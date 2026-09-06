@@ -845,7 +845,18 @@ func SettleExpiredAuctions(c *gin.Context) {
 }
 
 func settleExpiredAuctions() error {
-	rows, err := db.DB.Query(`SELECT id,seller_id,highest_bidder_id,item_type,item_data,quantity,current_price,currency,listing_type,duration_hours FROM auction WHERE status='ACTIVE' AND end_time <= NOW()`)
+	// Cheap guard: bail before any heavy row fetch / JSON unmarshal when no
+	// auction is actually expired. The 30s ticker would otherwise repeat this
+	// query 2880×/day per server even with zero activity.
+	var hasExpired bool
+	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM auction WHERE status='ACTIVE' AND end_time <= NOW())`).Scan(&hasExpired); err != nil {
+		return err
+	}
+	if !hasExpired {
+		return nil
+	}
+
+	rows, err := db.DB.Query(`SELECT id,seller_id,highest_bidder_id,item_type,item_data,quantity,current_price,currency,listing_type,duration_hours FROM auction WHERE status='ACTIVE' AND end_time <= NOW() ORDER BY end_time LIMIT 50`)
 	if err != nil {
 		return err
 	}

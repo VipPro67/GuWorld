@@ -15,13 +15,19 @@ import (
 // recovery) within one interval.
 const worldIndexSyncInterval = 30 * time.Second
 
+var lastEntryCount int
+
 // StartWorldIndexSyncWorker periodically reloads active players into the
 // in-memory position index. It runs the initial reconcile immediately so the
 // fast path is warm on the very first nearby-players query.
 func StartWorldIndexSyncWorker(ctx context.Context) {
 	reconcile := func() {
 		entries := loadActiveWorldPositions()
+		if len(entries) == 0 && lastEntryCount == 0 {
+			return
+		}
 		worldPosIndex.Reconcile(entries)
+		lastEntryCount = len(entries)
 	}
 
 	go func() {

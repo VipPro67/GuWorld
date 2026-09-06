@@ -619,25 +619,47 @@ func StartMineMonsterWorker(ctx context.Context) {
 	go AssignMonstersToMines()
 }
 
-// getRandomMineMonsterID selects an active monster template of type Elite, Boss, or higher for mine slots.
-func getRandomMineMonsterID(tx *sql.Tx) string {
-	var chosenMonsterID string
-	err := tx.QueryRow(`
-		SELECT id FROM monster_templates 
-		WHERE is_active = TRUE 
-		  AND (LOWER(type) LIKE '%elite%' OR LOWER(type) LIKE '%boss%') 
-		ORDER BY RANDOM() LIMIT 1
-	`).Scan(&chosenMonsterID)
-
-	if err != nil || chosenMonsterID == "" {
-		_ = tx.QueryRow(`
-			SELECT id FROM monster_templates 
-			WHERE is_active = TRUE 
-			ORDER BY RANDOM() LIMIT 1
-		`).Scan(&chosenMonsterID)
+// pickRandomMineMonsterIDs returns up to n random active monster IDs in a
+// single query. Prefers Elite/Boss templates; falls back to any active template
+// when the preferred pool is empty. Replaces per-slot ORDER BY RANDOM() loops
+// that previously re-sorted monster_templates once per abandoned mine slot.
+func pickRandomMineMonsterIDs(tx *sql.Tx, n int) []string {
+	if n <= 0 {
+		return nil
 	}
-
-	return chosenMonsterID
+	ids := make([]string, 0, n)
+	rows, err := tx.Query(`
+		SELECT id FROM monster_templates
+		WHERE is_active = TRUE
+		  AND (LOWER(type) LIKE '%elite%' OR LOWER(type) LIKE '%boss%')
+		ORDER BY RANDOM() LIMIT $1
+	`, n)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err == nil {
+				ids = append(ids, id)
+			}
+		}
+	}
+	if len(ids) > 0 {
+		return ids
+	}
+	rows2, err := tx.Query(`
+		SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT $1
+	`, n)
+	if err != nil {
+		return nil
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var id string
+		if err := rows2.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 func AssignMonstersToMines() {
@@ -683,7 +705,10 @@ func AssignMonstersToMines() {
 		return
 	}
 
-	for _, slot := range abandonedSlots {
+	// Single random pick for the whole batch — replaces per-slot ORDER BY RANDOM().
+	picks := pickRandomMineMonsterIDs(tx, len(abandonedSlots))
+
+	for i, slot := range abandonedSlots {
 		var targetRank int
 		if slot.MineType == "immortal" {
 			switch slot.Rarity {
@@ -711,8 +736,12 @@ func AssignMonstersToMines() {
 			}
 		}
 
-		// Find a monster template (Elite or Boss+)
-		chosenMonsterID := getRandomMineMonsterID(tx)
+		// Round-robin through the pre-fetched picks so different slots still
+		// get different monsters when more slots than picks exist.
+		chosenMonsterID := ""
+		if len(picks) > 0 {
+			chosenMonsterID = picks[i%len(picks)]
+		}
 
 		if chosenMonsterID != "" {
 			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3 WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)
@@ -799,7 +828,9 @@ func AssignMonstersToEmptyMines() {
 		return
 	}
 
-	for _, slot := range emptySlots {
+	picks := pickRandomMineMonsterIDs(tx, len(emptySlots))
+
+	for i, slot := range emptySlots {
 		var targetRank int
 		if slot.MineType == "immortal" {
 			switch slot.Rarity {
@@ -827,7 +858,10 @@ func AssignMonstersToEmptyMines() {
 			}
 		}
 
-		chosenMonsterID := getRandomMineMonsterID(tx)
+		chosenMonsterID := ""
+		if len(picks) > 0 {
+			chosenMonsterID = picks[i%len(picks)]
+		}
 
 		if chosenMonsterID != "" {
 			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3, abandoned_at = NOW() WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)

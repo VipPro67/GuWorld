@@ -34,6 +34,13 @@ func schemaAperture() error {
 		return err
 	}
 
+	// Index for fast state-based lookups (used by RegenerateImmortalApertures guard).
+	if err := execSchema("immortal_apertures_state_idx", `
+	CREATE INDEX IF NOT EXISTS idx_immortal_apertures_state ON immortal_apertures (state);
+	`); err != nil {
+		return err
+	}
+
 	// Ensure tribulation_pending_at column exists in case the table was created earlier.
 	if err := execSchema("immortal_apertures_tribulation_pending_at_upgrade", `
 	ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS tribulation_pending_at TIMESTAMP WITH TIME ZONE;

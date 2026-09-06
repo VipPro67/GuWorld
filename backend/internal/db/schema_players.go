@@ -84,6 +84,13 @@ func schemaPlayers() error {
 		return err
 	}
 
+	// Index to speed up the 30s world-index-sync scan on last_mana_update.
+	if err := execSchema("players_last_mana_update_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_last_mana_update ON players (last_mana_update);
+	`); err != nil {
+		return err
+	}
+
 	if err := execSchema("players_version_column", `
 	DO $$
 	BEGIN
