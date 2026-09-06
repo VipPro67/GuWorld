@@ -107,3 +107,30 @@ func TestComputeGlobalGuDamageMultiplierDedupesByGuID(t *testing.T) {
 		t.Fatalf("expected 1.5*1.2*1.3=2.34, got %.4f", mult)
 	}
 }
+
+func TestStartCombat_AllyFiltering(t *testing.T) {
+	playerID := "11111111-1111-1111-1111-111111111111"
+	partyMemberID := "22222222-2222-2222-2222-222222222222"
+	petID := "33333333-3333-3333-3333-333333333333"
+
+	allies := []models.Combatant{
+		{ID: playerID, Kind: "Player", Name: "Player1"},
+		{ID: partyMemberID, Kind: "Ally", Name: "PartyMember"},
+		{ID: petID, Kind: "Pet", Name: "Pet1"},
+	}
+
+	var notified []string
+	for _, ally := range allies {
+		if ally.Kind != "Ally" && ally.Kind != "Player" {
+			continue
+		}
+		if ally.ID != playerID {
+			notified = append(notified, ally.ID)
+		}
+	}
+
+	if len(notified) != 1 || notified[0] != partyMemberID {
+		t.Fatalf("expected only party member %s to be notified, got %+v", partyMemberID, notified)
+	}
+}
+

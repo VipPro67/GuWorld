@@ -300,9 +300,18 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 	}
 
 	for _, ally := range initialized.Allies {
+		if ally.Kind != "Ally" && ally.Kind != "Player" {
+			continue
+		}
 		allyUUID, errParse := uuid.Parse(ally.ID)
 		if errParse == nil && allyUUID != player.ID {
-			notify.Send(tx, allyUUID, "PARTY_COMBAT", "Tổ Đội Giao Chiến", fmt.Sprintf("Trưởng nhóm %s đã bắt đầu giao chiến! Đội hình của bạn đã tự động tham chiến.", player.Username))
+			// Guard against stale party member IDs referencing deleted players.
+			// A missing player would cause a 23503 FK violation on notifications.
+			var allyExists bool
+			if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE id = $1)`, allyUUID).Scan(&allyExists); err != nil || !allyExists {
+				continue
+			}
+			notify.Send(db.DB, allyUUID, "PARTY_COMBAT", "Tổ Đội Giao Chiến", fmt.Sprintf("Trưởng nhóm %s đã bắt đầu giao chiến! Đội hình của bạn đã tự động tham chiến.", player.Username))
 		}
 	}
 	return initialized

@@ -127,6 +127,86 @@ export interface CombatHistoryEntry {
   created_at: string;
 }
 
+// Death Arena Types
+export interface DeathArenaTournament {
+  id: string;
+  status: string;
+  scheduled_at: string;
+  registration_started_at: string;
+  registration_closed_at: string;
+  started_at?: string;
+  finished_at?: string;
+  total_players: number;
+  total_teams: number;
+  current_round: number;
+  total_rounds: number;
+  champion_team_id?: string;
+  created_at: string;
+}
+
+export interface DeathArenaTeam {
+  id: string;
+  tournament_id: string;
+  team_name: string;
+  seed_number: number;
+  eliminated: boolean;
+  eliminated_at_round?: number;
+  final_placement?: number;
+  member_count: number;
+  avg_hp: number;
+  created_at: string;
+}
+
+export interface DeathArenaTeamMember {
+  id: string;
+  team_id: string;
+  player_id: string;
+  username: string;
+  avatar_url: string;
+  rank: number;
+  current_hp: number;
+  max_hp: number;
+  current_mana: number;
+  max_mana: number;
+  eliminated: boolean;
+  eliminated_at_round?: number;
+  joined_at: string;
+}
+
+export interface DeathArenaMatch {
+  id: string;
+  tournament_id: string;
+  round_number: number;
+  bracket_position: number;
+  team_a_id: string;
+  team_a_name: string;
+  team_b_id?: string;
+  team_b_name?: string;
+  winner_team_id?: string;
+  status: string;
+  reward_stones_per_member: number;
+  created_at: string;
+  finished_at?: string;
+}
+
+export interface DeathArenaReward {
+  id: string;
+  tournament_id: string;
+  player_id: string;
+  username: string;
+  placement: number;
+  team_id: string;
+  team_name: string;
+  title: string;
+  reward_stones: number;
+  reward_immortal_stones: number;
+  reward_gu_id?: string;
+  reward_gu_rank?: number;
+  reward_items: any[];
+  claimed: boolean;
+  created_at: string;
+}
+
 export interface Player {
   id: string;
   username: string;
@@ -1094,6 +1174,25 @@ interface GameState {
   challengeArena: (targetPlayerId: string) => Promise<boolean>;
   buyArenaItem: (itemId: string, quantity?: number) => Promise<boolean>;
 
+  // Death Arena State & Actions
+  deathArenaTournament: DeathArenaTournament | null;
+  deathArenaBracket: DeathArenaMatch[];
+  deathArenaMyTeam: DeathArenaTeam | null;
+  deathArenaMyTeamMembers: DeathArenaTeamMember[];
+  deathArenaMyMatches: DeathArenaMatch[];
+  deathArenaRewards: DeathArenaReward[];
+  deathArenaHistory: DeathArenaTournament[];
+  deathArenaLoading: boolean;
+  fetchDeathArenaCurrent: () => Promise<void>;
+  registerDeathArena: () => Promise<boolean>;
+  unregisterDeathArena: () => Promise<boolean>;
+  fetchDeathArenaBracket: () => Promise<void>;
+  fetchDeathArenaMyTeam: () => Promise<void>;
+  fetchDeathArenaMyMatches: () => Promise<void>;
+  fetchDeathArenaRewards: () => Promise<void>;
+  fetchDeathArenaHistory: () => Promise<void>;
+  claimDeathArenaReward: (rewardId: string) => Promise<boolean>;
+
   // Leaderboard State & Actions
   leaderboardEntries: any[];
   leaderboardCategory: string;
@@ -1549,7 +1648,6 @@ export const useGameStore = create<GameState>((set, get) => {
   actionLoading: false,
   error: null,
   arenaDailyChallenges: 0,
-  arenaShopItems: [],
   playerEventsConnected: false,
   playerEventsRetries: 0,
   guInventoryLoaded: false,
@@ -1593,6 +1691,15 @@ export const useGameStore = create<GameState>((set, get) => {
   party: null,
   partyInvitations: [],
   arenaLeaderboard: [],
+  arenaShopItems: [],
+  deathArenaTournament: null,
+  deathArenaBracket: [],
+  deathArenaMyTeam: null,
+  deathArenaMyTeamMembers: [],
+  deathArenaMyMatches: [],
+  deathArenaRewards: [],
+  deathArenaHistory: [],
+  deathArenaLoading: false,
   leaderboardEntries: [],
   leaderboardCategory: "rank",
   myLeaderboardRank: null,
@@ -4771,6 +4878,182 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ error: err.message });
       // @ts-ignore
       get().addToast("Lỗi kết nối", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // Death Arena Actions
+  fetchDeathArenaCurrent: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    set({ deathArenaLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/current`);
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({
+        deathArenaTournament: data.tournament || null,
+        deathArenaMyTeam: data.team || null,
+        deathArenaMyTeamMembers: data.members || [],
+      });
+    } catch (err) {
+      console.error("fetch death arena current failed", err);
+      get().addToast("Lỗi tải thông tin Đấu Trường Sinh Tử.", "error");
+    } finally {
+      set({ deathArenaLoading: false });
+    }
+  },
+
+  registerDeathArena: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/register`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Đăng ký thất bại");
+      // @ts-ignore
+      get().addToast(data.message || "Đăng ký thành công!", "success");
+      get().addLog(data.message || "Đã đăng ký Đấu Trường Sinh Tử!");
+      await get().fetchDeathArenaCurrent();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Đăng ký thất bại.", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  unregisterDeathArena: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/register`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy đăng ký thất bại");
+      // @ts-ignore
+      get().addToast(data.message || "Hủy đăng ký thành công!", "success");
+      get().addLog(data.message || "Đã hủy đăng ký Đấu Trường Sinh Tử!");
+      await get().fetchDeathArenaCurrent();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Hủy đăng ký thất bại.", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  fetchDeathArenaBracket: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/bracket`);
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({
+        deathArenaTournament: data.tournament || null,
+        deathArenaBracket: data.matches || [],
+      });
+    } catch (err) {
+      console.error("fetch death arena bracket failed", err);
+      get().addToast("Lỗi tải bảng đấu.", "error");
+    }
+  },
+
+  fetchDeathArenaMyTeam: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/my-team`);
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({
+        deathArenaMyTeam: data.team || null,
+        deathArenaMyTeamMembers: data.members || [],
+      });
+    } catch (err) {
+      console.error("fetch death arena my team failed", err);
+      get().addToast("Lỗi tải thông tin đội.", "error");
+    }
+  },
+
+  fetchDeathArenaMyMatches: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/matches`);
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({ deathArenaMyMatches: data.matches || [] });
+    } catch (err) {
+      console.error("fetch death arena matches failed", err);
+      get().addToast("Lỗi tải trận đấu.", "error");
+    }
+  },
+
+  fetchDeathArenaRewards: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/rewards`);
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({ deathArenaRewards: data.rewards || [] });
+    } catch (err) {
+      console.error("fetch death arena rewards failed", err);
+      get().addToast("Lỗi tải phần thưởng.", "error");
+    }
+  },
+
+  fetchDeathArenaHistory: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/history`);
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({ deathArenaHistory: data.tournaments || [] });
+    } catch (err) {
+      console.error("fetch death arena history failed", err);
+      get().addToast("Lỗi tải lịch sử.", "error");
+    }
+  },
+
+  claimDeathArenaReward: async (rewardId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/claim-reward`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reward_id: rewardId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nhận thưởng thất bại");
+      // @ts-ignore
+      get().addToast(data.message || "Nhận thưởng thành công!", "success");
+      get().addLog(data.message || "Đã nhận phần thưởng Đấu Trường Sinh Tử!");
+      await get().fetchDeathArenaRewards();
+      await get().fetchPlayerStatus(get().player!.id);
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Nhận thưởng thất bại.", "error");
       return false;
     } finally {
       set({ actionLoading: false });

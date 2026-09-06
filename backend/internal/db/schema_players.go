@@ -145,12 +145,6 @@ func schemaPlayers() error {
 		return err
 	}
 
-	// Google ids are NULL/empty for most accounts; the partial unique index
-	// enforces uniqueness only for real google ids.
-	if err := execSchema("players_google_id_idx", `
-	CREATE UNIQUE INDEX IF NOT EXISTS players_google_id_idx ON players (google_id) WHERE google_id IS NOT NULL AND google_id != '';`); err != nil {
-		return err
-	}
 	if err := execSchema("players_region_xy_idx", `
 	CREATE INDEX IF NOT EXISTS idx_players_region_xy ON players (current_region, x, y);`); err != nil {
 		return err

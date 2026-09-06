@@ -201,7 +201,7 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
-	notify.Send(tx, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username))
+	notify.Send(db.DB, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username))
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -283,7 +283,7 @@ func LeaveParty(c *gin.Context) {
 
 	for _, m := range newMembers {
 		if mUUID, errM := uuid.Parse(m.ID); errM == nil {
-			notify.Send(tx, mUUID, "PARTY_LEAVE", "Cập Nhật Tổ Đội", fmt.Sprintf("Cổ sư %s đã rời khỏi tổ đội.", player.Username))
+			notify.Send(db.DB, mUUID, "PARTY_LEAVE", "Cập Nhật Tổ Đội", fmt.Sprintf("Cổ sư %s đã rời khỏi tổ đội.", player.Username))
 		}
 	}
 
@@ -439,7 +439,7 @@ func RespondToInvitation(c *gin.Context) {
 	_, _ = tx.Exec("DELETE FROM party_invitations WHERE invitee_id = $1 AND status = 'PENDING'", player.ID)
 
 	if leaderUUID, errL := uuid.Parse(leaderID); errL == nil {
-		notify.Send(tx, leaderUUID, "PARTY_JOIN", "Thành Viên Mới", fmt.Sprintf("Cổ sư %s đã chấp nhận lời mời và gia nhập tổ đội!", player.Username))
+		notify.Send(db.DB, leaderUUID, "PARTY_JOIN", "Thành Viên Mới", fmt.Sprintf("Cổ sư %s đã chấp nhận lời mời và gia nhập tổ đội!", player.Username))
 	}
 
 	if err := tx.Commit(); err != nil {

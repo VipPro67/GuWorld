@@ -27,6 +27,7 @@ const CaravanShop = dynamic(() => import("@/components/CaravanShop").then(m => m
 const PremiumStoreView = dynamic(() => import("@/components/PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
 const BaoHoangMarket = dynamic(() => import("@/components/BaoHoangMarket").then(m => m.BaoHoangMarket), { ssr: false });
 const ArenaView = dynamic(() => import("@/components/ArenaView").then(m => m.ArenaView), { ssr: false });
+const DeathArenaView = dynamic(() => import("@/components/DeathArena/DeathArenaView"), { ssr: false });
 const MineView = dynamic(() => import("@/components/MineView").then(m => m.MineView), { ssr: false });
 const EntertainmentPanel = dynamic(() => import("@/components/EntertainmentPanel").then(m => m.EntertainmentPanel), { ssr: false });
 const AchievementsPanel = dynamic(() => import("@/components/AchievementsPanel"), { ssr: false });
@@ -423,6 +424,10 @@ export default function Home() {
           />
         ) : currentView === "arena" ? (
           <ArenaView />
+        ) : currentView === "death-arena" ? (
+          <div className="w-full">
+            <DeathArenaView />
+          </div>
         ) : currentView === "leaderboard" ? (
           <div className="w-full">
             <LeaderboardView />

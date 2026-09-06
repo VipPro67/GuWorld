@@ -535,10 +535,15 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			if HasExplorationInventorySpace(player, 1) {
 				if err := InventorySvc.AddItem(tx, player.ID.String(), cell.Content, "materials", 1); err != nil {
 					logger.S.Errorf("Failed to add resource %s to player %s: %v", cell.Content, player.ID, err)
+					// Propagate: a failed write poisons the tx (25P02 on next statement).
+					return "", false, err
 				}
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s!", player.X, player.Y, itemName)
 
-				MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
+				if err := MarkPersistentCellCleared(tx, player.ID, player.X, player.Y); err != nil {
+					logger.S.Errorf("Failed to mark cell cleared for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+					return "", false, err
+				}
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)

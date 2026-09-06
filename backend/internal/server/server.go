@@ -548,6 +548,22 @@ func SetupRouter() *gin.Engine {
 			arena.POST("/shop/buy", handlers.BuyArenaShopItem)
 		}
 
+		// Death Arena — group: 40/min, per player: 25/min
+		deathArena := api.Group("/death-arena")
+		deathArena.Use(middleware.AuthRequired())
+		deathArena.Use(middleware.RateLimitByPlayer(25, time.Minute))
+		{
+			deathArena.GET("/current", handlers.GetCurrentTournament)
+			deathArena.POST("/register", handlers.RegisterForTournament)
+			deathArena.DELETE("/register", handlers.UnregisterFromTournament)
+			deathArena.GET("/bracket", handlers.GetBracket)
+			deathArena.GET("/my-team", handlers.GetMyTeam)
+			deathArena.GET("/matches", handlers.GetMyMatches)
+			deathArena.GET("/history", handlers.GetTournamentHistory)
+			deathArena.GET("/rewards", handlers.GetMyRewards)
+			deathArena.POST("/claim-reward", handlers.ClaimReward)
+		}
+
 		// Leaderboard — group: 30/min, per player: 20/min
 		leaderboard := api.Group("/leaderboard")
 		leaderboard.Use(middleware.AuthRequired())

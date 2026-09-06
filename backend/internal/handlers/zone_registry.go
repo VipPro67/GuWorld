@@ -380,13 +380,13 @@ func SubZoneKey(x, y int) string {
 
 // MarkPersistentCellCleared records that a shared cell (boss / high resource)
 // was cleared and persists the respawn state to map_cells.
-func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) {
+func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) error {
 	key := persistentCellKey{X: x, Y: y}
 	zoneReg.mu.RLock()
 	pc, ok := zoneReg.persistent[key]
 	zoneReg.mu.RUnlock()
 	if !ok {
-		return
+		return nil
 	}
 	wasCleared := pc.cleared
 	pc.LastCleared = time.Now()
@@ -395,18 +395,21 @@ func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) {
 	zoneReg.persistent[key] = pc
 	zoneReg.mu.Unlock()
 	if tx != nil {
-		_, _ = tx.Exec(`UPDATE map_cells SET last_cleared_at = NOW(), cleared_by = $1 WHERE x = $2 AND y = $3`, playerID, x, y)
+		if _, err := tx.Exec(`UPDATE map_cells SET last_cleared_at = NOW(), cleared_by = $1 WHERE x = $2 AND y = $3`, playerID, x, y); err != nil {
+			return err
+		}
 	}
 	if !wasCleared {
 		broadcastWorldCell(cellEventCleared, WorldCellEvent{X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
 	}
+	return nil
 }
 
 // MarkPersistentCellClearedNoTx clears a shared cell in memory only (used when
 // no transaction is available). The DB state is updated lazily on the next
 // MarkPersistentCellCleared call for the same cell.
 func MarkPersistentCellClearedNoTx(x, y int) {
-	MarkPersistentCellCleared(nil, uuid.Nil, x, y)
+	_ = MarkPersistentCellCleared(nil, uuid.Nil, x, y)
 }
 
 // PersistentCellAt returns the shared cell at (x,y) if any. found=false means
@@ -480,7 +483,7 @@ func markBossCleared(tx *sql.Tx, player *models.Player) {
 	if et != "BOSS" && et != "WORLDBOSS" && et != "WORLD BOSS" {
 		return
 	}
-	MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
+	_ = MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
 }
 
 // recordVisitedSubZone appends a small-zone key to the player's visited set

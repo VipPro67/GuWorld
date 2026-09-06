@@ -1400,7 +1400,7 @@ func CombatAttack(c *gin.Context) {
 			err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
 			if err == nil && currentOccupierStr != nil {
 				if defenderUUID, errParse := uuid.Parse(*currentOccupierStr); errParse == nil && defenderUUID != player.ID {
-					notify.Send(tx, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
+					notify.Send(db.DB, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
 						fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
 				}
 				if lastClaimedAt != nil {
@@ -1453,6 +1453,9 @@ func CombatAttack(c *gin.Context) {
 		player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 
 		for _, ally := range player.ActiveCombat.Allies {
+			if ally.Kind != "Ally" && ally.Kind != "Player" {
+				continue
+			}
 			allyUUID, errParse := uuid.Parse(ally.ID)
 			if errParse == nil {
 				if allyUUID != player.ID {
@@ -1474,7 +1477,7 @@ func CombatAttack(c *gin.Context) {
 				if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
 					var rarity string
 					_ = tx.QueryRow("SELECT rarity FROM mine_slots WHERE id = $1", player.ActiveCombat.MineSlotID).Scan(&rarity)
-					notify.Send(tx, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
+					notify.Send(db.DB, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
 						fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
 				}
 			}
@@ -1503,6 +1506,9 @@ func CombatAttack(c *gin.Context) {
 		}
 
 		for _, ally := range player.ActiveCombat.Allies {
+			if ally.Kind != "Ally" && ally.Kind != "Player" {
+				continue
+			}
 			allyUUID, errParse := uuid.Parse(ally.ID)
 			if errParse == nil {
 				if allyUUID != player.ID {
@@ -1514,6 +1520,9 @@ func CombatAttack(c *gin.Context) {
 	} else {
 		combatBytes, _ := json.Marshal(player.ActiveCombat)
 		for _, ally := range player.ActiveCombat.Allies {
+			if ally.Kind != "Ally" && ally.Kind != "Player" {
+				continue
+			}
 			allyUUID, errParse := uuid.Parse(ally.ID)
 			if errParse == nil && allyUUID != player.ID {
 				_, _ = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", string(combatBytes), allyUUID)

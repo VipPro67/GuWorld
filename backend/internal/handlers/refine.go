@@ -658,7 +658,9 @@ func RefineGu(c *gin.Context) {
 		exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
 		if exists {
 			isUniqueImmortalFail = true
-			if outcome == OutcomeSuccess || outcome == OutcomeFailSafe {
+			// Tiên cổ duy nhất đã tồn tại: không thể luyện thành công,
+			// và cũng không bị phản phệ (backfire) vì thất bại này có nguyên nhân khách quan.
+			if outcome != OutcomeFailNormal {
 				outcome = OutcomeFailNormal
 			}
 		}

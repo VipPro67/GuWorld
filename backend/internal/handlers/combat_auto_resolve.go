@@ -205,10 +205,6 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		}
 	}
 
-	if !alliesAlive {
-		return "Phe Địch", nil, nil, fmt.Errorf("AUTO_COMBAT_DEFEAT")
-	}
-
 	// Apply outcome to DB (simplified from AutoCombatStart)
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
@@ -480,7 +476,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 					}
 					if len(lootDetailLogs) > 0 {
 						lootStr := strings.Join(lootDetailLogs, "\n")
-						notify.Send(tx, player.ID, "combat_loot", "Chiến Lợi Phẩm (Tự Động)", lootStr)
+						notify.Send(db.DB, player.ID, "combat_loot", "Chiến Lợi Phẩm (Tự Động)", lootStr)
 					}
 					for _, l := range lootDetailLogs {
 						logs = append(logs, simulator.CombatLog{
@@ -503,7 +499,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
 				if err == nil && currentOccupierStr != nil {
 					if defenderUUID, errParse := uuid.Parse(*currentOccupierStr); errParse == nil && defenderUUID != player.ID {
-						notify.Send(tx, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
+						notify.Send(db.DB, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
 							fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
 					}
 					if lastClaimedAt != nil {
@@ -525,7 +521,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 									stoneName = "Tiên Nguyên Thạch"
 								}
 								mineLootMsg := fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf)
-								notify.Send(tx, player.ID, "combat_loot", "Chiến Lợi Phẩm (Cướp Mỏ)", mineLootMsg)
+								notify.Send(db.DB, player.ID, "combat_loot", "Chiến Lợi Phẩm (Cướp Mỏ)", mineLootMsg)
 								logs = append(logs, simulator.CombatLog{
 									Turn:   simState.Turn,
 									Action: "MINE_LOOT",
@@ -585,7 +581,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
 				var rarity string
 				_ = tx.QueryRow("SELECT rarity FROM mine_slots WHERE id = $1", player.ActiveCombat.MineSlotID).Scan(&rarity)
-				notify.Send(tx, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
+				notify.Send(db.DB, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
 					fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
 			}
 		}
@@ -602,6 +598,9 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		}
 
 		for _, ally := range player.ActiveCombat.Allies {
+			if ally.Kind != "Ally" && ally.Kind != "Player" {
+				continue
+			}
 			allyUUID, errParse := uuid.Parse(ally.ID)
 			if errParse == nil && allyUUID != player.ID {
 				_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)

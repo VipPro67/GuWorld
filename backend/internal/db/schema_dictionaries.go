@@ -27,15 +27,6 @@ func schemaDictionaries() error {
 	`); err != nil {
 		return err
 	}
-	if err := execSchema("item_dictionary_price_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='item_dictionary' AND column_name='base_price' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE item_dictionary ALTER COLUMN base_price TYPE BIGINT USING COALESCE(base_price, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
 
 	if err := execSchema("migrate_node_outputs_to_items", `
 	DO $$

@@ -22,7 +22,7 @@ func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 				logger.S.Info("Growth Worker stopped")
 				return
 			case <-ticker.C:
-				processGrowthTick(db)
+				processGrowthTick(ctx, db)
 			}
 		}
 	}()
@@ -32,7 +32,7 @@ func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 // growth profile. A set-based SQL query narrows the work to only the players
 // who actually own such a Gu (a tiny subset of the player base); the growth_data
 // fold for those players is then done in Go.
-func processGrowthTick(db *sql.DB) {
+func processGrowthTick(ctx context.Context, db *sql.DB) {
 	players, err := findGrowthAffectedPlayers(db)
 	if err != nil {
 		logger.S.Errorf("Growth Worker Error finding affected players: %v", err)
@@ -40,7 +40,13 @@ func processGrowthTick(db *sql.DB) {
 	}
 
 	for _, pID := range players {
-		if err := updatePlayerGrowth(db, pID); err != nil {
+		// Use a per-player deadline so a contended lock aborts quickly and the
+		// worker moves on rather than blocking the whole tick until the global
+		// statement_timeout fires.
+		pCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		err := updatePlayerGrowth(pCtx, db, pID)
+		cancel()
+		if err != nil {
 			logger.S.Errorf("Growth Worker Error updating player %s: %v", pID, err)
 		}
 	}
@@ -71,8 +77,8 @@ func findGrowthAffectedPlayers(db *sql.DB) ([]string, error) {
 	return playerIDs, rows.Err()
 }
 
-func updatePlayerGrowth(db *sql.DB, playerID string) error {
-	tx, err := db.Begin()
+func updatePlayerGrowth(ctx context.Context, db *sql.DB, playerID string) error {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -83,11 +89,14 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 	var baseHP float64
 	var timeSpeedMultiplier float64
 
+	// No FOR UPDATE: growth deltas are idempotent. EquippedAt is reset to now
+	// after each tick, so even if two ticks overlap the next tick's elapsed
+	// will be near-zero. Holding FOR UPDATE caused lock contention with combat,
+	// hunger, and tribulation handlers → 57014 statement timeout / 55P03 lock timeout.
 	err = tx.QueryRow(`
 		SELECT `+pkgdb.GuInventoryAggregate("players.id")+`, growth_data, base_hp, time_speed_multiplier
 		FROM players
-		WHERE id = $1
-		FOR UPDATE`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP, &timeSpeedMultiplier)
+		WHERE id = $1`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP, &timeSpeedMultiplier)
 	if timeSpeedMultiplier <= 0 {
 		timeSpeedMultiplier = 1.0
 	}
