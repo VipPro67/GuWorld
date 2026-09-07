@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -64,6 +65,7 @@ func sectMineBaseRate(rarity string) float64 {
 }
 
 func processSectTerritoryTick(db *sql.DB) {
+	// ── Phase 0: Fetch all occupied mines ──
 	rows, err := db.Query(`
 		SELECT m.id, m.rarity, m.occupier_sect_id, m.pending_funds, m.pending_materials,
 		       COALESCE(m.last_claimed_at, m.occupied_at, now()), COALESCE(s.level, 1)
@@ -85,157 +87,453 @@ func processSectTerritoryTick(db *sql.DB) {
 	}
 	rows.Close()
 
+	if len(mines) == 0 {
+		return
+	}
+
+	// Filter to mines with elapsed time > 0
+	var activeMines []territoryMineRow
 	for _, mr := range mines {
-		if err := processTerritoryMine(db, mr); err != nil {
-			logger.S.Errorf("Sect Territory Worker: mine %d error: %v", mr.id, err)
+		if time.Since(mr.lastClaimed).Minutes() > 0 {
+			activeMines = append(activeMines, mr)
 		}
 	}
-}
+	if len(activeMines) == 0 {
+		return
+	}
 
-func processTerritoryMine(db *sql.DB, mr territoryMineRow) error {
-	elapsedMin := time.Since(mr.lastClaimed).Minutes()
-	if elapsedMin <= 0 {
-		return nil
+	// Collect unique mine IDs and sect IDs
+	mineIDs := make([]int, 0, len(activeMines))
+	sectIDSet := map[string]bool{}
+	for _, mr := range activeMines {
+		mineIDs = append(mineIDs, mr.id)
+		sectIDSet[mr.sectID] = true
+	}
+	sectIDs := make([]string, 0, len(sectIDSet))
+	for sid := range sectIDSet {
+		sectIDs = append(sectIDs, sid)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return err
+		logger.S.Errorf("Sect Territory Worker: begin tx failed: %v", err)
+		return
 	}
 	defer tx.Rollback()
 
-	var defCount int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM sect_mine_defenders WHERE mine_id = $1`, mr.id).Scan(&defCount)
+	// ── Phase 1: Batch reads ──
 
-	var memberCount int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM sect_members WHERE sect_id = $1`, mr.sectID).Scan(&memberCount)
-
-	defMult := 1 + 0.2*float64(defCount)
-	fundsRate := sectMineBaseRate(mr.rarity) * float64(mr.sectLevel) * defMult
-	matRate := sectMineBaseRate(mr.rarity) * 0.2 * defMult
-
-	var newFunds, newMats float64
-	err = tx.QueryRow(`
-		UPDATE sect_mines
-		SET pending_funds = pending_funds + $1,
-		    pending_materials = pending_materials + $2,
-		    last_claimed_at = now()
-		WHERE id = $3
-		RETURNING pending_funds, pending_materials
-	`, fundsRate*elapsedMin, matRate*elapsedMin, mr.id).Scan(&newFunds, &newMats)
-	if err != nil {
-		return err
+	// 1a. Defender counts per mine
+	defenderCountMap := map[int]int{}
+	if dRows, err := tx.Query(`SELECT mine_id, COUNT(*) FROM sect_mine_defenders WHERE mine_id = ANY($1::int[]) GROUP BY mine_id`, pq.Array(mineIDs)); err == nil {
+		for dRows.Next() {
+			var mid, cnt int
+			if dRows.Scan(&mid, &cnt) == nil {
+				defenderCountMap[mid] = cnt
+			}
+		}
+		dRows.Close()
 	}
 
-	fundsCredit := int(math.Floor(newFunds))
-	if fundsCredit > 0 {
-		if _, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, fundsCredit, mr.sectID); err != nil {
-			return err
+	// 1b. Member counts per sect
+	memberCountMap := map[string]int{}
+	if mRows, err := tx.Query(`SELECT sect_id, COUNT(*) FROM sect_members WHERE sect_id = ANY($1::text[]) GROUP BY sect_id`, pq.Array(sectIDs)); err == nil {
+		for mRows.Next() {
+			var sid string
+			var cnt int
+			if mRows.Scan(&sid, &cnt) == nil {
+				memberCountMap[sid] = cnt
+			}
 		}
-		if _, err = tx.Exec(`UPDATE sect_mines SET pending_funds = pending_funds - $1 WHERE id = $2`, float64(fundsCredit), mr.id); err != nil {
-			return err
+		mRows.Close()
+	}
+
+	// 1c. Defender player IDs per mine
+	defenderIDsByMine := map[int]map[string]bool{}
+	if dRows, err := tx.Query(`SELECT mine_id, player_id::text FROM sect_mine_defenders WHERE mine_id = ANY($1::int[]) AND defender_type = 'member'`, pq.Array(mineIDs)); err == nil {
+		for dRows.Next() {
+			var mid int
+			var pid string
+			if dRows.Scan(&mid, &pid) == nil {
+				if defenderIDsByMine[mid] == nil {
+					defenderIDsByMine[mid] = map[string]bool{}
+				}
+				defenderIDsByMine[mid][pid] = true
+			}
+		}
+		dRows.Close()
+	}
+
+	// 1d. Member player IDs per sect
+	memberIDsBySect := map[string][]string{}
+	allMemberIDSet := map[string]bool{}
+	if mRows, err := tx.Query(`SELECT sect_id, player_id::text FROM sect_members WHERE sect_id = ANY($1::text[])`, pq.Array(sectIDs)); err == nil {
+		for mRows.Next() {
+			var sid, pid string
+			if mRows.Scan(&sid, &pid) == nil {
+				memberIDsBySect[sid] = append(memberIDsBySect[sid], pid)
+				allMemberIDSet[pid] = true
+			}
+		}
+		mRows.Close()
+	}
+
+	// All unique member player IDs for contribution credit
+	allMemberIDs := make([]string, 0, len(allMemberIDSet))
+	for pid := range allMemberIDSet {
+		allMemberIDs = append(allMemberIDs, pid)
+	}
+
+	// ── Phase 2: Compute per-mine (pure Go) ──
+	now := time.Now()
+	today := now.Format("2006-01-02")
+
+	// Arrays for batch UPDATE sect_mines
+	muMineIDs := make([]int, 0, len(activeMines))
+	muFundRates := make([]float64, 0, len(activeMines))
+	muMatRates := make([]float64, 0, len(activeMines))
+	muFundCredits := make([]float64, 0, len(activeMines))
+	muMatCredits := make([]float64, 0, len(activeMines))
+
+	// Arrays for batch UPDATE sects funds
+	sectFundCreditIDs := []string{}
+	sectFundCredits := []float64{}
+
+	// Material handling: accumulate per sect
+	type matCredit struct {
+		matID string
+		qty   int
+	}
+	sectMatCredits := map[string][]matCredit{} // sectID -> []matCredit
+	sectMatMineIDs := []int{}                  // mine IDs that had matCredit
+	sectMatCreditsFlat := []float64{}
+
+	// Max sect level for material dictionary lookup
+	maxSectLevel := 1
+	for _, mr := range activeMines {
+		if mr.sectLevel > maxSectLevel {
+			maxSectLevel = mr.sectLevel
 		}
 	}
 
-	matCredit := int(math.Floor(newMats))
-	if matCredit > 0 {
-		matID := ""
-		_ = tx.QueryRow(`
-			SELECT id FROM item_dictionary
+	for _, mr := range activeMines {
+		elapsedMin := now.Sub(mr.lastClaimed).Minutes()
+		defCount := defenderCountMap[mr.id]
+		defMult := 1.0 + 0.2*float64(defCount)
+
+		fundsRate := sectMineBaseRate(mr.rarity) * float64(mr.sectLevel) * defMult
+		matRate := sectMineBaseRate(mr.rarity) * 0.2 * defMult
+
+		newFunds := mr.pendingFunds + fundsRate*elapsedMin
+		newMats := mr.pendingMats + matRate*elapsedMin
+
+		fundsCredit := math.Floor(newFunds)
+		matCreditAmt := math.Floor(newMats)
+
+		muMineIDs = append(muMineIDs, mr.id)
+		muFundRates = append(muFundRates, fundsRate*elapsedMin)
+		muMatRates = append(muMatRates, matRate*elapsedMin)
+		muFundCredits = append(muFundCredits, fundsCredit)
+		muMatCredits = append(muMatCredits, matCreditAmt)
+
+		if fundsCredit > 0 {
+			// Deduplicate sect fund credits (multiple mines can share sect)
+			found := false
+			for i, sid := range sectFundCreditIDs {
+				if sid == mr.sectID {
+					sectFundCredits[i] += fundsCredit
+					found = true
+					break
+				}
+			}
+			if !found {
+				sectFundCreditIDs = append(sectFundCreditIDs, mr.sectID)
+				sectFundCredits = append(sectFundCredits, fundsCredit)
+			}
+		}
+
+		if matCreditAmt > 0 {
+			sectMatMineIDs = append(sectMatMineIDs, mr.id)
+			sectMatCreditsFlat = append(sectMatCreditsFlat, matCreditAmt)
+			// matID will be resolved after batch read
+			sectMatCredits[mr.sectID] = append(sectMatCredits[mr.sectID], matCredit{
+				qty: int(matCreditAmt),
+			})
+		}
+	}
+
+	// ── Phase 3: Batch writes ──
+
+	// 3a. UPDATE sect_mines pending_funds + pending_materials + last_claimed_at
+	if _, err := tx.Exec(`
+		UPDATE sect_mines m SET
+			pending_funds = m.pending_funds - v.fund_credit + v.fund_rate,
+			pending_materials = m.pending_materials - v.mat_credit + v.mat_rate,
+			last_claimed_at = now()
+		FROM (SELECT unnest($1::int[]) AS id,
+		             unnest($2::float8[]) AS fund_rate,
+		             unnest($3::float8[]) AS mat_rate,
+		             unnest($4::float8[]) AS fund_credit,
+		             unnest($5::float8[]) AS mat_credit) v
+		WHERE m.id = v.id
+	`, pq.Array(muMineIDs), pq.Array(muFundRates), pq.Array(muMatRates),
+		pq.Array(muFundCredits), pq.Array(muMatCredits)); err != nil {
+		logger.S.Errorf("Sect Territory Worker: batch update mines failed: %v", err)
+		return
+	}
+
+	// 3b. Batch UPDATE sects funds
+	if len(sectFundCreditIDs) > 0 {
+		if _, err := tx.Exec(`
+			UPDATE sects s SET funds = s.funds + v.credit
+			FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS credit) v
+			WHERE s.id = v.id
+		`, pq.Array(sectFundCreditIDs), pq.Array(sectFundCredits)); err != nil {
+			logger.S.Errorf("Sect Territory Worker: batch update sect funds failed: %v", err)
+			return
+		}
+	}
+
+	// 3c. Material handling
+	if len(sectMatMineIDs) > 0 {
+		// Pre-fetch random materials per rank (one per rank up to maxSectLevel)
+		matByRank := map[int]string{}
+		if matRows, err := tx.Query(`
+			SELECT DISTINCT ON (rank) rank, id FROM item_dictionary
 			WHERE item_type = 'Material' AND rank >= 1 AND rank <= $1
-			ORDER BY RANDOM() LIMIT 1
-		`, mr.sectLevel).Scan(&matID)
-		if matID != "" {
-			var vaultMatsRaw []byte
-			_ = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1`, mr.sectID).Scan(&vaultMatsRaw)
-			vaultMats := map[string]int{}
-			if len(vaultMatsRaw) > 0 {
-				_ = json.Unmarshal(vaultMatsRaw, &vaultMats)
+			ORDER BY rank, RANDOM()
+		`, maxSectLevel); err == nil {
+			for matRows.Next() {
+				var rank int
+				var id string
+				if matRows.Scan(&rank, &id) == nil {
+					matByRank[rank] = id
+				}
 			}
-			vaultMats[matID] += matCredit
-			newRaw, _ := json.Marshal(vaultMats)
-			if _, err = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, newRaw, mr.sectID); err != nil {
-				return err
-			}
+			matRows.Close()
 		}
-		if _, err = tx.Exec(`UPDATE sect_mines SET pending_materials = pending_materials - $1 WHERE id = $2`, float64(matCredit), mr.id); err != nil {
-			return err
-		}
-	}
 
-	// Contribution: defenders get the defender rate; other members get the member rate.
-	defenderIDs := map[string]bool{}
-	rows, err := tx.Query(`SELECT player_id::text FROM sect_mine_defenders WHERE mine_id = $1 AND defender_type = 'member'`, mr.id)
-	if err == nil {
-		for rows.Next() {
-			var pid string
-			if rows.Scan(&pid) == nil {
-				defenderIDs[pid] = true
-			}
-		}
-		rows.Close()
-	}
-
-	// Collect all member ids first (must close rows before issuing more queries
-	// on the same tx — lib/pq cannot interleave a second query mid-resultset).
-	var memberIDs []string
-	memberRows, err := tx.Query(`SELECT player_id::text FROM sect_members WHERE sect_id = $1`, mr.sectID)
-	if err == nil {
-		for memberRows.Next() {
-			var pid string
-			if memberRows.Scan(&pid) == nil {
-				memberIDs = append(memberIDs, pid)
+		// Assign material IDs to each mine's credit
+		// For each mine with matCredit, find a random material based on sect level
+		sectIDsNeedingVault := map[string]bool{}
+		for i, mid := range sectMatMineIDs {
+			// Find the mine's sect level
+			for _, mr := range activeMines {
+				if mr.id == mid {
+					matID := matByRank[mr.sectLevel]
+					if matID == "" {
+						// Fallback to rank 1
+						matID = matByRank[1]
+					}
+					if matID != "" {
+						// Find the correct index in sectMatCredits to assign matID
+						credits := sectMatCredits[mr.sectID]
+						for j := range credits {
+							if credits[j].matID == "" && credits[j].qty == int(sectMatCreditsFlat[i]) {
+								credits[j].matID = matID
+								break
+							}
+						}
+						sectIDsNeedingVault[mr.sectID] = true
+					}
+					break
+				}
 			}
 		}
-		memberRows.Close()
-	}
 
-	for _, pid := range memberIDs {
-		rate := territoryMemberRate
-		if defenderIDs[pid] {
-			rate = territoryDefenderRate
+		if len(sectIDsNeedingVault) > 0 {
+			vaultIDs := make([]string, 0, len(sectIDsNeedingVault))
+			for sid := range sectIDsNeedingVault {
+				vaultIDs = append(vaultIDs, sid)
+			}
+
+			// Batch read vaults
+			vaultMap := map[string]map[string]int{}
+			if vRows, err := tx.Query(`SELECT id, vault_materials FROM sects WHERE id = ANY($1::text[])`, pq.Array(vaultIDs)); err == nil {
+				for vRows.Next() {
+					var sid string
+					var raw []byte
+					if vRows.Scan(&sid, &raw) == nil {
+						vault := map[string]int{}
+						if len(raw) > 0 {
+							_ = json.Unmarshal(raw, &vault)
+						}
+						vaultMap[sid] = vault
+					}
+				}
+				vRows.Close()
+			}
+
+			// Accumulate materials in vaults
+			for sid, credits := range sectMatCredits {
+				vault := vaultMap[sid]
+				if vault == nil {
+					vault = map[string]int{}
+					vaultMap[sid] = vault
+				}
+				for _, mc := range credits {
+					if mc.matID != "" {
+						vault[mc.matID] += mc.qty
+					}
+				}
+			}
+
+			// Batch write vaults
+			writeIDs := make([]string, 0, len(vaultMap))
+			writeRaw := make([][]byte, 0, len(vaultMap))
+			for sid, vault := range vaultMap {
+				raw, _ := json.Marshal(vault)
+				writeIDs = append(writeIDs, sid)
+				writeRaw = append(writeRaw, raw)
+			}
+			if len(writeIDs) > 0 {
+				if _, err := tx.Exec(`
+					UPDATE sects s SET vault_materials = v.vault
+					FROM (SELECT unnest($1::text[]) AS id, unnest($2::bytea[]) AS vault) v
+					WHERE s.id = v.id
+				`, pq.Array(writeIDs), pq.Array(writeRaw)); err != nil {
+					logger.S.Errorf("Sect Territory Worker: batch update vaults failed: %v", err)
+					return
+				}
+			}
 		}
-		creditTerritoryContributionWorker(tx, pid, rate, elapsedMin)
 	}
 
-	return tx.Commit()
-}
+	// 3d. Batch contribution credit
+	// Original logic: for each mine, for each member of the mine's sect,
+	// add rate * elapsedMin to territory_pending, then credit whole points.
+	// A player can appear in multiple mines (if their sect owns >1 mine).
+	if len(allMemberIDs) > 0 {
+		// Read all member states in 1 query
+		type memberState struct {
+			territoryPending    float64
+			creditedToday       int
+			territoryCreditedAt string
+		}
+		memberStates := map[string]memberState{}
+		if cRows, err := tx.Query(`
+			SELECT player_id, territory_pending, territory_credited_today, COALESCE(territory_credited_at::text, '')
+			FROM sect_members WHERE player_id = ANY($1::text[])
+		`, pq.Array(allMemberIDs)); err == nil {
+			for cRows.Next() {
+				var pid string
+				var ms memberState
+				if cRows.Scan(&pid, &ms.territoryPending, &ms.creditedToday, &ms.territoryCreditedAt) == nil {
+					memberStates[pid] = ms
+				}
+			}
+			cRows.Close()
+		}
 
-// creditTerritoryContributionWorker accrues pending contribution and credits
-// whole points while respecting the daily cap.
-func creditTerritoryContributionWorker(tx *sql.Tx, playerID string, ratePerMin, elapsedMin float64) {
-	today := time.Now().Format("2006-01-02")
-	_, _ = tx.Exec(`
-		UPDATE sect_members SET territory_credited_at = $1::date, territory_credited_today = 0
-		WHERE player_id = $2 AND (territory_credited_at IS NULL OR territory_credited_at IS DISTINCT FROM $1::date)
-	`, today, playerID)
+		// Accumulate pending per player across all mines
+		// pendingAccum[pid] = extra pending to add this tick
+		pendingAccum := map[string]float64{}
+		for _, mr := range activeMines {
+			elapsedMin := now.Sub(mr.lastClaimed).Minutes()
+			if elapsedMin <= 0 {
+				continue
+			}
+			defenderIDs := defenderIDsByMine[mr.id]
+			for _, pid := range memberIDsBySect[mr.sectID] {
+				rate := territoryMemberRate
+				if defenderIDs[pid] {
+					rate = territoryDefenderRate
+				}
+				pendingAccum[pid] += rate * elapsedMin
+			}
+		}
 
-	var creditedToday int
-	_ = tx.QueryRow(`SELECT territory_credited_today FROM sect_members WHERE player_id = $1`, playerID).Scan(&creditedToday)
-	if creditedToday >= territoryDailyCap {
-		return
+		// Compute per-player contribution credit
+		type memberCreditResult struct {
+			playerID          string
+			contributionDelta int
+			newPending        float64
+			newCreditedToday  int
+			newCreditedAt     string
+		}
+		var creditResults []memberCreditResult
+
+		for _, pid := range allMemberIDs {
+			ms := memberStates[pid]
+
+			// Date rollover
+			creditedToday := ms.creditedToday
+			credDate := ms.territoryCreditedAt
+			if credDate == "" || credDate != today {
+				creditedToday = 0
+				credDate = today
+			}
+
+			pending := ms.territoryPending + pendingAccum[pid]
+
+			if creditedToday >= territoryDailyCap {
+				creditResults = append(creditResults, memberCreditResult{
+					playerID:         pid,
+					newPending:       pending,
+					newCreditedToday: creditedToday,
+					newCreditedAt:    credDate,
+				})
+				continue
+			}
+
+			credit := int(math.Floor(pending))
+			remaining := territoryDailyCap - creditedToday
+			if credit > remaining {
+				credit = remaining
+			}
+			newPending := pending
+			newCreditedToday := creditedToday
+			if credit > 0 {
+				newPending = pending - float64(credit)
+				newCreditedToday = creditedToday + credit
+			}
+
+			creditResults = append(creditResults, memberCreditResult{
+				playerID:         pid,
+				contributionDelta: credit,
+				newPending:       newPending,
+				newCreditedToday: newCreditedToday,
+				newCreditedAt:    credDate,
+			})
+		}
+
+		// Batch write contribution credits
+		if len(creditResults) > 0 {
+			crIDs := make([]string, 0, len(creditResults))
+			crDeltas := make([]int, 0, len(creditResults))
+			crPendings := make([]float64, 0, len(creditResults))
+			crCreditedTodays := make([]int, 0, len(creditResults))
+			crCreditedAts := make([]string, 0, len(creditResults))
+
+			for _, cr := range creditResults {
+				crIDs = append(crIDs, cr.playerID)
+				crDeltas = append(crDeltas, cr.contributionDelta)
+				crPendings = append(crPendings, cr.newPending)
+				crCreditedTodays = append(crCreditedTodays, cr.newCreditedToday)
+				crCreditedAts = append(crCreditedAts, cr.newCreditedAt)
+			}
+
+			if _, err := tx.Exec(`
+				UPDATE sect_members sm SET
+					contribution_points = sm.contribution_points + v.delta,
+					territory_pending = v.pending,
+					territory_credited_today = v.credited_today,
+					territory_credited_at = v.credited_at::date
+				FROM (SELECT unnest($1::text[]) AS player_id,
+				             unnest($2::int[]) AS delta,
+				             unnest($3::float8[]) AS pending,
+				             unnest($4::int[]) AS credited_today,
+				             unnest($5::text[]) AS credited_at) v
+				WHERE sm.player_id = v.player_id
+			`, pq.Array(crIDs), pq.Array(crDeltas), pq.Array(crPendings),
+				pq.Array(crCreditedTodays), pq.Array(crCreditedAts)); err != nil {
+				logger.S.Errorf("Sect Territory Worker: batch update contributions failed: %v", err)
+				return
+			}
+		}
 	}
 
-	var pending float64
-	_ = tx.QueryRow(`SELECT territory_pending FROM sect_members WHERE player_id = $1`, playerID).Scan(&pending)
-	pending += ratePerMin * elapsedMin
-
-	credit := int(math.Floor(pending))
-	remaining := territoryDailyCap - creditedToday
-	if credit > remaining {
-		credit = remaining
-	}
-	if credit <= 0 {
-		_, _ = tx.Exec(`UPDATE sect_members SET territory_pending = $1 WHERE player_id = $2`, pending, playerID)
-		return
-	}
-
-	_, err := tx.Exec(`
-		UPDATE sect_members SET contribution_points = contribution_points + $1,
-		       territory_pending = $2, territory_credited_today = $3
-		WHERE player_id = $4
-	`, credit, pending-float64(credit), creditedToday+credit, playerID)
-	if err != nil {
-		logger.S.Errorf("creditTerritoryContributionWorker error for %s: %v", playerID, err)
+	if err := tx.Commit(); err != nil {
+		logger.S.Errorf("Sect Territory Worker: commit failed: %v", err)
 	}
 }
