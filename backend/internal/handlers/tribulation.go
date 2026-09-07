@@ -688,9 +688,10 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 
 	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 
-	triggerYear := math.Round(calcNextYear)
-	if ap.NextTribulationYear > triggerYear {
-		triggerYear = math.Round(ap.NextTribulationYear)
+	triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
+	storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
+	if storedYear > triggerYear {
+		triggerYear = storedYear
 	}
 
 	if ap.InternalYearsPassed >= triggerYear {
@@ -827,8 +828,10 @@ func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
 // schedule is computed from intervals smaller than the already-passed year).
 // A milestone exactly equal to the current year is left as-is so that two types
 // due at the same milestone resolve one right after the other instead of drifting.
+// Also guards against math.MaxFloat64 (infinity) returned when no valid tribulation
+// type exists for the current rank (e.g., rank < 6 or rank > 9).
 func guardNextTribulationYear(nextYear, currentYears float64) float64 {
-	if nextYear < currentYears {
+	if math.IsInf(nextYear, 0) || nextYear == math.MaxFloat64 || nextYear < currentYears {
 		return math.Ceil(currentYears) + 10
 	}
 	return math.Round(nextYear)
@@ -1154,21 +1157,22 @@ func CheckAndTriggerTribulations() error {
 				}
 			}
 
-			// Tribulation scheduling
-			pd := pMap[ap.PlayerID]
-			rank := 0
-			if pd != nil {
-				rank = pd.rank
-			}
+// Tribulation scheduling
+		pd := pMap[ap.PlayerID]
+		rank := 0
+		if pd != nil {
+			rank = pd.rank
+		}
 
-			calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+		calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 
-			triggerYear := math.Round(calcNextYear)
-			if ap.NextTribulationYear > triggerYear {
-				triggerYear = math.Round(ap.NextTribulationYear)
-			}
+		triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
+		storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
+		if storedYear > triggerYear {
+			triggerYear = storedYear
+		}
 
-			if newYearsPassed >= triggerYear {
+		if newYearsPassed >= triggerYear {
 				if !isPlayerOnline(ap.PlayerID) {
 					_, _ = db.DB.Exec(`
 						UPDATE immortal_apertures

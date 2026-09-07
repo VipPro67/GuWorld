@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
@@ -185,4 +186,72 @@ func ClearCombatState(playerID string) error {
 	key := "combat_state:" + playerID
 	return Delete(key)
 }
+
+type TemporaryStatusData struct {
+	ID        string    `json:"id"`
+	Source    string    `json:"source,omitempty"`
+	Value     float64   `json:"value,omitempty"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// SetPlayerTemporaryStatus stores a temporary status in Redis with an automatic TTL expiration.
+func SetPlayerTemporaryStatus(playerID, statusID, source string, value float64, ttl time.Duration) error {
+	if Client == nil {
+		return nil
+	}
+	key := fmt.Sprintf("player_status:%s:%s", playerID, statusID)
+	data := TemporaryStatusData{
+		ID:        statusID,
+		Source:    source,
+		Value:     value,
+		ExpiresAt: time.Now().Add(ttl),
+	}
+	return SetJSON(key, data, ttl)
+}
+
+// HasPlayerTemporaryStatus checks whether a temporary status is active for a player in Redis.
+func HasPlayerTemporaryStatus(playerID, statusID string) bool {
+	if Client == nil {
+		return false
+	}
+	key := fmt.Sprintf("player_status:%s:%s", playerID, statusID)
+	n, err := Client.Exists(Ctx, key).Result()
+	return err == nil && n > 0
+}
+
+// RemovePlayerTemporaryStatus explicitly removes a temporary status from Redis.
+func RemovePlayerTemporaryStatus(playerID, statusID string) error {
+	if Client == nil {
+		return nil
+	}
+	key := fmt.Sprintf("player_status:%s:%s", playerID, statusID)
+	return Delete(key)
+}
+
+// GetPlayerTemporaryStatuses retrieves all active temporary statuses for a player from Redis.
+func GetPlayerTemporaryStatuses(playerID string) ([]TemporaryStatusData, error) {
+	if Client == nil {
+		return nil, redis.Nil
+	}
+	pattern := fmt.Sprintf("player_status:%s:*", playerID)
+	keys, err := Client.Keys(Ctx, pattern).Result()
+	if err != nil || len(keys) == 0 {
+		return []TemporaryStatusData{}, nil
+	}
+
+	payloads, err := GetManyJSON(keys)
+	if err != nil {
+		return nil, err
+	}
+
+	statuses := make([]TemporaryStatusData, 0, len(payloads))
+	for _, pStr := range payloads {
+		var s TemporaryStatusData
+		if err := json.Unmarshal([]byte(pStr), &s); err == nil {
+			statuses = append(statuses, s)
+		}
+	}
+	return statuses, nil
+}
+
 

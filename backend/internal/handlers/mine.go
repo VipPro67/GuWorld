@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -117,6 +118,12 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi f
 }
 
 func GetMineSlots(c *gin.Context) {
+	var cachedSlots []MineSlotResponse
+	if err := cache.GetJSON("mine_slots_list", &cachedSlots); err == nil && len(cachedSlots) > 0 {
+		c.JSON(http.StatusOK, cachedSlots)
+		return
+	}
+
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT m.id, m.rarity, m.mine_type, m.occupier_id, m.monster_id, m.occupied_at, m.last_claimed_at, p.username
 		FROM mine_slots m
@@ -173,6 +180,7 @@ func GetMineSlots(c *gin.Context) {
 		})
 	}
 
+	_ = cache.SetJSON("mine_slots_list", slots, 60*time.Second)
 	c.JSON(http.StatusOK, slots)
 }
 
@@ -267,6 +275,7 @@ func OccupyMineSlot(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+	invalidateMineSlotsCache()
 
 	auditlog.Logf(db.DB, &authID, "mine.occupy", "slot=%d rarity=%s", req.SlotID, rarity)
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d! Nhân Khí +5.", rarity, req.SlotID)})
@@ -336,6 +345,7 @@ func ClaimMineRewards(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+	invalidateMineSlotsCache()
 
 	auditlog.Logf(db.DB, &authID, "mine.claim", "slot=%d stones=%d qi=%.1f chests=%d", req.SlotID, stones, qi, chests)
 	c.JSON(http.StatusOK, gin.H{
@@ -412,6 +422,7 @@ func AbandonMineSlot(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+	invalidateMineSlotsCache()
 
 	auditlog.Logf(db.DB, &authID, "mine.abandon", "slot=%d stones=%d qi=%.1f chests=%d", req.SlotID, stones, qi, chests)
 	c.JSON(http.StatusOK, gin.H{
@@ -874,4 +885,10 @@ func AssignMonstersToEmptyMines() {
 	}
 
 	_ = tx.Commit()
+	invalidateMineSlotsCache()
 }
+
+func invalidateMineSlotsCache() {
+	_ = cache.Delete("mine_slots_list")
+}
+

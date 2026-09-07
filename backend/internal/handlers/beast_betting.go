@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -620,32 +621,38 @@ func GetCurrentBettingRound(c *gin.Context) {
 	}
 	userID := playerIDVal.(uuid.UUID)
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	defer tx.Rollback()
+	var r *BettingRound
+	if err := cache.GetJSON("beast_betting_current_round", &r); err != nil || r == nil {
+		tx, err := db.DB.Begin()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		defer tx.Rollback()
 
-	r, err := getOrCreateCurrentRound(tx, time.Now())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+		createdRound, err := getOrCreateCurrentRound(tx, time.Now())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		r = createdRound
+		_ = cache.SetJSON("beast_betting_current_round", r, 60*time.Second)
 	}
 
 	var myBetTeam string
 	var myBetAmount float64
-	err = db.DB.QueryRow(`
+	var queryErr error
+	queryErr = db.DB.QueryRow(`
 		SELECT team, amount FROM beast_bets
 		WHERE round_id = $1 AND player_id = $2
 	`, r.ID, userID).Scan(&myBetTeam, &myBetAmount)
-	if err != nil && err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if queryErr != nil && queryErr != sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": queryErr.Error()})
 		return
 	}
 
@@ -810,6 +817,7 @@ func PlaceBeastBet(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	_ = cache.Delete("beast_betting_current_round")
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Đặt cược thành công!",
