@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -64,17 +63,26 @@ func (s *lastActivityStore) flush() {
 	s.dirty = make(map[uuid.UUID]time.Time, len(snapshot))
 	s.mu.Unlock()
 
-	ids := make([]uuid.UUID, 0, len(snapshot))
-	for id := range snapshot {
-		ids = append(ids, id)
+	var failed []uuid.UUID
+	for id, lastTime := range snapshot {
+		_, err := db.DB.Exec(
+			`UPDATE players SET last_activity = $1 WHERE id = $2`,
+			lastTime, id,
+		)
+		if err != nil {
+			logger.S.Warnf("Last-activity flush postponed for player %s: %v", id, err)
+			failed = append(failed, id)
+		}
 	}
 
-	_, err := db.DB.Exec(
-		`UPDATE players SET last_activity = NOW() WHERE id = ANY($1)`,
-		pq.Array(ids),
-	)
-	if err != nil {
-		logger.S.Errorf("Last-activity batch flush failed (%d players): %v", len(ids), err)
+	if len(failed) > 0 {
+		s.mu.Lock()
+		for _, id := range failed {
+			if _, exists := s.dirty[id]; !exists {
+				s.dirty[id] = snapshot[id]
+			}
+		}
+		s.mu.Unlock()
 	}
 }
 

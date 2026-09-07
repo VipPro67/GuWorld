@@ -127,6 +127,10 @@ func schemaSocial() error {
 	CREATE INDEX IF NOT EXISTS idx_notifications_player ON notifications (player_id, created_at DESC);`); err != nil {
 		return err
 	}
+	if err := execSchema("notifications_unread_idx", `
+	CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (player_id, is_read) WHERE is_read = FALSE;`); err != nil {
+		return err
+	}
 
 	return nil
 }

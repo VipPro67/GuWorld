@@ -3,15 +3,14 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-// StartStatusExpiryWorker periodically purges expired entries from every
-// player's statuses JSONB array. Expiry is wall-clock based; effect resolution
-// also filters expired entries lazily, so this worker only keeps the stored
-// data tidy (and makes admin views accurate).
+// StartStatusExpiryWorker periodically purges expired entries from player statuses.
 func StartStatusExpiryWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	go func() {
@@ -29,53 +28,57 @@ func StartStatusExpiryWorker(ctx context.Context, db *sql.DB, interval time.Dura
 	}()
 }
 
-// processStatusExpiryTick rewrites the statuses array for every player that
-// has at least one entry carrying an expires_at, dropping elements whose
-// expires_at has passed. Permanent entries (no expires_at) are kept as-is.
 func processStatusExpiryTick(db *sql.DB) {
-	tx, err := db.Begin()
-	if err != nil {
-		logger.S.Errorf("Status Expiry Worker Error starting transaction: %v", err)
-		return
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
-		logger.S.Errorf("Status Expiry Worker Error setting statement_timeout: %v", err)
-		return
-	}
-	if _, err := tx.Exec(`SET LOCAL lock_timeout = '30000'`); err != nil {
-		logger.S.Errorf("Status Expiry Worker Error setting lock_timeout: %v", err)
-		return
-	}
-
-	res, err := tx.Exec(`
-		UPDATE players p
-		SET statuses = COALESCE((
-			SELECT jsonb_agg(s ORDER BY idx)
-			FROM jsonb_array_elements(p.statuses) WITH ORDINALITY AS t(s, idx)
-			WHERE (s->>'expires_at') IS NULL
-			   OR (s->>'expires_at')::timestamptz > now()
-		), '[]'::jsonb)
-		WHERE jsonb_path_exists(p.statuses, '$[*] ? (@.expires_at != null)')
-		  AND EXISTS (
-			SELECT 1
-			FROM jsonb_array_elements(p.statuses) s
-			WHERE (s->>'expires_at') IS NOT NULL
-			  AND (s->>'expires_at')::timestamptz <= now()
-		  )
+	rows, err := db.Query(`
+		SELECT id, statuses 
+		FROM players 
+		WHERE jsonb_path_exists(statuses, '$[*] ? (@.expires_at != null)')
 	`)
 	if err != nil {
-		logger.S.Errorf("Status Expiry Worker Error purging expired statuses: %v", err)
+		logger.S.Errorf("Status Expiry Worker Error fetching players with expiring statuses: %v", err)
 		return
 	}
+	defer rows.Close()
 
-	if err := tx.Commit(); err != nil {
-		logger.S.Errorf("Status Expiry Worker Error committing transaction: %v", err)
-		return
+	now := time.Now()
+	cleanedCount := 0
+
+	type playerStatusPurge struct {
+		id       string
+		statuses models.StatusList
+	}
+	var purges []playerStatusPurge
+
+	for rows.Next() {
+		var id string
+		var rawStatuses []byte
+		if err := rows.Scan(&id, &rawStatuses); err != nil {
+			continue
+		}
+		var list models.StatusList
+		if err := json.Unmarshal(rawStatuses, &list); err != nil {
+			continue
+		}
+		if list.Expire(now) {
+			purges = append(purges, playerStatusPurge{id: id, statuses: list})
+		}
+	}
+	_ = rows.Close()
+
+	for _, p := range purges {
+		b, err := json.Marshal(p.statuses)
+		if err != nil {
+			continue
+		}
+		_, err = db.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, string(b), p.id)
+		if err != nil {
+			logger.S.Warnf("Status Expiry Worker: failed to update player %s: %v", p.id, err)
+		} else {
+			cleanedCount++
+		}
 	}
 
-	if n, _ := res.RowsAffected(); n > 0 {
-		logger.S.Infof("Status Expiry Worker: cleaned expired statuses for %d player(s)", n)
+	if cleanedCount > 0 {
+		logger.S.Infof("Status Expiry Worker: cleaned expired statuses for %d player(s)", cleanedCount)
 	}
 }

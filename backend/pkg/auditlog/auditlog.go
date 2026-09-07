@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -27,10 +28,6 @@ type Entry struct {
 }
 
 func Log(q Querier, entry Entry) {
-	if q == nil {
-		logger.S.Errorf("auditlog: nil querier, skipping action=%s", entry.Action)
-		return
-	}
 	var metaBytes []byte
 	if entry.Metadata != nil {
 		var err error
@@ -47,13 +44,25 @@ func Log(q Querier, entry Entry) {
 	if entry.PlayerID != nil {
 		pid = *entry.PlayerID
 	}
-	_, err := q.Exec(
-		`INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)`,
-		pid, entry.Action, entry.EntityType, entry.EntityID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
-	)
-	if err != nil {
-		logger.S.Errorf("auditlog: failed to insert action=%s player=%v: %v", entry.Action, entry.PlayerID, err)
+
+	execDB := q
+	if db.DB != nil {
+		execDB = db.DB
 	}
+	if execDB == nil {
+		logger.S.Errorf("auditlog: nil querier, skipping action=%s", entry.Action)
+		return
+	}
+
+	go func(target Querier, pID interface{}, mJSON string, e Entry) {
+		_, err := target.Exec(
+			`INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)`,
+			pID, e.Action, e.EntityType, e.EntityID, e.RequestSummary, mJSON, e.IPAddress, e.Success, e.ErrorMessage, time.Now().UTC(),
+		)
+		if err != nil {
+			logger.S.Warnf("auditlog: failed to insert action=%s player=%v: %v", e.Action, e.PlayerID, err)
+		}
+	}(execDB, pid, metaJSON, entry)
 }
 
 func Logf(q Querier, playerID *uuid.UUID, action, format string, args ...interface{}) {
