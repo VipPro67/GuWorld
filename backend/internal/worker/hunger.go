@@ -33,39 +33,28 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 	}()
 }
 
-// processHungerDecay depletes Gu hunger for every player. Work is done per
-// player in small transactions rather than one giant set-based batch: a single
-// UPDATE over the whole player_gu table exceeds the statement_timeout configured
-// in db.Connect and deadlocks against concurrent gameplay writes on large data
-// sets. Only the rare ON_TICK effects (Thien Nguyen Bao Lien series,
-// GU_CREATION_ORIGIN) are handled in Go, and only for the small subset of
-// players that actually own an equipped ACTIVE Gu with such effects.
+// processHungerDecay depletes Gu hunger for every player.
 func processHungerDecay(db *sql.DB) {
-	// 1. Find players who own an equipped ACTIVE Gu carrying ON_TICK effects.
-	subset := findOnTickPlayers(db)
+	// 1. Batch ON_TICK effects (all players in one pass)
+	batchApplyOnTickEffects(db)
 
-	// 2. Apply ON_TICK effects (HP / stones / immortal stones) BEFORE the decay
-	//    pass so a Gu that starves this tick still produces its ON_TICK.
-	for _, pID := range subset {
-		if err := applyOnTickEffects(db, pID); err != nil {
-			logger.S.Errorf("Hunger Worker Error applying ON_TICK for player %s: %v", pID, err)
-		}
-	}
-
-	// 3. Per-player decay + starvation (sleep/death) + HP backlash + audit logs
-	//    + equipped_gus cleanup.
+	// 2. Per-player decay + starvation (sleep/death) + HP backlash + audit logs
+	//    + equipped_gus cleanup.  Per-player transactions are intentional:
+	//    a single UPDATE over the whole player_gu table exceeds the
+	//    statement_timeout and deadlocks against concurrent gameplay writes.
 	if err := runHungerDecayBatch(db); err != nil {
 		logger.S.Errorf("Hunger Worker Error running decay batch: %v", err)
 	}
 
-	// 4. Sect vault (kho tông môn) decay: Gu stored in a vault still get hungry
-	//    at the ACTIVE rate and starve to death in storage.
-	processVaultHungerDecay(db)
+	// 3. Sect vault hunger decay — batch across all sects.
+	batchVaultHungerDecay(db)
 }
+
+// ── ON_TICK batch ──────────────────────────────────────────────────────────
 
 // findOnTickPlayers returns the player ids that own at least one equipped
 // ACTIVE Gu whose dictionary effects.other contains an ON_TICK trigger.
-func findOnTickPlayers(db *sql.DB) []string {
+func findOnTickPlayers(db *sql.DB) ([]string, error) {
 	rows, err := db.Query(`
 		SELECT DISTINCT pg.player_id::text
 		FROM player_gu pg
@@ -76,11 +65,9 @@ func findOnTickPlayers(db *sql.DB) []string {
 			WHERE m->>'event_trigger' = 'ON_TICK'
 		  )`)
 	if err != nil {
-		logger.S.Errorf("Hunger Worker Error: failed to query ON_TICK players: %v", err)
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
-
 	var playerIDs []string
 	for rows.Next() {
 		var id string
@@ -88,57 +75,78 @@ func findOnTickPlayers(db *sql.DB) []string {
 			playerIDs = append(playerIDs, id)
 		}
 	}
-	return playerIDs
+	return playerIDs, rows.Err()
 }
 
-// applyOnTickEffects handles the rare ON_TICK effects (GENERATE_STONES_TICK,
-// GENERATE_IMMORTAL_STONES_TICK) for a single player's equipped ACTIVE Gus. It
-// only updates player counters (stones), never hunger or Gu state.
-// MANA_REGEN_TICK is handled separately as an hourly rate (see
-// models.ManaRegenTickPerHour), so it is not applied here. HP regeneration is
-// handled by the lazy projected-status service, so HOT_TICK no longer heals.
-func applyOnTickEffects(db *sql.DB, playerID string) error {
-	tx, err := db.Begin()
+// batchApplyOnTickEffects replaces the old per-player applyOnTickEffects loop.
+// It batch-reads all ON_TICK players' stones and equipped Gu effects in 2
+// queries, computes stone generation in Go, then batch-writes in 1 UPDATE.
+func batchApplyOnTickEffects(db *sql.DB) {
+	playerIDs, err := findOnTickPlayers(db)
 	if err != nil {
-		return err
+		logger.S.Errorf("Hunger Worker Error: failed to query ON_TICK players: %v", err)
+		return
 	}
-	defer tx.Rollback()
-
-	var immortalStones float64
-	var primevalStones float64
-	err = tx.QueryRow(`
-		SELECT primeval_stones, immortal_stones
-		FROM players WHERE id = $1`, playerID).Scan(
-		&primevalStones, &immortalStones)
-	if err != nil {
-		return err
+	if len(playerIDs) == 0 {
+		return
 	}
 
-	tickStones := 0.0
-	tickImmortalStones := 0.0
+	pqIDs := pq.Array(playerIDs)
 
-	rows, err := tx.Query(`
-		SELECT gd.effects->'other'
+	// 1. Batch-read stones
+	type stones struct {
+		primeval float64
+		immortal float64
+	}
+	stoneMap := make(map[string]*stones, len(playerIDs))
+	sRows, err := db.Query(`SELECT id, primeval_stones, immortal_stones FROM players WHERE id = ANY($1::text[])`, pqIDs)
+	if err != nil {
+		logger.S.Errorf("Hunger Worker Error reading stones: %v", err)
+		return
+	}
+	for sRows.Next() {
+		var pid string
+		var s stones
+		if sRows.Scan(&pid, &s.primeval, &s.immortal) == nil {
+			stoneMap[pid] = &s
+		}
+	}
+	sRows.Close()
+
+	// 2. Batch-read ON_TICK effects for all equipped ACTIVE Gus
+	type effectRow struct {
+		playerID string
+		otherRaw []byte
+	}
+	var effectRows []effectRow
+	eRows, err := db.Query(`
+		SELECT pg.player_id::text, gd.effects->'other'
 		FROM player_gu pg
 		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-		WHERE pg.player_id = $1 AND pg.equipped AND pg.state = 'ACTIVE'`, playerID)
+		WHERE pg.player_id = ANY($1::text[]) AND pg.equipped AND pg.state = 'ACTIVE'`, pqIDs)
 	if err != nil {
-		return err
+		logger.S.Errorf("Hunger Worker Error reading ON_TICK effects: %v", err)
+		return
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var otherRaw []byte
-		if err := rows.Scan(&otherRaw); err != nil {
-			return err
+	for eRows.Next() {
+		var er effectRow
+		if eRows.Scan(&er.playerID, &er.otherRaw) == nil {
+			effectRows = append(effectRows, er)
 		}
+	}
+	eRows.Close()
+
+	// 3. Compute per-player stone generation
+	tickStones := make(map[string]float64)
+	tickImmortal := make(map[string]float64)
+
+	for _, er := range effectRows {
 		var other []models.SpecialMechanic
-		if len(otherRaw) > 0 {
-			if err := json.Unmarshal(otherRaw, &other); err != nil {
+		if len(er.otherRaw) > 0 {
+			if err := json.Unmarshal(er.otherRaw, &other); err != nil {
 				continue
 			}
 		}
-
 		for _, mech := range other {
 			if mech.EventTrigger != "ON_TICK" {
 				continue
@@ -153,35 +161,53 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 				if val <= 0 {
 					val = 1.0
 				}
-				tickStones += val
+				tickStones[er.playerID] += val
 			case "GENERATE_IMMORTAL_STONES_TICK":
 				val, _ := params["value"].(float64)
 				if val <= 0 {
 					val = 1.0
 				}
-				tickImmortalStones += val
+				tickImmortal[er.playerID] += val
 			}
 		}
 	}
 
-	if tickStones > 0 {
-		primevalStones += tickStones
-	}
-	if tickImmortalStones > 0 {
-		immortalStones += tickImmortalStones
+	// 4. Collect players that actually need an update
+	var updateIDs []string
+	var updatePrimeval []float64
+	var updateImmortal []float64
+
+	for pid, s := range stoneMap {
+		ps := tickStones[pid]
+		is := tickImmortal[pid]
+		if ps == 0 && is == 0 {
+			continue
+		}
+		updateIDs = append(updateIDs, pid)
+		updatePrimeval = append(updatePrimeval, s.primeval+ps)
+		updateImmortal = append(updateImmortal, s.immortal+is)
 	}
 
-	if tickStones == 0 && tickImmortalStones == 0 {
-		return tx.Rollback()
+	if len(updateIDs) == 0 {
+		return
 	}
 
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
-		primevalStones, immortalStones, playerID)
+	// 5. Batch UPDATE
+	_, err = db.Exec(`
+		UPDATE players AS p SET
+			primeval_stones = v.ps,
+			immortal_stones = v.is
+		FROM (SELECT unnest($1::text[]) AS id,
+		             unnest($2::float8[]) AS ps,
+		             unnest($3::float8[]) AS is2) v
+		WHERE p.id = v.id
+	`, pq.Array(updateIDs), pq.Array(updatePrimeval), pq.Array(updateImmortal))
 	if err != nil {
-		return err
+		logger.S.Errorf("Hunger Worker Error batch updating stones: %v", err)
 	}
-	return tx.Commit()
 }
+
+// ── Hunger decay (per-player, intentional for deadlock safety) ─────────────
 
 // runHungerDecayBatch applies hunger decay for every player that owns a Gu in a
 // decayable state. Each player is processed in its own small transaction so lock
@@ -354,18 +380,28 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 		}
 	}
 
-	// Audit log for every Gu that starved this tick (vital vs regular death).
-	for _, s := range dead {
-		action := "gu.starve_death"
-		summary := s.guName + " | Cổ chết đói"
-		if s.isVital {
-			action = "gu.starve_vital_death"
-			summary = s.guName + " | bản mệnh Cổ chết đói"
+	// Batch audit logs for all dead Gus in one multi-row INSERT.
+	if len(dead) > 0 {
+		actions := make([]string, 0, len(dead))
+		summaries := make([]string, 0, len(dead))
+		guIDs := make([]string, 0, len(dead))
+		for _, s := range dead {
+			if s.isVital {
+				actions = append(actions, "gu.starve_vital_death")
+				summaries = append(summaries, s.guName+" | bản mệnh Cổ chết đói")
+			} else {
+				actions = append(actions, "gu.starve_death")
+				summaries = append(summaries, s.guName+" | Cổ chết đói")
+			}
+			guIDs = append(guIDs, s.guID)
 		}
 		if _, err := tx.Exec(`
 			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-			VALUES ($1, $2, 'gu_instance', $3, $4, '{}'::jsonb, '', false, 'Chết đói', NOW())`,
-			playerID, action, s.guID, summary); err != nil {
+			SELECT $1::uuid, v.action, 'gu_instance', v.entity_id, v.summary, '{}'::jsonb, '', false, 'Chết đói', NOW()
+			FROM (SELECT unnest($2::text[]) AS action,
+			             unnest($3::text[]) AS entity_id,
+			             unnest($4::text[]) AS summary) v
+		`, playerID, pq.Array(actions), pq.Array(guIDs), pq.Array(summaries)); err != nil {
 			return err
 		}
 	}
@@ -412,7 +448,7 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 	return nil
 }
 
-// ---- Sect vault (kho tông môn) hunger decay ---------------------------------
+// ── Sect vault hunger decay (batch) ────────────────────────────────────────
 
 // vaultGuItem is the JSONB shape of a single entry in sects.vault_gu.
 type vaultGuItem struct {
@@ -434,140 +470,135 @@ func vaultGuSpec(id string, rank int) (float64, float64) {
 	return 100, 0
 }
 
-// processVaultHungerDecay decays hunger for Gu stored in every sect vault at the
-// same ACTIVE rate as equipped Gu, removing groups that starve to 0. Each sect
-// is processed in its own short transaction.
-func processVaultHungerDecay(db *sql.DB) {
-	sectIDs, err := findSectIDsWithVaultGu(db)
+// batchVaultHungerDecay replaces the old per-sect transaction loop. It
+// batch-reads all sect vaults in 1 query, decays hunger in Go, then batch-writes
+// all modified vaults + audit logs in a single transaction.
+func batchVaultHungerDecay(db *sql.DB) {
+	// 1. Batch-read all sects with non-empty vault_gu
+	type sectVault struct {
+		id   string
+		raw  []byte
+	}
+	var vaults []sectVault
+	vRows, err := db.Query(`SELECT id, vault_gu FROM sects WHERE vault_gu <> '[]'::jsonb`)
 	if err != nil {
-		logger.S.Errorf("Hunger Worker Error finding sects with vault Gu: %v", err)
+		logger.S.Errorf("Hunger Worker Error reading vault Gus: %v", err)
 		return
 	}
-	for _, id := range sectIDs {
-		if err := processSectVaultHungerDecay(db, id); err != nil {
-			logger.S.Errorf("Hunger Worker Error decaying sect %s vault: %v", id, err)
+	for vRows.Next() {
+		var sv sectVault
+		if vRows.Scan(&sv.id, &sv.raw) == nil {
+			vaults = append(vaults, sv)
 		}
 	}
-}
+	vRows.Close()
 
-func findSectIDsWithVaultGu(db *sql.DB) ([]string, error) {
-	rows, err := db.Query(`SELECT id FROM sects WHERE vault_gu <> '[]'::jsonb`)
-	if err != nil {
-		return nil, err
+	if len(vaults) == 0 {
+		return
 	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			ids = append(ids, id)
+
+	// 2. Decay hunger in Go for each vault
+	type auditEntry struct {
+		sectID  string
+		summary string
+	}
+	var modifiedIDs []string
+	var modifiedRaw [][]byte
+	var auditLogs []auditEntry
+
+	for _, sv := range vaults {
+		var items []vaultGuItem
+		if len(sv.raw) > 0 {
+			if err := json.Unmarshal(sv.raw, &items); err != nil {
+				continue
+			}
 		}
-	}
-	return ids, rows.Err()
-}
 
-// processSectVaultHungerDecay retries a few times on transient deadlocks, mirroring
-// the per-player decay loop.
-func processSectVaultHungerDecay(db *sql.DB, sectID string) error {
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		lastErr = processSectVaultHungerDecayOnce(db, sectID)
-		if lastErr == nil {
-			return nil
+		changed := false
+		for i := range items {
+			maxH, rate := vaultGuSpec(items[i].ID, items[i].Rank)
+			if items[i].Hunger <= 0 {
+				items[i].Hunger = maxH
+			}
+			items[i].Hunger -= rate
+			if items[i].Hunger < 0 {
+				items[i].Hunger = 0
+			}
+			changed = true
 		}
-		if !isDeadlockOrLockTimeout(lastErr) {
-			return lastErr
-		}
-		time.Sleep(time.Duration(attempt+1) * time.Second)
-	}
-	return lastErr
-}
 
-// processSectVaultHungerDecayOnce decays hunger for one sect vault and removes
-// groups that starve, writing an audit log per removed group.
-func processSectVaultHungerDecayOnce(db *sql.DB, sectID string) error {
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec(`SET LOCAL statement_timeout = '600000'`); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`SET LOCAL lock_timeout = '60000'`); err != nil {
-		return err
-	}
-
-	var raw []byte
-	if err := tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&raw); err != nil {
-		return err
-	}
-
-	var items []vaultGuItem
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &items); err != nil {
-			return err
-		}
-	}
-
-	type starved struct {
-		name string
-	}
-	var starvedGroups []starved
-	changed := false
-
-	for i := range items {
-		maxH, rate := vaultGuSpec(items[i].ID, items[i].Rank)
-		if items[i].Hunger <= 0 {
-			// Legacy/backfilled entry with no stored hunger: treat as full.
-			items[i].Hunger = maxH
-		}
-		items[i].Hunger -= rate
-		if items[i].Hunger < 0 {
-			items[i].Hunger = 0
-		}
-		changed = true
-
-		name := items[i].ID
-		if spec, ok := models.GetGu(items[i].ID, items[i].Rank); ok {
-			name = spec.Name
-		}
-		if items[i].Hunger <= 0 {
-			starvedGroups = append(starvedGroups, starved{name: name})
-		}
-	}
-
-	if len(starvedGroups) > 0 {
+		// Remove starved groups
 		kept := items[:0]
 		for _, it := range items {
 			if it.Hunger > 0 {
 				kept = append(kept, it)
+			} else {
+				name := it.ID
+				if spec, ok := models.GetGu(it.ID, it.Rank); ok {
+					name = spec.Name
+				}
+				auditLogs = append(auditLogs, auditEntry{
+					sectID:  sv.id,
+					summary: name + " | Cổ trong Bảo khố chết đói",
+				})
 			}
 		}
 		items = kept
+
+		if changed {
+			newRaw, err := json.Marshal(items)
+			if err != nil {
+				continue
+			}
+			modifiedIDs = append(modifiedIDs, sv.id)
+			modifiedRaw = append(modifiedRaw, newRaw)
+		}
 	}
 
-	if changed {
-		newRaw, err := json.Marshal(items)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(`UPDATE sects SET vault_gu = $1 WHERE id = $2`, newRaw, sectID); err != nil {
-			return err
+	// 3. Batch-write modified vaults + audit logs in one transaction
+	if len(modifiedIDs) == 0 && len(auditLogs) == 0 {
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		logger.S.Errorf("Hunger Worker Error starting vault batch tx: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	if len(modifiedIDs) > 0 {
+		if _, err := tx.Exec(`
+			UPDATE sects AS s SET vault_gu = v.vault
+			FROM (SELECT unnest($1::text[]) AS id, unnest($2::bytea[]) AS vault) v
+			WHERE s.id = v.id
+		`, pq.Array(modifiedIDs), pq.Array(modifiedRaw)); err != nil {
+			logger.S.Errorf("Hunger Worker Error batch updating vaults: %v", err)
+			return
 		}
 	}
 
-	for _, s := range starvedGroups {
+	if len(auditLogs) > 0 {
+		auditIDs := make([]string, 0, len(auditLogs))
+		auditSummaries := make([]string, 0, len(auditLogs))
+		for _, al := range auditLogs {
+			auditIDs = append(auditIDs, al.sectID)
+			auditSummaries = append(auditSummaries, al.summary)
+		}
 		if _, err := tx.Exec(`
 			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-			VALUES (NULL, 'sect.vault_gu_starve', 'sect', $1, $2, '{}'::jsonb, '', false, 'Chết đói trong Bảo khố', NOW())`,
-			sectID, s.name+" | Cổ trong Bảo khố chết đói"); err != nil {
-			return err
+			SELECT NULL, 'sect.vault_gu_starve', 'sect', v.entity_id, v.summary, '{}'::jsonb, '', false, 'Chết đói trong Bảo khố', NOW()
+			FROM (SELECT unnest($1::text[]) AS entity_id,
+			             unnest($2::text[]) AS summary) v
+		`, pq.Array(auditIDs), pq.Array(auditSummaries)); err != nil {
+			logger.S.Errorf("Hunger Worker Error batch inserting vault audit logs: %v", err)
+			return
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		logger.S.Errorf("Hunger Worker Error committing vault batch: %v", err)
+	}
 }
 
 // isDeadlockOrLockTimeout reports whether err is a Postgres deadlock (40P01) or
