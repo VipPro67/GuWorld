@@ -285,6 +285,11 @@ func GetImmortalAperture(c *gin.Context) {
 		return
 	}
 
+	if (ap.State == "STABLE" || ap.State == "DAMAGED") && ap.NextTribulationYear > 0 && ap.InternalYearsPassed >= ap.NextTribulationYear {
+		_ = checkAndTriggerSingleAperture(ap.ID)
+		_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ap.ID).Scan(&ap.State)
+	}
+
 	c.JSON(http.StatusOK, ap)
 }
 
