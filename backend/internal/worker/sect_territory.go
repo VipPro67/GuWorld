@@ -380,16 +380,16 @@ func processSectTerritoryTick(db *sql.DB) {
 
 			// Batch write vaults
 			writeIDs := make([]string, 0, len(vaultMap))
-			writeRaw := make([][]byte, 0, len(vaultMap))
+			writeRaw := make([]string, 0, len(vaultMap))
 			for sid, vault := range vaultMap {
 				raw, _ := json.Marshal(vault)
 				writeIDs = append(writeIDs, sid)
-				writeRaw = append(writeRaw, raw)
+				writeRaw = append(writeRaw, string(raw))
 			}
 			if len(writeIDs) > 0 {
 				if _, err := tx.Exec(`
 					UPDATE sects s SET vault_materials = v.vault
-					FROM (SELECT unnest($1::text[]) AS id, unnest($2::bytea[]) AS vault) v
+					FROM (SELECT unnest($1::text[]) AS id, unnest($2::jsonb[]) AS vault) v
 					WHERE s.id = v.id
 				`, pq.Array(writeIDs), pq.Array(writeRaw)); err != nil {
 					logger.S.Errorf("Sect Territory Worker: batch update vaults failed: %v", err)
@@ -413,7 +413,7 @@ func processSectTerritoryTick(db *sql.DB) {
 		memberStates := map[string]memberState{}
 		if cRows, err := tx.Query(`
 			SELECT player_id, territory_pending, territory_credited_today, COALESCE(territory_credited_at::text, '')
-			FROM sect_members WHERE player_id = ANY($1::text[])
+			FROM sect_members WHERE player_id = ANY($1::uuid[])
 		`, pq.Array(allMemberIDs)); err == nil {
 			for cRows.Next() {
 				var pid string
@@ -519,7 +519,7 @@ func processSectTerritoryTick(db *sql.DB) {
 					territory_pending = v.pending,
 					territory_credited_today = v.credited_today,
 					territory_credited_at = v.credited_at::date
-				FROM (SELECT unnest($1::text[]) AS player_id,
+				FROM (SELECT unnest($1::uuid[]) AS player_id,
 				             unnest($2::int[]) AS delta,
 				             unnest($3::float8[]) AS pending,
 				             unnest($4::int[]) AS credited_today,

@@ -99,7 +99,7 @@ func batchApplyOnTickEffects(db *sql.DB) {
 		immortal float64
 	}
 	stoneMap := make(map[string]*stones, len(playerIDs))
-	sRows, err := db.Query(`SELECT id, primeval_stones, immortal_stones FROM players WHERE id = ANY($1::text[])`, pqIDs)
+	sRows, err := db.Query(`SELECT id, primeval_stones, immortal_stones FROM players WHERE id = ANY($1::uuid[])`, pqIDs)
 	if err != nil {
 		logger.S.Errorf("Hunger Worker Error reading stones: %v", err)
 		return
@@ -123,7 +123,7 @@ func batchApplyOnTickEffects(db *sql.DB) {
 		SELECT pg.player_id::text, gd.effects->'other'
 		FROM player_gu pg
 		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-		WHERE pg.player_id = ANY($1::text[]) AND pg.equipped AND pg.state = 'ACTIVE'`, pqIDs)
+		WHERE pg.player_id = ANY($1::uuid[]) AND pg.equipped AND pg.state = 'ACTIVE'`, pqIDs)
 	if err != nil {
 		logger.S.Errorf("Hunger Worker Error reading ON_TICK effects: %v", err)
 		return
@@ -197,7 +197,7 @@ func batchApplyOnTickEffects(db *sql.DB) {
 		UPDATE players AS p SET
 			primeval_stones = v.ps,
 			immortal_stones = v.is
-		FROM (SELECT unnest($1::text[]) AS id,
+		FROM (SELECT unnest($1::uuid[]) AS id,
 		             unnest($2::float8[]) AS ps,
 		             unnest($3::float8[]) AS is2) v
 		WHERE p.id = v.id
@@ -503,7 +503,7 @@ func batchVaultHungerDecay(db *sql.DB) {
 		summary string
 	}
 	var modifiedIDs []string
-	var modifiedRaw [][]byte
+	var modifiedRaw []string
 	var auditLogs []auditEntry
 
 	for _, sv := range vaults {
@@ -551,7 +551,7 @@ func batchVaultHungerDecay(db *sql.DB) {
 				continue
 			}
 			modifiedIDs = append(modifiedIDs, sv.id)
-			modifiedRaw = append(modifiedRaw, newRaw)
+			modifiedRaw = append(modifiedRaw, string(newRaw))
 		}
 	}
 
@@ -570,7 +570,7 @@ func batchVaultHungerDecay(db *sql.DB) {
 	if len(modifiedIDs) > 0 {
 		if _, err := tx.Exec(`
 			UPDATE sects AS s SET vault_gu = v.vault
-			FROM (SELECT unnest($1::text[]) AS id, unnest($2::bytea[]) AS vault) v
+			FROM (SELECT unnest($1::text[]) AS id, unnest($2::jsonb[]) AS vault) v
 			WHERE s.id = v.id
 		`, pq.Array(modifiedIDs), pq.Array(modifiedRaw)); err != nil {
 			logger.S.Errorf("Hunger Worker Error batch updating vaults: %v", err)

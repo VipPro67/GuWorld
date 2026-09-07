@@ -20,6 +20,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -904,12 +905,6 @@ func MovePlayer(c *gin.Context) {
 		}
 	}
 
-	// Update DB
-	updateQuery := `
-		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
-		WHERE id = $13
-	`
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		logger.S.Errorf("MovePlayer: failed to sync Gu inventory for player=%s: %v", player.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
@@ -925,11 +920,7 @@ func MovePlayer(c *gin.Context) {
 		}
 		combatJSON = string(b)
 	}
-	if ZoneByID(player.CurrentRegion) == nil {
-		player.CurrentRegion = HubRegionID
-	}
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
-	if err != nil {
+	if err := savePlayerMovement(tx, &player, combatJSON); err != nil {
 		logger.S.Errorf("MovePlayer: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
@@ -1166,15 +1157,7 @@ func MovePlayerPath(c *gin.Context) {
 		}
 		combatJSON = string(b)
 	}
-	if ZoneByID(player.CurrentRegion) == nil {
-		player.CurrentRegion = HubRegionID
-	}
-	_, err = tx.Exec(`
-		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
-		WHERE id = $13
-	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
-	if err != nil {
+	if err := savePlayerMovement(tx, &player, combatJSON); err != nil {
 		logger.S.Errorf("MovePlayerPath: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
@@ -1495,3 +1478,43 @@ func GetWorld(c *gin.Context) {
 		"hub_y":           HubEntryPoint.Y,
 	})
 }
+
+func savePlayerMovement(tx *sql.Tx, player *models.Player, combatJSON any) error {
+	if ZoneByID(player.CurrentRegion) == nil {
+		player.CurrentRegion = HubRegionID
+	}
+
+	if cache.Client != nil {
+		clearedBytes, _ := json.Marshal(player.ClearedCells)
+		visitedBytes, _ := json.Marshal(player.VisitedSubZones)
+
+		queuePayload := worker.PlayerMovementPayload{
+			ID:              player.ID.String(),
+			CurrentMana:     player.CurrentMana,
+			MaxMana:         player.MaxMana,
+			HP:              player.HP,
+			X:               player.X,
+			Y:               player.Y,
+			CurrentRegion:   player.CurrentRegion,
+			ClearedCells:    json.RawMessage(clearedBytes),
+			PrimevalStones:  player.PrimevalStones,
+			HumanQi:         player.HumanQi,
+			VisitedSubzones: json.RawMessage(visitedBytes),
+			UpdatedAt:       time.Now(),
+		}
+		if combatStr, ok := combatJSON.(string); ok && combatStr != "" {
+			queuePayload.ActiveCombat = json.RawMessage(combatStr)
+		}
+		if err := cache.SetAndQueueJSON("player_movement", player.ID.String(), queuePayload); err == nil {
+			return nil
+		}
+	}
+
+	_, err := tx.Exec(`
+		UPDATE players
+		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
+		WHERE id = $13
+	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
+	return err
+}
+

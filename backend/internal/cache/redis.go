@@ -94,3 +94,95 @@ func Delete(keys ...string) error {
 	}
 	return Client.Del(Ctx, keys...).Err()
 }
+
+// SetAndQueueJSON stores the JSON representation of a value in the cache and adds its ID to the pending writes set for the given entity type.
+func SetAndQueueJSON(entityType, entityID string, value interface{}) error {
+	if Client == nil {
+		return nil
+	}
+
+	key := entityType + ":" + entityID
+	err := SetJSON(key, value, 0) // No expiration for pending DB writes
+	if err != nil {
+		return err
+	}
+
+	// Add to pending set to be processed by the batch persister
+	return Client.SAdd(Ctx, "pending_db_writes:"+entityType, entityID).Err()
+}
+
+// GetPendingIDs retrieves all entity IDs that have pending database writes for a given entity type.
+func GetPendingIDs(entityType string) ([]string, error) {
+	if Client == nil {
+		return nil, redis.Nil
+	}
+	return Client.SMembers(Ctx, "pending_db_writes:"+entityType).Result()
+}
+
+// RemovePendingIDs removes the specified entity IDs from the pending writes set.
+func RemovePendingIDs(entityType string, entityIDs ...string) error {
+	if Client == nil || len(entityIDs) == 0 {
+		return nil
+	}
+	
+	// Convert strings to interface{} for SRem
+	args := make([]interface{}, len(entityIDs))
+	for i, id := range entityIDs {
+		args[i] = id
+	}
+	
+	return Client.SRem(Ctx, "pending_db_writes:"+entityType, args...).Err()
+}
+
+// GetManyJSON retrieves multiple values from Redis by keys (MGET).
+func GetManyJSON(keys []string) ([]string, error) {
+	if Client == nil {
+		return nil, redis.Nil
+	}
+	if len(keys) == 0 {
+		return []string{}, nil
+	}
+
+	results, err := Client.MGet(Ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var jsonStrs []string
+	for _, res := range results {
+		if res != nil {
+			if str, ok := res.(string); ok {
+				jsonStrs = append(jsonStrs, str)
+			}
+		}
+	}
+	return jsonStrs, nil
+}
+
+// SetCombatState stores active combat state in Redis with 15 minutes TTL.
+func SetCombatState(playerID string, state interface{}) error {
+	if Client == nil {
+		return nil
+	}
+	key := "combat_state:" + playerID
+	return SetJSON(key, state, 15*time.Minute)
+}
+
+// GetCombatState retrieves active combat state from Redis.
+func GetCombatState(playerID string, dest interface{}) error {
+	if Client == nil {
+		return redis.Nil
+	}
+	key := "combat_state:" + playerID
+	return GetJSON(key, dest)
+}
+
+// ClearCombatState removes active combat state from Redis.
+func ClearCombatState(playerID string) error {
+	if Client == nil {
+		return nil
+	}
+	key := "combat_state:" + playerID
+	return Delete(key)
+}
+

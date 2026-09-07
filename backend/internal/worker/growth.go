@@ -56,7 +56,7 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 
 	pRows, err := db.Query(`
 		SELECT id, growth_data, base_hp, time_speed_multiplier
-		FROM players WHERE id = ANY($1::text[])`, pqIDs)
+		FROM players WHERE id = ANY($1::uuid[])`, pqIDs)
 	if err != nil {
 		logger.S.Errorf("Growth Worker Error fetching players: %v", err)
 		return
@@ -102,7 +102,7 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 	gRows, err := db.Query(`
 		SELECT player_id::text, id, gu_id, gu_rank, state, equipped,
 		       is_vital, integration_time, equipped_at, growth_hours
-		FROM player_gu WHERE player_id = ANY($1::text[])`, pqIDs)
+		FROM player_gu WHERE player_id = ANY($1::uuid[])`, pqIDs)
 	if err != nil {
 		logger.S.Errorf("Growth Worker Error fetching player_gu: %v", err)
 		return
