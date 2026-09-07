@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-contrib/gzip"
+	"github.com/aurowora/compress"
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
@@ -99,8 +99,19 @@ func SetupRouter() *gin.Engine {
 		c.Next()
 	})
 
-	// Gzip compress all JSON/HTML responses (skip SSE stream)
-	r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/events"})))
+	// Compress responses with Brotli/Gzip/Zstd based on client Accept-Encoding.
+	// Skip SSE streams to avoid buffering issues.
+	r.Use(compress.Compress(
+		compress.WithExcludeFunc(func(c *gin.Context) bool {
+			p := c.Request.URL.Path
+			switch p {
+			case "/api/events", "/api/player/events",
+				"/api/trade/events", "/api/chat/bao-hoang/events":
+				return true
+			}
+			return false
+		}),
+	))
 
 	// Serve uploaded images
 	r.Static("/images", "./storage/images")

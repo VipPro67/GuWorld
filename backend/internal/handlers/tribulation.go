@@ -895,289 +895,386 @@ func CheckAndTriggerTribulations() error {
 		}
 	}
 
-	for _, ap := range apertures {
-		// Advance internal year: 60s tick interval
-		timeSpeedMultiplier := 1.0
-		realYearsPassed := 60.0 / 36000.0
 
-		// Deduct cultivator lifespan (real time, not scaled by TimeRate)
-		var currentLifespan float64
-		errLifespan := db.DB.QueryRow(`SELECT lifespan, time_speed_multiplier FROM players WHERE id = $1`, ap.PlayerID).Scan(&currentLifespan, &timeSpeedMultiplier)
-		if errLifespan == nil {
+
+	if len(apertures) > 0 {
+		// ── Batch-read: player lifespan, time_speed, rank (1 query) ──────────
+		type pdata struct {
+			lifespan float64
+			ts       float64
+			rank     int
+		}
+		pMap := make(map[string]*pdata, len(apertures))
+		{
+			pids := make([]string, len(apertures))
+			for i, ap := range apertures {
+				pids[i] = ap.PlayerID
+			}
+			if pRows, qErr := db.DB.Query(`SELECT id, lifespan, time_speed_multiplier, rank FROM players WHERE id = ANY($1::text[])`, pq.Array(pids)); qErr == nil {
+				defer pRows.Close()
+				for pRows.Next() {
+					var id string
+					var d pdata
+					if err := pRows.Scan(&id, &d.lifespan, &d.ts, &d.rank); err == nil {
+						pMap[id] = &d
+					}
+				}
+			}
+		}
+
+		// ── Batch-read: all nodes for affected apertures (1 query) ────────────
+		nodesByAperture := make(map[string][]models.ApertureResourceNode)
+		{
+			aids := make([]string, len(apertures))
+			for i, ap := range apertures {
+				aids[i] = ap.ID
+			}
+			if nRows, qErr := db.DB.Query(`
+				SELECT aperture_id, id, node_type, name, path, hp, max_hp, x, y, is_destroyed, zone_type, production_amount
+				FROM aperture_resource_nodes
+				WHERE aperture_id = ANY($1::text[]) AND is_destroyed = false
+			`, pq.Array(aids)); qErr == nil {
+				defer nRows.Close()
+				for nRows.Next() {
+					var nd models.ApertureResourceNode
+					var aid string
+					if err := nRows.Scan(&aid, &nd.ID, &nd.NodeType, &nd.Name, &nd.Path, &nd.HP, &nd.MaxHP, &nd.X, &nd.Y, &nd.IsDestroyed, &nd.ZoneType, &nd.ProductionAmount); err == nil {
+						nd.ApertureID = aid
+						nodesByAperture[aid] = append(nodesByAperture[aid], nd)
+					}
+				}
+			}
+		}
+
+		// ── Batch-read: all variant humans (1 query) ──────────────────────────
+		type vhRow struct {
+			id, race, laborIntensity string
+			population               int
+			happiness, oppression    float64
+		}
+		vhByAperture := make(map[string][]vhRow)
+		{
+			aids := make([]string, len(apertures))
+			for i, ap := range apertures {
+				aids[i] = ap.ID
+			}
+			if vRows, qErr := db.DB.Query(`
+				SELECT aperture_id, id, race, population, happiness, oppression, labor_intensity
+				FROM aperture_variant_humans
+				WHERE aperture_id = ANY($1::text[])
+			`, pq.Array(aids)); qErr == nil {
+				defer vRows.Close()
+				for vRows.Next() {
+					var v vhRow
+					var aid string
+					if err := vRows.Scan(&aid, &v.id, &v.race, &v.population, &v.happiness, &v.oppression, &v.laborIntensity); err == nil {
+						vhByAperture[aid] = append(vhByAperture[aid], v)
+					}
+				}
+			}
+		}
+
+		// ── Accumulate batch writes ───────────────────────────────────────────
+		type lifespanUp struct{ id string; val float64 }
+		type manaUp struct{ id string; val float64 }
+		type nodeUp struct{ id string; hp int; destroyed bool }
+		type vhUp struct{ id string; pop int; happy, oppress float64 }
+		type msgIns struct{ receiver, content string }
+
+		var lifeUps []lifespanUp
+		var manaUps []manaUp
+		var nodeUps []nodeUp
+		var vhUps []vhUp
+		var msgs []msgIns
+
+		// ── Process each aperture ─────────────────────────────────────────────
+		for _, ap := range apertures {
+			timeSpeedMultiplier := 1.0
+			realYearsPassed := 60.0 / 36000.0
+
+			// Look up player data from batch
+			currentLifespan := 100.0
+			if pd, ok := pMap[ap.PlayerID]; ok {
+				currentLifespan = pd.lifespan
+				timeSpeedMultiplier = pd.ts
+			}
+
 			if timeSpeedMultiplier <= 0 {
 				timeSpeedMultiplier = 1.0
 			}
 			if bonus, err := db.EquippedTimeSpeedBonus(db.DB, ap.PlayerID); err == nil {
 				timeSpeedMultiplier += bonus
 			}
+
 			if currentLifespan <= 0.0 {
-				// Lifespan already depleted, time does not flow and no message spam
 				continue
 			}
 
 			newLifespan := math.Max(0.0, currentLifespan-(realYearsPassed*timeSpeedMultiplier))
-			_, _ = db.DB.Exec(`UPDATE players SET lifespan = $1 WHERE id = $2`, newLifespan, ap.PlayerID)
+			lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, val: newLifespan})
 
 			if newLifespan <= 0.0 {
+				// Freeze aperture (keep per-aperture Exec: different SET clause)
 				_, _ = db.DB.Exec(`
 					UPDATE immortal_apertures
 					SET time_rate = 1.0, aperture_hp = max_aperture_hp / 10, state = 'DAMAGED', updated_at = NOW()
 					WHERE id = $1
 				`, ap.ID)
-
-				_, _ = db.DB.Exec(`
-					INSERT INTO messages (sender_id, receiver_id, content, channel)
-					VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!', 'private')
-				`, ap.PlayerID)
-
+				msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!"})
 				logger.S.Warnf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
 				continue
 			}
-		} else {
-			timeSpeedMultiplier = 1.0
-		}
 
-		subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 36000.0
+			subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 36000.0
+			newYearsPassed := ap.InternalYearsPassed + subjectiveYearsPassed
+			yearsDiff := math.Floor(newYearsPassed) - math.Floor(ap.InternalYearsPassed)
 
-		newYearsPassed := ap.InternalYearsPassed + subjectiveYearsPassed
+			if yearsDiff > 0 {
+				addedEssence := float64(yearsDiff) * float64(ap.EssenceProductionPerYear)
+				manaUps = append(manaUps, manaUp{id: ap.PlayerID, val: addedEssence})
 
-		yearsDiff := math.Floor(newYearsPassed) - math.Floor(ap.InternalYearsPassed)
-		if yearsDiff > 0 {
-			addedEssence := float64(yearsDiff) * float64(ap.EssenceProductionPerYear)
-			_, _ = db.DB.Exec(`
-				UPDATE players 
-				SET current_mana = LEAST(max_mana, current_mana + $1), last_mana_update = NOW()
-				WHERE id = $2
-			`, addedEssence, ap.PlayerID)
+				// Ecosystem & Conflicts Tick — read from pre-loaded nodes
+				nodes := nodesByAperture[ap.ID]
+				if len(nodes) > 0 {
+					_, _, _, overgrazing, _, _ := EvaluateEcosystem(nodes)
 
-			// 1. Ecosystem & Conflicts Tick
-			nodeRows, errNodes := db.DB.Query(`
-				SELECT id, node_type, path, hp, max_hp, x, y, is_destroyed 
-				FROM aperture_resource_nodes 
-				WHERE aperture_id = $1 AND is_destroyed = false
-			`, ap.ID)
-			if errNodes == nil {
-				var nodes []models.ApertureResourceNode
-				for nodeRows.Next() {
-					var nd models.ApertureResourceNode
-					if errScan := nodeRows.Scan(&nd.ID, &nd.NodeType, &nd.Path, &nd.X, &nd.Y, &nd.IsDestroyed); errScan == nil {
-						nodes = append(nodes, nd)
-					}
-				}
-				nodeRows.Close()
-
-				_, _, _, overgrazing, _, _ := EvaluateEcosystem(nodes)
-
-				for _, nd := range nodes {
-					decayDamage := 0
-					if CheckNodeConflict(nd, nodes) {
-						decayDamage += int(float64(nd.MaxHP) * 0.10 * float64(yearsDiff))
-					}
-					if overgrazing && (nd.NodeType == "FARMING_ZONE" || nd.ZoneType == "khu_trong" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS") {
-						decayDamage += int(float64(nd.MaxHP) * 0.05 * float64(yearsDiff))
-					}
-
-					if decayDamage > 0 {
-						var curHP int
-						_ = db.DB.QueryRow(`SELECT hp FROM aperture_resource_nodes WHERE id = $1`, nd.ID).Scan(&curHP)
-						newHP := curHP - decayDamage
-						isDestroyed := false
-						if newHP <= 0 {
-							newHP = 0
-							isDestroyed = true
-						}
-						_, _ = db.DB.Exec(`
-							UPDATE aperture_resource_nodes 
-							SET hp = $1, is_destroyed = $2, updated_at = NOW() 
-							WHERE id = $3
-						`, newHP, isDestroyed, nd.ID)
-
-						if isDestroyed {
-							_, _ = db.DB.Exec(`
-								INSERT INTO messages (sender_id, receiver_id, content, channel)
-								VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Điểm tài nguyên ' || $2 || ' đã bị phá hủy do bất ổn sinh thái hoặc xung đột Đạo ngân!', 'private')
-							`, ap.PlayerID, nd.Name)
-						}
-					}
-				}
-
-				// 2. Variant Human Tick
-				type VHCheck struct {
-					ID             string
-					Race           string
-					Population     int
-					Happiness      float64
-					Oppression     float64
-					LaborIntensity string
-				}
-				vRows, errV := db.DB.Query(`
-					SELECT id, race, population, happiness, oppression, labor_intensity 
-					FROM aperture_variant_humans 
-					WHERE aperture_id = $1
-				`, ap.ID)
-				if errV == nil {
-					var vhs []VHCheck
-					for vRows.Next() {
-						var v VHCheck
-						if errScan := vRows.Scan(&v.ID, &v.Race, &v.Population, &v.Happiness, &v.Oppression, &v.LaborIntensity); errScan == nil {
-							vhs = append(vhs, v)
-						}
-					}
-					vRows.Close()
-
-					totalFoodProd := int64(0)
 					for _, nd := range nodes {
-						if nd.NodeType == "FARMING_ZONE" || nd.NodeType == "BREEDING_ZONE" || nd.ZoneType == "khu_trong" || nd.ZoneType == "khu_nuoi" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS" || nd.NodeType == "SPIRIT_DEER_PASTURE" {
-							totalFoodProd += nd.ProductionAmount
+						decayDamage := 0
+						if CheckNodeConflict(nd, nodes) {
+							decayDamage += int(float64(nd.MaxHP) * 0.10 * float64(yearsDiff))
+						}
+						if overgrazing && (nd.NodeType == "FARMING_ZONE" || nd.ZoneType == "khu_trong" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS") {
+							decayDamage += int(float64(nd.MaxHP) * 0.05 * float64(yearsDiff))
+						}
+
+						if decayDamage > 0 {
+							newHP := nd.HP - decayDamage
+							isDestroyed := false
+							if newHP <= 0 {
+								newHP = 0
+								isDestroyed = true
+							}
+							nodeUps = append(nodeUps, nodeUp{id: nd.ID, hp: newHP, destroyed: isDestroyed})
+
+							if isDestroyed {
+								msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Điểm tài nguyên " + nd.Name + " đã bị phá hủy do bất ổn sinh thái hoặc xung đột Đạo ngân!"})
+							}
 						}
 					}
 
-					for _, v := range vhs {
-						happinessChange := 0.0
-						oppressionChange := 0.0
-
-						foodNeeded := float64(v.Population) / 100.0
-						if float64(totalFoodProd) < foodNeeded {
-							happinessChange -= 10.0 * float64(yearsDiff)
-						} else {
-							happinessChange += 2.0 * float64(yearsDiff)
-						}
-
-						switch v.LaborIntensity {
-						case "LOW":
-							happinessChange += 5.0 * float64(yearsDiff)
-							oppressionChange -= 5.0 * float64(yearsDiff)
-						case "NORMAL":
-						case "HIGH":
-							happinessChange -= 10.0 * float64(yearsDiff)
-							oppressionChange += 10.0 * float64(yearsDiff)
-						case "EXPLOIT":
-							happinessChange -= 25.0 * float64(yearsDiff)
-							oppressionChange += 25.0 * float64(yearsDiff)
-						}
-
-						newHappiness := math.Max(0.0, math.Min(100.0, v.Happiness+happinessChange))
-						newOppression := math.Max(0.0, math.Min(100.0, v.Oppression+oppressionChange))
-
-						rebellionRisk := (100.0 - newHappiness + newOppression) / 4.0
-						if newHappiness < 30.0 || newOppression > 70.0 {
-							if rand.Float64() < (rebellionRisk / 100.0) {
-								v.Population = int(float64(v.Population) * 0.8)
-								_, _ = db.DB.Exec(`
-									UPDATE aperture_resource_nodes 
-									SET hp = hp / 2 
-									WHERE id IN (
-										SELECT id FROM aperture_resource_nodes 
-										WHERE aperture_id = $1 AND is_destroyed = false 
-										ORDER BY random() LIMIT 2
-									)
-								`, ap.ID)
-								ap.ApertureHP = math.Max(0.0, ap.ApertureHP-ap.MaxApertureHP*0.05)
-								_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
-
-								_, _ = db.DB.Exec(`
-									INSERT INTO messages (sender_id, receiver_id, content, channel)
-									VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Bộ tộc ' || $2 || ' trong Tiên Khiếu đã nổi loạn do bị áp bức dữ dội! Một số điểm tài nguyên và Tiên Khiếu đã bị hư hại.', 'private')
-								`, ap.PlayerID, v.Race)
-							}
-						}
-
-						settlementCount := 0
-						targetSettlementType := ""
-						switch v.Race {
-						case "HAIRY_MAN":
-							targetSettlementType = "HAIRY_MAN_SETTLEMENT"
-						case "ROCKMAN":
-							targetSettlementType = "ROCKMAN_TRIBE"
-						case "FEATHERMAN":
-							targetSettlementType = "FEATHERMAN_CANYON"
-						}
+					// Variant Human Tick — read from pre-loaded data
+					vhs := vhByAperture[ap.ID]
+					if len(vhs) > 0 {
+						totalFoodProd := int64(0)
 						for _, nd := range nodes {
-							if nd.NodeType == targetSettlementType {
-								settlementCount++
+							if nd.NodeType == "FARMING_ZONE" || nd.NodeType == "BREEDING_ZONE" || nd.ZoneType == "khu_trong" || nd.ZoneType == "khu_nuoi" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS" || nd.NodeType == "SPIRIT_DEER_PASTURE" {
+								totalFoodProd += nd.ProductionAmount
 							}
 						}
 
-						maxPop := 200 * settlementCount
-						newPop := v.Population
-						if settlementCount > 0 {
-							if newHappiness > 60.0 {
-								newPop = int(float64(v.Population) * math.Pow(1.05, float64(yearsDiff)))
-							}
-							if newPop > maxPop {
-								newPop = maxPop
-							}
-						} else {
-							newPop = int(float64(v.Population) * math.Pow(0.90, float64(yearsDiff)))
-						}
+						for _, v := range vhs {
+							happinessChange := 0.0
+							oppressionChange := 0.0
 
-						_, _ = db.DB.Exec(`
-							UPDATE aperture_variant_humans
-							SET population = $1, happiness = $2, oppression = $3, updated_at = NOW()
-							WHERE id = $4
-						`, newPop, newHappiness, newOppression, v.ID)
+							foodNeeded := float64(v.population) / 100.0
+							if float64(totalFoodProd) < foodNeeded {
+								happinessChange -= 10.0 * float64(yearsDiff)
+							} else {
+								happinessChange += 2.0 * float64(yearsDiff)
+							}
+
+							switch v.laborIntensity {
+							case "LOW":
+								happinessChange += 5.0 * float64(yearsDiff)
+								oppressionChange -= 5.0 * float64(yearsDiff)
+							case "NORMAL":
+							case "HIGH":
+								happinessChange -= 10.0 * float64(yearsDiff)
+								oppressionChange += 10.0 * float64(yearsDiff)
+							case "EXPLOIT":
+								happinessChange -= 25.0 * float64(yearsDiff)
+								oppressionChange += 25.0 * float64(yearsDiff)
+							}
+
+							newHappiness := math.Max(0.0, math.Min(100.0, v.happiness+happinessChange))
+							newOppression := math.Max(0.0, math.Min(100.0, v.oppression+oppressionChange))
+
+							rebellionRisk := (100.0 - newHappiness + newOppression) / 4.0
+							newPop := v.population
+							if newHappiness < 30.0 || newOppression > 70.0 {
+								if rand.Float64() < (rebellionRisk / 100.0) {
+									newPop = int(float64(v.population) * 0.8)
+									// Rebellion random damage — keep as direct Exec (ORDER BY random)
+									_, _ = db.DB.Exec(`
+										UPDATE aperture_resource_nodes
+										SET hp = hp / 2
+										WHERE id IN (
+											SELECT id FROM aperture_resource_nodes
+											WHERE aperture_id = $1 AND is_destroyed = false
+											ORDER BY random() LIMIT 2
+										)
+									`, ap.ID)
+									ap.ApertureHP = math.Max(0.0, ap.ApertureHP-ap.MaxApertureHP*0.05)
+									_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
+									msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Bộ tộc " + v.race + " trong Tiên Khiếu đã nổi loạn do bị áp bức dữ dội! Một số điểm tài nguyên và Tiên Khiếu đã bị hư hại."})
+								}
+							}
+
+							settlementCount := 0
+							targetSettlementType := ""
+							switch v.race {
+							case "HAIRY_MAN":
+								targetSettlementType = "HAIRY_MAN_SETTLEMENT"
+							case "ROCKMAN":
+								targetSettlementType = "ROCKMAN_TRIBE"
+							case "FEATHERMAN":
+								targetSettlementType = "FEATHERMAN_CANYON"
+							}
+							for _, nd := range nodes {
+								if nd.NodeType == targetSettlementType {
+									settlementCount++
+								}
+							}
+
+							maxPop := 200 * settlementCount
+							if settlementCount > 0 {
+								if newHappiness > 60.0 {
+									newPop = int(float64(v.population) * math.Pow(1.05, float64(yearsDiff)))
+								}
+								if newPop > maxPop {
+									newPop = maxPop
+								}
+							} else {
+								newPop = int(float64(v.population) * math.Pow(0.90, float64(yearsDiff)))
+							}
+
+							vhUps = append(vhUps, vhUp{id: v.id, pop: newPop, happy: newHappiness, oppress: newOppression})
+						}
 					}
 				}
 			}
-		}
 
-		// --- New tribulation scheduling logic ---
-		// Recalculate next tribulation year based on rank + counters
-		var rank int
-		_ = db.DB.QueryRow(`SELECT rank FROM players WHERE id = $1`, ap.PlayerID).Scan(&rank)
+			// Tribulation scheduling
+			pd := pMap[ap.PlayerID]
+			rank := 0
+			if pd != nil {
+				rank = pd.rank
+			}
 
-		calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+			calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 
-		// The stored next_tribulation_year is authoritative for scheduling: it is
-		// advanced by the resolve handlers (success or failure) and by the guard
-		// on rank-up. Counters are NOT incremented here — they only grow in
-		// handleSuccess on a successful resolve (single count per crossing).
-		triggerYear := math.Round(calcNextYear)
-		if ap.NextTribulationYear > triggerYear {
-			triggerYear = math.Round(ap.NextTribulationYear)
-		}
+			triggerYear := math.Round(calcNextYear)
+			if ap.NextTribulationYear > triggerYear {
+				triggerYear = math.Round(ap.NextTribulationYear)
+			}
 
-		if newYearsPassed >= triggerYear {
-			// Offline grace: hold the tribulation until the player returns so they
-			// are not destroyed while away. Years keep flowing but no enemies spawn.
-			if !isPlayerOnline(ap.PlayerID) {
+			if newYearsPassed >= triggerYear {
+				if !isPlayerOnline(ap.PlayerID) {
+					_, _ = db.DB.Exec(`
+						UPDATE immortal_apertures
+						SET state = 'TRIBULATION_PENDING',
+						    tribulation_pending_at = COALESCE(tribulation_pending_at, NOW()),
+						    internal_years_passed = $1, next_tribulation_year = $2, updated_at = NOW()
+						WHERE id = $3
+					`, newYearsPassed, triggerYear, ap.ID)
+					continue
+				}
+
+				rewardMult := 1.0
+				if ap.TribulationPendingAt.Valid && time.Since(ap.TribulationPendingAt.Time) > tribulationPenaltyAfter {
+					rewardMult = 0.5
+				}
+
 				_, _ = db.DB.Exec(`
 					UPDATE immortal_apertures
-					SET state = 'TRIBULATION_PENDING',
-					    tribulation_pending_at = COALESCE(tribulation_pending_at, NOW()),
-					    internal_years_passed = $1, next_tribulation_year = $2, updated_at = NOW()
+					SET internal_years_passed = $1, tribulation_pending_at = NULL, updated_at = NOW()
+					WHERE id = $2
+				`, newYearsPassed, ap.ID)
+
+				spawnType := calcNextType
+				err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
+				if err != nil {
+					logger.S.Errorf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
+				}
+			} else {
+				_, _ = db.DB.Exec(`
+					UPDATE immortal_apertures
+					SET internal_years_passed = $1, next_tribulation_year = $2, updated_at = NOW()
 					WHERE id = $3
 				`, newYearsPassed, triggerYear, ap.ID)
-				continue
 			}
-
-			// Offline-hold penalty: halve the Dao Ngân reward if held offline
-			// beyond the threshold.
-			rewardMult := 1.0
-			if ap.TribulationPendingAt.Valid && time.Since(ap.TribulationPendingAt.Time) > tribulationPenaltyAfter {
-				rewardMult = 0.5
-			}
-
-			_, _ = db.DB.Exec(`
-				UPDATE immortal_apertures
-				SET internal_years_passed = $1, tribulation_pending_at = NULL, updated_at = NOW()
-				WHERE id = $2
-			`, newYearsPassed, ap.ID)
-
-			// Spawn the highest priority type due at this milestone
-			spawnType := calcNextType
-			err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
-			if err != nil {
-				logger.S.Errorf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
-			}
-		} else {
-			// Advance time in DB and keep the scheduled milestone
-			_, _ = db.DB.Exec(`
-				UPDATE immortal_apertures
-				SET internal_years_passed = $1, next_tribulation_year = $2, updated_at = NOW()
-				WHERE id = $3
-			`, newYearsPassed, triggerYear, ap.ID)
 		}
+
+		// ── Batch-write: all accumulated changes (single transaction) ─────────
+		if len(lifeUps)+len(manaUps)+len(nodeUps)+len(vhUps)+len(msgs) > 0 {
+			if tx, txErr := db.DB.Begin(); txErr == nil {
+				defer tx.Rollback()
+
+				// Batch UPDATE player lifespans
+				if len(lifeUps) > 0 {
+					ids := make([]string, len(lifeUps))
+					vals := make([]float64, len(lifeUps))
+					for i, u := range lifeUps {
+						ids[i] = u.id
+						vals[i] = u.val
+					}
+					_, _ = tx.Exec(`UPDATE players AS p SET lifespan = v.val FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS val) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
+				}
+
+				// Batch UPDATE player mana
+				if len(manaUps) > 0 {
+					ids := make([]string, len(manaUps))
+					vals := make([]float64, len(manaUps))
+					for i, u := range manaUps {
+						ids[i] = u.id
+						vals[i] = u.val
+					}
+					_, _ = tx.Exec(`UPDATE players AS p SET current_mana = LEAST(p.max_mana, p.current_mana + v.val), last_mana_update = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS val) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
+				}
+
+				// Batch UPDATE node HP
+				if len(nodeUps) > 0 {
+					ids := make([]string, len(nodeUps))
+					hps := make([]int, len(nodeUps))
+					dest := make([]bool, len(nodeUps))
+					for i, u := range nodeUps {
+						ids[i] = u.id
+						hps[i] = u.hp
+						dest[i] = u.destroyed
+					}
+					_, _ = tx.Exec(`UPDATE aperture_resource_nodes AS n SET hp = v.hp, is_destroyed = v.destroyed, updated_at = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS hp, unnest($3::bool[]) AS destroyed) AS v WHERE n.id = v.id`, pq.Array(ids), pq.Array(hps), pq.Array(dest))
+				}
+
+				// Batch UPDATE variant humans
+				if len(vhUps) > 0 {
+					ids := make([]string, len(vhUps))
+					pops := make([]int, len(vhUps))
+					happys := make([]float64, len(vhUps))
+					oppresses := make([]float64, len(vhUps))
+					for i, u := range vhUps {
+						ids[i] = u.id
+						pops[i] = u.pop
+						happys[i] = u.happy
+						oppresses[i] = u.oppress
+					}
+					_, _ = tx.Exec(`UPDATE aperture_variant_humans AS v SET population = d.pop, happiness = d.happy, oppression = d.oppress, updated_at = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS pop, unnest($3::float8[]) AS happy, unnest($4::float8[]) AS oppress) AS d WHERE v.id = d.id`, pq.Array(ids), pq.Array(pops), pq.Array(happys), pq.Array(oppresses))
+				}
+
+				// Batch INSERT messages
+				if len(msgs) > 0 {
+					receivers := make([]string, len(msgs))
+					contents := make([]string, len(msgs))
+					for i, m := range msgs {
+						receivers[i] = m.receiver
+						contents[i] = m.content
+					}
+					_, _ = tx.Exec(`INSERT INTO messages (sender_id, receiver_id, content, channel) SELECT '11111111-1111-1111-1111-111111111111', v.receiver, v.content, 'private' FROM (SELECT unnest($1::text[]) AS receiver, unnest($2::text[]) AS content) AS v`, pq.Array(receivers), pq.Array(contents))
+				}
+
+				_ = tx.Commit()
+			}
+		}
+
 	}
 
 	// 2. Check and auto-resolve pending active tribulations that exceeded 24 hours
@@ -1202,7 +1299,6 @@ func CheckAndTriggerTribulations() error {
 
 		for _, r := range toResolve {
 			logger.S.Infof("Auto-resolving expired tribulation event %s for player %s", r.EventID, r.PlayerID)
-			// Trigger a mock resolve
 			autoResolveEvent(r.EventID, r.PlayerID)
 		}
 	}

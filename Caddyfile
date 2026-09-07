@@ -3,12 +3,16 @@ www.cogioi.io.vn {
 }
 
 cogioi.io.vn {
+    encode zstd gzip
     reverse_proxy frontend:3000
 }
 
 api.cogioi.io.vn {
     @events {
         path /api/events*
+        path /api/player/events*
+        path /api/trade/events*
+        path /api/chat/bao-hoang/events*
     }
 
     handle @events {
@@ -24,6 +28,7 @@ api.cogioi.io.vn {
     }
 
     handle {
+        encode zstd gzip
         reverse_proxy backend:8080 {
             transport http {
                 dial_timeout 5s
