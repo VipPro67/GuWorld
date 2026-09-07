@@ -29,10 +29,14 @@ func StartStatusExpiryWorker(ctx context.Context, db *sql.DB, interval time.Dura
 }
 
 func processStatusExpiryTick(db *sql.DB) {
-	rows, err := db.Query(`
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := db.QueryContext(ctx, `
 		SELECT id, statuses 
 		FROM players 
-		WHERE jsonb_path_exists(statuses, '$[*] ? (@.expires_at != null)')
+		WHERE statuses != '[]'::jsonb AND statuses::text LIKE '%expires_at%'
+		LIMIT 200
 	`)
 	if err != nil {
 		logger.S.Errorf("Status Expiry Worker Error fetching players with expiring statuses: %v", err)
@@ -70,7 +74,7 @@ func processStatusExpiryTick(db *sql.DB) {
 		if err != nil {
 			continue
 		}
-		_, err = db.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, string(b), p.id)
+		_, err = db.ExecContext(ctx, `UPDATE players SET statuses = $1 WHERE id = $2`, string(b), p.id)
 		if err != nil {
 			logger.S.Warnf("Status Expiry Worker: failed to update player %s: %v", p.id, err)
 		} else {
