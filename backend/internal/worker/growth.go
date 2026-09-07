@@ -367,7 +367,7 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 			UPDATE players AS p
 			SET growth_data = v.gd::jsonb, base_hp = v.bhp
 			FROM (SELECT unnest($1::text[]) AS id, unnest($2::text[]) AS gd, unnest($3::float8[]) AS bhp) AS v
-			WHERE p.id = v.id
+			WHERE p.id = v.id::uuid
 		`, pq.Array(playerUpdateIDs), pq.Array(gds), pq.Array(bhps))
 		if err != nil {
 			logger.S.Errorf("Growth Worker Error batch updating players: %v", err)

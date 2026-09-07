@@ -82,5 +82,5 @@ func flushEntityType(ctx context.Context, entityType string, handler BatchHandle
 		return err 
 	}
 
-	return cache.RemovePendingIDs(entityType, validIDs...)
+	return nil
 }

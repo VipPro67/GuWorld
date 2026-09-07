@@ -425,7 +425,7 @@ func (s *PlayerService) ProjectStatus(q QueryRower, id uuid.UUID) (models.Player
 // EvaluateAndPersistMana is the authoritative status evaluator for mutation flows.
 // It loads with FOR UPDATE, projects time-variant fields, and persists changes.
 func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	player, err := s.LoadForUpdate(tx, id)
+	player, err := s.Load(tx, id, false)
 	if err != nil {
 		return player, err
 	}
@@ -497,7 +497,7 @@ func (s *PlayerService) EvaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.P
 // evaluators: load with FOR UPDATE, apply defaults, and project status in
 // memory. It does not write to the database.
 func (s *PlayerService) evaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	player, err := s.LoadForUpdateEquipped(tx, id)
+	player, err := s.LoadEquipped(tx, id)
 	if err != nil {
 		return player, err
 	}
@@ -528,18 +528,39 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 		return player, err
 	}
 
-	_, err = tx.Exec(`
-		UPDATE players
-		SET current_mana = $1, max_mana = $2, last_mana_update = $3,
-		    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
-		    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
-		    version = version + 1
-		WHERE id = $11
-	`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
-		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
-	if err != nil {
-		return player, err
+	if cache.Client != nil {
+		statsPayload := worker.PlayerStatsPayload{
+			ID:                  player.ID.String(),
+			HP:                  player.HP,
+			SoulHP:              player.SoulHP,
+			CurrentMana:         player.CurrentMana,
+			MaxMana:             player.MaxMana,
+			CurrentThought:      player.CurrentThought,
+			Lifespan:            player.Lifespan,
+			TimeSpeedMultiplier: player.TimeSpeedMultiplier,
+			ApertureStress:      player.ApertureStress,
+			HumanQi:             player.HumanQi,
+			PrimevalStones:      player.PrimevalStones,
+			ImmortalStones:      player.ImmortalStones,
+			LastManaUpdate:      player.LastManaUpdate,
+			LastCultivateTime:   player.LastCultivateTime,
+			UpdatedAt:           time.Now(),
+		}
+		_ = cache.SetAndQueueJSON("player_stats", player.ID.String(), statsPayload)
+	} else {
+		_, err = tx.Exec(`
+			UPDATE players
+			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
+			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
+			    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
+			    version = version + 1
+			WHERE id = $11
+		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
+			player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
+			player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
+		if err != nil {
+			return player, err
+		}
 	}
 	player.Version++
 

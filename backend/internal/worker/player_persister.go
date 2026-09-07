@@ -3,9 +3,9 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -54,26 +54,9 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 		return nil
 	}
 
-	tx, err := db.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin tx for player_movement batch: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, `
-		UPDATE players SET 
-			current_mana = $1, x = $2, y = $3, current_region = $4, 
-			cleared_cells = $5, active_combat = $6, last_mana_update = $7, 
-			primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, 
-			visited_subzones = $12
-		WHERE id = $13
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare stmt for player_movement batch: %w", err)
-	}
-	defer stmt.Close()
-
 	now := time.Now()
+	var succeededIDs []string
+
 	for _, pStr := range payloads {
 		var p PlayerMovementPayload
 		if err := json.Unmarshal([]byte(pStr), &p); err != nil {
@@ -96,22 +79,30 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 			visitedSubzonesVal = string(p.VisitedSubzones)
 		}
 
-		_, err := stmt.ExecContext(ctx,
+		_, err := db.DB.ExecContext(ctx, `
+			UPDATE players SET 
+				current_mana = $1, x = $2, y = $3, current_region = $4, 
+				cleared_cells = $5, active_combat = $6, last_mana_update = $7, 
+				primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, 
+				visited_subzones = $12
+			WHERE id = $13
+		`,
 			p.CurrentMana, p.X, p.Y, p.CurrentRegion,
 			clearedCellsVal, activeCombatVal, now,
 			p.PrimevalStones, p.HP, p.MaxMana, p.HumanQi,
 			visitedSubzonesVal, p.ID,
 		)
 		if err != nil {
-			logger.S.Errorf("Failed to batch update player movement for %s: %v", p.ID, err)
+			logger.S.Warnf("Batch update movement postponed for player %s (locked/retry): %v", p.ID, err)
+			continue
 		}
+		succeededIDs = append(succeededIDs, p.ID)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit player_movement batch: %w", err)
+	if len(succeededIDs) > 0 {
+		_ = cache.RemovePendingIDs("player_movement", succeededIDs...)
 	}
 
-	logger.S.Debugf("Successfully batch persisted %d player movement updates to PostgreSQL", len(payloads))
 	return nil
 }
 
@@ -120,25 +111,7 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 		return nil
 	}
 
-	tx, err := db.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin tx for player_stats batch: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, `
-		UPDATE players SET 
-			hp = $1, soul_hp = $2, current_mana = $3, max_mana = $4, 
-			current_thought = $5, lifespan = $6, time_speed_multiplier = $7, 
-			aperture_stress = $8, last_cultivate_time = $9, last_mana_update = $10,
-			human_qi = $11, primeval_stones = $12, immortal_stones = $13,
-			version = version + 1
-		WHERE id = $14
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare stmt for player_stats batch: %w", err)
-	}
-	defer stmt.Close()
+	var succeededIDs []string
 
 	for _, pStr := range payloads {
 		var p PlayerStatsPayload
@@ -147,22 +120,31 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 			continue
 		}
 
-		_, err := stmt.ExecContext(ctx,
+		_, err := db.DB.ExecContext(ctx, `
+			UPDATE players SET 
+				hp = $1, soul_hp = $2, current_mana = $3, max_mana = $4, 
+				current_thought = $5, lifespan = $6, time_speed_multiplier = $7, 
+				aperture_stress = $8, last_cultivate_time = $9, last_mana_update = $10,
+				human_qi = $11, primeval_stones = $12, immortal_stones = $13,
+				version = version + 1
+			WHERE id = $14
+		`,
 			p.HP, p.SoulHP, p.CurrentMana, p.MaxMana,
 			p.CurrentThought, p.Lifespan, p.TimeSpeedMultiplier,
 			p.ApertureStress, p.LastCultivateTime, p.LastManaUpdate,
 			p.HumanQi, p.PrimevalStones, p.ImmortalStones, p.ID,
 		)
 		if err != nil {
-			logger.S.Errorf("Failed to batch update player stats for %s: %v", p.ID, err)
+			logger.S.Warnf("Batch update stats postponed for player %s (locked/retry): %v", p.ID, err)
+			continue
 		}
+		succeededIDs = append(succeededIDs, p.ID)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit player_stats batch: %w", err)
+	if len(succeededIDs) > 0 {
+		_ = cache.RemovePendingIDs("player_stats", succeededIDs...)
 	}
 
-	logger.S.Debugf("Successfully batch persisted %d player stats updates to PostgreSQL", len(payloads))
 	return nil
 }
 
