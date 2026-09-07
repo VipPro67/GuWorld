@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/util"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -440,18 +442,39 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 		player.LastCultivateTime = now
 	}
 
-	_, err = tx.Exec(`
-		UPDATE players
-		SET current_mana = $1, max_mana = $2, last_mana_update = $3,
-		    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
-		    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
-		    version = version + 1
-		WHERE id = $11
-	`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
-		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
-	if err != nil {
-		return player, err
+	if cache.Client != nil {
+		statsPayload := worker.PlayerStatsPayload{
+			ID:                  player.ID.String(),
+			HP:                  player.HP,
+			SoulHP:              player.SoulHP,
+			CurrentMana:         player.CurrentMana,
+			MaxMana:             player.MaxMana,
+			CurrentThought:      player.CurrentThought,
+			Lifespan:            player.Lifespan,
+			TimeSpeedMultiplier: player.TimeSpeedMultiplier,
+			ApertureStress:      player.ApertureStress,
+			HumanQi:             player.HumanQi,
+			PrimevalStones:      player.PrimevalStones,
+			ImmortalStones:      player.ImmortalStones,
+			LastManaUpdate:      player.LastManaUpdate,
+			LastCultivateTime:   player.LastCultivateTime,
+			UpdatedAt:           now,
+		}
+		_ = cache.SetAndQueueJSON("player_stats", player.ID.String(), statsPayload)
+	} else {
+		_, err = tx.Exec(`
+			UPDATE players
+			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
+			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
+			    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
+			    version = version + 1
+			WHERE id = $11
+		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
+			player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
+			player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
+		if err != nil {
+			return player, err
+		}
 	}
 	player.Version++
 

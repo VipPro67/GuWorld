@@ -801,7 +801,8 @@ func MovePlayer(c *gin.Context) {
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		logger.S.Errorf("MovePlayer: failed to evaluate mana for player=%s: %v", authID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
@@ -1026,7 +1027,8 @@ func MovePlayerPath(c *gin.Context) {
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		logger.S.Errorf("MovePlayerPath: failed to evaluate mana for player=%s: %v", authID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
