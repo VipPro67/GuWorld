@@ -435,6 +435,11 @@ func (c *ClearedCellsMap) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(bytes) == 0 || string(bytes) == "null" {
+		*c = ClearedCellsMap{}
+		return nil
+	}
+	bytes = truncateJSON(bytes)
 	return json.Unmarshal(bytes, c)
 }
 
@@ -456,6 +461,11 @@ func (g *GuInventory) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(b) == 0 || string(b) == "null" {
+		*g = GuInventory{}
+		return nil
+	}
+	b = truncateJSON(b)
 	return json.Unmarshal(b, g)
 }
 
@@ -477,6 +487,11 @@ func (m *MaterialsInventory) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(b) == 0 || string(b) == "null" {
+		*m = MaterialsInventory{}
+		return nil
+	}
+	b = truncateJSON(b)
 	return json.Unmarshal(b, m)
 }
 
@@ -498,6 +513,11 @@ func (d *DaoMarksMap) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(b) == 0 || string(b) == "null" {
+		*d = DaoMarksMap{}
+		return nil
+	}
+	b = truncateJSON(b)
 	return json.Unmarshal(b, d)
 }
 
@@ -538,6 +558,7 @@ func (c *CombatState) Scan(value interface{}) error {
 		*c = CombatState{}
 		return nil
 	}
+	b = truncateJSON(b)
 	return json.Unmarshal(b, c)
 }
 
@@ -563,6 +584,11 @@ func (p *PathMasteriesMap) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(b) == 0 || string(b) == "null" {
+		*p = PathMasteriesMap{}
+		return nil
+	}
+	b = truncateJSON(b)
 	return json.Unmarshal(b, p)
 }
 
@@ -584,6 +610,11 @@ func (b *BodyModsList) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(bytes) == 0 || string(bytes) == "null" {
+		*b = BodyModsList{}
+		return nil
+	}
+	bytes = truncateJSON(bytes)
 	return json.Unmarshal(bytes, b)
 }
 
@@ -605,6 +636,11 @@ func (s *StatusList) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(bytes) == 0 || string(bytes) == "null" {
+		*s = StatusList{}
+		return nil
+	}
+	bytes = truncateJSON(bytes)
 	return json.Unmarshal(bytes, s)
 }
 
@@ -652,6 +688,11 @@ func (v *VisitedSubZonesList) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(bytes) == 0 || string(bytes) == "null" {
+		*v = VisitedSubZonesList{}
+		return nil
+	}
+	bytes = truncateJSON(bytes)
 	return json.Unmarshal(bytes, v)
 }
 
@@ -675,6 +716,11 @@ func (q *CompletedQuestsList) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
+	if len(bytes) == 0 || string(bytes) == "null" {
+		*q = CompletedQuestsList{}
+		return nil
+	}
+	bytes = truncateJSON(bytes)
 	return json.Unmarshal(bytes, q)
 }
 
@@ -684,4 +730,69 @@ func (q CompletedQuestsList) Value() (driver.Value, error) {
 		return "[]", nil
 	}
 	return json.Marshal(q)
+}
+
+// truncateJSON finds the end of the top-level JSON value in b and returns a
+// byte slice containing only that value. This handles corrupted DB columns
+// that have trailing non-whitespace bytes after valid JSON.
+func truncateJSON(b []byte) []byte {
+	if len(b) == 0 {
+		return b
+	}
+	// Skip leading whitespace
+	start := 0
+	for start < len(b) && (b[start] == ' ' || b[start] == '\t' || b[start] == '\n' || b[start] == '\r') {
+		start++
+	}
+	if start >= len(b) {
+		return b[:0]
+	}
+
+	depth := 0
+	inString := false
+	escape := false
+
+	for i := start; i < len(b); i++ {
+		ch := b[i]
+
+		if inString {
+			if escape {
+				escape = false
+			} else if ch == '\\' {
+				escape = true
+			} else if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+
+		switch ch {
+		case '"':
+			inString = true
+		case '{', '[':
+			if depth == 0 {
+				depth = 1
+			} else {
+				depth++
+			}
+		case '}', ']':
+			depth--
+			if depth == 0 {
+				return b[start : i+1]
+			}
+		case ',', ':', '=', ';':
+			if depth == 0 {
+				return b[start:i]
+			}
+		default:
+			if depth == 0 && (ch < 0x20 || ch == '#' || ch == '-') {
+				// Start of trailing garbage (comment, negative sign outside value, etc.)
+				return b[start:i]
+			}
+		}
+	}
+
+	// If we reach here without finding a clean boundary, return as-is
+	// (json.Unmarshal will error, but we won't panic)
+	return b
 }

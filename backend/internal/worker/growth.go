@@ -45,7 +45,7 @@ func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 
 // processGrowthTick advances Gu growth for every equipped ACTIVE Gu that has a
 // growth profile. Instead of one massive transaction for all players, it batch-reads and
-// processes players in chunks of 100 to prevent statement timeouts.
+// processes players in chunks of 50 to prevent statement timeouts and reduce lock contention.
 func processGrowthTick(ctx context.Context, db *sql.DB) {
 	// ── Step 1: find affected player IDs ──────────────────────────────────
 	playerIDs, err := findGrowthAffectedPlayers(ctx, db)
@@ -57,7 +57,7 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 		return
 	}
 
-	const batchSize = 100
+	const batchSize = 50
 	for i := 0; i < len(playerIDs); i += batchSize {
 		end := i + batchSize
 		if end > len(playerIDs) {
