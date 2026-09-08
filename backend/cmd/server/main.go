@@ -168,6 +168,9 @@ func main() {
 	worker.StartSectMaintenanceWorker(ctx, db.DB, 24*time.Hour)
 	handlers.StartLastActivityFlusher(ctx)
 	worker.StartBatchPersister(ctx, 5*time.Second)
+	if cache.Client != nil {
+		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)
+	}
 
 	r := server.SetupRouter()
 

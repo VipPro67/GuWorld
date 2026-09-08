@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
@@ -24,6 +25,7 @@ type PlayerMovementPayload struct {
 	HumanQi         float64         `json:"human_qi"`
 	VisitedSubzones json.RawMessage `json:"visited_subzones,omitempty"`
 	UpdatedAt       time.Time       `json:"updated_at"`
+	Version         int             `json:"version"`
 }
 
 type PlayerStatsPayload struct {
@@ -54,16 +56,31 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 		return nil
 	}
 
-	now := time.Now()
-	var succeededIDs []string
-
+	// Parse all payloads first
+	type parsedPayload struct {
+		PlayerMovementPayload
+		raw string
+	}
+	parsed := make([]parsedPayload, 0, len(payloads))
 	for _, pStr := range payloads {
 		var p PlayerMovementPayload
 		if err := json.Unmarshal([]byte(pStr), &p); err != nil {
 			logger.S.Errorf("Failed to unmarshal PlayerMovementPayload: %v", err)
 			continue
 		}
+		parsed = append(parsed, parsedPayload{PlayerMovementPayload: p, raw: pStr})
+	}
 
+	// Sort by UpdatedAt so we process older updates first; newer ones will
+	// win the version check.
+	sort.Slice(parsed, func(i, j int) bool {
+		return parsed[i].UpdatedAt.Before(parsed[j].UpdatedAt)
+	})
+
+	now := time.Now()
+	var succeededIDs []string
+
+	for _, p := range parsed {
 		var activeCombatVal any
 		if len(p.ActiveCombat) > 0 && string(p.ActiveCombat) != "null" {
 			activeCombatVal = string(p.ActiveCombat)
@@ -79,23 +96,35 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 			visitedSubzonesVal = string(p.VisitedSubzones)
 		}
 
-		_, err := db.DB.ExecContext(ctx, `
-			UPDATE players SET 
-				current_mana = $1, x = $2, y = $3, current_region = $4, 
-				cleared_cells = $5, active_combat = $6, last_mana_update = $7, 
-				primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, 
-				visited_subzones = $12
-			WHERE id = $13
+		result, err := db.DB.ExecContext(ctx, `
+			UPDATE players SET
+				current_mana = $1, x = $2, y = $3, current_region = $4,
+				cleared_cells = $5, active_combat = $6, last_mana_update = $7,
+				primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11,
+				visited_subzones = $12,
+				version = version + 1
+			WHERE id = $13 AND version = $14
 		`,
 			p.CurrentMana, p.X, p.Y, p.CurrentRegion,
 			clearedCellsVal, activeCombatVal, now,
 			p.PrimevalStones, p.HP, p.MaxMana, p.HumanQi,
-			visitedSubzonesVal, p.ID,
+			visitedSubzonesVal, p.ID, p.Version,
 		)
 		if err != nil {
 			logger.S.Warnf("Batch update movement postponed for player %s (locked/retry): %v", p.ID, err)
 			continue
 		}
+
+		affected, _ := result.RowsAffected()
+		if affected == 0 {
+			// Version mismatch: a newer update already ran. Drop this stale
+			// payload instead of retrying forever with the same stale version.
+			logger.S.Infof("Batch movement dropped for player %s: version %d stale", p.ID, p.Version)
+			Metrics.RecordDrop(1)
+			succeededIDs = append(succeededIDs, p.ID)
+			continue
+		}
+
 		succeededIDs = append(succeededIDs, p.ID)
 	}
 

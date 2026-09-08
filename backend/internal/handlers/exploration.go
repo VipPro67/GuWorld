@@ -1503,6 +1503,7 @@ func savePlayerMovement(tx *sql.Tx, player *models.Player, combatJSON any) error
 			HumanQi:         player.HumanQi,
 			VisitedSubzones: json.RawMessage(visitedBytes),
 			UpdatedAt:       time.Now(),
+			Version:         player.Version,
 		}
 		if combatStr, ok := combatJSON.(string); ok && combatStr != "" {
 			queuePayload.ActiveCombat = json.RawMessage(combatStr)

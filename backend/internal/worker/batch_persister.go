@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
@@ -54,6 +55,11 @@ func flushEntityType(ctx context.Context, entityType string, handler BatchHandle
 		return nil
 	}
 
+	atomic.StoreInt64(&Metrics.QueueDepth, int64(len(ids)))
+	if len(ids) > 100 {
+		logger.S.Warnf("High queue depth for %s: %d items", entityType, len(ids))
+	}
+
 	keys := make([]string, len(ids))
 	for i, id := range ids {
 		keys[i] = entityType + ":" + id
@@ -74,13 +80,17 @@ func flushEntityType(ctx context.Context, entityType string, handler BatchHandle
 	}
 
 	if len(validPayloads) == 0 {
-		return cache.RemovePendingIDs(entityType, ids...)
+		_ = cache.RemovePendingIDs(entityType, ids...)
+		Metrics.RecordFlush(entityType, 0, true)
+		return nil
 	}
 
 	if err := handler(ctx, validPayloads); err != nil {
 		logger.S.Errorf("Batch persist failed for %s: %v", entityType, err)
-		return err 
+		Metrics.RecordFlush(entityType, len(validPayloads), false)
+		return err
 	}
 
+	Metrics.RecordFlush(entityType, len(validPayloads), true)
 	return nil
 }

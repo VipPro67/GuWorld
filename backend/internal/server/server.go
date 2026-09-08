@@ -291,15 +291,17 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/players/:id/pets", handlers.AdminCreatePlayerPet)
 			admin.PUT("/players/:id/pets/:pet_id", handlers.AdminUpdatePlayerPet)
 
-			admin.GET("/constitution-dictionary", handlers.AdminListConstitutions)
-			admin.POST("/constitution-dictionary", handlers.AdminCreateConstitution)
-			admin.PUT("/constitution-dictionary/:key", handlers.AdminUpdateConstitution)
-			admin.DELETE("/constitution-dictionary/:key", handlers.AdminDeleteConstitution)
+		admin.GET("/constitution-dictionary", handlers.AdminListConstitutions)
+		admin.POST("/constitution-dictionary", handlers.AdminCreateConstitution)
+		admin.PUT("/constitution-dictionary/:key", handlers.AdminUpdateConstitution)
+		admin.DELETE("/constitution-dictionary/:key", handlers.AdminDeleteConstitution)
 
-			admin.GET("/race-dictionary", handlers.AdminListRaces)
-			admin.POST("/race-dictionary", handlers.AdminCreateRace)
-			admin.PUT("/race-dictionary/:key", handlers.AdminUpdateRace)
-			admin.DELETE("/race-dictionary/:key", handlers.AdminDeleteRace)
+		admin.GET("/race-dictionary", handlers.AdminListRaces)
+		admin.POST("/race-dictionary", handlers.AdminCreateRace)
+		admin.PUT("/race-dictionary/:key", handlers.AdminUpdateRace)
+		admin.DELETE("/race-dictionary/:key", handlers.AdminDeleteRace)
+
+		admin.GET("/batch-metrics", handlers.GetBatchMetrics)
 
 			admin.GET("/status-dictionary", handlers.AdminListStatuses)
 			admin.POST("/status-dictionary", handlers.AdminCreateStatus)

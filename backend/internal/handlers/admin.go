@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -4424,4 +4426,17 @@ func formatChangedFields(sets []string, args []interface{}) string {
 		fields = append(fields, fmt.Sprintf("%s (%s)", translated, valStr))
 	}
 	return strings.Join(fields, ", ")
+}
+
+// GetBatchMetrics returns metrics about the batch persister worker.
+func GetBatchMetrics(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"total_flushes":      atomic.LoadInt64(&worker.Metrics.TotalFlushes),
+		"successful_flushes": atomic.LoadInt64(&worker.Metrics.SuccessfulFlushes),
+		"failed_flushes":     atomic.LoadInt64(&worker.Metrics.FailedFlushes),
+		"items_processed":    atomic.LoadInt64(&worker.Metrics.ItemsProcessed),
+		"items_retried":      atomic.LoadInt64(&worker.Metrics.ItemsRetried),
+		"items_dropped":      atomic.LoadInt64(&worker.Metrics.ItemsDropped),
+		"queue_depth":        atomic.LoadInt64(&worker.Metrics.QueueDepth),
+	})
 }

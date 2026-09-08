@@ -15,6 +15,11 @@ import (
 var Client *redis.Client
 var Ctx = context.Background()
 
+// PendingWriteTTL is the TTL for pending write cache entries.
+// If the batch persister doesn't flush within this window, the entry is evicted
+// to avoid stale data accumulating indefinitely.
+const PendingWriteTTL = 5 * time.Minute
+
 // Connect initializes the Redis connection using REDIS_URL
 func Connect() error {
 	redisHost := os.Getenv("REDIS_HOST")
@@ -97,19 +102,25 @@ func Delete(keys ...string) error {
 }
 
 // SetAndQueueJSON stores the JSON representation of a value in the cache and adds its ID to the pending writes set for the given entity type.
+// Uses a Redis pipeline so SET + SADD are sent atomically; otherwise a failure between
+// the two commands would leave an orphan cache entry that never gets persisted.
+// A TTL (PendingWriteTTL) is applied so that orphaned entries are eventually evicted.
 func SetAndQueueJSON(entityType, entityID string, value interface{}) error {
 	if Client == nil {
 		return nil
 	}
 
 	key := entityType + ":" + entityID
-	err := SetJSON(key, value, 0) // No expiration for pending DB writes
+	data, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
 
-	// Add to pending set to be processed by the batch persister
-	return Client.SAdd(Ctx, "pending_db_writes:"+entityType, entityID).Err()
+	pipe := Client.Pipeline()
+	pipe.Set(Ctx, key, data, PendingWriteTTL)
+	pipe.SAdd(Ctx, "pending_db_writes:"+entityType, entityID)
+	_, err = pipe.Exec(Ctx)
+	return err
 }
 
 // GetPendingIDs retrieves all entity IDs that have pending database writes for a given entity type.
@@ -234,8 +245,22 @@ func GetPlayerTemporaryStatuses(playerID string) ([]TemporaryStatusData, error) 
 		return nil, redis.Nil
 	}
 	pattern := fmt.Sprintf("player_status:%s:*", playerID)
-	keys, err := Client.Keys(Ctx, pattern).Result()
-	if err != nil || len(keys) == 0 {
+	var cursor uint64
+	var keys []string
+
+	for {
+		batch, nextCursor, err := Client.Scan(Ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, batch...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	if len(keys) == 0 {
 		return []TemporaryStatusData{}, nil
 	}
 
