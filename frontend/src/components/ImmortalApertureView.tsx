@@ -170,6 +170,8 @@ export const ImmortalApertureView: React.FC = () => {
     useItems: consumeItems,
     setView,
     showConfirm,
+    fetchDictionary,
+    dictionaryLoaded,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "ecosystem" | "variant_humans">("overview");
@@ -213,6 +215,9 @@ export const ImmortalApertureView: React.FC = () => {
   const [isReloading, setIsReloading] = useState(false);
 
   useEffect(() => {
+    if (!dictionaryLoaded) {
+      fetchDictionary();
+    }
     fetchAperture();
     fetchDaoMarks();
     fetchActiveTribulation();
@@ -1312,7 +1317,7 @@ return (
 
                             const levelMultiplier = 1.0 + (Math.max(1, selectedNode.level) - 1) * 0.20;
                             const nodePathMarks = getDaoMarkAmount(selectedNode.path);
-                            const daoMultiplier = 1.0 + nodePathMarks * 0.01;
+                            const daoMultiplier = 1.0 + nodePathMarks * 0.0001;
                             const conflictMult = (isConflicting && !hasSovereignFetus) ? 0.5 : 1.0;
                             let ecoMult = 1.0;
                             if (overgrazed) ecoMult = 0.5;
@@ -1321,16 +1326,19 @@ return (
 
                             let vhLaborMult = 1.0;
                             let vhPopBonus = 1.0;
-                            const rockmanVH = variantHumans.find(v => v.race === "ROCKMAN");
-                            const rockmanPop = rockmanVH ? rockmanVH.population : 0;
-                            const rockmanLabor = rockmanVH ? rockmanVH.labor_intensity : "NORMAL";
+                            const vhRace = selectedNode.node_type === "HAIRY_MAN_SETTLEMENT" ? "HAIRY_MAN"
+                              : (selectedNode.node_type === "FEATHERMAN_CANYON" ? "FEATHERMAN"
+                              : (isMine || selectedNode.node_type === "ROCKMAN_TRIBE" ? "ROCKMAN" : ""));
+                            const vh = vhRace ? variantHumans.find(v => v.race === vhRace) : undefined;
+                            const vhPop = vh ? vh.population : 0;
+                            const vhLabor = vh ? vh.labor_intensity : "NORMAL";
                             const laborLabels: Record<string, string> = { LOW: "x0.7 (Nhàn)", NORMAL: "x1.0", HIGH: "x1.5", EXPLOIT: "x2.0 (Bóc lột)" };
 
-                            if (isMine && rockmanPop > 0) {
-                              vhPopBonus = 1.0 + Math.min(0.5, rockmanPop * 0.001);
-                              if (rockmanLabor === "LOW") vhLaborMult = 0.7;
-                              if (rockmanLabor === "HIGH") vhLaborMult = 1.5;
-                              if (rockmanLabor === "EXPLOIT") vhLaborMult = 2.0;
+                            if (vhRace && vhPop > 0) {
+                              vhPopBonus = 1.0 + vhPop * 0.001;
+                              if (vhLabor === "LOW") vhLaborMult = 0.7;
+                              if (vhLabor === "HIGH") vhLaborMult = 1.5;
+                              if (vhLabor === "EXPLOIT") vhLaborMult = 2.0;
                             }
 
                             const getManaVal = (rank: number): number => {
@@ -1382,7 +1390,7 @@ return (
                                 if (item.path) {
                                   itemPathName = item.path;
                                   itemPathMarks = getDaoMarkAmount(item.path);
-                                  itemFoodPathMultiplier = 1.0 + itemPathMarks * 0.01;
+                                  itemFoodPathMultiplier = 1.0 + itemPathMarks * 0.0001;
                                 }
                               }
                             }
@@ -1413,7 +1421,7 @@ return (
                                       ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
                                       : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
                                   }`}>
-                                    Hiệu suất thực tế: {efficiencyPercent}% ({combinedMultiplier >= 1.0 ? `+${Math.round((combinedMultiplier - 1) * 100)}%` : `-${Math.round((1 - combinedMultiplier) * 100)}%`})
+                                    Hiệu suất thực tế: {efficiencyPercent.toLocaleString("vi-VN")}% ({combinedMultiplier >= 1.0 ? `+${Math.round((combinedMultiplier - 1) * 100).toLocaleString("vi-VN")}%` : `-${Math.round((1 - combinedMultiplier) * 100).toLocaleString("vi-VN")}%`})
                                   </span>
                                 </div>
 
@@ -1450,9 +1458,9 @@ return (
                                       className={displayMarks > 0 ? "text-emerald-400 font-bold text-right" : "text-slate-400 text-right"}
                                       title={`${displayMarks.toLocaleString("vi-VN")} vết Đạo ngân`}
                                     >
-                                      {((displayMarks * 1.0) / itemRankDivisor) >= 10000
-                                        ? `+${formatNumber((displayMarks * 1.0) / itemRankDivisor)}%`
-                                        : `+${((displayMarks * 1.0) / itemRankDivisor).toFixed(1)}%`}
+                                      {((displayMarks * 0.01) / itemRankDivisor) >= 10000
+                                        ? `+${formatNumber((displayMarks * 0.01) / itemRankDivisor)}%`
+                                        : `+${((displayMarks * 0.01) / itemRankDivisor).toFixed(2)}%`}
                                       {itemRankDivisor > 1 && (
                                         <span className="text-[10px] text-amber-400 font-normal ml-1">
                                           (chia Rank /{itemRankDivisor >= 10000 ? formatNumber(itemRankDivisor) : itemRankDivisor.toLocaleString("vi-VN")})
@@ -1516,15 +1524,15 @@ return (
                                   )}
 
                                   {/* 5. Variant Humans Labor Status */}
-                                  {isMine && rockmanPop > 0 && (
+                                  {vhRace && vhPop > 0 && (
                                     <div className="space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-850 text-[10px]">
                                       <div className="flex justify-between items-center">
-                                        <span className="text-slate-300">🪨 Dân số Người Đá:</span>
-                                        <span className="text-cyan-400 font-bold">{rockmanPop} (+{(Math.min(0.5, rockmanPop * 0.001) * 100).toFixed(1)}%)</span>
+                                        <span className="text-slate-300">{vhRace === "HAIRY_MAN" ? "🦁 Dân số Mao Nhân:" : (vhRace === "FEATHERMAN" ? "🪶 Dân số Vũ Nhân:" : "🪨 Dân số Người Đá:")}</span>
+                                        <span className="text-cyan-400 font-bold">{vhPop.toLocaleString("vi-VN")} (+{(vhPop * 0.1).toFixed(1)}%)</span>
                                       </div>
                                       <div className="flex justify-between items-center">
                                         <span className="text-slate-300">⚙️ Cường độ lao động:</span>
-                                        <span className="text-amber-400 font-bold">{laborLabels[rockmanLabor]}</span>
+                                        <span className="text-amber-400 font-bold">{laborLabels[vhLabor] || "x1.0"}</span>
                                       </div>
                                     </div>
                                   )}

@@ -179,7 +179,7 @@ func GetMineSlots(c *gin.Context) {
 		})
 	}
 
-	_ = cache.SetJSON("mine_slots_list", slots, 60*time.Second)
+	_ = cache.SetJSON("mine_slots_list", slots, 10*time.Second)
 	c.JSON(http.StatusOK, slots)
 }
 

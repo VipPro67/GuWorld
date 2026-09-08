@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { Sword, LogOut, Coins, Flame, Gift, Clock, User, ShieldAlert, Loader2, Skull } from "lucide-react";
+const mineRarityRates: Record<string, { stonesPerMin: number; qiPerMin: number; chestChance: number }> = {
+  "Siêu Cấp":      { stonesPerMin: 60, qiPerMin: 15, chestChance: 0.5 },
+  "Truyền Thuyết": { stonesPerMin: 30, qiPerMin: 7.5, chestChance: 0.2 },
+  "Sử Thi":        { stonesPerMin: 25, qiPerMin: 6.25, chestChance: 0.15 },
+  "Hiếm":          { stonesPerMin: 22, qiPerMin: 5.5, chestChance: 0.12 },
+  "Thường":        { stonesPerMin: 15, qiPerMin: 3, chestChance: 0.08 },
+};
 
 export const MineView: React.FC = () => {
   const {
@@ -292,6 +299,16 @@ export const MineView: React.FC = () => {
                 </span>
               </div>
 
+              {/* Rate badge */}
+              {(() => {
+                const rates = mineRarityRates[slot.rarity] || mineRarityRates["Thường"];
+                return (
+                  <div className="text-[10px] text-zinc-400 font-mono mb-2 bg-zinc-950/70 px-2 py-0.5 rounded-full border border-zinc-800/80">
+                    +{rates.stonesPerMin} Đá/p · +{rates.qiPerMin} Khí/p
+                  </div>
+                );
+              })()}
+
               {/* Occupied Timer */}
               <div className="text-xs text-zinc-500 font-mono mb-4 flex items-center gap-1.5 justify-center">
                 <Clock className="w-3.5 h-3.5 text-zinc-600" />
@@ -299,26 +316,40 @@ export const MineView: React.FC = () => {
               </div>
 
               {/* Rewards Indicators */}
-              <div className="w-full bg-zinc-950/40 border border-zinc-900 rounded-2xl py-2 px-3 flex items-center justify-around gap-2 mb-5">
-                <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title={activeTab === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch"}>
-                  <Coins className={`w-3.5 h-3.5 ${activeTab === "immortal" ? "text-cyan-400" : "text-yellow-500"}`} />
-                  <span>{slot.accumulated_stones}</span>
-                </div>
-                <div className="w-px h-4 bg-zinc-900" />
-                <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title="Nhân Khí">
-                  <Flame className="w-3.5 h-3.5 text-orange-500" />
-                  <span>{slot.accumulated_qi.toFixed(0)}</span>
-                </div>
-                {slot.accumulated_chests > 0 && (
-                  <>
-                    <div className="w-px h-4 bg-zinc-900" />
-                    <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title="Rương Mỏ Linh Thạch">
-                      <Gift className="w-3.5 h-3.5 text-red-500" />
-                      <span>{slot.accumulated_chests}</span>
+              {(() => {
+                const rates = mineRarityRates[slot.rarity] || mineRarityRates["Thường"];
+                let liveStones = slot.accumulated_stones;
+                let liveQi = slot.accumulated_qi;
+                if (isOccupied && slot.last_claimed_at) {
+                  const elapsedMins = Math.floor(Math.max(0, time - Date.parse(slot.last_claimed_at)) / 60000);
+                  if (elapsedMins > 0) {
+                    liveStones = Math.max(slot.accumulated_stones, Math.floor(elapsedMins * rates.stonesPerMin));
+                    liveQi = Math.max(slot.accumulated_qi, elapsedMins * rates.qiPerMin);
+                  }
+                }
+                return (
+                  <div className="w-full bg-zinc-950/40 border border-zinc-900 rounded-2xl py-2 px-3 flex items-center justify-around gap-2 mb-5">
+                    <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title={activeTab === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch"}>
+                      <Coins className={`w-3.5 h-3.5 ${activeTab === "immortal" ? "text-cyan-400" : "text-yellow-500"}`} />
+                      <span>{liveStones}</span>
                     </div>
-                  </>
-                )}
-              </div>
+                    <div className="w-px h-4 bg-zinc-900" />
+                    <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title="Nhân Khí">
+                      <Flame className="w-3.5 h-3.5 text-orange-500" />
+                      <span>{liveQi.toFixed(0)}</span>
+                    </div>
+                    {slot.accumulated_chests > 0 && (
+                      <>
+                        <div className="w-px h-4 bg-zinc-900" />
+                        <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title="Rương Mỏ Linh Thạch">
+                          <Gift className="w-3.5 h-3.5 text-red-500" />
+                          <span>{slot.accumulated_chests}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Action Buttons */}
               <div className="w-full mt-auto">

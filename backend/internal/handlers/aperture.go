@@ -1104,7 +1104,11 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	// 2. Conflict multiplier
 	conflictMultiplier := 1.0
 	if CheckNodeConflict(n, allNodes) {
-		conflictMultiplier = 0.5
+		var hasSovereignFetus bool
+		_ = tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM player_gu WHERE player_id = $1 AND gu_id = 'GU_SOVEREIGN_FETUS' AND equipped = true)`, playerID).Scan(&hasSovereignFetus)
+		if !hasSovereignFetus {
+			conflictMultiplier = 0.5
+		}
 	}
 
 	// 3. Ecosystem / Food Chain multiplier
