@@ -370,36 +370,7 @@ func ResolveTribulation(c *gin.Context) {
 		var username string
 		_ = tx.QueryRow(`SELECT rank, username FROM players WHERE id = $1`, playerID).Scan(&playerRank, &username)
 
-		yearsAtRankSync := ap.InternalYearsPassed - ap.RankStartYear
-		for _, tConfig := range models.GetTribulationTypesForRank(playerRank) {
-			if tConfig.Interval > 0 {
-				expectedCount := int(math.Floor(yearsAtRankSync / tConfig.Interval))
-				switch tConfig.Type {
-				case "EARTH_CALAMITY":
-					if ap.EarthCalamityCount < expectedCount {
-						ap.EarthCalamityCount = expectedCount
-					}
-				case "HEAVENLY_TRIBULATION":
-					if ap.HeavenlyTribulationCount < expectedCount {
-						ap.HeavenlyTribulationCount = expectedCount
-					}
-				case "GRAND_TRIBULATION":
-					if ap.GrandTribulationCount < expectedCount {
-						ap.GrandTribulationCount = expectedCount
-					}
-				case "MYRIAD_TRIBULATION":
-					if ap.MyriadTribulationCount < expectedCount {
-						ap.MyriadTribulationCount = expectedCount
-					}
-				case "CHAOS_CALAMITY":
-					if ap.ChaosCalamityCount < expectedCount {
-						ap.ChaosCalamityCount = expectedCount
-					}
-				}
-			}
-		}
-
-		nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+		nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.InternalYearsPassed)
 		ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 
 		// Check breakthrough conditions
@@ -442,7 +413,7 @@ func ResolveTribulation(c *gin.Context) {
 				}
 
 				// Recalculate next tribulation year based on the new rank!
-				nextYear, _ = models.GetNextTribulationInfo(newRank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+				nextYear, _ = models.GetNextTribulationInfo(newRank, ap.RankStartYear, ap.InternalYearsPassed)
 				ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 			}
 		}
@@ -564,51 +535,10 @@ func ResolveTribulation(c *gin.Context) {
 			var playerRank int
 			_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
 
-			// Compute nextYear using incremented counts
-			ap.TribulationCount++
-			switch ev.TribulationType {
-			case "EARTH_CALAMITY":
-				ap.EarthCalamityCount++
-			case "HEAVENLY_TRIBULATION":
-				ap.HeavenlyTribulationCount++
-			case "GRAND_TRIBULATION":
-				ap.GrandTribulationCount++
-			case "MYRIAD_TRIBULATION":
-				ap.MyriadTribulationCount++
-			case "CHAOS_CALAMITY":
-				ap.ChaosCalamityCount++
-			}
-
-			yearsAtRankFail := ap.InternalYearsPassed - ap.RankStartYear
-			for _, tConfig := range models.GetTribulationTypesForRank(playerRank) {
-				if tConfig.Interval > 0 {
-					expectedCount := int(math.Floor(yearsAtRankFail / tConfig.Interval))
-					switch tConfig.Type {
-					case "EARTH_CALAMITY":
-						if ap.EarthCalamityCount < expectedCount {
-							ap.EarthCalamityCount = expectedCount
-						}
-					case "HEAVENLY_TRIBULATION":
-						if ap.HeavenlyTribulationCount < expectedCount {
-							ap.HeavenlyTribulationCount = expectedCount
-						}
-					case "GRAND_TRIBULATION":
-						if ap.GrandTribulationCount < expectedCount {
-							ap.GrandTribulationCount = expectedCount
-						}
-					case "MYRIAD_TRIBULATION":
-						if ap.MyriadTribulationCount < expectedCount {
-							ap.MyriadTribulationCount = expectedCount
-						}
-					case "CHAOS_CALAMITY":
-						if ap.ChaosCalamityCount < expectedCount {
-							ap.ChaosCalamityCount = expectedCount
-						}
-					}
-				}
-			}
-
-			nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+			// Counts are only incremented on success — a failed tribulation does
+			// not count toward the total / per-type counters, but the next year
+			// is still pushed forward to the next milestone for recovery time.
+			nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.InternalYearsPassed)
 			ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 
 			ap.State = "DAMAGED"
@@ -742,11 +672,11 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		return err
 	}
 
-	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+		calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
 
 	triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 	storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
-	if storedYear > triggerYear {
+	if storedYear < triggerYear {
 		triggerYear = storedYear
 	}
 
@@ -1220,11 +1150,11 @@ func CheckAndTriggerTribulations() error {
 			rank = pd.rank
 		}
 
-		calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
 
 		triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 		storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
-		if storedYear > triggerYear {
+		if storedYear < triggerYear {
 			triggerYear = storedYear
 		}
 
@@ -1613,50 +1543,10 @@ func autoResolveEvent(eventID string, playerID string) {
 
 	var playerRank int
 	_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
-	ap.TribulationCount++
-	switch ev.TribulationType {
-	case "EARTH_CALAMITY":
-		ap.EarthCalamityCount++
-	case "HEAVENLY_TRIBULATION":
-		ap.HeavenlyTribulationCount++
-	case "GRAND_TRIBULATION":
-		ap.GrandTribulationCount++
-	case "MYRIAD_TRIBULATION":
-		ap.MyriadTribulationCount++
-	case "CHAOS_CALAMITY":
-		ap.ChaosCalamityCount++
-	}
 
-	yearsAtRankAuto := ap.InternalYearsPassed - ap.RankStartYear
-	for _, tConfig := range models.GetTribulationTypesForRank(playerRank) {
-		if tConfig.Interval > 0 {
-			expectedCount := int(math.Floor(yearsAtRankAuto / tConfig.Interval))
-			switch tConfig.Type {
-			case "EARTH_CALAMITY":
-				if ap.EarthCalamityCount < expectedCount {
-					ap.EarthCalamityCount = expectedCount
-				}
-			case "HEAVENLY_TRIBULATION":
-				if ap.HeavenlyTribulationCount < expectedCount {
-					ap.HeavenlyTribulationCount = expectedCount
-				}
-			case "GRAND_TRIBULATION":
-				if ap.GrandTribulationCount < expectedCount {
-					ap.GrandTribulationCount = expectedCount
-				}
-			case "MYRIAD_TRIBULATION":
-				if ap.MyriadTribulationCount < expectedCount {
-					ap.MyriadTribulationCount = expectedCount
-				}
-			case "CHAOS_CALAMITY":
-				if ap.ChaosCalamityCount < expectedCount {
-					ap.ChaosCalamityCount = expectedCount
-				}
-			}
-		}
-	}
-
-	nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+	// Auto-resolve counts as a failure — counters are only incremented on
+	// success, but the next year is still pushed to the next milestone.
+	nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.InternalYearsPassed)
 	nextYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 
 	var feathermanPop int

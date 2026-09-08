@@ -212,19 +212,27 @@ func tribulationPriority(t string) int {
 	return 0
 }
 
-func GetNextTribulationInfo(rank int, rankStartYear float64, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int) (nextYear float64, nextType string) {
-	cleanRankStartYear := math.Round(rankStartYear)
-	types := []struct {
-		Type     string
-		Interval float64
-		Count    int
-	}{
-		{"EARTH_CALAMITY", GetTribulationInterval(rank, "EARTH_CALAMITY"), earthCnt},
-		{"HEAVENLY_TRIBULATION", GetTribulationInterval(rank, "HEAVENLY_TRIBULATION"), heavenCnt},
-		{"GRAND_TRIBULATION", GetTribulationInterval(rank, "GRAND_TRIBULATION"), grandCnt},
-		{"MYRIAD_TRIBULATION", GetTribulationInterval(rank, "MYRIAD_TRIBULATION"), myriadCnt},
-		{"CHAOS_CALAMITY", GetTribulationInterval(rank, "CHAOS_CALAMITY"), chaosCnt},
+// nextRoundMultiple returns the smallest multiple of interval that is strictly
+// greater than yearsAtRank.  When yearsAtRank ≤ 0 the first interval is returned.
+// This ensures tribulation milestones always land on round numbers (10, 20, 30 …
+// for interval-10 types; 50, 100, 150 … for interval-50, etc.).
+func nextRoundMultiple(yearsAtRank, interval float64) float64 {
+	if yearsAtRank <= 0 {
+		return interval
 	}
+	n := math.Ceil(yearsAtRank / interval)
+	return n * interval
+}
+
+// GetNextTribulationInfo returns the year and type of the next tribulation for
+// the given rank.  The next year for each type is the next round multiple of
+// its interval relative to rankStartYear; the type with the earliest year wins
+// (ties broken by rarity priority).  currentYear is the player's internal
+// years passed (used to determine position within the current rank cycle).
+func GetNextTribulationInfo(rank int, rankStartYear float64, currentYear float64) (nextYear float64, nextType string) {
+	cleanRankStartYear := math.Round(rankStartYear)
+	yearsAtRank := math.Max(0, currentYear-cleanRankStartYear)
+	types := GetTribulationTypesForRank(rank)
 
 	nextYear = math.MaxFloat64
 	nextType = ""
@@ -233,10 +241,8 @@ func GetNextTribulationInfo(rank int, rankStartYear float64, earthCnt, heavenCnt
 		if t.Interval <= 0 {
 			continue
 		}
-		// Schedule is relative to when the current rank began, so each rank's
-		// tribulation cadence (e.g. Địa Tai every 10 internal years) restarts
-		// cleanly after a breakthrough.
-		year := math.Round(cleanRankStartYear + t.Interval*float64(t.Count+1))
+		nextOffset := nextRoundMultiple(yearsAtRank, t.Interval)
+		year := cleanRankStartYear + nextOffset
 		priority := tribulationPriority(t.Type)
 
 		if year < nextYear || (math.Abs(year-nextYear) < 0.001 && priority > tribulationPriority(nextType)) {
