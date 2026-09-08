@@ -9,8 +9,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var L *zap.Logger = zap.NewNop()
-var S *zap.SugaredLogger = zap.NewNop().Sugar()
+var (
+	L *zap.Logger        = zap.NewNop()
+	S *zap.SugaredLogger = zap.NewNop().Sugar()
+)
 
 type ginWriter struct{}
 
@@ -21,6 +23,13 @@ func (g *ginWriter) Write(p []byte) (n int, err error) {
 
 func GinWriter() io.Writer {
 	return &ginWriter{}
+}
+
+func Sync() error {
+	if L != nil {
+		return L.Sync()
+	}
+	return nil
 }
 
 func Init() error {
@@ -42,36 +51,38 @@ func Init() error {
 		level = zapcore.FatalLevel
 	}
 
-	cfg := zap.Config{
-		Level:       zap.NewAtomicLevelAt(level),
-		Development: true,
-		Sampling: &zap.SamplingConfig{
-			Initial:    100,
-			Thereafter: 100,
-		},
-		Encoding: "console",
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "ts",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			FunctionKey:    zapcore.OmitKey,
-			MessageKey:     "msg",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.StringDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
+	encoderConfig := zapcore.EncoderConfig{
+		TimeKey:        "ts",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		FunctionKey:    zapcore.OmitKey,
+		MessageKey:     "msg",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+		EncodeTime:     zapcore.ISO8601TimeEncoder,
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
 
-	logger, err := cfg.Build()
-	if err != nil {
-		return err
+	// Use JSON encoding when running in production/docker for structured logging,
+	// or console encoding for development mode.
+	var encoder zapcore.Encoder
+	if strings.ToLower(os.Getenv("PROD_ENV")) == "production" || os.Getenv("JSON_LOGS") == "true" {
+		encoderConfig.EncodeLevel = zapcore.LowercaseLevelEncoder
+		encoder = zapcore.NewJSONEncoder(encoderConfig)
+	} else {
+		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	}
+
+	core := zapcore.NewCore(
+		encoder,
+		zapcore.Lock(os.Stdout),
+		zap.NewAtomicLevelAt(level),
+	)
+
+	logger := zap.New(core, zap.AddCaller())
 
 	L = logger
 	S = logger.Sugar()

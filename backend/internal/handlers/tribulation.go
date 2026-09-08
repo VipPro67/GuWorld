@@ -373,8 +373,7 @@ func ResolveTribulation(c *gin.Context) {
 		ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 
 		// Check breakthrough conditions
-		yearsAtRank := ap.InternalYearsPassed - ap.RankStartYear
-		canBreak, newRank := models.CheckImmortalBreakthrough(playerRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, yearsAtRank)
+		canBreak, newRank := models.CheckImmortalBreakthrough(playerRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 		if canBreak {
 			// Rank-up requirement: player must own at least one path (lưu phái)
 			// at the required Cảnh Giới — Rank 7 = Tông Sư, Rank 8 = Đại Tông Sư,

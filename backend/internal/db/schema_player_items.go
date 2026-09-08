@@ -100,6 +100,10 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_gu_location_state ON player_gu (state, location) WHERE state IN ('ACTIVE', 'SLEEPING', 'EQUIPPING');`); err != nil {
 		return err
 	}
+	if err := execSchema("player_gu_active_equipped_growth_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_active_equipped_growth ON player_gu (gu_id, gu_rank) WHERE equipped = true AND state = 'ACTIVE';`); err != nil {
+		return err
+	}
 
 	if err := execSchema("player_inventory_items", `
 	CREATE TABLE IF NOT EXISTS player_inventory_items (

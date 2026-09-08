@@ -44,12 +44,11 @@ func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 }
 
 // processGrowthTick advances Gu growth for every equipped ACTIVE Gu that has a
-// growth profile. Instead of one transaction per player, it batch-reads all
-// affected data in two queries, processes in Go, then writes back with two
-// batch UPDATEs via unnest().
+// growth profile. Instead of one massive transaction for all players, it batch-reads and
+// processes players in chunks of 100 to prevent statement timeouts.
 func processGrowthTick(ctx context.Context, db *sql.DB) {
 	// ── Step 1: find affected player IDs ──────────────────────────────────
-	playerIDs, err := findGrowthAffectedPlayers(db)
+	playerIDs, err := findGrowthAffectedPlayers(ctx, db)
 	if err != nil {
 		logger.S.Errorf("Growth Worker Error finding affected players: %v", err)
 		return
@@ -58,6 +57,17 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 		return
 	}
 
+	const batchSize = 100
+	for i := 0; i < len(playerIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(playerIDs) {
+			end = len(playerIDs)
+		}
+		processGrowthBatch(ctx, db, playerIDs[i:end])
+	}
+}
+
+func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 	pqIDs := pq.Array(playerIDs)
 
 	// ── Step 2: batch-fetch player metadata ───────────────────────────────
@@ -68,7 +78,7 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 	}
 	playerMap := make(map[string]*playerRow, len(playerIDs))
 
-	pRows, err := db.Query(`
+	pRows, err := db.QueryContext(ctx, `
 		SELECT id, growth_data, base_hp, time_speed_multiplier
 		FROM players WHERE id = ANY($1::uuid[])`, pqIDs)
 	if err != nil {
@@ -113,7 +123,7 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 
 	guByPlayer := make(map[string][]guRow)
 
-	gRows, err := db.Query(`
+	gRows, err := db.QueryContext(ctx, `
 		SELECT player_id::text, id, gu_id, gu_rank, state, equipped,
 		       is_vital, integration_time, equipped_at, growth_hours
 		FROM player_gu WHERE player_id = ANY($1::uuid[])`, pqIDs)
@@ -399,15 +409,43 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 }
 
 // findGrowthAffectedPlayers returns players who own at least one equipped ACTIVE
-// Gu with a growth profile.
-func findGrowthAffectedPlayers(db *sql.DB) ([]string, error) {
-	rows, err := db.Query(`
+// Gu with a growth profile, using the in-memory Gu registry to avoid heavy JSONB scans.
+func findGrowthAffectedPlayers(ctx context.Context, db *sql.DB) ([]string, error) {
+	type guKey struct {
+		id   string
+		rank int
+	}
+	var growthKeys []guKey
+
+	for id, ranks := range models.GuRegistry {
+		for rank, spec := range ranks {
+			if spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0 {
+				growthKeys = append(growthKeys, guKey{id: id, rank: rank})
+			}
+		}
+	}
+
+	if len(growthKeys) == 0 {
+		return nil, nil
+	}
+
+	ids := make([]string, len(growthKeys))
+	ranks := make([]int, len(growthKeys))
+	for i, k := range growthKeys {
+		ids[i] = k.id
+		ranks[i] = k.rank
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	rows, err := db.QueryContext(queryCtx, `
 		SELECT DISTINCT pg.player_id::text
 		FROM player_gu pg
-		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-		WHERE pg.equipped AND pg.state = 'ACTIVE'
-		  AND gd.effects->'growth' IS NOT NULL
-		  AND COALESCE((gd.effects->'growth'->>'hours_to_max')::double precision, 0) > 0`)
+		JOIN unnest($1::text[], $2::int[]) AS g(gu_id, gu_rank)
+		  ON pg.gu_id = g.gu_id AND pg.gu_rank = g.gu_rank
+		WHERE pg.equipped AND pg.state = 'ACTIVE'`,
+		pq.Array(ids), pq.Array(ranks))
 	if err != nil {
 		return nil, err
 	}

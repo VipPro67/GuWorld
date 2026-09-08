@@ -24,6 +24,7 @@ Các biến thường dùng:
 | Google OAuth vars | Dùng cho `/auth/google/*` nếu bật Google login. |
 | PayOS vars | Dùng cho topup/webhook nếu bật payment thật. |
 | Cloudinary vars | Dùng cho upload avatar nếu bật upload cloud. |
+| `GRAFANA_URL`, `GRAFANA_API_KEY`, `GRAFANA_USER`, `GRAFANA_SERVICE_NAME` | Cấu hình log shipping tới Grafana Cloud qua OpenTelemetry OTLP HTTP (`/otlp/v1/logs`). |
 
 Frontend:
 
@@ -43,7 +44,8 @@ Lệnh này sẽ tự động:
 1. Tải và cấu hình PostgreSQL (`gu_db`) và Redis.
 2. Build Go backend dựa trên `backend/Dockerfile` và sao chép các file CSV dữ liệu đi kèm.
 3. Khởi chạy Caddy Server để làm reverse proxy và tự động cấp chứng chỉ SSL (HTTPS) cho tên miền `api.cogioi.io.vn` (cấu hình trong `Caddyfile`).
-4. Sử dụng cơ chế healthcheck để trì hoãn khởi động Go app cho đến khi PostgreSQL đã hoàn toàn sẵn sàng nhận kết nối.
+4. Khởi chạy Grafana Alloy container (`guworld-alloy`) kết nối tới Docker Socket để tự động thu thập stdout/stderr logs của toàn bộ container và đẩy về Grafana Cloud Loki & Prometheus.
+5. Sử dụng cơ chế healthcheck để trì hoãn khởi động Go app cho đến khi PostgreSQL đã hoàn toàn sẵn sàng nhận kết nối.
 
 API backend sau đó sẽ lắng nghe tại `http://localhost:8080` (truy cập cục bộ từ host) và được expose ra ngoài qua Caddy tại `https://api.cogioi.io.vn`.
 

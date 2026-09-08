@@ -86,7 +86,7 @@ func processStatusExpiryTick(db *sql.DB) {
 		WITH updates(id, statuses) AS (
 			SELECT unnest($1::text[]), unnest($2::text[])
 		)
-		UPDATE players p SET statuses = u.statuses
+		UPDATE players p SET statuses = u.statuses::jsonb
 		FROM updates u WHERE p.id = u.id::uuid
 	`, pq.Array(ids), pq.Array(statuses))
 	if err != nil {

@@ -33,22 +33,26 @@ func init() {
 }
 
 func main() {
+	var envLoaded bool
+	var loadedEnvPath string
+	for _, envPath := range []string{".env", "backend/.env", "../.env", "../../.env"} {
+		if err := godotenv.Load(envPath); err == nil {
+			envLoaded = true
+			loadedEnvPath = envPath
+			break
+		}
+	}
+
 	if err := logger.Init(); err != nil {
 		os.Stderr.WriteString("Failed to initialize logger: " + err.Error() + "\n")
 		os.Exit(1)
 	}
+	defer logger.Sync()
 
 	logger.S.Infof("App running in default local timezone: %s", time.Now().Location())
-
-	var envLoaded bool
-	for _, envPath := range []string{".env", "backend/.env", "../.env", "../../.env"} {
-		if err := godotenv.Load(envPath); err == nil {
-			logger.S.Infof("Loaded environment variables from %s", envPath)
-			envLoaded = true
-			break
-		}
-	}
-	if !envLoaded {
+	if envLoaded {
+		logger.S.Infof("Loaded environment variables from %s", loadedEnvPath)
+	} else {
 		logger.S.Warn("No .env file loaded, using default system/environment variables")
 	}
 

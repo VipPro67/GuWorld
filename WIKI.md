@@ -108,7 +108,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - Thất Chuyển: Địa Tai (10 năm), Thiên Kiếp (50 năm), Hạo Kiếp (100 năm)
   - Bát Chuyển: Thiên Kiếp (10 năm), Hạo Kiếp (50 năm), Vạn Kiếp (100 năm)
   - Cửu Chuyển: Hạo Kiếp (10 năm), Vạn Kiếp (50 năm), Hỗn Độn Đại Nạn (100 năm)
-- **Tự động đột phá:** Khi đủ 3 lần vượt kiếp cấp cao nhất (vd: 3 Thiên Kiếp), kết hợp điều kiện số năm ở Chuyển (300 năm với 6→7, 7→8), Cổ Tiên tự động lên Chuyển kế tiếp.
+- **Tự động đột phá:** Khi vượt thành công đủ 3 lần kiếp nạn cấp cao nhất của Chuyển hiện tại (Rank 6: 3 Thiên Kiếp; Rank 7: 3 Hạo Kiếp; Rank 8: 3 Vạn Kiếp) và đạt cảnh giới lưu phái yêu cầu, Cổ Tiên tự động lên Chuyển kế tiếp.
 - Nhiều kiểu kiếp nạn đến cùng lúc: ưu tiên sinh kiểu hiếm nhất, nhưng đếm tất cả các kiểu đang đến hạn.
 
 ## 3. Không khiếu, tiên khiếu và đạo ngân

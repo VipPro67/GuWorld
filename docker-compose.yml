@@ -58,6 +58,24 @@ services:
       - backend
       - frontend
 
+  alloy:
+    image: grafana/alloy:latest
+    container_name: guworld-alloy
+    restart: always
+    environment:
+      - LOKI_URL=https://logs-prod-020.grafana.net/loki/api/v1/push
+      - LOKI_USER=1492959
+      - PROMETHEUS_URL=https://prometheus-prod-37-prod-ap-southeast-1.grafana.net/api/prom/push
+      - PROMETHEUS_USER=2994568
+      - GRAFANA_API_KEY=glc_eyJvIjoiMTY3NzU0OCIsIm4iOiJ2aXBwcm82NyIsImsiOiIxUTBOOTIyaXFrOXM2b0ZhYjUyNGJvR1ciLCJtIjp7InIiOiJwcm9kLWFwLXNvdXRoZWFzdC0xIn19
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+
 volumes:
   redis_data:
   caddy_data:

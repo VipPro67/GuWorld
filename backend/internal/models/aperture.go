@@ -220,7 +220,7 @@ func nextRoundMultiple(yearsAtRank, interval float64) float64 {
 	if yearsAtRank <= 0 {
 		return interval
 	}
-	n := math.Ceil(yearsAtRank / interval)
+	n := math.Floor(yearsAtRank/interval) + 1
 	return n * interval
 }
 
@@ -258,14 +258,14 @@ func GetNextTribulationInfo(rank int, rankStartYear float64, currentYear float64
 	return nextYear, nextType
 }
 
-func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int, yearsAtRank float64) (bool, int) {
+func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int) (bool, int) {
 	switch rank {
 	case 6:
-		if heavenCnt >= 3 && yearsAtRank >= 300 {
+		if heavenCnt >= 3 {
 			return true, 7
 		}
 	case 7:
-		if grandCnt >= 3 && yearsAtRank >= 300 {
+		if grandCnt >= 3 {
 			return true, 8
 		}
 	case 8:

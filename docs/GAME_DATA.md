@@ -38,7 +38,7 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 - `aperture_hp`, `max_aperture_hp` (BIGINT) — HP của Tiên Khiếu (BIGINT để tránh tràn số ở cấp độ cao)
 - `area_size` — diện tích grid, quyết định số node tối đa
 - `immortal_essence`, `essence_production_per_year` — Tiên Nguyên
-- `rank_start_year` — năm bắt đầu rank hiện tại (dùng cho auto-breakthrough)
+- `rank_start_year` — năm bắt đầu rank hiện tại (dùng làm mốc tính lịch giáng lâm tai kiếp)
 - `earth_calamity_count`, `heavenly_tribulation_count`, `grand_tribulation_count`, `myriad_tribulation_count`, `chaos_calamity_count` — bộ đếm kiếp nạn
 - `tribulation_pending_at` (TIMESTAMPTZ, NULL) — thời điểm tai kiếp bắt đầu bị "giữ" vì người chơi offline; dùng để tính phạt giảm thưởng Đạo Ngân (quá 24 giờ → còn 50%)
 - `state` — STABLE / TRIBULATION_PENDING / TRIBULATION_ACTIVE / DAMAGED / DESTROYED
