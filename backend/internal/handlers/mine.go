@@ -16,7 +16,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -277,7 +276,6 @@ func OccupyMineSlot(c *gin.Context) {
 	}
 	invalidateMineSlotsCache()
 
-	auditlog.Logf(db.DB, &authID, "mine.occupy", "slot=%d rarity=%s", req.SlotID, rarity)
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d! Nhân Khí +5.", rarity, req.SlotID)})
 }
 
@@ -347,7 +345,6 @@ func ClaimMineRewards(c *gin.Context) {
 	}
 	invalidateMineSlotsCache()
 
-	auditlog.Logf(db.DB, &authID, "mine.claim", "slot=%d stones=%d qi=%.1f chests=%d", req.SlotID, stones, qi, chests)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Nhận thưởng tích lũy thành công!",
 		"rewards": gin.H{
@@ -424,7 +421,6 @@ func AbandonMineSlot(c *gin.Context) {
 	}
 	invalidateMineSlotsCache()
 
-	auditlog.Logf(db.DB, &authID, "mine.abandon", "slot=%d stones=%d qi=%.1f chests=%d", req.SlotID, stones, qi, chests)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Từ bỏ mỏ linh thạch thành công, đã nhận toàn bộ phần thưởng tích lũy!",
 		"rewards": gin.H{
@@ -607,7 +603,6 @@ func AttackMineSlot(c *gin.Context) {
 		return
 	}
 
-	auditlog.Logf(db.DB, &authID, "mine.attack", "slot=%d enemyType=%s", req.SlotID, pvpCombat.EnemyType)
 	c.JSON(http.StatusOK, gin.H{"message": "Khởi động chiến đấu chiếm mỏ thành công! Nhân Khí +3."})
 }
 

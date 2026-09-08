@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -63,27 +64,41 @@ func (s *lastActivityStore) flush() {
 	s.dirty = make(map[uuid.UUID]time.Time, len(snapshot))
 	s.mu.Unlock()
 
-	var failed []uuid.UUID
-	for id, lastTime := range snapshot {
-		_, err := db.DB.Exec(
-			`UPDATE players SET last_activity = $1 WHERE id = $2`,
-			lastTime, id,
-		)
-		if err != nil {
-			logger.S.Warnf("Last-activity flush postponed for player %s: %v", id, err)
-			failed = append(failed, id)
-		}
+	if len(snapshot) == 0 {
+		return
 	}
 
-	if len(failed) > 0 {
+	// Batch UPDATE using unnest for all dirty players
+	ids := make([]string, len(snapshot))
+	times := make([]time.Time, len(snapshot))
+	i := 0
+	for id, lastTime := range snapshot {
+		ids[i] = id.String()
+		times[i] = lastTime
+		i++
+	}
+
+	_, err := db.DB.Exec(`
+		WITH updates(id, last_activity) AS (
+			SELECT unnest($1::text[]), unnest($2::timestamptz[])
+		)
+		UPDATE players p SET last_activity = u.last_activity
+		FROM updates u WHERE p.id = u.id::uuid
+	`, pq.Array(ids), pq.Array(times))
+	if err != nil {
+		logger.S.Warnf("Last-activity flush failed for %d players: %v", len(snapshot), err)
+		// Re-add failed players back to dirty set
 		s.mu.Lock()
-		for _, id := range failed {
+		for id, lastTime := range snapshot {
 			if _, exists := s.dirty[id]; !exists {
-				s.dirty[id] = snapshot[id]
+				s.dirty[id] = lastTime
 			}
 		}
 		s.mu.Unlock()
+		return
 	}
+
+	logger.S.Debugf("Last-activity flush: updated %d player(s)", len(snapshot))
 }
 
 // StartLastActivityFlusher starts the background batch flusher for SSE heartbeat

@@ -15,7 +15,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -1550,14 +1549,6 @@ func CombatAttack(c *gin.Context) {
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
-	}
-
-	if victory || defeat {
-		action := "combat.defeat"
-		if victory {
-			action = "combat.victory"
-		}
-		auditlog.Logf(db.DB, &authID, action, "enemy=%s enemyType=%s", histEnemyName, histEnemyType)
 	}
 
 	setWorldPosFromPlayer(&player)

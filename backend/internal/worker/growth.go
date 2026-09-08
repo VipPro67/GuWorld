@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -12,7 +13,20 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+var (
+	growthWorkerStarted bool
+	growthWorkerMutex   sync.Mutex
+)
+
 func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
+	growthWorkerMutex.Lock()
+	if growthWorkerStarted {
+		growthWorkerMutex.Unlock()
+		return
+	}
+	growthWorkerStarted = true
+	growthWorkerMutex.Unlock()
+
 	ticker := time.NewTicker(interval)
 	go func() {
 		logger.S.Infof("Starting background Growth Worker with tick interval of %v", interval)
@@ -330,6 +344,10 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 
 	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
 		logger.S.Errorf("Growth Worker Error setting statement timeout: %v", err)
+		return
+	}
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '10000'`); err != nil {
+		logger.S.Errorf("Growth Worker Error setting lock timeout: %v", err)
 		return
 	}
 

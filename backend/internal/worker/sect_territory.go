@@ -33,7 +33,7 @@ func StartSectTerritoryWorker(ctx context.Context, db *sql.DB, interval time.Dur
 				logger.S.Info("Sect Territory Worker stopped")
 				return
 			case <-ticker.C:
-				processSectTerritoryTick(db)
+				processSectTerritoryTick(ctx, db)
 			}
 		}
 	}()
@@ -64,7 +64,7 @@ func sectMineBaseRate(rarity string) float64 {
 	}
 }
 
-func processSectTerritoryTick(db *sql.DB) {
+func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 	// ── Phase 0: Fetch all occupied mines ──
 	rows, err := db.Query(`
 		SELECT m.id, m.rarity, m.occupier_sect_id, m.pending_funds, m.pending_materials,

@@ -19,14 +19,14 @@ func StartPetHungerWorker(ctx context.Context, db *sql.DB, interval time.Duratio
 				logger.S.Info("Pet Hunger Worker stopped")
 				return
 			case <-ticker.C:
-				processPetHungerDecay(db)
+				processPetHungerDecay(ctx, db)
 			}
 		}
 	}()
 }
 
-func processPetHungerDecay(db *sql.DB) {
-	tx, err := db.Begin()
+func processPetHungerDecay(ctx context.Context, db *sql.DB) {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		logger.S.Errorf("Pet Hunger Worker: failed to begin tx: %v", err)
 		return
@@ -69,6 +69,12 @@ func processPetHungerDecay(db *sql.DB) {
 	}
 	defer rows.Close()
 
+	// Collect starved pets for audit log within the same transaction
+	type starvedPet struct {
+		playerID string
+		nickname string
+	}
+	var starved []starvedPet
 	starvedCount := 0
 	for rows.Next() {
 		var id, playerID, nickname string
@@ -76,10 +82,16 @@ func processPetHungerDecay(db *sql.DB) {
 			continue
 		}
 		starvedCount++
-		_, _ = db.Exec(`
+		starved = append(starved, starvedPet{playerID: playerID, nickname: nickname})
+	}
+	rows.Close()
+
+	// Insert audit logs inside the transaction for consistency
+	for _, p := range starved {
+		_, _ = tx.Exec(`
 			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
 			VALUES ($1, 'pet.starve_death', 'player_pet', $2, $3, '{}', '', false, 'Pet chết đói', NOW())
-		`, playerID, id, nickname+" chết đói")
+		`, p.playerID, p.nickname+" chết đói")
 	}
 
 	if starvedCount > 0 {

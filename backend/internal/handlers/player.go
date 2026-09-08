@@ -783,9 +783,6 @@ func RegisterPlayer(c *gin.Context) {
 	}
 	setAuthCookie(c, token)
 
-	auditlog.Logf(db.DB, &player.ID, "player.register",
-		"username=%s email=%s region=%s", req.Username, req.Email, req.StartingRegion)
-
 	c.JSON(http.StatusCreated, CreatePlayerResponse{
 		Player: player,
 		Token:  token,
@@ -1138,9 +1135,6 @@ func LoginPlayer(c *gin.Context) {
 	}
 	setAuthCookie(c, token)
 
-	auditlog.Logf(db.DB, &player.ID, "player.login",
-		"username=%s email=%s", player.Username, loginEmail)
-
 	c.JSON(http.StatusOK, CreatePlayerResponse{
 		Player: player,
 		Token:  token,
@@ -1150,7 +1144,7 @@ func LoginPlayer(c *gin.Context) {
 // LogoutPlayer clears the auth cookie for the current browser session.
 func LogoutPlayer(c *gin.Context) {
 	if playerID, exists := middleware.GetPlayerID(c); exists {
-		auditlog.Logf(db.DB, &playerID, "player.logout", "")
+		_ = playerID
 	}
 	clearAuthCookie(c)
 	c.Status(http.StatusNoContent)
@@ -1943,22 +1937,6 @@ func FeedGu(c *gin.Context) {
 	}
 	foodStr := strings.Join(foodDetails, ", ")
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:       &authID,
-		Action:         "gu.feed",
-		EntityType:     "gu_instance",
-		EntityID:       req.GuInstanceID,
-		RequestSummary: fmt.Sprintf("Cho Cổ trùng %s (Instance ID: %s) ăn %s", specs.Name, req.GuInstanceID[:8], foodStr),
-		Metadata: map[string]interface{}{
-			"gu_id":         targetGu.GuID,
-			"gu_name":       specs.Name,
-			"food_consumed": foodConsumed,
-			"new_hunger":    targetGu.Hunger,
-		},
-		IPAddress: c.ClientIP(),
-		Success:   true,
-	})
-
 	msg := fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục tới %d độ no. Tiêu hao: %s. Nhân Khí +%.0f.", specs.Name, targetGu.Hunger, foodStr, qiGained)
 	if feedEventMsg != "" {
 		msg += " " + feedEventMsg
@@ -2152,22 +2130,6 @@ func FeedGroup(c *gin.Context) {
 		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, foodName))
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:       &authID,
-		Action:         "gu.feed_group",
-		EntityType:     "gu_dictionary",
-		EntityID:       req.GuID,
-		RequestSummary: fmt.Sprintf("Cho ăn hàng loạt %d con %s. Tiêu hao: %s", fedCount, specs.Name, strings.Join(foodDetails, ", ")),
-		Metadata: map[string]interface{}{
-			"gu_id":         req.GuID,
-			"gu_name":       specs.Name,
-			"fed_count":     fedCount,
-			"food_consumed": foodConsumed,
-		},
-		IPAddress: c.ClientIP(),
-		Success:   true,
-	})
-
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Đã cho ăn thành công %d con %s! Tiêu hao: %s.", fedCount, specs.Name, strings.Join(foodDetails, ", ")),
 	})
@@ -2346,20 +2308,6 @@ func FeedAll(c *gin.Context) {
 		}
 		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, foodName))
 	}
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:       &authID,
-		Action:         "gu.feed_all",
-		EntityType:     "player",
-		EntityID:       authID.String(),
-		RequestSummary: fmt.Sprintf("Cho tất cả Cổ trùng ăn (%d Cổ trùng). Tiêu hao: %s", fedCount, strings.Join(foodDetails, ", ")),
-		Metadata: map[string]interface{}{
-			"fed_count":     fedCount,
-			"food_consumed": foodConsumed,
-		},
-		IPAddress: c.ClientIP(),
-		Success:   true,
-	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Cho tất cả Cổ trùng ăn thành công! Đã khôi phục cho %d Cổ trùng. Tiêu hao: %s.", fedCount, strings.Join(foodDetails, ", ")),
@@ -3573,12 +3521,6 @@ func UseItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
-	initialHP := player.HP
-	initialMana := player.CurrentMana
-	initialLifespan := player.Lifespan
-	initialHumanQi := player.HumanQi
-	initialStones := player.PrimevalStones
-
 
 	item, ok := models.ItemRegistry[req.ItemID]
 	if !ok {
@@ -3669,21 +3611,6 @@ func UseItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
-
-		auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "item.use", EntityType: "item",
-		EntityID:       req.ItemID,
-		RequestSummary: item.Name,
-		Metadata: map[string]interface{}{
-			"hp_change": player.HP - initialHP,
-			"mana_change": player.CurrentMana - initialMana,
-			"lifespan_change": player.Lifespan - initialLifespan,
-			"stones_change": player.PrimevalStones - initialStones,
-			"human_qi_change": player.HumanQi - initialHumanQi,
-			"messages": messages,
-		},
-		IPAddress:      c.ClientIP(), Success: true,
-	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
@@ -3901,21 +3828,6 @@ func UseItems(c *gin.Context) {
 		aggregatedSpecial := aggregateChestSpecialMessages(specialMessages)
 		finalMessage += "\n" + strings.Join(aggregatedSpecial, "\n")
 	}
-
-		auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "item.use_bulk",
-		RequestSummary: strings.Join(usageDetails, ", "),
-		Metadata: map[string]interface{}{
-			"items_used": usedCounts,
-			"hp_change": player.HP - initialHP,
-			"mana_change": player.CurrentMana - initialMana,
-			"lifespan_change": player.Lifespan - initialLifespan,
-			"stones_change": player.PrimevalStones - initialStones,
-			"human_qi_change": player.HumanQi - initialHumanQi,
-			"messages": specialMessages,
-		},
-		IPAddress:      c.ClientIP(), Success: true,
-	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": finalMessage})
@@ -4394,11 +4306,6 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "gu.use_consumable", EntityType: "gu_instance",
-		EntityID: req.GuInstanceID, RequestSummary: logMsg,
-		IPAddress: c.ClientIP(), Success: true,
-	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
@@ -4519,12 +4426,6 @@ func UseSupportGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "gu.use_support", EntityType: "gu_instance",
-		EntityID: req.GuInstanceID, RequestSummary: logMsg,
-		IPAddress: c.ClientIP(), Success: true,
-	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),

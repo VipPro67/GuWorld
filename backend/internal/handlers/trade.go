@@ -277,12 +277,6 @@ func InitiateTrade(c *gin.Context) {
 		return
 	}
 	notifyTradeParticipants(sender.ID, receiver.ID)
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "trade.initiate", EntityType: "trade",
-		EntityID:       tradeID.String(),
-		RequestSummary: fmt.Sprintf("người gửi=%s (%s) → người nhận=%s (%s)", sender.Username, sender.ID, receiver.Username, receiver.ID),
-		IPAddress:      c.ClientIP(), Success: true,
-	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Yêu cầu giao dịch đã được gửi! Nhân Khí +2.",
 		"trade_id": tradeID,
@@ -313,7 +307,7 @@ func AcceptTrade(c *gin.Context) {
 		return
 	}
 
-	senderID, senderName, receiverID, receiverName, err := getTradeParticipantsWithUsernames(tradeID)
+	senderID, _, receiverID, _, err := getTradeParticipantsWithUsernames(tradeID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
 		return
@@ -330,12 +324,6 @@ func AcceptTrade(c *gin.Context) {
 	}
 
 	notifyTradeParticipants(senderID, receiverID)
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "trade.accept", EntityType: "trade",
-		EntityID: tradeID,
-		RequestSummary: fmt.Sprintf("người nhận=%s (%s) đã chấp nhận giao dịch từ người gửi=%s (%s)", receiverName, receiverID, senderName, senderID),
-		IPAddress: c.ClientIP(), Success: true,
-	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã chấp nhận giao dịch"})
 }
 
@@ -574,33 +562,11 @@ func UpdateTradeOffer(c *gin.Context) {
 		return
 	}
 
-	offerStr := formatOffer(tx, offer)
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
-
-	var updaterName string
-	if authID == senderID {
-		updaterName = senderName
-	} else {
-		updaterName = receiverName
-	}
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "trade.update_offer", EntityType: "trade",
-		EntityID:       tradeID,
-		RequestSummary: fmt.Sprintf("người cập nhật=%s (%s) | ưu đãi=%s | người gửi=%s (%s) - người nhận=%s (%s)", updaterName, authID, offerStr, senderName, senderID, receiverName, receiverID),
-		Metadata: map[string]interface{}{
-			"offer":         offer,
-			"sender_id":     senderID.String(),
-			"sender_name":   senderName,
-			"receiver_id":   receiverID.String(),
-			"receiver_name": receiverName,
-		},
-		IPAddress: c.ClientIP(), Success: true,
-	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật ưu đãi thành công, trạng thái khóa của 2 bên đã được đặt lại. Nhân Khí +1."})
 }
@@ -665,18 +631,6 @@ func LockTrade(c *gin.Context) {
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
-	var lockerName string
-	if authID == senderID {
-		lockerName = senderName
-	} else {
-		lockerName = receiverName
-	}
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "trade.lock", EntityType: "trade",
-		EntityID: tradeID,
-		RequestSummary: fmt.Sprintf("người khóa=%s (%s) | người gửi=%s (%s) - người nhận=%s (%s)", lockerName, authID, senderName, senderID, receiverName, receiverID),
-		IPAddress: c.ClientIP(), Success: true,
-	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch. Nhân Khí +1."})
 }
 

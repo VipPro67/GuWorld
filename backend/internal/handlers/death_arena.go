@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // Tournament represents a death arena tournament
@@ -754,8 +753,6 @@ func ClaimReward(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failed"})
 		return
 	}
-
-	auditlog.Logf(db.DB, &authID, "death_arena.claim_reward", "reward_id=%s placement=%d", rewardUUID, reward.Placement)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Nhận phần thưởng thành công!",

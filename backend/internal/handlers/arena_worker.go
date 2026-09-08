@@ -3,14 +3,28 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"sync"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+var (
+	arenaWorkerStarted bool
+	arenaWorkerMutex   sync.Mutex
+)
+
 // StartArenaSettlementWorker runs every minute, checking if it is 22:00
 func StartArenaSettlementWorker(ctx context.Context) {
+	arenaWorkerMutex.Lock()
+	if arenaWorkerStarted {
+		arenaWorkerMutex.Unlock()
+		return
+	}
+	arenaWorkerStarted = true
+	arenaWorkerMutex.Unlock()
+
 	logger.S.Info("Starting Arena Settlement Worker...")
 
 	var lastSettlementDay int

@@ -16,7 +16,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type GachaRewardItem struct {
@@ -434,29 +433,14 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	action := "gacha.open"
-	if quantity > 1 {
-		action = "gacha.open_bulk"
-	}
 	summary := fmt.Sprintf("pool=%s | %dx | cost=%.0f %s", pool.Name, quantity, totalCost, pool.CostType)
 	if discounted {
 		summary += " (đã giảm 10%)"
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:       &playerID,
-		Action:         action,
-		EntityType:     "gacha_pool",
-		EntityID:       pool.ID,
-		RequestSummary: summary,
-		Metadata: map[string]interface{}{
-			"pool_id":     pool.ID,
-			"cost_type":   pool.CostType,
-			"cost_amount": totalCost,
-			"quantity":    quantity,
-			"rewards":     rewards,
-		},
-		IPAddress: c.ClientIP(), Success: true,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
+		"message": summary,
+		"rewards": rewards,
 	})
 
 	if quantity == 1 {

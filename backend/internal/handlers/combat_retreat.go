@@ -16,7 +16,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -217,7 +216,6 @@ func Flee(c *gin.Context) {
 
 	enemyName := player.ActiveCombat.EnemyName
 	var logMsg string
-	var defeatAudit *auditlog.Entry
 
 	// Mine and PvP combat always allow a free escape — fleeing is not gated by
 	// a random roll and carries no penalty for those encounter types.
@@ -384,7 +382,6 @@ func Flee(c *gin.Context) {
 
 			setWorldPosFromPlayer(&player)
 
-			auditlog.Logf(db.DB, &authID, "combat.flee_victory", "enemy=%s", enemyName)
 			responseWithPlayer(c, http.StatusOK, player, gin.H{
 				"flee_success": false,
 				"victory":      true,
@@ -422,13 +419,6 @@ func Flee(c *gin.Context) {
 				dropSummary := applyDeathDropRecord(tx, &authID, winnerID)
 				_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
 				if dropSummary != "" {
-					defeatAudit = &auditlog.Entry{
-						PlayerID:       &authID,
-						Action:         "combat.flee_fail_death",
-						RequestSummary: fmt.Sprintf("lost=%s", dropSummary),
-						IPAddress:      c.ClientIP(),
-						Success:        true,
-					}
 					if winnerID != nil {
 						turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và bị đối thủ cướp đoạt: %s.", dropSummary))
 					} else {
@@ -458,12 +448,6 @@ func Flee(c *gin.Context) {
 
 		setWorldPosFromPlayer(&player)
 
-		if defeatAudit != nil {
-			auditlog.Log(db.DB, *defeatAudit)
-		} else {
-			auditlog.Logf(db.DB, &authID, "combat.flee_failed", "enemy=%s", enemyName)
-		}
-
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"flee_success": false,
 			"victory":      false,
@@ -488,17 +472,6 @@ func Flee(c *gin.Context) {
 
 			dropSummary := applyDeathDropRecord(tx, &authID, nil)
 			_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
-
-			// Snapshot the loss before clearing; the audit insert runs AFTER
-			// commit so the transaction stays short (no second pool connection
-			// held while the row is locked).
-			defeatAudit = &auditlog.Entry{
-				PlayerID:       &authID,
-				Action:         "combat.flee_death",
-				RequestSummary: fmt.Sprintf("lost=%s", dropSummary),
-				IPAddress:      c.ClientIP(),
-				Success:        true,
-			}
 
 			if dropSummary != "" {
 				logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã thấy ở an toàn nhưng rơi rớt mất: %s.", enemyName, dropSummary)
@@ -536,10 +509,6 @@ func Flee(c *gin.Context) {
 
 	setWorldPosFromPlayer(&player)
 
-	// Best-effort audit logs AFTER commit — never inside the transaction.
-	if defeatAudit != nil {
-		auditlog.Log(db.DB, *defeatAudit)
-	}
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})

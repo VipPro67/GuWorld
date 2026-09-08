@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +17,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -448,6 +446,5 @@ func CompleteQuest(c *gin.Context) {
 
 	rewardStr := buildRewardLabel(quest.Rewards)
 
-	auditlog.Logf(db.DB, &authID, "quest.complete", "questId=%s questTitle=%s", req.QuestID, quest.Title)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": quest.Message + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)})
 }

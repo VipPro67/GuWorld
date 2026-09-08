@@ -280,7 +280,6 @@ func EngageTribulation(c *gin.Context) {
 		return
 	}
 
-	auditlog.Logf(db.DB, &playerID, "tribulation.engage", "event=%s enemies=%d", eventIDStr, len(enemies))
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Xuất trận nghênh chiến %d quái tai kiếp! Nhân Khí +3.", len(enemies))})
 }
 

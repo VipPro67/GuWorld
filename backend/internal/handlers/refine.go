@@ -1094,11 +1094,6 @@ func DeduceRecipe(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "refine.deduce_recipe", EntityType: "refining_recipe",
-		EntityID: req.RecipeID, RequestSummary: fmt.Sprintf("improvement=%g%% inspiration=%v", improvement, inspirationFlash),
-		IPAddress: c.ClientIP(), Success: true,
-	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message":         message + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		"inspiration":     inspirationFlash,

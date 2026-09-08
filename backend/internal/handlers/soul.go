@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 func getSoulTierLimit(tier string) int {
@@ -102,11 +101,6 @@ func RefineSoul(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &playerID, Action: "soul.refine",
-		RequestSummary: fmt.Sprintf("tier %s → %s", oldTier, newTier),
-		Success: true,
-	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Luyện Hồn thành công! Hồn phách đột phá lên %s, nhưng bị suy yếu do gió Lạc Phách (Soul HP giảm mạnh). Hãy dưỡng hồn để khôi phục. Nhân Khí +%.0f.", newTier, qiGained),
 	})

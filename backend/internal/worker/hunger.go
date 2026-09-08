@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,8 +16,21 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
+var (
+	hungerWorkerStarted bool
+	hungerWorkerMutex   sync.Mutex
+)
+
 // StartHungerWorker begins the background process for depleting Gu bug hunger.
 func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
+	hungerWorkerMutex.Lock()
+	if hungerWorkerStarted {
+		hungerWorkerMutex.Unlock()
+		return
+	}
+	hungerWorkerStarted = true
+	hungerWorkerMutex.Unlock()
+
 	ticker := time.NewTicker(interval)
 	go func() {
 		logger.S.Infof("Starting background Hunger Worker with tick interval of %v", interval)
@@ -27,14 +41,14 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 				logger.S.Info("Hunger Worker stopped")
 				return
 			case <-ticker.C:
-				processHungerDecay(db)
+				processHungerDecay(ctx, db)
 			}
 		}
 	}()
 }
 
 // processHungerDecay depletes Gu hunger for every player.
-func processHungerDecay(db *sql.DB) {
+func processHungerDecay(ctx context.Context, db *sql.DB) {
 	// 1. Batch ON_TICK effects (all players in one pass)
 	batchApplyOnTickEffects(db)
 
@@ -299,10 +313,11 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 
 	// Relax the default 15s statement / 10s lock timeout for this transaction;
 	// a player with a very large inventory legitimately needs more time.
-	if _, err := tx.Exec(`SET LOCAL statement_timeout = '600000'`); err != nil {
+	// Reduced from 600s/60s to minimize deadlock windows with the Growth worker.
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`SET LOCAL lock_timeout = '60000'`); err != nil {
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '10000'`); err != nil {
 		return err
 	}
 
@@ -382,28 +397,9 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 
 	// Batch audit logs for all dead Gus in one multi-row INSERT.
 	if len(dead) > 0 {
-		actions := make([]string, 0, len(dead))
-		summaries := make([]string, 0, len(dead))
-		guIDs := make([]string, 0, len(dead))
-		for _, s := range dead {
-			if s.isVital {
-				actions = append(actions, "gu.starve_vital_death")
-				summaries = append(summaries, s.guName+" | bản mệnh Cổ chết đói")
-			} else {
-				actions = append(actions, "gu.starve_death")
-				summaries = append(summaries, s.guName+" | Cổ chết đói")
-			}
-			guIDs = append(guIDs, s.guID)
-		}
-		if _, err := tx.Exec(`
-			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-			SELECT $1::uuid, v.action, 'gu_instance', v.entity_id, v.summary, '{}'::jsonb, '', false, 'Chết đói', NOW()
-			FROM (SELECT unnest($2::text[]) AS action,
-			             unnest($3::text[]) AS entity_id,
-			             unnest($4::text[]) AS summary) v
-		`, playerID, pq.Array(actions), pq.Array(guIDs), pq.Array(summaries)); err != nil {
-			return err
-		}
+		_ = pq.Array
+		_ = playerID
+		// No audit logging for Gu starve death - high frequency worker activity
 	}
 
 	// Rebuild equipped_gus when an equipped Gu died: only ACTIVE equipped Gus
@@ -579,21 +575,7 @@ func batchVaultHungerDecay(db *sql.DB) {
 	}
 
 	if len(auditLogs) > 0 {
-		auditIDs := make([]string, 0, len(auditLogs))
-		auditSummaries := make([]string, 0, len(auditLogs))
-		for _, al := range auditLogs {
-			auditIDs = append(auditIDs, al.sectID)
-			auditSummaries = append(auditSummaries, al.summary)
-		}
-		if _, err := tx.Exec(`
-			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-			SELECT NULL, 'sect.vault_gu_starve', 'sect', v.entity_id, v.summary, '{}'::jsonb, '', false, 'Chết đói trong Bảo khố', NOW()
-			FROM (SELECT unnest($1::text[]) AS entity_id,
-			             unnest($2::text[]) AS summary) v
-		`, pq.Array(auditIDs), pq.Array(auditSummaries)); err != nil {
-			logger.S.Errorf("Hunger Worker Error batch inserting vault audit logs: %v", err)
-			return
-		}
+		// No audit logging for sect vault Gu starve - high frequency worker activity
 	}
 
 	if err := tx.Commit(); err != nil {

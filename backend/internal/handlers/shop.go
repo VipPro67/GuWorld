@@ -15,7 +15,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
@@ -593,18 +592,6 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 
-	// Refresh the catalog caches so the frontend sees the updated remaining
-	// stock immediately (auto random-pool items are daily-stock limited).
-	if selectedItem.IsAuto {
-		invalidateShopCatalogCache()
-	}
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "shop.buy", EntityType: "shop_item",
-		EntityID:       selectedItem.ID,
-		RequestSummary: fmt.Sprintf("%s x%d | %d %s", selectedItem.Name, req.Quantity, totalCost, currencyName),
-		IPAddress:      c.ClientIP(), Success: true,
-	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Giao dịch thành công! Nhân Khí +%.0f.", qiGained)})
 }
@@ -812,16 +799,6 @@ func SellShopItem(c *gin.Context) {
 	} else {
 		_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&itemName)
 	}
-	if itemName == "" {
-		itemName = req.ItemID
-	}
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "shop.sell", EntityType: "shop_item",
-		EntityID:       req.ItemID,
-		RequestSummary: fmt.Sprintf("%s x%d | nhận %d %s", itemName, req.Quantity, totalGain, sellCurrencyName),
-		IPAddress:      c.ClientIP(), Success: true,
-	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận %s! Nhân Khí +%.0f.", sellCurrencyName, qiGained)})
 }
@@ -1099,13 +1076,6 @@ func SellShopItemsBulk(c *gin.Context) {
 			gainSummary = fmt.Sprintf("+%d Tiên Nguyên Thạch", totalGainImmortal)
 		}
 	}
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "shop.sell_bulk", EntityType: "shop_item",
-		EntityID:       "bulk",
-		RequestSummary: fmt.Sprintf("Bán nhiều: %s | nhận %s", summaryStr, gainSummary),
-		IPAddress:      c.ClientIP(), Success: true,
-	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận %s! Nhân Khí +%.0f.", len(req.Items), gainSummary, qiGained)})

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -33,8 +34,8 @@ func processStatusExpiryTick(db *sql.DB) {
 	defer cancel()
 
 	rows, err := db.QueryContext(ctx, `
-		SELECT id, statuses 
-		FROM players 
+		SELECT id, statuses
+		FROM players
 		WHERE statuses != '[]'::jsonb AND statuses::text LIKE '%expires_at%'
 		LIMIT 200
 	`)
@@ -45,11 +46,10 @@ func processStatusExpiryTick(db *sql.DB) {
 	defer rows.Close()
 
 	now := time.Now()
-	cleanedCount := 0
 
 	type playerStatusPurge struct {
 		id       string
-		statuses models.StatusList
+		statuses []byte
 	}
 	var purges []playerStatusPurge
 
@@ -64,25 +64,37 @@ func processStatusExpiryTick(db *sql.DB) {
 			continue
 		}
 		if list.Expire(now) {
-			purges = append(purges, playerStatusPurge{id: id, statuses: list})
-		}
-	}
-	_ = rows.Close()
-
-	for _, p := range purges {
-		b, err := json.Marshal(p.statuses)
-		if err != nil {
-			continue
-		}
-		_, err = db.ExecContext(ctx, `UPDATE players SET statuses = $1 WHERE id = $2`, string(b), p.id)
-		if err != nil {
-			logger.S.Warnf("Status Expiry Worker: failed to update player %s: %v", p.id, err)
-		} else {
-			cleanedCount++
+			if b, err := json.Marshal(list); err == nil {
+				purges = append(purges, playerStatusPurge{id: id, statuses: b})
+			}
 		}
 	}
 
-	if cleanedCount > 0 {
-		logger.S.Infof("Status Expiry Worker: cleaned expired statuses for %d player(s)", cleanedCount)
+	if len(purges) == 0 {
+		return
+	}
+
+	// Batch UPDATE using unnest for all affected players in one query
+	ids := make([]string, len(purges))
+	statuses := make([]string, len(purges))
+	for i, p := range purges {
+		ids[i] = p.id
+		statuses[i] = string(p.statuses)
+	}
+
+	_, err = db.ExecContext(ctx, `
+		WITH updates(id, statuses) AS (
+			SELECT unnest($1::text[]), unnest($2::text[])
+		)
+		UPDATE players p SET statuses = u.statuses
+		FROM updates u WHERE p.id = u.id::uuid
+	`, pq.Array(ids), pq.Array(statuses))
+	if err != nil {
+		logger.S.Errorf("Status Expiry Worker Error batch updating: %v", err)
+		return
+	}
+
+	if len(purges) > 0 {
+		logger.S.Infof("Status Expiry Worker: cleaned expired statuses for %d player(s)", len(purges))
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type AchievementDef struct {
@@ -198,8 +197,6 @@ func ClaimAchievement(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
 		return
 	}
-
-	auditlog.Logf(db.DB, &playerID, "achievement.claim", "achievementId=%s name=%s", ach.ID, ach.Name)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Nhận thành tựu [%s] %s! Phần thưởng: %s Nhân Khí +%.0f.", ach.Icon, ach.Name, ach.RewardLabel, qiGained),
