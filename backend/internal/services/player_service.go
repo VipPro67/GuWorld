@@ -214,6 +214,24 @@ FROM players
 		}
 	}
 
+	// Read-Through: Overlay uncommitted realtime movement from Redis if present
+	if cache.Client != nil {
+		var mov worker.PlayerMovementPayload
+		if errMov := cache.GetJSON("player_movement:"+id.String(), &mov); errMov == nil && mov.ID != "" {
+			player.X = mov.X
+			player.Y = mov.Y
+			if mov.CurrentRegion != "" {
+				player.CurrentRegion = mov.CurrentRegion
+			}
+			if len(mov.ClearedCells) > 0 && string(mov.ClearedCells) != "{}" {
+				_ = json.Unmarshal(mov.ClearedCells, &player.ClearedCells)
+			}
+			if len(mov.VisitedSubzones) > 0 && string(mov.VisitedSubzones) != "[]" {
+				_ = json.Unmarshal(mov.VisitedSubzones, &player.VisitedSubZones)
+			}
+		}
+	}
+
 	return player, nil
 }
 

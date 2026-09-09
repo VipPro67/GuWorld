@@ -17,20 +17,45 @@ import (
 // This replaces the previous pattern where every SSE heartbeat ran an
 // individual UPDATE players SET last_activity = NOW() query.
 type lastActivityStore struct {
-	mu    sync.Mutex
-	dirty map[uuid.UUID]time.Time
+	mu     sync.RWMutex
+	dirty  map[uuid.UUID]time.Time
+	recent map[uuid.UUID]time.Time
 }
 
 var lastActivity = &lastActivityStore{
-	dirty: make(map[uuid.UUID]time.Time),
+	dirty:  make(map[uuid.UUID]time.Time),
+	recent: make(map[uuid.UUID]time.Time),
 }
 
-// Touch records a player as recently active.  Called from SSE heartbeat
-// loops – must be cheap (memory-only, no DB round-trip).
+// Touch records a player as recently active. Called from WebSocket heartbeat/messages
+// – must be cheap (memory-only, no DB round-trip).
 func (s *lastActivityStore) Touch(id uuid.UUID) {
+	now := time.Now()
 	s.mu.Lock()
-	s.dirty[id] = time.Now()
+	s.dirty[id] = now
+	s.recent[id] = now
 	s.mu.Unlock()
+}
+
+// IsActiveRecently checks if the player was active in memory within the given window.
+func (s *lastActivityStore) IsActiveRecently(id uuid.UUID, window time.Duration) bool {
+	s.mu.RLock()
+	t, ok := s.recent[id]
+	s.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	return time.Since(t) <= window
+}
+
+// TouchPlayerActivity records a player as recently active (e.g. from WebSocket).
+func TouchPlayerActivity(id uuid.UUID) {
+	lastActivity.Touch(id)
+}
+
+// IsPlayerActiveRecently checks whether the player was active recently in memory.
+func IsPlayerActiveRecently(id uuid.UUID, window time.Duration) bool {
+	return lastActivity.IsActiveRecently(id, window)
 }
 
 // StartFlusher starts a background goroutine that periodically writes all
@@ -56,12 +81,25 @@ func (s *lastActivityStore) StartFlusher(ctx context.Context, flushInterval time
 func (s *lastActivityStore) flush() {
 	s.mu.Lock()
 	if len(s.dirty) == 0 {
+		// Prune old entries from recent map
+		for id, t := range s.recent {
+			if time.Since(t) > 15*time.Minute {
+				delete(s.recent, id)
+			}
+		}
 		s.mu.Unlock()
 		return
 	}
-	// Swap out the map so the lock is held for minimum time.
+	// Swap out the dirty map so the lock is held for minimum time.
 	snapshot := s.dirty
 	s.dirty = make(map[uuid.UUID]time.Time, len(snapshot))
+
+	// Prune old entries from recent map
+	for id, t := range s.recent {
+		if time.Since(t) > 15*time.Minute {
+			delete(s.recent, id)
+		}
+	}
 	s.mu.Unlock()
 
 	if len(snapshot) == 0 {

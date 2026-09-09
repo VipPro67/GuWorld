@@ -433,6 +433,9 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+
 	// Batch rare Gu system messages into a single message
 	var rareDrops []string
 	for _, r := range rewards {

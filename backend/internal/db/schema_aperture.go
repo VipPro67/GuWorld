@@ -186,6 +186,8 @@ func schemaAperture() error {
 		y INTEGER NOT NULL,
 		is_boss BOOLEAN NOT NULL DEFAULT false,
 		is_dead BOOLEAN NOT NULL DEFAULT false,
+		rank INTEGER NOT NULL DEFAULT 6,
+		sub_rank INTEGER NOT NULL DEFAULT 1,
 		created_at TIMESTAMP DEFAULT now(),
 		updated_at TIMESTAMP DEFAULT now()
 	);`); err != nil {
@@ -193,6 +195,13 @@ func schemaAperture() error {
 	}
 	if err := execSchema("tribulation_enemies_event_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_enemies_event ON tribulation_enemies (event_id);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("tribulation_enemies_rank_cols", `
+	ALTER TABLE tribulation_enemies ADD COLUMN IF NOT EXISTS rank INTEGER NOT NULL DEFAULT 6;
+	ALTER TABLE tribulation_enemies ADD COLUMN IF NOT EXISTS sub_rank INTEGER NOT NULL DEFAULT 1;
+	`); err != nil {
 		return err
 	}
 

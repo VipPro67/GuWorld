@@ -70,3 +70,39 @@ func TestHub_SubscribeAndBroadcast(t *testing.T) {
 	}
 	hub.mu.RUnlock()
 }
+
+func TestHub_IsConnected(t *testing.T) {
+	hub := InitHub()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = hub.Stop(ctx)
+	}()
+
+	playerID := uuid.New()
+	if hub.IsConnected(playerID) {
+		t.Fatal("expected player to not be connected initially")
+	}
+
+	client := &Client{
+		playerID:      playerID,
+		send:          make(chan []byte, 10),
+		hub:           hub,
+		subscriptions: make(map[string]struct{}),
+	}
+
+	hub.register <- client
+	time.Sleep(20 * time.Millisecond)
+
+	if !hub.IsConnected(playerID) {
+		t.Fatal("expected player to be connected after registration")
+	}
+
+	hub.unregister <- client
+	time.Sleep(20 * time.Millisecond)
+
+	if hub.IsConnected(playerID) {
+		t.Fatal("expected player to not be connected after unregistration")
+	}
+}
+

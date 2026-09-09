@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -1187,6 +1188,11 @@ func CombatAttack(c *gin.Context) {
 		histItemsUsed = player.ActiveCombat.ItemsUsedCount
 	}
 
+	var combatAllies []models.Combatant
+	if player.ActiveCombat != nil {
+		combatAllies = player.ActiveCombat.Allies
+	}
+
 	if victory {
 		ctx.Logs = append(ctx.Logs, "=== CHIẾN THẮNG VANG DỘI ===")
 
@@ -1504,7 +1510,7 @@ func CombatAttack(c *gin.Context) {
 			ctx.Logs = append(ctx.Logs, "Độ kiếp thất bại nhưng may mắn giữ được mạng sống! Nhân khí +200. Tiên Nguyên Thạch bị hao tổn 50% và reset số lần độ kiếp.")
 		}
 
-		for _, ally := range player.ActiveCombat.Allies {
+		for _, ally := range combatAllies {
 			if ally.Kind != "Ally" && ally.Kind != "Player" {
 				continue
 			}
@@ -1549,6 +1555,37 @@ func CombatAttack(c *gin.Context) {
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
+	}
+
+	// Synchronize Redis & WebSocket for realtime combat updates
+	if victory || defeat {
+		_ = cache.ClearCombatState(player.ID.String())
+		ClearPendingPlayerQueues(player.ID.String())
+		PublishPlayerSnapshot(&player, CombatEventEnded)
+
+		for _, ally := range combatAllies {
+			if ally.Kind != "Ally" && ally.Kind != "Player" {
+				continue
+			}
+			if allyUUID, errParse := uuid.Parse(ally.ID); errParse == nil && allyUUID != player.ID {
+				_ = cache.ClearCombatState(allyUUID.String())
+				ClearPendingPlayerQueues(allyUUID.String())
+				PublishPlayerRealtimeEvent(allyUUID, CombatEventEnded)
+			}
+		}
+	} else if player.ActiveCombat != nil {
+		_ = cache.SetCombatState(player.ID.String(), player.ActiveCombat)
+		PublishPlayerSnapshot(&player, PlayerEventUpdated)
+
+		for _, ally := range player.ActiveCombat.Allies {
+			if ally.Kind != "Ally" && ally.Kind != "Player" {
+				continue
+			}
+			if allyUUID, errParse := uuid.Parse(ally.ID); errParse == nil && allyUUID != player.ID {
+				_ = cache.SetCombatState(allyUUID.String(), player.ActiveCombat)
+				PublishPlayerRealtimeEvent(allyUUID, PlayerEventUpdated)
+			}
+		}
 	}
 
 	setWorldPosFromPlayer(&player)

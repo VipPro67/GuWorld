@@ -75,15 +75,9 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 		return parsed[i].UpdatedAt.Before(parsed[j].UpdatedAt)
 	})
 
-	now := time.Now()
 	var succeededIDs []string
 
 	for _, p := range parsed {
-		var activeCombatVal any
-		if len(p.ActiveCombat) > 0 && string(p.ActiveCombat) != "null" {
-			activeCombatVal = string(p.ActiveCombat)
-		}
-
 		var clearedCellsVal any = "{}"
 		if len(p.ClearedCells) > 0 {
 			clearedCellsVal = string(p.ClearedCells)
@@ -112,34 +106,19 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 			continue
 		}
 
-		result, err := tx.Exec(`
+		_, err = tx.Exec(`
 			UPDATE players SET
-				current_mana = $1, x = $2, y = $3, current_region = $4,
-				cleared_cells = $5, active_combat = $6, last_mana_update = $7,
-				primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11,
-				visited_subzones = $12,
-				version = version + 1
-			WHERE id = $13 AND version = $14
+				x = $1, y = $2, current_region = $3,
+				cleared_cells = $4, visited_subzones = $5
+			WHERE id = $6
 		`,
-			p.CurrentMana, p.X, p.Y, p.CurrentRegion,
-			clearedCellsVal, activeCombatVal, now,
-			p.PrimevalStones, p.HP, p.MaxMana, p.HumanQi,
-			visitedSubzonesVal, p.ID, p.Version,
+			p.X, p.Y, p.CurrentRegion,
+			clearedCellsVal, visitedSubzonesVal,
+			p.ID,
 		)
 		if err != nil {
 			tx.Rollback()
 			logger.S.Warnf("Batch update movement postponed for player %s (locked/retry): %v", p.ID, err)
-			continue
-		}
-
-		affected, _ := result.RowsAffected()
-		if affected == 0 {
-			// Version mismatch: a newer update already ran. Drop this stale
-			// payload instead of retrying forever with the same stale version.
-			logger.S.Infof("Batch movement dropped for player %s: version %d stale", p.ID, p.Version)
-			Metrics.RecordDrop(1)
-			succeededIDs = append(succeededIDs, p.ID)
-			tx.Commit()
 			continue
 		}
 
@@ -247,7 +226,7 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 				aperture_stress = u.aperture_stress, last_cultivate_time = u.last_cultivate_time,
 				last_mana_update = u.last_mana_update,
 				version = version + 1
-			FROM updates u WHERE p.id = u.id::uuid
+			FROM updates u WHERE p.id = u.id::uuid AND (p.last_mana_update IS NULL OR p.last_mana_update <= u.last_mana_update)
 		`, pq.Array(ids), pq.Array(hps), pq.Array(soulHps), pq.Array(currentManas), pq.Array(maxManas),
 			pq.Array(currentThoughts), pq.Array(lifespans), pq.Array(timeSpeedMultipliers),
 			pq.Array(apertureStresses), pq.Array(lastCultivateTimes), pq.Array(lastManaUpdates))

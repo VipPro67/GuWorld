@@ -60,6 +60,7 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, playerID uuid.UUI
 	}
 
 	client.hub.register <- client
+	handlers.TouchPlayerActivity(client.playerID)
 
 	// Auto-subscribe to player-specific and global channels
 	hub.Subscribe(client, ChannelName("player:"+playerID.String()))
@@ -129,6 +130,7 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		handlers.TouchPlayerActivity(c.playerID)
 		return nil
 	})
 
@@ -153,6 +155,7 @@ func (c *Client) readPump() {
 
 // handleMessage processes incoming messages from the client.
 func (c *Client) handleMessage(msg WSMessage) {
+	handlers.TouchPlayerActivity(c.playerID)
 	switch msg.Type {
 	case "subscribe":
 		var sub SubscribeMsg

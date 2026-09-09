@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -66,7 +67,7 @@ func GetActiveTribulation(c *gin.Context) {
 
 	// 2. Fetch enemies
 	rows, err := tx.Query(`
-		SELECT id, event_id, name, enemy_type, path, hp, max_hp, attack, defense, target_node_id, x, y, is_boss, is_dead
+		SELECT id, event_id, name, enemy_type, path, hp, max_hp, attack, defense, target_node_id, x, y, is_boss, is_dead, rank, sub_rank
 		FROM tribulation_enemies
 		WHERE event_id = $1 AND is_dead = false
 	`, ev.ID)
@@ -80,7 +81,7 @@ func GetActiveTribulation(c *gin.Context) {
 	for rows.Next() {
 		var en models.TribulationEnemy
 		var targetID sql.NullString
-		err = rows.Scan(&en.ID, &en.EventID, &en.Name, &en.EnemyType, &en.Path, &en.HP, &en.MaxHP, &en.Attack, &en.Defense, &targetID, &en.X, &en.Y, &en.IsBoss, &en.IsDead)
+		err = rows.Scan(&en.ID, &en.EventID, &en.Name, &en.EnemyType, &en.Path, &en.HP, &en.MaxHP, &en.Attack, &en.Defense, &targetID, &en.X, &en.Y, &en.IsBoss, &en.IsDead, &en.Rank, &en.SubRank)
 		if err == nil {
 			if targetID.Valid {
 				en.TargetNodeID = &targetID.String
@@ -163,7 +164,7 @@ func EngageTribulation(c *gin.Context) {
 
 	// 4. Load all live enemies of this event (boss first for stable ordering).
 	rows, err := tx.Query(`
-		SELECT id, name, hp, max_hp, attack, defense, is_boss
+		SELECT id, name, hp, max_hp, attack, defense, is_boss, rank, sub_rank
 		FROM tribulation_enemies
 		WHERE event_id = $1 AND is_dead = false
 		ORDER BY is_boss DESC, max_hp DESC
@@ -182,11 +183,13 @@ func EngageTribulation(c *gin.Context) {
 		Attack  float64
 		Defense float64
 		IsBoss  bool
+		Rank    int
+		SubRank int
 	}
 	var enemies []liveEnemy
 	for rows.Next() {
 		var e liveEnemy
-		if err := rows.Scan(&e.ID, &e.Name, &e.HP, &e.MaxHP, &e.Attack, &e.Defense, &e.IsBoss); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.HP, &e.MaxHP, &e.Attack, &e.Defense, &e.IsBoss, &e.Rank, &e.SubRank); err != nil {
 			logger.S.Errorf("EngageTribulation rows.Scan failed for event %s: %v", eventID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc quái tai kiếp"})
 			return
@@ -204,6 +207,18 @@ func EngageTribulation(c *gin.Context) {
 		combatType = "TRIBULATION_BOSS"
 	}
 
+	enemyRank := first.Rank
+	if enemyRank < 6 {
+		enemyRank = player.Rank
+		if enemyRank < 6 {
+			enemyRank = 6
+		}
+	}
+	enemySubRank := first.SubRank
+	if enemySubRank < 1 {
+		enemySubRank = 1
+	}
+
 	base := models.CombatState{
 		EnemyTemplateID:    first.ID,
 		EnemyName:          first.Name,
@@ -213,8 +228,8 @@ func EngageTribulation(c *gin.Context) {
 		EnemyMaxHP:         float64(first.MaxHP),
 		EnemyDamage:        float64(first.Attack),
 		EnemyDefense:       float64(first.Defense),
-		EnemyRank:          6,
-		EnemySubRank:       1,
+		EnemyRank:          enemyRank,
+		EnemySubRank:       enemySubRank,
 		TargetPlayerID:     "",
 		MineSlotID:         0,
 		TribulationEventID: eventIDStr,
@@ -242,12 +257,20 @@ func EngageTribulation(c *gin.Context) {
 		if e.IsBoss {
 			kind = "Boss"
 		}
+		eRank := e.Rank
+		if eRank < 6 {
+			eRank = enemyRank
+		}
+		eSubRank := e.SubRank
+		if eSubRank < 1 {
+			eSubRank = 1
+		}
 		c := models.Combatant{
 			ID:          e.ID,
 			Name:        e.Name,
 			Kind:        kind,
-			Rank:        6,
-			SubRank:     1,
+			Rank:        eRank,
+			SubRank:     eSubRank,
 			HP:          float64(e.HP),
 			MaxHP:       float64(e.MaxHP),
 			CurrentMana: 100,
@@ -830,16 +853,58 @@ const (
 	tribulationPenaltyAfter = 24 * time.Hour  // offline hold beyond this halves the Dao Ngân reward
 )
 
-// isPlayerOnline reports whether the player has been active within the online
-// window. The SSE heartbeat refreshes players.last_activity every 60s.
+var (
+	wsConnectedMu sync.RWMutex
+	wsConnectedFn func(playerID uuid.UUID) bool
+)
+
+// SetWSConnectedProvider sets the provider function for checking live WebSocket connections.
+func SetWSConnectedProvider(fn func(playerID uuid.UUID) bool) {
+	wsConnectedMu.Lock()
+	defer wsConnectedMu.Unlock()
+	wsConnectedFn = fn
+}
+
+func isWSConnected(playerID uuid.UUID) bool {
+	wsConnectedMu.RLock()
+	fn := wsConnectedFn
+	wsConnectedMu.RUnlock()
+	if fn == nil {
+		return false
+	}
+	return fn(playerID)
+}
+
+// isPlayerOnline reports whether the player has been active within the online window.
+// It checks 3 tiers:
+// 1. Live WebSocket connection in ws.Hub (instant O(1), zero DB query).
+// 2. In-memory recent activity from WebSocket pings/messages (lastActivityStore.recent).
+// 3. Persistent players.last_activity in PostgreSQL (fallback).
 func isPlayerOnline(playerID string) bool {
+	uid, err := uuid.Parse(playerID)
+	if err == nil {
+		// Tier 1: Real-time WebSocket connection
+		if isWSConnected(uid) {
+			return true
+		}
+		// Tier 2: Recent activity in memory
+		if IsPlayerActiveRecently(uid, tribulationOnlineWindow) {
+			return true
+		}
+	}
+
+	// Tier 3: Fallback to PostgreSQL
+	if db.DB == nil {
+		return false
+	}
 	var la sql.NullTime
-	err := db.DB.QueryRow(`SELECT last_activity FROM players WHERE id = $1`, playerID).Scan(&la)
+	err = db.DB.QueryRow(`SELECT last_activity FROM players WHERE id = $1`, playerID).Scan(&la)
 	if err != nil || !la.Valid {
 		return false
 	}
 	return time.Since(la.Time) <= tribulationOnlineWindow
 }
+
 
 func CheckAndTriggerTribulations() error {
 	// Query stable apertures
@@ -1383,17 +1448,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 
 	difficulty := 1 + tribCount
-	rewardMarks := 250 + difficulty*50
-	switch tribulationType {
-	case "HEAVENLY_TRIBULATION":
-		rewardMarks = 750 + difficulty*150
-	case "GRAND_TRIBULATION":
-		rewardMarks = 7250 + difficulty*500
-	case "MYRIAD_TRIBULATION":
-		rewardMarks = 86750 + difficulty*2000
-	case "CHAOS_CALAMITY":
-		rewardMarks = 500000 + difficulty*10000
-	}
+	rewardMarks := models.CalculateTribulationReward(rank, tribulationType, difficulty)
 	if rewardMult <= 0 {
 		rewardMult = 1.0
 	}
@@ -1424,18 +1479,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		bossTemplateID = "monster_chaos_calamity_boss"
 	}
 
-	bossRank := 6
-	switch tribulationType {
-	case "EARTH_CALAMITY", "HEAVENLY_TRIBULATION":
-		bossRank = 6
-	case "GRAND_TRIBULATION":
-		bossRank = 7
-	case "MYRIAD_TRIBULATION":
-		bossRank = 8
-	case "CHAOS_CALAMITY":
-		bossRank = 9
-	}
-	bossSubRank := 1
+	bossRank, bossSubRank := models.GetTribulationRankAndSubRank(rank, tribulationType)
 
 	var boss models.MonsterTemplate
 	var bossGu []byte
@@ -1459,9 +1503,9 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	bossDef := int(scaledDef * diffMultiplier * daoBalancingMult)
 
 	_, err = tx.Exec(`
-		INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead)
-		VALUES ($1, $2, 'BOSS', $3, $4, $4, $5, $6, $7, $8, true, false)
-	`, eventID, fmt.Sprintf("%s (%s Path)", boss.Name, strings.Title(path)), path, bossHP, bossAtk, bossDef, rand.Intn(20), rand.Intn(20))
+		INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead, rank, sub_rank)
+		VALUES ($1, $2, 'BOSS', $3, $4, $4, $5, $6, $7, $8, true, false, $9, $10)
+	`, eventID, fmt.Sprintf("%s (%s Path)", boss.Name, strings.Title(path)), path, bossHP, bossAtk, bossDef, rand.Intn(20), rand.Intn(20), bossRank, bossSubRank)
 	if err != nil {
 		return err
 	}
@@ -1482,16 +1526,17 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 
 	minionCount := 1 + rand.Intn(3)
+	minionSubRank := 1
 	for i := 0; i < minionCount; i++ {
-		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, bossSubRank, minion.Type)
+		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, minionSubRank, minion.Type)
 		mHP := int(scaledHPm * diffMultiplier * daoBalancingMult)
 		mAtk := int(scaledAtkm * diffMultiplier * daoBalancingMult)
 		mDef := int(scaledDefm * diffMultiplier * daoBalancingMult)
 
 		_, err = tx.Exec(`
-			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_dead)
-			VALUES ($1, $2, 'MINION', $3, $4, $4, $5, $6, $7, $8, false)
-		`, eventID, fmt.Sprintf("%s #%d", minion.Name, i+1), path, mHP, mAtk, mDef, rand.Intn(20), rand.Intn(20))
+			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_dead, rank, sub_rank)
+			VALUES ($1, $2, 'MINION', $3, $4, $4, $5, $6, $7, $8, false, $9, $10)
+		`, eventID, fmt.Sprintf("%s #%d", minion.Name, i+1), path, mHP, mAtk, mDef, rand.Intn(20), rand.Intn(20), bossRank, minionSubRank)
 		if err != nil {
 			return err
 		}

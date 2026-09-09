@@ -88,6 +88,27 @@ export function getPathIconAndColor(path: string | undefined, nodeType: string |
   return { icon: "📦", color: "bg-slate-800 border-slate-700" };
 }
 
+export function getTribulationTypeName(type: string): string {
+  switch (type) {
+    case "EARTH_CALAMITY": return "Địa Tai";
+    case "HEAVENLY_TRIBULATION": return "Thiên Kiếp";
+    case "GRAND_TRIBULATION": return "Hạo Kiếp";
+    case "MYRIAD_TRIBULATION": return "Vạn Kiếp";
+    case "CHAOS_CALAMITY": return "Hỗn Độn Đại Nạn";
+    default: return type;
+  }
+}
+
+export function getRankName(rank: number): string {
+  switch (rank) {
+    case 6: return "Lục Chuyển";
+    case 7: return "Thất Chuyển";
+    case 8: return "Bát Chuyển";
+    case 9: return "Cửu Chuyển";
+    default: return `${rank} Chuyển`;
+  }
+}
+
 export function getItemZoneCategory(item: { id: string; name: string; item_type?: string; type?: string; description?: string; path?: string }): "khu_trong" | "khu_nuoi" | "khu_khai_thac" {
   const text = `${item.id} ${item.name} ${item.description || ''} ${item.path || ''}`.toLowerCase();
 
@@ -1079,8 +1100,8 @@ return (
 
                     <div className="p-4 bg-rose-950/20 border border-rose-500/20 rounded-xl space-y-2 text-xs">
                       <div className="flex justify-between items-center">
-                        <span className="font-bold text-rose-300">
-                          {activeTribulation.event.tribulation_type === "EARTH_CALAMITY" ? "Địa Tai" : "Thiên Kiếp"}
+                        <span className="font-bold text-rose-300 text-sm">
+                          {getRankName(rank)} - {getTribulationTypeName(activeTribulation.event.tribulation_type)}
                         </span>
                         <span className="text-slate-400">Độ khó: <span className="text-rose-400 font-bold">{activeTribulation.event.difficulty}</span></span>
                       </div>
@@ -1106,8 +1127,14 @@ return (
                             className="p-2 rounded-lg text-xs flex justify-between items-center bg-slate-900 border border-transparent text-slate-400"
                           >
                             <div>
-                              <div className="font-bold flex items-center gap-1">
-                                {enemy.is_boss ? "👑" : "👾"} {enemy.name}
+                              <div className="font-bold flex items-center gap-1.5">
+                                <span>{enemy.is_boss ? "👑" : "👾"}</span>
+                                <span>{enemy.name}</span>
+                                {enemy.rank && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-500/30 text-rose-300 font-semibold">
+                                    {getRankName(enemy.rank)}
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
                                 <span>Tọa độ: ({enemy.x}, {enemy.y})</span>

@@ -191,3 +191,15 @@ func (h *Hub) GetStats() (int, int) {
 	return len(h.clients), len(h.channels)
 }
 
+// IsConnected reports whether a player currently has an active WebSocket connection.
+func (h *Hub) IsConnected(playerID uuid.UUID) bool {
+	if h == nil {
+		return false
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, ok := h.clients[playerID]
+	return ok
+}
+
+

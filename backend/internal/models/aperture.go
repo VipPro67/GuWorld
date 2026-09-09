@@ -105,6 +105,8 @@ type TribulationEnemy struct {
 	Y            int       `json:"y"`
 	IsBoss       bool      `json:"is_boss"`
 	IsDead       bool      `json:"is_dead"`
+	Rank         int       `json:"rank"`
+	SubRank      int       `json:"sub_rank"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -275,5 +277,109 @@ func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCn
 	}
 	return false, 0
 }
+
+// GetTribulationRankAndSubRank returns the monster rank and subRank for a tribulation event
+// matching the player's realm rank and the calamity type according to lore:
+// - Rank 6: Địa Tai (10y - Sơ Giai), Thiên Kiếp (100y - Đỉnh Phong)
+// - Rank 7: Địa Tai (10y - Sơ Giai), Thiên Kiếp (50y - Trung Giai), Hạo Kiếp (100y - Đỉnh Phong)
+// - Rank 8: Thiên Kiếp (10y - Sơ Giai), Hạo Kiếp (50y - Trung Giai), Vạn Kiếp (100y - Đỉnh Phong)
+// - Rank 9: Hạo Kiếp (10y - Sơ Giai), Vạn Kiếp (50y - Trung Giai), Hỗn Độn Đại Nạn (100y - Đỉnh Phong)
+func GetTribulationRankAndSubRank(playerRank int, tribType string) (rank int, subRank int) {
+	rank = playerRank
+	if rank < 6 {
+		rank = 6
+	} else if rank > 9 {
+		rank = 9
+	}
+
+	subRank = 1
+	switch rank {
+	case 6:
+		switch tribType {
+		case "EARTH_CALAMITY":
+			subRank = 1
+		case "HEAVENLY_TRIBULATION":
+			subRank = 4
+		}
+	case 7:
+		switch tribType {
+		case "EARTH_CALAMITY":
+			subRank = 1
+		case "HEAVENLY_TRIBULATION":
+			subRank = 2
+		case "GRAND_TRIBULATION":
+			subRank = 4
+		}
+	case 8:
+		switch tribType {
+		case "HEAVENLY_TRIBULATION":
+			subRank = 1
+		case "GRAND_TRIBULATION":
+			subRank = 2
+		case "MYRIAD_TRIBULATION":
+			subRank = 4
+		}
+	case 9:
+		switch tribType {
+		case "GRAND_TRIBULATION":
+			subRank = 1
+		case "MYRIAD_TRIBULATION":
+			subRank = 2
+		case "CHAOS_CALAMITY":
+			subRank = 4
+		}
+	}
+	return rank, subRank
+}
+
+// CalculateTribulationReward calculates the Dao Marks reward based on player rank, tribulation type, and difficulty.
+// Scales smoothly with the target Dao Marks for each realm (Rank 6: ~40k, Rank 7: ~220k, Rank 8: ~1.4M, Rank 9: ~8.5M).
+func CalculateTribulationReward(rank int, tribType string, difficulty int) int {
+	if rank < 6 {
+		rank = 6
+	} else if rank > 9 {
+		rank = 9
+	}
+
+	switch rank {
+	case 6:
+		switch tribType {
+		case "HEAVENLY_TRIBULATION":
+			return 750 + difficulty*150
+		default:
+			return 250 + difficulty*50
+		}
+	case 7:
+		switch tribType {
+		case "GRAND_TRIBULATION":
+			return 20000 + difficulty*2000
+		case "HEAVENLY_TRIBULATION":
+			return 5000 + difficulty*500
+		default:
+			return 1500 + difficulty*200
+		}
+	case 8:
+		switch tribType {
+		case "MYRIAD_TRIBULATION":
+			return 150000 + difficulty*10000
+		case "GRAND_TRIBULATION":
+			return 40000 + difficulty*3000
+		default:
+			return 10000 + difficulty*1000
+		}
+	case 9:
+		switch tribType {
+		case "CHAOS_CALAMITY":
+			return 1500000 + difficulty*50000
+		case "MYRIAD_TRIBULATION":
+			return 200000 + difficulty*15000
+		default:
+			return 50000 + difficulty*5000
+		}
+	default:
+		return 250 + difficulty*50
+	}
+}
+
 
 

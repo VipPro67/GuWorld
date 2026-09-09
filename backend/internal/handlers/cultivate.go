@@ -214,6 +214,9 @@ func BreakWall(c *gin.Context) {
 		return
 	}
 
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+
 	c.JSON(http.StatusOK, BreakWallResponse{Player: player, Success: success && !cracked, Message: msg})
 }
 
@@ -329,12 +332,13 @@ func UseRelicGu(c *gin.Context) {
 		return
 	}
 
-	// Removed automatic referral milestone check
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Relic Gu consumed. Instant advancement!"})
 }
@@ -360,18 +364,39 @@ func Ascension(c *gin.Context) {
 		return
 	}
 
+	// Statuses that block cultivation (e.g. Kiệt Sức).
+	if gamefx.HasBlockedAction(&player, gamefx.ActionCultivate) {
+		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionCultivate)})
+		return
+	}
+
 	// Must be Rank 5, SubRank 4 with full wall progress to ascend
 	if player.Rank != 5 || player.SubRank != 4 || player.WallProgress < 1.0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You must reach Rank 5 Peak (Đỉnh phong) with full wall progress to attempt Ascension"})
 		return
 	}
 
-	// Ascension chance scales linearly with Nhân Khí: 0% at 0, 100% at full (MaxHumanQi)
-	chance := player.HumanQi / MaxHumanQi
-	success := rand.Float64() < chance
+	// Balance Check: Require 100,000 Human Qi to attempt Ascension
+	const requiredHumanQi = 100000.0
+	if player.HumanQi < requiredHumanQi {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần đạt đủ %.0f Nhân Khí mới có thể cân bằng Thiên Địa Nhân Khí để Thăng Tiên (Hiện có: %.0f)", requiredHumanQi, player.HumanQi)})
+		return
+	}
 
-	msg := ""
+	// Human Qi contributes up to +20% bonus chance at cap (100k)
+	qiBonus := (player.HumanQi / requiredHumanQi) * 0.20
+	baseChance := 0.10 // 10% base
+	totalChance := baseChance + qiBonus
 
+	// Cap chance at 90%
+	if totalChance > 0.90 {
+		totalChance = 0.90
+	}
+
+	roll := rand.Float64()
+	success := roll <= totalChance
+
+	var msg string
 	if success {
 		ascQi := player.HumanQi
 		player.Rank = 6
@@ -436,6 +461,9 @@ func Ascension(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"success": success, "message": msg})
 }

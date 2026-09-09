@@ -895,6 +895,8 @@ func MovePlayer(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 				return
 			}
+			ClearPendingPlayerQueues(player.ID.String())
+			PublishPlayerSnapshot(&player, CombatEventEnded)
 			// Include skip summary in response
 			responseWithPlayer(c, http.StatusOK, player, gin.H{
 				"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
@@ -942,6 +944,12 @@ func MovePlayer(c *gin.Context) {
 		Y:         player.Y,
 		TS:        time.Now().UnixMilli(),
 	})
+
+	if combatTriggered {
+		PublishPlayerSnapshot(&player, CombatEventStarted)
+	} else {
+		PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	}
 
 	// Calculate fresh stats
 	newStats := CalculatePlayerStats(&player)
@@ -1180,6 +1188,12 @@ func MovePlayerPath(c *gin.Context) {
 		Y:         player.Y,
 		TS:        time.Now().UnixMilli(),
 	})
+
+	if combatTriggered {
+		PublishPlayerSnapshot(&player, CombatEventStarted)
+	} else {
+		PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	}
 
 	newStats := CalculatePlayerStats(&player)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{

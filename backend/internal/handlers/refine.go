@@ -874,6 +874,9 @@ func RefineGu(c *gin.Context) {
 		return
 	}
 
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+
 	targetName := recipe.TargetGuID
 	if targetSpec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank); ok {
 		targetName = targetSpec.Name
@@ -1093,6 +1096,9 @@ func DeduceRecipe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
 	}
+
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message":         message + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),

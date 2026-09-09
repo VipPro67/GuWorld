@@ -19,6 +19,9 @@ import (
 var (
 	hungerWorkerStarted bool
 	hungerWorkerMutex   sync.Mutex
+
+	// PlayerEventPublisher is an optional callback to broadcast player updates over WebSocket.
+	PlayerEventPublisher func(playerID uuid.UUID, eventType string)
 )
 
 // StartHungerWorker begins the background process for depleting Gu bug hunger.
@@ -438,6 +441,9 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 				content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.guName)
 			}
 			notify.Send(db, parsedPID, ntype, title, content)
+		}
+		if len(dead) > 0 && PlayerEventPublisher != nil {
+			PlayerEventPublisher(parsedPID, "player.updated")
 		}
 	}
 

@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/internal/ws"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -59,10 +60,12 @@ func requestLogging() gin.HandlerFunc {
 func SetupRouter(hub *ws.Hub) *gin.Engine {
 	if hub != nil {
 		handlers.SetWSStatsProvider(hub.GetStats)
+		handlers.SetWSConnectedProvider(hub.IsConnected)
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			hub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
 		}
 	}
+	worker.PlayerEventPublisher = handlers.PublishPlayerRealtimeEvent
 	gin.DefaultWriter = logger.GinWriter()
 	r := gin.Default()
 

@@ -51,12 +51,36 @@ type PlayerRealtimeEvent struct {
 	Data PlayerRealtimeSnapshot `json:"data"`
 }
 
+// ClearPendingPlayerQueues removes a player's ID from async batch queues so uncommitted stale snapshots don't overwrite immediate DB commits.
+func ClearPendingPlayerQueues(playerID string) {
+	if playerID == "" {
+		return
+	}
+	_ = cache.RemovePendingIDs("player_stats", playerID)
+	_ = cache.RemovePendingIDs("player_movement", playerID)
+	_ = cache.Delete("player_snapshot:" + playerID)
+}
+
+// PublishPlayerSnapshot publishes a pre-loaded player snapshot to Redis Pub/Sub for instant WebSocket broadcast without hitting PostgreSQL.
+func PublishPlayerSnapshot(player *models.Player, eventType string) {
+	if player == nil {
+		return
+	}
+	snapshot := playerRealtimeSnapshot(*player)
+	_ = cache.SetJSON("player_snapshot:"+player.ID.String(), snapshot, 5*time.Minute)
+	_ = cache.PublishEvent(context.Background(), "player:"+player.ID.String(), PlayerRealtimeEvent{
+		Type: eventType,
+		Data: snapshot,
+	})
+}
+
 // PublishPlayerRealtimeEvent publishes a player realtime snapshot to Redis for WebSocket broadcast.
 func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string) {
 	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
 	if err != nil {
 		return
 	}
+	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
 	_ = cache.PublishEvent(context.Background(), "player:"+playerID.String(), PlayerRealtimeEvent{
 		Type: eventType,
 		Data: snapshot,
@@ -64,6 +88,11 @@ func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string) {
 }
 
 func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, error) {
+	var cached PlayerRealtimeSnapshot
+	if err := cache.GetJSON("player_snapshot:"+playerID.String(), &cached); err == nil && cached.ID != "" {
+		return cached, nil
+	}
+
 	var player models.Player
 	var activeCombatBytes []byte
 	err := db.DB.QueryRow(`
@@ -96,7 +125,9 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 	}
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 
-	return playerRealtimeSnapshot(player), nil
+	snapshot := playerRealtimeSnapshot(player)
+	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
+	return snapshot, nil
 }
 
 func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
