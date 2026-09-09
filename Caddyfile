@@ -1,12 +1,3 @@
-www.cogioi.io.vn {
-    redir https://cogioi.io.vn{uri} permanent
-}
-
-cogioi.io.vn {
-    encode zstd gzip
-    reverse_proxy frontend:3000
-}
-
 api.cogioi.io.vn {
     @events {
         path /api/events*
