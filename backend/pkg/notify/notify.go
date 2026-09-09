@@ -1,11 +1,12 @@
 package notify
 
 import (
+	"context"
 	"database/sql"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -26,39 +27,7 @@ type Notification struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ---------------------------------------------------------------------------
-// SSE fan-out hub (mirrors trade_events.go / chat_events.go pattern)
-// ---------------------------------------------------------------------------
-
-var hub = struct {
-	sync.Mutex
-	subs map[uuid.UUID]map[chan Notification]struct{}
-}{subs: map[uuid.UUID]map[chan Notification]struct{}{}}
-
-// Subscribe returns a channel that receives new notifications for the player.
-func Subscribe(playerID uuid.UUID) chan Notification {
-	ch := make(chan Notification, 16)
-	hub.Lock()
-	defer hub.Unlock()
-	if hub.subs[playerID] == nil {
-		hub.subs[playerID] = map[chan Notification]struct{}{}
-	}
-	hub.subs[playerID][ch] = struct{}{}
-	return ch
-}
-
-// Unsubscribe removes the channel from the hub and closes it.
-func Unsubscribe(playerID uuid.UUID, ch chan Notification) {
-	hub.Lock()
-	defer hub.Unlock()
-	delete(hub.subs[playerID], ch)
-	if len(hub.subs[playerID]) == 0 {
-		delete(hub.subs, playerID)
-	}
-	close(ch)
-}
-
-// Send inserts a notification for a player and pushes it over SSE.
+// Send inserts a notification for a player and publishes it to Redis for WebSocket broadcast.
 // Failures are logged but never returned — notifications are best-effort.
 //
 // When q is a *sql.DB the insert is retried up to 3 times on lock-timeout
@@ -143,21 +112,5 @@ func containsAt(s, sub string) bool {
 }
 
 func push(playerID uuid.UUID, n Notification) {
-	hub.Lock()
-	defer hub.Unlock()
-	for ch := range hub.subs[playerID] {
-		select {
-		case ch <- n:
-		default:
-			// Buffer full — drop the oldest to make room for the newest.
-			select {
-			case <-ch:
-			default:
-			}
-			select {
-			case ch <- n:
-			default:
-			}
-		}
-	}
+	_ = cache.PublishEvent(context.Background(), "notif:"+playerID.String(), n)
 }

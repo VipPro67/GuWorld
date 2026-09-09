@@ -1395,6 +1395,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         detail.id !== useGameStore.getState().player?.id
       ) {
         upsertPlayerPosition(detail);
+        // Prune stale players whenever we get a fresh position update from the server.
+        pruneStalePlayers();
       }
     };
 
@@ -1418,7 +1420,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         lastCellsPoll = now;
         pollCells();
       }
-      if (now - lastPlayersPoll >= 2000) {
+      if (now - lastPlayersPoll >= 15000) {
         lastPlayersPoll = now;
         pollPlayers();
       }

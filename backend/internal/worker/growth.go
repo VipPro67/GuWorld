@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -17,6 +18,22 @@ var (
 	growthWorkerStarted bool
 	growthWorkerMutex   sync.Mutex
 )
+
+type guUpdate struct {
+	InstanceID  string
+	GrowthHours float64
+	EquippedAt  time.Time
+}
+
+type playerUpdate struct {
+	GrowthData string
+	BaseHP     float64
+}
+
+type playerGrowthBatch struct {
+	guUpdates    []guUpdate
+	playerUpdate *playerUpdate
+}
 
 func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
 	growthWorkerMutex.Lock()
@@ -70,6 +87,9 @@ func processGrowthTick(ctx context.Context, db *sql.DB) {
 func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 	pqIDs := pq.Array(playerIDs)
 
+	fetchCtx, fetchCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer fetchCancel()
+
 	// ── Step 2: batch-fetch player metadata ───────────────────────────────
 	type playerRow struct {
 		GrowthData []byte
@@ -78,7 +98,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 	}
 	playerMap := make(map[string]*playerRow, len(playerIDs))
 
-	pRows, err := db.QueryContext(ctx, `
+	pRows, err := db.QueryContext(fetchCtx, `
 		SELECT id, growth_data, base_hp, time_speed_multiplier
 		FROM players WHERE id = ANY($1::uuid[])`, pqIDs)
 	if err != nil {
@@ -89,9 +109,9 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 
 	for pRows.Next() {
 		var (
-			id  string
-			pr  playerRow
-			gd  sql.NullString
+			id string
+			pr playerRow
+			gd sql.NullString
 		)
 		if err := pRows.Scan(&id, &gd, &pr.BaseHP, &pr.TimeSpeed); err != nil {
 			logger.S.Errorf("Growth Worker Error scanning player row: %v", err)
@@ -107,7 +127,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 		return
 	}
 
-	// ── Step 3: batch-fetch all player_gu rows ───────────────────────────
+	// ── Step 3: batch-fetch equipped active player_gu rows ───────────────────
 	type guRow struct {
 		PlayerID    string
 		InstanceID  string
@@ -123,10 +143,11 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 
 	guByPlayer := make(map[string][]guRow)
 
-	gRows, err := db.QueryContext(ctx, `
+	gRows, err := db.QueryContext(fetchCtx, `
 		SELECT player_id::text, id, gu_id, gu_rank, state, equipped,
 		       is_vital, integration_time, equipped_at, growth_hours
-		FROM player_gu WHERE player_id = ANY($1::uuid[])`, pqIDs)
+		FROM player_gu
+		WHERE player_id = ANY($1::uuid[]) AND equipped = true AND state = 'ACTIVE'`, pqIDs)
 	if err != nil {
 		logger.S.Errorf("Growth Worker Error fetching player_gu: %v", err)
 		return
@@ -149,22 +170,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 	}
 
 	// ── Step 4: process growth in Go (same logic, no DB access) ──────────
-	type guUpdate struct {
-		InstanceID  string
-		GrowthHours float64
-		EquippedAt  time.Time
-	}
-	type playerUpdate struct {
-		GrowthData string
-		BaseHP     float64
-	}
-
-	var (
-		guUpdates      []guUpdate
-		playerUpdates  []playerUpdate
-		playerUpdateIDs []string
-	)
-
+	updatesByPlayer := make(map[string]*playerGrowthBatch)
 	now := time.Now()
 
 	type typeKey struct {
@@ -187,15 +193,15 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 		guInv := make(models.GuInventory, len(guList))
 		for i, g := range guList {
 			guInv[i] = models.GuInstance{
-				InstanceID:  g.InstanceID,
-				GuID:        g.GuID,
-				Rank:        g.Rank,
-				Status:      g.State,
-				Equipped:    g.Equipped,
-				IsVital:     g.IsVital,
+				InstanceID:      g.InstanceID,
+				GuID:            g.GuID,
+				Rank:            g.Rank,
+				Status:          g.State,
+				Equipped:        g.Equipped,
+				IsVital:         g.IsVital,
 				IntegrationTime: g.IntegrTime,
-				EquippedAt:  g.EquippedAt,
-				GrowthHours: g.GrowthHours,
+				EquippedAt:      g.EquippedAt,
+				GrowthHours:     g.GrowthHours,
 			}
 		}
 
@@ -237,6 +243,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 
 		hasGrowthGu := false
 		baseHP := pRow.BaseHP
+		var pGuUpdates []guUpdate
 
 		for _, g := range groups {
 			spec := g.spec
@@ -258,7 +265,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 				gu := &guInv[idx]
 				if gu.EquippedAt == nil || gu.EquippedAt.IsZero() {
 					gu.EquippedAt = &now
-					guUpdates = append(guUpdates, guUpdate{
+					pGuUpdates = append(pGuUpdates, guUpdate{
 						InstanceID:  gu.InstanceID,
 						GrowthHours: gu.GrowthHours,
 						EquippedAt:  now,
@@ -281,7 +288,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 					continue
 				}
 				guInv[idx].EquippedAt = &now
-				guUpdates = append(guUpdates, guUpdate{
+				pGuUpdates = append(pGuUpdates, guUpdate{
 					InstanceID:  guInv[idx].InstanceID,
 					GrowthHours: guInv[idx].GrowthHours,
 					EquippedAt:  now,
@@ -318,7 +325,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 			}
 
 			// Carrier update.
-			guUpdates = append(guUpdates, guUpdate{
+			pGuUpdates = append(pGuUpdates, guUpdate{
 				InstanceID:  gu.InstanceID,
 				GrowthHours: gu.GrowthHours,
 				EquippedAt:  now,
@@ -330,38 +337,60 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 		}
 
 		growthRaw, _ := json.Marshal(growthData)
-		playerUpdates = append(playerUpdates, playerUpdate{
-			GrowthData: string(growthRaw),
-			BaseHP:     baseHP,
-		})
-		playerUpdateIDs = append(playerUpdateIDs, pID)
+		updatesByPlayer[pID] = &playerGrowthBatch{
+			guUpdates: pGuUpdates,
+			playerUpdate: &playerUpdate{
+				GrowthData: string(growthRaw),
+				BaseHP:     baseHP,
+			},
+		}
 	}
 
-	if len(guUpdates) == 0 && len(playerUpdates) == 0 {
+	if len(updatesByPlayer) == 0 {
 		return
 	}
 
-	// ── Step 5: batch-write via single transaction ────────────────────────
-	batchCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	// ── Step 5: per-player isolated transactions ────────────────────────────
+	for pID, pUpdate := range updatesByPlayer {
+		if err := updatePlayerGrowthWithRetry(ctx, db, pID, pUpdate.guUpdates, pUpdate.playerUpdate); err != nil {
+			logger.S.Errorf("Growth Worker Error updating player %s: %v", pID, err)
+		}
+	}
+}
+
+func updatePlayerGrowthWithRetry(ctx context.Context, db *sql.DB, playerID string, guUpdates []guUpdate, pUpdate *playerUpdate) error {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		lastErr = updatePlayerGrowthOnce(ctx, db, playerID, guUpdates, pUpdate)
+		if lastErr == nil {
+			return nil
+		}
+		if !isDeadlockOrLockTimeout(lastErr) {
+			return lastErr
+		}
+		logger.S.Warnf("Growth Worker: lock timeout/deadlock updating player %s (attempt %d/3): %v", playerID, attempt+1, lastErr)
+		time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+	}
+	return fmt.Errorf("growth update failed for player %s after 3 attempts: %w", playerID, lastErr)
+}
+
+func updatePlayerGrowthOnce(ctx context.Context, db *sql.DB, playerID string, guUpdates []guUpdate, pUpdate *playerUpdate) error {
+	txCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	tx, err := db.BeginTx(batchCtx, nil)
+	tx, err := db.BeginTx(txCtx, nil)
 	if err != nil {
-		logger.S.Errorf("Growth Worker Error starting batch transaction: %v", err)
-		return
+		return err
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
-		logger.S.Errorf("Growth Worker Error setting statement timeout: %v", err)
-		return
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '5000'`); err != nil {
+		return err
 	}
-	if _, err := tx.Exec(`SET LOCAL lock_timeout = '10000'`); err != nil {
-		logger.S.Errorf("Growth Worker Error setting lock timeout: %v", err)
-		return
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '3000'`); err != nil {
+		return err
 	}
 
-	// Batch update player_gu (equipped_at + growth_hours for all touched Gus).
 	if len(guUpdates) > 0 {
 		ids := make([]string, len(guUpdates))
 		ghs := make([]float64, len(guUpdates))
@@ -375,37 +404,25 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 			UPDATE player_gu AS pg
 			SET growth_hours = v.gh, equipped_at = v.ea, updated_at = NOW()
 			FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS gh, unnest($3::timestamptz[]) AS ea) AS v
-			WHERE pg.id = v.id
-		`, pq.Array(ids), pq.Array(ghs), pq.Array(eas))
+			WHERE pg.id = v.id AND pg.player_id = $4::uuid
+		`, pq.Array(ids), pq.Array(ghs), pq.Array(eas), playerID)
 		if err != nil {
-			logger.S.Errorf("Growth Worker Error batch updating player_gu: %v", err)
-			return
+			return err
 		}
 	}
 
-	// Batch update players (growth_data + base_hp).
-	if len(playerUpdates) > 0 {
-		gds := make([]string, len(playerUpdates))
-		bhps := make([]float64, len(playerUpdates))
-		for i, u := range playerUpdates {
-			gds[i] = u.GrowthData
-			bhps[i] = u.BaseHP
-		}
+	if pUpdate != nil {
 		_, err = tx.Exec(`
-			UPDATE players AS p
-			SET growth_data = v.gd::jsonb, base_hp = v.bhp
-			FROM (SELECT unnest($1::text[]) AS id, unnest($2::text[]) AS gd, unnest($3::float8[]) AS bhp) AS v
-			WHERE p.id = v.id::uuid
-		`, pq.Array(playerUpdateIDs), pq.Array(gds), pq.Array(bhps))
+			UPDATE players
+			SET growth_data = $1::jsonb, base_hp = $2
+			WHERE id = $3::uuid
+		`, pUpdate.GrowthData, pUpdate.BaseHP, playerID)
 		if err != nil {
-			logger.S.Errorf("Growth Worker Error batch updating players: %v", err)
-			return
+			return err
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		logger.S.Errorf("Growth Worker Error committing batch transaction: %v", err)
-	}
+	return tx.Commit()
 }
 
 // findGrowthAffectedPlayers returns players who own at least one equipped ACTIVE

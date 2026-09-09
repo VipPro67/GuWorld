@@ -1,0 +1,669 @@
+goroutine 452 [running]:
+runtime/pprof.writeGoroutineStacks({0x7f3674f7bc20, 0x2a45e7fc0200})
+	/usr/lib/go/src/runtime/pprof/pprof.go:816 +0x69
+runtime/pprof.writeGoroutine({0x7f3674f7bc20?, 0x2a45e7fc0200?}, 0x2a45e7eb8420?)
+	/usr/lib/go/src/runtime/pprof/pprof.go:779 +0x25
+runtime/pprof.(*Profile).WriteTo(0x25272e0?, {0x7f3674f7bc20?, 0x2a45e7fc0200?}, 0xc?)
+	/usr/lib/go/src/runtime/pprof/pprof.go:405 +0x149
+net/http/pprof.handler.ServeHTTP({0x14c107e, 0x9}, {0x7f3695b20418, 0x2a45e7fc0200}, 0x2a45e76ff180)
+	/usr/lib/go/src/net/http/pprof/pprof.go:272 +0x554
+github.com/gin-gonic/gin.WrapH.func1(0x2a45e7fc0200?)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/utils.go:56 +0x48
+github.com/gin-gonic/gin.(*Context).Next(0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/context.go:192 +0x5f
+github.com/aurowora/compress.(*compressMiddleware).Handler(0x2a45e7d00000, 0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/aurowora/compress@v0.0.0-20230724224640-6512772d482f/middleware.go:43 +0xd3
+github.com/gin-gonic/gin.(*Context).Next(0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/context.go:192 +0x5f
+github.com/vippro67/GuWorld/backend/internal/server.SetupRouter.func1(0x2a45e7fc0200)
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/server/server.go:100 +0x693
+github.com/gin-gonic/gin.(*Context).Next(0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/context.go:192 +0x5f
+github.com/vippro67/GuWorld/backend/internal/server.requestLogging.func1(0x2a45e7fc0200)
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/server/server.go:37 +0x168
+github.com/gin-gonic/gin.(*Context).Next(0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/context.go:192 +0x5f
+github.com/gin-gonic/gin.CustomRecoveryWithWriter.func1(0x4c26b3?)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/recovery.go:90 +0x51
+github.com/gin-gonic/gin.(*Context).Next(0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/context.go:192 +0x5f
+github.com/gin-gonic/gin.LoggerWithConfig.func1(0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/logger.go:282 +0xca
+github.com/gin-gonic/gin.(*Context).Next(0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/context.go:192 +0x5f
+github.com/gin-gonic/gin.(*Engine).handleHTTPRequest(0x2a45e7a86000, 0x2a45e7fc0200)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/gin.go:722 +0x45b
+github.com/gin-gonic/gin.(*Engine).ServeHTTP(0x2a45e7a86000, {0x24420b0, 0x2a45e7948000}, 0x2a45e76ff180)
+	/home/vippro67/go/pkg/mod/github.com/gin-gonic/gin@v1.12.0/gin.go:672 +0x1dc
+net/http.serverHandler.ServeHTTP({0x2a45e7daa280?}, {0x24420b0?, 0x2a45e7948000?}, 0x1?)
+	/usr/lib/go/src/net/http/server.go:3413 +0x8e
+net/http.(*conn).serve(0x2a45e71e02d0, {0x2443288, 0x2a45e7b40870})
+	/usr/lib/go/src/net/http/server.go:2137 +0x6dc
+created by net/http.(*Server).Serve in goroutine 212
+	/usr/lib/go/src/net/http/server.go:3581 +0x4fd
+
+goroutine 1 [chan receive, 9 minutes]:
+main.main()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/cmd/server/main.go:207 +0x125c
+
+goroutine 21 [select, 9 minutes]:
+database/sql.(*DB).connectionOpener(0x2a45e70e0f70, {0x24432c0, 0x2a45e7018960})
+	/usr/lib/go/src/database/sql/sql.go:1266 +0x89
+created by database/sql.OpenDB in goroutine 1
+	/usr/lib/go/src/database/sql/sql.go:846 +0x135
+
+goroutine 5 [select, 4 minutes]:
+database/sql.(*DB).connectionCleaner(0x2a45e70e0f70, 0x2a45e6e74748?)
+	/usr/lib/go/src/database/sql/sql.go:1109 +0x9e
+created by database/sql.(*DB).startCleanerLocked in goroutine 1
+	/usr/lib/go/src/database/sql/sql.go:1096 +0x109
+
+goroutine 33 [sleep, 9 minutes]:
+time.Sleep(0x8bb2c97000)
+	/usr/lib/go/src/runtime/time.go:368 +0x165
+github.com/vippro67/GuWorld/backend/internal/middleware.(*MemoryStore).cleanup(0x2a45e716cd10)
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/middleware/rate_limit_store.go:88 +0x3e
+created by github.com/vippro67/GuWorld/backend/internal/middleware.NewMemoryStore in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/middleware/rate_limit_store.go:61 +0x9f
+
+goroutine 34 [chan receive]:
+github.com/vippro67/GuWorld/backend/internal/middleware.(*FallbackStore).StartRedisWatchdog.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/middleware/rate_limit_store.go:155 +0x8f
+created by github.com/vippro67/GuWorld/backend/internal/middleware.(*FallbackStore).StartRedisWatchdog in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/middleware/rate_limit_store.go:152 +0x67
+
+goroutine 66 [syscall, 9 minutes]:
+os/signal.signal_recv()
+	/usr/lib/go/src/runtime/sigqueue.go:152 +0x98
+os/signal.loop()
+	/usr/lib/go/src/os/signal/signal_unix.go:23 +0x13
+created by os/signal.Notify.func2.1 in goroutine 1
+	/usr/lib/go/src/os/signal/signal.go:164 +0x1f
+
+goroutine 67 [select, 9 minutes]:
+os/signal.NotifyContext.func1()
+	/usr/lib/go/src/os/signal/signal.go:304 +0x7c
+created by os/signal.NotifyContext in goroutine 1
+	/usr/lib/go/src/os/signal/signal.go:303 +0x165
+
+goroutine 68 [select, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartHungerWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/hunger.go:38 +0xf6
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartHungerWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/hunger.go:35 +0x153
+
+goroutine 69 [select]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartStatusExpiryWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/status_expiry.go:20 +0xec
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartStatusExpiryWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/status_expiry.go:17 +0xb0
+
+goroutine 70 [select, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartPetHungerWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/pet_hunger.go:16 +0xf6
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartPetHungerWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/pet_hunger.go:13 +0xb0
+
+goroutine 71 [select, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartGrowthWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/growth.go:51 +0xf6
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartGrowthWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/growth.go:48 +0x153
+
+goroutine 72 [select]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartTribulationWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/tribulation.go:2141 +0xc6
+created by github.com/vippro67/GuWorld/backend/internal/handlers.StartTribulationWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/tribulation.go:2138 +0xb9
+
+goroutine 73 [select]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartTribulationWorker.func2()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/tribulation.go:2161 +0xc5
+created by github.com/vippro67/GuWorld/backend/internal/handlers.StartTribulationWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/tribulation.go:2158 +0x125
+
+goroutine 74 [select]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartWorldIndexSyncWorker.func2()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/world_index_sync.go:38 +0x105
+created by github.com/vippro67/GuWorld/backend/internal/handlers.StartWorldIndexSyncWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/world_index_sync.go:33 +0x76
+
+goroutine 75 [select, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartMineMonsterWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/mine.go:615 +0xc8
+created by github.com/vippro67/GuWorld/backend/internal/handlers.StartMineMonsterWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/mine.go:612 +0x91
+
+goroutine 149 [select]:
+github.com/redis/go-redis/v9.(*channel).initHealthCheck.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:701 +0xcb
+created by github.com/redis/go-redis/v9.(*channel).initHealthCheck in goroutine 94
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:695 +0xae
+
+goroutine 77 [select, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartMidnightMineWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/mine.go:775 +0x1c9
+created by github.com/vippro67/GuWorld/backend/internal/handlers.StartMidnightMineWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/mine.go:767 +0x67
+
+goroutine 78 [select]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartArenaSettlementWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/arena_worker.go:37 +0x115
+created by github.com/vippro67/GuWorld/backend/internal/handlers.StartArenaSettlementWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/arena_worker.go:32 +0x177
+
+goroutine 79 [select]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartAuctionSettlementWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/marketplace.go:1190 +0xba
+created by github.com/vippro67/GuWorld/backend/internal/handlers.StartAuctionSettlementWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/marketplace.go:1187 +0x91
+
+goroutine 81 [select]:
+github.com/vippro67/GuWorld/backend/internal/handlers.StartDeathArenaWorker({0x2443410, 0x2a45e77c1440})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/death_arena_worker.go:33 +0x1b9
+created by main.main in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/cmd/server/main.go:169 +0xf9f
+
+goroutine 82 [select]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartPoolWatchdog.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/pool_watchdog.go:20 +0xec
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartPoolWatchdog in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/pool_watchdog.go:17 +0xb0
+
+goroutine 83 [select]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartSectMissionWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/sect_mission.go:19 +0xec
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartSectMissionWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/sect_mission.go:16 +0xb0
+
+goroutine 84 [select]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartSectTerritoryWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/sect_territory.go:30 +0xf6
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartSectTerritoryWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/sect_territory.go:27 +0xb0
+
+goroutine 85 [select, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartSectMaintenanceWorker.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/sect_maintenance.go:22 +0xf6
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartSectMaintenanceWorker in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/sect_maintenance.go:19 +0xb0
+
+goroutine 86 [select]:
+github.com/vippro67/GuWorld/backend/internal/handlers.(*lastActivityStore).StartFlusher.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/last_activity_batcher.go:43 +0xe6
+created by github.com/vippro67/GuWorld/backend/internal/handlers.(*lastActivityStore).StartFlusher in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/last_activity_batcher.go:39 +0x91
+
+goroutine 87 [select]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartBatchPersister.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/batch_persister.go:30 +0x130
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartBatchPersister in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/batch_persister.go:23 +0x76
+
+goroutine 88 [select, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/worker.StartOrphanedKeyCleanup.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/orphan_cleanup.go:24 +0x12c
+created by github.com/vippro67/GuWorld/backend/internal/worker.StartOrphanedKeyCleanup in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/worker/orphan_cleanup.go:17 +0x76
+
+goroutine 89 [select, 8 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.(*Hub).run(0x2a45e6f14bd0)
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/hub.go:66 +0x12f
+created by github.com/vippro67/GuWorld/backend/internal/ws.InitHub in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/hub.go:57 +0x1a5
+
+goroutine 90 [chan receive, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.subscribePattern(0x2a45e6f14bd0, {0x14bf2de, 0x8})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:49 +0x231
+created by github.com/vippro67/GuWorld/backend/internal/ws.StartRedisSubscribers in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:14 +0x5f
+
+goroutine 91 [chan receive, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.subscribePattern(0x2a45e6f14bd0, {0x14b92a3, 0x6})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:49 +0x231
+created by github.com/vippro67/GuWorld/backend/internal/ws.StartRedisSubscribers in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:15 +0xa5
+
+goroutine 92 [chan receive, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.subscribePattern(0x2a45e6f14bd0, {0x14bd302, 0x7})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:49 +0x231
+created by github.com/vippro67/GuWorld/backend/internal/ws.StartRedisSubscribers in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:16 +0xeb
+
+goroutine 93 [chan receive, 8 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.subscribePattern(0x2a45e6f14bd0, {0x14c0fc1, 0x9})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:49 +0x231
+created by github.com/vippro67/GuWorld/backend/internal/ws.StartRedisSubscribers in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:17 +0x136
+
+goroutine 94 [chan receive, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.subscribePattern(0x2a45e6f14bd0, {0x14c2cd7, 0xa})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:49 +0x231
+created by github.com/vippro67/GuWorld/backend/internal/ws.StartRedisSubscribers in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:18 +0x17c
+
+goroutine 95 [chan receive, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.subscribePattern(0x2a45e6f14bd0, {0x14bf2d6, 0x8})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:49 +0x231
+created by github.com/vippro67/GuWorld/backend/internal/ws.StartRedisSubscribers in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:19 +0x1c5
+
+goroutine 96 [chan receive, 9 minutes]:
+github.com/vippro67/GuWorld/backend/internal/ws.subscribePattern(0x2a45e6f14bd0, {0x14bd2fb, 0x7})
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:49 +0x231
+created by github.com/vippro67/GuWorld/backend/internal/ws.StartRedisSubscribers in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/redis_sub.go:20 +0x20b
+
+goroutine 179 [select]:
+github.com/redis/go-redis/v9.(*channel).initHealthCheck.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:701 +0xcb
+created by github.com/redis/go-redis/v9.(*channel).initHealthCheck in goroutine 91
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:695 +0xae
+
+goroutine 259 [IO wait]:
+internal/poll.runtime_pollWait(0x7f369405de00, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7e04400?, 0x2a45e7e0d000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7e04400, {0x2a45e7e0d000, 0x1000, 0x1000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7e04400, {0x2a45e7e0d000?, 0x4f6300?, 0x2a45e7e04400?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e7da4058, {0x2a45e7e0d000?, 0x1bf08eaf9e?, 0x72?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+net/http.(*connReader).Read(0x2a45e8020380, {0x2a45e7e0d000, 0x1000, 0x1000})
+	/usr/lib/go/src/net/http/server.go:856 +0x150
+bufio.(*Reader).fill(0x2a45e716e240)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e716e240, 0x4)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+net/http.(*conn).serve(0x2a45e71d67e0, {0x2443288, 0x2a45e7b40870})
+	/usr/lib/go/src/net/http/server.go:2173 +0x833
+created by net/http.(*Server).Serve in goroutine 212
+	/usr/lib/go/src/net/http/server.go:3581 +0x4fd
+
+goroutine 195 [select]:
+github.com/redis/go-redis/v9.(*channel).initHealthCheck.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:701 +0xcb
+created by github.com/redis/go-redis/v9.(*channel).initHealthCheck in goroutine 95
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:695 +0xae
+
+goroutine 132 [select]:
+github.com/redis/go-redis/v9.(*channel).initHealthCheck.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:701 +0xcb
+created by github.com/redis/go-redis/v9.(*channel).initHealthCheck in goroutine 90
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:695 +0xae
+
+goroutine 150 [IO wait]:
+internal/poll.runtime_pollWait(0x7f3674fbe600, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7e41300?, 0x2a45e7e98000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7e41300, {0x2a45e7e98000, 0x8000, 0x8000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7e41300, {0x2a45e7e98000?, 0x8000?, 0x8000?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e6f88178, {0x2a45e7e98000?, 0x0?, 0x102?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e6e3e0c0)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e6e3e0c0, 0x1)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/redis/go-redis/v9/internal/proto.(*Reader).PeekReplyType(0x2a45e6f88180)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/proto/reader.go:90 +0x25
+github.com/redis/go-redis/v9/push.(*Processor).ProcessPendingNotifications(0x2a45e6f88648, {0x2443368, 0x256d240}, {{0x0, 0x0}, {0x0, 0x0}, {0x22343d8, 0x2a45e71ea000}, {0x2219430, ...}, ...}, ...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/push/processor.go:61 +0x6e
+github.com/redis/go-redis/v9.(*PubSub).processPendingPushNotificationWithReader(0x0?, {0x2443368?, 0x256d240?}, 0x0?, 0x0?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:617 +0xe3
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout.func1(0x2a45e6f88180)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:503 +0x51
+github.com/redis/go-redis/v9/internal/pool.(*Conn).WithReader(0x2a45e707a100?, {0x2443368?, 0x256d240?}, 0x0?, 0x2a45e7d3dee8?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/pool/conn.go:891 +0x107
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout(0x2a45e71ea000, {0x2443368, 0x256d240}, 0x0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:501 +0x11d
+github.com/redis/go-redis/v9.(*PubSub).Receive(...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:529
+github.com/redis/go-redis/v9.(*channel).initMsgChan.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:730 +0x7e
+created by github.com/redis/go-redis/v9.(*channel).initMsgChan in goroutine 94
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:724 +0xae
+
+goroutine 210 [select]:
+github.com/redis/go-redis/v9.(*channel).initHealthCheck.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:701 +0xcb
+created by github.com/redis/go-redis/v9.(*channel).initHealthCheck in goroutine 92
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:695 +0xae
+
+goroutine 211 [IO wait]:
+internal/poll.runtime_pollWait(0x7f36964b2800, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7d8a080?, 0x2a45e7f1a000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7d8a080, {0x2a45e7f1a000, 0x8000, 0x8000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7d8a080, {0x2a45e7f1a000?, 0x44f9e7?, 0x42d93a?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e7bf2000, {0x2a45e7f1a000?, 0x0?, 0x7f3698697940?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e7f18000)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e7f18000, 0x1)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/redis/go-redis/v9/internal/proto.(*Reader).PeekReplyType(0x2a45e7bf2008)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/proto/reader.go:90 +0x25
+github.com/redis/go-redis/v9/push.(*Processor).ProcessPendingNotifications(0x2a45e6f88648, {0x2443368, 0x256d240}, {{0x0, 0x0}, {0x0, 0x0}, {0x22343d8, 0x2a45e71d6120}, {0x2219430, ...}, ...}, ...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/push/processor.go:61 +0x6e
+github.com/redis/go-redis/v9.(*PubSub).processPendingPushNotificationWithReader(0x0?, {0x2443368?, 0x256d240?}, 0x0?, 0x0?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:617 +0xe3
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout.func1(0x2a45e7bf2008)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:503 +0x51
+github.com/redis/go-redis/v9/internal/pool.(*Conn).WithReader(0x2a45e7bfe000?, {0x2443368?, 0x256d240?}, 0x0?, 0x2a45e7e7fee8?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/pool/conn.go:891 +0x107
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout(0x2a45e71d6120, {0x2443368, 0x256d240}, 0x0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:501 +0x11d
+github.com/redis/go-redis/v9.(*PubSub).Receive(...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:529
+github.com/redis/go-redis/v9.(*channel).initMsgChan.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:730 +0x7e
+created by github.com/redis/go-redis/v9.(*channel).initMsgChan in goroutine 92
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:724 +0xae
+
+goroutine 36 [select]:
+github.com/redis/go-redis/v9.(*channel).initHealthCheck.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:701 +0xcb
+created by github.com/redis/go-redis/v9.(*channel).initHealthCheck in goroutine 93
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:695 +0xae
+
+goroutine 37 [IO wait]:
+internal/poll.runtime_pollWait(0x7f3674fbe200, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7a26f00?, 0x2a45e8000000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7a26f00, {0x2a45e8000000, 0x8000, 0x8000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7a26f00, {0x2a45e8000000?, 0x2a45e6e89be0?, 0x4c9f3d?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e7d00068, {0x2a45e8000000?, 0x2a45e6e89c00?, 0x73?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e7d7c000)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e7d7c000, 0x1)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/redis/go-redis/v9/internal/proto.(*Reader).PeekReplyType(0x2a45e7d00070)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/proto/reader.go:90 +0x25
+github.com/redis/go-redis/v9/push.(*Processor).ProcessPendingNotifications(0x2a45e6f88648, {0x2443368, 0x256d240}, {{0x0, 0x0}, {0x0, 0x0}, {0x22343d8, 0x2a45e71e0090}, {0x2219430, ...}, ...}, ...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/push/processor.go:61 +0x6e
+github.com/redis/go-redis/v9.(*PubSub).processPendingPushNotificationWithReader(0x0?, {0x2443368?, 0x256d240?}, 0x0?, 0x0?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:617 +0xe3
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout.func1(0x2a45e7d00070)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:503 +0x51
+github.com/redis/go-redis/v9/internal/pool.(*Conn).WithReader(0x2a45e7d74000?, {0x2443368?, 0x256d240?}, 0x0?, 0x2a45e6e89ee8?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/pool/conn.go:891 +0x107
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout(0x2a45e71e0090, {0x2443368, 0x256d240}, 0x0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:501 +0x11d
+github.com/redis/go-redis/v9.(*PubSub).Receive(...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:529
+github.com/redis/go-redis/v9.(*channel).initMsgChan.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:730 +0x7e
+created by github.com/redis/go-redis/v9.(*channel).initMsgChan in goroutine 93
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:724 +0xae
+
+goroutine 196 [IO wait]:
+internal/poll.runtime_pollWait(0x7f36964b2c00, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7fb4080?, 0x2a45e8008000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7fb4080, {0x2a45e8008000, 0x8000, 0x8000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7fb4080, {0x2a45e8008000?, 0x2a45e7d40c00?, 0x42d93a?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e6de8240, {0x2a45e8008000?, 0x0?, 0x7f3694281958?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e7832000)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e7832000, 0x1)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/redis/go-redis/v9/internal/proto.(*Reader).PeekReplyType(0x2a45e6de82f0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/proto/reader.go:90 +0x25
+github.com/redis/go-redis/v9/push.(*Processor).ProcessPendingNotifications(0x2a45e6f88648, {0x2443368, 0x256d240}, {{0x0, 0x0}, {0x0, 0x0}, {0x22343d8, 0x2a45e71ee090}, {0x2219430, ...}, ...}, ...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/push/processor.go:61 +0x6e
+github.com/redis/go-redis/v9.(*PubSub).processPendingPushNotificationWithReader(0x0?, {0x2443368?, 0x256d240?}, 0x0?, 0x0?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:617 +0xe3
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout.func1(0x2a45e6de82f0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:503 +0x51
+github.com/redis/go-redis/v9/internal/pool.(*Conn).WithReader(0x2a45e782c000?, {0x2443368?, 0x256d240?}, 0x0?, 0x2a45e7d40ee8?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/pool/conn.go:891 +0x107
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout(0x2a45e71ee090, {0x2443368, 0x256d240}, 0x0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:501 +0x11d
+github.com/redis/go-redis/v9.(*PubSub).Receive(...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:529
+github.com/redis/go-redis/v9.(*channel).initMsgChan.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:730 +0x7e
+created by github.com/redis/go-redis/v9.(*channel).initMsgChan in goroutine 95
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:724 +0xae
+
+goroutine 197 [select]:
+github.com/redis/go-redis/v9.(*channel).initHealthCheck.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:701 +0xcb
+created by github.com/redis/go-redis/v9.(*channel).initHealthCheck in goroutine 96
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:695 +0xae
+
+goroutine 198 [IO wait]:
+internal/poll.runtime_pollWait(0x7f36964b2200, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7d9c000?, 0x2a45e7f00000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7d9c000, {0x2a45e7f00000, 0x8000, 0x8000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7d9c000, {0x2a45e7f00000?, 0x2a45e7d41c00?, 0x42d93a?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e7da4000, {0x2a45e7f00000?, 0x0?, 0x7f36964e1aa0?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e6f80180)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e6f80180, 0x1)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/redis/go-redis/v9/internal/proto.(*Reader).PeekReplyType(0x2a45e7da4008)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/proto/reader.go:90 +0x25
+github.com/redis/go-redis/v9/push.(*Processor).ProcessPendingNotifications(0x2a45e6f88648, {0x2443368, 0x256d240}, {{0x0, 0x0}, {0x0, 0x0}, {0x22343d8, 0x2a45e7997b90}, {0x2219430, ...}, ...}, ...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/push/processor.go:61 +0x6e
+github.com/redis/go-redis/v9.(*PubSub).processPendingPushNotificationWithReader(0x0?, {0x2443368?, 0x256d240?}, 0x0?, 0x0?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:617 +0xe3
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout.func1(0x2a45e7da4008)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:503 +0x51
+github.com/redis/go-redis/v9/internal/pool.(*Conn).WithReader(0x2a45e7da6000?, {0x2443368?, 0x256d240?}, 0x0?, 0x2a45e7d41ee8?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/pool/conn.go:891 +0x107
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout(0x2a45e7997b90, {0x2443368, 0x256d240}, 0x0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:501 +0x11d
+github.com/redis/go-redis/v9.(*PubSub).Receive(...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:529
+github.com/redis/go-redis/v9.(*channel).initMsgChan.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:730 +0x7e
+created by github.com/redis/go-redis/v9.(*channel).initMsgChan in goroutine 96
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:724 +0xae
+
+goroutine 180 [IO wait]:
+internal/poll.runtime_pollWait(0x7f3674fbe800, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e78d2200?, 0x2a45e7ea0000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e78d2200, {0x2a45e7ea0000, 0x8000, 0x8000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e78d2200, {0x2a45e7ea0000?, 0x2a45e7d43c00?, 0x42d93a?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e730a010, {0x2a45e7ea0000?, 0x0?, 0x7f369424e920?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e7041860)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e7041860, 0x1)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/redis/go-redis/v9/internal/proto.(*Reader).PeekReplyType(0x2a45e730a018)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/proto/reader.go:90 +0x25
+github.com/redis/go-redis/v9/push.(*Processor).ProcessPendingNotifications(0x2a45e6f88648, {0x2443368, 0x256d240}, {{0x0, 0x0}, {0x0, 0x0}, {0x22343d8, 0x2a45e71e01b0}, {0x2219430, ...}, ...}, ...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/push/processor.go:61 +0x6e
+github.com/redis/go-redis/v9.(*PubSub).processPendingPushNotificationWithReader(0x0?, {0x2443368?, 0x256d240?}, 0x0?, 0x0?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:617 +0xe3
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout.func1(0x2a45e730a018)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:503 +0x51
+github.com/redis/go-redis/v9/internal/pool.(*Conn).WithReader(0x2a45e7976000?, {0x2443368?, 0x256d240?}, 0x0?, 0x2a45e7d43ee8?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/pool/conn.go:891 +0x107
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout(0x2a45e71e01b0, {0x2443368, 0x256d240}, 0x0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:501 +0x11d
+github.com/redis/go-redis/v9.(*PubSub).Receive(...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:529
+github.com/redis/go-redis/v9.(*channel).initMsgChan.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:730 +0x7e
+created by github.com/redis/go-redis/v9.(*channel).initMsgChan in goroutine 91
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:724 +0xae
+
+goroutine 133 [IO wait]:
+internal/poll.runtime_pollWait(0x7f36964b2400, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e79ac180?, 0x2a45e7fc4000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e79ac180, {0x2a45e7fc4000, 0x8000, 0x8000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e79ac180, {0x2a45e7fc4000?, 0x2a45e7d30c00?, 0x42d93a?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e7fb6008, {0x2a45e7fc4000?, 0x0?, 0x7f369424e920?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e7fc2000)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e7fc2000, 0x1)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/redis/go-redis/v9/internal/proto.(*Reader).PeekReplyType(0x2a45e7fb6010)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/proto/reader.go:90 +0x25
+github.com/redis/go-redis/v9/push.(*Processor).ProcessPendingNotifications(0x2a45e6f88648, {0x2443368, 0x256d240}, {{0x0, 0x0}, {0x0, 0x0}, {0x22343d8, 0x2a45e71d6000}, {0x2219430, ...}, ...}, ...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/push/processor.go:61 +0x6e
+github.com/redis/go-redis/v9.(*PubSub).processPendingPushNotificationWithReader(0x0?, {0x2443368?, 0x256d240?}, 0x0?, 0x0?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:617 +0xe3
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout.func1(0x2a45e7fb6010)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:503 +0x51
+github.com/redis/go-redis/v9/internal/pool.(*Conn).WithReader(0x2a45e7fc0000?, {0x2443368?, 0x256d240?}, 0x0?, 0x2a45e7d30ee8?)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/internal/pool/conn.go:891 +0x107
+github.com/redis/go-redis/v9.(*PubSub).ReceiveTimeout(0x2a45e71d6000, {0x2443368, 0x256d240}, 0x0)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:501 +0x11d
+github.com/redis/go-redis/v9.(*PubSub).Receive(...)
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:529
+github.com/redis/go-redis/v9.(*channel).initMsgChan.func1()
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:730 +0x7e
+created by github.com/redis/go-redis/v9.(*channel).initMsgChan in goroutine 90
+	/home/vippro67/go/pkg/mod/github.com/redis/go-redis/v9@v9.20.1/pubsub.go:724 +0xae
+
+goroutine 212 [IO wait]:
+internal/poll.runtime_pollWait(0x7f3674fbe000, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e8104300?, 0x100?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Accept(0x2a45e8104300)
+	/usr/lib/go/src/internal/poll/fd_unix.go:618 +0x27d
+net.(*netFD).accept(0x2a45e8104300)
+	/usr/lib/go/src/net/fd_unix.go:149 +0x29
+net.(*TCPListener).accept(0x2a45e812be40)
+	/usr/lib/go/src/net/tcpsock_posix.go:159 +0x1b
+net.(*TCPListener).Accept(0x2a45e812be40)
+	/usr/lib/go/src/net/tcpsock.go:387 +0x30
+net/http.(*Server).Serve(0x2a45e76fea00, {0x24422c0, 0x2a45e812be40})
+	/usr/lib/go/src/net/http/server.go:3551 +0x379
+net/http.(*Server).ListenAndServe(0x2a45e76fea00)
+	/usr/lib/go/src/net/http/server.go:3462 +0x71
+main.main.func1()
+	/home/vippro67/Documents/GitHub/GuWorld/backend/cmd/server/main.go:202 +0x6f
+created by main.main in goroutine 1
+	/home/vippro67/Documents/GitHub/GuWorld/backend/cmd/server/main.go:200 +0x123f
+
+goroutine 453 [IO wait]:
+internal/poll.runtime_pollWait(0x7f36964b3000, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7d9c480?, 0x2a45e7daa2a1?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7d9c480, {0x2a45e7daa2a1, 0x1, 0x1})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7d9c480, {0x2a45e7daa2a1?, 0x2a45e810bfa8?, 0x2a45e810bf80?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e7da43d8, {0x2a45e7daa2a1?, 0x2a45e7caa0e0?, 0x2a45e701e2a0?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+net/http.(*connReader).backgroundRead(0x2a45e7daa280)
+	/usr/lib/go/src/net/http/server.go:746 +0x32
+created by net/http.(*connReader).startBackgroundRead in goroutine 452
+	/usr/lib/go/src/net/http/server.go:742 +0xba
+
+goroutine 104 [IO wait]:
+internal/poll.runtime_pollWait(0x7f369405d600, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7a26d80?, 0x2a45e7a5b000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7a26d80, {0x2a45e7a5b000, 0x1000, 0x1000})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7a26d80, {0x2a45e7a5b000?, 0x4f6300?, 0x2a45e7a26d80?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e6f88758, {0x2a45e7a5b000?, 0x1bf08eaf42?, 0x72?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+net/http.(*connReader).Read(0x2a45e799d940, {0x2a45e7a5b000, 0x1000, 0x1000})
+	/usr/lib/go/src/net/http/server.go:856 +0x150
+bufio.(*Reader).fill(0x2a45e7d7d200)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e7d7d200, 0x4)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+net/http.(*conn).serve(0x2a45e71e0630, {0x2443288, 0x2a45e7b40870})
+	/usr/lib/go/src/net/http/server.go:2173 +0x833
+created by net/http.(*Server).Serve in goroutine 212
+	/usr/lib/go/src/net/http/server.go:3581 +0x4fd
+
+goroutine 41 [select]:
+github.com/vippro67/GuWorld/backend/internal/ws.(*Client).writePump(0x2a45e7832120)
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/client.go:180 +0xfa
+created by github.com/vippro67/GuWorld/backend/internal/ws.ServeWs in goroutine 52
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/client.go:81 +0x57b
+
+goroutine 42 [IO wait]:
+internal/poll.runtime_pollWait(0x7f3674fbde00, 0x72)
+	/usr/lib/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0x2a45e7e04000?, 0x2a45e6fc3000?, 0x0)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0x27
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0x2a45e7e04000, {0x2a45e6fc3000, 0x400, 0x400})
+	/usr/lib/go/src/internal/poll/fd_unix.go:170 +0x2a8
+net.(*netFD).Read(0x2a45e7e04000, {0x2a45e6fc3000?, 0x429733?, 0x2a45e7c90330?})
+	/usr/lib/go/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x2a45e6f02020, {0x2a45e6fc3000?, 0x2a45e7389808?, 0x2a45e7e71ce8?})
+	/usr/lib/go/src/net/net.go:196 +0x45
+bufio.(*Reader).fill(0x2a45e78320c0)
+	/usr/lib/go/src/bufio/bufio.go:113 +0x103
+bufio.(*Reader).Peek(0x2a45e78320c0, 0x2)
+	/usr/lib/go/src/bufio/bufio.go:152 +0x52
+github.com/gorilla/websocket.(*Conn).read(0x2a45e6fd0420, 0x2a45e7d7a5a0?)
+	/home/vippro67/go/pkg/mod/github.com/gorilla/websocket@v1.5.3/conn.go:371 +0x25
+github.com/gorilla/websocket.(*Conn).advanceFrame(0x2a45e6fd0420)
+	/home/vippro67/go/pkg/mod/github.com/gorilla/websocket@v1.5.3/conn.go:809 +0x70
+github.com/gorilla/websocket.(*Conn).NextReader(0x2a45e6fd0420)
+	/home/vippro67/go/pkg/mod/github.com/gorilla/websocket@v1.5.3/conn.go:1009 +0xad
+github.com/gorilla/websocket.(*Conn).ReadMessage(0x2a45e7832120?)
+	/home/vippro67/go/pkg/mod/github.com/gorilla/websocket@v1.5.3/conn.go:1093 +0x13
+github.com/vippro67/GuWorld/backend/internal/ws.(*Client).readPump(0x2a45e7832120)
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/client.go:136 +0x154
+created by github.com/vippro67/GuWorld/backend/internal/ws.ServeWs in goroutine 52
+	/home/vippro67/Documents/GitHub/GuWorld/backend/internal/ws/client.go:82 +0x5c7

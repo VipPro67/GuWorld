@@ -1,0 +1,106 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: guworld-db
+    restart: always
+    environment:
+      POSTGRES_USER: gu_admin
+      POSTGRES_PASSWORD: gu_pass_123
+      POSTGRES_DB: gu_db
+      TZ: Asia/Ho_Chi_Minh
+    command: ["postgres", "-c", "timezone=Asia/Ho_Chi_Minh"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gu_admin -d gu_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    container_name: guworld-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guworld-backend
+    restart: always
+    ports:
+      - "127.0.0.1:8080:8080"  # Chỉ cho phép truy cập cục bộ trên host, ngoài internet sẽ đi qua Caddy
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8080
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=gu_admin
+      - DB_PASSWORD=gu_pass_123
+      - DB_NAME=gu_db
+      - DB_SSLMODE=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_SSL=false
+      - JWT_SECRET=guworld_cultivation_secret_key_change_me
+      - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn,https://cogioi.io.vn,http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    image: ghcr.io/vippro67/guworld-frontend:latest
+    container_name: guworld-frontend
+    restart: always
+    environment:
+      INTERNAL_BACKEND_URL: http://backend:8080
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: guworld-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: guworld-alloy
+    restart: always
+    environment:
+      LOKI_URL: https://logs-prod-020.grafana.net/loki/api/v1/push
+      LOKI_USER: 1492959
+      PROMETHEUS_URL: https://prometheus-prod-37-prod-ap-southeast-1.grafana.net/api/prom/push
+      PROMETHEUS_USER: 2994568
+      GRAFANA_API_KEY: ${GRAFANA_API_KEY}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

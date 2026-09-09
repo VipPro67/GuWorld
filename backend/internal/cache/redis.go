@@ -36,8 +36,7 @@ func Connect() error {
 	}
 
 	if redisHost == "" || redisPort == "" {
-		logger.S.Info("Redis host or port not configured, skipping Redis connection")
-		return nil
+		return fmt.Errorf("Redis is required: REDIS_HOST and REDIS_PORT must be configured")
 	}
 
 	options := &redis.Options{
@@ -58,7 +57,7 @@ func Connect() error {
 
 	// Test the connection
 	if err := Client.Ping(Ctx).Err(); err != nil {
-		logger.S.Warnf("Failed to connect to Redis: %v", err)
+		logger.S.Errorf("Failed to connect to Redis: %v", err)
 		Client = nil // Set to nil to indicate Redis is not available
 		return err
 	}
@@ -144,6 +143,27 @@ func RemovePendingIDs(entityType string, entityIDs ...string) error {
 	}
 	
 	return Client.SRem(Ctx, "pending_db_writes:"+entityType, args...).Err()
+}
+
+// PublishEvent publishes a JSON-marshaled payload to the specified Redis channel.
+func PublishEvent(ctx context.Context, channel string, payload interface{}) error {
+	if Client == nil {
+		return nil
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return Client.Publish(ctx, channel, data).Err()
+}
+
+// SubscribeChannels subscribes to one or more Redis Pub/Sub channels or patterns.
+// Note: If using patterns, use PSubscribe in the caller or adjust this function.
+func SubscribeChannels(ctx context.Context, channels ...string) *redis.PubSub {
+	if Client == nil {
+		return nil
+	}
+	return Client.Subscribe(ctx, channels...)
 }
 
 // GetManyJSON retrieves multiple values from Redis by keys (MGET).

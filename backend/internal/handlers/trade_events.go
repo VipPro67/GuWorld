@@ -1,15 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
-	"net/http"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -17,82 +16,9 @@ type tradeEventPayload struct {
 	Trade any `json:"trade"`
 }
 
-type tradeSubscription struct {
-	playerID uuid.UUID
-	ch       chan tradeEventPayload
-}
-
-var tradeEventHub = struct {
-	sync.Mutex
-	subs map[uuid.UUID]map[chan tradeEventPayload]struct{}
-}{subs: map[uuid.UUID]map[chan tradeEventPayload]struct{}{}}
-
-func SubscribeTradeEvents(c *gin.Context) {
-	playerID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming unsupported"})
-		return
-	}
-
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache, no-transform")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("X-Accel-Buffering", "no")
-	c.Writer.Header().Set("Content-Encoding", "identity")
-
-	ch := subscribeTrade(playerID)
-	defer unsubscribeTrade(playerID, ch)
-
-	if err := writeTradeEvent(c, playerID); err != nil {
-		_ = writeSSE(c, "error", gin.H{"error": err.Error()})
-		flusher.Flush()
-		return
-	}
-	flusher.Flush()
-
-	for {
-		select {
-		case <-c.Request.Context().Done():
-			return
-		case payload := <-ch:
-			if err := writeSSE(c, "trade.updated", payload); err != nil {
-				return
-			}
-			flusher.Flush()
-		}
-	}
-}
-
-func subscribeTrade(playerID uuid.UUID) chan tradeEventPayload {
-	ch := make(chan tradeEventPayload, 1)
-	tradeEventHub.Lock()
-	defer tradeEventHub.Unlock()
-	if tradeEventHub.subs[playerID] == nil {
-		tradeEventHub.subs[playerID] = map[chan tradeEventPayload]struct{}{}
-	}
-	tradeEventHub.subs[playerID][ch] = struct{}{}
-	return ch
-}
-
-func unsubscribeTrade(playerID uuid.UUID, ch chan tradeEventPayload) {
-	tradeEventHub.Lock()
-	defer tradeEventHub.Unlock()
-	delete(tradeEventHub.subs[playerID], ch)
-	if len(tradeEventHub.subs[playerID]) == 0 {
-		delete(tradeEventHub.subs, playerID)
-	}
-	close(ch)
-}
-
 func notifyTradeParticipants(playerIDs ...uuid.UUID) {
 	for _, playerID := range playerIDs {
-		trade, err := loadActiveTrade(playerID)
+		trade, err := LoadActiveTrade(playerID)
 		if err != nil {
 			continue
 		}
@@ -101,27 +27,7 @@ func notifyTradeParticipants(playerIDs ...uuid.UUID) {
 }
 
 func notifyTrade(playerID uuid.UUID, payload tradeEventPayload) {
-	tradeEventHub.Lock()
-	defer tradeEventHub.Unlock()
-	for ch := range tradeEventHub.subs[playerID] {
-		select {
-		case ch <- payload:
-		default:
-			select {
-			case <-ch:
-			default:
-			}
-			ch <- payload
-		}
-	}
-}
-
-func writeTradeEvent(c *gin.Context, playerID uuid.UUID) error {
-	trade, err := loadActiveTrade(playerID)
-	if err != nil {
-		return err
-	}
-	return writeSSE(c, "trade.updated", tradeEventPayload{Trade: trade})
+	_ = cache.PublishEvent(context.Background(), "trade:"+playerID.String(), payload)
 }
 
 func getTradeParticipants(tradeID string) (uuid.UUID, uuid.UUID, error) {
@@ -130,7 +36,7 @@ func getTradeParticipants(tradeID string) (uuid.UUID, uuid.UUID, error) {
 	return senderID, receiverID, err
 }
 
-func loadActiveTrade(authID uuid.UUID) (any, error) {
+func LoadActiveTrade(authID uuid.UUID) (any, error) {
 	var id, status string
 	var senderID, receiverID uuid.UUID
 	var senderOfferBytes, receiverOfferBytes []byte

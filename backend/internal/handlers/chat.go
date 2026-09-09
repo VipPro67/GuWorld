@@ -91,7 +91,10 @@ func SendPrivateMail(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Truyền tin thành công! Cổ trùng đã cất cánh bay đi. Nhân Khí +%.0f.", qiGained)})
+	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Truyền tin thành công! Cổ trùng đã cất cánh bay đi. Nhân Khí +%.0f.", qiGained),
+	})
 }
 
 func GetInbox(c *gin.Context) {
@@ -249,6 +252,7 @@ func SendBaoHoangChat(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để chat kênh này"})
 			return
 		}
+		player.PrimevalStones -= fee
 	}
 
 	qiGained := AddHumanQi(&player, 1.0)
@@ -263,12 +267,15 @@ func SendBaoHoangChat(c *gin.Context) {
 		return
 	}
 	notifyBaoHoangMessages(req.Channel, sectID)
+	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
 
 	msg := "Đã truyền tin nhắn thành công! Nhân Khí +1."
 	if fee > 0 {
 		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %d Nguyên Thạch phí truyền phát. Nhân Khí +%.0f.", fee, qiGained)
 	}
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": msg})
+	c.JSON(http.StatusOK, gin.H{
+		"message": msg,
+	})
 }
 
 func GetBaoHoangMessages(c *gin.Context) {

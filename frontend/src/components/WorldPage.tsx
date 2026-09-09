@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useWorldStore } from "@/store/useWorldStore";
 import { useGameStore } from "@/store/useGameStore";
-import { WorldLogViewer } from "./WorldLogViewer";
 import TeleportModal from "./TeleportModal";
 import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users } from "lucide-react";
 
@@ -538,7 +537,6 @@ export function WorldPage() {
       )}
 
       <GuQuickBar />
-      <WorldLogViewer />
     </div>
   );
 }

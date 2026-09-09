@@ -10,10 +10,13 @@ import (
 
 	"github.com/aurowora/compress"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
+	"github.com/vippro67/GuWorld/backend/internal/ws"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -53,11 +56,18 @@ func requestLogging() gin.HandlerFunc {
 }
 
 // SetupRouter initializes the Gin router with middlewares and routes
-func SetupRouter() *gin.Engine {
+func SetupRouter(hub *ws.Hub) *gin.Engine {
+	if hub != nil {
+		handlers.SetWSStatsProvider(hub.GetStats)
+		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
+			hub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
+		}
+	}
 	gin.DefaultWriter = logger.GinWriter()
 	r := gin.Default()
 
 	r.Use(requestLogging())
+	r.Use(monitor.Middleware())
 
 	// CORS Middleware
 	r.Use(func(c *gin.Context) {
@@ -100,16 +110,10 @@ func SetupRouter() *gin.Engine {
 	})
 
 	// Compress responses with Brotli/Gzip/Zstd based on client Accept-Encoding.
-	// Skip SSE streams to avoid buffering issues.
+	// Skip websocket route.
 	r.Use(compress.Compress(
 		compress.WithExcludeFunc(func(c *gin.Context) bool {
-			p := c.Request.URL.Path
-			switch p {
-			case "/api/events", "/api/player/events",
-				"/api/trade/events", "/api/chat/bao-hoang/events":
-				return true
-			}
-			return false
+			return c.Request.URL.Path == "/api/ws"
 		}),
 	))
 
@@ -122,6 +126,20 @@ func SetupRouter() *gin.Engine {
 	// API routes
 	api := r.Group("/api")
 	{
+		// WebSocket route
+		api.GET("/ws", middleware.AuthRequired(), func(c *gin.Context) {
+			if hub == nil {
+				c.JSON(503, gin.H{"error": "WebSocket hub not initialized"})
+				return
+			}
+			playerID, exists := middleware.GetPlayerID(c)
+			if !exists {
+				c.JSON(401, gin.H{"error": "Unauthorized"})
+				return
+			}
+			ws.ServeWs(hub, c.Writer, c.Request, playerID)
+		})
+
 		// Public endpoints — per IP
 		api.GET("/dictionary", middleware.RateLimitByIP(40, time.Minute), handlers.GetDictionary)
 		api.GET("/recipes", middleware.RateLimitByIP(40, time.Minute), handlers.GetRecipes)
@@ -204,6 +222,16 @@ func SetupRouter() *gin.Engine {
 		admin.Use(middleware.AuthRequired())
 		admin.Use(middleware.RateLimitByGroup("admin", 80, time.Minute))
 		{
+			// Application Monitoring & Tracing endpoints
+			adminMonitor := admin.Group("/monitor")
+			{
+				adminMonitor.GET("/system", handlers.AdminGetSystemStats)
+				adminMonitor.GET("/requests/summary", handlers.AdminGetRequestSummary)
+				adminMonitor.GET("/requests/traces", handlers.AdminGetRequestTraces)
+				adminMonitor.GET("/requests/traces/:id", handlers.AdminGetRequestTraceDetail)
+				adminMonitor.POST("/requests/reset", handlers.AdminResetRequestMetrics)
+			}
+
 			admin.GET("/topup-orders", handlers.AdminListTopupOrders)
 			admin.GET("/wallet-transactions", handlers.AdminListWalletTransactions)
 			admin.GET("/players/online", handlers.AdminListOnlinePlayers)
@@ -375,9 +403,6 @@ func SetupRouter() *gin.Engine {
 			player.GET("/beast-betting/history", handlers.GetBettingHistory)
 			player.POST("/beast-betting/bet", handlers.PlaceBeastBet)
 		}
-		// SSE — no rate limit
-		api.GET("/player/events", middleware.AuthRequired(), handlers.StreamPlayerEvents)
-		api.GET("/events", middleware.AuthRequired(), handlers.StreamUnifiedEvents)
 
 		// Mine — group: 40/min, per player: 25/min
 		mine := api.Group("/mine")
@@ -595,7 +620,6 @@ func SetupRouter() *gin.Engine {
 			chat.GET("/mail/inbox", handlers.GetInbox)
 			chat.POST("/bao-hoang/send", middleware.RateLimitByIP(30, time.Minute), handlers.SendBaoHoangChat)
 			chat.GET("/bao-hoang/messages", handlers.GetBaoHoangMessages)
-			chat.GET("/bao-hoang/events", handlers.SubscribeBaoHoangMessages)
 		}
 
 		// Explore — per player: 25/min
@@ -649,8 +673,6 @@ func SetupRouter() *gin.Engine {
 			trade.POST("/lock/:id", handlers.LockTrade)
 			trade.POST("/confirm/:id", handlers.ConfirmTrade)
 		}
-		// SSE — no rate limit
-		api.GET("/trade/events", middleware.AuthRequired(), handlers.SubscribeTradeEvents)
 
 		// Soul — group: 20/min, per player: 15/min
 		soul := api.Group("/soul")
@@ -737,20 +759,36 @@ func SetupRouter() *gin.Engine {
 func registerDebugEndpoints(r *gin.Engine) {
 	debug := r.Group("/debug")
 	{
-		// net/http/pprof handler registry
-		pprofHandler := pprof.Handler("goroutine")
-		debug.GET("/pprof/goroutine", gin.WrapH(pprofHandler))
+		// Standard net/http/pprof endpoints for go tool pprof & browser inspection
+		debug.GET("/pprof", func(c *gin.Context) {
+			c.Redirect(http.StatusMovedPermanently, "/debug/pprof/")
+		})
+		debug.GET("/pprof/", gin.WrapF(pprof.Index))
+		debug.GET("/pprof/cmdline", gin.WrapF(pprof.Cmdline))
+		debug.GET("/pprof/profile", gin.WrapF(pprof.Profile))
+		debug.GET("/pprof/symbol", gin.WrapF(pprof.Symbol))
+		debug.POST("/pprof/symbol", gin.WrapF(pprof.Symbol))
+		debug.GET("/pprof/trace", gin.WrapF(pprof.Trace))
+
+		// Individual profile handlers
+		debug.GET("/pprof/goroutine", gin.WrapH(pprof.Handler("goroutine")))
 		debug.GET("/pprof/heap", gin.WrapH(pprof.Handler("heap")))
 		debug.GET("/pprof/allocs", gin.WrapH(pprof.Handler("allocs")))
 		debug.GET("/pprof/block", gin.WrapH(pprof.Handler("block")))
 		debug.GET("/pprof/mutex", gin.WrapH(pprof.Handler("mutex")))
+		debug.GET("/pprof/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
 		debug.GET("/pprof/goroutine/stack", func(c *gin.Context) {
 			buf := make([]byte, 8<<20)
 			n := runtime.Stack(buf, true)
 			c.Data(http.StatusOK, "text/plain", buf[:n])
 		})
 
+		// DB connection pool stats
 		debug.GET("/db-pool", func(c *gin.Context) {
+			if db.DB == nil {
+				c.JSON(http.StatusOK, gin.H{"error": "database not connected"})
+				return
+			}
 			stats := db.DB.Stats()
 			c.JSON(http.StatusOK, gin.H{
 				"max_open_connections": stats.MaxOpenConnections,
@@ -764,5 +802,9 @@ func registerDebugEndpoints(r *gin.Engine) {
 				"max_lifetime_closed":  stats.MaxLifetimeClosed,
 			})
 		})
+
+		// Public diagnostic endpoints
+		debug.GET("/system", handlers.DebugSystemSummary)
+		debug.GET("/requests/summary", handlers.DebugRequestSummary)
 	}
 }

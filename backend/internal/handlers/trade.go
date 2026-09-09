@@ -290,7 +290,7 @@ func GetActiveTrade(c *gin.Context) {
 		return
 	}
 
-	trade, err := loadActiveTrade(authID)
+	trade, err := LoadActiveTrade(authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query active trade: " + err.Error()})
 		return

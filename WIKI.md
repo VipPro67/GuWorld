@@ -426,11 +426,11 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 
 - Hỗ trợ niêm yết kiểu chợ, đấu giá và giao dịch/mục tiêu người mua.
 - Có đặt giá, mua, hủy và kết toán đấu giá hết hạn.
-- Có chat Bảo Hoàng và SSE messages.
+- Có chat Bảo Hoàng và tin nhắn real-time qua WebSocket.
 
 ### Thông báo
 
-- Chuông thông báo (góc trên phải) báo tin mới theo thời gian thực qua SSE.
+- Chuông thông báo (góc trên phải) báo tin mới theo thời gian thực qua WebSocket.
 - Thông báo khi: Cổ chết đói (kể cả bản mệnh cổ), tử đạo đánh rơi tài sản, nhặt chiến lợi phẩm, ai mua hàng của bạn, ai đặt giá đấu giá, thắng đấu giá, đấu giá hết hạn.
 - Hỗ trợ đánh dấu đã đọc từng mục hoặc tất cả.
 
@@ -438,7 +438,7 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 
 - Hai Cổ sư có thể khởi tạo, chấp nhận/từ chối, đề nghị, khóa và xác nhận.
 - Đề nghị hỗ trợ nguyên thạch, Tiên Nguyên Thạch, Cổ, vật liệu và **Bí phương**.
-- Có SSE trade events.
+- Có WebSocket trade events — nhận cập nhật giao dịch real-time.
 
 ### Ví, nạp tiền và gói quý
 
@@ -497,7 +497,7 @@ Hệ thống môn phái hiện có:
 ## 16. Chat, mail và feedback
 
 - Mail riêng: gửi và xem inbox.
-- Bảo Hoàng chat theo channel, fetch message và subscribe SSE. Hệ thống tích hợp bộ lọc chặn spam (giới hạn thời gian gửi 1.5s, cấm trùng lặp tin nhắn trong 10s, cấm lặp từ hoặc chuỗi ký tự liên tiếp) và chặn từ ngữ tục tĩu nhạy cảm.
+- Bảo Hoàng chat theo channel, fetch message và subscribe WebSocket. Hệ thống tích hợp bộ lọc chặn spam (giới hạn thời gian gửi 1.5s, cấm trùng lặp tin nhắn trong 10s, cấm lặp từ hoặc chuỗi ký tự liên tiếp) và chặn từ ngữ tục tĩu nhạy cảm.
 - Feedback (Thỉnh Thiên Đạo): mỗi sớ trình là một topic. Xem danh sách, gửi góp ý, bình chọn, góp ý (comment), cập nhật trạng thái/developer response.
 - **Quyền theo trạng thái topic:**
   - `pending` (chờ duyệt): không bình chọn, không góp ý.

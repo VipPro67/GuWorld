@@ -1,11 +1,16 @@
 package handlers
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 )
+
+// WorldPosBroadcaster allows injection of websocket targeted broadcast without import cycle
+var WorldPosBroadcaster func(channel string, payload []byte, targets map[uuid.UUID]struct{})
 
 // WorldPosEvent is broadcast whenever a player's position changes on the
 // shared world map so nearby clients can glide markers smoothly instead of
@@ -53,8 +58,11 @@ func unsubscribeWorldPos(playerID string, ch chan WorldPosEvent) {
 
 // broadcastWorldPos upserts the mover into the position index (so interest
 // resolution is always based on the freshest position) and fans the event out
-// to subscribers within interest radius.
+// to subscribers within interest radius via WebSocket.
 func broadcastWorldPos(payload WorldPosEvent) {
+	playerID, _ := uuid.Parse(payload.ID)
+	_ = playerID // suppress unused warning if not needed
+
 	worldPosIndex.Set(WorldPosEntry{
 		ID:        payload.ID,
 		Username:  payload.Username,
@@ -66,28 +74,20 @@ func broadcastWorldPos(payload WorldPosEvent) {
 
 	nearby := worldPosIndex.Nearby(payload.X, payload.Y, WorldPosInterestRadius, payload.ID)
 
-	worldPosHub.Lock()
-	defer worldPosHub.Unlock()
-	for _, e := range nearby {
-		for ch := range worldPosHub.subs[e.ID] {
-			sendWorldPos(ch, payload)
+	if WorldPosBroadcaster != nil {
+		targets := make(map[uuid.UUID]struct{}, len(nearby))
+		for _, e := range nearby {
+			if nid, err := uuid.Parse(e.ID); err == nil {
+				targets[nid] = struct{}{}
+			}
 		}
+		WorldPosBroadcaster("world:pos", mustMarshal(payload), targets)
 	}
 }
 
-// sendWorldPos delivers a position event to a subscriber's channel, keeping the
-// newest position when the buffer is full (older intermediate positions are
-// dropped so clients always glide toward the latest known coordinate).
-func sendWorldPos(ch chan WorldPosEvent, payload WorldPosEvent) {
-	select {
-	case ch <- payload:
-	default:
-		select {
-		case <-ch:
-		default:
-		}
-		ch <- payload
-	}
+func mustMarshal(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
 }
 
 // ensureWorldPosLoaded makes sure a subscriber has an entry in the position

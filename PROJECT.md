@@ -8,13 +8,13 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 
 ## Kiến trúc hiện tại
 
-- `backend/cmd/server/main.go`: entrypoint backend, load `.env`, kết nối PostgreSQL, khởi tạo schema/seed, kết nối Redis nếu có, load registry Cổ/vật phẩm, chạy worker và Gin router.
+- `backend/cmd/server/main.go`: entrypoint backend, load `.env`, kết nối PostgreSQL, khởi tạo schema/seed, kết nối Redis, load registry Cổ/vật phẩm, chạy worker và Gin router.
 - `backend/internal/server/server.go`: khai báo toàn bộ route `/api`.
 - `backend/internal/db/db.go`: schema PostgreSQL, migration dạng `CREATE/ALTER IF NOT EXISTS`, seed CSV.
 - `backend/internal/models`: struct domain cho player, Cổ, item, recipe, combat, aperture, monster, cell, feedback, killer move.
 - `backend/internal/handlers`: logic API theo từng module gameplay.
 - `backend/internal/worker`: worker đói Cổ, worker đói sủng vật.
-- `backend/internal/cache`: Redis client optional.
+- `backend/internal/cache`: Redis client (bắt buộc).
 - `frontend/src/app`: Next.js App Router pages/layout.
 - `frontend/src/store/useGameStore.ts`: Zustand store, API client phía frontend và state gameplay.
 - `frontend/src/components`: UI module gameplay.

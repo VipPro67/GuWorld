@@ -433,33 +433,6 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	summary := fmt.Sprintf("pool=%s | %dx | cost=%.0f %s", pool.Name, quantity, totalCost, pool.CostType)
-	if discounted {
-		summary += " (đã giảm 10%)"
-	}
-
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": summary,
-		"rewards": rewards,
-	})
-
-	if quantity == 1 {
-		responseWithPlayerData(c, http.StatusOK, player, player.MaterialsInventory, loadCompletedQuests(player.ID.String()), gin.H{
-			"reward":  rewards[0],
-			"message": buildGachaRewardLabel(rewards[0]) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
-		})
-	} else {
-		announcement := aggregateGachaRewards(rewards)
-		discountMsg := ""
-		if discounted {
-			discountMsg = " Đã giảm 10% chi phí mở."
-		}
-		responseWithPlayerData(c, http.StatusOK, player, player.MaterialsInventory, loadCompletedQuests(player.ID.String()), gin.H{
-			"rewards": rewards,
-			"message": fmt.Sprintf("Mở %d lần thành công! Nhân Khí +%.0f.%s\n", quantity, qiGained, discountMsg) + announcement,
-		})
-	}
-
 	// Batch rare Gu system messages into a single message
 	var rareDrops []string
 	for _, r := range rewards {
@@ -473,6 +446,24 @@ func runGachaOpen(c *gin.Context, forced int) {
 		dropList := strings.Join(rareDrops, ", ")
 		message := fmt.Sprintf("Đạo hữu %s đã mở được Cổ Trùng %s từ Mở Thạch %s!", player.Username, dropList, pool.Name)
 		SendSystemMessage("world", sql.NullString{Valid: false}, message)
+	}
+
+	if quantity == 1 {
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
+			"reward":  rewards[0],
+			"rewards": rewards,
+			"message": buildGachaRewardLabel(rewards[0]) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+		})
+	} else {
+		announcement := aggregateGachaRewards(rewards)
+		discountMsg := ""
+		if discounted {
+			discountMsg = " Đã giảm 10% chi phí mở."
+		}
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
+			"rewards": rewards,
+			"message": fmt.Sprintf("Mở %d lần thành công! Nhân Khí +%.0f.%s\n", quantity, qiGained, discountMsg) + announcement,
+		})
 	}
 }
 

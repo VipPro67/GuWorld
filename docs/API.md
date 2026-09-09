@@ -8,13 +8,21 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/debug/pprof/goroutine` | Goroutine dump (chẩn đoán request treo). |
-| GET | `/debug/pprof/goroutine/stack` | Toàn bộ goroutine stack dạng text. |
-| GET | `/debug/pprof/heap` | Heap profile. |
-| GET | `/debug/pprof/allocs` | Allocation profile. |
+| GET | `/debug/pprof/` | Pprof index / dashboard trình duyệt hoặc `go tool pprof`. |
+| GET | `/debug/pprof/profile` | CPU profiling (`?seconds=30`), phân tích CPU tiêu thụ bằng `go tool pprof`. |
+| GET | `/debug/pprof/trace` | Execution tracer profile (`?seconds=5`), xem timeline goroutines bằng `go tool trace`. |
+| GET | `/debug/pprof/cmdline` | Command line arguments của tiến trình Go. |
+| GET/POST | `/debug/pprof/symbol` | Symbol resolution cho trình pprof. |
+| GET | `/debug/pprof/goroutine` | Goroutine dump (chẩn đoán request treo hoặc goroutine leak). |
+| GET | `/debug/pprof/goroutine/stack` | Toàn bộ goroutine stack dạng text thô. |
+| GET | `/debug/pprof/heap` | Heap memory profile (phát hiện memory leak). |
+| GET | `/debug/pprof/allocs` | Past memory allocation profile. |
 | GET | `/debug/pprof/block` | Block profile (bật `runtime.SetBlockProfileRate` để có data). |
-| GET | `/debug/pprof/mutex` | Mutex profile. |
+| GET | `/debug/pprof/mutex` | Mutex contention profile. |
+| GET | `/debug/pprof/threadcreate` | OS thread creation profile. |
 | GET | `/debug/db-pool` | DB connection pool stats (open/inUse/idle/wait). |
+| GET | `/debug/system` | Public diagnostic: tổng quan CPU %, Goroutines, RAM, DB Pool, Redis, WebSockets, Uptime. |
+| GET | `/debug/requests/summary` | Public diagnostic: tổng quan RPS, in-flight, status codes, latency percentiles. |
 
 > **Log request:** mọi request (trừ OPTIONS) được log `REQ START` khi bắt đầu và `REQ END` khi kết thúc kèm duration. Request > 5s được đánh dấu `REQ SLOW` — dùng để phát hiện handler đang treo mà log cũ không thấy (Gin chỉ log khi request hoàn thành).
 
@@ -210,9 +218,9 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 | Method | Path |
 | --- | --- |
-| POST | `/chat/mail/send` |
+| POST | `/chat/mail/send` | Gửi thư (tiêu hao 1 Nguyên Thạch, +1 Nhân Khí). Trả về `{ message }`; thông tin player đồng bộ qua WebSocket `player.updated`. |
 | GET | `/chat/mail/inbox` |
-| POST | `/chat/bao-hoang/send` |
+| POST | `/chat/bao-hoang/send` | Gửi tin nhắn chat. Trả về `{ message }`; thông tin player (Nguyên Thạch, Nhân Khí) đồng bộ qua WebSocket `player.updated`. |
 | GET | `/chat/bao-hoang/messages` |
 | GET | `/chat/bao-hoang/events` |
 | POST | `/soul/use-guts` |
@@ -303,9 +311,36 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
 | GET | `/admin/audit-logs` | Audit log (bao gồm `admin.update_player`). |
 
-## SSE realtime — `GET /events` (Auth)
+## Admin — Monitoring & Tracing (CPU, Memory, Request Traces)
 
-Stream hợp nhất (`StreamUnifiedEvents`) cho authenticated player. Các event-type:
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, WebSocket clients/channels, Process Uptime. |
+| GET | `/admin/monitor/requests/summary` | Thống kê request toàn diện: Tổng số request, in-flight requests, RPS (cửa sổ trượt 60s), phân bố mã trạng thái (2xx/3xx/4xx/5xx), độ trễ (min/max/avg/p50/p90/p99), top endpoint được gọi nhiều nhất và top endpoint chậm nhất. |
+| GET | `/admin/monitor/requests/traces` | Tra cứu chi tiết danh sách các request gần nhất (Ring Buffer 500 requests). Hỗ trợ query params: `limit` (default 50, max 200), `offset`, `method` (GET/POST/...), `status` (`200`, `500`, hoặc `errors` để lọc lỗi ≥ 400), `path` (chuỗi con URL), `min_duration_ms` (lọc slow request), `search` (tìm theo player_id, username, client_ip). |
+| GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một request cụ thể qua `trace_id` (Method, Path, Query, Status, Latency ms, Client IP, Player ID, Username, User Agent, Error message). |
+| POST | `/admin/monitor/requests/reset` | Đặt lại (reset) toàn bộ chỉ số đếm và xóa danh sách request trace gần nhất. |
+
+## Realtime Communication — WebSocket `GET /api/ws` (Auth)
+
+WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa phiên bản phục vụ mở rộng horizontal. Kết nối yêu cầu token qua header `Authorization: Bearer <token>` hoặc query parameter `?token=<token>`.
+
+### Các kênh hỗ trợ (Channels):
+| Channel | Direction | Mục đích |
+| --- | --- | --- |
+| `player` | S→C | Snapshot & cập nhật chỉ số người chơi thời gian thực |
+| `chat:world` | Hai chiều | Chat thế giới |
+| `chat:general` | Hai chiều | Chat Bảo Hoàng Thiên (yêu cầu Thông Thiên Cổ & Thần Niệm Cổ) |
+| `chat:sect` | Hai chiều | Chat tông môn |
+| `trade` | S→C | Trạng thái giao dịch realtime |
+| `world:pos` | S→C | Vị trí người chơi di chuyển trên bản đồ lớn |
+| `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh |
+| `combat` | S→C | Biến động chiến đấu realtime |
+| `notification` | S→C | Thông báo mới (chuông thông báo) |
+
+### SSE realtime — `GET /events` (Auth) [Deprecated Fallback]
+
+Stream hợp nhất (`StreamUnifiedEvents`) giữ lại làm fallback cho authenticated player. Các event-type:
 
 | Event | Mô tả |
 | --- | --- |

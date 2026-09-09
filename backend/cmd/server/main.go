@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/server"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
+	"github.com/vippro67/GuWorld/backend/internal/ws"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -68,7 +69,7 @@ func main() {
 	}
 
 	if err := cache.Connect(); err != nil {
-		logger.S.Warnf("Failed to connect to Redis: %v. Proceeding without caching.", err)
+		logger.S.Fatalf("Redis connection failed (required): %v", err)
 	} else {
 		_ = cache.Delete("game_dictionary_unified")
 	}
@@ -157,7 +158,7 @@ func main() {
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
 	worker.StartStatusExpiryWorker(ctx, db.DB, 1*time.Minute)
 	worker.StartPetHungerWorker(ctx, db.DB, 1*time.Hour)
-	worker.StartGrowthWorker(ctx, db.DB, 60*time.Second)
+	worker.StartGrowthWorker(ctx, db.DB, 1*time.Hour)
 	handlers.StartTribulationWorker(ctx)
 	handlers.StartWorldIndexSyncWorker(ctx)
 	handlers.StartMineMonsterWorker(ctx)
@@ -176,7 +177,13 @@ func main() {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)
 	}
 
-	r := server.SetupRouter()
+	// Initialize WebSocket Hub and Redis Pub/Sub
+	hub := ws.InitHub()
+	if cache.Client != nil {
+		ws.StartRedisSubscribers(hub)
+	}
+
+	r := server.SetupRouter(hub)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -206,6 +213,8 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.S.Fatalf("Server forced to shutdown: %v", err)
 	}
+
+	hub.Stop(shutdownCtx)
 
 	logger.S.Info("Server exited cleanly")
 }

@@ -2,7 +2,7 @@
 
 GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luyện/Cổ trùng. Codebase hiện tại gồm:
 
-- **Backend:** Go + Gin, PostgreSQL, Redis optional, JWT/cookie auth.
+- **Backend:** Go + Gin, PostgreSQL, Redis (bắt buộc), JWT/cookie auth.
 - **Frontend:** Next.js App Router + React + Zustand.
 - **Dữ liệu seed:** CSV trong `backend/` cho Cổ, vật phẩm, công thức, quái, loot, shop, vùng và gói nạp.
 

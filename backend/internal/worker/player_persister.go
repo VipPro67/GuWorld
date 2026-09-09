@@ -39,9 +39,6 @@ type PlayerStatsPayload struct {
 	Lifespan            float64   `json:"lifespan"`
 	TimeSpeedMultiplier float64   `json:"time_speed_multiplier"`
 	ApertureStress      float64   `json:"aperture_stress"`
-	HumanQi             float64   `json:"human_qi"`
-	PrimevalStones      int64     `json:"primeval_stones"`
-	ImmortalStones      int64     `json:"immortal_stones"`
 	LastManaUpdate      time.Time `json:"last_mana_update"`
 	LastCultivateTime   time.Time `json:"last_cultivate_time"`
 	UpdatedAt           time.Time `json:"updated_at"`
@@ -203,9 +200,6 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 		apertureStresses := make([]float64, len(chunk))
 		lastCultivateTimes := make([]time.Time, len(chunk))
 		lastManaUpdates := make([]time.Time, len(chunk))
-		humanQis := make([]float64, len(chunk))
-		primevalStones := make([]int64, len(chunk))
-		immortalStones := make([]int64, len(chunk))
 
 		for j, p := range chunk {
 			ids[j] = p.ID
@@ -219,9 +213,6 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 			apertureStresses[j] = p.ApertureStress
 			lastCultivateTimes[j] = p.LastCultivateTime
 			lastManaUpdates[j] = p.LastManaUpdate
-			humanQis[j] = p.HumanQi
-			primevalStones[j] = p.PrimevalStones
-			immortalStones[j] = p.ImmortalStones
 		}
 
 		// Each chunk runs in its own short transaction with lock/statement timeout
@@ -244,26 +235,22 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 
 		_, err = tx.Exec(`
 			WITH updates(id, hp, soul_hp, current_mana, max_mana, current_thought, lifespan,
-			            time_speed_multiplier, aperture_stress, last_cultivate_time, last_mana_update,
-			            human_qi, primeval_stones, immortal_stones) AS (
+			            time_speed_multiplier, aperture_stress, last_cultivate_time, last_mana_update) AS (
 				SELECT unnest($1::text[]), unnest($2::float8[]), unnest($3::int[]),
 				       unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]),
 				       unnest($7::float8[]), unnest($8::float8[]), unnest($9::float8[]),
-				       unnest($10::timestamptz[]), unnest($11::timestamptz[]),
-				       unnest($12::float8[]), unnest($13::int8[]), unnest($14::int8[])
+				       unnest($10::timestamptz[]), unnest($11::timestamptz[])
 			)
 			UPDATE players p SET
 				hp = u.hp, soul_hp = u.soul_hp, current_mana = u.current_mana, max_mana = u.max_mana,
 				current_thought = u.current_thought, lifespan = u.lifespan, time_speed_multiplier = u.time_speed_multiplier,
 				aperture_stress = u.aperture_stress, last_cultivate_time = u.last_cultivate_time,
-				last_mana_update = u.last_mana_update, human_qi = u.human_qi,
-				primeval_stones = u.primeval_stones, immortal_stones = u.immortal_stones,
+				last_mana_update = u.last_mana_update,
 				version = version + 1
 			FROM updates u WHERE p.id = u.id::uuid
 		`, pq.Array(ids), pq.Array(hps), pq.Array(soulHps), pq.Array(currentManas), pq.Array(maxManas),
 			pq.Array(currentThoughts), pq.Array(lifespans), pq.Array(timeSpeedMultipliers),
-			pq.Array(apertureStresses), pq.Array(lastCultivateTimes), pq.Array(lastManaUpdates),
-			pq.Array(humanQis), pq.Array(primevalStones), pq.Array(immortalStones))
+			pq.Array(apertureStresses), pq.Array(lastCultivateTimes), pq.Array(lastManaUpdates))
 		if err != nil {
 			tx.Rollback()
 			logger.S.Warnf("Batch update stats chunk failed: %v", err)

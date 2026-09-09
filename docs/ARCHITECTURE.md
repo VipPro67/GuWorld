@@ -8,7 +8,7 @@ Browser / Next.js UI
   -> Backend API (`/api/...`) with cookie credentials
   -> Gin handlers
   -> PostgreSQL tables + CSV-seeded dictionaries
-  -> Optional Redis cache and background workers
+  -> Redis cache/pub-sub + background workers
 ```
 
 ## Backend startup
@@ -18,7 +18,7 @@ Browser / Next.js UI
 1. Load `.env` từ `.env`, `backend/.env nếu có.
 2. Kết nối PostgreSQL qua `db.Connect()`.
 3. Gọi `db.InitSchema()` để tạo/migrate bảng và seed dữ liệu.
-4. Kết nối Redis qua `cache.Connect()` nếu cấu hình sẵn; lỗi Redis chỉ warning.
+4. Kết nối Redis qua `cache.Connect()`; lỗi Redis sẽ ngăn server khởi động.
 5. Load Gu registry và Item registry từ database vào memory cache.
 6. Start worker đói Cổ, worker tai kiếp và worker quái mỏ.
 7. Khởi tạo Gin router và listen `PORT` hoặc `8080`.
@@ -34,7 +34,7 @@ Browser / Next.js UI
 | `backend/internal/handlers` | HTTP handlers và gameplay services. |
 | `backend/internal/middleware` | Auth và rate limiting. |
 | `backend/internal/auth` | JWT helpers. |
-| `backend/internal/cache` | Redis connector optional. |
+| `backend/internal/cache` | Redis connector + pub/sub (bắt buộc). |
 | `backend/internal/worker` | Background jobs. |
 | `backend/*.csv` | Seed data. |
 

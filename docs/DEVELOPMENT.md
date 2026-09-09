@@ -5,7 +5,7 @@
 - Go theo `backend/go.mod`.
 - Node.js/npm tương thích Next.js 16.
 - PostgreSQL cho backend.
-- Redis optional.
+- Redis (bắt buộc).
 
 ## Environment variables
 
@@ -20,7 +20,7 @@ Các biến thường dùng:
 | `CORS_ALLOWED_ORIGINS` | Danh sách origin frontend, mặc định `http://localhost:3000`. |
 | `JWT_SECRET` | Ký token/cookie auth. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Cấu hình SMTP (ví dụ: Brevo) để gửi mã OTP đăng ký. |
-| `REDIS_ADDR`/Redis config | Optional cache/worker support nếu được cấu hình. |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_SSL` | Redis connection config (bắt buộc). |
 | Google OAuth vars | Dùng cho `/auth/google/*` nếu bật Google login. |
 | PayOS vars | Dùng cho topup/webhook nếu bật payment thật. |
 | Cloudinary vars | Dùng cho upload avatar nếu bật upload cloud. |

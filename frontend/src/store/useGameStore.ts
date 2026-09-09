@@ -3,6 +3,7 @@ import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import type { RequiredGus } from "@/lib/gu-dict";
 import type { EffectDictionaryEntry } from "@/lib/effects";
 import { useUIStore } from "@/store/useUIStore";
+import { wsManager } from "@/lib/websocket";
 let fetchAperturePromise: Promise<void> | null = null;
 let fetchApertureNodesPromise: Promise<void> | null = null;
 let fetchVariantHumansPromise: Promise<void> | null = null;
@@ -1518,8 +1519,6 @@ type PlayerRealtimeEvent = {
   data: Partial<Player> & { id: string; aperture_stress_level?: string };
 };
 
-let unifiedEventsSource: EventSource | null = null;
-
 export function guSpecFor(guId?: string, rank?: number): GuSpec | undefined {
   if (!guId) return undefined;
   const state = useGameStore.getState();
@@ -1947,197 +1946,187 @@ export const useGameStore = create<GameState>((set, get) => {
   subscribeEvents: () => {
     if (typeof window === "undefined" || !get().token) return;
 
-    if (unifiedEventsSource) {
-      return;
-    }
+    const token = get().token!;
 
-    const source = new EventSource(`${BACKEND_URL}/api/events?token=${encodeURIComponent(get().token!)}`);
-    unifiedEventsSource = source;
+    // 1. Setup WebSocket connection
+    try {
+      wsManager.connect(token).then(() => {
+        set({ playerEventsConnected: true, playerEventsRetries: 0 });
+      }).catch((err) => {
+        console.warn("[WebSocket] Connection failed", err);
+      });
 
-    const mergePlayerEvent = (event: MessageEvent<string>) => {
-      try {
-        const payload: PlayerRealtimeEvent = JSON.parse(event.data);
-        if (!payload?.data?.id) return;
+      // Listen for player updates
+      wsManager.subscribe("player", (payload: any) => {
+        try {
+          const eventData = payload?.data || payload;
+          if (!eventData?.id) return;
 
-        const currentPlayer = get().player;
-        if (!currentPlayer || currentPlayer.id !== payload.data.id) return;
+          const currentPlayer = get().player;
+          if (!currentPlayer || currentPlayer.id !== eventData.id) return;
 
-        // Only merge scalar fields from SSE to avoid overwriting arrays with stale data
-        const { active_combat, ...rest } = payload.data;
-        set({
-          player: normalizePlayer({
+          if (payload?.type === "session.kicked") {
+            const state = get();
+            state.addToast("Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
+            state.logout();
+            return;
+          }
+
+          const { active_combat, ...rest } = eventData;
+          const updatedPlayer = normalizePlayer({
             ...currentPlayer,
             ...rest,
             ...(active_combat !== undefined ? { active_combat } : {}),
-          }),
-        });
+          });
+          set({
+            player: updatedPlayer,
+            manaSnapshot: updatedPlayer
+              ? createManaSnapshotFromPlayer(
+                  updatedPlayer,
+                  get().guDictionary,
+                  get().constitutionDictionary,
+                  get().aperture?.time_rate
+                )
+              : get().manaSnapshot,
+          });
 
-        if (event.type === "combat.started") {
-          get().addLog("Chiến đấu realtime đã bắt đầu.");
-        } else if (event.type === "combat.ended") {
-          get().addLog("Chiến đấu realtime đã kết thúc.");
+          if (payload?.type === "combat.started") {
+            get().addLog("Chiến đấu realtime đã bắt đầu.");
+          } else if (payload?.type === "combat.ended") {
+            get().addLog("Chiến đấu realtime đã kết thúc.");
+          }
+        } catch (err) {
+          console.error("Failed to process player websocket event", err);
         }
-      } catch (err) {
-        console.error("Failed to process player realtime event", err);
-      }
-    };
+      });
 
-    PLAYER_EVENT_TYPES.forEach((eventType) => {
-      source.addEventListener(eventType, mergePlayerEvent as EventListener);
-    });
-
-    source.addEventListener("trade.updated", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data);
-        set({ activeTrade: payload.trade ?? null });
-      } catch (err) {
-        console.error("Failed to process trade event", err);
-      }
-    });
-
-    source.addEventListener("world.player.pos", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data);
-        if (payload && payload.id) {
-          window.dispatchEvent(new CustomEvent("gu_world_pos", { detail: payload }));
+      // Listen for trade updates
+      wsManager.subscribe("trade", (payload: any) => {
+        try {
+          set({ activeTrade: payload?.trade ?? null });
+        } catch (err) {
+          console.error("Failed to process trade event", err);
         }
-      } catch (err) {
-        console.error("Failed to process world position event", err);
-      }
-    });
+      });
 
-    source.addEventListener("world.cell.cleared", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data);
-        window.dispatchEvent(new CustomEvent("gu_world_cell", { detail: { ...payload, type: "cleared" } }));
-      } catch (err) {
-        console.error("Failed to process world cell cleared event", err);
-      }
-    });
-
-    source.addEventListener("world.cell.respawn", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data);
-        window.dispatchEvent(new CustomEvent("gu_world_cell", { detail: { ...payload, type: "respawn" } }));
-      } catch (err) {
-        console.error("Failed to process world cell respawn event", err);
-      }
-    });
-
-    source.addEventListener("chat.messages.world", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data);
-        const messages = Array.isArray(payload.messages) ? payload.messages : [];
-        set((state) => {
-          const active = state.activeChannel || "world";
-          const open = state.chatOpen;
-          const isCurrent = active === "world" && open;
-          const newUnread = { ...state.unreadChannels };
-          if (!isCurrent) {
-            newUnread.world = true;
+      // Listen for world position
+      wsManager.subscribe("world:pos", (payload: any) => {
+        try {
+          if (payload && payload.id) {
+            window.dispatchEvent(new CustomEvent("gu_world_pos", { detail: payload }));
           }
-          return {
-            chatMessages: { ...state.chatMessages, world: messages },
-            unreadChannels: newUnread,
-            baoHoangMessages: active === "world" ? messages : state.baoHoangMessages,
-          };
-        });
-      } catch (err) {
-        console.error("Failed to process world chat event", err);
-      }
-    });
+        } catch (err) {
+          console.error("Failed to process world position event", err);
+        }
+      });
 
-    source.addEventListener("chat.messages.general", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data);
-        const messages = Array.isArray(payload.messages) ? payload.messages : [];
-        set((state) => {
-          const active = state.activeChannel || "world";
-          const open = state.chatOpen;
-          const isCurrent = active === "general" && open;
-          const newUnread = { ...state.unreadChannels };
-          if (!isCurrent) {
-            newUnread.general = true;
+      // Listen for world cell
+      wsManager.subscribe("world:cell", (payload: any) => {
+        try {
+          if (payload) {
+            window.dispatchEvent(new CustomEvent("gu_world_cell", { detail: payload }));
           }
-          return {
-            chatMessages: { ...state.chatMessages, general: messages },
-            unreadChannels: newUnread,
-            baoHoangMessages: active === "general" ? messages : state.baoHoangMessages,
-          };
-        });
-      } catch (err) {
-        console.error("Failed to process general chat event", err);
-      }
-    });
+        } catch (err) {
+          console.error("Failed to process world cell event", err);
+        }
+      });
 
-    source.addEventListener("chat.messages.sect", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data);
-        const messages = Array.isArray(payload.messages) ? payload.messages : [];
-        set((state) => {
-          const active = state.activeChannel || "world";
-          const open = state.chatOpen;
-          const isCurrent = active === "sect" && open;
-          const newUnread = { ...state.unreadChannels };
-          if (!isCurrent) {
-            newUnread.sect = true;
-          }
-          return {
-            chatMessages: { ...state.chatMessages, sect: messages },
-            unreadChannels: newUnread,
-            baoHoangMessages: active === "sect" ? messages : state.baoHoangMessages,
-          };
-        });
-      } catch (err) {
-        console.error("Failed to process sect chat event", err);
-      }
-    });
+      // Listen for chat:world
+      wsManager.subscribe("chat:world", (payload: any) => {
+        try {
+          const messages = Array.isArray(payload?.messages) ? payload.messages : (Array.isArray(payload) ? payload : []);
+          set((state) => {
+            const active = state.activeChannel || "world";
+            const open = state.chatOpen;
+            const isCurrent = active === "world" && open;
+            const newUnread = { ...state.unreadChannels };
+            if (!isCurrent) {
+              newUnread.world = true;
+            }
+            return {
+              chatMessages: { ...state.chatMessages, world: messages },
+              unreadChannels: newUnread,
+              baoHoangMessages: active === "world" ? messages : state.baoHoangMessages,
+            };
+          });
+        } catch (err) {
+          console.error("Failed to process world chat event", err);
+        }
+      });
 
-    source.addEventListener("notification.new", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data) as PlayerNotification;
-        if (!payload?.id) return;
-        set((state) => {
-          const exists = state.notifications.some((n) => n.id === payload.id);
-          if (exists) return {};
-          return {
-            notifications: [payload, ...state.notifications].slice(0, 50),
-            unreadNotifications: state.unreadNotifications + 1,
-          };
-        });
-      } catch (err) {
-        console.error("Failed to process notification event", err);
-      }
-    });
+      // Listen for chat:general
+      wsManager.subscribe("chat:general", (payload: any) => {
+        try {
+          const messages = Array.isArray(payload?.messages) ? payload.messages : (Array.isArray(payload) ? payload : []);
+          set((state) => {
+            const active = state.activeChannel || "world";
+            const open = state.chatOpen;
+            const isCurrent = active === "general" && open;
+            const newUnread = { ...state.unreadChannels };
+            if (!isCurrent) {
+              newUnread.general = true;
+            }
+            return {
+              chatMessages: { ...state.chatMessages, general: messages },
+              unreadChannels: newUnread,
+              baoHoangMessages: active === "general" ? messages : state.baoHoangMessages,
+            };
+          });
+        } catch (err) {
+          console.error("Failed to process general chat event", err);
+        }
+      });
 
-    source.addEventListener("session.kicked", () => {
-      const state = get();
-      state.addToast("Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
-      state.logout();
-    });
+      // Listen for chat:sect
+      wsManager.subscribe("chat:sect", (payload: any) => {
+        try {
+          const messages = Array.isArray(payload?.messages) ? payload.messages : (Array.isArray(payload) ? payload : []);
+          set((state) => {
+            const active = state.activeChannel || "world";
+            const open = state.chatOpen;
+            const isCurrent = active === "sect" && open;
+            const newUnread = { ...state.unreadChannels };
+            if (!isCurrent) {
+              newUnread.sect = true;
+            }
+            return {
+              chatMessages: { ...state.chatMessages, sect: messages },
+              unreadChannels: newUnread,
+              baoHoangMessages: active === "sect" ? messages : state.baoHoangMessages,
+            };
+          });
+        } catch (err) {
+          console.error("Failed to process sect chat event", err);
+        }
+      });
 
-    source.onopen = () => {
-      set({ playerEventsConnected: true, playerEventsRetries: 0 });
-    };
+      // Listen for notification
+      wsManager.subscribe("notification", (payload: any) => {
+        try {
+          if (!payload?.id) return;
+          set((state) => {
+            const exists = state.notifications.some((n) => n.id === payload.id);
+            if (exists) return {};
+            return {
+              notifications: [payload, ...state.notifications].slice(0, 50),
+              unreadNotifications: state.unreadNotifications + 1,
+            };
+          });
+        } catch (err) {
+          console.error("Failed to process notification event", err);
+        }
+      });
 
-    source.onerror = () => {
-      set({ playerEventsConnected: false });
-      source.close();
-      unifiedEventsSource = null;
-      // Auto-reconnect with exponential backoff
-      const retries = get().playerEventsRetries || 0;
-      const delay = Math.min(1000 * Math.pow(2, retries), 30000);
-      set({ playerEventsRetries: retries + 1 });
-      setTimeout(() => {
-        if (get().token) get().subscribeEvents();
-      }, delay);
-    };
+    } catch (wsErr) {
+      console.warn("[WebSocket] Exception starting WS:", wsErr);
+    }
   },
 
   unsubscribeEvents: () => {
-    if (unifiedEventsSource) {
-      unifiedEventsSource.close();
-      unifiedEventsSource = null;
+    try {
+      wsManager.disconnect();
+    } catch {
+      // ignore
     }
     set({ playerEventsConnected: false });
   },

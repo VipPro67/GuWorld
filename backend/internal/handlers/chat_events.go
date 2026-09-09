@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
-	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -14,74 +15,6 @@ import (
 
 type chatEventPayload struct {
 	Messages []ChatItem `json:"messages"`
-}
-
-var chatEventHub = struct {
-	sync.Mutex
-	subs map[string]map[chan chatEventPayload]struct{}
-}{subs: map[string]map[chan chatEventPayload]struct{}{}}
-
-func SubscribeBaoHoangMessages(c *gin.Context) {
-	channel := c.DefaultQuery("channel", "world")
-	key, ok := resolveChatChannelKey(c, channel)
-	if !ok {
-		return
-	}
-
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming unsupported"})
-		return
-	}
-
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache, no-transform")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("X-Accel-Buffering", "no")
-	c.Writer.Header().Set("Content-Encoding", "identity")
-
-	ch := subscribeChat(key)
-	defer unsubscribeChat(key, ch)
-
-	if err := writeChatEvent(c, channel, key); err != nil {
-		_ = writeSSE(c, "error", gin.H{"error": err.Error()})
-		flusher.Flush()
-		return
-	}
-	flusher.Flush()
-
-	for {
-		select {
-		case <-c.Request.Context().Done():
-			return
-		case payload := <-ch:
-			if err := writeSSE(c, "chat.messages", payload); err != nil {
-				return
-			}
-			flusher.Flush()
-		}
-	}
-}
-
-func subscribeChat(key string) chan chatEventPayload {
-	ch := make(chan chatEventPayload, 1)
-	chatEventHub.Lock()
-	defer chatEventHub.Unlock()
-	if chatEventHub.subs[key] == nil {
-		chatEventHub.subs[key] = map[chan chatEventPayload]struct{}{}
-	}
-	chatEventHub.subs[key][ch] = struct{}{}
-	return ch
-}
-
-func unsubscribeChat(key string, ch chan chatEventPayload) {
-	chatEventHub.Lock()
-	defer chatEventHub.Unlock()
-	delete(chatEventHub.subs[key], ch)
-	if len(chatEventHub.subs[key]) == 0 {
-		delete(chatEventHub.subs, key)
-	}
-	close(ch)
 }
 
 func notifyBaoHoangMessages(channel string, sectID sql.NullString) {
@@ -92,31 +25,14 @@ func notifyBaoHoangMessages(channel string, sectID sql.NullString) {
 	}
 
 	payload := chatEventPayload{Messages: messages}
-	chatEventHub.Lock()
-	defer chatEventHub.Unlock()
-	for ch := range chatEventHub.subs[key] {
-		select {
-		case ch <- payload:
-		default:
-			select {
-			case <-ch:
-			default:
-			}
-			ch <- payload
-		}
-	}
+	_ = cache.PublishEvent(context.Background(), "chat:"+key, payload)
 }
 
-func writeChatEvent(c *gin.Context, channel, key string) error {
-	sectID := sql.NullString{}
-	if channel == "sect" {
-		sectID = sql.NullString{String: key[len("sect:"):], Valid: true}
+func chatChannelKey(channel string, sectID sql.NullString) string {
+	if channel == "sect" && sectID.Valid {
+		return fmt.Sprintf("sect:%s", sectID.String)
 	}
-	messages, err := loadBaoHoangMessages(channel, sectID)
-	if err != nil {
-		return err
-	}
-	return writeSSE(c, "chat.messages", chatEventPayload{Messages: messages})
+	return channel
 }
 
 func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
@@ -143,11 +59,11 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 		}
 		defer tx.Rollback()
 		var hasConnectingHeaven, hasDivineSense bool
-			player, err := evaluateManaTx(tx, playerID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
-				return "", false
-			}
+		player, err := evaluateManaTx(tx, playerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+			return "", false
+		}
 
 		for _, gu := range player.GuInventory {
 			if gu.GuID == "GU_CONNECTING_HEAVEN" {
@@ -176,13 +92,6 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 	}
 
 	return chatChannelKey(channel, sql.NullString{String: sectID, Valid: true}), true
-}
-
-func chatChannelKey(channel string, sectID sql.NullString) string {
-	if channel == "sect" && sectID.Valid {
-		return fmt.Sprintf("sect:%s", sectID.String)
-	}
-	return channel
 }
 
 func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, error) {
