@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // BreakWallRequest - mortals choose amount of mana and stones to attempt breaking their aperture wall
@@ -339,6 +340,21 @@ func UseRelicGu(c *gin.Context) {
 
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "item.use_relic",
+		EntityType:     "item",
+		EntityID:       req.RelicKey,
+		RequestSummary: fmt.Sprintf("Sử dụng 1x Relic Cổ (%s) để đột phá: Chuyển %d - Giai đoạn %d", req.RelicKey, player.Rank, player.SubRank),
+		Metadata: map[string]interface{}{
+			"relic_key": req.RelicKey,
+			"new_rank":  player.Rank,
+			"new_sub":   player.SubRank,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Relic Gu consumed. Instant advancement!"})
 }

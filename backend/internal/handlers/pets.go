@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type FeedPetRequest struct {
@@ -135,6 +136,24 @@ func FeedPet(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "pet.feed",
+		EntityType:     "player_pet",
+		EntityID:       petID,
+		RequestSummary: fmt.Sprintf("Cho linh thú %s ăn: 1x %s | Độ no: %.0f/%.0f", nickname, item.Name, newHunger, maxHunger),
+		Metadata: map[string]interface{}{
+			"pet_id":     petID,
+			"pet_name":   nickname,
+			"item_id":    req.ItemID,
+			"item_name":  item.Name,
+			"new_hunger": newHunger,
+			"max_hunger": maxHunger,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"pet_id":     petID,

@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -797,8 +798,37 @@ func PlaceApertureNode(c *gin.Context) {
 	node.CreatedAt = createdAt
 	node.UpdatedAt = createdAt
 
-	buildMsg := fmt.Sprintf("Xây dựng thành công %s!", template.Name)
+	var costParts []string
+	if hasItem {
+		costParts = append(costParts, fmt.Sprintf("1x %s", nodeItemID))
+	} else {
+		costParts = append(costParts, fmt.Sprintf("%d Tiên Nguyên Thạch", template.CostStones))
+	}
+	if len(template.CostGu) > 0 {
+		costParts = append(costParts, fmt.Sprintf("Cổ trùng: %s", strings.Join(template.CostGu, ", ")))
+	}
+	costDesc := strings.Join(costParts, ", ")
+
+	buildMsg := fmt.Sprintf("Xây dựng thành công %s! Tiêu hao: %s.", template.Name, costDesc)
 	notify.Send(db.DB, playerID, "aperture_build", "Xây Dựng Tiên Khiếu", buildMsg)
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "aperture.build_node",
+		EntityType:     "immortal_aperture_node",
+		EntityID:       node.ID,
+		RequestSummary: fmt.Sprintf("Xây dựng kiến trúc Tiên Khiếu: %s | Tiêu hao: %s", template.Name, costDesc),
+		Metadata: map[string]interface{}{
+			"node_id":   node.ID,
+			"node_type": req.NodeType,
+			"node_name": template.Name,
+			"has_item":  hasItem,
+			"cost_desc": costDesc,
+			"cost_gus":  template.CostGu,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"node":    node,

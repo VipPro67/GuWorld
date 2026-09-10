@@ -15,7 +15,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -799,6 +801,31 @@ func SellShopItem(c *gin.Context) {
 	} else {
 		_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&itemName)
 	}
+
+	action := "shop.sell_item"
+	entityType := "item"
+	if req.ItemType == "Gu" {
+		action = "shop.sell_gu"
+		entityType = "gu_instance"
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         action,
+		EntityType:     entityType,
+		EntityID:       req.ItemID,
+		RequestSummary: fmt.Sprintf("Bán %dx %s (%s) cho Tiệm Buôn | Nhận %d %s", req.Quantity, itemName, req.ItemID, totalGain, sellCurrencyName),
+		Metadata: map[string]interface{}{
+			"item_id":       req.ItemID,
+			"item_name":     itemName,
+			"item_type":     req.ItemType,
+			"quantity":      req.Quantity,
+			"total_gain":    totalGain,
+			"currency_type": sellCurrencyName,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận %s! Nhân Khí +%.0f.", sellCurrencyName, qiGained)})
 }
@@ -1076,6 +1103,24 @@ func SellShopItemsBulk(c *gin.Context) {
 			gainSummary = fmt.Sprintf("+%d Tiên Nguyên Thạch", totalGainImmortal)
 		}
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "shop.sell_bulk",
+		EntityType:     "shop",
+		RequestSummary: fmt.Sprintf("Bán sỉ %d loại cho Tiệm Buôn: %s | Tổng nhận: %s", len(req.Items), summaryStr, gainSummary),
+		Metadata: map[string]interface{}{
+			"item_count":          len(req.Items),
+			"total_gain_primeval": totalGainPrimeval,
+			"total_gain_immortal": totalGainImmortal,
+			"summaries":           auditSummaries,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
+	notify.Send(db.DB, authID, "shop_sell", "Bán Hàng Tiệm Buôn",
+		fmt.Sprintf("Đã bán sỉ %d loại vật phẩm/Cổ trùng, thu về %s.", len(req.Items), gainSummary))
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận %s! Nhân Khí +%.0f.", len(req.Items), gainSummary, qiGained)})

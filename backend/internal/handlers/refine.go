@@ -1100,6 +1100,22 @@ func DeduceRecipe(c *gin.Context) {
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "recipe.deduce",
+		EntityType:     "refining_recipe",
+		EntityID:       req.RecipeID,
+		RequestSummary: fmt.Sprintf("Thôi diễn bí phương %s: %s (Hoàn thiện: %.1f%%)", req.RecipeID, message, newRate),
+		Metadata: map[string]interface{}{
+			"recipe_id":       req.RecipeID,
+			"improvement":     improvement,
+			"completion_rate": newRate,
+			"inspiration":     inspirationFlash,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message":         message + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		"inspiration":     inspirationFlash,

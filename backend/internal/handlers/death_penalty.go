@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
@@ -174,6 +175,19 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 		notify.Send(db.DB, *winnerID, "loot_gained", "Nhặt được chiến lợi phẩm",
 			fmt.Sprintf("Bạn đã thu được chiến lợi phẩm từ %s: %s.", loserName, summary))
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &loserID,
+		Action:         "combat.death_penalty",
+		EntityType:     "player",
+		EntityID:       loserID.String(),
+		RequestSummary: fmt.Sprintf("Tử đạo đánh rơi tài sản: %s", summary),
+		Metadata: map[string]interface{}{
+			"lost_items": lost,
+			"winner_id":  winnerID,
+		},
+		Success: true,
+	})
 
 	return summary
 }

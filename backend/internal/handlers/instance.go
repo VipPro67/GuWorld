@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 const MaxDailyInstanceEntries = 5
@@ -485,6 +486,23 @@ func EnterInstance(c *gin.Context) {
 		return
 	}
 
+	if template.EntryItem != "NONE" {
+		auditlog.Log(db.DB, auditlog.Entry{
+			PlayerID:       &playerID,
+			Action:         "instance.enter",
+			EntityType:     "instance_template",
+			EntityID:       template.ID,
+			RequestSummary: fmt.Sprintf("Tiến vào bí cảnh %s | Tiêu hao vé vào: 1x %s", template.Name, template.EntryItem),
+			Metadata: map[string]interface{}{
+				"instance_id":   template.ID,
+				"instance_name": template.Name,
+				"entry_item":    template.EntryItem,
+			},
+			IPAddress: c.ClientIP(),
+			Success:   true,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "Tiến vào phó bản \"" + template.Name + "\" thành công! Nhân Khí +2.",
 		"session":         session,
@@ -749,6 +767,24 @@ func ActionInstance(c *gin.Context) {
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transition: " + err.Error()})
 			return
+		}
+
+		if len(option.Requirements) > 0 {
+			reqBytes, _ := json.Marshal(option.Requirements)
+			auditlog.Log(db.DB, auditlog.Entry{
+				PlayerID:       &playerID,
+				Action:         "instance.choose_option",
+				EntityType:     "instance_session",
+				EntityID:       session.ID.String(),
+				RequestSummary: fmt.Sprintf("Kỳ ngộ bí cảnh %s: %s | Tiêu hao: %s", template.Name, option.Text, string(reqBytes)),
+				Metadata: map[string]interface{}{
+					"instance_id":  template.ID,
+					"option_text":  option.Text,
+					"requirements": option.Requirements,
+				},
+				IPAddress: c.ClientIP(),
+				Success:   true,
+			})
 		}
 
 		// Reload session for response

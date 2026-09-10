@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Search,
   BookOpen,
   Maximize2,
   Minimize2,
@@ -45,7 +44,7 @@ export const AuditLogsView: React.FC = () => {
   const offset = (page - 1) * limit;
 
   const loadLogs = () => {
-    const filters: any = {
+    const filters: Record<string, unknown> = {
       limit,
       offset,
     };
@@ -69,6 +68,7 @@ export const AuditLogsView: React.FC = () => {
     switch (action) {
       case "gu.feed":
       case "gu.feed_group":
+      case "gu.feed_all":
         return (
           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 font-mono">
             🌱 NUÔI DƯỠNG
@@ -91,6 +91,76 @@ export const AuditLogsView: React.FC = () => {
         return (
           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-950/80 border border-rose-500/30 text-rose-400 font-mono">
             💀 TỊCH DIỆT
+          </span>
+        );
+      case "gu.drop":
+      case "gu.drop_batch":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 border border-zinc-600/40 text-zinc-300 font-mono">
+            🗑️ VỨT BỎ
+          </span>
+        );
+      case "gu.use_consumable":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950/80 border border-cyan-500/30 text-cyan-400 font-mono">
+            💊 DÙNG CỔ
+          </span>
+        );
+      case "gu.seal":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-sky-950/80 border border-sky-500/30 text-sky-400 font-mono">
+            🧊 PHONG ẤN
+          </span>
+        );
+      case "item.use":
+      case "item.use_batch":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-teal-950/80 border border-teal-500/30 text-teal-400 font-mono">
+            🧪 DÙNG ĐỒ
+          </span>
+        );
+      case "item.use_relic":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-yellow-950/80 border border-yellow-500/30 text-yellow-400 font-mono">
+            🔮 RELIC
+          </span>
+        );
+      case "shop.sell_item":
+      case "shop.sell_gu":
+      case "shop.sell_bulk":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950/80 border border-amber-600/30 text-amber-300 font-mono">
+            🪙 BÁN ĐỒ
+          </span>
+        );
+      case "sect.mission_complete":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-950/80 border border-blue-500/30 text-blue-400 font-mono">
+            📜 TÔNG MÔN
+          </span>
+        );
+      case "aperture.build_node":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-950/80 border border-indigo-500/30 text-indigo-400 font-mono">
+            🏯 TIÊN KHIẾU
+          </span>
+        );
+      case "combat.death_penalty":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-950/80 border border-red-500/30 text-red-400 font-mono">
+            ⚔️ TỬ ĐẠO
+          </span>
+        );
+      case "recipe.deduce":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-fuchsia-950/80 border border-fuchsia-500/30 text-fuchsia-400 font-mono">
+            📖 THÔI DIỄN
+          </span>
+        );
+      case "pet.feed":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-lime-950/80 border border-lime-500/30 text-lime-400 font-mono">
+            🐾 LINH THÚ
           </span>
         );
       default:
@@ -125,7 +195,7 @@ export const AuditLogsView: React.FC = () => {
             Ký Sự Tu Hành
           </h2>
           <p className="text-xs text-slate-400 mt-1 font-mono">
-            Nhật ký ghi chép nhân quả tu luyện, hợp luyện và nuôi dưỡng linh trùng.
+            Nhật ký ghi chép nhân quả tu luyện, hợp luyện, giao dịch và nuôi dưỡng linh trùng.
           </p>
         </div>
         <button
@@ -156,10 +226,29 @@ export const AuditLogsView: React.FC = () => {
             <option value="">-- Tất cả hành động --</option>
             <option value="gu.feed">🌱 Cho ăn Cổ trùng</option>
             <option value="gu.feed_group">🌱 Cho ăn hàng loạt</option>
+            <option value="gu.feed_all">🌱 Cho ăn toàn bộ</option>
             <option value="refine.gu">🔥 Hợp luyện Cổ</option>
             <option value="gu.set_vital">✨ Khóa Bản Mệnh Cổ</option>
             <option value="gu.starve_death">💀 Cổ trùng chết đói</option>
             <option value="gu.starve_vital_death">💀 Bản mệnh Cổ chết đói</option>
+            <option value="gu.drop">🗑️ Vứt bỏ Cổ trùng</option>
+            <option value="gu.drop_batch">🗑️ Vứt bỏ Cổ hàng loạt</option>
+            <option value="gu.use_consumable">💊 Dùng Cổ tiêu hao</option>
+            <option value="gu.seal">🧊 Phong ấn Cổ</option>
+            <option value="item.use">🧪 Sử dụng vật phẩm</option>
+            <option value="item.use_batch">🧪 Sử dụng hàng loạt</option>
+            <option value="item.use_relic">🔮 Dùng Relic Cổ đột phá</option>
+            <option value="shop.sell_item">🪙 Bán vật phẩm</option>
+            <option value="shop.sell_gu">🪙 Bán Cổ trùng</option>
+            <option value="shop.sell_bulk">🪙 Bán sỉ cho Tiệm Buôn</option>
+            <option value="sect.mission_complete">📜 Nộp nhiệm vụ Tông môn</option>
+            <option value="aperture.build_node">🏯 Xây dựng Tiên Khiếu</option>
+            <option value="combat.death_penalty">⚔️ Tử đạo rơi tài sản</option>
+            <option value="recipe.deduce">📖 Thôi diễn bí phương</option>
+            <option value="pet.feed">🐾 Cho linh thú ăn</option>
+            <option value="trade.confirm">🤝 Giao dịch người chơi</option>
+            <option value="marketplace.create_listing">🏷️ Treo bán Bảo Hoàng Thiên</option>
+            <option value="marketplace.buy_listing">🏷️ Mua đồ Bảo Hoàng Thiên</option>
           </select>
         </div>
 

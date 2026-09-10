@@ -2272,6 +2272,24 @@ func CompleteSectMission(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "sect.mission_complete",
+		EntityType:     "sect_mission",
+		EntityID:       missionID.String(),
+		RequestSummary: fmt.Sprintf("Hoàn thành nhiệm vụ tông môn: %s (%s) | Nộp: %d %s | Nhận %d Cống hiến", sm.Title, sm.MissionType, sm.TargetAmount, sm.TargetID, sm.RewardContribution),
+		Metadata: map[string]interface{}{
+			"mission_id":    missionID.String(),
+			"mission_title": sm.Title,
+			"mission_type":  sm.MissionType,
+			"target_id":     sm.TargetID,
+			"target_amount": sm.TargetAmount,
+			"reward_points": sm.RewardContribution,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + strconv.FormatInt(sm.RewardContribution, 10) + " Điểm cống hiến.",
 		"contribution_points": m.ContributionPoints,

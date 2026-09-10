@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -303,6 +305,71 @@ func processPlayerHungerDecay(db *sql.DB, playerID string) error {
 	return fmt.Errorf("hunger decay failed for player %s after 3 attempts: %w", playerID, lastErr)
 }
 
+// StarvedGuInfo holds information about a Gu that died of starvation.
+type StarvedGuInfo struct {
+	ID, GuID, State, GuName string
+	IsVital, Equipped       bool
+}
+
+// FormatStarvedGuNotification formats a grouped notification for normal Gus that starved to death.
+func FormatStarvedGuNotification(normalDead []StarvedGuInfo) (title string, content string) {
+	if len(normalDead) == 0 {
+		return "", ""
+	}
+	title = "Cổ trùng chết đói"
+	if len(normalDead) == 1 {
+		content = fmt.Sprintf("%s đã chết vì đói!", normalDead[0].GuName)
+		return
+	}
+
+	nameCounts := make(map[string]int)
+	var uniqueNames []string
+	for _, s := range normalDead {
+		if nameCounts[s.GuName] == 0 {
+			uniqueNames = append(uniqueNames, s.GuName)
+		}
+		nameCounts[s.GuName]++
+	}
+
+	var parts []string
+	for _, name := range uniqueNames {
+		if cnt := nameCounts[name]; cnt > 1 {
+			parts = append(parts, fmt.Sprintf("%s x%d", name, cnt))
+		} else {
+			parts = append(parts, name)
+		}
+	}
+
+	var detail string
+	if len(parts) <= 5 {
+		detail = strings.Join(parts, ", ")
+	} else {
+		detail = fmt.Sprintf("%s và %d loại khác", strings.Join(parts[:5], ", "), len(parts)-5)
+	}
+	content = fmt.Sprintf("%d cổ trùng đã chết vì đói: %s.", len(normalDead), detail)
+	return
+}
+
+// FormatVitalGuNotification formats a grouped notification for vital Gus that starved to death.
+func FormatVitalGuNotification(vitalDead []StarvedGuInfo) (title string, content string) {
+	if len(vitalDead) == 0 {
+		return "", ""
+	}
+	title = "Bản mệnh cổ chết đói"
+	if len(vitalDead) == 1 {
+		content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", vitalDead[0].GuName)
+		return
+	}
+
+	var vNames []string
+	for _, s := range vitalDead {
+		vNames = append(vNames, s.GuName)
+	}
+	backlash := 80.0 * float64(len(vitalDead))
+	content = fmt.Sprintf("%d bản mệnh cổ đã chết vì đói: %s! Bạn nhận %.0f sát thương phản phệ.", len(vitalDead), strings.Join(vNames, ", "), backlash)
+	return
+}
+
 // processPlayerHungerDecayOnce decays hunger for one player's Gus, transitions
 // starved Gus to DEAD, applies the vital HP backlash, writes audit logs, rebuilds
 // equipped_gus and deletes the dead instances. All steps share one transaction so
@@ -351,28 +418,24 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	type starvedGu struct {
-		id, guID, state, guName string
-		isVital, equipped       bool
-	}
-	var dead []starvedGu
+	var dead []StarvedGuInfo
 	var deadIDs []string
 	vitalDeaths := 0
 	equippedDeath := false
 
 	for rows.Next() {
-		var s starvedGu
-		if err := rows.Scan(&s.id, &s.guID, &s.state, &s.isVital, &s.equipped, &s.guName); err != nil {
+		var s StarvedGuInfo
+		if err := rows.Scan(&s.ID, &s.GuID, &s.State, &s.IsVital, &s.Equipped, &s.GuName); err != nil {
 			rows.Close()
 			return err
 		}
-		if s.state == "DEAD" {
+		if s.State == "DEAD" {
 			dead = append(dead, s)
-			deadIDs = append(deadIDs, s.id)
-			if s.isVital {
+			deadIDs = append(deadIDs, s.ID)
+			if s.IsVital {
 				vitalDeaths++
 			}
-			if s.equipped {
+			if s.Equipped {
 				equippedDeath = true
 			}
 		}
@@ -429,19 +492,51 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	// Send notifications after successful commit (best-effort).
+	// Send notifications and audit logs after successful commit (best-effort).
 	if parsedPID, err := uuid.Parse(playerID); err == nil {
+		var normalDead []StarvedGuInfo
+		var vitalDead []StarvedGuInfo
+
 		for _, s := range dead {
-			ntype := "gu_death"
-			title := "Cổ trùng chết đói"
-			content := fmt.Sprintf("%s đã chết vì đói!", s.guName)
-			if s.isVital {
-				ntype = "vital_gu_death"
-				title = "Bản mệnh cổ chết đói"
-				content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.guName)
+			if s.IsVital {
+				vitalDead = append(vitalDead, s)
+			} else {
+				normalDead = append(normalDead, s)
 			}
-			notify.Send(db, parsedPID, ntype, title, content)
+
+			// Individual audit log per starved Gu instance for trace integrity
+			action := "gu.starve_death"
+			content := fmt.Sprintf("%s đã chết vì đói!", s.GuName)
+			if s.IsVital {
+				action = "gu.starve_vital_death"
+				content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.GuName)
+			}
+			auditlog.Log(db, auditlog.Entry{
+				PlayerID:       &parsedPID,
+				Action:         action,
+				EntityType:     "gu_instance",
+				EntityID:       s.ID,
+				RequestSummary: content,
+				Metadata: map[string]interface{}{
+					"gu_instance_id": s.ID,
+					"gu_id":          s.GuID,
+					"gu_name":        s.GuName,
+					"is_vital":       s.IsVital,
+				},
+				Success: true,
+			})
 		}
+
+		// Grouped notification for normal starved Gus
+		if title, content := FormatStarvedGuNotification(normalDead); title != "" {
+			notify.Send(db, parsedPID, "gu_death", title, content)
+		}
+
+		// Grouped notification for vital starved Gus
+		if title, content := FormatVitalGuNotification(vitalDead); title != "" {
+			notify.Send(db, parsedPID, "vital_gu_death", title, content)
+		}
+
 		if len(dead) > 0 && PlayerEventPublisher != nil {
 			PlayerEventPublisher(parsedPID, "player.updated")
 		}
