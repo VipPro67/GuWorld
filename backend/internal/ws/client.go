@@ -3,6 +3,8 @@ package ws
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,14 +20,37 @@ const (
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 1048576 // 1 MB
+	maxConnectionsPerPlayer = 3
 )
+
+// GetAllowedOrigins returns the list of allowed WebSocket origins from env var
+func GetAllowedOrigins() []string {
+	origins := os.Getenv("WS_ALLOWED_ORIGINS")
+	if origins == "" {
+		// Default to localhost development
+		return []string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://127.0.0.1:3000",
+		}
+	}
+	return strings.Split(origins, ",")
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// Rely on CORS middleware or implement tighter logic here
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // Allow same-origin requests
+		}
+		for _, allowed := range GetAllowedOrigins() {
+			if strings.TrimSpace(allowed) == origin {
+				return true
+			}
+		}
+		return false
 	},
 }
 
@@ -35,6 +60,8 @@ type Client struct {
 	conn     *websocket.Conn
 	send     chan []byte
 	hub      *Hub
+	shard    *ShardedHub
+	clientIP string
 
 	mu            sync.Mutex
 	subscriptions map[string]struct{}
@@ -44,7 +71,20 @@ type Client struct {
 }
 
 // ServeWs handles websocket requests from the peer.
-func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, playerID uuid.UUID) {
+func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID uuid.UUID) {
+	// Extract client IP
+	clientIP := r.Header.Get("X-Forwarded-For")
+	if clientIP != "" {
+		parts := strings.Split(clientIP, ",")
+		clientIP = strings.TrimSpace(parts[0])
+	} else {
+		clientIP = r.RemoteAddr
+		// Strip port from IP
+		if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
+			clientIP = clientIP[:idx]
+		}
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.S.Errorf("Failed to upgrade websocket: %v", err)
@@ -54,29 +94,31 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, playerID uuid.UUI
 	client := &Client{
 		playerID:      playerID,
 		conn:          conn,
-		send:          make(chan []byte, 256),
-		hub:           hub,
+		send:          make(chan []byte, 1024),
+		hub:           shub.GetClientShard(playerID),
 		subscriptions: make(map[string]struct{}),
+		clientIP:      clientIP,
+		shard:         shub,
 	}
 
 	client.hub.register <- client
 	handlers.TouchPlayerActivity(client.playerID)
 
 	// Auto-subscribe to player-specific and global channels
-	hub.Subscribe(client, ChannelName("player:"+playerID.String()))
-	hub.Subscribe(client, ChannelName("trade:"+playerID.String()))
-	hub.Subscribe(client, ChannelName("notif:"+playerID.String()))
-	hub.Subscribe(client, ChannelName("combat:"+playerID.String()))
-	hub.Subscribe(client, ChannelName("world:pos"))
-	hub.Subscribe(client, ChannelName("world:cell"))
-	hub.Subscribe(client, ChannelName("chat:world"))
+	shub.Subscribe(client, ChannelName("player:"+playerID.String()))
+	shub.Subscribe(client, ChannelName("trade:"+playerID.String()))
+	shub.Subscribe(client, ChannelName("notif:"+playerID.String()))
+	shub.Subscribe(client, ChannelName("combat:"+playerID.String()))
+	shub.Subscribe(client, ChannelName("world:pos"))
+	shub.Subscribe(client, ChannelName("world:cell"))
+	shub.Subscribe(client, ChannelName("chat:world"))
 
 	// Check Sect membership
 	var sectID string
 	err = db.DB.QueryRow("SELECT sect_id FROM sect_members WHERE player_id = $1", playerID).Scan(&sectID)
 	if err == nil && sectID != "" {
-		hub.Subscribe(client, ChannelName("chat:sect:"+sectID))
-		hub.Subscribe(client, ChannelName("chat:sect"))
+		shub.Subscribe(client, ChannelName("chat:sect:"+sectID))
+		shub.Subscribe(client, ChannelName("chat:sect"))
 	}
 
 	go client.writePump()
@@ -123,7 +165,8 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, playerID uuid.UUI
 // readPump pumps messages from the websocket connection to the hub.
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.unregister <- c
+		c.shard.Unregister(c)
+		ReleaseConnection(c.playerID, c.clientIP)
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -173,39 +216,60 @@ func (c *Client) handleMessage(msg WSMessage) {
 
 // writePump pumps messages from the hub to the websocket connection.
 func (c *Client) writePump() {
+	const (
+		maxBatchSize  = 64
+		batchTimeout  = 2 * time.Millisecond
+	)
 	ticker := time.NewTicker(pingPeriod)
+	batchTicker := time.NewTicker(batchTimeout)
 	defer func() {
 		ticker.Stop()
-		c.hub.unregister <- c
+		batchTicker.Stop()
+		c.shard.Unregister(c)
 	}()
+
+	batch := make([][]byte, 0, maxBatchSize)
+
+	flushBatch := func() {
+		if len(batch) == 0 {
+			return
+		}
+		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		w, err := c.conn.NextWriter(websocket.TextMessage)
+		if err != nil {
+			batch = batch[:0]
+			return
+		}
+		for i, msg := range batch {
+			if i > 0 {
+				w.Write([]byte{'\n'})
+			}
+			w.Write(msg)
+		}
+		if err := w.Close(); err != nil {
+			batch = batch[:0]
+			return
+		}
+		batch = batch[:0]
+	}
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
+				c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-
-			w, err := c.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
+			batch = append(batch, message)
+			if len(batch) >= maxBatchSize {
+				flushBatch()
 			}
-			w.Write(message)
-
-			// Add queued messages to the current websocket message.
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
-			}
-
-			if err := w.Close(); err != nil {
-				return
-			}
+		case <-batchTicker.C:
+			flushBatch()
 		case <-ticker.C:
+			flushBatch()
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return

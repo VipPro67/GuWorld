@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 
@@ -21,6 +20,8 @@ const (
 	ManaEventSnapshot    = "mana.snapshot"
 	PlayerEventHeartbeat = "player.heartbeat"
 	SessionEventKicked   = "session.kicked"
+	PositionEventUpdated = "player.position"
+	CombatStateEvent     = "player.combat_state"
 )
 
 type PlayerRealtimeSnapshot struct {
@@ -51,6 +52,24 @@ type PlayerRealtimeEvent struct {
 	Data PlayerRealtimeSnapshot `json:"data"`
 }
 
+// PlayerDeltaEvent sends only changed fields for efficient bandwidth usage.
+type PlayerDeltaEvent struct {
+	Type string         `json:"type"`
+	Data PlayerDeltaData `json:"data"`
+}
+
+// PlayerDeltaData contains only the fields that changed.
+type PlayerDeltaData struct {
+	X         int               `json:"x,omitempty"`
+	Y         int               `json:"y,omitempty"`
+	HP        *float64          `json:"hp,omitempty"`
+	MaxHP     *float64          `json:"max_hp,omitempty"`
+	CurrentMana *float64        `json:"current_mana,omitempty"`
+	MaxMana   *float64          `json:"max_mana,omitempty"`
+	ActiveCombat *models.CombatState `json:"active_combat,omitempty"`
+	ApertureStress *float64      `json:"aperture_stress,omitempty"`
+}
+
 // ClearPendingPlayerQueues removes a player's ID from async batch queues so uncommitted stale snapshots don't overwrite immediate DB commits.
 func ClearPendingPlayerQueues(playerID string) {
 	if playerID == "" {
@@ -59,6 +78,7 @@ func ClearPendingPlayerQueues(playerID string) {
 	_ = cache.RemovePendingIDs("player_stats", playerID)
 	_ = cache.RemovePendingIDs("player_movement", playerID)
 	_ = cache.Delete("player_snapshot:" + playerID)
+	_ = cache.Delete("player_movement:" + playerID)
 }
 
 // PublishPlayerSnapshot publishes a pre-loaded player snapshot to Redis Pub/Sub for instant WebSocket broadcast without hitting PostgreSQL.
@@ -68,7 +88,7 @@ func PublishPlayerSnapshot(player *models.Player, eventType string) {
 	}
 	snapshot := playerRealtimeSnapshot(*player)
 	_ = cache.SetJSON("player_snapshot:"+player.ID.String(), snapshot, 5*time.Minute)
-	_ = cache.PublishEvent(context.Background(), "player:"+player.ID.String(), PlayerRealtimeEvent{
+	_ = cache.PublishEventQuick("player:"+player.ID.String(), PlayerRealtimeEvent{
 		Type: eventType,
 		Data: snapshot,
 	})
@@ -81,10 +101,64 @@ func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string) {
 		return
 	}
 	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
-	_ = cache.PublishEvent(context.Background(), "player:"+playerID.String(), PlayerRealtimeEvent{
+	_ = cache.PublishEventQuick("player:"+playerID.String(), PlayerRealtimeEvent{
 		Type: eventType,
 		Data: snapshot,
 	})
+}
+
+// PublishPlayerPositionDelta publishes only position changes (minimal payload).
+func PublishPlayerPositionDelta(playerID uuid.UUID, x, y int) {
+	delta := PlayerDeltaEvent{
+		Type: PositionEventUpdated,
+		Data: PlayerDeltaData{
+			X: x,
+			Y: y,
+		},
+	}
+	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
+}
+
+// PublishPlayerCombatDelta publishes combat state changes efficiently.
+func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, combat *models.CombatState) {
+	// Also update the full snapshot cache
+	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
+	if err != nil {
+		return
+	}
+	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
+
+	delta := PlayerDeltaEvent{
+		Type: eventType,
+		Data: PlayerDeltaData{
+			ActiveCombat: combat,
+		},
+	}
+	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
+}
+
+// PublishPlayerHPDelta publishes HP changes (common during combat ticks).
+func PublishPlayerHPDelta(playerID uuid.UUID, hp, maxHP float64) {
+	delta := PlayerDeltaEvent{
+		Type: "player.hp",
+		Data: PlayerDeltaData{
+			HP:    &hp,
+			MaxHP: &maxHP,
+		},
+	}
+	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
+}
+
+// PublishPlayerManaDelta publishes mana changes (common during regen ticks).
+func PublishPlayerManaDelta(playerID uuid.UUID, currentMana, maxMana float64) {
+	delta := PlayerDeltaEvent{
+		Type: "player.mana",
+		Data: PlayerDeltaData{
+			CurrentMana: &currentMana,
+			MaxMana:     &maxMana,
+		},
+	}
+	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
 }
 
 func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, error) {
@@ -158,7 +232,7 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 // SendSessionKickedEvent sends a session.kicked event to the player's WebSocket connection when invalidated.
 func SendSessionKickedEvent(playerID uuid.UUID) {
 	notify.Send(db.DB, playerID, "session.kicked", "Phiên đăng nhập đã hết hạn", "Tài khoản đã đăng nhập từ thiết bị khác")
-	_ = cache.PublishEvent(context.Background(), "player:"+playerID.String(), PlayerRealtimeEvent{
+	_ = cache.PublishEventQuick("player:"+playerID.String(), PlayerRealtimeEvent{
 		Type: SessionEventKicked,
 	})
 }

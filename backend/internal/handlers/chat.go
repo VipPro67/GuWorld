@@ -266,7 +266,26 @@ func SendBaoHoangChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit chat"})
 		return
 	}
-	notifyBaoHoangMessages(req.Channel, sectID)
+
+	// Broadcast the new message efficiently (append-only)
+	var newMsg ChatItem
+	err = db.DB.QueryRow(`
+		SELECT id, sender_id, username, COALESCE(avatar_url, ''), COALESCE(selected_title, ''), content, channel, created_at
+		FROM messages m
+		JOIN players p ON m.sender_id = p.id
+		WHERE m.id = (SELECT id FROM messages ORDER BY created_at DESC LIMIT 1)
+		  AND m.channel = $1
+	`, req.Channel).Scan(
+		&newMsg.ID, &newMsg.SenderID, &newMsg.SenderUsername,
+		&newMsg.SenderAvatar, &newMsg.SenderTitle,
+		&newMsg.Content, &newMsg.Channel, &newMsg.CreatedAt,
+	)
+	if err == nil {
+		notifyNewChatMessage(req.Channel, sectID, newMsg)
+	} else {
+		// Fallback to full history on error
+		notifyBaoHoangMessages(req.Channel, sectID)
+	}
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
 
 	msg := "Đã truyền tin nhắn thành công! Nhân Khí +1."

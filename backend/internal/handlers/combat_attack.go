@@ -1561,7 +1561,7 @@ func CombatAttack(c *gin.Context) {
 	if victory || defeat {
 		_ = cache.ClearCombatState(player.ID.String())
 		ClearPendingPlayerQueues(player.ID.String())
-		PublishPlayerSnapshot(&player, CombatEventEnded)
+		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
 
 		for _, ally := range combatAllies {
 			if ally.Kind != "Ally" && ally.Kind != "Player" {
@@ -1575,7 +1575,7 @@ func CombatAttack(c *gin.Context) {
 		}
 	} else if player.ActiveCombat != nil {
 		_ = cache.SetCombatState(player.ID.String(), player.ActiveCombat)
-		PublishPlayerSnapshot(&player, PlayerEventUpdated)
+		PublishPlayerCombatDelta(player.ID, PlayerEventUpdated, player.ActiveCombat)
 
 		for _, ally := range player.ActiveCombat.Allies {
 			if ally.Kind != "Ally" && ally.Kind != "Player" {

@@ -57,12 +57,12 @@ func requestLogging() gin.HandlerFunc {
 }
 
 // SetupRouter initializes the Gin router with middlewares and routes
-func SetupRouter(hub *ws.Hub) *gin.Engine {
-	if hub != nil {
-		handlers.SetWSStatsProvider(hub.GetStats)
-		handlers.SetWSConnectedProvider(hub.IsConnected)
+func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
+	if shub != nil {
+		handlers.SetWSStatsProvider(shub.GetStats)
+		handlers.SetWSConnectedProvider(shub.IsConnected)
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			hub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
+			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
 		}
 	}
 	worker.PlayerEventPublisher = handlers.PublishPlayerRealtimeEvent
@@ -131,7 +131,7 @@ func SetupRouter(hub *ws.Hub) *gin.Engine {
 	{
 		// WebSocket route
 		api.GET("/ws", middleware.AuthRequired(), func(c *gin.Context) {
-			if hub == nil {
+			if shub == nil {
 				c.JSON(503, gin.H{"error": "WebSocket hub not initialized"})
 				return
 			}
@@ -140,7 +140,13 @@ func SetupRouter(hub *ws.Hub) *gin.Engine {
 				c.JSON(401, gin.H{"error": "Unauthorized"})
 				return
 			}
-			ws.ServeWs(hub, c.Writer, c.Request, playerID)
+			// Check connection rate limit
+			ip := c.ClientIP()
+			if !ws.IsConnectionAllowed(playerID, ip) {
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "Quá nhiều kết nối WebSocket. Vui lòng đóng các tab khác và thử lại!"})
+				return
+			}
+			ws.ServeWs(shub, c.Writer, c.Request, playerID)
 		})
 
 		// Public endpoints — per IP

@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"context"
-
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 )
 
@@ -33,5 +31,5 @@ func broadcastWorldCell(name string, data WorldCellEvent) {
 		"cell_type":  data.CellType,
 		"content_id": data.ContentID,
 	}
-	_ = cache.PublishEvent(context.Background(), "world:cell", payload)
+	_ = cache.PublishEventQuick("world:cell", payload)
 }

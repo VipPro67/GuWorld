@@ -15,11 +15,17 @@ export class WebSocketManager {
   private reconnectAttempts = 0;
   private maxReconnectDelay = 30000;
   private baseReconnectDelay = 1000;
+  private maxReconnectAttempts = 10;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private pongTimeout: ReturnType<typeof setTimeout> | null = null;
   private isExplicitClose = false;
   private subscriptions = new Map<string, Set<(data: unknown) => void>>();
   private connectPromise: Promise<void> | null = null;
+  private lastPingTime: number = 0;
+  private onTokenRefresh: (() => void) | null = null;
+  private subscriptionRefCounts = new Map<string, number>();
+  private connectionRefCounts = 0;
 
   constructor(url: string = DEFAULT_WS_URL) {
     this.url = url;
@@ -31,6 +37,51 @@ export class WebSocketManager {
 
   public isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  public setOnTokenRefresh(callback: () => void) {
+    this.onTokenRefresh = callback;
+  }
+
+  // Get the current connection reference count
+  public getRefCount(): number {
+    return this.connectionRefCounts;
+  }
+
+  // Acquire a WebSocket connection with reference counting
+  public acquireConnection(token?: string): () => void {
+    if (token) {
+      this.token = token;
+    }
+    this.connectionRefCounts++;
+    if (this.connectionRefCounts === 1) {
+      // First subscriber, establish connection
+      if (!this.token) {
+        console.warn("[WebSocket] Cannot acquire connection without token");
+        return () => this.releaseConnection();
+      }
+      this.connect(this.token).catch((err) => {
+        console.error("[WebSocket] Failed to acquire connection:", err);
+        this.releaseConnection();
+      });
+    }
+    return () => this.releaseConnection();
+  }
+
+  // Release a WebSocket connection reference
+  private releaseConnection() {
+    this.connectionRefCounts--;
+    if (this.connectionRefCounts <= 0) {
+      this.connectionRefCounts = 0;
+      if (!this.isExplicitClose) {
+        // Wait a bit before disconnecting to allow new subscribers
+        setTimeout(() => {
+          if (this.connectionRefCounts === 0) {
+            this.disconnect();
+          }
+        }, 30000);
+      }
+    }
   }
 
   public connect(token: string): Promise<void> {
@@ -98,6 +149,7 @@ export class WebSocketManager {
 
   public disconnect() {
     this.isExplicitClose = true;
+    this.connectionRefCounts = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -112,9 +164,16 @@ export class WebSocketManager {
       this.ws = null;
     }
     this.connectPromise = null;
+    // Clear all subscriptions
+    this.subscriptions.clear();
+    this.subscriptionRefCounts.clear();
   }
 
   public subscribe<T = unknown>(channel: string, callback: (data: T) => void): () => void {
+    // Update reference count
+    const currentRef = this.subscriptionRefCounts.get(channel) || 0;
+    this.subscriptionRefCounts.set(channel, currentRef + 1);
+
     if (!this.subscriptions.has(channel)) {
       this.subscriptions.set(channel, new Set());
       this.sendSubscription(channel);
@@ -122,11 +181,17 @@ export class WebSocketManager {
     this.subscriptions.get(channel)!.add(callback as (data: unknown) => void);
 
     return () => {
+      const newRef = currentRef - 1;
+      this.subscriptionRefCounts.set(channel, newRef);
+      
       const subs = this.subscriptions.get(channel);
       if (subs) {
         subs.delete(callback as (data: unknown) => void);
         if (subs.size === 0) {
           this.subscriptions.delete(channel);
+          this.subscriptionRefCounts.delete(channel);
+          // Notify server to unsubscribe
+          this.send("unsubscribe", channel, { channel });
         }
       }
     };
@@ -161,6 +226,13 @@ export class WebSocketManager {
   }
 
   private handleMessage(raw: string) {
+    // Message size validation: reject oversized messages
+    const MAX_MESSAGE_SIZE = 65536; // 64KB
+    if (raw.length > MAX_MESSAGE_SIZE) {
+      console.warn(`[WebSocket] Message too large (${raw.length} bytes), dropping`);
+      return;
+    }
+
     try {
       // Split raw by newlines if server batched multiple frames in one buffer
       const lines = raw.split("\n");
@@ -170,6 +242,11 @@ export class WebSocketManager {
         const msg = JSON.parse(trimmed) as WSMessage;
 
         if (msg.type === "pong") {
+          // Clear pong timeout since we received a pong
+          if (this.pongTimeout) {
+            clearTimeout(this.pongTimeout);
+            this.pongTimeout = null;
+          }
           continue;
         }
 
@@ -196,8 +273,16 @@ export class WebSocketManager {
 
   private startHeartbeat() {
     this.stopHeartbeat();
+    this.lastPingTime = Date.now();
     this.pingTimer = setInterval(() => {
       if (this.isConnected()) {
+        this.lastPingTime = Date.now();
+        // Set pong timeout: if no pong received within 10s, connection is stale
+        this.pongTimeout = setTimeout(() => {
+          console.warn("[WebSocket] Pong timeout detected, closing stale connection");
+          this.reconnectWithStaleToken();
+        }, 10000);
+
         try {
           this.ws!.send(JSON.stringify({ type: "ping" }));
         } catch {
@@ -212,10 +297,28 @@ export class WebSocketManager {
       clearInterval(this.pingTimer);
       this.pingTimer = null;
     }
+    if (this.pongTimeout) {
+      clearTimeout(this.pongTimeout);
+      this.pongTimeout = null;
+    }
+  }
+
+  private reconnectWithStaleToken() {
+    this.stopHeartbeat();
+    this.connectPromise = null;
+    this.ws = null;
+    if (!this.isExplicitClose && this.token) {
+      this.scheduleReconnect();
+    }
   }
 
   private scheduleReconnect() {
     if (this.isExplicitClose || !this.token) return;
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error("[WebSocket] Max reconnect attempts reached, giving up");
+      return;
+    }
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -225,15 +328,25 @@ export class WebSocketManager {
       this.baseReconnectDelay * Math.pow(1.5, this.reconnectAttempts),
       this.maxReconnectDelay
     );
+    // Add jitter: 50-100% of delay to prevent thundering herd
+    const jitter = delay * (0.5 + Math.random() * 0.5);
     this.reconnectAttempts++;
 
     this.reconnectTimer = setTimeout(() => {
       if (!this.isExplicitClose && this.token) {
+        // Trigger token refresh if available before reconnecting
+        if (this.onTokenRefresh) {
+          try {
+            this.onTokenRefresh();
+          } catch (e) {
+            console.warn("[WebSocket] Token refresh callback failed:", e);
+          }
+        }
         this.connect(this.token).catch(() => {
           // Handled by onclose -> scheduleReconnect
         });
       }
-    }, delay);
+    }, jitter);
   }
 }
 

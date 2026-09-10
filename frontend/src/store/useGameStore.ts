@@ -1040,7 +1040,7 @@ interface GameState {
     vital_gu_choice: string;
   }) => Promise<boolean>;
   updateManaSnapshot: (player: Player | null) => void;
-  setPlayerFromServer: (player: Player | null) => void;
+  setPlayerFromServer: (player: Player | Partial<Player> | null) => void;
   getEstimatedMana: () => number | null;
   fetchPlayerStatus: (id: string) => Promise<void>;
   fetchGuInventory: () => Promise<void>;
@@ -1568,9 +1568,22 @@ export const useGameStore = create<GameState>((set, get) => {
     };
   };
 
-  const setPlayerFromServer = (player: Player | null, extraState: Partial<GameState> = {}) => {
+  const setPlayerFromServer = (player: Player | Partial<Player> | null, extraState: Partial<GameState> = {}) => {
+    if (!player) {
+      set({ ...extraState, player: null, manaSnapshot: null });
+      return;
+    }
     const currentPlayer = get().player;
-    const normalizedPlayer = normalizePlayer(player);
+    const fullPlayer: Player = currentPlayer ? {
+      ...currentPlayer,
+      ...player,
+      gu_inventory: player.gu_inventory ?? currentPlayer.gu_inventory,
+      materials_inventory: player.materials_inventory ?? currentPlayer.materials_inventory,
+      completed_quests: player.completed_quests ?? currentPlayer.completed_quests,
+      unlocked_recipes: player.unlocked_recipes ?? currentPlayer.unlocked_recipes,
+    } : (player as Player);
+
+    const normalizedPlayer = normalizePlayer(fullPlayer);
     if (normalizedPlayer && !normalizedPlayer.materials_inventory) {
       normalizedPlayer.materials_inventory = {};
     }
@@ -1947,27 +1960,108 @@ export const useGameStore = create<GameState>((set, get) => {
 
   subscribeEvents: () => {
     if (typeof window === "undefined" || !get().token) return;
+    if (get().playerEventsConnected) return; // Already connected
 
     const token = get().token!;
 
-    // 1. Setup WebSocket connection
+    // Acquire connection with reference counting
+    const releaseConnection = wsManager.acquireConnection(token);
+
     try {
       wsManager.connect(token).then(() => {
         set({ playerEventsConnected: true, playerEventsRetries: 0 });
       }).catch((err) => {
         console.warn("[WebSocket] Connection failed", err);
+        releaseConnection();
       });
 
       // Listen for player updates
-      wsManager.subscribe("player", (payload: any) => {
+      const unsubscribePlayer = wsManager.subscribe("player", (payload: any) => {
         try {
           const eventData = payload?.data || payload;
+          const eventType = payload?.type;
+
+          // Handle delta events (efficient updates)
+          if (eventType === "player.position") {
+            const currentPlayer = get().player;
+            if (!currentPlayer) return;
+            const newX = eventData?.x ?? currentPlayer.x;
+            const newY = eventData?.y ?? currentPlayer.y;
+            if (newX !== currentPlayer.x || newY !== currentPlayer.y) {
+              set({
+                player: { ...currentPlayer, x: newX, y: newY },
+              });
+            }
+            return;
+          }
+
+          if (eventType === "player.hp") {
+            const currentPlayer = get().player;
+            if (!currentPlayer) return;
+            const newHp = eventData?.hp ?? currentPlayer.hp;
+            const newMaxHp = eventData?.max_hp ?? currentPlayer.base_hp;
+            set({
+              player: { ...currentPlayer, hp: newHp, base_hp: newMaxHp },
+              manaSnapshot: createManaSnapshotFromPlayer(
+                { ...currentPlayer, hp: newHp, base_hp: newMaxHp },
+                get().guDictionary,
+                get().constitutionDictionary,
+                get().aperture?.time_rate
+              ),
+            });
+            return;
+          }
+
+          if (eventType === "player.mana") {
+            const currentPlayer = get().player;
+            if (!currentPlayer) return;
+            const newCurrentMana = eventData?.current_mana ?? currentPlayer.current_mana;
+            const newMaxMana = eventData?.max_mana ?? currentPlayer.max_mana;
+            set({
+              player: { ...currentPlayer, current_mana: newCurrentMana, max_mana: newMaxMana },
+              manaSnapshot: createManaSnapshotFromPlayer(
+                { ...currentPlayer, current_mana: newCurrentMana, max_mana: newMaxMana },
+                get().guDictionary,
+                get().constitutionDictionary,
+                get().aperture?.time_rate
+              ),
+            });
+            return;
+          }
+
+          if (eventType === "player.combat_state" || eventType === "combat.started" || eventType === "combat.ended") {
+            const currentPlayer = get().player;
+            if (!currentPlayer) return;
+            const updatedPlayer = {
+              ...currentPlayer,
+              active_combat: eventData?.active_combat || null,
+            };
+            set({
+              player: updatedPlayer,
+              manaSnapshot: updatedPlayer
+                ? createManaSnapshotFromPlayer(
+                    updatedPlayer,
+                    get().guDictionary,
+                    get().constitutionDictionary,
+                    get().aperture?.time_rate
+                  )
+                : get().manaSnapshot,
+            });
+            if (eventType === "combat.started") {
+              get().addLog("Chiến đấu realtime đã bắt đầu.");
+            } else if (eventType === "combat.ended") {
+              get().addLog("Chiến đấu realtime đã kết thúc.");
+            }
+            return;
+          }
+
+          // Full snapshot fallback (for initial connection and other events)
           if (!eventData?.id) return;
 
           const currentPlayer = get().player;
           if (!currentPlayer || currentPlayer.id !== eventData.id) return;
 
-          if (payload?.type === "session.kicked") {
+          if (eventType === "session.kicked") {
             const state = get();
             state.addToast("Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
             state.logout();
@@ -1992,9 +2086,9 @@ export const useGameStore = create<GameState>((set, get) => {
               : get().manaSnapshot,
           });
 
-          if (payload?.type === "combat.started") {
+          if (eventType === "combat.started") {
             get().addLog("Chiến đấu realtime đã bắt đầu.");
-          } else if (payload?.type === "combat.ended") {
+          } else if (eventType === "combat.ended") {
             get().addLog("Chiến đấu realtime đã kết thúc.");
           }
         } catch (err) {
@@ -2003,7 +2097,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for trade updates
-      wsManager.subscribe("trade", (payload: any) => {
+      const unsubscribeTrade = wsManager.subscribe("trade", (payload: any) => {
         try {
           set({ activeTrade: payload?.trade ?? null });
         } catch (err) {
@@ -2036,6 +2130,33 @@ export const useGameStore = create<GameState>((set, get) => {
       // Listen for chat:world
       wsManager.subscribe("chat:world", (payload: any) => {
         try {
+          // Handle append-only updates (single new message)
+          if (payload?.message && !Array.isArray(payload?.messages)) {
+            set((state) => {
+              const existing = state.chatMessages.world || [];
+              const newMsg = payload.message;
+              // Avoid duplicates
+              if (existing.find((m: any) => m.id === newMsg.id)) {
+                return {};
+              }
+              const merged = [...existing, newMsg];
+              const active = state.activeChannel || "world";
+              const open = state.chatOpen;
+              const isCurrent = active === "world" && open;
+              const newUnread = { ...state.unreadChannels };
+              if (!isCurrent) {
+                newUnread.world = true;
+              }
+              return {
+                chatMessages: { ...state.chatMessages, world: merged },
+                unreadChannels: newUnread,
+                baoHoangMessages: active === "world" && open ? merged : state.baoHoangMessages,
+              };
+            });
+            return;
+          }
+
+          // Handle full history (initial load or fallback)
           const messages = Array.isArray(payload?.messages) ? payload.messages : (Array.isArray(payload) ? payload : []);
           set((state) => {
             const active = state.activeChannel || "world";
@@ -2059,6 +2180,32 @@ export const useGameStore = create<GameState>((set, get) => {
       // Listen for chat:general
       wsManager.subscribe("chat:general", (payload: any) => {
         try {
+          // Handle append-only updates (single new message)
+          if (payload?.message && !Array.isArray(payload?.messages)) {
+            set((state) => {
+              const existing = state.chatMessages.general || [];
+              const newMsg = payload.message;
+              if (existing.find((m: any) => m.id === newMsg.id)) {
+                return {};
+              }
+              const merged = [...existing, newMsg];
+              const active = state.activeChannel || "world";
+              const open = state.chatOpen;
+              const isCurrent = active === "general" && open;
+              const newUnread = { ...state.unreadChannels };
+              if (!isCurrent) {
+                newUnread.general = true;
+              }
+              return {
+                chatMessages: { ...state.chatMessages, general: merged },
+                unreadChannels: newUnread,
+                baoHoangMessages: active === "general" && open ? merged : state.baoHoangMessages,
+              };
+            });
+            return;
+          }
+
+          // Handle full history (initial load or fallback)
           const messages = Array.isArray(payload?.messages) ? payload.messages : (Array.isArray(payload) ? payload : []);
           set((state) => {
             const active = state.activeChannel || "world";
@@ -2082,6 +2229,32 @@ export const useGameStore = create<GameState>((set, get) => {
       // Listen for chat:sect
       wsManager.subscribe("chat:sect", (payload: any) => {
         try {
+          // Handle append-only updates (single new message)
+          if (payload?.message && !Array.isArray(payload?.messages)) {
+            set((state) => {
+              const existing = state.chatMessages.sect || [];
+              const newMsg = payload.message;
+              if (existing.find((m: any) => m.id === newMsg.id)) {
+                return {};
+              }
+              const merged = [...existing, newMsg];
+              const active = state.activeChannel || "world";
+              const open = state.chatOpen;
+              const isCurrent = active === "sect" && open;
+              const newUnread = { ...state.unreadChannels };
+              if (!isCurrent) {
+                newUnread.sect = true;
+              }
+              return {
+                chatMessages: { ...state.chatMessages, sect: merged },
+                unreadChannels: newUnread,
+                baoHoangMessages: active === "sect" && open ? merged : state.baoHoangMessages,
+              };
+            });
+            return;
+          }
+
+          // Handle full history (initial load or fallback)
           const messages = Array.isArray(payload?.messages) ? payload.messages : (Array.isArray(payload) ? payload : []);
           set((state) => {
             const active = state.activeChannel || "world";
@@ -2119,14 +2292,28 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      // Store cleanup functions in a global variable
+      (window as any).__gu_ws_cleanup = () => {
+        unsubscribePlayer();
+        unsubscribeTrade();
+        releaseConnection();
+      };
+
     } catch (wsErr) {
       console.warn("[WebSocket] Exception starting WS:", wsErr);
+      releaseConnection();
     }
   },
 
   unsubscribeEvents: () => {
     try {
-      wsManager.disconnect();
+      const cleanup = (window as any).__gu_ws_cleanup;
+      if (cleanup) {
+        cleanup();
+        (window as any).__gu_ws_cleanup = null;
+      } else {
+        wsManager.disconnect();
+      }
     } catch {
       // ignore
     }
@@ -2431,8 +2618,12 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       void get().fetchMySectStatus();
       void get().fetchGuInventory();
-      get().subscribePlayerEvents();
-      get().subscribeTradeEvents();
+      try {
+        get().subscribePlayerEvents();
+        get().subscribeTradeEvents();
+      } catch (wsErr) {
+        console.warn("[WebSocket] Failed to subscribe events during session restore:", wsErr);
+      }
       const today = new Date().toISOString().split('T')[0];
       const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
       if (hiddenUntil !== today) {
@@ -3638,6 +3829,15 @@ export const useGameStore = create<GameState>((set, get) => {
 
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 400 && (data.error?.includes("Không trong trạng thái chiến đấu") || data.error?.includes("Không có trận chiến nào"))) {
+          const currentPlayer = get().player;
+          if (currentPlayer && currentPlayer.active_combat) {
+            set({
+              player: { ...currentPlayer, active_combat: null },
+              activeCombatReplay: null,
+            });
+          }
+        }
         throw new Error(data.error || "Bắt đầu mô phỏng thất bại.");
       }
 
@@ -3766,6 +3966,15 @@ export const useGameStore = create<GameState>((set, get) => {
 
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 400 && data.error?.includes("Không có trận chiến nào")) {
+          const currentPlayer = get().player;
+          if (currentPlayer && currentPlayer.active_combat) {
+            set({
+              player: { ...currentPlayer, active_combat: null },
+              activeCombatReplay: null,
+            });
+          }
+        }
         throw new Error(data.error || "Bỏ chạy thất bại.");
       }
 

@@ -896,7 +896,7 @@ func MovePlayer(c *gin.Context) {
 				return
 			}
 			ClearPendingPlayerQueues(player.ID.String())
-			PublishPlayerSnapshot(&player, CombatEventEnded)
+			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
 			// Include skip summary in response
 			responseWithPlayer(c, http.StatusOK, player, gin.H{
 				"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
@@ -946,7 +946,7 @@ func MovePlayer(c *gin.Context) {
 	})
 
 	if combatTriggered {
-		PublishPlayerSnapshot(&player, CombatEventStarted)
+		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
 	} else {
 		PublishPlayerSnapshot(&player, PlayerEventUpdated)
 	}
@@ -1002,6 +1002,47 @@ func lineCells(x0, y0, x1, y1 int) [][2]int {
 		cells = append(cells, [2]int{x, y})
 	}
 	return cells
+}
+
+// MovePathPlayerUpdate is a lightweight player snapshot for movement responses,
+// avoiding sending huge inventories, recipes, and quest histories on high-frequency moves.
+type MovePathPlayerUpdate struct {
+	ID              uuid.UUID           `json:"id"`
+	X               int                 `json:"x"`
+	Y               int                 `json:"y"`
+	CurrentRegion   string              `json:"current_region"`
+	HP              float64             `json:"hp"`
+	BaseHP          float64             `json:"base_hp"`
+	CurrentMana     float64             `json:"current_mana"`
+	MaxMana         float64             `json:"max_mana"`
+	HumanQi         float64             `json:"human_qi"`
+	PrimevalStones  int64               `json:"primeval_stones"`
+	ImmortalStones  int64               `json:"immortal_stones"`
+	VisitedSubzones []string            `json:"visited_subzones,omitempty"`
+	ActiveCombat    *models.CombatState `json:"active_combat"`
+	GuInventory     models.GuInventory  `json:"gu_inventory,omitempty"`
+}
+
+func buildMovePathPlayerUpdate(player *models.Player, beforeGus models.GuInventory) MovePathPlayerUpdate {
+	update := MovePathPlayerUpdate{
+		ID:              player.ID,
+		X:               player.X,
+		Y:               player.Y,
+		CurrentRegion:   player.CurrentRegion,
+		HP:              player.HP,
+		BaseHP:          gamefx.EffectiveMaxHP(player),
+		CurrentMana:     player.CurrentMana,
+		MaxMana:         gamefx.EffectiveMaxMana(player),
+		HumanQi:         player.HumanQi,
+		PrimevalStones:  player.PrimevalStones,
+		ImmortalStones:  player.ImmortalStones,
+		VisitedSubzones: player.VisitedSubZones,
+		ActiveCombat:    player.ActiveCombat,
+	}
+	if len(player.GuInventory) != len(beforeGus) {
+		update.GuInventory = player.GuInventory
+	}
+	return update
 }
 
 // MovePlayerPath moves the player along a straight path from its current cell
@@ -1091,16 +1132,20 @@ func MovePlayerPath(c *gin.Context) {
 		path = path[:maxPathCells]
 	}
 	reached := len(path) < maxPathCells
-	var logs []string
+	var eventLogs []string
 	combatTriggered := false
-	var logMsg string
+	var lastStepLog string
 	for _, step := range path {
-		logMsg, triggered, errArrival := resolveCellArrival(tx, &player, step[0], step[1], "", true)
+		stepLog, triggered, errArrival := resolveCellArrival(tx, &player, step[0], step[1], "", true)
 		if errArrival != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
 			return
 		}
-		logs = append(logs, logMsg)
+		lastStepLog = stepLog
+		// Filter out generic movement logs; only keep noteworthy events (encounters, discoveries, gathering, traps, pvp)
+		if !strings.HasPrefix(stepLog, "Di chuyển thành công đến") {
+			eventLogs = append(eventLogs, stepLog)
+		}
 		if triggered {
 			combatTriggered = true
 			reached = false
@@ -1121,32 +1166,35 @@ func MovePlayerPath(c *gin.Context) {
 			if e, ok := skipSummary["enemy_name"].(string); ok {
 				enemyName = e
 			}
+			var autoLog string
 			if winner == "Phe Ta" {
-				logMsg = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +3.", enemyName, player.X, player.Y)
+				autoLog = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +3.", enemyName, player.X, player.Y)
 			} else {
-				logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
+				autoLog = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
 			}
 			if skipSummary != nil {
 				if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
-					logMsg += " " + strings.Join(loot, " ")
+					autoLog += " " + strings.Join(loot, " ")
 				}
 				if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
-					logMsg += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
+					autoLog += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
 				}
 			}
-			logs = append(logs, logMsg)
+			eventLogs = append(eventLogs, autoLog)
 			if err := tx.Commit(); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 				return
 			}
-			// Include skip summary in response
-			responseWithPlayer(c, http.StatusOK, player, gin.H{
-				"log":              strings.Join(logs, "\n") + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
-				"logs":             logs,
+			finalLog := strings.Join(eventLogs, "\n")
+			if qiGained > 0 {
+				finalLog += fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"player":           buildMovePathPlayerUpdate(&player, before),
+				"log":              finalLog,
 				"combat_triggered": false,
 				"skip_result":      skipSummary,
 				"reached":          reached,
-				"stats":            CalculatePlayerStats(&player),
 			})
 			return
 		}
@@ -1190,18 +1238,33 @@ func MovePlayerPath(c *gin.Context) {
 	})
 
 	if combatTriggered {
-		PublishPlayerSnapshot(&player, CombatEventStarted)
+		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
 	} else {
 		PublishPlayerSnapshot(&player, PlayerEventUpdated)
 	}
 
-	newStats := CalculatePlayerStats(&player)
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"log":              strings.Join(logs, "\n") + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
-		"logs":             logs,
+	var finalLog string
+	if len(eventLogs) > 0 {
+		finalLog = strings.Join(eventLogs, "\n")
+		if !combatTriggered {
+			finalLog += fmt.Sprintf("\nĐã di chuyển đến (%d, %d).", player.X, player.Y)
+		}
+	} else {
+		if lastStepLog != "" {
+			finalLog = lastStepLog
+		} else {
+			finalLog = fmt.Sprintf("Đã di chuyển đến (%d, %d).", player.X, player.Y)
+		}
+	}
+	if qiGained > 0 {
+		finalLog += fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player":           buildMovePathPlayerUpdate(&player, before),
+		"log":              finalLog,
 		"combat_triggered": combatTriggered,
 		"reached":          reached,
-		"stats":            newStats,
 	})
 }
 
@@ -1500,7 +1563,9 @@ func savePlayerMovement(tx *sql.Tx, player *models.Player, combatJSON any) error
 		player.CurrentRegion = HubRegionID
 	}
 
-	if cache.Client != nil {
+	// Only defer to asynchronous Redis batching when NO combat is triggered or active.
+	// Combat requires immediate synchronous persistence in PostgreSQL for subsequent combat actions.
+	if combatJSON == nil && player.ActiveCombat == nil && cache.Client != nil {
 		clearedBytes, _ := json.Marshal(player.ClearedCells)
 		visitedBytes, _ := json.Marshal(player.VisitedSubZones)
 
@@ -1519,13 +1584,12 @@ func savePlayerMovement(tx *sql.Tx, player *models.Player, combatJSON any) error
 			UpdatedAt:       time.Now(),
 			Version:         player.Version,
 		}
-		if combatStr, ok := combatJSON.(string); ok && combatStr != "" {
-			queuePayload.ActiveCombat = json.RawMessage(combatStr)
-		}
 		if err := cache.SetAndQueueJSON("player_movement", player.ID.String(), queuePayload); err == nil {
 			return nil
 		}
 	}
+
+	ClearPendingPlayerQueues(player.ID.String())
 
 	_, err := tx.Exec(`
 		UPDATE players

@@ -109,11 +109,13 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 		_, err = tx.Exec(`
 			UPDATE players SET
 				x = $1, y = $2, current_region = $3,
-				cleared_cells = $4, visited_subzones = $5
-			WHERE id = $6
+				cleared_cells = $4, visited_subzones = $5,
+				human_qi = $6
+			WHERE id = $7
 		`,
 			p.X, p.Y, p.CurrentRegion,
 			clearedCellsVal, visitedSubzonesVal,
+			p.HumanQi,
 			p.ID,
 		)
 		if err != nil {

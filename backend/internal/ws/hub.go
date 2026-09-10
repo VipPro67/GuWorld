@@ -49,9 +49,9 @@ func InitHub() *Hub {
 	h := &Hub{
 		clients:    make(map[uuid.UUID]*Client),
 		channels:   make(map[ChannelName]map[uuid.UUID]*Client),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		broadcast:  make(chan *BroadcastMsg, 256),
+register:   make(chan *Client, 128),
+	unregister: make(chan *Client, 128),
+	broadcast:  make(chan *BroadcastMsg, 4096),
 		ctx:        ctx,
 		cancel:     cancel,
 	}

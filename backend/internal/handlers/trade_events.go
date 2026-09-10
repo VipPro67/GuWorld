@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 
@@ -17,17 +16,22 @@ type tradeEventPayload struct {
 }
 
 func notifyTradeParticipants(playerIDs ...uuid.UUID) {
+	if len(playerIDs) == 0 {
+		return
+	}
+	// Load trade once for the first participant
+	trade, err := LoadActiveTrade(playerIDs[0])
+	if err != nil || trade == nil {
+		return
+	}
+	payload := tradeEventPayload{Trade: trade}
 	for _, playerID := range playerIDs {
-		trade, err := LoadActiveTrade(playerID)
-		if err != nil {
-			continue
-		}
-		notifyTrade(playerID, tradeEventPayload{Trade: trade})
+		notifyTrade(playerID, payload)
 	}
 }
 
 func notifyTrade(playerID uuid.UUID, payload tradeEventPayload) {
-	_ = cache.PublishEvent(context.Background(), "trade:"+playerID.String(), payload)
+	_ = cache.PublishEventQuick("trade:"+playerID.String(), payload)
 }
 
 func getTradeParticipants(tradeID string) (uuid.UUID, uuid.UUID, error) {

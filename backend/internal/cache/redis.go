@@ -40,13 +40,17 @@ func Connect() error {
 	}
 
 	options := &redis.Options{
-		Addr:         redisHost + ":" + redisPort,
-		Username:     redisUsername,
-		Password:     redisPassword,
-		DB:           0,
-		DialTimeout:  redisTimeout,
-		ReadTimeout:  redisTimeout,
-		WriteTimeout: redisTimeout,
+		Addr:            redisHost + ":" + redisPort,
+		Username:        redisUsername,
+		Password:        redisPassword,
+		DB:              0,
+		DialTimeout:     redisTimeout,
+		ReadTimeout:     redisTimeout,
+		WriteTimeout:    redisTimeout,
+		PoolSize:        50,
+		MinIdleConns:    10,
+		ConnMaxIdleTime: 5 * time.Minute,
+		ConnMaxLifetime: 30 * time.Minute,
 	}
 
 	if redisSSL {
@@ -150,11 +154,38 @@ func PublishEvent(ctx context.Context, channel string, payload interface{}) erro
 	if Client == nil {
 		return nil
 	}
+
+	cb := GetCircuitBreaker()
+	if !cb.AllowRequest() {
+		logger.S.Warnf("Redis circuit breaker is %s, dropping publish to %s", cb.GetState(), channel)
+		return ErrCircuitOpen
+	}
+
 	data, err := json.Marshal(payload)
 	if err != nil {
+		cb.RecordFailure()
 		return err
 	}
-	return Client.Publish(ctx, channel, data).Err()
+
+	err = Client.Publish(ctx, channel, data).Err()
+	if err != nil {
+		cb.RecordFailure()
+		return err
+	}
+
+	cb.RecordSuccess()
+	return nil
+}
+
+// ErrCircuitOpen is returned when the circuit breaker is open.
+var ErrCircuitOpen = fmt.Errorf("redis circuit breaker is open")
+
+// PublishEventQuick publishes an event with a short timeout (100ms) to prevent blocking.
+// Use this when calling from handlers without a request-scoped context.
+func PublishEventQuick(channel string, payload interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	return PublishEvent(ctx, channel, payload)
 }
 
 // SubscribeChannels subscribes to one or more Redis Pub/Sub channels or patterns.

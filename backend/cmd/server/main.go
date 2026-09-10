@@ -178,12 +178,14 @@ func main() {
 	}
 
 	// Initialize WebSocket Hub and Redis Pub/Sub
-	hub := ws.InitHub()
+	shub := ws.InitShardedHub()
+	ws.InitConnectionLimiter(3, 10) // Max 3 connections per player, 10 per IP
 	if cache.Client != nil {
-		ws.StartRedisSubscribers(hub)
+		cache.InitCircuitBreaker() // Initialize Redis circuit breaker
+		ws.StartRedisSubscribers(shub)
 	}
 
-	r := server.SetupRouter(hub)
+	r := server.SetupRouter(shub)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -214,7 +216,7 @@ func main() {
 		logger.S.Fatalf("Server forced to shutdown: %v", err)
 	}
 
-	hub.Stop(shutdownCtx)
+	shub.Stop(shutdownCtx)
 
 	logger.S.Info("Server exited cleanly")
 }

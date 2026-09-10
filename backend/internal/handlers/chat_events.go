@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -17,6 +16,11 @@ type chatEventPayload struct {
 	Messages []ChatItem `json:"messages"`
 }
 
+// chatAppendPayload is for append-only updates (single new message).
+type chatAppendPayload struct {
+	Message ChatItem `json:"message"`
+}
+
 func notifyBaoHoangMessages(channel string, sectID sql.NullString) {
 	key := chatChannelKey(channel, sectID)
 	messages, err := loadBaoHoangMessages(channel, sectID)
@@ -25,7 +29,15 @@ func notifyBaoHoangMessages(channel string, sectID sql.NullString) {
 	}
 
 	payload := chatEventPayload{Messages: messages}
-	_ = cache.PublishEvent(context.Background(), "chat:"+key, payload)
+	_ = cache.PublishEventQuick("chat:"+key, payload)
+}
+
+// notifyNewChatMessage publishes only the new message for efficient append-only updates.
+// Use this for live chat updates instead of reloading the entire history.
+func notifyNewChatMessage(channel string, sectID sql.NullString, message ChatItem) {
+	key := chatChannelKey(channel, sectID)
+	payload := chatAppendPayload{Message: message}
+	_ = cache.PublishEventQuick("chat:"+key, payload)
 }
 
 func chatChannelKey(channel string, sectID sql.NullString) string {

@@ -210,7 +210,10 @@ func Flee(c *gin.Context) {
 	}
 
 	if player.ActiveCombat == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có trận chiến nào để rút lui."})
+		ClearPendingPlayerQueues(player.ID.String())
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
+			"log": "Không có trận chiến nào đang diễn ra, đạo hữu an toàn rút lui.",
+		})
 		return
 	}
 

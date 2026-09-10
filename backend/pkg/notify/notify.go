@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"context"
 	"database/sql"
 	"time"
 
@@ -112,5 +111,5 @@ func containsAt(s, sub string) bool {
 }
 
 func push(playerID uuid.UUID, n Notification) {
-	_ = cache.PublishEvent(context.Background(), "notif:"+playerID.String(), n)
+	_ = cache.PublishEventQuick("notif:"+playerID.String(), n)
 }

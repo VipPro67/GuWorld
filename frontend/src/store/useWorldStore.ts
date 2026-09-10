@@ -121,7 +121,7 @@ interface WorldStoreState {
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
-  movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean; skip_result?: unknown } | null>;
+  movePath: (x: number, y: number) => Promise<{ player: Partial<Player> & Pick<Player, "x" | "y">; log: string; combat_triggered: boolean; reached: boolean; skip_result?: unknown } | null>;
   teleportToRegion: (regionId: string) => Promise<TeleportResponse | null>;
   useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number; damage_dealt?: number; target_defeated?: boolean; target_hp?: number; target_max_hp?: number } | null>;
   setTargetingGu: (gu: { guInstanceId: string; guId: string; name: string } | null) => void;
