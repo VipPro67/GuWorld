@@ -2032,12 +2032,14 @@ export const useGameStore = create<GameState>((set, get) => {
           if (eventType === "player.combat_state" || eventType === "combat.started" || eventType === "combat.ended") {
             const currentPlayer = get().player;
             if (!currentPlayer) return;
+            const nextCombat = eventData?.active_combat || null;
             const updatedPlayer = {
               ...currentPlayer,
-              active_combat: eventData?.active_combat || null,
+              active_combat: nextCombat,
             };
             set({
               player: updatedPlayer,
+              ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
               manaSnapshot: updatedPlayer
                 ? createManaSnapshotFromPlayer(
                     updatedPlayer,
@@ -2069,13 +2071,15 @@ export const useGameStore = create<GameState>((set, get) => {
           }
 
           const { active_combat, ...rest } = eventData;
+          const nextCombat = active_combat !== undefined ? active_combat : currentPlayer.active_combat;
           const updatedPlayer = normalizePlayer({
             ...currentPlayer,
             ...rest,
-            ...(active_combat !== undefined ? { active_combat } : {}),
+            active_combat: nextCombat,
           });
           set({
             player: updatedPlayer,
+            ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
             manaSnapshot: updatedPlayer
               ? createManaSnapshotFromPlayer(
                   updatedPlayer,
@@ -2612,6 +2616,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
       const player: Player = await response.json();
       const localToken = (typeof window !== "undefined" ? localStorage.getItem("gu_auth_token") : null) || AUTHENTICATED_SESSION;
+      set({ activeCombatReplay: null });
       setPlayerFromServer(player, { token: localToken });
       if (typeof window !== "undefined") {
         localStorage.setItem("gu_player_id", player.id);
@@ -3920,6 +3925,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Rút lui thất bại.");
       }
 
+      set({ activeCombatReplay: null });
       setPlayerFromServer(data.player);
       useUIStore.getState().setView("dashboard");
       get().addLog(data.log || "Đạo hữu đã rút lui an toàn.");
@@ -3973,6 +3979,8 @@ export const useGameStore = create<GameState>((set, get) => {
               player: { ...currentPlayer, active_combat: null },
               activeCombatReplay: null,
             });
+          } else {
+            set({ activeCombatReplay: null });
           }
         }
         throw new Error(data.error || "Bỏ chạy thất bại.");
@@ -4004,6 +4012,7 @@ export const useGameStore = create<GameState>((set, get) => {
         else if (combat.mine_slot_id) returnView = "mine";
         else if (combat.tribulation_event_id) returnView = "aperture";
       }
+      set({ activeCombatReplay: null });
       setPlayerFromServer(data.player);
       useUIStore.getState().setView(returnView);
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");

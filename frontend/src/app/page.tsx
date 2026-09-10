@@ -201,8 +201,9 @@ export default function Home() {
   };
 
   const isPartyMemberNotLeader = Boolean(player?.party_id) && party !== null && party.leader_id !== player?.id;
-  // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay
-  const inCombat = (player && player.active_combat && !isPartyMemberNotLeader) || !!activeCombatReplay;
+  // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay with logs
+  const hasReplayLogs = Boolean(activeCombatReplay && activeCombatReplay.enemy && (activeCombatReplay.logs?.length ?? 0) > 0);
+  const inCombat = (player && player.active_combat && !isPartyMemberNotLeader) || hasReplayLogs;
 
   
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";

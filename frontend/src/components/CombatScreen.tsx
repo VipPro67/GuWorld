@@ -60,9 +60,24 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const monsterDictionary = useGameStore((state) => state.monsterDictionary);
   const party = useGameStore((state) => state.party);
   const fetchPartyStatus = useGameStore((state) => state.fetchPartyStatus);
+  const activeCombatReplay = useGameStore((state) => state.activeCombatReplay);
 
   const isPartyLeader = party ? party.leader_id === player.id : true;
   const isPartyMemberNotLeader = Boolean(player.party_id) && (party === null || !isPartyLeader);
+
+  useEffect(() => {
+    if (activeCombatReplay && activeCombatReplay.logs && activeCombatReplay.logs.length > 0) {
+      setSimulationLogs(activeCombatReplay.logs);
+      setSimulationWinner(activeCombatReplay.winner || null);
+      setSimulationCombatants(activeCombatReplay.combatants || []);
+    }
+  }, [activeCombatReplay]);
+
+  useEffect(() => {
+    if (!isPracticeMode && !player?.active_combat && (!activeCombatReplay || !activeCombatReplay.logs || activeCombatReplay.logs.length === 0) && simulationLogs.length === 0) {
+      void handleExitSimulation();
+    }
+  }, [player?.active_combat, activeCombatReplay, simulationLogs.length, isPracticeMode]);
 
   useEffect(() => {
     if (player.party_id && !party) {
@@ -1431,7 +1446,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   return (
     <GamePanel variant="default" className="w-full mx-auto">
-      {simulationLogs.length === 0 ? renderLoadoutPhase() : renderReplayPhase()}
+      {simulationLogs.length === 0
+        ? (player?.active_combat || isPracticeMode ? renderLoadoutPhase() : null)
+        : renderReplayPhase()}
     </GamePanel>
   );
 };

@@ -163,6 +163,10 @@ func Retreat(c *gin.Context) {
 		return
 	}
 
+	ClearPendingPlayerQueues(player.ID.String())
+	_ = cache.Delete("player_snapshot:" + player.ID.String())
+	PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
+
 	setWorldPosFromPlayer(&player)
 
 	var dbAfter int
@@ -212,6 +216,8 @@ func Flee(c *gin.Context) {
 
 	if player.ActiveCombat == nil {
 		ClearPendingPlayerQueues(player.ID.String())
+		_ = cache.Delete("player_snapshot:" + player.ID.String())
+		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"log": "Không có trận chiến nào đang diễn ra, đạo hữu an toàn rút lui.",
 		})
@@ -384,6 +390,10 @@ func Flee(c *gin.Context) {
 				return
 			}
 
+			ClearPendingPlayerQueues(player.ID.String())
+			_ = cache.Delete("player_snapshot:" + player.ID.String())
+			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
+
 			setWorldPosFromPlayer(&player)
 
 			responseWithPlayer(c, http.StatusOK, player, gin.H{
@@ -450,6 +460,14 @@ func Flee(c *gin.Context) {
 			return
 		}
 
+		if defeat {
+			ClearPendingPlayerQueues(player.ID.String())
+			_ = cache.Delete("player_snapshot:" + player.ID.String())
+			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
+		} else {
+			PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
+		}
+
 		setWorldPosFromPlayer(&player)
 
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
@@ -510,6 +528,10 @@ func Flee(c *gin.Context) {
 		respondCombatTxErr(c, err, "Transaction commit failed")
 		return
 	}
+
+	ClearPendingPlayerQueues(player.ID.String())
+	_ = cache.Delete("player_snapshot:" + player.ID.String())
+	PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
 
 	setWorldPosFromPlayer(&player)
 

@@ -66,7 +66,7 @@ type PlayerDeltaData struct {
 	MaxHP     *float64          `json:"max_hp,omitempty"`
 	CurrentMana *float64        `json:"current_mana,omitempty"`
 	MaxMana   *float64          `json:"max_mana,omitempty"`
-	ActiveCombat *models.CombatState `json:"active_combat,omitempty"`
+	ActiveCombat *models.CombatState `json:"active_combat"`
 	ApertureStress *float64      `json:"aperture_stress,omitempty"`
 }
 
@@ -121,7 +121,8 @@ func PublishPlayerPositionDelta(playerID uuid.UUID, x, y int) {
 
 // PublishPlayerCombatDelta publishes combat state changes efficiently.
 func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, combat *models.CombatState) {
-	// Also update the full snapshot cache
+	// Invalidate stale snapshot so LoadPlayerRealtimeSnapshot reloads from DB
+	_ = cache.Delete("player_snapshot:" + playerID.String())
 	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
 	if err != nil {
 		return
