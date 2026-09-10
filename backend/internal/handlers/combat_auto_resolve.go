@@ -106,83 +106,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	// Build enemies
 	for idx := range player.ActiveCombat.Enemies {
 		enemy := &player.ActiveCombat.Enemies[idx]
-		eHP := enemy.HP
-		if eHP <= 0 {
-			eHP = enemy.MaxHP
-		}
-		enemyMana := enemy.CurrentMana
-		if isVirtual {
-			eHP = enemy.MaxHP
-			enemyMana = enemy.MaxMana
-		}
-		enemyShield := 0.0
-		for _, guInst := range enemy.GuInventory {
-			if guInst.Status != "ACTIVE" {
-				continue
-			}
-			spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
-			if !ok {
-				continue
-			}
-			if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
-				enemyShield += spec.Effects.Active.ShieldFlat
-			}
-		}
-
-		enemyKind := "Enemy"
-		if enemy.Kind == "Pet" {
-			enemyKind = "Pet"
-		}
-		simEnemy := &simulator.CombatantAuto{
-			ID:            enemy.ID,
-			Name:          enemy.Name,
-			Kind:          enemyKind,
-			GridX:         enemy.GridX,
-			GridY:         enemy.GridY,
-			MaxHP:         enemy.MaxHP,
-			HP:            eHP,
-			MaxMana:       enemy.MaxMana,
-			Mana:          enemyMana,
-			BaseDmg:       enemy.BaseAttack,
-			BaseDef:       enemy.BaseDefense,
-			Speed:         enemy.Speed,
-			VirtualShield: enemyShield,
-			DaoMarks: func() simulator.DaoMarks {
-				dm := make(simulator.DaoMarks)
-				for k, v := range enemy.DaoMarks {
-					dm[k] = v
-				}
-				return dm
-			}(),
-		}
-		if enemy.Kind == "Boss" {
-			simEnemy.Kind = "Boss"
-		}
-		var enemyActions []simulator.SimAction
-		for _, guInst := range enemy.GuInventory {
-			if guInst.Status != "ACTIVE" {
-				continue
-			}
-			spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
-			if !ok {
-				continue
-			}
-			if hasCombatActiveEffects(&spec) {
-				act, err := buildSimActionFromGu(enemy, &spec, "GU_SKILL")
-				if err != nil {
-					continue
-				}
-				act.SourceID = guInst.GuID
-				enemyActions = append(enemyActions, act)
-			}
-		}
-		enemyActions = append(enemyActions, simulator.SimAction{
-			ActionType: "BASIC_ATTACK",
-			Name:       "Đánh thường",
-			Damage:     float64(enemy.BaseAttack),
-			ManaCost:   0,
-		})
-		simEnemy.Actions = enemyActions
+		simEnemy := buildSimEnemyCombatant(tx, enemy, player.ActiveCombat)
 		simState.Enemies = append(simState.Enemies, simEnemy)
 	}
 
@@ -846,6 +770,9 @@ func scanKillerMoveRow(rows *sql.Rows) (models.KillerMove, error) {
 }
 
 func loadKillerMovesBatch(tx *sql.Tx, playerID uuid.UUID, ids []string) (map[string]models.KillerMove, map[string][]models.KillerMoveSlot, error) {
+	if tx == nil {
+		return nil, nil, nil
+	}
 	var query string
 	var args []any
 	if ids == nil {

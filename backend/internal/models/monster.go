@@ -99,6 +99,7 @@ type Combatant struct {
 	ApertureDmg   float64           `json:"aperture_dmg"`
 	AvatarURL     string            `json:"avatar_url,omitempty"`
 	FullyGrown    []FullyGrownInfo  `json:"fully_grown,omitempty"`
+	CombatSettings *AutoCombatConfig `json:"combat_settings,omitempty"`
 }
 
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {
@@ -566,6 +567,7 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 		ApertureDmg:   player.ApertureDamage,
 		AvatarURL:     player.AvatarURL,
 		FullyGrown:    player.GrowthData.FullyGrown,
+		CombatSettings: &player.CombatSettings,
 	}
 }
 
@@ -590,6 +592,7 @@ func CombatantFromActiveCombat(cs *CombatState) Combatant {
 		LootTableID:   cs.LootTableID,
 		StatusEffects: cs.EnemyStatusEffects,
 		AvatarURL:     cs.EnemyAvatarURL,
+		CombatSettings: cs.EnemyCombatSettings,
 	}
 }
 

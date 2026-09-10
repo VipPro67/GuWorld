@@ -260,6 +260,7 @@ type CombatState struct {
 	// Defender-side character effects for PVP enemies (race/constitution/status).
 	EnemyPathResistance   map[string]float64 `json:"enemy_path_resistance,omitempty"`
 	EnemyMentalResistance float64            `json:"enemy_mental_resistance,omitempty"`
+	EnemyCombatSettings   *AutoCombatConfig  `json:"enemy_combat_settings,omitempty"`
 	SkillCooldowns        map[string]int     `json:"skill_cooldowns,omitempty"`
 	ItemsUsedCount        int                `json:"items_used_count"`
 	ItemCooldowns         map[string]int     `json:"item_cooldowns,omitempty"`

@@ -517,6 +517,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				EnemyGuInventory:   filterGuLoadout(targetPlayer.GuInventory, targetPlayer.CombatSettings),
 				EnemyDaoMarks:      targetPlayer.DaoMarks,
 				EnemyPathMasteries: targetPlayer.PathMasteries,
+				EnemyCombatSettings: &targetPlayer.CombatSettings,
 				TargetPlayerID:     targetPlayer.ID.String(),
 			}
 			player.ActiveCombat = &pvpCombat
@@ -640,14 +641,14 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 		case "PVP":
 			var targetPlayer models.Player
 			err := tx.QueryRow(`
-				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
+				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.combat_settings
 				FROM players p
 				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 				WHERE p.id != $1 
 				LIMIT 1`, player.ID,
 			).Scan(
 				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
 			)
 
 			combatTriggered = true
@@ -664,14 +665,21 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			} else {
 				targetStats := CalculatePlayerStats(&targetPlayer)
 				player.ActiveCombat = &models.CombatState{
-					EnemyName:      targetPlayer.Username,
-					EnemyType:      "PVP",
-					CombatMode:     "real",
-					EnemyHP:        100.0,
-					EnemyMaxHP:     100.0,
-					EnemyDamage:    targetStats["attack"],
-					EnemyDefense:   targetStats["defense"],
-					TargetPlayerID: targetPlayer.ID.String(),
+					EnemyName:           targetPlayer.Username,
+					EnemyType:           "PVP",
+					CombatMode:          "real",
+					EnemyHP:             100.0,
+					EnemyMaxHP:          100.0,
+					EnemyDamage:         targetStats["attack"],
+					EnemyDefense:        targetStats["defense"],
+					EnemySpeed:          targetStats["speed"],
+					EnemyRank:           targetPlayer.Rank,
+					EnemySubRank:        targetPlayer.SubRank,
+					EnemyGuInventory:    filterGuLoadout(targetPlayer.GuInventory, targetPlayer.CombatSettings),
+					EnemyDaoMarks:       targetPlayer.DaoMarks,
+					EnemyPathMasteries:  targetPlayer.PathMasteries,
+					EnemyCombatSettings: &targetPlayer.CombatSettings,
+					TargetPlayerID:      targetPlayer.ID.String(),
 				}
 				logMsg = fmt.Sprintf("Đạo hữu bắt gặp một Cổ Sư khác đang du ngoạn: %s! Lập tức giao đấu!", targetPlayer.Username)
 			}

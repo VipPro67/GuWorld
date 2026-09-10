@@ -259,6 +259,7 @@ func ChallengeArena(c *gin.Context) {
 		EnemyGuInventory:   enemyGuInventory,
 		EnemyDaoMarks:      targetPlayer.DaoMarks,
 		EnemyPathMasteries: targetPlayer.PathMasteries,
+		EnemyCombatSettings: &targetPlayer.CombatSettings,
 		TargetPlayerID:     targetPlayer.ID.String(),
 	}
 	enemyCharFX := gamefx.Get(&targetPlayer)

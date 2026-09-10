@@ -160,86 +160,7 @@ func AutoCombatStart(c *gin.Context) {
 	// ── Build enemies ──
 	for idx := range player.ActiveCombat.Enemies {
 		enemy := &player.ActiveCombat.Enemies[idx]
-		eHP := enemy.HP
-		if eHP <= 0 {
-			eHP = enemy.MaxHP
-		}
-		enemyMana := enemy.CurrentMana
-		if isVirtual {
-			eHP = enemy.MaxHP
-			enemyMana = enemy.MaxMana
-		}
-		// Calculate enemy VirtualShield from their Gu inventory
-		enemyShield := 0.0
-		for _, guInst := range enemy.GuInventory {
-			if guInst.Status != "ACTIVE" {
-				continue
-			}
-			spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
-			if !ok {
-				continue
-			}
-			if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
-				enemyShield += spec.Effects.Active.ShieldFlat
-			}
-		}
-
-		enemyKind := "Enemy"
-		if enemy.Kind == "Pet" {
-			enemyKind = "Pet"
-		}
-		simEnemy := &simulator.CombatantAuto{
-			ID:            enemy.ID,
-			Name:          enemy.Name,
-			Kind:          enemyKind,
-			GridX:         enemy.GridX,
-			GridY:         enemy.GridY,
-			MaxHP:         enemy.MaxHP,
-			HP:            eHP,
-			MaxMana:       enemy.MaxMana,
-			Mana:          enemyMana,
-			BaseDmg:       enemy.BaseAttack,
-			BaseDef:       enemy.BaseDefense,
-			Speed:         enemy.Speed,
-			VirtualShield: enemyShield,
-			DaoMarks: func() simulator.DaoMarks {
-				dm := make(simulator.DaoMarks)
-				for k, v := range enemy.DaoMarks {
-					dm[k] = v
-				}
-				return dm
-			}(),
-		}
-		if enemy.Kind == "Boss" {
-			simEnemy.Kind = "Boss"
-		}
-		// Auto-select Gu actions from enemy inventory
-		var enemyActions []simulator.SimAction
-		for _, guInst := range enemy.GuInventory {
-			if guInst.Status != "ACTIVE" {
-				continue
-			}
-			spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
-			if !ok {
-				continue
-			}
-			if hasCombatActiveEffects(&spec) {
-				act, err := buildSimActionFromGu(enemy, &spec, "GU_SKILL")
-				if err != nil {
-					continue
-				}
-				act.SourceID = guInst.GuID
-				enemyActions = append(enemyActions, act)
-			}
-		}
-		// Always add basic attack as fallback
-		enemyActions = append(enemyActions, simulator.SimAction{
-			ActionType: "BASIC_ATTACK",
-			Name:       "Đánh thường",
-			Damage:     float64(enemy.BaseAttack),
-			ManaCost:   0,
-		})
-		simEnemy.Actions = enemyActions
+		simEnemy := buildSimEnemyCombatant(tx, enemy, player.ActiveCombat)
 		simState.Enemies = append(simState.Enemies, simEnemy)
 	}
 
@@ -1037,6 +958,207 @@ func AutoCombatStart(c *gin.Context) {
 	})
 }
 
+// buildSimEnemyCombatant constructs a simulator.CombatantAuto for an enemy/defender in combat.
+// If the enemy is a PVP defender (player) and has CombatSettings, it mirrors the exact
+// loadout ordering, action priorities, conditions, killer moves, and category priorities
+// used by buildSimCombatant for player combatants.
+func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *models.CombatState) *simulator.CombatantAuto {
+	var enemyShield float64
+	for _, guInst := range enemy.GuInventory {
+		if guInst.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
+		if !ok {
+			continue
+		}
+		if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
+			enemyShield += spec.Effects.Active.ShieldFlat
+		}
+	}
+
+	eHP := enemy.HP
+	if eHP <= 0 {
+		eHP = enemy.MaxHP
+	}
+	enemyMana := enemy.CurrentMana
+	if activeCombat != nil && activeCombat.CombatMode == "virtual" {
+		eHP = enemy.MaxHP
+		enemyMana = enemy.MaxMana
+	}
+
+	enemyKind := "Enemy"
+	if enemy.Kind == "Pet" {
+		enemyKind = "Pet"
+	} else if enemy.Kind == "Boss" {
+		enemyKind = "Boss"
+	}
+
+	cs := enemy.CombatSettings
+	if cs == nil && activeCombat != nil {
+		cs = activeCombat.EnemyCombatSettings
+	}
+
+	simEnemy := &simulator.CombatantAuto{
+		ID:            enemy.ID,
+		Name:          enemy.Name,
+		Kind:          enemyKind,
+		GridX:         enemy.GridX,
+		GridY:         enemy.GridY,
+		MaxHP:         enemy.MaxHP,
+		HP:            eHP,
+		MaxMana:       enemy.MaxMana,
+		Mana:          enemyMana,
+		BaseDmg:       enemy.BaseAttack,
+		BaseDef:       enemy.BaseDefense,
+		Speed:         enemy.Speed,
+		VirtualShield: enemyShield,
+		DaoMarks: func() simulator.DaoMarks {
+			dm := make(simulator.DaoMarks)
+			for k, v := range enemy.DaoMarks {
+				dm[k] = v
+			}
+			return dm
+		}(),
+		PathMasteries: enemy.PathMasteries,
+	}
+
+	if activeCombat != nil {
+		simEnemy.PathResistance = activeCombat.EnemyPathResistance
+		simEnemy.MentalResistance = activeCombat.EnemyMentalResistance
+	}
+
+	// Build Gu actions from enemy inventory
+	var enemyActions []simulator.SimAction
+	for _, guInst := range enemy.GuInventory {
+		if guInst.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
+		if !ok {
+			continue
+		}
+		if hasCombatActiveEffects(&spec) {
+			act, err := buildSimActionFromGu(enemy, &spec, "GU_SKILL")
+			if err != nil {
+				continue
+			}
+			act.SourceID = guInst.GuID
+			enemyActions = append(enemyActions, act)
+		}
+	}
+
+	// For PVP defender with UUID, load active killer moves if any
+	isPVP := activeCombat != nil && (activeCombat.EnemyType == "PVP" || enemy.Kind == "Player")
+	if isPVP && activeCombat.TargetPlayerID != "" {
+		if targetUUID, errParse := uuid.Parse(activeCombat.TargetPlayerID); errParse == nil && tx != nil {
+			var selectedKMIDs []string
+			if cs != nil && len(cs.KMPriorities) > 0 {
+				for _, kp := range cs.KMPriorities {
+					selectedKMIDs = append(selectedKMIDs, kp.KillerMoveID)
+				}
+			}
+			kmMap, slotsMap, errKM := loadKillerMovesBatch(tx, targetUUID, selectedKMIDs)
+			if errKM == nil {
+				ownedGuInstMap := make(map[string]bool)
+				for _, g := range enemy.GuInventory {
+					if g.Status == "ACTIVE" {
+						ownedGuInstMap[g.InstanceID] = true
+					}
+				}
+				for kmID, km := range kmMap {
+					slots := slotsMap[kmID]
+					if ownedGuInstMap[km.CorePlayerGuID] {
+						allValid := true
+						for _, slot := range slots {
+							if !ownedGuInstMap[slot.PlayerGuID] {
+								allValid = false
+								break
+							}
+						}
+						if allValid {
+							act := buildSimActionFromKillerMove(km, slots, enemy.DaoMarks)
+							act.SourceID = kmID
+							enemyActions = append(enemyActions, act)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Basic attack fallback
+	enemyActions = append(enemyActions, simulator.SimAction{
+		ActionType: "BASIC_ATTACK",
+		Name:       "Đánh thường",
+		Damage:     float64(enemy.BaseAttack),
+		ManaCost:   0,
+		Priority:   999,
+	})
+
+	// Global damage multipliers from loadout Gus
+	var guIDs []string
+	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
+		for _, g := range enemy.GuInventory {
+			if g.GuID == guID {
+				return models.GetGu(guID, g.Rank)
+			}
+		}
+		return models.GuDictionaryItem{}, false
+	}
+	for _, g := range enemy.GuInventory {
+		guIDs = append(guIDs, g.GuID)
+	}
+	globalMult := computeGlobalGuDamageMultiplier(guIDs, loadoutSpec)
+	if globalMult > 1.0 {
+		for i := range enemyActions {
+			enemyActions[i].Damage *= globalMult
+		}
+		simEnemy.DamageMultiplier = globalMult
+	}
+
+	// Apply tactics (Priority, UseCondition, ConditionValue) from CombatSettings
+	if cs != nil {
+		for i := range enemyActions {
+			act := &enemyActions[i]
+			switch act.ActionType {
+			case "GU_SKILL":
+				for _, t := range cs.GuPriorities {
+					if t.GuID == act.SourceID {
+						act.Priority = t.Priority
+						act.UseCondition = t.UseCondition
+						act.ConditionValue = t.ConditionValue
+						break
+					}
+				}
+			case "KILLER_MOVE":
+				for _, t := range cs.KMPriorities {
+					if t.KillerMoveID == act.SourceID {
+						act.Priority = t.Priority
+						act.UseCondition = t.UseCondition
+						act.ConditionValue = t.ConditionValue
+						break
+					}
+				}
+			}
+		}
+
+		if len(cs.CategoryPriorities) > 0 {
+			simEnemy.CategoryPriorities = cs.CategoryPriorities
+		} else {
+			simEnemy.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
+		}
+
+		simEnemy.AutoHealHP = cs.AutoHealHP
+		simEnemy.HealThreshold = cs.HealThreshold
+		simEnemy.AutoRestoreMana = cs.AutoRestoreMana
+		simEnemy.ManaThreshold = cs.ManaThreshold
+	}
+
+	simEnemy.Actions = enemyActions
+	return simEnemy
+}
+
 // buildSimCombatant constructs a simulator.CombatantAuto from player + Gu loadout.
 // Shared by AutoCombatStart (combat_auto.go) and AutoResolveCombat (combat_auto_resolve.go).
 func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInitiator bool, reqLoadout *simulator.CombatLoadout) (*simulator.CombatantAuto, error) {
@@ -1229,20 +1351,22 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	// Scan inventory for healing items
 	healPotency := 0.0
 	healCharges := 0
-	invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
-	for _, inv := range invItems {
-		if inv.Quantity <= 0 {
-			continue
-		}
-		item, ok := models.ItemRegistry[inv.ItemID]
-		if !ok || item.Type != "Consumable" {
-			continue
-		}
-		if healVal, ok := item.Effects["restore_hp"]; ok && healVal > 0 {
-			if healPotency == 0 {
-				healPotency = healVal
+	if InventorySvc != nil {
+		invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
+		for _, inv := range invItems {
+			if inv.Quantity <= 0 {
+				continue
 			}
-			healCharges += int(inv.Quantity)
+			item, ok := models.ItemRegistry[inv.ItemID]
+			if !ok || item.Type != "Consumable" {
+				continue
+			}
+			if healVal, ok := item.Effects["restore_hp"]; ok && healVal > 0 {
+				if healPotency == 0 {
+					healPotency = healVal
+				}
+				healCharges += int(inv.Quantity)
+			}
 		}
 	}
 

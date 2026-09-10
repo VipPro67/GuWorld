@@ -12,14 +12,18 @@ import (
 
 // Action represents a dynamic combat action compiled from Gu effects
 type Action struct {
-	Name          string
-	Dmg           float64
-	Def           float64
-	ManaCost      float64
-	IsUtility     bool
-	LifeStealRate float64
-	StatusEffects []models.StatusEffect
-	Logs          []string
+	Name           string
+	Dmg            float64
+	Def            float64
+	ManaCost       float64
+	IsUtility      bool
+	LifeStealRate  float64
+	StatusEffects  []models.StatusEffect
+	Logs           []string
+	GuID           string
+	Priority       int
+	UseCondition   string
+	ConditionValue float64
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────

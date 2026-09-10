@@ -582,6 +582,7 @@ func AttackMineSlot(c *gin.Context) {
 			EnemyGuInventory:   filterGuLoadout(defender.GuInventory, defender.CombatSettings),
 			EnemyDaoMarks:      defender.DaoMarks,
 			EnemyPathMasteries: defender.PathMasteries,
+			EnemyCombatSettings: &defender.CombatSettings,
 			TargetPlayerID:     defender.ID.String(),
 			MineSlotID:         req.SlotID,
 		}

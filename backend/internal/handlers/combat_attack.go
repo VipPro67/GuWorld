@@ -1011,43 +1011,44 @@ func CombatAttack(c *gin.Context) {
 						}
 						enemyActions := BuildEnemyActions(enemyCtx, refEnemy)
 						if len(enemyActions) > 0 {
-							act := enemyActions[0]
-							if act.ManaCost > 0 {
-								if player.ActiveCombat.EnemyType != "PVP" && refEnemy.Kind != "Player" {
-									hpCost := refEnemy.MaxHP * 0.05
-									if hpCost < 1.0 {
-										hpCost = 1.0
+							for _, act := range enemyActions {
+								if act.ManaCost > 0 {
+									if player.ActiveCombat.EnemyType != "PVP" && refEnemy.Kind != "Player" {
+										hpCost := refEnemy.MaxHP * 0.05
+										if hpCost < 1.0 {
+											hpCost = 1.0
+										}
+										refEnemy.HP -= hpCost
+										logs = append(logs, fmt.Sprintf("-> %s tiêu hao sinh lực (Mất %.1f HP) để thúc dục Cổ ký sinh!", refEnemy.Name, hpCost))
+										if refEnemy.HP <= 0 {
+											logs = append(logs, fmt.Sprintf("-> %s bị Cổ ký sinh vắt kiệt sinh mệnh đến chết!", refEnemy.Name))
+											return logs
+										}
+									} else if refEnemy.CurrentMana >= act.ManaCost {
+										refEnemy.CurrentMana -= act.ManaCost
 									}
-									refEnemy.HP -= hpCost
-									logs = append(logs, fmt.Sprintf("-> %s tiêu hao sinh lực (Mất %.1f HP) để thúc dục Cổ ký sinh!", refEnemy.Name, hpCost))
-									if refEnemy.HP <= 0 {
-										logs = append(logs, fmt.Sprintf("-> %s bị Cổ ký sinh vắt kiệt sinh mệnh đến chết!", refEnemy.Name))
-										return logs
+								}
+
+								isHealing := act.Def > 0 && (act.IsUtility || (len(act.StatusEffects) == 0 && act.Dmg == 0))
+								isAttack := act.Dmg > 0 || len(act.StatusEffects) > 0
+
+								if isHealing {
+									healVal := act.Def
+									refEnemy.HP += healVal
+									if refEnemy.HP > refEnemy.MaxHP {
+										refEnemy.HP = refEnemy.MaxHP
 									}
-								} else if refEnemy.CurrentMana >= act.ManaCost {
-									refEnemy.CurrentMana -= act.ManaCost
+									logs = append(logs, fmt.Sprintf("-> %s kích hoạt phòng ngự/trị liệu %s, hồi %.1f HP.", refEnemy.Name, act.Name, healVal))
+								} else if isAttack {
+									netDmg := act.Dmg - targetAlly.BaseDefense
+									if netDmg < 1.0 {
+										netDmg = 1.0
+									}
+									dmgLog := applyDamageWithLogs(refEnemy.Name, targetAlly.Name, targetAlly, netDmg)
+									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s tấn công!", refEnemy.Name, act.Name), dmgLog)
+								} else {
+									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refEnemy.Name, act.Name))
 								}
-							}
-
-							isHealing := act.Def > 0 && (act.IsUtility || (len(act.StatusEffects) == 0 && act.Dmg == 0))
-							isAttack := act.Dmg > 0 || len(act.StatusEffects) > 0
-
-							if isHealing {
-								healVal := act.Def
-								refEnemy.HP += healVal
-								if refEnemy.HP > refEnemy.MaxHP {
-									refEnemy.HP = refEnemy.MaxHP
-								}
-								logs = append(logs, fmt.Sprintf("-> %s kích hoạt phòng ngự/trị liệu %s, hồi %.1f HP.", refEnemy.Name, act.Name, healVal))
-							} else if isAttack {
-								netDmg := act.Dmg - targetAlly.BaseDefense
-								if netDmg < 1.0 {
-									netDmg = 1.0
-								}
-								dmgLog := applyDamageWithLogs(refEnemy.Name, targetAlly.Name, targetAlly, netDmg)
-								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s tấn công!", refEnemy.Name, act.Name), dmgLog)
-							} else {
-								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refEnemy.Name, act.Name))
 							}
 						} else {
 							dmgVal := refEnemy.BaseAttack
