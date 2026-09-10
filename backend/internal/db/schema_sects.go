@@ -19,8 +19,19 @@ func schemaSects() error {
 		require_approval BOOLEAN NOT NULL DEFAULT FALSE,
 		require_promotion_approval BOOLEAN NOT NULL DEFAULT FALSE,
 		last_maintenance_at TIMESTAMP WITH TIME ZONE,
-		last_salary_paid_at TIMESTAMP WITH TIME ZONE
+		last_salary_paid_at TIMESTAMP WITH TIME ZONE,
+		last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("sects_last_vault_decay_column", `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='last_vault_decay_at') THEN
+			ALTER TABLE sects ADD COLUMN last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

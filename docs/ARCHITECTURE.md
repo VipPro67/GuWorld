@@ -57,7 +57,7 @@ Browser / Next.js UI
 
 ## Background workers
 
-- Hunger worker: giảm hunger/trạng thái Cổ theo chu kỳ.
+- Hunger / Tick worker: xử lý ON_TICK effects (sinh đá từ Cổ đặc biệt). Độ no Cổ trùng (người chơi và tông môn) được tính toán theo cơ chế Lazy Evaluation (on-demand khi truy cập).
 - Tribulation worker: kiểm tra/tạo tai kiếp và xử lý enemy grid.
 - Mine monster worker: gán quái vào mỏ bỏ hoang.
 

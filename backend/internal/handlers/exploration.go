@@ -27,10 +27,6 @@ import (
 const clearedCellCooldown = 15 * time.Minute
 
 func GetCellSeed(x, y int, zoneKey string) int64 {
-	// Deterministic per (zone, x, y): monster / resource content stays stable
-	// on the map and matches what players actually encounter. Cell respawn is
-	// handled separately via per-player cleared_cells cooldown, so a static
-	// seed does not lock content forever for an individual player.
 	h := sha256.New()
 	h.Write([]byte(zoneKey))
 	binary.Write(h, binary.BigEndian, int64(x))
@@ -79,8 +75,8 @@ func pickWeightedType(weights map[string]int, rng *rand.Rand) string {
 // GenerateCell procedurally generates a low-tier cell (monster / resource /
 // wild Gu / empty) from the containing zone's in-memory pools. No database
 // access — content is deterministic per (zone, x, y) and stays stable so the
-// map matches gameplay. Cleared cells are suppressed per player via the
-// cleared_cells cooldown, which acts as the respawn mechanism.
+// map matches gameplay. Cleared cells are suppressed via Redis shared map
+// state with respawn TTL, allowing synchronized clearing across all players.
 func GenerateCell(x, y int) models.Cell {
 	if cell, ok := cellGenCache.get(x, y); ok {
 		return cell
@@ -260,24 +256,17 @@ func ResolveCell(x, y int) models.Cell {
 	return GenerateCell(x, y)
 }
 
-func isCellClearedRecently(player *models.Player, x, y int, cooldown time.Duration) bool {
-	if player.ClearedCells == nil {
-		return false
-	}
-	coordKey := fmt.Sprintf("%d,%d", x, y)
-	clearedTimeStr, ok := player.ClearedCells[coordKey]
-	if !ok {
-		return false
-	}
-	t, err := time.Parse(time.RFC3339, clearedTimeStr)
+func isCellClearedRecently(regionID string, x, y int, cooldown time.Duration) bool {
+	cleared, _, err := cache.IsCellCleared(regionID, x, y)
 	if err != nil {
+		logger.S.Errorf("Failed to check Redis cell state for (%d,%d) in region %s: %v", x, y, regionID, err)
 		return false
 	}
-	return time.Since(t) < cooldown
+	return cleared
 }
 
 // cleanupExpiredClearedCells removes cells from player.ClearedCells that have exceeded the cooldown duration.
-// Returns true if any cells were removed.
+// Returns true if any cells were removed. Kept for backward compatibility with legacy players.
 func cleanupExpiredClearedCells(player *models.Player, cooldown time.Duration) bool {
 	if player.ClearedCells == nil {
 		return false
@@ -347,7 +336,7 @@ func GetGrid(c *gin.Context) {
 			cy := player.Y + dy
 			if cx >= 0 && cx < WorldWidth && cy >= 0 && cy < WorldHeight {
 				cell := ResolveCell(cx, cy)
-				if isCellClearedRecently(&player, cx, cy, clearedCellCooldown) {
+				if isCellClearedRecently(player.CurrentRegion, cx, cy, clearedCellCooldown) {
 					cell = models.Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
 				}
 				cells = append(cells, cell)
@@ -451,7 +440,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	recordVisitedSubZone(player, SubZoneKey(player.X, player.Y))
 
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-	isCleared := isCellClearedRecently(player, player.X, player.Y, clearedCellCooldown)
+	isCleared := isCellClearedRecently(player.CurrentRegion, player.X, player.Y, clearedCellCooldown)
 	cell := ResolveCell(player.X, player.Y)
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
 	combatTriggered := false
@@ -542,10 +531,11 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				}
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s!", player.X, player.Y, itemName)
 
-				if err := MarkPersistentCellCleared(tx, player.ID, player.X, player.Y); err != nil {
-					logger.S.Errorf("Failed to mark cell cleared for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
 					return "", false, err
 				}
+				broadcastWorldCell(cellEventCleared, WorldCellEvent{X: player.X, Y: player.Y, CellType: cell.Type, ContentID: cell.Content})
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -578,6 +568,12 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				}
 				player.GuInventory = append(player.GuInventory, newGu)
 				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s!", guName)
+
+				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+					return "", false, err
+				}
+				cache.BroadcastWildGuCaptured(player.X, player.Y, cell.Content)
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -696,7 +692,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				adjY := player.Y + ay
 
 				// check if already cleared
-				if isCellClearedRecently(player, adjX, adjY, clearedCellCooldown) {
+				if isCellClearedRecently(player.CurrentRegion, adjX, adjY, clearedCellCooldown) {
 					continue
 				}
 
@@ -725,6 +721,10 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)
 					}
 					// Mark the original monster cell as cleared
+					if err := cache.SetCellCleared(player.CurrentRegion, adjX, adjY, player.ID.String(), clearedCellCooldown); err != nil {
+						logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, adjX, adjY, err)
+					}
+					cache.BroadcastMonsterKilled(adjX, adjY, mon.Name, player.CurrentRegion)
 					if player.ClearedCells == nil {
 						player.ClearedCells = make(models.ClearedCellsMap)
 					}
@@ -1323,6 +1323,7 @@ type NearbyCell struct {
 	Content string `json:"content"`
 	Rank    int    `json:"rank,omitempty"`
 	SubRank int    `json:"sub_rank,omitempty"`
+	Region  string `json:"region_id,omitempty"`
 }
 
 // GetNearbyCells resolves the cells around the player (or an explicit
@@ -1370,7 +1371,11 @@ func GetNearbyCells(c *gin.Context) {
 			if cell.Type == "Empty" {
 				continue
 			}
-			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank})
+			regionID := DeriveRegionAt(cx, cy)
+			if isCellClearedRecently(regionID, cx, cy, clearedCellCooldown) {
+				continue
+			}
+			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
 		}
 	}
 
@@ -1425,7 +1430,11 @@ func GetCellsRect(c *gin.Context) {
 			if cell.Type == "Empty" {
 				continue
 			}
-			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank})
+			regionID := DeriveRegionAt(x, y)
+			if isCellClearedRecently(regionID, x, y, clearedCellCooldown) {
+				continue
+			}
+			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
 		}
 	}
 

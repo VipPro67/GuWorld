@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -144,109 +143,77 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 		return nil
 	}
 
-	// Parse all payloads
-	parsed := make([]PlayerStatsPayload, 0, len(payloads))
+	// Parse and deduplicate payloads by player ID, keeping the newest UpdatedAt
+	latestByPlayer := make(map[string]PlayerStatsPayload)
 	for _, pStr := range payloads {
 		var p PlayerStatsPayload
 		if err := json.Unmarshal([]byte(pStr), &p); err != nil {
 			logger.S.Errorf("Failed to unmarshal PlayerStatsPayload: %v", err)
 			continue
 		}
-		parsed = append(parsed, p)
+		if existing, ok := latestByPlayer[p.ID]; !ok || p.UpdatedAt.After(existing.UpdatedAt) {
+			latestByPlayer[p.ID] = p
+		}
 	}
 
-	if len(parsed) == 0 {
-		return cache.RemovePendingIDs("player_stats")
+	if len(latestByPlayer) == 0 {
+		return nil
 	}
 
-	// Process in chunks to reduce lock contention
-	const chunkSize = 25
-	var allIDs []string
+	var succeededIDs []string
 
-	for i := 0; i < len(parsed); i += chunkSize {
-		end := i + chunkSize
-		if end > len(parsed) {
-			end = len(parsed)
-		}
-		chunk := parsed[i:end]
-
-		ids := make([]string, len(chunk))
-		hps := make([]float64, len(chunk))
-		soulHps := make([]int, len(chunk))
-		currentManas := make([]float64, len(chunk))
-		maxManas := make([]float64, len(chunk))
-		currentThoughts := make([]float64, len(chunk))
-		lifespans := make([]float64, len(chunk))
-		timeSpeedMultipliers := make([]float64, len(chunk))
-		apertureStresses := make([]float64, len(chunk))
-		lastCultivateTimes := make([]time.Time, len(chunk))
-		lastManaUpdates := make([]time.Time, len(chunk))
-
-		for j, p := range chunk {
-			ids[j] = p.ID
-			hps[j] = p.HP
-			soulHps[j] = p.SoulHP
-			currentManas[j] = p.CurrentMana
-			maxManas[j] = p.MaxMana
-			currentThoughts[j] = p.CurrentThought
-			lifespans[j] = p.Lifespan
-			timeSpeedMultipliers[j] = p.TimeSpeedMultiplier
-			apertureStresses[j] = p.ApertureStress
-			lastCultivateTimes[j] = p.LastCultivateTime
-			lastManaUpdates[j] = p.LastManaUpdate
-		}
-
-		// Each chunk runs in its own short transaction with lock/statement timeout
+	for _, p := range latestByPlayer {
+		// Each player update runs in its own short transaction with lock/statement timeout
 		tx, err := db.DB.BeginTx(ctx, nil)
 		if err != nil {
-			logger.S.Warnf("Batch stats: failed to begin tx: %v", err)
-			return err
+			logger.S.Warnf("Batch stats: failed to begin tx for player %s: %v", p.ID, err)
+			continue
 		}
 
-		if _, err := tx.Exec(`SET LOCAL lock_timeout = '5000'`); err != nil {
-			logger.S.Warnf("Batch stats: failed to set lock_timeout: %v", err)
+		if _, err := tx.Exec(`SET LOCAL lock_timeout = '3000'`); err != nil {
+			logger.S.Warnf("Batch stats: failed to set lock_timeout for player %s: %v", p.ID, err)
 			tx.Rollback()
-			return err
+			continue
 		}
-		if _, err := tx.Exec(`SET LOCAL statement_timeout = '8000'`); err != nil {
-			logger.S.Warnf("Batch stats: failed to set statement_timeout: %v", err)
+		if _, err := tx.Exec(`SET LOCAL statement_timeout = '5000'`); err != nil {
+			logger.S.Warnf("Batch stats: failed to set statement_timeout for player %s: %v", p.ID, err)
 			tx.Rollback()
-			return err
+			continue
 		}
 
 		_, err = tx.Exec(`
-			WITH updates(id, hp, soul_hp, current_mana, max_mana, current_thought, lifespan,
-			            time_speed_multiplier, aperture_stress, last_cultivate_time, last_mana_update) AS (
-				SELECT unnest($1::text[]), unnest($2::float8[]), unnest($3::int[]),
-				       unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]),
-				       unnest($7::float8[]), unnest($8::float8[]), unnest($9::float8[]),
-				       unnest($10::timestamptz[]), unnest($11::timestamptz[])
-			)
-			UPDATE players p SET
-				hp = u.hp, soul_hp = u.soul_hp, current_mana = u.current_mana, max_mana = u.max_mana,
-				current_thought = u.current_thought, lifespan = u.lifespan, time_speed_multiplier = u.time_speed_multiplier,
-				aperture_stress = u.aperture_stress, last_cultivate_time = u.last_cultivate_time,
-				last_mana_update = u.last_mana_update,
+			UPDATE players SET
+				hp = $1, soul_hp = $2, current_mana = $3, max_mana = $4,
+				current_thought = $5, lifespan = $6, time_speed_multiplier = $7,
+				aperture_stress = $8, last_cultivate_time = $9,
+				last_mana_update = $10,
 				version = version + 1
-			FROM updates u WHERE p.id = u.id::uuid AND (p.last_mana_update IS NULL OR p.last_mana_update <= u.last_mana_update)
-		`, pq.Array(ids), pq.Array(hps), pq.Array(soulHps), pq.Array(currentManas), pq.Array(maxManas),
-			pq.Array(currentThoughts), pq.Array(lifespans), pq.Array(timeSpeedMultipliers),
-			pq.Array(apertureStresses), pq.Array(lastCultivateTimes), pq.Array(lastManaUpdates))
+			WHERE id = $11 AND (last_mana_update IS NULL OR last_mana_update <= $10)
+		`,
+			p.HP, p.SoulHP, p.CurrentMana, p.MaxMana,
+			p.CurrentThought, p.Lifespan, p.TimeSpeedMultiplier,
+			p.ApertureStress, p.LastCultivateTime,
+			p.LastManaUpdate,
+			p.ID,
+		)
 		if err != nil {
 			tx.Rollback()
-			logger.S.Warnf("Batch update stats chunk failed: %v", err)
-			return err
+			logger.S.Warnf("Batch update stats postponed for player %s (locked/retry): %v", p.ID, err)
+			continue
 		}
 
 		if err := tx.Commit(); err != nil {
-			logger.S.Warnf("Batch stats: failed to commit tx: %v", err)
-			return err
+			logger.S.Warnf("Batch stats: failed to commit for player %s: %v", p.ID, err)
+			continue
 		}
 
-		allIDs = append(allIDs, ids...)
+		succeededIDs = append(succeededIDs, p.ID)
 	}
 
-	_ = cache.RemovePendingIDs("player_stats", allIDs...)
+	if len(succeededIDs) > 0 {
+		_ = cache.RemovePendingIDs("player_stats", succeededIDs...)
+	}
+
 	return nil
 }
 

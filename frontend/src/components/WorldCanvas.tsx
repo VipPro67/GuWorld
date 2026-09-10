@@ -82,6 +82,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const fetchNearbyCells = useWorldStore((s) => s.fetchNearbyCells);
   const fetchNearbyPlayers = useWorldStore((s) => s.fetchNearbyPlayers);
   const fetchCellsRect = useWorldStore((s) => s.fetchCellsRect);
+  const invalidateCell = useWorldStore((s) => s.invalidateCell);
   const upsertPlayerPosition = useWorldStore((s) => s.upsertPlayerPosition);
   const pruneStalePlayers = useWorldStore((s) => s.pruneStalePlayers);
   const setLivePosition = useWorldStore((s) => s.setLivePosition);
@@ -1125,8 +1126,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       drawPlayer();
       drawRegions(regions);
       drawObjects(displayObjects);
-      const cleared = gamePlayer?.cleared_cells || {};
-      drawMonsters(nearbyCells.filter((c) => !cleared[`${c.x},${c.y}`]));
+      drawMonsters(nearbyCells);
       drawPlayers(nearbyPlayers);
       drawFog();
       drawRange();
@@ -1321,10 +1321,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
-    const cleared = gamePlayer?.cleared_cells || {};
-    const filteredCells = nearbyCells.filter(c => !cleared[`${c.x},${c.y}`]);
-    drawMonsters(filteredCells);
-  }, [appReady, nearbyCells, gamePlayer?.cleared_cells, drawMonsters]);
+    drawMonsters(nearbyCells);
+  }, [appReady, nearbyCells, drawMonsters]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
@@ -1400,9 +1398,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       }
     };
 
-    const onWorldCell = () => {
-      // A persistent cell was cleared or respawned server-side; refresh the
-      // object list so markers and the detail card reflect the new state.
+    const onWorldCell = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || !detail.x || !detail.y) return;
+      // When a cell is cleared, invalidate it immediately from cache so markers disappear.
+      if (detail.type === "cell_cleared" || detail.type === "monster_killed") {
+        invalidateCell(detail.x, detail.y);
+        fetchNearbyCells(detail.x, detail.y, useWorldStore.getState().investigationRange);
+      }
       fetchObjects();
     };
 

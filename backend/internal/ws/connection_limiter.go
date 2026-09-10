@@ -74,10 +74,16 @@ func (lim *ConnectionLimiter) ReleaseConnection(playerID uuid.UUID, clientIP str
 	if playerID != uuid.Nil {
 		if lim.playerConnections[playerID] > 0 {
 			lim.playerConnections[playerID]--
+			if lim.playerConnections[playerID] == 0 {
+				delete(lim.playerConnections, playerID)
+			}
 		}
 	}
 	if lim.ipConnections[clientIP] > 0 {
 		lim.ipConnections[clientIP]--
+		if lim.ipConnections[clientIP] == 0 {
+			delete(lim.ipConnections, clientIP)
+		}
 	}
 }
 

@@ -65,7 +65,12 @@ register:   make(chan *Client, 128),
 
 // run is the main event loop for the Hub.
 func (h *Hub) run() {
-	defer h.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			logger.S.Errorf("Hub run panic recovered: %v", r)
+		}
+		h.wg.Done()
+	}()
 	for {
 		select {
 		case <-h.ctx.Done():
@@ -87,20 +92,22 @@ func (h *Hub) run() {
 
 		case client := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[client.playerID]; ok {
-				// Remove from all subscribed channels
-				for ch := range client.subscriptions {
-					if subs, ok := h.channels[ChannelName(ch)]; ok {
+			if curr, ok := h.clients[client.playerID]; ok && curr == client {
+				delete(h.clients, client.playerID)
+				logger.S.Debugf("Client unregistered: %s", client.playerID)
+			}
+			// Remove from all subscribed channels on this shard if it matches this client
+			for _, ch := range client.GetSubscriptions() {
+				if subs, ok := h.channels[ch]; ok {
+					if subs[client.playerID] == client {
 						delete(subs, client.playerID)
 						if len(subs) == 0 {
-							delete(h.channels, ChannelName(ch))
+							delete(h.channels, ch)
 						}
 					}
 				}
-				delete(h.clients, client.playerID)
-				client.Close()
-				logger.S.Debugf("Client unregistered: %s", client.playerID)
 			}
+			client.Close()
 			h.mu.Unlock()
 
 		case msg := <-h.broadcast:
@@ -162,6 +169,25 @@ func (h *Hub) Subscribe(client *Client, channel ChannelName) {
 	
 	client.mu.Lock()
 	client.subscriptions[string(channel)] = struct{}{}
+	client.mu.Unlock()
+}
+
+// Unsubscribe removes a client from a channel.
+func (h *Hub) Unsubscribe(client *Client, channel ChannelName) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if subs, ok := h.channels[channel]; ok {
+		if subs[client.playerID] == client {
+			delete(subs, client.playerID)
+			if len(subs) == 0 {
+				delete(h.channels, channel)
+			}
+		}
+	}
+
+	client.mu.Lock()
+	delete(client.subscriptions, string(channel))
 	client.mu.Unlock()
 }
 

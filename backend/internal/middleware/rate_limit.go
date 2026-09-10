@@ -9,6 +9,8 @@ import (
 
 var defaultStore RateLimitStore
 
+const rateLimitMultiplier = 5
+
 func SetDefaultStore(s RateLimitStore) {
 	defaultStore = s
 }
@@ -24,6 +26,7 @@ func RateLimit(limit int, window time.Duration) gin.HandlerFunc {
 
 // RateLimitByIP limits requests per client IP.
 func RateLimitByIP(limit int, window time.Duration) gin.HandlerFunc {
+	limit *= rateLimitMultiplier
 	return func(c *gin.Context) {
 		key := "ip:" + c.ClientIP()
 		ok, _ := defaultStore.Allow(key, limit, window)
@@ -41,6 +44,7 @@ func RateLimitByIP(limit int, window time.Duration) gin.HandlerFunc {
 // RateLimitByPlayer limits requests per authenticated player.
 // Must be placed AFTER AuthRequired().
 func RateLimitByPlayer(limit int, window time.Duration) gin.HandlerFunc {
+	limit *= rateLimitMultiplier
 	return func(c *gin.Context) {
 		id, ok := GetPlayerID(c)
 		if !ok {
@@ -62,6 +66,7 @@ func RateLimitByPlayer(limit int, window time.Duration) gin.HandlerFunc {
 
 // RateLimitByGroup limits requests across an entire API group (shared counter).
 func RateLimitByGroup(groupName string, limit int, window time.Duration) gin.HandlerFunc {
+	limit *= rateLimitMultiplier
 	return func(c *gin.Context) {
 		// Use IP as secondary key so different IPs have independent group counters
 		key := "group:" + groupName + ":" + c.ClientIP()

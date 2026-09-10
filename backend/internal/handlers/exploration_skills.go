@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type UseGuOnMapRequest struct {
@@ -289,7 +291,7 @@ func UseGuOnMap(c *gin.Context) {
 
 	if inWorld(req.TargetX, req.TargetY) && (req.TargetX != 0 || req.TargetY != 0) {
 		cell := ResolveCell(req.TargetX, req.TargetY)
-		if (cell.Type == "Monster" || cell.Type == "Boss") && !isCellClearedRecently(&player, req.TargetX, req.TargetY, 5*time.Minute) {
+		if (cell.Type == "Monster" || cell.Type == "Boss") && !isCellClearedRecently(player.CurrentRegion, req.TargetX, req.TargetY, 5*time.Minute) {
 			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
 			if err == nil {
 				maxHP, _, def := models.ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, cell.Rank, cell.SubRank, mon.Type)
@@ -312,6 +314,11 @@ func UseGuOnMap(c *gin.Context) {
 					}
 					coordKey := fmt.Sprintf("%d,%d", req.TargetX, req.TargetY)
 					player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+					if err := cache.SetCellCleared(player.CurrentRegion, req.TargetX, req.TargetY, player.ID.String(), clearedCellCooldown); err != nil {
+						logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, req.TargetX, req.TargetY, err)
+					}
+					cache.BroadcastMonsterKilled(req.TargetX, req.TargetY, mon.Name, player.CurrentRegion)
+					_ = cache.BroadcastCellCleared(player.CurrentRegion, req.TargetX, req.TargetY, "Monster", mon.ID)
 
 					stonesGain := int64(float64(cell.Rank) * 30.0)
 					if stonesGain <= 0 {

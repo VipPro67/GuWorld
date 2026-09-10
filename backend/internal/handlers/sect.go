@@ -15,7 +15,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -31,6 +33,7 @@ type Sect struct {
 	Level                    int             `json:"level"`
 	RequireApproval          bool            `json:"require_approval"`
 	RequirePromotionApproval bool            `json:"require_promotion_approval"`
+	LastVaultDecayAt         *time.Time      `json:"last_vault_decay_at,omitempty"`
 }
 
 type SectJoinRequest struct {
@@ -419,6 +422,14 @@ func GetMySectStatus(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 		}
 		return
+	}
+
+	if tx, errTx := db.DB.Begin(); errTx == nil {
+		if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH == nil {
+			_ = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
 	}
 
 	var s Sect
@@ -1010,6 +1021,10 @@ func DonateGu(c *gin.Context) {
 	vaultItemCost := int64(pricing.VaultCost(effectiveBase))
 
 	// Add to sect vault
+	if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH != nil {
+		logger.S.Warnf("EvaluateSectVaultHungerTx failed for sect %s: %v", m.SectID, errH)
+	}
+
 	var vaultGuRaw json.RawMessage
 	err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultGuRaw)
 	if err != nil {
@@ -1416,6 +1431,10 @@ func DonateBulk(c *gin.Context) {
 
 	// 2. Process Gu Instances
 	if len(req.Gus) > 0 {
+		if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH != nil {
+			logger.S.Warnf("EvaluateSectVaultHungerTx failed for sect %s: %v", m.SectID, errH)
+		}
+
 		// Fetch sect vault Gu
 		var vaultGuRaw json.RawMessage
 		err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultGuRaw)
@@ -1699,6 +1718,10 @@ func BuyFromSectVault(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
+	}
+
+	if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH != nil {
+		logger.S.Warnf("EvaluateSectVaultHungerTx failed for sect %s: %v", m.SectID, errH)
 	}
 
 	var s Sect

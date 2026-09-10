@@ -111,7 +111,7 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       wall_progress, human_qi, next_tribulation_time,
 		       hp, base_hp, body_mods, x, y,
 		       equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries,
-		       active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier,
+		       active_combat, last_mana_update, COALESCE(last_hunger_tick_at, created_at, NOW()), created_at, lifespan, time_speed_multiplier,
 		       party_id, arena_rank, COALESCE(email, ''), google_id,
 		       explore_count, last_explore_reset, aperture_stress,
 		       last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine,
@@ -140,7 +140,7 @@ FROM players
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
 		&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
 		&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
-		&player.LastManaUpdate, &player.CreatedAt, &player.Lifespan, &player.TimeSpeedMultiplier,
+		&player.LastManaUpdate, &player.LastHungerTickAt, &player.CreatedAt, &player.Lifespan, &player.TimeSpeedMultiplier,
 		&player.PartyID, &player.ArenaRank, &player.Email, &player.GoogleID,
 		&player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
@@ -443,6 +443,10 @@ func (s *PlayerService) ProjectStatus(q QueryRower, id uuid.UUID) (models.Player
 // EvaluateAndPersistMana is the authoritative status evaluator for mutation flows.
 // It loads with FOR UPDATE, projects time-variant fields, and persists changes.
 func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	if err := worker.EvaluatePlayerHungerTx(tx, id); err != nil {
+		logger.S.Warnf("EvaluatePlayerHungerTx failed for player %s: %v", id, err)
+	}
+
 	player, err := s.Load(tx, id, false)
 	if err != nil {
 		return player, err
@@ -512,6 +516,10 @@ func (s *PlayerService) EvaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.P
 // evaluators: load with FOR UPDATE, apply defaults, and project status in
 // memory. It does not write to the database.
 func (s *PlayerService) evaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	if err := worker.EvaluatePlayerHungerTx(tx, id); err != nil {
+		logger.S.Warnf("EvaluatePlayerHungerTx failed for player %s: %v", id, err)
+	}
+
 	player, err := s.LoadEquipped(tx, id)
 	if err != nil {
 		return player, err

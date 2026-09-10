@@ -59,6 +59,7 @@ type Client struct {
 	playerID uuid.UUID
 	conn     *websocket.Conn
 	send     chan []byte
+	done     chan struct{}
 	hub      *Hub
 	shard    *ShardedHub
 	clientIP string
@@ -71,23 +72,26 @@ type Client struct {
 }
 
 // ServeWs handles websocket requests from the peer.
-func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID uuid.UUID) {
-	// Extract client IP
-	clientIP := r.Header.Get("X-Forwarded-For")
-	if clientIP != "" {
-		parts := strings.Split(clientIP, ",")
-		clientIP = strings.TrimSpace(parts[0])
-	} else {
-		clientIP = r.RemoteAddr
-		// Strip port from IP
-		if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
-			clientIP = clientIP[:idx]
+func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID uuid.UUID, clientIP string) {
+	if clientIP == "" {
+		// Fallback to extracting client IP from request
+		clientIP = r.Header.Get("X-Forwarded-For")
+		if clientIP != "" {
+			parts := strings.Split(clientIP, ",")
+			clientIP = strings.TrimSpace(parts[0])
+		} else {
+			clientIP = r.RemoteAddr
+			// Strip port from IP
+			if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
+				clientIP = clientIP[:idx]
+			}
 		}
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.S.Errorf("Failed to upgrade websocket: %v", err)
+		ReleaseConnection(playerID, clientIP)
 		return
 	}
 
@@ -95,6 +99,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 		playerID:      playerID,
 		conn:          conn,
 		send:          make(chan []byte, 1024),
+		done:          make(chan struct{}),
 		hub:           shub.GetClientShard(playerID),
 		subscriptions: make(map[string]struct{}),
 		clientIP:      clientIP,
@@ -166,7 +171,6 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 func (c *Client) readPump() {
 	defer func() {
 		c.shard.Unregister(c)
-		ReleaseConnection(c.playerID, c.clientIP)
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -180,8 +184,8 @@ func (c *Client) readPump() {
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				logger.S.Errorf("Unexpected close error: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
+				logger.S.Warnf("Unexpected close error for %s: %v", c.playerID, err)
 			}
 			break
 		}
@@ -206,39 +210,37 @@ func (c *Client) handleMessage(msg WSMessage) {
 			logger.S.Warnf("Invalid subscribe payload from %s: %v", c.playerID, err)
 			return
 		}
-		c.hub.Subscribe(c, ChannelName(sub.Channel))
+		c.shard.Subscribe(c, ChannelName(sub.Channel))
 	case "ping":
 		// handled by pong handler/ping loop, but if client sends application-level ping:
 		pong, _ := json.Marshal(WSMessage{Type: "pong"})
-		c.send <- pong
+		select {
+		case c.send <- pong:
+		default:
+		}
 	}
 }
 
 // writePump pumps messages from the hub to the websocket connection.
 func (c *Client) writePump() {
-	const (
-		maxBatchSize  = 64
-		batchTimeout  = 2 * time.Millisecond
-	)
+	const maxBatchSize = 64
 	ticker := time.NewTicker(pingPeriod)
-	batchTicker := time.NewTicker(batchTimeout)
 	defer func() {
 		ticker.Stop()
-		batchTicker.Stop()
 		c.shard.Unregister(c)
 	}()
 
 	batch := make([][]byte, 0, maxBatchSize)
 
-	flushBatch := func() {
+	flushBatch := func() error {
 		if len(batch) == 0 {
-			return
+			return nil
 		}
 		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 		w, err := c.conn.NextWriter(websocket.TextMessage)
 		if err != nil {
 			batch = batch[:0]
-			return
+			return err
 		}
 		for i, msg := range batch {
 			if i > 0 {
@@ -248,28 +250,31 @@ func (c *Client) writePump() {
 		}
 		if err := w.Close(); err != nil {
 			batch = batch[:0]
-			return
+			return err
 		}
 		batch = batch[:0]
+		return nil
 	}
 
 	for {
 		select {
-		case message, ok := <-c.send:
-			if !ok {
-				// The hub closed the channel.
-				c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+		case <-c.done:
+			return
+		case message := <-c.send:
+			batch = append(batch, message)
+		drainLoop:
+			for len(batch) < maxBatchSize {
+				select {
+				case m := <-c.send:
+					batch = append(batch, m)
+				default:
+					break drainLoop
+				}
+			}
+			if err := flushBatch(); err != nil {
 				return
 			}
-			batch = append(batch, message)
-			if len(batch) >= maxBatchSize {
-				flushBatch()
-			}
-		case <-batchTicker.C:
-			flushBatch()
 		case <-ticker.C:
-			flushBatch()
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
@@ -281,9 +286,23 @@ func (c *Client) writePump() {
 // Close ensures connection is only closed once.
 func (c *Client) Close() {
 	c.closeOnce.Do(func() {
-		close(c.send)
+		if c.done != nil {
+			close(c.done)
+		}
 		if c.conn != nil {
 			c.closeErr = c.conn.Close()
 		}
+		ReleaseConnection(c.playerID, c.clientIP)
 	})
+}
+
+// GetSubscriptions returns a copy of current channel subscriptions.
+func (c *Client) GetSubscriptions() []ChannelName {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	subs := make([]ChannelName, 0, len(c.subscriptions))
+	for ch := range c.subscriptions {
+		subs = append(subs, ChannelName(ch))
+	}
+	return subs
 }

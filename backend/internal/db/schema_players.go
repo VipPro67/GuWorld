@@ -43,6 +43,7 @@ func schemaPlayers() error {
 		combat_settings JSONB NOT NULL DEFAULT '{}',
 		immortal_state JSONB NOT NULL DEFAULT '{}',
 		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		last_hunger_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0,
 		last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -96,6 +97,16 @@ func schemaPlayers() error {
 	BEGIN
 		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='version') THEN
 			ALTER TABLE players ADD COLUMN version INT NOT NULL DEFAULT 0;
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
+
+	if err := execSchema("players_last_hunger_tick_column", `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_hunger_tick_at') THEN
+			ALTER TABLE players ADD COLUMN last_hunger_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 		END IF;
 	END $$;`); err != nil {
 		return err

@@ -120,21 +120,23 @@ func (s CultivationState) Apply(p *Player) {
 
 // ResourceState groups mana and currency fields.
 type ResourceState struct {
-	CurrentMana    float64   `json:"current_mana"`
-	MaxMana        float64   `json:"max_mana"`
-	PrimevalStones int64     `json:"primeval_stones"`
-	ImmortalStones int64     `json:"immortal_stones"`
-	LastManaUpdate time.Time `json:"last_mana_update"`
+	CurrentMana      float64   `json:"current_mana"`
+	MaxMana          float64   `json:"max_mana"`
+	PrimevalStones   int64     `json:"primeval_stones"`
+	ImmortalStones   int64     `json:"immortal_stones"`
+	LastManaUpdate   time.Time `json:"last_mana_update"`
+	LastHungerTickAt time.Time `json:"last_hunger_tick_at"`
 }
 
 // NewResourceState extracts resource data from a Player.
 func NewResourceState(p *Player) ResourceState {
 	return ResourceState{
-		CurrentMana:    p.CurrentMana,
-		MaxMana:        p.MaxMana,
-		PrimevalStones: p.PrimevalStones,
-		ImmortalStones: p.ImmortalStones,
-		LastManaUpdate: p.LastManaUpdate,
+		CurrentMana:      p.CurrentMana,
+		MaxMana:          p.MaxMana,
+		PrimevalStones:   p.PrimevalStones,
+		ImmortalStones:   p.ImmortalStones,
+		LastManaUpdate:   p.LastManaUpdate,
+		LastHungerTickAt: p.LastHungerTickAt,
 	}
 }
 
@@ -145,6 +147,7 @@ func (s ResourceState) Apply(p *Player) {
 	p.PrimevalStones = s.PrimevalStones
 	p.ImmortalStones = s.ImmortalStones
 	p.LastManaUpdate = s.LastManaUpdate
+	p.LastHungerTickAt = s.LastHungerTickAt
 }
 
 // BodyState groups HP and body modification fields.

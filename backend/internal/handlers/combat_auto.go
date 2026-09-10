@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -641,6 +642,13 @@ func AutoCombatStart(c *gin.Context) {
 			if !isTribulation {
 				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+				}
+				if player.ActiveCombat != nil {
+					_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
+				}
+				_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
 			}
 
 			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`

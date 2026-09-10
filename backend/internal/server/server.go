@@ -146,7 +146,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 				c.JSON(http.StatusTooManyRequests, gin.H{"error": "Quá nhiều kết nối WebSocket. Vui lòng đóng các tab khác và thử lại!"})
 				return
 			}
-			ws.ServeWs(shub, c.Writer, c.Request, playerID)
+			ws.ServeWs(shub, c.Writer, c.Request, playerID, ip)
 		})
 
 		// Public endpoints — per IP

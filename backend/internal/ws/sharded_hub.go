@@ -64,16 +64,34 @@ func (sh *ShardedHub) Register(client *Client) {
 	shard.register <- client
 }
 
-// Unregister removes a client from the appropriate shard.
+// Unregister removes a client from the appropriate shard and all channel shards.
 func (sh *ShardedHub) Unregister(client *Client) {
+	if client == nil {
+		return
+	}
+	// 1. Unsubscribe from all subscribed channels on their respective channel shards
+	for _, ch := range client.GetSubscriptions() {
+		sh.Unsubscribe(client, ch)
+	}
+
+	// 2. Unregister from the client's shard
 	shard := sh.GetClientShard(client.playerID)
 	shard.unregister <- client
+
+	// 3. Ensure client resources are closed
+	client.Close()
 }
 
 // Subscribe adds a client to a channel on the appropriate shard.
 func (sh *ShardedHub) Subscribe(client *Client, channel ChannelName) {
 	shard := sh.GetChannelShard(channel)
 	shard.Subscribe(client, channel)
+}
+
+// Unsubscribe removes a client from a channel on the appropriate shard.
+func (sh *ShardedHub) Unsubscribe(client *Client, channel ChannelName) {
+	shard := sh.GetChannelShard(channel)
+	shard.Unsubscribe(client, channel)
 }
 
 // BroadcastToChannel sends a message to all subscribers of a channel.
@@ -103,17 +121,11 @@ func (sh *ShardedHub) GetStats() (int, int) {
 		return 0, 0
 	}
 	var totalClients, totalChannels int
-	var wg sync.WaitGroup
-	wg.Add(ShardCount)
 	for i := 0; i < ShardCount; i++ {
-		go func(idx int) {
-			defer wg.Done()
-			clients, channels := sh.shards[idx].GetStats()
-			totalClients += clients
-			totalChannels += channels
-		}(i)
+		clients, channels := sh.shards[i].GetStats()
+		totalClients += clients
+		totalChannels += channels
 	}
-	wg.Wait()
 	return totalClients, totalChannels
 }
 

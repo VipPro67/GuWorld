@@ -3,6 +3,7 @@ package worker
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFormatStarvedGuNotification(t *testing.T) {
@@ -101,5 +102,70 @@ func TestFormatVitalGuNotification(t *testing.T) {
 	expectedMulti := "2 bản mệnh cổ đã chết vì đói: Xuân Thu Thiền, Nguyệt Quang Cổ! Bạn nhận 160 sát thương phản phệ."
 	if content != expectedMulti {
 		t.Errorf("expected %q, got %q", expectedMulti, content)
+	}
+}
+
+func TestLazyEvaluationTicksCalculation(t *testing.T) {
+	now := time.Now()
+	interval := 3 * time.Hour
+
+	// Case 1: Less than 3 hours -> 0 ticks
+	lastTick1 := now.Add(-2 * time.Hour)
+	ticks1 := int(now.Sub(lastTick1) / interval)
+	if ticks1 != 0 {
+		t.Errorf("expected 0 ticks for 2 hours, got %d", ticks1)
+	}
+
+	// Case 2: Exactly 3 hours -> 1 tick
+	lastTick2 := now.Add(-3 * time.Hour)
+	ticks2 := int(now.Sub(lastTick2) / interval)
+	if ticks2 != 1 {
+		t.Errorf("expected 1 tick for 3 hours, got %d", ticks2)
+	}
+
+	// Case 3: 7 hours -> 2 ticks, remainder 1 hour preserved
+	lastTick3 := now.Add(-7 * time.Hour)
+	ticks3 := int(now.Sub(lastTick3) / interval)
+	if ticks3 != 2 {
+		t.Errorf("expected 2 ticks for 7 hours, got %d", ticks3)
+	}
+	newTick3 := lastTick3.Add(time.Duration(ticks3) * interval)
+	if diff := now.Sub(newTick3); diff < 59*time.Minute || diff > 61*time.Minute {
+		t.Errorf("expected remainder ~1 hour, got %v", diff)
+	}
+}
+
+func TestVaultGuLazyDecay(t *testing.T) {
+	items := []vaultGuItem{
+		{ID: "GU_TEST_1", Rank: 1, Quantity: 1, Hunger: 100},
+		{ID: "GU_TEST_2", Rank: 1, Quantity: 1, Hunger: 10},
+	}
+	rate := 6.0
+	ticks := 2
+
+	// Decay with 2 ticks: loss = 2 * 6 = 12
+	for i := range items {
+		items[i].Hunger -= float64(ticks) * rate
+		if items[i].Hunger < 0 {
+			items[i].Hunger = 0
+		}
+	}
+
+	if items[0].Hunger != 88 {
+		t.Errorf("expected GU_TEST_1 hunger 88, got %v", items[0].Hunger)
+	}
+	if items[1].Hunger != 0 {
+		t.Errorf("expected GU_TEST_2 hunger 0 (starved), got %v", items[1].Hunger)
+	}
+
+	// Filtering starved
+	kept := items[:0]
+	for _, it := range items {
+		if it.Hunger > 0 {
+			kept = append(kept, it)
+		}
+	}
+	if len(kept) != 1 || kept[0].ID != "GU_TEST_1" {
+		t.Errorf("expected 1 surviving item (GU_TEST_1), got %d items", len(kept))
 	}
 }

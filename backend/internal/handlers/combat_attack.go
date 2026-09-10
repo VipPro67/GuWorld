@@ -1458,6 +1458,16 @@ func CombatAttack(c *gin.Context) {
 		coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 		player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 
+		if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+			logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+		}
+		if player.ActiveCombat != nil {
+			_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
+		}
+		if err := cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID); err != nil {
+			logger.S.Errorf("Failed to broadcast cell cleared event for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+		}
+
 		for _, ally := range player.ActiveCombat.Allies {
 			if ally.Kind != "Ally" && ally.Kind != "Player" {
 				continue

@@ -106,3 +106,65 @@ func TestHub_IsConnected(t *testing.T) {
 	}
 }
 
+func TestShardedHub_UnregisterAndBroadcast(t *testing.T) {
+	shub := InitShardedHub()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = shub.Stop(ctx)
+	}()
+
+	playerID := uuid.New()
+	client := &Client{
+		playerID:      playerID,
+		send:          make(chan []byte, 10),
+		done:          make(chan struct{}),
+		hub:           shub.GetClientShard(playerID),
+		shard:         shub,
+		subscriptions: make(map[string]struct{}),
+	}
+
+	shub.Register(client)
+	time.Sleep(20 * time.Millisecond)
+
+	channels := []ChannelName{
+		"player:" + ChannelName(playerID.String()),
+		"world:pos",
+		"world:cell",
+		"chat:world",
+		"trade:" + ChannelName(playerID.String()),
+	}
+
+	for _, ch := range channels {
+		shub.Subscribe(client, ch)
+	}
+	time.Sleep(20 * time.Millisecond)
+
+	// Unregister client
+	shub.Unregister(client)
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcasting to any of these channels should NEVER panic even though client disconnected
+	for _, ch := range channels {
+		payload := []byte(`{"type":"event","channel":"` + string(ch) + `","data":"test"}`)
+		shub.BroadcastToChannel(ch, payload, uuid.Nil)
+	}
+
+	// Verify client is not connected
+	if shub.IsConnected(playerID) {
+		t.Fatal("expected player to be disconnected after unregistration")
+	}
+
+	// Verify all subscriptions were cleaned up
+	for _, ch := range channels {
+		shard := shub.GetChannelShard(ch)
+		shard.mu.RLock()
+		if subs, ok := shard.channels[ch]; ok {
+			if _, exists := subs[playerID]; exists {
+				t.Fatalf("expected player to be removed from channel %s", ch)
+			}
+		}
+		shard.mu.RUnlock()
+	}
+}
+

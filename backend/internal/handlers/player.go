@@ -26,6 +26,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/internal/util"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -1224,6 +1225,14 @@ func GetPlayerInventoryGus(c *gin.Context) {
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
+	}
+
+	if tx, errTx := db.DB.Begin(); errTx == nil {
+		if errH := worker.EvaluatePlayerHungerTx(tx, authID); errH == nil {
+			_ = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
 	}
 
 	guInv, err := db.LoadPlayerGus(db.DB, authID.String(), false)

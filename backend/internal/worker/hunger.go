@@ -52,21 +52,13 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 	}()
 }
 
-// processHungerDecay depletes Gu hunger for every player.
+// processHungerDecay handles background tasks for Gu ticks.
+// Note: Gu hunger decay for players and sects is now handled lazily on-demand
+// (EvaluatePlayerHungerTx / EvaluateSectVaultHungerTx) to eliminate full table
+// scans and deadlock contention. This worker only processes lightweight ON_TICK effects.
 func processHungerDecay(ctx context.Context, db *sql.DB) {
-	// 1. Batch ON_TICK effects (all players in one pass)
+	// 1. Batch ON_TICK effects (generating stones from special Gus)
 	batchApplyOnTickEffects(db)
-
-	// 2. Per-player decay + starvation (sleep/death) + HP backlash + audit logs
-	//    + equipped_gus cleanup.  Per-player transactions are intentional:
-	//    a single UPDATE over the whole player_gu table exceeds the
-	//    statement_timeout and deadlocks against concurrent gameplay writes.
-	if err := runHungerDecayBatch(db); err != nil {
-		logger.S.Errorf("Hunger Worker Error running decay batch: %v", err)
-	}
-
-	// 3. Sect vault hunger decay — batch across all sects.
-	batchVaultHungerDecay(db)
 }
 
 // ── ON_TICK batch ──────────────────────────────────────────────────────────
@@ -226,84 +218,7 @@ func batchApplyOnTickEffects(db *sql.DB) {
 	}
 }
 
-// ── Hunger decay (per-player, intentional for deadlock safety) ─────────────
-
-// runHungerDecayBatch applies hunger decay for every player that owns a Gu in a
-// decayable state. Each player is processed in its own small transaction so lock
-// hold times stay short (no deadlock with concurrent gameplay) and each statement
-// stays well under the statement_timeout configured in db.Connect.
-func runHungerDecayBatch(db *sql.DB) error {
-	playerIDs, err := findDecayPlayers(db)
-	if err != nil {
-		return err
-	}
-
-	logger.S.Infof("Hunger Worker: processing hunger decay for %d players", len(playerIDs))
-
-	for _, pID := range playerIDs {
-		if err := processPlayerHungerDecay(db, pID); err != nil {
-			// One player failing must not abort the rest of the batch.
-			logger.S.Errorf("Hunger Worker Error updating player %s: %v", pID, err)
-		}
-	}
-	return nil
-}
-
-// findDecayPlayers returns the ids of all players owning at least one Gu in a
-// decayable state (ACTIVE / SLEEPING / SEALED).
-func findDecayPlayers(db *sql.DB) ([]string, error) {
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	// The DISTINCT scan over the full player_gu table can exceed the default
-	// 15s statement timeout; relax it for this transaction only.
-	if _, err := tx.Exec(`SET LOCAL statement_timeout = '600000'`); err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.Query(`SELECT DISTINCT player_id::text FROM player_gu WHERE state IN ('ACTIVE','SLEEPING','SEALED')`)
-	if err != nil {
-		return nil, err
-	}
-
-	var playerIDs []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		playerIDs = append(playerIDs, id)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, err
-	}
-	rows.Close()
-	return playerIDs, tx.Commit()
-}
-
-// processPlayerHungerDecay applies decay + starvation for one player, retrying a
-// few times when the small per-player transaction hits a deadlock or lock
-// timeout against concurrent gameplay.
-func processPlayerHungerDecay(db *sql.DB, playerID string) error {
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		lastErr = processPlayerHungerDecayOnce(db, playerID)
-		if lastErr == nil {
-			return nil
-		}
-		if !isDeadlockOrLockTimeout(lastErr) {
-			return lastErr
-		}
-		logger.S.Warnf("Hunger Worker: deadlock/lock timeout on player %s (attempt %d/3): %v", playerID, attempt+1, lastErr)
-		time.Sleep(time.Duration(attempt+1) * time.Second)
-	}
-	return fmt.Errorf("hunger decay failed for player %s after 3 attempts: %w", playerID, lastErr)
-}
+// ── Gu Hunger Starvation Notifications ──────────────────────────────────────
 
 // StarvedGuInfo holds information about a Gu that died of starvation.
 type StarvedGuInfo struct {
@@ -370,34 +285,39 @@ func FormatVitalGuNotification(vitalDead []StarvedGuInfo) (title string, content
 	return
 }
 
-// processPlayerHungerDecayOnce decays hunger for one player's Gus, transitions
-// starved Gus to DEAD, applies the vital HP backlash, writes audit logs, rebuilds
-// equipped_gus and deletes the dead instances. All steps share one transaction so
-// the outcome is atomic per player.
-func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
-	tx, err := db.Begin()
+// EvaluatePlayerHungerTx performs lazy on-demand decay of a player's Gus.
+// It checks the player's last_hunger_tick_at timestamp, and if one or more
+// 3-hour intervals have passed, decays the player's Gus according to their state.
+func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
+	var lastTick time.Time
+	err := tx.QueryRow(`
+		SELECT COALESCE(last_hunger_tick_at, created_at, NOW())
+		FROM players
+		WHERE id = $1
+		FOR UPDATE
+	`, playerID).Scan(&lastTick)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
 
-	// Relax the default 15s statement / 10s lock timeout for this transaction;
-	// a player with a very large inventory legitimately needs more time.
-	// Reduced from 600s/60s to minimize deadlock windows with the Growth worker.
-	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`SET LOCAL lock_timeout = '10000'`); err != nil {
-		return err
+	now := time.Now()
+	const tickInterval = 3 * time.Hour
+	if now.Before(lastTick) {
+		return nil
 	}
 
-	// Apply decay + capture every Gu that starved this tick in one pass.
+	ticks := int(now.Sub(lastTick) / tickInterval)
+	if ticks <= 0 {
+		return nil
+	}
+
+	// Apply decay + capture every Gu that starved in one pass.
 	rows, err := tx.Query(`
 		WITH decayed AS (
 			SELECT pg.id AS gu_instance_id, pg.gu_id, pg.is_vital, pg.equipped,
-				CASE WHEN pg.state='ACTIVE' THEN pg.hunger - gd.hunger_rate
-				     WHEN pg.state='SLEEPING' THEN pg.hunger - 0.25 * gd.hunger_rate
-				     WHEN pg.state='SEALED' THEN pg.hunger - 0.1 * gd.hunger_rate
+				CASE WHEN pg.state='ACTIVE' THEN pg.hunger - ($2 * gd.hunger_rate)
+				     WHEN pg.state='SLEEPING' THEN pg.hunger - ($2 * 0.25 * gd.hunger_rate)
+				     WHEN pg.state='SEALED' THEN pg.hunger - ($2 * 0.1 * gd.hunger_rate)
 				     ELSE pg.hunger END AS new_hunger,
 				gd.name AS gu_name
 			FROM player_gu pg
@@ -413,7 +333,7 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 			WHERE pg.id = d.gu_instance_id
 			RETURNING pg.id, pg.gu_id, pg.state, pg.is_vital, pg.equipped, d.gu_name
 		)
-		SELECT id, gu_id, state, is_vital, equipped, gu_name FROM upd`, playerID)
+		SELECT id, gu_id, state, is_vital, equipped, gu_name FROM upd`, playerID.String(), ticks)
 	if err != nil {
 		return err
 	}
@@ -445,8 +365,14 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 		return err
 	}
 
+	// Advance last_hunger_tick_at preserving remainder
+	newTick := lastTick.Add(time.Duration(ticks) * tickInterval)
+	if _, err := tx.Exec(`UPDATE players SET last_hunger_tick_at = $1 WHERE id = $2`, newTick, playerID); err != nil {
+		return err
+	}
+
 	if len(dead) == 0 {
-		return tx.Commit()
+		return nil
 	}
 
 	// Vital Gu death → 80 HP backlash per death; drop active_combat on collapse.
@@ -459,13 +385,6 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 			WHERE p.id = $2`, backlash, playerID); err != nil {
 			return err
 		}
-	}
-
-	// Batch audit logs for all dead Gus in one multi-row INSERT.
-	if len(dead) > 0 {
-		_ = pq.Array
-		_ = playerID
-		// No audit logging for Gu starve death - high frequency worker activity
 	}
 
 	// Rebuild equipped_gus when an equipped Gu died: only ACTIVE equipped Gus
@@ -488,61 +407,72 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	if err := tx.Commit(); err != nil {
-		return err
+	// Send notifications and audit logs (using tx).
+	var normalDead []StarvedGuInfo
+	var vitalDead []StarvedGuInfo
+
+	for _, s := range dead {
+		if s.IsVital {
+			vitalDead = append(vitalDead, s)
+		} else {
+			normalDead = append(normalDead, s)
+		}
+
+		action := "gu.starve_death"
+		content := fmt.Sprintf("%s đã chết vì đói!", s.GuName)
+		if s.IsVital {
+			action = "gu.starve_vital_death"
+			content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.GuName)
+		}
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID:       &playerID,
+			Action:         action,
+			EntityType:     "gu_instance",
+			EntityID:       s.ID,
+			RequestSummary: content,
+			Metadata: map[string]interface{}{
+				"gu_instance_id": s.ID,
+				"gu_id":          s.GuID,
+				"gu_name":        s.GuName,
+				"is_vital":       s.IsVital,
+			},
+			Success: true,
+		})
 	}
 
-	// Send notifications and audit logs after successful commit (best-effort).
-	if parsedPID, err := uuid.Parse(playerID); err == nil {
-		var normalDead []StarvedGuInfo
-		var vitalDead []StarvedGuInfo
+	// Grouped notification for normal starved Gus
+	if title, content := FormatStarvedGuNotification(normalDead); title != "" {
+		notify.Send(tx, playerID, "gu_death", title, content)
+	}
 
-		for _, s := range dead {
-			if s.IsVital {
-				vitalDead = append(vitalDead, s)
-			} else {
-				normalDead = append(normalDead, s)
-			}
+	// Grouped notification for vital starved Gus
+	if title, content := FormatVitalGuNotification(vitalDead); title != "" {
+		notify.Send(tx, playerID, "vital_gu_death", title, content)
+	}
 
-			// Individual audit log per starved Gu instance for trace integrity
-			action := "gu.starve_death"
-			content := fmt.Sprintf("%s đã chết vì đói!", s.GuName)
-			if s.IsVital {
-				action = "gu.starve_vital_death"
-				content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.GuName)
-			}
-			auditlog.Log(db, auditlog.Entry{
-				PlayerID:       &parsedPID,
-				Action:         action,
-				EntityType:     "gu_instance",
-				EntityID:       s.ID,
-				RequestSummary: content,
-				Metadata: map[string]interface{}{
-					"gu_instance_id": s.ID,
-					"gu_id":          s.GuID,
-					"gu_name":        s.GuName,
-					"is_vital":       s.IsVital,
-				},
-				Success: true,
-			})
-		}
-
-		// Grouped notification for normal starved Gus
-		if title, content := FormatStarvedGuNotification(normalDead); title != "" {
-			notify.Send(db, parsedPID, "gu_death", title, content)
-		}
-
-		// Grouped notification for vital starved Gus
-		if title, content := FormatVitalGuNotification(vitalDead); title != "" {
-			notify.Send(db, parsedPID, "vital_gu_death", title, content)
-		}
-
-		if len(dead) > 0 && PlayerEventPublisher != nil {
-			PlayerEventPublisher(parsedPID, "player.updated")
-		}
+	if len(dead) > 0 && PlayerEventPublisher != nil {
+		PlayerEventPublisher(playerID, "player.updated")
 	}
 
 	return nil
+}
+
+// processPlayerHungerDecay applies decay + starvation for one player.
+func processPlayerHungerDecay(db *sql.DB, playerID string) error {
+	parsedPID, err := uuid.Parse(playerID)
+	if err != nil {
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := EvaluatePlayerHungerTx(tx, parsedPID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // ── Sect vault hunger decay (batch) ────────────────────────────────────────
@@ -565,6 +495,82 @@ func vaultGuSpec(id string, rank int) (float64, float64) {
 		return float64(spec.MaxHunger), float64(spec.HungerRate)
 	}
 	return 100, 0
+}
+
+// EvaluateSectVaultHungerTx performs lazy on-demand decay of a sect's vault Gus.
+// It checks the sect's last_vault_decay_at timestamp, and if one or more 3-hour
+// intervals have passed, decays the Gus in vault_gu.
+func EvaluateSectVaultHungerTx(tx *sql.Tx, sectID string) error {
+	var vaultRaw []byte
+	var lastDecay time.Time
+	err := tx.QueryRow(`
+		SELECT vault_gu, COALESCE(last_vault_decay_at, NOW())
+		FROM sects
+		WHERE id = $1
+		FOR UPDATE
+	`, sectID).Scan(&vaultRaw, &lastDecay)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	const tickInterval = 3 * time.Hour
+	if now.Before(lastDecay) {
+		return nil
+	}
+
+	ticks := int(now.Sub(lastDecay) / tickInterval)
+	if ticks <= 0 {
+		return nil
+	}
+
+	var items []vaultGuItem
+	if len(vaultRaw) > 0 {
+		if err := json.Unmarshal(vaultRaw, &items); err != nil {
+			return err
+		}
+	}
+
+	newDecay := lastDecay.Add(time.Duration(ticks) * tickInterval)
+	if len(items) == 0 {
+		_, err = tx.Exec(`UPDATE sects SET last_vault_decay_at = $1 WHERE id = $2`, newDecay, sectID)
+		return err
+	}
+
+	changed := false
+	for i := range items {
+		maxH, rate := vaultGuSpec(items[i].ID, items[i].Rank)
+		if items[i].Hunger <= 0 {
+			items[i].Hunger = maxH
+		}
+		items[i].Hunger -= float64(ticks) * rate
+		if items[i].Hunger < 0 {
+			items[i].Hunger = 0
+		}
+		changed = true
+	}
+
+	kept := items[:0]
+	for _, it := range items {
+		if it.Hunger > 0 {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+
+	if changed {
+		newRaw, err := json.Marshal(items)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`
+			UPDATE sects SET vault_gu = $1, last_vault_decay_at = $2 WHERE id = $3
+		`, string(newRaw), newDecay, sectID)
+		return err
+	}
+
+	_, err = tx.Exec(`UPDATE sects SET last_vault_decay_at = $1 WHERE id = $2`, newDecay, sectID)
+	return err
 }
 
 // batchVaultHungerDecay replaces the old per-sect transaction loop. It

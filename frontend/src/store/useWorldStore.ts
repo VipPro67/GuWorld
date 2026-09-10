@@ -118,6 +118,7 @@ interface WorldStoreState {
   fetchObjects: () => Promise<void>;
   fetchNearbyCells: (x: number, y: number, r: number) => Promise<void>;
   fetchCellsRect: (minX: number, minY: number, maxX: number, maxY: number) => Promise<void>;
+  invalidateCell: (x: number, y: number) => void;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
@@ -435,6 +436,20 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   fetchNearbyCells: async (x, y, r) => {
     set({ nearbyWindow: { x, y, r } });
     await useWorldStore.getState().fetchCellsRect(x - r, y - r, x + r, y + r);
+  },
+
+  invalidateCell: (x, y) => {
+    set((s) => {
+      const key = `${x},${y}`;
+      const cache = { ...s.cellCache };
+      delete cache[key];
+      let nearbyCells = s.nearbyCells;
+      const w = s.nearbyWindow;
+      if (w) {
+        nearbyCells = s.nearbyCells.filter((c) => `${c.x},${c.y}` !== key);
+      }
+      return { cellCache: cache, nearbyCells };
+    });
   },
 
   fetchNearbyPlayers: async (x, y, r) => {
