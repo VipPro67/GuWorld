@@ -174,16 +174,24 @@ export default function Home() {
     initializeSession();
   }, [initializeSession, fetchDictionary]);
 
-  // 2. Sparse authoritative status sync. Mana is rendered from a local snapshot between server actions.
+  // 2. Sparse authoritative status sync. PostgreSQL (via /player/status) is the
+  // source of truth for active_combat; keep reconciling while the combat UI is
+  // open so a missed/stale realtime event cannot trap the player there.
+  const playerId = player?.id;
+  const hasActiveCombat = Boolean(player?.active_combat);
   useEffect(() => {
-    if (!player || player.active_combat) return;
+    if (!playerId) return;
+
+    if (hasActiveCombat) {
+      void fetchPlayerStatus(playerId);
+    }
 
     const interval = setInterval(() => {
-      fetchPlayerStatus(player.id);
-    }, 90000);
+      fetchPlayerStatus(playerId);
+    }, hasActiveCombat ? 10000 : 90000);
 
     return () => clearInterval(interval);
-  }, [player, fetchPlayerStatus]);
+  }, [playerId, hasActiveCombat, fetchPlayerStatus]);
 
   // 3. Trade realtime subscription. This replaces the old /api/trade/active polling loop.
   const isPlayerReady = !!player;
