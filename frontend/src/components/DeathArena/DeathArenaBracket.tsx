@@ -1,10 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { GameCard } from "@/components/ui";
 
 export default function DeathArenaBracket() {
-  const { deathArenaTournament, deathArenaBracket } = useGameStore();
+  const { deathArenaTournament, deathArenaBracket, fetchDeathArenaBracket } = useGameStore();
+
+  useEffect(() => {
+    fetchDeathArenaBracket();
+  }, [fetchDeathArenaBracket]);
 
   if (!deathArenaTournament) {
     return <div className="text-center text-gray-400">Không có dữ liệu giải đấu</div>;

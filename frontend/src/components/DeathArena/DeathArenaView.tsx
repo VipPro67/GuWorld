@@ -14,8 +14,6 @@ export default function DeathArenaView() {
     deathArenaMyTeam,
     deathArenaLoading,
     fetchDeathArenaCurrent,
-    fetchDeathArenaBracket,
-    fetchDeathArenaMyTeam,
     registerDeathArena,
     unregisterDeathArena,
   } = useGameStore();
@@ -25,13 +23,6 @@ export default function DeathArenaView() {
   useEffect(() => {
     fetchDeathArenaCurrent();
   }, [fetchDeathArenaCurrent]);
-
-  useEffect(() => {
-    if (deathArenaTournament && deathArenaTournament.status !== "REGISTRATION") {
-      fetchDeathArenaBracket();
-      fetchDeathArenaMyTeam();
-    }
-  }, [deathArenaTournament, fetchDeathArenaBracket, fetchDeathArenaMyTeam]);
 
   const getStatusLabel = (status: string) => {
     switch (status) {

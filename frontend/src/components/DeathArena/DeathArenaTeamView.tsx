@@ -1,10 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { GameCard, GameProgressBar } from "@/components/ui";
 
 export default function DeathArenaTeamView() {
-  const { deathArenaMyTeam, deathArenaMyTeamMembers, deathArenaTournament } = useGameStore();
+  const { deathArenaMyTeam, deathArenaMyTeamMembers, deathArenaTournament, fetchDeathArenaMyTeam } = useGameStore();
+
+  useEffect(() => {
+    fetchDeathArenaMyTeam();
+  }, [fetchDeathArenaMyTeam]);
 
   if (!deathArenaMyTeam) {
     return (

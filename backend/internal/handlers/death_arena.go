@@ -156,18 +156,37 @@ func GetCurrentTournament(c *gin.Context) {
 		)
 	`, authID, t.ID).Scan(&isRegistered, &teamID)
 
-	// Get team members if registered
+	// Get team and members if registered
 	var members []TeamMember
+	var team *Team
 	if isRegistered && teamID != nil {
+		var tm Team
+		errTeam := db.DB.QueryRow(`
+			SELECT dt.id, dt.tournament_id, dt.team_name, dt.seed_number, dt.eliminated,
+			       dt.eliminated_at_round, dt.final_placement, dt.created_at,
+			       COUNT(dtm.id) as member_count,
+			       COALESCE(AVG(dtm.current_hp / NULLIF(dtm.max_hp, 0) * 100), 0) as avg_hp
+			FROM death_arena_teams dt
+			LEFT JOIN death_arena_team_members dtm ON dt.id = dtm.team_id
+			WHERE dt.id = $1
+			GROUP BY dt.id, dt.tournament_id, dt.team_name, dt.seed_number, dt.eliminated,
+			         dt.eliminated_at_round, dt.final_placement, dt.created_at
+		`, *teamID).Scan(&tm.ID, &tm.TournamentID, &tm.TeamName, &tm.SeedNumber,
+			&tm.Eliminated, &tm.EliminatedAtRound, &tm.FinalPlacement, &tm.CreatedAt,
+			&tm.MemberCount, &tm.AvgHP)
+		if errTeam == nil {
+			team = &tm
+		}
+
 		rows, err := db.DB.Query(`
-			SELECT dtm.id, dtm.team_id, dtm.player_id, p.username, p.avatar_url, p.rank,
+			SELECT dtm.id, dtm.team_id, dtm.player_id, p.username, COALESCE(p.avatar_url, ''), p.rank,
 			       dtm.current_hp, dtm.max_hp, dtm.current_mana, dtm.max_mana,
 			       dtm.eliminated, dtm.eliminated_at_round, dtm.joined_at
 			FROM death_arena_team_members dtm
 			JOIN players p ON dtm.player_id = p.id
 			WHERE dtm.team_id = $1
 			ORDER BY dtm.joined_at
-		`, teamID)
+		`, *teamID)
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
@@ -185,6 +204,7 @@ func GetCurrentTournament(c *gin.Context) {
 		"tournament":    t,
 		"is_registered": isRegistered,
 		"team_id":       teamID,
+		"team":          team,
 		"members":       members,
 	})
 }
@@ -475,21 +495,15 @@ func GetMyTeam(c *gin.Context) {
 		return
 	}
 
-	// Find player's team
-	var team Team
+	// Find player's team ID
+	var teamID string
 	err = db.DB.QueryRow(`
-		SELECT dt.id, dt.tournament_id, dt.team_name, dt.seed_number, dt.eliminated,
-		       dt.eliminated_at_round, dt.final_placement, dt.created_at,
-		       COUNT(dtm.id) as member_count,
-		       COALESCE(AVG(dtm.current_hp / NULLIF(dtm.max_hp, 0) * 100), 0) as avg_hp
-		FROM death_arena_teams dt
-		JOIN death_arena_team_members dtm ON dt.id = dtm.team_id
+		SELECT dtm.team_id
+		FROM death_arena_team_members dtm
+		JOIN death_arena_teams dt ON dtm.team_id = dt.id
 		WHERE dt.tournament_id = $1 AND dtm.player_id = $2
-		GROUP BY dt.id, dt.tournament_id, dt.team_name, dt.seed_number, dt.eliminated,
-		         dt.eliminated_at_round, dt.final_placement, dt.created_at
-	`, tournamentID, authID).Scan(&team.ID, &team.TournamentID, &team.TeamName, &team.SeedNumber,
-		&team.Eliminated, &team.EliminatedAtRound, &team.FinalPlacement, &team.CreatedAt,
-		&team.MemberCount, &team.AvgHP)
+		LIMIT 1
+	`, tournamentID, authID).Scan(&teamID)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusOK, gin.H{"team": nil, "tournament_status": tournamentStatus})
@@ -499,9 +513,30 @@ func GetMyTeam(c *gin.Context) {
 		return
 	}
 
+	// Find player's team details
+	var team Team
+	err = db.DB.QueryRow(`
+		SELECT dt.id, dt.tournament_id, dt.team_name, dt.seed_number, dt.eliminated,
+		       dt.eliminated_at_round, dt.final_placement, dt.created_at,
+		       COUNT(dtm.id) as member_count,
+		       COALESCE(AVG(dtm.current_hp / NULLIF(dtm.max_hp, 0) * 100), 0) as avg_hp
+		FROM death_arena_teams dt
+		LEFT JOIN death_arena_team_members dtm ON dt.id = dtm.team_id
+		WHERE dt.id = $1
+		GROUP BY dt.id, dt.tournament_id, dt.team_name, dt.seed_number, dt.eliminated,
+		         dt.eliminated_at_round, dt.final_placement, dt.created_at
+	`, teamID).Scan(&team.ID, &team.TournamentID, &team.TeamName, &team.SeedNumber,
+		&team.Eliminated, &team.EliminatedAtRound, &team.FinalPlacement, &team.CreatedAt,
+		&team.MemberCount, &team.AvgHP)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
 	// Get team members
 	rows, err := db.DB.Query(`
-		SELECT dtm.id, dtm.team_id, dtm.player_id, p.username, p.avatar_url, p.rank,
+		SELECT dtm.id, dtm.team_id, dtm.player_id, p.username, COALESCE(p.avatar_url, ''), p.rank,
 		       dtm.current_hp, dtm.max_hp, dtm.current_mana, dtm.max_mana,
 		       dtm.eliminated, dtm.eliminated_at_round, dtm.joined_at
 		FROM death_arena_team_members dtm

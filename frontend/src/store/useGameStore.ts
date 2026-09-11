@@ -5120,10 +5120,31 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/current`);
       if (response.status === 401) { logout(); return; }
       const data = await response.json();
-      set({
-        deathArenaTournament: data.tournament || null,
-        deathArenaMyTeam: data.team || null,
-        deathArenaMyTeamMembers: data.members || [],
+      set((state) => {
+        const nextTournament = data.tournament || null;
+        const currentTournament = state.deathArenaTournament;
+        const isSameTournament = currentTournament && nextTournament &&
+          currentTournament.id === nextTournament.id &&
+          currentTournament.status === nextTournament.status &&
+          currentTournament.current_round === nextTournament.current_round &&
+          currentTournament.total_players === nextTournament.total_players &&
+          currentTournament.total_teams === nextTournament.total_teams;
+
+        const nextTeam = data.team || null;
+        const currentTeam = state.deathArenaMyTeam;
+        const isSameTeam = currentTeam && nextTeam &&
+          currentTeam.id === nextTeam.id &&
+          currentTeam.eliminated === nextTeam.eliminated &&
+          currentTeam.eliminated_at_round === nextTeam.eliminated_at_round &&
+          currentTeam.final_placement === nextTeam.final_placement &&
+          currentTeam.member_count === nextTeam.member_count &&
+          currentTeam.avg_hp === nextTeam.avg_hp;
+
+        return {
+          deathArenaTournament: isSameTournament ? currentTournament : nextTournament,
+          deathArenaMyTeam: isSameTeam ? currentTeam : nextTeam,
+          deathArenaMyTeamMembers: data.members || [],
+        };
       });
     } catch (err) {
       console.error("fetch death arena current failed", err);
@@ -5190,9 +5211,20 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/bracket`);
       if (response.status === 401) { logout(); return; }
       const data = await response.json();
-      set({
-        deathArenaTournament: data.tournament || null,
-        deathArenaBracket: data.matches || [],
+      set((state) => {
+        const nextTournament = data.tournament || null;
+        const currentTournament = state.deathArenaTournament;
+        const isSameTournament = currentTournament && nextTournament &&
+          currentTournament.id === nextTournament.id &&
+          currentTournament.status === nextTournament.status &&
+          currentTournament.current_round === nextTournament.current_round &&
+          currentTournament.total_players === nextTournament.total_players &&
+          currentTournament.total_teams === nextTournament.total_teams;
+
+        return {
+          deathArenaTournament: isSameTournament ? currentTournament : (nextTournament ?? currentTournament),
+          deathArenaBracket: data.matches || [],
+        };
       });
     } catch (err) {
       console.error("fetch death arena bracket failed", err);
@@ -5207,9 +5239,21 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/my-team`);
       if (response.status === 401) { logout(); return; }
       const data = await response.json();
-      set({
-        deathArenaMyTeam: data.team || null,
-        deathArenaMyTeamMembers: data.members || [],
+      set((state) => {
+        const nextTeam = data.team || null;
+        const currentTeam = state.deathArenaMyTeam;
+        const isSameTeam = currentTeam && nextTeam &&
+          currentTeam.id === nextTeam.id &&
+          currentTeam.eliminated === nextTeam.eliminated &&
+          currentTeam.eliminated_at_round === nextTeam.eliminated_at_round &&
+          currentTeam.final_placement === nextTeam.final_placement &&
+          currentTeam.member_count === nextTeam.member_count &&
+          currentTeam.avg_hp === nextTeam.avg_hp;
+
+        return {
+          deathArenaMyTeam: isSameTeam ? currentTeam : nextTeam,
+          deathArenaMyTeamMembers: data.members || [],
+        };
       });
     } catch (err) {
       console.error("fetch death arena my team failed", err);
