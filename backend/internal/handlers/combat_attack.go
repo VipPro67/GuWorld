@@ -1200,7 +1200,13 @@ func CombatAttack(c *gin.Context) {
 		qiGained := AddHumanQi(&player, 20.0)
 		ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng đem lại sự tin tưởng của bá tánh. Nhân Khí +%.0f.", qiGained))
 
-		IntegratePassiveGus(&player, &ctx.Logs)
+		integratedIDs := IntegratePassiveGus(&player, &ctx.Logs)
+		// Explicit delete — SyncPlayerGus no longer deletes.
+		if len(integratedIDs) > 0 {
+			if err := db.RemovePlayerGus(tx, integratedIDs); err != nil {
+				logger.S.Error("Failed to remove integrated passive Gus:", err)
+			}
+		}
 
 		var partyMembers []uuid.UUID
 		if player.PartyID != nil {

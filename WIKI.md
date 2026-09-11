@@ -402,6 +402,24 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 - **Gộp:** Cùng `monster_template_id` có thể gộp thành 1 bầy. Chỉ số × `N^0.65` (theo base, không cộng dồn lũy tiến). Bầy tối đa `max_soul/10` cá thể — cần tăng Hồn Phách để gộp thêm.
 - **Chết:** Sinh lực = 0 trong combat hoặc hết độ no → xóa vĩnh viễn. Không thể hồi sinh.
 
+### Đấu Trường Sinh Tử (Death Arena)
+
+Đại chiến tổ đội 6v6 loại trực tiếp đỉnh cao hàng tuần:
+
+- **Lịch trình:** Diễn ra vào **chiều Thứ 7 hàng tuần**.
+  - **Mở đăng ký:** Từ **16:00 đến 17:00 chiều Thứ 7**.
+  - **Khai chiến:** Đúng **17:00 (5h chiều) Thứ 7**.
+- **Quy mô & Giới hạn:**
+  - Mỗi đội gồm **6 Cổ sư** (hệ thống tự động xếp đội cho người chơi đăng ký đơn).
+  - Tối đa **16 đội** (tổng cộng **96 người chơi**). Khi đủ 16 đội hoặc 96 người, cổng đăng ký tự động khóa sớm.
+- **Thể thức thi đấu & Nhịp độ vòng đấu:**
+  - **Loại trực tiếp (Single Elimination):** Gồm 4 vòng đấu (Vòng 1 → Tứ kết → Bán kết → Chung kết).
+  - **Nhịp độ:** Cứ mỗi **5 phút chia đôi số đội 1 lần** (16 → 8 → 4 → 2 → 1).
+  - **Nghỉ giữa hiệp:** Sau khi các trận trong vòng kết thúc, hệ thống sinh nhánh đấu cho vòng kế tiếp và đếm ngược thời gian nghỉ để các đạo hữu mở xem **Lịch sử trận đấu (Combat Replay)** của đội mình và khán phá đối thủ.
+- **Phần thưởng:**
+  - Thưởng chiến thắng theo vòng: tăng lũy tiến từ 50 đến 400 Nguyên Thạch/người.
+  - Quán Quân, Á Quân & Top 3: Nhận thêm Tiên Nguyên Thạch, danh hiệu độc quyền và phần thưởng vật phẩm quý hiếm.
+
 ## 10. Phó bản
 
 - Instance có template, session active và action theo option index.

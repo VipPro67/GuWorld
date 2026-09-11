@@ -495,6 +495,10 @@ export const wikiPages: WikiPage[] = [
                     <td className="p-3">Làm mới lượt thám hiểm (20 lượt), khiêu chiến Đấu Trường (10 trận), tái lập mỏ khai thác.</td>
                   </tr>
                   <tr>
+                    <td className="p-3 font-bold text-[var(--text-primary)]">17:00 Thứ 7 hàng tuần</td>
+                    <td className="p-3"><strong>Đấu Trường Sinh Tử:</strong> Đại chiến tổ đội 6v6 loại trực tiếp 16 đội. Mở đăng ký từ 16:00 - 17:00 Thứ 7, khai chiến lúc 17:00 (5h chiều Thứ 7).</td>
+                  </tr>
+                  <tr>
                     <td className="p-3 font-bold text-[var(--text-primary)]">Vài giờ sau thăng tiên (tùy phẩm chất Tiên Khiếu)</td>
                     <td className="p-3">Kiếp nạn đầu tiên giáng lâm — chuẩn bị phòng thủ Tiên Khiếu và chiến lực.</td>
                   </tr>
@@ -506,6 +510,70 @@ export const wikiPages: WikiPage[] = [
         </div>
       </div>
     )
+  },
+  {
+    id: "gameplay-death-arena",
+    title: "Đấu Trường Sinh Tử",
+    category: "gameplay",
+    keywords: ["đấu trường sinh tử", "death arena", "pvp", "giải đấu", "tournament", "thứ 7", "saturday"],
+    content: (
+      <div className="space-y-6">
+        <div className="p-4 rounded-2xl bg-red-950/30 border border-red-500/20 flex gap-3 items-start">
+          <Swords className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-serif font-bold text-red-200">Đại Chiến Sinh Tử Hàng Tuần</h4>
+            <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+              <strong>Đấu Trường Sinh Tử</strong> là giải đấu PvP tổ đội 6v6 loại trực tiếp đỉnh cao diễn ra định kỳ vào <strong>chiều Thứ 7 hàng tuần</strong>. Nơi các Cổ sư tinh anh cùng tổ đội tranh đoạt vinh quang và phần thưởng Nguyên Thạch khổng lồ.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
+            <h3 className="text-sm font-serif font-bold text-red-400 flex items-center gap-2">
+              <Clock className="w-4 h-4" /> Thời Gian & Lịch Trình
+            </h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><strong>Thời gian mở đăng ký:</strong> Từ <strong>16:00 đến 17:00 chiều Thứ 7</strong>.</li>
+              <li><strong>Thời gian khai chiến:</strong> Đúng <strong>17:00 (5h chiều) Thứ 7</strong>.</li>
+              <li><strong>Địa điểm tham gia:</strong> Vào mục <em>Đấu Trường Sinh Tử</em> từ màn hình chính hoặc gõ lệnh <code>/death-arena</code>.</li>
+            </ul>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
+            <h3 className="text-sm font-serif font-bold text-amber-400 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> Quy Mô & Giới Hạn Đăng Ký
+            </h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><strong>Quy mô đội:</strong> Mỗi đội gồm <strong>6 Cổ sư</strong> (hỗ trợ tự động ghép đội khi đăng ký cá nhân).</li>
+              <li><strong>Giới hạn giải đấu:</strong> Tối đa <strong>16 đội</strong> (tổng cộng <strong>96 người chơi</strong>).</li>
+              <li>Khi đủ 16 đội hoặc 96 người, cổng đăng ký sẽ tự động đóng sớm.</li>
+            </ul>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
+            <h3 className="text-sm font-serif font-bold text-indigo-400 flex items-center gap-2">
+              <Flame className="w-4 h-4" /> Thể Thức Thi Đấu & Nhịp Độ Vòng Đấu
+            </h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><strong>Loại trực tiếp (Single Elimination):</strong> Bảng đấu gồm 4 vòng (Vòng 1 ➔ Tứ kết ➔ Bán kết ➔ Chung kết). Đội thua bị loại ngay lập tức.</li>
+              <li><strong>Nhịp độ vòng đấu:</strong> Cứ mỗi <strong>5 phút chia đôi số đội 1 lần</strong> (16 ➔ 8 ➔ 4 ➔ 2 ➔ 1).</li>
+              <li><strong>Nghỉ giữa hiệp:</strong> Sau khi hoàn tất các trận của mỗi vòng, hệ thống sinh nhánh đấu vòng tiếp theo và đếm ngược thời gian nghỉ để các đạo hữu mở xem <strong>Combat Replay</strong> (diễn biến trận đấu vừa xong) và chuẩn bị chiến thuật.</li>
+            </ul>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
+            <h3 className="text-sm font-serif font-bold text-yellow-400 flex items-center gap-2">
+              <Coins className="w-4 h-4" /> Phần Thưởng
+            </h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><strong>Thưởng qua từng vòng:</strong> Mỗi thành viên đội chiến thắng nhận Nguyên Thạch tăng lũy tiến qua từng vòng (Vòng 1: 50, Vòng 2: 100, Vòng 3: 200, Chung kết: 400 Nguyên Thạch).</li>
+              <li><strong>Quán Quân & Á Quân:</strong> Nhận thêm Tiên Nguyên Thạch, danh hiệu độc quyền và phần thưởng vật phẩm quý giá gửi về hòm thư.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    ),
   },
   {
     id: "gameplay-baothach",

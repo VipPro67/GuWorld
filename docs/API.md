@@ -367,3 +367,20 @@ Kèm theo: `GET /player/events` (stream player snapshot + heartbeat riêng), `GE
 | POST | `/player/notifications/read-all` | Đánh dấu tất cả đã đọc. |
 
 Các loại `type` thông báo: `gu_death`, `vital_gu_death` (cổ chết đói), `death_drop` (tử đạo mất tài sản), `loot_gained` (PvP nhặt chiến lợi phẩm), `combat_loot` (nhặt đồ sau khi thắng quái), `market_sold`/`market_bought` (mua bán), `auction_bid` (ai đặt giá), `auction_won`/`auction_sold`/`auction_expired` (đấu giá).
+
+## Đấu Trường Sinh Tử (Death Arena) — Auth
+
+Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:00 - 17:00 Thứ 7).
+
+| Method | Endpoint | Mô tả |
+| --- | --- | --- |
+| GET | `/death-arena/current` | Lấy thông tin giải đấu hiện tại, trạng thái đăng ký của bản thân và thông tin đội. |
+| POST | `/death-arena/register` | Đăng ký tham gia giải đấu (giới hạn tối đa 96 người chơi / 16 đội). |
+| POST | `/death-arena/unregister` | Hủy đăng ký tham gia giải đấu (khi còn mở đăng ký). |
+| GET | `/death-arena/bracket` | Lấy sơ đồ bảng đấu và các trận đấu (hỗ trợ Redis cache 3s). |
+| GET | `/death-arena/my-team` | Lấy danh sách thành viên và trạng thái HP/Mana đội của bản thân. |
+| GET | `/death-arena/matches/:id/log` | Lấy lịch sử chi tiết (Combat Log Replay) của trận đấu. |
+| GET | `/death-arena/rewards` | Lấy danh sách phần thưởng giải đấu của bản thân. |
+| POST | `/death-arena/rewards/:id/claim` | Nhận phần thưởng giải đấu. |
+| GET | `/death-arena/history` | Lịch sử các mùa giải Đấu Trường Sinh Tử trước. |
+

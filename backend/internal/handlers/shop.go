@@ -726,7 +726,7 @@ func SellShopItem(c *gin.Context) {
 		var removed int64 = 0
 		newInv := models.GuInventory{}
 		for _, gu := range player.GuInventory {
-			if gu.GuID == req.ItemID && !gu.IsVital && removed < req.Quantity {
+			if gu.GuID == req.ItemID && !gu.IsVital && !gu.Equipped && removed < req.Quantity {
 				removed++
 				removedIDs = append(removedIDs, gu.InstanceID)
 				continue
@@ -734,7 +734,7 @@ func SellShopItem(c *gin.Context) {
 			newInv = append(newInv, gu)
 		}
 		if removed < req.Quantity {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Cổ trùng để bán hoặc Cổ là Bản Mệnh"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Cổ trùng để bán hoặc Cổ là Bản Mệnh/Trang bị"})
 			return
 		}
 		player.GuInventory = newInv

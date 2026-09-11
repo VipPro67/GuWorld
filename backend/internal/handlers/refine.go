@@ -697,6 +697,7 @@ func RefineGu(c *gin.Context) {
 	hasVitalIngredient := false
 	hasVitalSurvived := false
 	var refineEventMsg string
+	consumedGuIDs := []string{} // Track consumed Gus for explicit delete.
 
 	if outcome == OutcomeSuccess {
 		statusStr = "success"
@@ -704,6 +705,7 @@ func RefineGu(c *gin.Context) {
 		newInventory := models.GuInventory{}
 		for _, item := range player.GuInventory {
 			if seenInstances[item.InstanceID] {
+				consumedGuIDs = append(consumedGuIDs, item.InstanceID)
 				if item.IsVital {
 					hasVitalIngredient = true
 				}
@@ -772,6 +774,8 @@ func RefineGu(c *gin.Context) {
 					item.Equipped = false
 					newInventory = append(newInventory, item)
 					hasVitalSurvived = true
+				} else {
+					consumedGuIDs = append(consumedGuIDs, item.InstanceID)
 				}
 				if spec, ok := models.GetGu(item.GuID, item.Rank); ok {
 					if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
@@ -853,6 +857,14 @@ func RefineGu(c *gin.Context) {
 	}
 
 	// 9. Update player status in database
+	// Explicit delete — SyncPlayerGus no longer deletes.
+	if len(consumedGuIDs) > 0 {
+		if err := db.RemovePlayerGus(tx, consumedGuIDs); err != nil {
+			logger.S.Error("RefineGu: failed to remove consumed Gus:", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})
+			return
+		}
+	}
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		logger.S.Error("DEBUG SyncPlayerGus failed:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})

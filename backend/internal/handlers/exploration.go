@@ -952,6 +952,8 @@ func MovePlayer(c *gin.Context) {
 		TS:        time.Now().UnixMilli(),
 	})
 
+	PushCellsToPlayer(player.ID, player.X, player.Y, 300)
+
 	if combatTriggered {
 		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
 	} else {
@@ -1243,6 +1245,10 @@ func MovePlayerPath(c *gin.Context) {
 		Y:         player.Y,
 		TS:        time.Now().UnixMilli(),
 	})
+
+	// Push fresh cell data to the moving player so the client can skip the
+	// next HTTP poll cycle for cells/rect.
+	PushCellsToPlayer(player.ID, player.X, player.Y, 300)
 
 	if combatTriggered {
 		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)

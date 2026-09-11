@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { GameCard } from "@/components/ui";
+import { ScrollText } from "lucide-react";
+import DeathArenaCombatModal from "./DeathArenaCombatModal";
 
 export default function DeathArenaBracket() {
   const { deathArenaTournament, deathArenaBracket, fetchDeathArenaBracket } = useGameStore();
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDeathArenaBracket();
@@ -113,11 +116,26 @@ export default function DeathArenaBracket() {
                     +{match.reward_stones_per_member} Nguyên Thạch/người
                   </div>
                 )}
+                {match.status === "FINISHED" && (
+                  <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex justify-end">
+                    <button
+                      onClick={() => setSelectedMatchId(match.id)}
+                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition font-medium cursor-pointer"
+                    >
+                      <ScrollText className="w-3 h-3" /> Xem chiến báo
+                    </button>
+                  </div>
+                )}
               </GameCard>
             ))}
           </div>
         ))}
       </div>
+
+      <DeathArenaCombatModal
+        matchId={selectedMatchId}
+        onClose={() => setSelectedMatchId(null)}
+      />
     </div>
   );
 }

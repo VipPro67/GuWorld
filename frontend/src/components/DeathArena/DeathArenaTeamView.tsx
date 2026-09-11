@@ -40,7 +40,7 @@ export default function DeathArenaTeamView() {
           <div className="text-sm text-yellow-400">
             Thứ hạng: {deathArenaMyTeam.final_placement === 1 ? "🥇 Quán Quân" : 
                        deathArenaMyTeam.final_placement === 2 ? "🥈 Á Quân" : 
-                       deathArenaMyTeam.final_placement === 3 ? "🥉 Qúa Quân" : 
+                       deathArenaMyTeam.final_placement === 3 ? "🥉 Quý Quân" : 
                        `#${deathArenaMyTeam.final_placement}`}
           </div>
         )}

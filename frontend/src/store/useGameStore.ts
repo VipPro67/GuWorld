@@ -1195,6 +1195,7 @@ interface GameState {
   fetchDeathArenaRewards: () => Promise<void>;
   fetchDeathArenaHistory: () => Promise<void>;
   claimDeathArenaReward: (rewardId: string) => Promise<boolean>;
+  fetchDeathArenaMatchLog: (matchId: string) => Promise<any>;
 
   // Leaderboard State & Actions
   leaderboardEntries: any[];
@@ -2131,6 +2132,17 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      // Listen for world:cells — per-player cell snapshots pushed after movement
+      wsManager.subscribe("world:cells", (payload: any) => {
+        try {
+          if (payload?.cells) {
+            window.dispatchEvent(new CustomEvent("gu_world_cells", { detail: payload }));
+          }
+        } catch (err) {
+          console.error("Failed to process world cells event", err);
+        }
+      });
+
       // Listen for chat:world
       wsManager.subscribe("chat:world", (payload: any) => {
         try {
@@ -2296,10 +2308,47 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      // Listen for death_arena events
+      const unsubscribeDeathArena = wsManager.subscribe("death_arena", (payload: any) => {
+        try {
+          const eventType = payload?.type;
+          const eventData = payload?.data;
+          if (eventType === "match_updated" && eventData?.match_id) {
+            set((state) => {
+              const currentMatches = state.deathArenaBracket || [];
+              const updated = currentMatches.map((m) =>
+                m.id === eventData.match_id
+                  ? { ...m, winner_team_id: eventData.winner_team_id, status: eventData.status }
+                  : m
+              );
+              return { deathArenaBracket: updated };
+            });
+          } else if (eventType === "round_advanced" || eventType === "tournament_started") {
+            get().fetchDeathArenaBracket();
+            get().fetchDeathArenaCurrent();
+          } else if (eventType === "tournament_finished") {
+            set((state) => {
+              if (!state.deathArenaTournament) return {};
+              return {
+                deathArenaTournament: {
+                  ...state.deathArenaTournament,
+                  status: "FINISHED",
+                  champion_team_id: eventData?.champion_team_id || state.deathArenaTournament.champion_team_id,
+                },
+              };
+            });
+            get().fetchDeathArenaBracket();
+          }
+        } catch (err) {
+          console.error("Failed to process death arena event", err);
+        }
+      });
+
       // Store cleanup functions in a global variable
       (window as any).__gu_ws_cleanup = () => {
         unsubscribePlayer();
         unsubscribeTrade();
+        unsubscribeDeathArena();
         releaseConnection();
       };
 
@@ -5328,6 +5377,20 @@ export const useGameStore = create<GameState>((set, get) => {
       return false;
     } finally {
       set({ actionLoading: false });
+    }
+  },
+
+  fetchDeathArenaMatchLog: async (matchId: string) => {
+    const { token, logout } = get();
+    if (!token) return null;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/death-arena/matches/${matchId}/log`);
+      if (response.status === 401) { logout(); return null; }
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (err) {
+      console.error("fetch match log failed", err);
+      return null;
     }
   },
 

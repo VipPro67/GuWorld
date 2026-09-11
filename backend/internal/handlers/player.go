@@ -1746,7 +1746,7 @@ func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodO
 		}
 		if strings.HasPrefix(food, "GU_") {
 			for i, invGu := range player.GuInventory {
-				if invGu.GuID == food && invGu.InstanceID != targetInstanceID && invGu.Status != "DEAD" && invGu.Status != "SEALED" {
+				if invGu.GuID == food && invGu.InstanceID != targetInstanceID && invGu.Status != "DEAD" && invGu.Status != "SEALED" && !invGu.IsVital && !invGu.Equipped {
 					return food, i
 				}
 			}
@@ -2063,7 +2063,7 @@ func FeedGroup(c *gin.Context) {
 		for _, food := range foodOptions {
 			if strings.HasPrefix(food, "GU_") {
 				for i, invGu := range player.GuInventory {
-					if invGu.GuID == food && invGu.InstanceID != skipInstanceID && invGu.Status != "DEAD" {
+					if invGu.GuID == food && invGu.InstanceID != skipInstanceID && invGu.Status != "DEAD" && !invGu.IsVital && !invGu.Equipped {
 						return i
 					}
 				}
@@ -2074,6 +2074,7 @@ func FeedGroup(c *gin.Context) {
 
 	fedCount := 0
 	foodConsumed := make(map[string]int)
+	consumedGuIDs := []string{} // Track Gu IDs consumed as food for explicit delete.
 
 	// 3. Iterate over the player's Gu inventory and feed hungry ones of matching type
 	for i := 0; i < len(player.GuInventory); i++ {
@@ -2108,6 +2109,7 @@ func FeedGroup(c *gin.Context) {
 					consumedGu := player.GuInventory[consumedGuIndex]
 					foodID = consumedGu.GuID
 					foodConsumed[consumedGu.GuID]++
+					consumedGuIDs = append(consumedGuIDs, consumedGu.InstanceID)
 					player.GuInventory = append(player.GuInventory[:consumedGuIndex], player.GuInventory[consumedGuIndex+1:]...)
 					if consumedGuIndex <= i {
 						i--
@@ -2139,6 +2141,13 @@ func FeedGroup(c *gin.Context) {
 	}
 
 	// 4. Update database
+	// Explicit delete — SyncPlayerGus no longer deletes.
+	if len(consumedGuIDs) > 0 {
+		if err := db.RemovePlayerGus(tx, consumedGuIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume Gu as food"})
+			return
+		}
+	}
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -2244,7 +2253,7 @@ func FeedAll(c *gin.Context) {
 		for _, food := range specs.FoodTypes {
 			if strings.HasPrefix(food, "GU_") {
 				for i, invGu := range player.GuInventory {
-					if invGu.GuID == food && invGu.InstanceID != skipInstanceID && invGu.Status != "DEAD" && invGu.Status != "SEALED" {
+					if invGu.GuID == food && invGu.InstanceID != skipInstanceID && invGu.Status != "DEAD" && invGu.Status != "SEALED" && !invGu.IsVital && !invGu.Equipped {
 						return i
 					}
 				}
@@ -2252,6 +2261,8 @@ func FeedAll(c *gin.Context) {
 		}
 		return -1
 	}
+
+	consumedGuIDs := []string{} // Track Gu IDs consumed as food for explicit delete.
 
 	for i := 0; i < len(player.GuInventory); i++ {
 		gu := &player.GuInventory[i]
@@ -2307,6 +2318,7 @@ func FeedAll(c *gin.Context) {
 				consumedGu := player.GuInventory[consumedGuIndex]
 				foodID = consumedGu.GuID
 				foodConsumed[consumedGu.GuID]++
+				consumedGuIDs = append(consumedGuIDs, consumedGu.InstanceID)
 				player.GuInventory = append(player.GuInventory[:consumedGuIndex], player.GuInventory[consumedGuIndex+1:]...)
 				if consumedGuIndex <= i {
 					i--
@@ -2336,6 +2348,13 @@ func FeedAll(c *gin.Context) {
 		return
 	}
 
+	// Explicit delete — SyncPlayerGus no longer deletes.
+	if len(consumedGuIDs) > 0 {
+		if err := db.RemovePlayerGus(tx, consumedGuIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume Gu as food"})
+			return
+		}
+	}
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return

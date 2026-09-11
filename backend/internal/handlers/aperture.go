@@ -695,24 +695,46 @@ func PlaceApertureNode(c *gin.Context) {
 	if len(template.CostGu) > 0 {
 		for _, requiredGuID := range template.CostGu {
 			var guInstanceID string
+			var guRank int
 			err = tx.QueryRow(`
-				SELECT id FROM player_gu 
-				WHERE player_id = $1 AND gu_id = $2 AND gu_rank >= $3 AND state = 'ACTIVE'
+				SELECT id, gu_rank FROM player_gu 
+				WHERE player_id = $1 AND gu_id = $2 AND gu_rank >= $3 AND state = 'ACTIVE' AND is_vital = false AND equipped = false
 				LIMIT 1
-			`, playerID, requiredGuID, template.CostGuRank).Scan(&guInstanceID)
+			`, playerID, requiredGuID, template.CostGuRank).Scan(&guInstanceID, &guRank)
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần sở hữu Cổ trùng %s (rank %d+) để xây dựng %s", requiredGuID, template.CostGuRank, template.Name)})
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần sở hữu Cổ trùng %s (rank %d+, không phải Bản Mệnh/đang trang bị) để xây dựng %s", requiredGuID, template.CostGuRank, template.Name)})
 				return
 			} else if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn cổ trùng"})
 				return
 			}
 			// Consume the Gu (destroy it)
-			_, err = tx.Exec(`DELETE FROM player_gu WHERE id = $1`, guInstanceID)
+			_, err = tx.Exec(`DELETE FROM player_gu WHERE id = $1 AND is_vital = false`, guInstanceID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao cổ trùng"})
 				return
 			}
+			// Audit log for the consumed Gu
+			consumedGuName := requiredGuID
+			if spec, ok := models.GetGu(requiredGuID, guRank); ok {
+				consumedGuName = spec.Name
+			}
+			auditlog.Log(db.DB, auditlog.Entry{
+				PlayerID:   &playerID,
+				Action:     "aperture.consume_gu",
+				EntityType: "gu_instance",
+				EntityID:   guInstanceID,
+				RequestSummary: fmt.Sprintf("Tiêu hao Cổ trùng %s (rank %d) để xây dựng %s", consumedGuName, guRank, template.Name),
+				Metadata: map[string]interface{}{
+					"gu_id":       requiredGuID,
+					"gu_name":     consumedGuName,
+					"gu_rank":     guRank,
+					"node_name":   template.Name,
+					"node_type":   template.NodeType,
+				},
+				IPAddress: c.ClientIP(),
+				Success:   true,
+			})
 		}
 	}
 

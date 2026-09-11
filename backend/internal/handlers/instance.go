@@ -654,24 +654,33 @@ func ActionInstance(c *gin.Context) {
 			// Check if player has enough Gu
 			matchingGus := 0
 			var keptGus []models.GuInstance
+			var consumedIDs []string
 			var removedCount int
 
 			for _, gi := range player.GuInventory {
-				if gi.GuID == guID && removedCount < requiredAmt {
+				if gi.GuID == guID && !gi.IsVital && !gi.Equipped && removedCount < requiredAmt {
 					removedCount++
+					consumedIDs = append(consumedIDs, gi.InstanceID)
 				} else {
 					keptGus = append(keptGus, gi)
 				}
-				if gi.GuID == guID {
+				if gi.GuID == guID && !gi.IsVital && !gi.Equipped {
 					matchingGus++
 				}
 			}
 
 			if matchingGus < requiredAmt {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ Cổ trùng yêu cầu!"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ Cổ trùng yêu cầu (Bản Mệnh/Trang bị không được dùng)!"})
 				return
 			}
 			player.GuInventory = keptGus
+			// Explicit delete — SyncPlayerGus no longer deletes.
+			if len(consumedIDs) > 0 {
+				if err := db.RemovePlayerGus(tx, consumedIDs); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume Gu for instance"})
+					return
+				}
+			}
 		}
 	}
 

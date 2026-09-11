@@ -18,8 +18,10 @@ func StartRedisSubscribers(shub *ShardedHub) {
 	go subscribePattern(shub, "trade:*")
 	go subscribePattern(shub, "world:pos")
 	go subscribePattern(shub, "world:cell")
+	go subscribePattern(shub, "world:cells:*")
 	go subscribePattern(shub, "combat:*")
 	go subscribePattern(shub, "notif:*")
+	go subscribePattern(shub, "death_arena:*")
 }
 
 func subscribePattern(shub *ShardedHub, pattern string) {
@@ -58,9 +60,12 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 
 		// Receive loop
 		for msg := range ch {
-			_, clientMsg := formatClientEvent(msg.Channel, []byte(msg.Payload))
+			clientChannel, clientMsg := formatClientEvent(msg.Channel, []byte(msg.Payload))
 
 			shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
+			if clientChannel != msg.Channel {
+				shub.BroadcastToChannel(ChannelName(clientChannel), clientMsg, uuid.Nil)
+			}
 		}
 
 		pubsub.Close()
@@ -87,8 +92,12 @@ func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) 
 		clientChannel = "notification"
 	case len(redisChannel) >= 7 && redisChannel[:7] == "combat:":
 		clientChannel = "combat"
+	case len(redisChannel) >= 12 && redisChannel[:12] == "death_arena:":
+		clientChannel = "death_arena"
 	case len(redisChannel) >= 10 && redisChannel[:10] == "chat:sect:":
 		clientChannel = "chat:sect"
+	case len(redisChannel) >= 11 && redisChannel[:11] == "world:cells:":
+		clientChannel = "world:cells"
 	default:
 		clientChannel = redisChannel // "chat:world", "chat:general", "world:pos", "world:cell"
 	}

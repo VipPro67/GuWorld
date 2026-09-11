@@ -119,6 +119,7 @@ interface WorldStoreState {
   fetchNearbyCells: (x: number, y: number, r: number) => Promise<void>;
   fetchCellsRect: (minX: number, minY: number, maxX: number, maxY: number) => Promise<void>;
   invalidateCell: (x: number, y: number) => void;
+  mergeWSCells: (cells: NearbyCell[]) => void;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
@@ -447,6 +448,42 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       const w = s.nearbyWindow;
       if (w) {
         nearbyCells = s.nearbyCells.filter((c) => `${c.x},${c.y}` !== key);
+      }
+      return { cellCache: cache, nearbyCells };
+    });
+  },
+
+  mergeWSCells: (cells: NearbyCell[]) => {
+    set((s) => {
+      const cache = { ...s.cellCache };
+      for (const c of cells) {
+        cache[`${c.x},${c.y}`] = c;
+      }
+      // Bound memory: keep cells near the player window, drop the far ones.
+      const keys = Object.keys(cache);
+      if (keys.length > 150000) {
+        const w = s.nearbyWindow;
+        if (w) {
+          const keep = Math.max(w.r, 300) * 3;
+          for (const key of keys) {
+            const [cx, cy] = key.split(",").map(Number);
+            if (Math.abs(cx - w.x) > keep || Math.abs(cy - w.y) > keep) {
+              delete cache[key];
+            }
+          }
+        }
+      }
+      // Derive the visible window from whatever chunks have been loaded so far.
+      let nearbyCells = s.nearbyCells;
+      const w = s.nearbyWindow;
+      if (w) {
+        nearbyCells = [];
+        for (const key of Object.keys(cache)) {
+          const [cx, cy] = key.split(",").map(Number);
+          if (cx >= w.x - w.r && cx <= w.x + w.r && cy >= w.y - w.r && cy <= w.y + w.r) {
+            nearbyCells.push(cache[key]);
+          }
+        }
       }
       return { cellCache: cache, nearbyCells };
     });

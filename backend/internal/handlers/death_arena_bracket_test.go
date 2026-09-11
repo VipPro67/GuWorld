@@ -2,7 +2,11 @@ package handlers
 
 import (
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestNextPowerOf2(t *testing.T) {
@@ -59,5 +63,30 @@ func TestBracketRoundsCalculation(t *testing.T) {
 		if byes != tt.byes {
 			t.Errorf("teamCount %d: byes = %d; want %d", tt.teamCount, byes, tt.byes)
 		}
+	}
+}
+
+func TestGetMatchCombatLogMissingID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{}
+
+	GetMatchCombatLog(c)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request, got %d", w.Code)
+	}
+}
+
+func TestDeathArenaLimitsConstants(t *testing.T) {
+	if MaxTournamentTeams != 16 {
+		t.Errorf("expected MaxTournamentTeams = 16, got %d", MaxTournamentTeams)
+	}
+	if MaxTournamentPlayers != 96 {
+		t.Errorf("expected MaxTournamentPlayers = 96, got %d", MaxTournamentPlayers)
+	}
+	if RoundDuration <= 0 {
+		t.Errorf("expected RoundDuration > 0, got %v", RoundDuration)
 	}
 }

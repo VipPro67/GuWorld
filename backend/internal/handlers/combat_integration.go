@@ -6,7 +6,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-func IntegratePassiveGus(player *models.Player, logs *[]string) {
+func IntegratePassiveGus(player *models.Player, logs *[]string) []string {
+	var consumedIDs []string
 	newInventory := models.GuInventory{}
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
@@ -49,6 +50,7 @@ func IntegratePassiveGus(player *models.Player, logs *[]string) {
 					}
 
 					*logs = append(*logs, fmt.Sprintf("✨ Thể chất cải tạo hoàn tất: Cổ trùng %s đã hoàn toàn dung nhập vào da thịt, khắc sâu Đạo Ngân lên cơ thể đạo hữu. Cổ trùng tiêu biến, đạo hữu nhận được vĩnh viễn %s!", spec.Name, bonusText))
+					consumedIDs = append(consumedIDs, gu.InstanceID)
 					continue
 				}
 			}
@@ -57,4 +59,5 @@ func IntegratePassiveGus(player *models.Player, logs *[]string) {
 	}
 	player.GuInventory = newInventory
 	RebuildEquippedGus(player)
+	return consumedIDs
 }

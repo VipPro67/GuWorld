@@ -255,15 +255,23 @@ func SyncPlayerGus(tx *sql.Tx, playerID string, before models.GuInventory, after
 			playerID, len(before), len(after), dropped, len(removed), len(updated), len(added))
 	}
 
-	if len(removed) == 0 && len(added) == 0 && len(updated) == 0 {
+	// ── SAFETY: NEVER DELETE through diff ─────────────────────────────
+	// SyncPlayerGus only ADDS and UPDATES. If a handler needs to remove
+	// Gus, it must call RemovePlayerGu/RemovePlayerGus explicitly BEFORE
+	// SyncPlayerGus. This prevents silent Gu loss from handler bugs.
+	if len(removed) > 0 {
+		for _, id := range removed {
+			gu := beforeIndex[id]
+			logger.S.Errorf("SyncPlayerGus player=%s SKIP_DELETE id=%s gu=%s(rank=%d,hunger=%d,state=%s,vital=%v,equipped=%v) — handler should call RemovePlayerGu explicitly!",
+				playerID, id, gu.GuID, gu.Rank, gu.Hunger, gu.Status, gu.IsVital, gu.Equipped)
+		}
+	}
+	// ── END SAFETY ────────────────────────────────────────────────────
+
+	if len(added) == 0 && len(updated) == 0 {
 		return nil
 	}
 
-	if len(removed) > 0 {
-		if err := RemovePlayerGus(tx, removed); err != nil {
-			return err
-		}
-	}
 	if len(updated) > 0 {
 		if err := UpdatePlayerGusBulk(tx, updated); err != nil {
 			return err

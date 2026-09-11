@@ -10,12 +10,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
+
+// RoundDuration is the duration allocated to each tournament round (default 5 minutes)
+var RoundDuration = 5 * time.Minute
 
 // Round rewards by round number (stones per member)
 var roundRewards = map[int]int{
@@ -76,7 +80,7 @@ func GenerateBracket(tournamentID string) error {
 		if len(teams) == 1 {
 			_, _ = tx.Exec(`
 				UPDATE death_arena_tournaments 
-				SET status = 'FINISHED', champion_team_id = $1, finished_at = NOW()
+				SET status = 'FINISHED', champion_team_id = $1, finished_at = NOW(), total_teams = 1
 				WHERE id = $2
 			`, teams[0].ID, tournamentID)
 
@@ -84,6 +88,13 @@ func GenerateBracket(tournamentID string) error {
 			if err := awardChampionRewards(tx, tournamentID, teams[0].ID, 1); err != nil {
 				logger.S.Errorf("Failed to award champion rewards: %v", err)
 			}
+		} else {
+			// 0 teams registered - tournament cannot proceed
+			_, _ = tx.Exec(`
+				UPDATE death_arena_tournaments 
+				SET status = 'FINISHED', finished_at = NOW(), total_teams = 0
+				WHERE id = $1
+			`, tournamentID)
 		}
 		return tx.Commit()
 	}
@@ -184,22 +195,36 @@ func StartTournament(tournamentID string) error {
 	}
 	defer tx.Rollback()
 
-	// Update status
-	_, err = tx.Exec(`
-		UPDATE death_arena_tournaments SET status = 'IN_PROGRESS' WHERE id = $1
+	// Update status only if tournament is currently LOCKED and has >= 2 teams
+	res, err := tx.Exec(`
+		UPDATE death_arena_tournaments 
+		SET status = 'IN_PROGRESS' 
+		WHERE id = $1 AND status = 'LOCKED' AND total_teams >= 2
 	`, tournamentID)
 	if err != nil {
 		return err
+	}
+	rowsAff, _ := res.RowsAffected()
+	if rowsAff == 0 {
+		return nil // Tournament not in LOCKED status or not enough teams (already finished)
 	}
 
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	invalidateTournamentCache(tournamentID)
+	BroadcastDeathArenaEvent("tournament_started", tournamentID, nil)
 
 	// Start processing pending matches
 	go processPendingMatches(tournamentID)
 
 	return nil
+}
+
+func invalidateTournamentCache(tournamentID string) {
+	_ = cache.Delete("death_arena:bracket:current")
+	_ = cache.Delete("death_arena:bracket:" + tournamentID)
+	_ = cache.Delete("death_arena:current_tournament_meta")
 }
 
 var (
@@ -234,6 +259,8 @@ func processPendingMatches(tournamentID string) {
 
 	// Recover any match stuck IN_PROGRESS from previous crashes/restarts back to PENDING
 	_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'PENDING' WHERE tournament_id = $1 AND status = 'IN_PROGRESS'`, tournamentID)
+
+	roundStartTime := time.Now()
 
 	for {
 		// Check if tournament is still IN_PROGRESS
@@ -274,9 +301,52 @@ func processPendingMatches(tournamentID string) {
 
 				// Check if tournament has advanced to next round or finished
 				var currentStatus string
-				_ = db.DB.QueryRow(`SELECT status FROM death_arena_tournaments WHERE id = $1`, tournamentID).Scan(&currentStatus)
+				var currentRound, totalRounds int
+				_ = db.DB.QueryRow(`SELECT status, current_round, total_rounds FROM death_arena_tournaments WHERE id = $1`, tournamentID).Scan(&currentStatus, &currentRound, &totalRounds)
 				if currentStatus == "IN_PROGRESS" {
+					// Round pacing: wait for RoundDuration before starting the next round
+					elapsed := time.Since(roundStartTime)
+					if elapsed < RoundDuration {
+						intermission := RoundDuration - elapsed
+						intermissionSec := int(intermission.Seconds())
+						logger.S.Infof("Death Arena: Round finished. Intermission of %v before round %d begins", intermission.Round(time.Second), currentRound)
+
+						// Broadcast intermission event to WebSocket
+						BroadcastDeathArenaEvent("round_intermission", tournamentID, map[string]interface{}{
+							"current_round":     currentRound,
+							"total_rounds":      totalRounds,
+							"countdown_seconds": intermissionSec,
+						})
+
+						// Announce to world chat
+						mins := intermissionSec / 60
+						secs := intermissionSec % 60
+						var timeMsg string
+						if mins > 0 {
+							timeMsg = fmt.Sprintf("%d phút %02d giây", mins, secs)
+						} else {
+							timeMsg = fmt.Sprintf("%d giây", secs)
+						}
+						_, _ = db.DB.Exec(`
+							INSERT INTO messages (sender_id, content, channel)
+							VALUES ('00000000-0000-0000-0000-000000000000', $1, 'world')
+						`, fmt.Sprintf("[Đấu Trường Sinh Tử] Vòng %d đã kết thúc! Vòng %d sẽ chính thức khai chiến sau %s...", currentRound-1, currentRound, timeMsg))
+
+						time.Sleep(intermission)
+					}
+					roundStartTime = time.Now()
 					continue
+				}
+			} else if pendingCount == 0 && finishedCount == 0 {
+				// No matches in current round! Check if tournament has any pending matches at all
+				var remainingPending int
+				_ = db.DB.QueryRow(`SELECT COUNT(*) FROM death_arena_matches WHERE tournament_id = $1 AND status = 'PENDING'`, tournamentID).Scan(&remainingPending)
+				if remainingPending == 0 {
+					logger.S.Warnf("Death Arena: Tournament %s has no pending or finished matches in current round, auto-finishing", tournamentID)
+					_, _ = db.DB.Exec(`UPDATE death_arena_tournaments SET status = 'FINISHED', finished_at = NOW() WHERE id = $1`, tournamentID)
+					invalidateTournamentCache(tournamentID)
+					BroadcastDeathArenaEvent("tournament_finished", tournamentID, nil)
+					return
 				}
 			}
 			return
@@ -311,38 +381,39 @@ func processPendingMatches(tournamentID string) {
 
 // resolveTeamMatch resolves a single team match
 func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) error {
-	tx, err := db.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
 	// Check if this is a BYE
 	if teamBID == nil || *teamBID == "" {
-		_, err = tx.Exec(`
+		_, err := db.DB.Exec(`
 			UPDATE death_arena_matches SET status = 'BYE', winner_team_id = $1, finished_at = NOW()
 			WHERE id = $2
 		`, teamAID, matchID)
-		if err != nil {
-			return err
-		}
-		return tx.Commit()
+		invalidateTournamentCache(tournamentID)
+		BroadcastDeathArenaEvent("match_updated", tournamentID, map[string]interface{}{
+			"match_id":       matchID,
+			"winner_team_id": teamAID,
+			"status":         "BYE",
+		})
+		return err
 	}
 
-	// Load team A members (alive only)
-	teamAMembers, err := loadTeamMembersForCombat(tx, teamAID)
+	// Load team members (alive only) without holding a transaction
+	teamAMembers, err := loadTeamMembersForCombat(db.DB, teamAID)
 	if err != nil {
 		return err
 	}
 
-	// Load team B members (alive only)
-	teamBMembers, err := loadTeamMembersForCombat(tx, *teamBID)
+	teamBMembers, err := loadTeamMembersForCombat(db.DB, *teamBID)
 	if err != nil {
 		return err
 	}
 
 	// If either team has no members, the other wins by default
 	if len(teamAMembers) == 0 {
+		tx, err := db.DB.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
 		_, err = tx.Exec(`
 			UPDATE death_arena_matches SET status = 'FINISHED', winner_team_id = $1, finished_at = NOW()
 			WHERE id = $2
@@ -350,14 +421,27 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		if err != nil {
 			return err
 		}
-		// Eliminate team A
 		_, _ = tx.Exec(`UPDATE death_arena_teams SET eliminated = true, eliminated_at_round = (
 			SELECT current_round FROM death_arena_tournaments WHERE id = $1
 		) WHERE id = $2`, tournamentID, teamAID)
-		return tx.Commit()
+		invalidateTournamentCache(tournamentID)
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		BroadcastDeathArenaEvent("match_updated", tournamentID, map[string]interface{}{
+			"match_id":       matchID,
+			"winner_team_id": *teamBID,
+			"status":         "FINISHED",
+		})
+		return nil
 	}
 
 	if len(teamBMembers) == 0 {
+		tx, err := db.DB.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
 		_, err = tx.Exec(`
 			UPDATE death_arena_matches SET status = 'FINISHED', winner_team_id = $1, finished_at = NOW()
 			WHERE id = $2
@@ -365,14 +449,22 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		if err != nil {
 			return err
 		}
-		// Eliminate team B
 		_, _ = tx.Exec(`UPDATE death_arena_teams SET eliminated = true, eliminated_at_round = (
 			SELECT current_round FROM death_arena_tournaments WHERE id = $1
 		) WHERE id = $2`, tournamentID, *teamBID)
-		return tx.Commit()
+		invalidateTournamentCache(tournamentID)
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		BroadcastDeathArenaEvent("match_updated", tournamentID, map[string]interface{}{
+			"match_id":       matchID,
+			"winner_team_id": teamAID,
+			"status":         "FINISHED",
+		})
+		return nil
 	}
 
-	// Build combat state for 6v6
+	// Build combat state for 6v6 purely in-memory
 	simState := &simulator.CombatState{
 		Turn:        0,
 		Seed:        time.Now().UnixNano(),
@@ -419,7 +511,7 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		simState.Enemies = append(simState.Enemies, simEnemy)
 	}
 
-	// Run simulation
+	// Run simulation purely in-memory (zero DB transaction lock)
 	logs := simulator.Simulate(simState)
 
 	// Determine winner
@@ -468,8 +560,15 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 		winnerTeamID = teamAID
 	}
 
-	// Store combat log
+	// Store combat log JSON
 	combatLogJSON, _ := json.Marshal(logs)
+
+	// Fast write transaction (< 5ms)
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
 	// Update match result
 	_, err = tx.Exec(`
@@ -546,14 +645,24 @@ func resolveTeamMatch(tournamentID, matchID, teamAID string, teamBID *string) er
 	}
 
 	// Award round rewards to winning team members
-	reward := roundRewards[1] // Will be updated based on round number
+	reward := roundRewards[1]
 	_ = tx.QueryRow(`SELECT reward_stones_per_member FROM death_arena_matches WHERE id = $1`, matchID).Scan(&reward)
 
 	for _, member := range getTeamMembers(tx, winnerTeamID) {
 		_, _ = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, reward, member)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	invalidateTournamentCache(tournamentID)
+	BroadcastDeathArenaEvent("match_updated", tournamentID, map[string]interface{}{
+		"match_id":       matchID,
+		"winner_team_id": winnerTeamID,
+		"status":         "FINISHED",
+	})
+	return nil
 }
 
 // advanceToNextRound advances the tournament to the next round
@@ -586,7 +695,11 @@ func advanceToNextRound(tournamentID string) {
 			LIMIT 1
 		`, tournamentID, currentRound).Scan(&championTeamID)
 		if err != nil {
-			logger.S.Errorf("Death Arena: Failed to find champion: %v", err)
+			logger.S.Warnf("Death Arena: Failed to find champion in final round: %v, marking FINISHED", err)
+			_, _ = tx.Exec(`UPDATE death_arena_tournaments SET status = 'FINISHED', finished_at = NOW() WHERE id = $1`, tournamentID)
+			_ = tx.Commit()
+			invalidateTournamentCache(tournamentID)
+			BroadcastDeathArenaEvent("tournament_finished", tournamentID, nil)
 			return
 		}
 
@@ -609,6 +722,10 @@ func advanceToNextRound(tournamentID string) {
 		`, fmt.Sprintf("[Đấu Trường Sinh Tử] Giải đấu đã kết thúc! Chúc mừng vô địch!"))
 
 		_ = tx.Commit()
+		invalidateTournamentCache(tournamentID)
+		BroadcastDeathArenaEvent("tournament_finished", tournamentID, map[string]interface{}{
+			"champion_team_id": championTeamID,
+		})
 		logger.S.Infof("Death Arena: Tournament %s finished with champion %s", tournamentID, championTeamID)
 		return
 	}
@@ -669,11 +786,17 @@ func advanceToNextRound(tournamentID string) {
 			`, fmt.Sprintf("[Đấu Trường Sinh Tử] Giải đấu đã kết thúc! Chúc mừng vô địch!"))
 
 			_ = tx.Commit()
+			invalidateTournamentCache(tournamentID)
+			BroadcastDeathArenaEvent("tournament_finished", tournamentID, map[string]interface{}{
+				"champion_team_id": championTeamID,
+			})
 			logger.S.Infof("Death Arena: Tournament %s finished early with champion %s", tournamentID, championTeamID)
 			return
 		}
 		_, _ = tx.Exec(`UPDATE death_arena_tournaments SET status = 'FINISHED', finished_at = NOW() WHERE id = $1`, tournamentID)
 		_ = tx.Commit()
+		invalidateTournamentCache(tournamentID)
+		BroadcastDeathArenaEvent("tournament_finished", tournamentID, nil)
 		return
 	}
 
@@ -720,6 +843,10 @@ func advanceToNextRound(tournamentID string) {
 		logger.S.Errorf("Death Arena: Failed to commit round advance: %v", err)
 		return
 	}
+	invalidateTournamentCache(tournamentID)
+	BroadcastDeathArenaEvent("round_advanced", tournamentID, map[string]interface{}{
+		"current_round": nextRound,
+	})
 
 	// Process next round matches if not already running in current worker loop
 	if !IsProcessingMatches() {
@@ -728,8 +855,8 @@ func advanceToNextRound(tournamentID string) {
 }
 
 // loadTeamMembersForCombat loads team members for combat
-func loadTeamMembersForCombat(tx *sql.Tx, teamID string) ([]*teamMemberCombatant, error) {
-	rows, err := tx.Query(`
+func loadTeamMembersForCombat(q db.Queryer, teamID string) ([]*teamMemberCombatant, error) {
+	rows, err := q.Query(`
 		SELECT dtm.player_id, dtm.current_hp, dtm.max_hp, dtm.current_mana, dtm.max_mana,
 		       p.username, p.rank, p.sub_rank, p.hp, p.base_hp, p.current_mana, p.max_mana,
 		       COALESCE(p.race, ''), COALESCE(p.constitution, ''),

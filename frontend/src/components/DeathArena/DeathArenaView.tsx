@@ -63,7 +63,7 @@ export default function DeathArenaView() {
           </div>
           {deathArenaTournament.status === "REGISTRATION" && (
             <div className="mt-2 text-sm text-gray-300">
-              Thời gian đăng ký: 20:00 - 21:00 Thứ 6
+              Thời gian đăng ký: 16:00 - 17:00 Thứ 7 (Khai chiến: 17:00 chiều Thứ 7)
             </div>
           )}
           {deathArenaTournament.status === "IN_PROGRESS" && (
@@ -74,7 +74,7 @@ export default function DeathArenaView() {
         </div>
       ) : (
         <div className="mb-4 p-3 bg-black/30 rounded-lg text-center text-gray-400">
-          Chưa có giải đấu nào. Giải đấu tiếp theo: Thứ 6 lúc 20:00
+          Chưa có giải đấu nào. Giải đấu tiếp theo: 17:00 Thứ 7 hàng tuần (Mở đăng ký từ 16:00)
         </div>
       )}
 

@@ -64,6 +64,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
 		}
+		handlers.WorldCellBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
+			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
+		}
 	}
 	worker.PlayerEventPublisher = handlers.PublishPlayerRealtimeEvent
 	gin.DefaultWriter = logger.GinWriter()
@@ -606,6 +609,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			deathArena.GET("/bracket", handlers.GetBracket)
 			deathArena.GET("/my-team", handlers.GetMyTeam)
 			deathArena.GET("/matches", handlers.GetMyMatches)
+			deathArena.GET("/matches/:id/log", handlers.GetMatchCombatLog)
 			deathArena.GET("/history", handlers.GetTournamentHistory)
 			deathArena.GET("/rewards", handlers.GetMyRewards)
 			deathArena.POST("/claim-reward", handlers.ClaimReward)

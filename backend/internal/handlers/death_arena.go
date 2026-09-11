@@ -2,14 +2,24 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+)
+
+const (
+	// MaxTournamentTeams is the maximum number of teams allowed in a tournament (16 teams = 4 rounds)
+	MaxTournamentTeams = 16
+	// MaxTournamentPlayers is the maximum number of participants allowed (16 teams * 6 members = 96)
+	MaxTournamentPlayers = MaxTournamentTeams * 6
 )
 
 // Tournament represents a death arena tournament
@@ -104,39 +114,50 @@ func GetCurrentTournament(c *gin.Context) {
 		return
 	}
 
-	// Find current tournament (most recent non-FINISHED)
+	// Find current tournament (cached for 5s to avoid DB load)
 	var t Tournament
-	err := db.DB.QueryRow(`
-		SELECT id, status, scheduled_at, registration_started_at, registration_closed_at,
-		       started_at, finished_at, total_players, total_teams, current_round, total_rounds,
-		       champion_team_id, created_at
-		FROM death_arena_tournaments
-		WHERE status != 'FINISHED'
-		ORDER BY scheduled_at DESC
-		LIMIT 1
-	`).Scan(&t.ID, &t.Status, &t.ScheduledAt, &t.RegistrationStartedAt, &t.RegistrationClosedAt,
-		&t.StartedAt, &t.FinishedAt, &t.TotalPlayers, &t.TotalTeams, &t.CurrentRound, &t.TotalRounds,
-		&t.ChampionTeamID, &t.CreatedAt)
-
-	if err == sql.ErrNoRows {
-		// No active tournament, check for most recent finished one
-		err = db.DB.QueryRow(`
+	var found bool
+	if err := cache.GetJSON("death_arena:current_tournament_meta", &t); err == nil && t.ID != "" {
+		found = true
+	} else {
+		err := db.DB.QueryRow(`
 			SELECT id, status, scheduled_at, registration_started_at, registration_closed_at,
 			       started_at, finished_at, total_players, total_teams, current_round, total_rounds,
 			       champion_team_id, created_at
 			FROM death_arena_tournaments
-			WHERE status = 'FINISHED'
-			ORDER BY finished_at DESC
+			WHERE status != 'FINISHED'
+			ORDER BY scheduled_at DESC
 			LIMIT 1
 		`).Scan(&t.ID, &t.Status, &t.ScheduledAt, &t.RegistrationStartedAt, &t.RegistrationClosedAt,
 			&t.StartedAt, &t.FinishedAt, &t.TotalPlayers, &t.TotalTeams, &t.CurrentRound, &t.TotalRounds,
 			&t.ChampionTeamID, &t.CreatedAt)
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{"tournament": nil, "message": "Không có giải đấu nào"})
+
+		if err == sql.ErrNoRows {
+			// No active tournament, check for most recent finished one
+			err = db.DB.QueryRow(`
+				SELECT id, status, scheduled_at, registration_started_at, registration_closed_at,
+				       started_at, finished_at, total_players, total_teams, current_round, total_rounds,
+				       champion_team_id, created_at
+				FROM death_arena_tournaments
+				WHERE status = 'FINISHED'
+				ORDER BY finished_at DESC
+				LIMIT 1
+			`).Scan(&t.ID, &t.Status, &t.ScheduledAt, &t.RegistrationStartedAt, &t.RegistrationClosedAt,
+				&t.StartedAt, &t.FinishedAt, &t.TotalPlayers, &t.TotalTeams, &t.CurrentRound, &t.TotalRounds,
+				&t.ChampionTeamID, &t.CreatedAt)
+			if err != nil {
+				c.JSON(http.StatusOK, gin.H{"tournament": nil, "message": "Không có giải đấu nào"})
+				return
+			}
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tournament"})
 			return
 		}
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tournament"})
+		found = true
+		_ = cache.SetJSON("death_arena:current_tournament_meta", t, 5*time.Second)
+	}
+	if !found {
+		c.JSON(http.StatusOK, gin.H{"tournament": nil, "message": "Không có giải đấu nào"})
 		return
 	}
 
@@ -252,6 +273,16 @@ func RegisterForTournament(c *gin.Context) {
 		return
 	}
 
+	// Check max total players limit
+	var currentTotalPlayers int
+	_ = tx.QueryRow(`SELECT total_players FROM death_arena_tournaments WHERE id = $1`, tournamentID).Scan(&currentTotalPlayers)
+	if currentTotalPlayers >= MaxTournamentPlayers {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("Giải đấu đã đủ giới hạn tối đa %d người chơi (%d đội)!", MaxTournamentPlayers, MaxTournamentTeams),
+		})
+		return
+	}
+
 	// Load player to get HP/Mana
 	var playerHP, playerMaxHP, playerMana, playerMaxMana float64
 	err = tx.QueryRow(`
@@ -277,6 +308,16 @@ func RegisterForTournament(c *gin.Context) {
 	`, tournamentID).Scan(&teamID, &teamMemberCount)
 
 	if err == sql.ErrNoRows {
+		// Check if we reached the max teams limit before creating a new team
+		var currentTeams int
+		_ = tx.QueryRow(`SELECT COUNT(*) FROM death_arena_teams WHERE tournament_id = $1`, tournamentID).Scan(&currentTeams)
+		if currentTeams >= MaxTournamentTeams {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("Giải đấu đã đạt giới hạn tối đa %d đội, các đội hiện tại đã kín chỗ!", MaxTournamentTeams),
+			})
+			return
+		}
+
 		// No team available, create new team
 		teamName := generateTeamName()
 		var seedNum int
@@ -413,8 +454,23 @@ func UnregisterFromTournament(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Hủy đăng ký thành công"})
 }
 
+// BracketResponse represents the JSON payload returned by GetBracket
+type BracketResponse struct {
+	Tournament *Tournament `json:"tournament"`
+	Matches    []Match     `json:"matches"`
+}
+
 // GetBracket returns the tournament bracket
 func GetBracket(c *gin.Context) {
+	var cached BracketResponse
+	if err := cache.GetJSON("death_arena:bracket:current", &cached); err == nil && cached.Tournament != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"tournament": cached.Tournament,
+			"matches":    cached.Matches,
+		})
+		return
+	}
+
 	// Find current/latest tournament
 	var t Tournament
 	err := db.DB.QueryRow(`
@@ -457,7 +513,7 @@ func GetBracket(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var matches []Match
+	matches := []Match{}
 	for rows.Next() {
 		var m Match
 		if errScan := rows.Scan(&m.ID, &m.TournamentID, &m.RoundNumber, &m.BracketPosition,
@@ -466,6 +522,15 @@ func GetBracket(c *gin.Context) {
 			matches = append(matches, m)
 		}
 	}
+
+	ttl := 3 * time.Second
+	if t.Status == "FINISHED" {
+		ttl = 10 * time.Minute
+	}
+	_ = cache.SetJSON("death_arena:bracket:current", BracketResponse{
+		Tournament: &t,
+		Matches:    matches,
+	}, ttl)
 
 	c.JSON(http.StatusOK, gin.H{
 		"tournament": t,
@@ -625,6 +690,130 @@ func GetMyMatches(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"matches": matches})
+}
+
+// MatchLogResponse represents the payload returned for a match combat replay
+type MatchLogResponse struct {
+	Match        Match         `json:"match"`
+	TeamAMembers []TeamMember  `json:"team_a_members"`
+	TeamBMembers []TeamMember  `json:"team_b_members"`
+	CombatLog    []interface{} `json:"combat_log"`
+}
+
+// GetMatchCombatLog returns detailed match information and combat replay logs
+func GetMatchCombatLog(c *gin.Context) {
+	matchID := c.Param("id")
+	if matchID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu mã trận đấu"})
+		return
+	}
+
+	cacheKey := fmt.Sprintf("death_arena:match_log:%s", matchID)
+	var cached MatchLogResponse
+	if err := cache.GetJSON(cacheKey, &cached); err == nil && cached.Match.ID != "" {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
+	var m Match
+	var teamBName sql.NullString
+	var teamBID sql.NullString
+	var winnerID sql.NullString
+	var combatLogRaw []byte
+
+	err := db.DB.QueryRow(`
+		SELECT m.id, m.tournament_id, m.round_number, m.bracket_position,
+		       m.team_a_id, ta.team_name,
+		       m.team_b_id, COALESCE(tb.team_name, ''),
+		       m.winner_team_id, m.status, m.reward_stones_per_member,
+		       m.created_at, m.finished_at,
+		       COALESCE(m.combat_log, '[]'::jsonb)
+		FROM death_arena_matches m
+		JOIN death_arena_teams ta ON m.team_a_id = ta.id
+		LEFT JOIN death_arena_teams tb ON m.team_b_id = tb.id
+		WHERE m.id = $1
+	`, matchID).Scan(
+		&m.ID, &m.TournamentID, &m.RoundNumber, &m.BracketPosition,
+		&m.TeamAID, &m.TeamAName,
+		&teamBID, &teamBName,
+		&winnerID, &m.Status, &m.RewardStonesPerMember,
+		&m.CreatedAt, &m.FinishedAt,
+		&combatLogRaw,
+	)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy trận đấu"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn trận đấu"})
+		return
+	}
+
+	if teamBID.Valid && teamBID.String != "" {
+		m.TeamBID = &teamBID.String
+	}
+	if teamBName.Valid && teamBName.String != "" {
+		m.TeamBName = &teamBName.String
+	}
+	if winnerID.Valid && winnerID.String != "" {
+		m.WinnerTeamID = &winnerID.String
+	}
+
+	var combatLogs []interface{}
+	if len(combatLogRaw) > 0 {
+		_ = json.Unmarshal(combatLogRaw, &combatLogs)
+	}
+	if combatLogs == nil {
+		combatLogs = []interface{}{}
+	}
+
+	loadMembers := func(teamID string) []TeamMember {
+		if teamID == "" {
+			return []TeamMember{}
+		}
+		rows, err := db.DB.Query(`
+			SELECT dtm.id, dtm.team_id, dtm.player_id, p.username, COALESCE(p.avatar_url, ''), p.rank,
+			       dtm.current_hp, dtm.max_hp, dtm.current_mana, dtm.max_mana,
+			       dtm.eliminated, dtm.eliminated_at_round, dtm.joined_at
+			FROM death_arena_team_members dtm
+			JOIN players p ON dtm.player_id = p.id
+			WHERE dtm.team_id = $1
+			ORDER BY p.rank DESC, dtm.joined_at
+		`, teamID)
+		if err != nil {
+			return []TeamMember{}
+		}
+		defer rows.Close()
+
+		list := []TeamMember{}
+		for rows.Next() {
+			var tm TeamMember
+			if err := rows.Scan(&tm.ID, &tm.TeamID, &tm.PlayerID, &tm.Username, &tm.AvatarURL,
+				&tm.Rank, &tm.CurrentHP, &tm.MaxHP, &tm.CurrentMana, &tm.MaxMana,
+				&tm.Eliminated, &tm.EliminatedAtRound, &tm.JoinedAt); err == nil {
+				list = append(list, tm)
+			}
+		}
+		return list
+	}
+
+	teamAMembers := loadMembers(m.TeamAID)
+	teamBMembers := []TeamMember{}
+	if m.TeamBID != nil && *m.TeamBID != "" {
+		teamBMembers = loadMembers(*m.TeamBID)
+	}
+
+	resp := MatchLogResponse{
+		Match:        m,
+		TeamAMembers: teamAMembers,
+		TeamBMembers: teamBMembers,
+		CombatLog:    combatLogs,
+	}
+
+	if m.Status == "FINISHED" || m.Status == "BYE" {
+		_ = cache.SetJSON(cacheKey, resp, 24*time.Hour)
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetTournamentHistory returns past tournaments

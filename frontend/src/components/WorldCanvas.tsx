@@ -83,6 +83,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const fetchNearbyPlayers = useWorldStore((s) => s.fetchNearbyPlayers);
   const fetchCellsRect = useWorldStore((s) => s.fetchCellsRect);
   const invalidateCell = useWorldStore((s) => s.invalidateCell);
+  const mergeWSCells = useWorldStore((s) => s.mergeWSCells);
   const upsertPlayerPosition = useWorldStore((s) => s.upsertPlayerPosition);
   const pruneStalePlayers = useWorldStore((s) => s.pruneStalePlayers);
   const setLivePosition = useWorldStore((s) => s.setLivePosition);
@@ -1409,21 +1410,30 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       fetchObjects();
     };
 
+    const onWorldCells = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.cells && Array.isArray(detail.cells)) {
+        mergeWSCells(detail.cells);
+      }
+    };
+
     pollCells();
     pollPlayers();
     prefetch();
     window.addEventListener("gu_world_pos", onWorldPos);
     window.addEventListener("gu_world_cell", onWorldCell);
+    window.addEventListener("gu_world_cells", onWorldCells);
     let lastCellsPoll = Date.now();
     let lastPlayersPoll = Date.now();
     let lastPrefetchPoll = Date.now();
     const unifiedTick = () => {
       const now = Date.now();
-      if (now - lastCellsPoll >= 30000) {
+      // WS push after move-path makes 30s cell poll redundant; keep 60s as fallback.
+      if (now - lastCellsPoll >= 60000) {
         lastCellsPoll = now;
         pollCells();
       }
-      if (now - lastPlayersPoll >= 15000) {
+      if (now - lastPlayersPoll >= 30000) {
         lastPlayersPoll = now;
         pollPlayers();
       }
@@ -1436,9 +1446,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     return () => {
       window.removeEventListener("gu_world_pos", onWorldPos);
       window.removeEventListener("gu_world_cell", onWorldCell);
+      window.removeEventListener("gu_world_cells", onWorldCells);
       clearInterval(intervalId);
     };
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, fetchObjects]);
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, fetchObjects, mergeWSCells]);
 
   // Keep the live X/Y position in sync with the game player when idle.
   useEffect(() => {

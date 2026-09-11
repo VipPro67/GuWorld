@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 type TradeOffer struct {
@@ -53,6 +54,24 @@ func getRecipeName(recipeID string) string {
 		}
 	}
 	return fmt.Sprintf("Bí phương %s", recipeID)
+}
+
+// formatGuNames returns a human-readable list of Gu names for a set of instance IDs.
+func formatGuNames(q db.Queryer, instanceIDs []string) string {
+	if len(instanceIDs) == 0 {
+		return ""
+	}
+	var names []string
+	for _, id := range instanceIDs {
+		var guID string
+		var rank int
+		if err := q.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE id = $1`, id).Scan(&guID, &rank); err != nil {
+			names = append(names, id)
+			continue
+		}
+		names = append(names, getGuName(guID, rank))
+	}
+	return strings.Join(names, ", ")
 }
 
 func getGuNamesFromInstances(tx *sql.Tx, instIDs []string) []string {
@@ -923,6 +942,24 @@ func ConfirmTrade(c *gin.Context) {
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
+
+	// Notify both parties about Gu transfers when trade completes
+	if senderConfirmed && receiverConfirmed {
+		if len(senderOffer.Gus) > 0 {
+			guNames := formatGuNames(db.DB, senderOffer.Gus)
+			notify.Send(db.DB, senderID, "trade_gu_sent", "Giao dịch - Cổ trùng đã chuyển",
+				fmt.Sprintf("Bạn đã chuyển %d Cổ trùng cho %s: %s", len(senderOffer.Gus), receiverName, guNames))
+			notify.Send(db.DB, receiverID, "trade_gu_received", "Giao dịch - Nhận Cổ trùng",
+				fmt.Sprintf("%s đã chuyển cho bạn %d Cổ trùng: %s", senderName, len(senderOffer.Gus), guNames))
+		}
+		if len(receiverOffer.Gus) > 0 {
+			guNames := formatGuNames(db.DB, receiverOffer.Gus)
+			notify.Send(db.DB, receiverID, "trade_gu_sent", "Giao dịch - Cổ trùng đã chuyển",
+				fmt.Sprintf("Bạn đã chuyển %d Cổ trùng cho %s: %s", len(receiverOffer.Gus), senderName, guNames))
+			notify.Send(db.DB, senderID, "trade_gu_received", "Giao dịch - Nhận Cổ trùng",
+				fmt.Sprintf("%s đã chuyển cho bạn %d Cổ trùng: %s", receiverName, len(receiverOffer.Gus), guNames))
+		}
+	}
 
 	action := "trade.confirm"
 	var confirmerName string

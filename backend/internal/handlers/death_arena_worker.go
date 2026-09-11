@@ -12,9 +12,11 @@ import (
 var (
 	deathArenaWorkerStarted bool
 	deathArenaWorkerMutex   sync.Mutex
+	deathArenaTimer         *time.Timer
+	deathArenaTimerMutex    sync.Mutex
 )
 
-// StartDeathArenaWorker starts the background worker for death arena tournaments
+// StartDeathArenaWorker starts the event-driven scheduler for death arena tournaments (Beast Betting style)
 func StartDeathArenaWorker(ctx context.Context) {
 	deathArenaWorkerMutex.Lock()
 	if deathArenaWorkerStarted {
@@ -24,56 +26,140 @@ func StartDeathArenaWorker(ctx context.Context) {
 	deathArenaWorkerStarted = true
 	deathArenaWorkerMutex.Unlock()
 
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	logger.S.Info("Started Death Arena worker (event-driven timer schedule)")
 
-	logger.S.Info("Death Arena worker started (checking every 30s)")
+	// 1. Recover state on startup (handles server restarts during tournaments)
+	recoverDeathArenaOnStartup()
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.S.Info("Death Arena worker stopped")
-			return
-		case <-ticker.C:
-			if err := runDeathArenaTick(); err != nil {
-				logger.S.Errorf("Death Arena worker tick error: %v", err)
-			}
+	// 2. Schedule next event
+	scheduleNextDeathArenaEvent(ctx)
+
+	// 3. Listen for context shutdown
+	go func() {
+		<-ctx.Done()
+		deathArenaTimerMutex.Lock()
+		if deathArenaTimer != nil {
+			deathArenaTimer.Stop()
 		}
+		deathArenaTimerMutex.Unlock()
+		logger.S.Info("Death Arena worker stopped")
+	}()
+}
+
+// recoverDeathArenaOnStartup checks if any tournament was interrupted by a restart
+func recoverDeathArenaOnStartup() {
+	// A. Resume active IN_PROGRESS tournament
+	var inProgressID string
+	err := db.DB.QueryRow(`
+		SELECT id FROM death_arena_tournaments 
+		WHERE status = 'IN_PROGRESS' 
+		ORDER BY scheduled_at DESC LIMIT 1
+	`).Scan(&inProgressID)
+	if err == nil && inProgressID != "" {
+		logger.S.Infof("Death Arena: Recovered active tournament %s on startup", inProgressID)
+		if !IsProcessingMatches() {
+			go processPendingMatches(inProgressID)
+		}
+		return
+	}
+
+	// B. Close and start tournament if REGISTRATION is already past closed time
+	_ = closeRegistrationAndStart()
+
+	// C. If Saturday between 16:00 and 17:00 VN time, ensure registration is created
+	vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+	nowVN := time.Now().In(vnLoc)
+	if nowVN.Weekday() == time.Saturday && nowVN.Hour() >= 16 && nowVN.Hour() < 17 {
+		_ = createTournamentIfNeeded()
 	}
 }
 
-// runDeathArenaTick processes one tick of the death arena worker
-func runDeathArenaTick() error {
-	now := time.Now()
+// scheduleNextDeathArenaEvent calculates delay to the next target event and arms a timer
+func scheduleNextDeathArenaEvent(ctx context.Context) {
+	deathArenaTimerMutex.Lock()
+	defer deathArenaTimerMutex.Unlock()
+
+	if deathArenaTimer != nil {
+		deathArenaTimer.Stop()
+	}
+
+	targetTime, eventType := getNextDeathArenaTarget()
+	delay := time.Until(targetTime)
+
+	if delay <= 0 {
+		logger.S.Infof("Death Arena: Target event %s is due immediately", eventType)
+		go handleScheduledEvent(eventType, ctx)
+		return
+	}
+
+	logger.S.Infof("Death Arena: Next event (%s) scheduled at %s (in %v)",
+		eventType, targetTime.Format("2006-01-02 15:04:05 MST"), delay.Round(time.Second))
+
+	deathArenaTimer = time.AfterFunc(delay, func() {
+		handleScheduledEvent(eventType, ctx)
+	})
+}
+
+// handleScheduledEvent executes the scheduled event and schedules the subsequent event
+func handleScheduledEvent(eventType string, ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
+	logger.S.Infof("Death Arena: Executing scheduled event %s", eventType)
+
+	switch eventType {
+	case "OPEN_REGISTRATION":
+		if err := createTournamentIfNeeded(); err != nil {
+			logger.S.Errorf("Death Arena: Failed to create tournament: %v", err)
+		}
+	case "START_TOURNAMENT":
+		if err := closeRegistrationAndStart(); err != nil {
+			logger.S.Errorf("Death Arena: Failed to start tournament: %v", err)
+		}
+	}
+
+	// Schedule the next event
+	scheduleNextDeathArenaEvent(ctx)
+}
+
+// getNextDeathArenaTarget calculates the next milestone time and event type
+func getNextDeathArenaTarget() (time.Time, string) {
 	vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
-	nowVN := now.In(vnLoc)
+	nowVN := time.Now().In(vnLoc)
 
-	// Check if it's Friday (5 = Friday in Go's time.Weekday)
-	if nowVN.Weekday() != time.Friday {
-		return nil
+	// 1. If there's an open REGISTRATION tournament, target its registration_closed_at
+	var regClosedAt time.Time
+	err := db.DB.QueryRow(`
+		SELECT registration_closed_at FROM death_arena_tournaments 
+		WHERE status = 'REGISTRATION'
+		ORDER BY scheduled_at DESC LIMIT 1
+	`).Scan(&regClosedAt)
+	if err == nil {
+		return regClosedAt.In(vnLoc), "START_TOURNAMENT"
 	}
 
-	hour := nowVN.Hour()
-	minute := nowVN.Minute()
+	// 2. Otherwise calculate next Saturday 16:00 (or today 16:00 / 17:00 if Saturday)
+	daysUntilSaturday := (int(time.Saturday) - int(nowVN.Weekday()) + 7) % 7
 
-	// Tournament schedule (all times in VN timezone):
-	// 20:00 - Create tournament (REGISTRATION)
-	// 21:00 - Close registration, generate bracket (LOCKED)
-	// 21:01+ - Process matches (IN_PROGRESS)
-
-	switch {
-	case hour == 20 && minute == 0:
-		// Create new tournament for registration
-		return createTournamentIfNeeded()
-	case hour == 21 && minute == 0:
-		// Close registration and start tournament
-		return closeRegistrationAndStart()
-	case hour >= 21:
-		// Process pending matches (if any)
-		return processActiveTournament()
+	if daysUntilSaturday == 0 {
+		// Today is Saturday
+		if nowVN.Hour() < 16 {
+			// Before 16:00 -> Open registration at 16:00 today
+			return time.Date(nowVN.Year(), nowVN.Month(), nowVN.Day(), 16, 0, 0, 0, vnLoc), "OPEN_REGISTRATION"
+		} else if nowVN.Hour() == 16 {
+			// Between 16:00 and 17:00 -> Start tournament at 17:00 today
+			return time.Date(nowVN.Year(), nowVN.Month(), nowVN.Day(), 17, 0, 0, 0, vnLoc), "START_TOURNAMENT"
+		} else {
+			// After 17:00 -> Next Saturday at 16:00
+			return time.Date(nowVN.Year(), nowVN.Month(), nowVN.Day()+7, 16, 0, 0, 0, vnLoc), "OPEN_REGISTRATION"
+		}
 	}
 
-	return nil
+	// Another day of the week -> target upcoming Saturday at 16:00
+	return time.Date(nowVN.Year(), nowVN.Month(), nowVN.Day()+daysUntilSaturday, 16, 0, 0, 0, vnLoc), "OPEN_REGISTRATION"
 }
 
 // createTournamentIfNeeded creates a new tournament if none exists
@@ -110,13 +196,13 @@ func createTournamentIfNeeded() error {
 	vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
 	now := time.Now().In(vnLoc)
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, vnLoc)
-	regStart := today.Add(20 * time.Hour)  // 20:00
-	regEnd := today.Add(21 * time.Hour)    // 21:00
+	regStart := today.Add(16 * time.Hour) // 16:00 (Chiều Thứ 7)
+	regEnd := today.Add(17 * time.Hour)   // 17:00 (Chiều 5h Thứ 7 khai chiến)
 
 	_, err = db.DB.Exec(`
 		INSERT INTO death_arena_tournaments (status, scheduled_at, registration_started_at, registration_closed_at)
 		VALUES ('REGISTRATION', $1, $2, $3)
-	`, today.Add(21*time.Hour), regStart, regEnd)
+	`, today.Add(17*time.Hour), regStart, regEnd)
 
 	if err != nil {
 		return err
@@ -128,7 +214,7 @@ func createTournamentIfNeeded() error {
 	_, _ = db.DB.Exec(`
 		INSERT INTO messages (sender_id, content, channel)
 		VALUES ('00000000-0000-0000-0000-000000000000', $1, 'world')
-	`, "[Đấu Trường Sinh Tử] Giải đấu Sinh Tử hàng tuần đã mở đăng ký! Thời gian đăng ký: 20:00-21:00 Thứ 6. Gõ /death-arena để tham gia!")
+	`, "[Đấu Trường Sinh Tử] Giải đấu Sinh Tử hàng tuần đã mở đăng ký! Thời gian đăng ký: 16:00-17:00 Thứ 7 (Khai chiến lúc 17:00 chiều Thứ 7). Gõ /death-arena để tham gia!")
 
 	return nil
 }
@@ -139,7 +225,7 @@ func closeRegistrationAndStart() error {
 	var tournamentID string
 	err := db.DB.QueryRow(`
 		SELECT id FROM death_arena_tournaments 
-		WHERE status = 'REGISTRATION'
+		WHERE status = 'REGISTRATION' AND registration_closed_at <= NOW()
 		ORDER BY scheduled_at DESC
 		LIMIT 1
 	`).Scan(&tournamentID)
@@ -167,6 +253,14 @@ func closeRegistrationAndStart() error {
 		return err
 	}
 
+	// Check if tournament was already finalized (e.g. 0 or 1 team registered)
+	var currentStatus string
+	_ = db.DB.QueryRow(`SELECT status FROM death_arena_tournaments WHERE id = $1`, tournamentID).Scan(&currentStatus)
+	if currentStatus == "FINISHED" {
+		logger.S.Infof("Death Arena: Tournament %s auto-finished during bracket generation (not enough teams)", tournamentID)
+		return nil
+	}
+
 	// Start tournament
 	if err := StartTournament(tournamentID); err != nil {
 		logger.S.Errorf("Death Arena: Failed to start tournament: %v", err)
@@ -180,32 +274,6 @@ func closeRegistrationAndStart() error {
 		INSERT INTO messages (sender_id, content, channel)
 		VALUES ('00000000-0000-0000-0000-000000000000', $1, 'world')
 	`, "[Đấu Trường Sinh Tử] Giải đấu đã bắt đầu! Các trận chiến đang diễn ra...")
-
-	return nil
-}
-
-// processActiveTournament processes any active tournament's pending matches
-func processActiveTournament() error {
-	if IsProcessingMatches() {
-		return nil // Already actively processing matches
-	}
-
-	// Find IN_PROGRESS tournament
-	var tournamentID string
-	err := db.DB.QueryRow(`
-		SELECT id FROM death_arena_tournaments 
-		WHERE status = 'IN_PROGRESS'
-		ORDER BY scheduled_at DESC
-		LIMIT 1
-	`).Scan(&tournamentID)
-	if err != nil {
-		return nil // No active tournament
-	}
-
-	// Process tournament matches, advance rounds, or finalize tournament
-	if !IsProcessingMatches() {
-		go processPendingMatches(tournamentID)
-	}
 
 	return nil
 }

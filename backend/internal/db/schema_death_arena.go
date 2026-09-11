@@ -120,6 +120,21 @@ func schemaDeathArena() error {
 		return err
 	}
 
+	if err := execSchema("idx_death_arena_matches_tourn_status_round", `
+	CREATE INDEX IF NOT EXISTS idx_death_arena_matches_tourn_status_round ON death_arena_matches(tournament_id, status, round_number, bracket_position);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("idx_death_arena_tm_player_team", `
+	CREATE INDEX IF NOT EXISTS idx_death_arena_tm_player_team ON death_arena_team_members(player_id, team_id);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("idx_death_arena_tourn_status_sched", `
+	CREATE INDEX IF NOT EXISTS idx_death_arena_tourn_status_sched ON death_arena_tournaments(status, scheduled_at DESC);`); err != nil {
+		return err
+	}
+
 	// Champion rewards table
 	if err := execSchema("death_arena_champion_rewards", `
 	CREATE TABLE IF NOT EXISTS death_arena_champion_rewards (
