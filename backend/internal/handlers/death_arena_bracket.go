@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -120,15 +121,12 @@ func GenerateBracket(tournamentID string) error {
 
 			// Mark match as BYE
 			_, err = tx.Exec(`
-				INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, status, reward_stones_per_member)
-				VALUES ($1, 1, $2, $3, 'BYE', 0)
+				INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, winner_team_id, status, reward_stones_per_member)
+				VALUES ($1, 1, $2, $3, $3, 'BYE', 0)
 			`, tournamentID, matchPosition, teamAID)
 			if err != nil {
 				return err
 			}
-
-			// BYE teams advance to round 2 (create placeholder match in round 2)
-			// We'll handle this when we process round 2
 		} else {
 			// Regular match
 			idx1 := i
@@ -149,8 +147,8 @@ func GenerateBracket(tournamentID string) error {
 
 			if status == "BYE" {
 				_, err = tx.Exec(`
-					INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, status, reward_stones_per_member)
-					VALUES ($1, 1, $2, $3, 'BYE', 0)
+					INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, winner_team_id, status, reward_stones_per_member)
+					VALUES ($1, 1, $2, $3, $3, 'BYE', 0)
 				`, tournamentID, matchPosition, teamAID)
 			} else {
 				reward := roundRewards[1]
@@ -194,48 +192,6 @@ func StartTournament(tournamentID string) error {
 		return err
 	}
 
-	// Process BYE matches in round 1 - advance teams to round 2
-	rows, err := tx.Query(`
-		SELECT id, team_a_id FROM death_arena_matches 
-		WHERE tournament_id = $1 AND round_number = 1 AND status = 'BYE'
-	`, tournamentID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	byeTeamIDs := []string{}
-	for rows.Next() {
-		var matchID, teamAID string
-		if errScan := rows.Scan(&matchID, &teamAID); errScan == nil {
-			byeTeamIDs = append(byeTeamIDs, teamAID)
-		}
-	}
-
-	// Create round 2 matches for BYE teams
-	// Group BYE teams into pairs for round 2
-	for i := 0; i < len(byeTeamIDs); i += 2 {
-		if i+1 < len(byeTeamIDs) {
-			// Two BYE teams fight each other
-			_, err = tx.Exec(`
-				INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, team_b_id, status, reward_stones_per_member)
-				VALUES ($1, 2, $2, $3, $4, 'PENDING', $5)
-			`, tournamentID, (i/2)+1, byeTeamIDs[i], byeTeamIDs[i+1], roundRewards[2])
-			if err != nil {
-				return err
-			}
-		} else {
-			// Odd BYE team - advance to next round automatically
-			_, err = tx.Exec(`
-				INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, status, reward_stones_per_member)
-				VALUES ($1, 2, $2, $3, 'BYE', 0)
-			`, tournamentID, (i/2)+1, byeTeamIDs[i])
-			if err != nil {
-				return err
-			}
-		}
-	}
-
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -246,9 +202,38 @@ func StartTournament(tournamentID string) error {
 	return nil
 }
 
+var (
+	matchProcessingMutex sync.Mutex
+	isProcessingMatches  bool
+)
+
+// IsProcessingMatches returns whether a match processing worker is currently active
+func IsProcessingMatches() bool {
+	matchProcessingMutex.Lock()
+	defer matchProcessingMutex.Unlock()
+	return isProcessingMatches
+}
+
 // processPendingMatches processes all pending matches in the tournament
 func processPendingMatches(tournamentID string) {
+	matchProcessingMutex.Lock()
+	if isProcessingMatches {
+		matchProcessingMutex.Unlock()
+		return
+	}
+	isProcessingMatches = true
+	matchProcessingMutex.Unlock()
+
+	defer func() {
+		matchProcessingMutex.Lock()
+		isProcessingMatches = false
+		matchProcessingMutex.Unlock()
+	}()
+
 	logger.S.Infof("Death Arena: Starting match processing for tournament %s", tournamentID)
+
+	// Recover any match stuck IN_PROGRESS from previous crashes/restarts back to PENDING
+	_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'PENDING' WHERE tournament_id = $1 AND status = 'IN_PROGRESS'`, tournamentID)
 
 	for {
 		// Check if tournament is still IN_PROGRESS
@@ -261,7 +246,8 @@ func processPendingMatches(tournamentID string) {
 
 		// Find and process next pending match
 		var matchID string
-		var teamAID, teamBID string
+		var teamAID string
+		var teamBID sql.NullString
 		err = db.DB.QueryRow(`
 			SELECT id, team_a_id, team_b_id FROM death_arena_matches
 			WHERE tournament_id = $1 AND status = 'PENDING'
@@ -285,6 +271,13 @@ func processPendingMatches(tournamentID string) {
 			if pendingCount == 0 && finishedCount > 0 {
 				// All matches in current round finished, advance to next round
 				advanceToNextRound(tournamentID)
+
+				// Check if tournament has advanced to next round or finished
+				var currentStatus string
+				_ = db.DB.QueryRow(`SELECT status FROM death_arena_tournaments WHERE id = $1`, tournamentID).Scan(&currentStatus)
+				if currentStatus == "IN_PROGRESS" {
+					continue
+				}
 			}
 			return
 		} else if err != nil {
@@ -295,12 +288,20 @@ func processPendingMatches(tournamentID string) {
 		// Mark as in progress
 		_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'IN_PROGRESS' WHERE id = $1`, matchID)
 
+		var teamBIDPtr *string
+		if teamBID.Valid && teamBID.String != "" {
+			teamBIDPtr = &teamBID.String
+		}
+
 		// Resolve the match
-		err = resolveTeamMatch(tournamentID, matchID, teamAID, &teamBID)
+		err = resolveTeamMatch(tournamentID, matchID, teamAID, teamBIDPtr)
 		if err != nil {
 			logger.S.Errorf("Death Arena: Error resolving match %s: %v", matchID, err)
-			// Mark as finished with error - skip this match
-			_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'FINISHED' WHERE id = $1`, matchID)
+			// Mark as finished with fallback winner so bracket is never stuck
+			_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'FINISHED', winner_team_id = $1, finished_at = NOW() WHERE id = $2`, teamAID, matchID)
+			if teamBIDPtr != nil {
+				_, _ = db.DB.Exec(`UPDATE death_arena_teams SET eliminated = true WHERE id = $1`, *teamBIDPtr)
+			}
 		}
 
 		// Small delay between matches
@@ -576,11 +577,12 @@ func advanceToNextRound(tournamentID string) {
 
 	// If this was the final round, tournament is finished
 	if currentRound >= totalRounds {
-		// Find champion team
+		// Find champion team (prefer battle winner, fallback to bye team)
 		var championTeamID string
 		err = tx.QueryRow(`
-			SELECT winner_team_id FROM death_arena_matches
-			WHERE tournament_id = $1 AND round_number = $2 AND status = 'FINISHED'
+			SELECT COALESCE(winner_team_id, team_a_id) FROM death_arena_matches
+			WHERE tournament_id = $1 AND round_number = $2 AND status IN ('FINISHED', 'BYE')
+			ORDER BY CASE WHEN status = 'FINISHED' THEN 1 ELSE 2 END
 			LIMIT 1
 		`, tournamentID, currentRound).Scan(&championTeamID)
 		if err != nil {
@@ -614,7 +616,7 @@ func advanceToNextRound(tournamentID string) {
 	// Get winners from current round
 	rows, err := tx.Query(`
 		SELECT winner_team_id FROM death_arena_matches
-		WHERE tournament_id = $1 AND round_number = $2 AND status = 'FINISHED'
+		WHERE tournament_id = $1 AND round_number = $2 AND status = 'FINISHED' AND winner_team_id IS NOT NULL
 		ORDER BY bracket_position
 	`, tournamentID, currentRound)
 	if err != nil {
@@ -626,14 +628,14 @@ func advanceToNextRound(tournamentID string) {
 	var winners []string
 	for rows.Next() {
 		var winnerID string
-		if errScan := rows.Scan(&winnerID); errScan == nil {
+		if errScan := rows.Scan(&winnerID); errScan == nil && winnerID != "" {
 			winners = append(winners, winnerID)
 		}
 	}
 
 	// Also get BYE winners from current round
 	rows2, err := tx.Query(`
-		SELECT team_a_id FROM death_arena_matches
+		SELECT COALESCE(winner_team_id, team_a_id) FROM death_arena_matches
 		WHERE tournament_id = $1 AND round_number = $2 AND status = 'BYE'
 		ORDER BY bracket_position
 	`, tournamentID, currentRound)
@@ -641,10 +643,38 @@ func advanceToNextRound(tournamentID string) {
 		defer rows2.Close()
 		for rows2.Next() {
 			var teamID string
-			if errScan := rows2.Scan(&teamID); errScan == nil {
+			if errScan := rows2.Scan(&teamID); errScan == nil && teamID != "" {
 				winners = append(winners, teamID)
 			}
 		}
+	}
+
+	if len(winners) <= 1 {
+		// Only 1 or 0 winners left - crown champion or finish immediately
+		if len(winners) == 1 {
+			championTeamID := winners[0]
+			_, _ = tx.Exec(`
+				UPDATE death_arena_tournaments 
+				SET status = 'FINISHED', champion_team_id = $1, finished_at = NOW()
+				WHERE id = $2
+			`, championTeamID, tournamentID)
+
+			if err := awardChampionRewards(tx, tournamentID, championTeamID, 1); err != nil {
+				logger.S.Errorf("Death Arena: Failed to award champion rewards: %v", err)
+			}
+
+			_, _ = tx.Exec(`
+				INSERT INTO messages (sender_id, content, channel)
+				VALUES ('00000000-0000-0000-0000-000000000000', $1, 'world')
+			`, fmt.Sprintf("[Đấu Trường Sinh Tử] Giải đấu đã kết thúc! Chúc mừng vô địch!"))
+
+			_ = tx.Commit()
+			logger.S.Infof("Death Arena: Tournament %s finished early with champion %s", tournamentID, championTeamID)
+			return
+		}
+		_, _ = tx.Exec(`UPDATE death_arena_tournaments SET status = 'FINISHED', finished_at = NOW() WHERE id = $1`, tournamentID)
+		_ = tx.Commit()
+		return
 	}
 
 	// Create next round matches
@@ -667,8 +697,8 @@ func advanceToNextRound(tournamentID string) {
 		} else {
 			// Odd winner - BYE to next round
 			_, err = tx.Exec(`
-				INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, status, reward_stones_per_member)
-				VALUES ($1, $2, $3, $4, 'BYE', 0)
+				INSERT INTO death_arena_matches (tournament_id, round_number, bracket_position, team_a_id, winner_team_id, status, reward_stones_per_member)
+				VALUES ($1, $2, $3, $4, $4, 'BYE', 0)
 			`, tournamentID, nextRound, (i/2)+1, winners[i])
 		}
 		if err != nil {
@@ -691,8 +721,10 @@ func advanceToNextRound(tournamentID string) {
 		return
 	}
 
-	// Process next round matches
-	go processPendingMatches(tournamentID)
+	// Process next round matches if not already running in current worker loop
+	if !IsProcessingMatches() {
+		go processPendingMatches(tournamentID)
+	}
 }
 
 // loadTeamMembersForCombat loads team members for combat
@@ -700,9 +732,14 @@ func loadTeamMembersForCombat(tx *sql.Tx, teamID string) ([]*teamMemberCombatant
 	rows, err := tx.Query(`
 		SELECT dtm.player_id, dtm.current_hp, dtm.max_hp, dtm.current_mana, dtm.max_mana,
 		       p.username, p.rank, p.sub_rank, p.hp, p.base_hp, p.current_mana, p.max_mana,
-		       p.gu_inventory, p.dao_marks, p.path_masteries, p.combat_settings
+		       COALESCE(p.race, ''), COALESCE(p.constitution, ''),
+		       `+db.GuInventoryAggregateEquipped("p.id")+`,
+		       COALESCE(ia.dao_marks, '{}'::jsonb),
+		       COALESCE(p.path_masteries, '{}'::jsonb),
+		       COALESCE(p.combat_settings, '{}'::jsonb)
 		FROM death_arena_team_members dtm
 		JOIN players p ON dtm.player_id = p.id
+		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 		WHERE dtm.team_id = $1 AND dtm.eliminated = false AND dtm.current_hp > 0
 	`, teamID)
 	if err != nil {
@@ -713,11 +750,16 @@ func loadTeamMembersForCombat(tx *sql.Tx, teamID string) ([]*teamMemberCombatant
 	var members []*teamMemberCombatant
 	for rows.Next() {
 		var m teamMemberCombatant
-		if errScan := rows.Scan(&m.PlayerID, &m.CurrentHP, &m.MaxHP, &m.CurrentMana, &m.MaxMana,
-			&m.Username, &m.Rank, &m.SubRank, &m.PlayerHP, &m.BaseHP, &m.PlayerMana, &m.MaxMana,
-			&m.GuInventory, &m.DaoMarks, &m.PathMasteries, &m.CombatSettings); errScan == nil {
-			members = append(members, &m)
+		if errScan := rows.Scan(
+			&m.PlayerID, &m.CurrentHP, &m.MaxHP, &m.CurrentMana, &m.MaxMana,
+			&m.Username, &m.Rank, &m.SubRank, &m.PlayerHP, &m.BaseHP, &m.PlayerMana, &m.MaxManaPlayer,
+			&m.Race, &m.Constitution,
+			&m.GuInventory, &m.DaoMarks, &m.PathMasteries, &m.CombatSettings,
+		); errScan != nil {
+			logger.S.Errorf("Death Arena: Failed to scan team member %s: %v", m.PlayerID, errScan)
+			return nil, errScan
 		}
+		members = append(members, &m)
 	}
 
 	return members, nil
@@ -736,6 +778,8 @@ type teamMemberCombatant struct {
 	BaseHP        float64
 	PlayerMana    float64
 	MaxManaPlayer float64
+	Race          string
+	Constitution  string
 	GuInventory   models.GuInventory
 	DaoMarks      models.DaoMarksMap
 	PathMasteries models.PathMasteriesMap
@@ -754,6 +798,8 @@ func buildTeamCombatant(member *teamMemberCombatant) (*simulator.CombatantAuto, 
 	player.BaseHP = member.BaseHP
 	player.CurrentMana = member.CurrentMana
 	player.MaxMana = member.MaxMana
+	player.Race = member.Race
+	player.Constitution = member.Constitution
 	player.GuInventory = member.GuInventory
 	player.DaoMarks = member.DaoMarks
 	player.PathMasteries = member.PathMasteries
@@ -871,7 +917,7 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 	placementTitles := map[int]string{
 		1: "Quán Quân Đấu Trường Sinh Tử",
 		2: "Á Quân Đấu Trường Sinh Tử",
-		3: "Qúa Quân Đấu Trường Sinh Tử",
+		3: "Quý Quân Đấu Trường Sinh Tử",
 	}
 
 	placementStones := map[int]int{
@@ -948,46 +994,48 @@ func getTeamPlacements(tx *sql.Tx, tournamentID string) []string {
 	err := tx.QueryRow(`
 		SELECT champion_team_id FROM death_arena_tournaments WHERE id = $1
 	`, tournamentID).Scan(&championID)
-	if err != nil {
+	if err != nil || championID == "" {
 		return nil
 	}
 
 	result := []string{championID}
 
-	// Get runner-up from final match
+	// Get runner-up from final match (the loser of the final match)
 	var runnerUp *string
 	err = tx.QueryRow(`
-		SELECT CASE WHEN team_a_id = $1 THEN team_b_id ELSE team_a_id END
+		SELECT CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END
 		FROM death_arena_matches
-		WHERE tournament_id = $2 AND round_number = (
-			SELECT total_rounds FROM death_arena_tournaments WHERE id = $2
+		WHERE tournament_id = $1 AND round_number = (
+			SELECT total_rounds FROM death_arena_tournaments WHERE id = $1
 		) AND status = 'FINISHED'
 		LIMIT 1
-	`, championID, tournamentID).Scan(&runnerUp)
-	if err == nil && runnerUp != nil {
+	`, tournamentID).Scan(&runnerUp)
+	if err == nil && runnerUp != nil && *runnerUp != "" {
 		result = append(result, *runnerUp)
 	}
 
 	// Get 3rd place from semi-final losers
+	runnerUpID := ""
+	if runnerUp != nil {
+		runnerUpID = *runnerUp
+	}
 	rows, err := tx.Query(`
 		SELECT DISTINCT 
-			CASE WHEN m.team_a_id = $1 THEN m.team_b_id ELSE m.team_a_id END
-		FROM death_arena_matches m
-		WHERE m.tournament_id = $2 
-		AND m.round_number = (SELECT total_rounds - 1 FROM death_arena_tournaments WHERE id = $2)
-		AND m.status = 'FINISHED'
-		AND m.winner_team_id != $1
-		AND CASE WHEN m.team_a_id = $1 THEN m.team_b_id ELSE m.team_a_id END NOT IN (
-			SELECT winner_team_id FROM death_arena_matches 
-			WHERE tournament_id = $2 AND status = 'FINISHED'
-		)
+			CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END AS loser_id
+		FROM death_arena_matches
+		WHERE tournament_id = $1 
+		AND round_number = (SELECT total_rounds - 1 FROM death_arena_tournaments WHERE id = $1)
+		AND status = 'FINISHED'
+		AND (CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END) IS NOT NULL
+		AND (CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END) != $2
+		AND (CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END) != $3
 		LIMIT 1
-	`, championID, tournamentID)
+	`, tournamentID, championID, runnerUpID)
 	if err == nil {
 		defer rows.Close()
 		if rows.Next() {
 			var third string
-			if errScan := rows.Scan(&third); errScan == nil {
+			if errScan := rows.Scan(&third); errScan == nil && third != "" {
 				result = append(result, third)
 			}
 		}

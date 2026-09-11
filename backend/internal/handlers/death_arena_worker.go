@@ -147,13 +147,18 @@ func closeRegistrationAndStart() error {
 		return nil // No tournament to start
 	}
 
-	// Check if we already processed this (dedup by checking if started_at is set)
-	var startedAt *time.Time
-	_ = db.DB.QueryRow(`
-		SELECT started_at FROM death_arena_tournaments WHERE id = $1
-	`, tournamentID).Scan(&startedAt)
-	if startedAt != nil {
-		return nil // Already started
+	// Atomically transition status from REGISTRATION to LOCKED to prevent duplicate starts during minute 00
+	res, err := db.DB.Exec(`
+		UPDATE death_arena_tournaments 
+		SET status = 'LOCKED'
+		WHERE id = $1 AND status = 'REGISTRATION'
+	`, tournamentID)
+	if err != nil {
+		return err
+	}
+	rowsAff, _ := res.RowsAffected()
+	if rowsAff == 0 {
+		return nil // Already processed by another tick
 	}
 
 	// Generate bracket
@@ -181,6 +186,10 @@ func closeRegistrationAndStart() error {
 
 // processActiveTournament processes any active tournament's pending matches
 func processActiveTournament() error {
+	if IsProcessingMatches() {
+		return nil // Already actively processing matches
+	}
+
 	// Find IN_PROGRESS tournament
 	var tournamentID string
 	err := db.DB.QueryRow(`
@@ -193,18 +202,8 @@ func processActiveTournament() error {
 		return nil // No active tournament
 	}
 
-	// Check if there are pending matches
-	var pendingCount int
-	err = db.DB.QueryRow(`
-		SELECT COUNT(*) FROM death_arena_matches 
-		WHERE tournament_id = $1 AND status = 'PENDING'
-	`, tournamentID).Scan(&pendingCount)
-	if err != nil {
-		return err
-	}
-
-	if pendingCount > 0 {
-		// Process matches in a goroutine
+	// Process tournament matches, advance rounds, or finalize tournament
+	if !IsProcessingMatches() {
 		go processPendingMatches(tournamentID)
 	}
 
