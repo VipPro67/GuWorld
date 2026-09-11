@@ -431,7 +431,7 @@ func (s *PlayerService) ProjectStatus(q QueryRower, id uuid.UUID) (models.Player
 // It loads with FOR UPDATE, projects time-variant fields, and persists changes.
 func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	if err := worker.EvaluatePlayerHungerTx(tx, id); err != nil {
-		logger.S.Warnf("EvaluatePlayerHungerTx failed for player %s: %v", id, err)
+		return models.Player{}, fmt.Errorf("evaluate player hunger: %w", err)
 	}
 
 	player, err := s.LoadForUpdate(tx, id)
@@ -486,7 +486,7 @@ func (s *PlayerService) EvaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.P
 // memory. It does not write to the database.
 func (s *PlayerService) evaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	if err := worker.EvaluatePlayerHungerTx(tx, id); err != nil {
-		logger.S.Warnf("EvaluatePlayerHungerTx failed for player %s: %v", id, err)
+		return models.Player{}, fmt.Errorf("evaluate player hunger: %w", err)
 	}
 
 	player, err := s.LoadForUpdateEquipped(tx, id)

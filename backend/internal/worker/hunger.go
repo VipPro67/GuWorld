@@ -207,7 +207,7 @@ func batchApplyOnTickEffects(db *sql.DB) {
 	_, err = db.Exec(`
 		UPDATE players AS p SET
 			primeval_stones = v.ps,
-			immortal_stones = v.is
+			immortal_stones = v.is2
 		FROM (SELECT unnest($1::uuid[]) AS id,
 		             unnest($2::float8[]) AS ps,
 		             unnest($3::float8[]) AS is2) v

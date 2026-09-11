@@ -27,18 +27,20 @@ type Notification struct {
 }
 
 // Send inserts a notification for a player and publishes it to Redis for WebSocket broadcast.
-// Failures are logged but never returned — notifications are best-effort.
+// Failures are logged and returned. Most callers treat notifications as
+// best-effort, but transaction callers must handle the error because PostgreSQL
+// aborts the transaction after a failed statement.
 //
 // When q is a *sql.DB the insert is retried up to 3 times on lock-timeout
 // (55P03) or deadlock (40P01) errors, since these are transient contention
 // issues caused by concurrent combat/hunger transactions holding player row
 // locks (the notifications FK requires a KEY SHARE lock on players).
-// When q is a *sql.Tx, retry is skipped because the transaction is already
-// aborted after a PostgreSQL error.
-func Send(q Querier, playerID uuid.UUID, ntype, title, content string) {
+// When q is a *sql.Tx, a savepoint isolates an insert failure so the caller's
+// transaction remains usable.
+func Send(q Querier, playerID uuid.UUID, ntype, title, content string) error {
 	if q == nil {
 		logger.S.Errorf("notify: nil querier, skipping player=%s type=%s", playerID, ntype)
-		return
+		return sql.ErrConnDone
 	}
 	n := Notification{
 		ID:        uuid.New().String(),
@@ -54,7 +56,6 @@ func Send(q Querier, playerID uuid.UUID, ntype, title, content string) {
 		 VALUES ($1, $2, $3, $4, $5, FALSE, $6)`
 
 	// For bare *sql.DB connections retry on transient lock contention.
-	// For *sql.Tx the caller's transaction is already aborted; don't retry.
 	if db, ok := q.(*sql.DB); ok {
 		const maxAttempts = 3
 		var err error
@@ -62,7 +63,7 @@ func Send(q Querier, playerID uuid.UUID, ntype, title, content string) {
 			_, err = db.Exec(insertSQL, n.ID, n.PlayerID, n.Type, n.Title, n.Content, n.CreatedAt)
 			if err == nil {
 				push(playerID, n)
-				return
+				return nil
 			}
 			if !isRetryableDBError(err) || attempt == maxAttempts {
 				break
@@ -75,15 +76,41 @@ func Send(q Querier, playerID uuid.UUID, ntype, title, content string) {
 			n.ID = uuid.New().String()
 		}
 		logger.S.Errorf("notify: insert failed player=%s type=%s: %v", playerID, ntype, err)
-		return
+		return err
 	}
 
-	// Fallback for *sql.Tx or any other Querier: single attempt, no retry.
+	// Keep a failed best-effort insert from poisoning a caller-owned PostgreSQL
+	// transaction. Using the caller's transaction also avoids waiting on player
+	// row locks held by that same transaction while validating the foreign key.
+	if tx, ok := q.(*sql.Tx); ok {
+		if _, err := tx.Exec("SAVEPOINT notify_send"); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(insertSQL, n.ID, n.PlayerID, n.Type, n.Title, n.Content, n.CreatedAt); err != nil {
+			logger.S.Errorf("notify: insert failed player=%s type=%s: %v", playerID, ntype, err)
+			if _, rollbackErr := tx.Exec("ROLLBACK TO SAVEPOINT notify_send"); rollbackErr != nil {
+				return rollbackErr
+			}
+			if _, releaseErr := tx.Exec("RELEASE SAVEPOINT notify_send"); releaseErr != nil {
+				return releaseErr
+			}
+			return err
+		}
+		if _, err := tx.Exec("RELEASE SAVEPOINT notify_send"); err != nil {
+			return err
+		}
+		// Do not publish before the owner commits: doing so can expose a row that
+		// is not visible yet, or a notification for a transaction that rolls back.
+		return nil
+	}
+
+	// Fallback for any other Querier: single attempt, no retry.
 	if _, err := q.Exec(insertSQL, n.ID, n.PlayerID, n.Type, n.Title, n.Content, n.CreatedAt); err != nil {
 		logger.S.Errorf("notify: insert failed player=%s type=%s: %v", playerID, ntype, err)
-		return
+		return err
 	}
 	push(playerID, n)
+	return nil
 }
 
 // isRetryableDBError reports whether err is a transient PostgreSQL error that
