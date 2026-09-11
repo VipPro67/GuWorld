@@ -15,9 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
-	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -422,14 +420,6 @@ func GetMySectStatus(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 		}
 		return
-	}
-
-	if tx, errTx := db.DB.Begin(); errTx == nil {
-		if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
 	}
 
 	var s Sect
@@ -1021,9 +1011,6 @@ func DonateGu(c *gin.Context) {
 	vaultItemCost := int64(pricing.VaultCost(effectiveBase))
 
 	// Add to sect vault
-	if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH != nil {
-		logger.S.Warnf("EvaluateSectVaultHungerTx failed for sect %s: %v", m.SectID, errH)
-	}
 
 	var vaultGuRaw json.RawMessage
 	err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultGuRaw)
@@ -1431,9 +1418,6 @@ func DonateBulk(c *gin.Context) {
 
 	// 2. Process Gu Instances
 	if len(req.Gus) > 0 {
-		if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH != nil {
-			logger.S.Warnf("EvaluateSectVaultHungerTx failed for sect %s: %v", m.SectID, errH)
-		}
 
 		// Fetch sect vault Gu
 		var vaultGuRaw json.RawMessage
@@ -1719,11 +1703,6 @@ func BuyFromSectVault(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
-
-	if errH := worker.EvaluateSectVaultHungerTx(tx, m.SectID); errH != nil {
-		logger.S.Warnf("EvaluateSectVaultHungerTx failed for sect %s: %v", m.SectID, errH)
-	}
-
 	var s Sect
 	err = tx.QueryRow(`
 		SELECT id, vault_gu, vault_materials, vault_recipes
@@ -1776,8 +1755,6 @@ func BuyFromSectVault(c *gin.Context) {
 		if actualRank == 0 {
 			actualRank = guSpec.Rank
 		}
-		buyHunger := normalizeVaultGuHunger(req.ItemID, actualRank, vaultGus[targetIdx].Hunger)
-
 		if vaultGus[targetIdx].Quantity <= 0 {
 			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
 		}
@@ -1786,7 +1763,7 @@ func BuyFromSectVault(c *gin.Context) {
 				InstanceID: uuid.New().String(),
 				GuID:       req.ItemID,
 				Rank:       actualRank,
-				Hunger:     int(buyHunger),
+				Hunger:     1,
 				Status:     "ACTIVE",
 				Equipped:   false,
 			}

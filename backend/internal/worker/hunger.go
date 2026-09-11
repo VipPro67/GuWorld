@@ -53,9 +53,10 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 }
 
 // processHungerDecay handles background tasks for Gu ticks.
-// Note: Gu hunger decay for players and sects is now handled lazily on-demand
-// (EvaluatePlayerHungerTx / EvaluateSectVaultHungerTx) to eliminate full table
-// scans and deadlock contention. This worker only processes lightweight ON_TICK effects.
+// Note: Gu hunger decay for players is handled lazily on-demand
+// (EvaluatePlayerHungerTx). Sect vault Gu hunger decay has been eliminated
+// to save CPU/DB overhead; withdrawn Gus start at hunger 1 instead.
+// This worker only processes lightweight ON_TICK effects.
 func processHungerDecay(ctx context.Context, db *sql.DB) {
 	// 1. Batch ON_TICK effects (generating stones from special Gus)
 	batchApplyOnTickEffects(db)
@@ -497,197 +498,11 @@ func vaultGuSpec(id string, rank int) (float64, float64) {
 	return 100, 0
 }
 
-// EvaluateSectVaultHungerTx performs lazy on-demand decay of a sect's vault Gus.
-// It checks the sect's last_vault_decay_at timestamp, and if one or more 3-hour
-// intervals have passed, decays the Gus in vault_gu.
+// EvaluateSectVaultHungerTx is a no-op because hunger decay for sect vaults
+// has been disabled to eliminate background/on-demand CPU overhead and row locking.
+// Gu in the sect vault does not decay or starve. When withdrawn, its hunger is set to 1.
 func EvaluateSectVaultHungerTx(tx *sql.Tx, sectID string) error {
-	var vaultRaw []byte
-	var lastDecay time.Time
-	err := tx.QueryRow(`
-		SELECT vault_gu, COALESCE(last_vault_decay_at, NOW())
-		FROM sects
-		WHERE id = $1
-		FOR UPDATE
-	`, sectID).Scan(&vaultRaw, &lastDecay)
-	if err != nil {
-		return err
-	}
-
-	now := time.Now()
-	const tickInterval = 3 * time.Hour
-	if now.Before(lastDecay) {
-		return nil
-	}
-
-	ticks := int(now.Sub(lastDecay) / tickInterval)
-	if ticks <= 0 {
-		return nil
-	}
-
-	var items []vaultGuItem
-	if len(vaultRaw) > 0 {
-		if err := json.Unmarshal(vaultRaw, &items); err != nil {
-			return err
-		}
-	}
-
-	newDecay := lastDecay.Add(time.Duration(ticks) * tickInterval)
-	if len(items) == 0 {
-		_, err = tx.Exec(`UPDATE sects SET last_vault_decay_at = $1 WHERE id = $2`, newDecay, sectID)
-		return err
-	}
-
-	changed := false
-	for i := range items {
-		maxH, rate := vaultGuSpec(items[i].ID, items[i].Rank)
-		if items[i].Hunger <= 0 {
-			items[i].Hunger = maxH
-		}
-		items[i].Hunger -= float64(ticks) * rate
-		if items[i].Hunger < 0 {
-			items[i].Hunger = 0
-		}
-		changed = true
-	}
-
-	kept := items[:0]
-	for _, it := range items {
-		if it.Hunger > 0 {
-			kept = append(kept, it)
-		}
-	}
-	items = kept
-
-	if changed {
-		newRaw, err := json.Marshal(items)
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(`
-			UPDATE sects SET vault_gu = $1, last_vault_decay_at = $2 WHERE id = $3
-		`, string(newRaw), newDecay, sectID)
-		return err
-	}
-
-	_, err = tx.Exec(`UPDATE sects SET last_vault_decay_at = $1 WHERE id = $2`, newDecay, sectID)
-	return err
-}
-
-// batchVaultHungerDecay replaces the old per-sect transaction loop. It
-// batch-reads all sect vaults in 1 query, decays hunger in Go, then batch-writes
-// all modified vaults + audit logs in a single transaction.
-func batchVaultHungerDecay(db *sql.DB) {
-	// 1. Batch-read all sects with non-empty vault_gu
-	type sectVault struct {
-		id   string
-		raw  []byte
-	}
-	var vaults []sectVault
-	vRows, err := db.Query(`SELECT id, vault_gu FROM sects WHERE vault_gu <> '[]'::jsonb`)
-	if err != nil {
-		logger.S.Errorf("Hunger Worker Error reading vault Gus: %v", err)
-		return
-	}
-	for vRows.Next() {
-		var sv sectVault
-		if vRows.Scan(&sv.id, &sv.raw) == nil {
-			vaults = append(vaults, sv)
-		}
-	}
-	vRows.Close()
-
-	if len(vaults) == 0 {
-		return
-	}
-
-	// 2. Decay hunger in Go for each vault
-	type auditEntry struct {
-		sectID  string
-		summary string
-	}
-	var modifiedIDs []string
-	var modifiedRaw []string
-	var auditLogs []auditEntry
-
-	for _, sv := range vaults {
-		var items []vaultGuItem
-		if len(sv.raw) > 0 {
-			if err := json.Unmarshal(sv.raw, &items); err != nil {
-				continue
-			}
-		}
-
-		changed := false
-		for i := range items {
-			maxH, rate := vaultGuSpec(items[i].ID, items[i].Rank)
-			if items[i].Hunger <= 0 {
-				items[i].Hunger = maxH
-			}
-			items[i].Hunger -= rate
-			if items[i].Hunger < 0 {
-				items[i].Hunger = 0
-			}
-			changed = true
-		}
-
-		// Remove starved groups
-		kept := items[:0]
-		for _, it := range items {
-			if it.Hunger > 0 {
-				kept = append(kept, it)
-			} else {
-				name := it.ID
-				if spec, ok := models.GetGu(it.ID, it.Rank); ok {
-					name = spec.Name
-				}
-				auditLogs = append(auditLogs, auditEntry{
-					sectID:  sv.id,
-					summary: name + " | Cổ trong Bảo khố chết đói",
-				})
-			}
-		}
-		items = kept
-
-		if changed {
-			newRaw, err := json.Marshal(items)
-			if err != nil {
-				continue
-			}
-			modifiedIDs = append(modifiedIDs, sv.id)
-			modifiedRaw = append(modifiedRaw, string(newRaw))
-		}
-	}
-
-	// 3. Batch-write modified vaults + audit logs in one transaction
-	if len(modifiedIDs) == 0 && len(auditLogs) == 0 {
-		return
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		logger.S.Errorf("Hunger Worker Error starting vault batch tx: %v", err)
-		return
-	}
-	defer tx.Rollback()
-
-	if len(modifiedIDs) > 0 {
-		if _, err := tx.Exec(`
-			UPDATE sects AS s SET vault_gu = v.vault
-			FROM (SELECT unnest($1::text[]) AS id, unnest($2::jsonb[]) AS vault) v
-			WHERE s.id = v.id
-		`, pq.Array(modifiedIDs), pq.Array(modifiedRaw)); err != nil {
-			logger.S.Errorf("Hunger Worker Error batch updating vaults: %v", err)
-			return
-		}
-	}
-
-	if len(auditLogs) > 0 {
-		// No audit logging for sect vault Gu starve - high frequency worker activity
-	}
-
-	if err := tx.Commit(); err != nil {
-		logger.S.Errorf("Hunger Worker Error committing vault batch: %v", err)
-	}
+	return nil
 }
 
 // isDeadlockOrLockTimeout reports whether err is a Postgres deadlock (40P01) or

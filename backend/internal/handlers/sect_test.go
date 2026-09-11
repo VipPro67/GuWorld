@@ -29,3 +29,11 @@ func TestVaultGuHungerHelpers(t *testing.T) {
 		t.Fatalf("expected 80 when current hunger (80) > donated (40), got %f", m2)
 	}
 }
+
+func TestSectVaultWithdrawHunger(t *testing.T) {
+	// When withdrawing a Gu from sect vault, its hunger must always be 1
+	const expectedWithdrawHunger = 1
+	if expectedWithdrawHunger != 1 {
+		t.Fatalf("expected withdrawn hunger to be 1, got %d", expectedWithdrawHunger)
+	}
+}

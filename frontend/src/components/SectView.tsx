@@ -1673,8 +1673,6 @@ export const SectView: React.FC = () => {
                       const displayRank = vg.rank || spec?.rank || 1;
                       const ownedCount = player?.gu_inventory?.filter((g: any) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
                       const vgMaxHunger = spec?.max_hunger || 100;
-                      const vgHunger = typeof vg.hunger === "number" && vg.hunger > 0 ? vg.hunger : vgMaxHunger;
-                      const vgHungerPct = Math.max(0, Math.min(100, (vgHunger / vgMaxHunger) * 100));
                       return (
                         <div
                           key={uKey}
@@ -1694,21 +1692,9 @@ export const SectView: React.FC = () => {
                               )}
                             </span>
                             <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-[9px] text-zinc-500 font-mono">Độ no:</span>
-                              <div className="w-16 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-850">
-                                <div
-                                  className={`h-full rounded-full transition-all duration-300 ${
-                                    vgHungerPct < 20
-                                      ? "bg-rose-500 animate-pulse"
-                                      : vgHungerPct < 50
-                                      ? "bg-amber-505"
-                                      : "bg-emerald-500"
-                                  }`}
-                                  style={{ width: `${vgHungerPct}%` }}
-                                />
-                              </div>
-                              <span className="text-[9px] font-mono text-zinc-400">
-                                {Math.round(vgHunger)}/{vgMaxHunger}
+                              <span className="text-[9px] text-zinc-500 font-mono">Độ no khi rút:</span>
+                              <span className="text-[9px] font-mono text-amber-400 font-semibold">
+                                1/{vgMaxHunger}
                               </span>
                             </div>
                             <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
