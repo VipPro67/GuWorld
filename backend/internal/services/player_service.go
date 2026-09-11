@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -196,8 +195,14 @@ FROM players
 		}
 	}
 
-	if s.db != nil {
-		invRows, err := s.db.Query(`
+	var inventoryQuery db.Queryer
+	if qy, ok := q.(db.Queryer); ok {
+		inventoryQuery = qy
+	} else {
+		inventoryQuery = s.db
+	}
+	if inventoryQuery != nil {
+		invRows, err := inventoryQuery.Query(`
 			SELECT item_id, quantity FROM player_inventory_items WHERE player_id = $1
 		`, id.String())
 		if err == nil {
@@ -211,24 +216,6 @@ FROM players
 				}
 			}
 			player.MaterialsInventory = mi
-		}
-	}
-
-	// Read-Through: Overlay uncommitted realtime movement from Redis if present
-	if cache.Client != nil {
-		var mov worker.PlayerMovementPayload
-		if errMov := cache.GetJSON("player_movement:"+id.String(), &mov); errMov == nil && mov.ID != "" {
-			player.X = mov.X
-			player.Y = mov.Y
-			if mov.CurrentRegion != "" {
-				player.CurrentRegion = mov.CurrentRegion
-			}
-			if len(mov.ClearedCells) > 0 && string(mov.ClearedCells) != "{}" {
-				_ = json.Unmarshal(mov.ClearedCells, &player.ClearedCells)
-			}
-			if len(mov.VisitedSubzones) > 0 && string(mov.VisitedSubzones) != "[]" {
-				_ = json.Unmarshal(mov.VisitedSubzones, &player.VisitedSubZones)
-			}
 		}
 	}
 
@@ -447,7 +434,7 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 		logger.S.Warnf("EvaluatePlayerHungerTx failed for player %s: %v", id, err)
 	}
 
-	player, err := s.Load(tx, id, false)
+	player, err := s.LoadForUpdate(tx, id)
 	if err != nil {
 		return player, err
 	}
@@ -464,24 +451,7 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 		player.LastCultivateTime = now
 	}
 
-	if cache.Client != nil {
-		statsPayload := worker.PlayerStatsPayload{
-			ID:                  player.ID.String(),
-			HP:                  player.HP,
-			SoulHP:              player.SoulHP,
-			CurrentMana:         player.CurrentMana,
-			MaxMana:             player.MaxMana,
-			CurrentThought:      player.CurrentThought,
-			Lifespan:            player.Lifespan,
-			TimeSpeedMultiplier: player.TimeSpeedMultiplier,
-			ApertureStress:      player.ApertureStress,
-			LastManaUpdate:      player.LastManaUpdate,
-			LastCultivateTime:   player.LastCultivateTime,
-			UpdatedAt:           now,
-		}
-		_ = cache.SetAndQueueJSON("player_stats", player.ID.String(), statsPayload)
-	} else {
-		_, err = tx.Exec(`
+	_, err = tx.Exec(`
 			UPDATE players
 			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
@@ -489,11 +459,10 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 			    version = version + 1
 			WHERE id = $11
 		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
-			player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-			player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
-		if err != nil {
-			return player, err
-		}
+		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
+		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
+	if err != nil {
+		return player, err
 	}
 	player.Version++
 
@@ -520,7 +489,7 @@ func (s *PlayerService) evaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.P
 		logger.S.Warnf("EvaluatePlayerHungerTx failed for player %s: %v", id, err)
 	}
 
-	player, err := s.LoadEquipped(tx, id)
+	player, err := s.LoadForUpdateEquipped(tx, id)
 	if err != nil {
 		return player, err
 	}
@@ -551,24 +520,7 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 		return player, err
 	}
 
-	if cache.Client != nil {
-		statsPayload := worker.PlayerStatsPayload{
-			ID:                  player.ID.String(),
-			HP:                  player.HP,
-			SoulHP:              player.SoulHP,
-			CurrentMana:         player.CurrentMana,
-			MaxMana:             player.MaxMana,
-			CurrentThought:      player.CurrentThought,
-			Lifespan:            player.Lifespan,
-			TimeSpeedMultiplier: player.TimeSpeedMultiplier,
-			ApertureStress:      player.ApertureStress,
-			LastManaUpdate:      player.LastManaUpdate,
-			LastCultivateTime:   player.LastCultivateTime,
-			UpdatedAt:           time.Now(),
-		}
-		_ = cache.SetAndQueueJSON("player_stats", player.ID.String(), statsPayload)
-	} else {
-		_, err = tx.Exec(`
+	_, err = tx.Exec(`
 			UPDATE players
 			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
@@ -576,11 +528,10 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 			    version = version + 1
 			WHERE id = $11
 		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
-			player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-			player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
-		if err != nil {
-			return player, err
-		}
+		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
+		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
+	if err != nil {
+		return player, err
 	}
 	player.Version++
 

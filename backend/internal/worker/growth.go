@@ -391,6 +391,14 @@ func updatePlayerGrowthOnce(ctx context.Context, db *sql.DB, playerID string, gu
 		return err
 	}
 
+	// All player/Gu mutation flows lock the parent player before player_gu.
+	// Keeping this order aligned with hunger evaluation prevents a direct
+	// players <-> player_gu deadlock cycle.
+	var lockedPlayerID string
+	if err := tx.QueryRow(`SELECT id::text FROM players WHERE id = $1::uuid FOR UPDATE`, playerID).Scan(&lockedPlayerID); err != nil {
+		return err
+	}
+
 	if len(guUpdates) > 0 {
 		ids := make([]string, len(guUpdates))
 		ghs := make([]float64, len(guUpdates))

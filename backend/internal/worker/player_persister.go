@@ -74,8 +74,6 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 		return parsed[i].UpdatedAt.Before(parsed[j].UpdatedAt)
 	})
 
-	var succeededIDs []string
-
 	for _, p := range parsed {
 		var clearedCellsVal any = "{}"
 		if len(p.ClearedCells) > 0 {
@@ -105,17 +103,19 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 			continue
 		}
 
-		_, err = tx.Exec(`
+		result, err := tx.Exec(`
 			UPDATE players SET
 				x = $1, y = $2, current_region = $3,
 				cleared_cells = $4, visited_subzones = $5,
-				human_qi = $6
+				human_qi = $6, version = GREATEST(version, $8)
 			WHERE id = $7
+			  AND version IN ($8 - 1, $8)
+			  AND (last_mana_update IS NULL OR last_mana_update <= $9)
 		`,
 			p.X, p.Y, p.CurrentRegion,
 			clearedCellsVal, visitedSubzonesVal,
 			p.HumanQi,
-			p.ID,
+			p.ID, p.Version, p.UpdatedAt,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -123,16 +123,26 @@ func handlePlayerMovementBatch(ctx context.Context, payloads []string) error {
 			continue
 		}
 
+		rows, err := result.RowsAffected()
+		if err != nil || rows > 1 {
+			tx.Rollback()
+			logger.S.Warnf("Batch movement: failed checking player %s result: rows=%d err=%v", p.ID, rows, err)
+			continue
+		}
+		if rows == 0 {
+			tx.Rollback()
+			if _, ackErr := cache.AcknowledgePendingJSON("player_movement", p.ID, p.raw); ackErr != nil {
+				logger.S.Warnf("Batch movement: failed to acknowledge stale player %s: %v", p.ID, ackErr)
+			}
+			continue
+		}
 		if err := tx.Commit(); err != nil {
 			logger.S.Warnf("Batch movement: failed to commit for player %s: %v", p.ID, err)
 			continue
 		}
-
-		succeededIDs = append(succeededIDs, p.ID)
-	}
-
-	if len(succeededIDs) > 0 {
-		_ = cache.RemovePendingIDs("player_movement", succeededIDs...)
+		if _, err := cache.AcknowledgePendingJSON("player_movement", p.ID, p.raw); err != nil {
+			logger.S.Warnf("Batch movement: failed to acknowledge player %s: %v", p.ID, err)
+		}
 	}
 
 	return nil
@@ -144,15 +154,19 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 	}
 
 	// Parse and deduplicate payloads by player ID, keeping the newest UpdatedAt
-	latestByPlayer := make(map[string]PlayerStatsPayload)
+	type pendingStats struct {
+		payload PlayerStatsPayload
+		raw     string
+	}
+	latestByPlayer := make(map[string]pendingStats)
 	for _, pStr := range payloads {
 		var p PlayerStatsPayload
 		if err := json.Unmarshal([]byte(pStr), &p); err != nil {
 			logger.S.Errorf("Failed to unmarshal PlayerStatsPayload: %v", err)
 			continue
 		}
-		if existing, ok := latestByPlayer[p.ID]; !ok || p.UpdatedAt.After(existing.UpdatedAt) {
-			latestByPlayer[p.ID] = p
+		if existing, ok := latestByPlayer[p.ID]; !ok || p.UpdatedAt.After(existing.payload.UpdatedAt) {
+			latestByPlayer[p.ID] = pendingStats{payload: p, raw: pStr}
 		}
 	}
 
@@ -160,9 +174,8 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 		return nil
 	}
 
-	var succeededIDs []string
-
-	for _, p := range latestByPlayer {
+	for _, pending := range latestByPlayer {
+		p := pending.payload
 		// Each player update runs in its own short transaction with lock/statement timeout
 		tx, err := db.DB.BeginTx(ctx, nil)
 		if err != nil {
@@ -181,7 +194,7 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 			continue
 		}
 
-		_, err = tx.Exec(`
+		result, err := tx.Exec(`
 			UPDATE players SET
 				hp = $1, soul_hp = $2, current_mana = $3, max_mana = $4,
 				current_thought = $5, lifespan = $6, time_speed_multiplier = $7,
@@ -202,18 +215,27 @@ func handlePlayerStatsBatch(ctx context.Context, payloads []string) error {
 			continue
 		}
 
+		rows, err := result.RowsAffected()
+		if err != nil || rows > 1 {
+			tx.Rollback()
+			logger.S.Warnf("Batch stats: failed checking player %s result: rows=%d err=%v", p.ID, rows, err)
+			continue
+		}
+		if rows == 0 {
+			tx.Rollback()
+			if _, ackErr := cache.AcknowledgePendingJSON("player_stats", p.ID, pending.raw); ackErr != nil {
+				logger.S.Warnf("Batch stats: failed to acknowledge stale player %s: %v", p.ID, ackErr)
+			}
+			continue
+		}
 		if err := tx.Commit(); err != nil {
 			logger.S.Warnf("Batch stats: failed to commit for player %s: %v", p.ID, err)
 			continue
 		}
-
-		succeededIDs = append(succeededIDs, p.ID)
-	}
-
-	if len(succeededIDs) > 0 {
-		_ = cache.RemovePendingIDs("player_stats", succeededIDs...)
+		if _, err := cache.AcknowledgePendingJSON("player_stats", p.ID, pending.raw); err != nil {
+			logger.S.Warnf("Batch stats: failed to acknowledge player %s: %v", p.ID, err)
+		}
 	}
 
 	return nil
 }
-

@@ -2920,14 +2920,9 @@ func GetPassiveStatsHandler(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTx(tx, authID)
+	// Passive stats are a read-only projection. Do not invoke lazy hunger or
+	// persistence here: polling this endpoint must never hold a player row lock.
+	player, err := PlayerSvc.ProjectStatus(db.DB, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return

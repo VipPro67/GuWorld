@@ -20,7 +20,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -1580,39 +1579,17 @@ func savePlayerMovement(tx *sql.Tx, player *models.Player, combatJSON any) error
 		player.CurrentRegion = HubRegionID
 	}
 
-	// Only defer to asynchronous Redis batching when NO combat is triggered or active.
-	// Combat requires immediate synchronous persistence in PostgreSQL for subsequent combat actions.
-	if combatJSON == nil && player.ActiveCombat == nil && cache.Client != nil {
-		clearedBytes, _ := json.Marshal(player.ClearedCells)
-		visitedBytes, _ := json.Marshal(player.VisitedSubZones)
 
-		queuePayload := worker.PlayerMovementPayload{
-			ID:              player.ID.String(),
-			CurrentMana:     player.CurrentMana,
-			MaxMana:         player.MaxMana,
-			HP:              player.HP,
-			X:               player.X,
-			Y:               player.Y,
-			CurrentRegion:   player.CurrentRegion,
-			ClearedCells:    json.RawMessage(clearedBytes),
-			PrimevalStones:  player.PrimevalStones,
-			HumanQi:         player.HumanQi,
-			VisitedSubzones: json.RawMessage(visitedBytes),
-			UpdatedAt:       time.Now(),
-			Version:         player.Version,
-		}
-		if err := cache.SetAndQueueJSON("player_movement", player.ID.String(), queuePayload); err == nil {
-			return nil
-		}
-	}
-
-	ClearPendingPlayerQueues(player.ID.String())
-
+	// Movement awards resources and may mutate hunger/progress in the same
+	// transaction. Persist the complete authoritative result synchronously so a
+	// Redis snapshot cannot survive a rollback or overwrite a newer mutation.
 	_, err := tx.Exec(`
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
+		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12, version = version + 1
 		WHERE id = $13
 	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
+	if err == nil {
+		player.Version++
+	}
 	return err
 }
-
