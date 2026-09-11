@@ -105,8 +105,8 @@ func Delete(keys ...string) error {
 }
 
 // SetAndQueueJSON stores the JSON representation of a value in the cache and adds its ID to the pending writes set for the given entity type.
-// Uses a Redis pipeline so SET + SADD are sent atomically; otherwise a failure between
-// the two commands would leave an orphan cache entry that never gets persisted.
+// A Lua script makes SET + SADD atomic; otherwise a failure between the two
+// commands would leave an orphan cache entry that never gets persisted.
 // A TTL (PendingWriteTTL) is applied so that orphaned entries are eventually evicted.
 func SetAndQueueJSON(entityType, entityID string, value interface{}) error {
 	if Client == nil {
@@ -119,11 +119,29 @@ func SetAndQueueJSON(entityType, entityID string, value interface{}) error {
 		return err
 	}
 
-	pipe := Client.Pipeline()
-	pipe.Set(Ctx, key, data, PendingWriteTTL)
-	pipe.SAdd(Ctx, "pending_db_writes:"+entityType, entityID)
-	_, err = pipe.Exec(Ctx)
-	return err
+	return Client.Eval(Ctx, `
+		redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[3])
+		redis.call('SADD', KEYS[2], ARGV[2])
+		return 1
+	`, []string{key, "pending_db_writes:" + entityType}, data, entityID, PendingWriteTTL.Milliseconds()).Err()
+}
+
+// AcknowledgePendingJSON removes a pending marker only when the cached payload
+// is still exactly the value that was persisted. If a producer has replaced the
+// payload in the meantime, the marker is deliberately retained for the next flush.
+func AcknowledgePendingJSON(entityType, entityID, expectedPayload string) (bool, error) {
+	if Client == nil {
+		return false, nil
+	}
+	result, err := Client.Eval(Ctx, `
+		if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+			return 0
+		end
+		redis.call('SREM', KEYS[2], ARGV[2])
+		redis.call('DEL', KEYS[1])
+		return 1
+	`, []string{entityType + ":" + entityID, "pending_db_writes:" + entityType}, expectedPayload, entityID).Int()
+	return result == 1, err
 }
 
 // GetPendingIDs retrieves all entity IDs that have pending database writes for a given entity type.
@@ -139,13 +157,13 @@ func RemovePendingIDs(entityType string, entityIDs ...string) error {
 	if Client == nil || len(entityIDs) == 0 {
 		return nil
 	}
-	
+
 	// Convert strings to interface{} for SRem
 	args := make([]interface{}, len(entityIDs))
 	for i, id := range entityIDs {
 		args[i] = id
 	}
-	
+
 	return Client.SRem(Ctx, "pending_db_writes:"+entityType, args...).Err()
 }
 
@@ -329,5 +347,3 @@ func GetPlayerTemporaryStatuses(playerID string) ([]TemporaryStatusData, error) 
 	}
 	return statuses, nil
 }
-
-
