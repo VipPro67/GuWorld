@@ -132,18 +132,23 @@ func PublishPlayerPositionDelta(playerID uuid.UUID, x, y int) {
 }
 
 // PublishPlayerCombatDelta publishes combat state changes efficiently.
-func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, combat *models.CombatState) {
-	// Combat handlers call this with the state they have just committed (or nil
-	// after clearing it). Do not synchronously re-query the player here: some
-	// recovery paths publish while their transaction still owns the row lock,
-	// which would deadlock a second connection and eventually abort the request.
+func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, _ *models.CombatState) {
+	// Invalidate stale snapshot so LoadPlayerRealtimeSnapshot reloads from DB
 	_ = cache.Delete("player_snapshot:" + playerID.String())
-	syncCombatCache(playerID, combat)
+	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
+	if err != nil {
+		logger.S.Warnf("PublishPlayerCombatDelta: authoritative snapshot load failed for player=%s event=%s: %v", playerID, eventType, err)
+		return
+	}
+	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
 
 	delta := PlayerDeltaEvent{
 		Type: eventType,
 		Data: PlayerDeltaData{
-			ActiveCombat: combat,
+			// PostgreSQL is authoritative. The caller's copy may have been built
+			// before the transaction committed (or may simply be stale), while the
+			// snapshot above has just been reconciled with players.active_combat.
+			ActiveCombat: snapshot.ActiveCombat,
 		},
 	}
 	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
