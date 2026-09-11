@@ -3773,6 +3773,9 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/attack`, {
         method: "POST",
+        // Combat resolution can include party, pet, loot and persistence work.
+        // Do not cancel a valid turn at the generic 30-second API timeout.
+        timeoutMs: 120000,
         headers: {
           "Content-Type": "application/json",
         },
@@ -3804,9 +3807,15 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       return data;
     } catch (err: any) {
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Tấn công thất bại: ${err.message}`);
+      const message = err?.name === "AbortError"
+        ? "Yêu cầu tấn công quá thời gian. Trạng thái nhân vật sẽ được đồng bộ lại."
+        : (err?.message || "Thao tác thất bại.");
+      set({ error: message });
+      get().addToast(message, "error");
+      get().addLog(`Tấn công thất bại: ${message}`);
+      if (err?.name === "AbortError") {
+        setTimeout(() => void get().fetchPlayerStatus(player.id), 0);
+      }
       return null;
     } finally {
       set({ actionLoading: false });
@@ -3821,6 +3830,9 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/start`, {
         method: "POST",
+        // Full auto-combat simulations legitimately take longer than ordinary
+        // CRUD requests, especially for parties and multi-enemy encounters.
+        timeoutMs: 120000,
         headers: {
           "Content-Type": "application/json",
         },
@@ -3850,9 +3862,15 @@ export const useGameStore = create<GameState>((set, get) => {
       // The frontend handles the replay animation
       return data;
     } catch (err: any) {
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Mô phỏng thất bại: ${err.message}`);
+      const message = err?.name === "AbortError"
+        ? "Mô phỏng chiến đấu quá thời gian. Trạng thái nhân vật sẽ được đồng bộ lại."
+        : (err?.message || "Thao tác thất bại.");
+      set({ error: message });
+      get().addToast(message, "error");
+      get().addLog(`Mô phỏng thất bại: ${message}`);
+      if (err?.name === "AbortError") {
+        setTimeout(() => void get().fetchPlayerStatus(player.id), 0);
+      }
       return null;
     } finally {
       set({ actionLoading: false });
