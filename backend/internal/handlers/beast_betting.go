@@ -577,11 +577,11 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 
 		// Send win/lose/refund notification to player
 		if isRefund {
-			notify.Send(db.DB, pID, "BEAST_BETTING", "Hoàn trả cược Đấu Thú", fmt.Sprintf("Vòng đấu %s đã được hoàn trả %.0f Nguyên Thạch do một bên không có cược hoặc trận hòa.", r.CreatedAt.Format("15:00 02/01"), b.Amount))
+			notify.Send(tx, pID, "BEAST_BETTING", "Hoàn trả cược Đấu Thú", fmt.Sprintf("Vòng đấu %s đã được hoàn trả %.0f Nguyên Thạch do một bên không có cược hoặc trận hòa.", r.CreatedAt.Format("15:00 02/01"), b.Amount))
 		} else if b.Team == winner {
-			notify.Send(db.DB, pID, "BEAST_BETTING", "Thắng cược Đấu Thú!", fmt.Sprintf("Chúc mừng đạo hữu đã đoán trúng kết quả vòng %s! Nhận được %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
+			notify.Send(tx, pID, "BEAST_BETTING", "Thắng cược Đấu Thú!", fmt.Sprintf("Chúc mừng đạo hữu đã đoán trúng kết quả vòng %s! Nhận được %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
 		} else {
-			notify.Send(db.DB, pID, "BEAST_BETTING", "Thua cược Đấu Thú", fmt.Sprintf("Rất tiếc, phe cược của đạo hữu đã thất bại ở vòng đấu %s. Hoàn trả phần dư: %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
+			notify.Send(tx, pID, "BEAST_BETTING", "Thua cược Đấu Thú", fmt.Sprintf("Rất tiếc, phe cược của đạo hữu đã thất bại ở vòng đấu %s. Hoàn trả phần dư: %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
 		}
 	}
 

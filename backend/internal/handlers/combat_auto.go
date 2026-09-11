@@ -550,7 +550,7 @@ func AutoCombatStart(c *gin.Context) {
 						if len(lootParts) > 0 {
 							lootMsg := "Nhặt được: " + strings.Join(lootParts, ", ") + "."
 							lootDetailLogs = append(lootDetailLogs, lootMsg)
-							notify.Send(db.DB, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg)
+							notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg)
 						}
 					}
 				}
@@ -576,7 +576,7 @@ func AutoCombatStart(c *gin.Context) {
 				err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
 				if err == nil && currentOccupierStr != nil {
 					if defenderUUID, errParse := uuid.Parse(*currentOccupierStr); errParse == nil && defenderUUID != player.ID {
-						notify.Send(db.DB, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
+						notify.Send(tx, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
 							fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
 					}
 					if lastClaimedAt != nil {
@@ -679,7 +679,7 @@ func AutoCombatStart(c *gin.Context) {
 				if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
 					var rarity string
 					_ = tx.QueryRow("SELECT rarity FROM mine_slots WHERE id = $1", player.ActiveCombat.MineSlotID).Scan(&rarity)
-					notify.Send(db.DB, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
+					notify.Send(tx, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
 						fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
 				}
 			}

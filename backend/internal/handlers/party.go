@@ -198,7 +198,7 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
-	notify.Send(db.DB, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username))
+	notify.Send(tx, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username))
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -477,4 +477,3 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) {
 		_, _ = tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3 WHERE party_id = $4 AND id != $5", leader.CurrentRegion, leader.X, leader.Y, leader.PartyID, leader.ID)
 	}
 }
-
