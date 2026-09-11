@@ -547,8 +547,8 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 | --- | --- | --- |
 | `funds` | BIGINT | Quỹ tông môn (đổi từ INTEGER → BIGINT để tránh tràn số khi tích lũy lãnh địa). |
 | `require_approval` | BOOLEAN | DEFAULT FALSE. Bật = phải duyệt đơn gia nhập. |
-| `vault_gu` | JSONB | Cổ trùng trong Bảo khố, gộp theo `(id, rank)`. Định dạng `[{"id": "...", "rank": 1, "cost": N, "quantity": N, "hunger": float}]`. `hunger` là độ no chung của nhóm; tính theo cơ chế Lazy Evaluation qua `last_vault_decay_at` (chu kỳ 3h mức `ACTIVE` full `hunger_rate`), khi ≤ 0 nhóm bị xóa khỏi kho. Khi quyên góp, `hunger` nhóm lấy **max** giữa giá trị cũ và Cổ được góp; khi đổi ra, Cổ nhận đúng `hunger` hiện tại của nhóm (không reset 100). Entry cũ thiếu `hunger` được backfill về `max_hunger` khi chạy. |
-| `last_vault_decay_at` | TIMESTAMPTZ | Mốc thời gian tính toán độ no Cổ trong Bảo khố gần nhất (Lazy Evaluation). |
+| `vault_gu` | JSONB | Cổ trùng trong Bảo khố, gộp theo `(id, rank)`. Định dạng `[{"id": "...", "rank": 1, "cost": N, "quantity": N, "hunger": float}]`. Cổ trùng trong Bảo khố không bị đói hay hao hụt độ no theo thời gian (cơ chế đói kho đã được loại bỏ để tối ưu CPU/DB). Khi thành viên đổi/rút Cổ ra khỏi kho, độ no của Cổ trùng được rút ra sẽ là 1 (đối với Cổ có cơ chế đói `hunger_rate > 0`) để người chơi cần cho ăn ngay; đối với Cổ không có cơ chế đói (`hunger_rate = 0`) thì nhận `max_hunger`. |
+| `last_vault_decay_at` | TIMESTAMPTZ | Cột lịch sử (không còn dùng do đã bỏ cơ chế tính đói kho tông môn). |
 | `vault_recipes` | JSONB | Danh sách Bí phương trong bảo khố. Định dạng `[{"recipe_id": "recipe_...", "completion_rate": 100}]`. Seed từ `Sect.csv`. |
 
 Các cột được thêm sau khi tạo bảng bằng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` trong `db.go`.

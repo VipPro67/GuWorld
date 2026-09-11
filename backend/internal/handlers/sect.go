@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
@@ -167,6 +168,27 @@ func mergeVaultGuHunger(id string, rank int, current, donated float64) float64 {
 		return max
 	}
 	return merged
+}
+
+// createVaultWithdrawnGu creates a new player GuInstance withdrawn from the sect vault.
+// As per game rules, Gus with hunger rate > 0 start with hunger = 1.
+// Gus with hunger rate <= 0 (e.g. consumables) keep full max hunger.
+func createVaultWithdrawnGu(guID string, rank int, guSpec models.Gu) models.GuInstance {
+	initialHunger := 1
+	if guSpec.HungerRate <= 0 {
+		initialHunger = guSpec.MaxHunger
+		if initialHunger <= 0 {
+			initialHunger = 100
+		}
+	}
+	return models.GuInstance{
+		InstanceID: uuid.New().String(),
+		GuID:       guID,
+		Rank:       rank,
+		Hunger:     initialHunger,
+		Status:     "ACTIVE",
+		Equipped:   false,
+	}
 }
 
 type DonateStonesRequest struct {
@@ -1686,6 +1708,8 @@ func BuyFromSectVault(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	_ = worker.EvaluatePlayerHungerTx(tx, playerID)
+
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
@@ -1759,14 +1783,7 @@ func BuyFromSectVault(c *gin.Context) {
 			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
 		}
 		for i := int64(0); i < quantity; i++ {
-			newGu := models.GuInstance{
-				InstanceID: uuid.New().String(),
-				GuID:       req.ItemID,
-				Rank:       actualRank,
-				Hunger:     1,
-				Status:     "ACTIVE",
-				Equipped:   false,
-			}
+			newGu := createVaultWithdrawnGu(req.ItemID, actualRank, guSpec)
 			player.GuInventory = append(player.GuInventory, newGu)
 		}
 
@@ -1953,8 +1970,14 @@ func BuyFromSectVault(c *gin.Context) {
 		},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
+	msg := fmt.Sprintf("Đổi thành công %d %s! Nhân Khí +%.0f.", quantity, itemName, qiGained)
+	if strings.ToLower(req.ItemType) == "gu" {
+		if spec, ok := models.GetGuAny(req.ItemID); ok && spec.HungerRate > 0 {
+			msg += " Cổ đang đói lả (Độ no = 1), hãy cho ăn sớm để tránh chết đói!"
+		}
+	}
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": fmt.Sprintf("Đổi thành công %d %s! Nhân Khí +%.0f.", quantity, itemName, qiGained),
+		"message": msg,
 		"member":  m,
 	})
 }

@@ -1691,12 +1691,14 @@ export const SectView: React.FC = () => {
                                 </>
                               )}
                             </span>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-[9px] text-zinc-500 font-mono">Độ no khi rút:</span>
-                              <span className="text-[9px] font-mono text-amber-400 font-semibold">
-                                1/{vgMaxHunger}
-                              </span>
-                            </div>
+                            {(spec?.hunger_rate ?? 0) > 0 && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className="text-[9px] text-zinc-500 font-mono">Độ no khi rút:</span>
+                                <span className="text-[9px] font-mono text-amber-400 font-semibold">
+                                  1/{vgMaxHunger}
+                                </span>
+                              </div>
+                            )}
                             <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
                               {spec?.description || "Không có mô tả bí thuật..."}
                             </p>

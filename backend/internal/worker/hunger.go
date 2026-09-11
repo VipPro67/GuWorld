@@ -478,24 +478,12 @@ func processPlayerHungerDecay(db *sql.DB, playerID string) error {
 
 // ── Sect vault hunger decay (batch) ────────────────────────────────────────
 
-// vaultGuItem is the JSONB shape of a single entry in sects.vault_gu.
+// vaultGuItem is the JSONB shape of a single entry in sects.vault_gu (used in tests).
 type vaultGuItem struct {
 	ID       string  `json:"id"`
 	Rank     int     `json:"rank,omitempty"`
 	Quantity int     `json:"quantity"`
 	Hunger   float64 `json:"hunger,omitempty"`
-}
-
-// vaultGuSpec returns (maxHunger, hungerRate) for a vault Gu group, with safe
-// defaults when the dictionary entry is missing.
-func vaultGuSpec(id string, rank int) (float64, float64) {
-	if spec, ok := models.GetGu(id, rank); ok {
-		return float64(spec.MaxHunger), float64(spec.HungerRate)
-	}
-	if spec, ok := models.GetGuAny(id); ok {
-		return float64(spec.MaxHunger), float64(spec.HungerRate)
-	}
-	return 100, 0
 }
 
 // EvaluateSectVaultHungerTx is a no-op because hunger decay for sect vaults
