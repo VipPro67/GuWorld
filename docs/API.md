@@ -103,7 +103,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/inventory/feed` |
 | POST | `/inventory/feed-group` |
 | POST | `/inventory/equip` |
-| POST | `/inventory/status` |
+| POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
 | POST | `/inventory/set-vital` |
 | POST | `/inventory/use-gu` |
 | POST | `/inventory/use-support` |

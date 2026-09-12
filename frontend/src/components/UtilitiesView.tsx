@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useGameStore, GuInstance, guSpecFor } from "@/store/useGameStore";
-import { Lock, Unlock, Search, ShieldAlert, Sparkles, HelpCircle, AlertCircle, Layers } from "lucide-react";
-import { translateGuType, translatePath } from "@/lib/translate";
+import { Lock, Unlock, Search, Sparkles, AlertCircle, Layers } from "lucide-react";
+import { translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
 
 const getPathColor = (path: string): string => {
@@ -11,11 +11,24 @@ const getPathColor = (path: string): string => {
   return `${c.bg} ${c.text} ${c.border}`;
 };
 
+const getRankPFactor = (rank: number): number => {
+  switch (rank) {
+    case 1: return 1;
+    case 2: return 2;
+    case 3: return 5;
+    case 4: return 20;
+    case 5: return 100;
+    case 6: return 10000;
+    case 7: return 1000000;
+    case 8: return 100000000;
+    case 9: return 10000000000;
+    default: return rank < 1 ? 1 : 10000000000;
+  }
+};
+
 export const UtilitiesView: React.FC = () => {
   const {
     player,
-    guDictionary,
-    itemDictionary,
     actionLoading,
     updateGuStatus,
     addToast,
@@ -35,10 +48,8 @@ export const UtilitiesView: React.FC = () => {
     if (!guInventoryLoaded) void fetchGuInventory();
   }, [fetchGuInventory, guInventoryLoaded]);
 
-  if (!player) return null;
-
-  const sealingStoneQty = player.materials_inventory?.["sealing_stone"] || 0;
-  const guList = player.gu_inventory || [];
+  const sealingStoneQty = player?.materials_inventory?.["sealing_stone"] || 0;
+  const guList = useMemo(() => player?.gu_inventory || [], [player?.gu_inventory]);
 
   // Filter Gu bugs depending on action tab
   const filteredGuList = useMemo(() => {
@@ -66,6 +77,8 @@ export const UtilitiesView: React.FC = () => {
     });
   }, [guList, searchTerm, selectedRank, activeTab]);
 
+  if (!player) return null;
+
   const handleSealGu = async (gu: GuInstance, name: string) => {
     if (actionLoading || processingId) return;
 
@@ -74,12 +87,13 @@ export const UtilitiesView: React.FC = () => {
       return;
     }
 
-    if (sealingStoneQty < 1) {
-      addToast("Đạo hữu không có đủ Đá Phong Ấn (sealing_stone)!", "error");
+    const neededStones = getRankPFactor(gu.rank);
+    if (sealingStoneQty < neededStones) {
+      addToast(`Đạo hữu không có đủ Đá Phong Ấn (sealing_stone)! Cần ${neededStones.toLocaleString("vi-VN")}x Đá Phong Ấn.`, "error");
       return;
     }
 
-    const confirmMsg = `Phong ấn Cổ trùng "${name}" (Rank ${gu.rank}) sẽ tiêu hao 1x Đá Phong Ấn.\nĐạo hữu chắc chắn muốn phong ấn chứ?`;
+    const confirmMsg = `Phong ấn Cổ trùng "${name}" (Rank ${gu.rank}) sẽ tiêu hao ${neededStones.toLocaleString("vi-VN")}x Đá Phong Ấn.\nĐạo hữu chắc chắn muốn phong ấn chứ?`;
 
     if (!(await showConfirm(confirmMsg))) return;
 
@@ -217,12 +231,12 @@ export const UtilitiesView: React.FC = () => {
             <div>
               {activeTab === "seal" ? (
                 <p>
-                  <strong>Phong Ấn Cổ:</strong> Phong ấn Cổ trùng của đạo hữu vào một trạng thái ngủ sâu, <p className="text-gray-300">
-                    nhưng chúng
-                    <span className="font-bold text-red-500">VẪN BỊ ĐÓI và CHẾT</span>,
+                  <strong>Phong Ấn Cổ:</strong> Phong ấn Cổ trùng của đạo hữu vào một trạng thái ngủ sâu, <span className="text-gray-300">
+                    nhưng chúng 
+                    <span className="font-bold text-red-500"> VẪN BỊ ĐÓI và CHẾT</span>,
                     chỉ là
-                    <span className="font-semibold text-yellow-400">giảm độ no chậm hơn</span>.
-                  </p> Cần tiêu hao <span className="text-amber-400 font-semibold">1 Đá Phong Ấn</span> cho mỗi lần thực hiện.
+                    <span className="font-semibold text-yellow-400"> giảm độ no chậm hơn</span>.
+                  </span> Cần tiêu hao <span className="text-amber-400 font-semibold">Lượng Đá Phong Ấn theo Hệ số Rank P</span> cho mỗi lần thực hiện.
                 </p>
               ) : (
                 <p>
@@ -239,6 +253,7 @@ export const UtilitiesView: React.FC = () => {
                 const spec = guSpecFor(gu.gu_id, gu.rank);
                 const name = spec?.name || gu.gu_id;
                 const isProcessing = processingId === gu.instance_id;
+                const neededStones = getRankPFactor(gu.rank);
 
                 return (
                   <div
@@ -284,7 +299,7 @@ export const UtilitiesView: React.FC = () => {
                           className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-zinc-950 font-semibold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
                         >
                           <Lock className="w-3.5 h-3.5" />
-                          {isProcessing ? "Đang xử lý..." : "Phong Ấn"}
+                          {isProcessing ? "Đang xử lý..." : `Phong Ấn (${neededStones.toLocaleString("vi-VN")} đá)`}
                         </button>
                       ) : (
                         <button

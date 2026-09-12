@@ -3482,6 +3482,35 @@ func UnequipAllGu(c *gin.Context) {
 	respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã tháo thành công %d Cổ trùng!", unequippedCount)})
 }
 
+// getSealingStoneCostByRank returns required sealing_stone quantity according to Rank P factor
+func getSealingStoneCostByRank(rank int) int64 {
+	switch rank {
+	case 1:
+		return 1
+	case 2:
+		return 2
+	case 3:
+		return 5
+	case 4:
+		return 20
+	case 5:
+		return 100
+	case 6:
+		return 10000
+	case 7:
+		return 1000000
+	case 8:
+		return 100000000
+	case 9:
+		return 10000000000
+	default:
+		if rank < 1 {
+			return 1
+		}
+		return 10000000000
+	}
+}
+
 // UpdateGuStatusRequest defines body to change status of owned Gu instance
 type UpdateGuStatusRequest struct {
 	InstanceID string `json:"instance_id" binding:"required"`
@@ -3550,17 +3579,19 @@ func UpdateGuStatus(c *gin.Context) {
 		targetGu.Equipped = false
 	}
 
+	neededStones := int64(0)
 	if req.Status == "SEALED" && targetGu.Status != "SEALED" {
 		if targetGu.Equipped {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể phong ấn Cổ trùng đang được trang bị. Hãy tháo ra trước."})
 			return
 		}
+		neededStones = getSealingStoneCostByRank(targetGu.Rank)
 		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), "sealing_stone")
-		if err != nil || qty < 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ sealing_stone để phong ấn Cổ trùng."})
+		if err != nil || qty < neededStones {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ sealing_stone để phong ấn Cổ trùng (Cần %d Đá Phong Ấn).", neededStones)})
 			return
 		}
-		if err := InventorySvc.RemoveItem(tx, player.ID.String(), "sealing_stone", "materials", 1); err != nil {
+		if err := InventorySvc.RemoveItem(tx, player.ID.String(), "sealing_stone", "materials", neededStones); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume sealing_stone"})
 			return
 		}
@@ -3590,16 +3621,20 @@ func UpdateGuStatus(c *gin.Context) {
 	}
 
 	if req.Status == "SEALED" {
+		if neededStones < 1 {
+			neededStones = getSealingStoneCostByRank(targetGu.Rank)
+		}
 		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID:       &authID,
 			Action:         "gu.seal",
 			EntityType:     "gu_instance",
 			EntityID:       targetGu.InstanceID,
-			RequestSummary: fmt.Sprintf("Dùng 1x Phong Ấn Thạch phong ấn Cổ trùng %s (%s)", targetGu.GuID, targetGu.InstanceID),
+			RequestSummary: fmt.Sprintf("Dùng %dx Phong Ấn Thạch phong ấn Cổ trùng %s (%s)", neededStones, targetGu.GuID, targetGu.InstanceID),
 			Metadata: map[string]interface{}{
-				"gu_instance_id": targetGu.InstanceID,
-				"gu_id":          targetGu.GuID,
-				"item_consumed":  "sealing_stone",
+				"gu_instance_id":  targetGu.InstanceID,
+				"gu_id":           targetGu.GuID,
+				"item_consumed":   "sealing_stone",
+				"stones_consumed": neededStones,
 			},
 			IPAddress: c.ClientIP(),
 			Success:   true,
