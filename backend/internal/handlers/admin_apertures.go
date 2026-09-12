@@ -63,7 +63,9 @@ func AdminListApertures(c *gin.Context) {
 			ia.id, ia.player_id, p.username, ia.grade, ia.time_rate, 
 			ia.aperture_hp, ia.max_aperture_hp, ia.area_size, ia.immortal_essence, 
 			ia.essence_production_per_year, ia.internal_years_passed, 
-			ia.next_tribulation_year, ia.tribulation_count, ia.state, 
+			ia.next_tribulation_year,
+			COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0) AS tribulation_count,
+			ia.state,
 			ia.created_at, ia.updated_at
 		FROM immortal_apertures ia
 		JOIN players p ON ia.player_id = p.id
@@ -147,7 +149,9 @@ func AdminGetApertureDetail(c *gin.Context) {
 			ia.id, ia.player_id, p.username, ia.grade, ia.time_rate, 
 			ia.aperture_hp, ia.max_aperture_hp, ia.area_size, ia.immortal_essence, 
 			ia.essence_production_per_year, ia.internal_years_passed, 
-			ia.next_tribulation_year, ia.tribulation_count, ia.rank_start_year,
+			ia.next_tribulation_year,
+			COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0) AS tribulation_count,
+			ia.rank_start_year,
 			ia.earth_calamity_count, ia.heavenly_tribulation_count, 
 			ia.grand_tribulation_count, ia.myriad_tribulation_count, 
 			ia.chaos_calamity_count, ia.state, ia.dao_marks,
@@ -205,7 +209,6 @@ type AdminUpdateApertureRequest struct {
 	EssenceProductionPerYear *int                `json:"essence_production_per_year"`
 	InternalYearsPassed      *float64            `json:"internal_years_passed"`
 	NextTribulationYear      *float64            `json:"next_tribulation_year"`
-	TribulationCount         *int                `json:"tribulation_count"`
 	RankStartYear            *float64            `json:"rank_start_year"`
 	EarthCalamityCount       *int                `json:"earth_calamity_count"`
 	HeavenlyTribulationCount *int                `json:"heavenly_tribulation_count"`
@@ -298,11 +301,6 @@ func AdminUpdateAperture(c *gin.Context) {
 	if req.NextTribulationYear != nil {
 		sets = append(sets, "next_tribulation_year=$"+strconv.Itoa(argIdx))
 		args = append(args, *req.NextTribulationYear)
-		argIdx++
-	}
-	if req.TribulationCount != nil {
-		sets = append(sets, "tribulation_count=$"+strconv.Itoa(argIdx))
-		args = append(args, *req.TribulationCount)
 		argIdx++
 	}
 	if req.RankStartYear != nil {

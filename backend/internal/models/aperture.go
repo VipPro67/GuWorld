@@ -35,6 +35,10 @@ type ImmortalAperture struct {
 	Terrain                  string      `json:"terrain,omitempty"`
 }
 
+func (a ImmortalAperture) TotalTribulationCount() int {
+	return a.EarthCalamityCount + a.HeavenlyTribulationCount + a.GrandTribulationCount + a.MyriadTribulationCount + a.ChaosCalamityCount
+}
+
 type DaoMark struct {
 	ID        string    `json:"id"`
 	PlayerID  string    `json:"player_id"`
@@ -166,6 +170,10 @@ func GetTribulationInterval(rank int, tribType string) float64 {
 		case "CHAOS_CALAMITY":
 			return 100
 		}
+	case 10:
+		if tribType == "CHAOS_CALAMITY" {
+			return 10
+		}
 	}
 	return 0
 }
@@ -195,6 +203,8 @@ func GetTribulationTypesForRank(rank int) []TribTypeConfig {
 			{"MYRIAD_TRIBULATION", 50},
 			{"CHAOS_CALAMITY", 100},
 		}
+	case 10:
+		return []TribTypeConfig{{"CHAOS_CALAMITY", 10}}
 	}
 	return nil
 }
@@ -261,6 +271,41 @@ func GetNextTribulationInfo(rank int, rankStartYear float64, currentYear float64
 	return nextYear, nextType
 }
 
+func GetNextTribulationInfoWithCounts(rank int, rankStartYear float64, counts map[string]int) (nextYear float64, nextType string) {
+	nextYear = math.MaxFloat64
+	cleanRankStartYear := math.Round(rankStartYear)
+
+	for _, t := range GetTribulationTypesForRank(rank) {
+		occurrence := counts[t.Type] + 1
+		year := cleanRankStartYear + float64(occurrence)*t.Interval
+		priority := tribulationPriority(t.Type)
+		if year < nextYear || (math.Abs(year-nextYear) < 0.001 && priority > tribulationPriority(nextType)) {
+			nextYear = year
+			nextType = t.Type
+		}
+	}
+
+	if nextYear != math.MaxFloat64 {
+		nextYear = math.Round(nextYear)
+	}
+	return nextYear, nextType
+}
+
+func GetTribulationTypeAtYear(rank int, rankStartYear float64, year float64) string {
+	offset := math.Round(year) - math.Round(rankStartYear)
+	if offset <= 0 {
+		return ""
+	}
+
+	tribType := ""
+	for _, t := range GetTribulationTypesForRank(rank) {
+		if math.Mod(offset, t.Interval) == 0 && tribulationPriority(t.Type) > tribulationPriority(tribType) {
+			tribType = t.Type
+		}
+	}
+	return tribType
+}
+
 func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int) (bool, int) {
 	switch rank {
 	case 6:
@@ -289,8 +334,8 @@ func GetTribulationRankAndSubRank(playerRank int, tribType string) (rank int, su
 	rank = playerRank
 	if rank < 6 {
 		rank = 6
-	} else if rank > 9 {
-		rank = 9
+	} else if rank > 10 {
+		rank = 10
 	}
 
 	subRank = 1
@@ -329,6 +374,10 @@ func GetTribulationRankAndSubRank(playerRank int, tribType string) (rank int, su
 		case "CHAOS_CALAMITY":
 			subRank = 4
 		}
+	case 10:
+		if tribType == "CHAOS_CALAMITY" {
+			subRank = 4
+		}
 	}
 	return rank, subRank
 }
@@ -338,8 +387,8 @@ func GetTribulationRankAndSubRank(playerRank int, tribType string) (rank int, su
 func CalculateTribulationReward(rank int, tribType string, difficulty int) int {
 	if rank < 6 {
 		rank = 6
-	} else if rank > 9 {
-		rank = 9
+	} else if rank > 10 {
+		rank = 10
 	}
 
 	switch rank {
@@ -377,6 +426,8 @@ func CalculateTribulationReward(rank int, tribType string, difficulty int) int {
 		default:
 			return 50000 + difficulty*5000
 		}
+	case 10:
+		return 1500000 + difficulty*50000
 	default:
 		return 250 + difficulty*50
 	}

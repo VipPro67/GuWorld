@@ -225,15 +225,15 @@ func checkAchievementCondition(ach *AchievementDef, player *models.Player) bool 
 		return player.Rank >= 9
 	case "tribulation_1":
 		var tribCount int
-		_ = db.DB.QueryRow(`SELECT tribulation_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
+		_ = db.DB.QueryRow(`SELECT earth_calamity_count + heavenly_tribulation_count + grand_tribulation_count + myriad_tribulation_count + chaos_calamity_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
 		return tribCount >= 1
 	case "tribulation_5":
 		var tribCount int
-		_ = db.DB.QueryRow(`SELECT tribulation_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
+		_ = db.DB.QueryRow(`SELECT earth_calamity_count + heavenly_tribulation_count + grand_tribulation_count + myriad_tribulation_count + chaos_calamity_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
 		return tribCount >= 5
 	case "tribulation_10":
 		var tribCount int
-		_ = db.DB.QueryRow(`SELECT tribulation_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
+		_ = db.DB.QueryRow(`SELECT earth_calamity_count + heavenly_tribulation_count + grand_tribulation_count + myriad_tribulation_count + chaos_calamity_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
 		return tribCount >= 10
 	case "gu_10":
 		return countDistinctGu(player) >= 10

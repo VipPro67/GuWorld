@@ -687,7 +687,6 @@ export const AdminView: React.FC = () => {
         addIfChanged("essence_production_per_year", Number(apertureDetail.essence_production_per_year), Number(apertureForm.essence_production_per_year));
         addIfChanged("internal_years_passed", Number(apertureDetail.internal_years_passed), Number(apertureForm.internal_years_passed));
         addIfChanged("next_tribulation_year", Number(apertureDetail.next_tribulation_year), Number(apertureForm.next_tribulation_year));
-        addIfChanged("tribulation_count", Number(apertureDetail.tribulation_count), Number(apertureForm.tribulation_count));
         addIfChanged("rank_start_year", Number(apertureDetail.rank_start_year), Number(apertureForm.rank_start_year));
         addIfChanged("earth_calamity_count", Number(apertureDetail.earth_calamity_count), Number(apertureForm.earth_calamity_count));
         addIfChanged("heavenly_tribulation_count", Number(apertureDetail.heavenly_tribulation_count), Number(apertureForm.heavenly_tribulation_count));
@@ -713,7 +712,6 @@ export const AdminView: React.FC = () => {
           essence_production_per_year: Number(apertureForm.essence_production_per_year),
           internal_years_passed: Number(apertureForm.internal_years_passed),
           next_tribulation_year: Number(apertureForm.next_tribulation_year),
-          tribulation_count: Number(apertureForm.tribulation_count),
           rank_start_year: Number(apertureForm.rank_start_year),
           earth_calamity_count: Number(apertureForm.earth_calamity_count),
           heavenly_tribulation_count: Number(apertureForm.heavenly_tribulation_count),
@@ -4215,10 +4213,6 @@ export const AdminView: React.FC = () => {
                     <div>
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Năm bắt đầu cảnh giới hiện tại</label>
                       <input type="number" step="0.1" value={apertureForm.rank_start_year || 0} onChange={e => setApertureForm({ ...apertureForm, rank_start_year: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tổng số lần độ kiếp</label>
-                      <input type="number" value={apertureForm.tribulation_count || 0} onChange={e => setApertureForm({ ...apertureForm, tribulation_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Số lần Địa Tai</label>

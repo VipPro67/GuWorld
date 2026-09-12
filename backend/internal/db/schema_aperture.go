@@ -19,7 +19,6 @@ func schemaAperture() error {
 		internal_years_passed DOUBLE PRECISION NOT NULL DEFAULT 0,
 		next_tribulation_year DOUBLE PRECISION NOT NULL DEFAULT 10,
 		tribulation_pending_at TIMESTAMP WITH TIME ZONE,
-		tribulation_count INTEGER NOT NULL DEFAULT 0,
 		rank_start_year DOUBLE PRECISION NOT NULL DEFAULT 0,
 		earth_calamity_count INTEGER NOT NULL DEFAULT 0,
 		heavenly_tribulation_count INTEGER NOT NULL DEFAULT 0,
@@ -44,6 +43,12 @@ func schemaAperture() error {
 	// Ensure tribulation_pending_at column exists in case the table was created earlier.
 	if err := execSchema("immortal_apertures_tribulation_pending_at_upgrade", `
 	ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS tribulation_pending_at TIMESTAMP WITH TIME ZONE;
+	`); err != nil {
+		return err
+	}
+
+	if err := execSchema("immortal_apertures_remove_total_tribulation_count", `
+	ALTER TABLE immortal_apertures DROP COLUMN IF EXISTS tribulation_count;
 	`); err != nil {
 		return err
 	}
@@ -239,4 +244,3 @@ func HasActiveTribulationOrEnemies(q Queryer, apertureID string) (bool, error) {
 	}
 	return count > 0, nil
 }
-

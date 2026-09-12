@@ -81,6 +81,36 @@ func TestTribulationIntervalsMatchWiki(t *testing.T) {
 	}
 }
 
+func TestNextTribulationInfoWithCountsKeepsOverlappingMilestones(t *testing.T) {
+	year, tribType := models.GetNextTribulationInfoWithCounts(6, 0, map[string]int{
+		"EARTH_CALAMITY":       9,
+		"HEAVENLY_TRIBULATION": 0,
+	})
+	if year != 100 || tribType != "HEAVENLY_TRIBULATION" {
+		t.Fatalf("first rank 6 year-100 event = (%v, %s); want (100, HEAVENLY_TRIBULATION)", year, tribType)
+	}
+
+	year, tribType = models.GetNextTribulationInfoWithCounts(6, 0, map[string]int{
+		"EARTH_CALAMITY":       9,
+		"HEAVENLY_TRIBULATION": 1,
+	})
+	if year != 100 || tribType != "EARTH_CALAMITY" {
+		t.Fatalf("second rank 6 year-100 event = (%v, %s); want (100, EARTH_CALAMITY)", year, tribType)
+	}
+}
+
+func TestRank10UsesChaosCalamity(t *testing.T) {
+	types := models.GetTribulationTypesForRank(10)
+	if len(types) != 1 || types[0].Type != "CHAOS_CALAMITY" {
+		t.Fatalf("rank 10 tribulation types = %+v; want only CHAOS_CALAMITY", types)
+	}
+
+	rank, subRank := models.GetTribulationRankAndSubRank(10, "CHAOS_CALAMITY")
+	if rank != 10 || subRank != 4 {
+		t.Fatalf("rank 10 chaos level = (%d, %d); want (10, 4)", rank, subRank)
+	}
+}
+
 func TestCalculateTribulationReward(t *testing.T) {
 	// Ensure higher rank and higher tier tribulations yield progressively greater rewards
 	r6Earth := models.CalculateTribulationReward(6, "EARTH_CALAMITY", 1)

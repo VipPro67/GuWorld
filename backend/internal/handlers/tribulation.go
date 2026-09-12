@@ -355,10 +355,10 @@ func ResolveTribulation(c *gin.Context) {
 
 	var ap models.ImmortalAperture
 	err = tx.QueryRow(`
-		SELECT id, aperture_hp, max_aperture_hp, tribulation_count, next_tribulation_year,
+		SELECT id, aperture_hp, max_aperture_hp, next_tribulation_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, internal_years_passed
 		FROM immortal_apertures WHERE id = $1
-	`, ev.ApertureID).Scan(&ap.ID, &ap.ApertureHP, &ap.MaxApertureHP, &ap.TribulationCount, &ap.NextTribulationYear,
+	`, ev.ApertureID).Scan(&ap.ID, &ap.ApertureHP, &ap.MaxApertureHP, &ap.NextTribulationYear,
 		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.InternalYearsPassed)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin Tiên Khiếu"})
@@ -373,7 +373,6 @@ func ResolveTribulation(c *gin.Context) {
 
 	// Helper: recalc next_year, check breakthrough
 	handleSuccess := func(tribType string) {
-		ap.TribulationCount++
 		switch tribType {
 		case "EARTH_CALAMITY":
 			ap.EarthCalamityCount++
@@ -392,7 +391,14 @@ func ResolveTribulation(c *gin.Context) {
 		var username string
 		_ = tx.QueryRow(`SELECT rank, username FROM players WHERE id = $1`, playerID).Scan(&playerRank, &username)
 
-		nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.InternalYearsPassed)
+		counts := map[string]int{
+			"EARTH_CALAMITY":       ap.EarthCalamityCount,
+			"HEAVENLY_TRIBULATION": ap.HeavenlyTribulationCount,
+			"GRAND_TRIBULATION":    ap.GrandTribulationCount,
+			"MYRIAD_TRIBULATION":   ap.MyriadTribulationCount,
+			"CHAOS_CALAMITY":       ap.ChaosCalamityCount,
+		}
+		nextYear, _ := models.GetNextTribulationInfoWithCounts(playerRank, ap.RankStartYear, counts)
 		ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 
 		// Check breakthrough conditions
@@ -434,7 +440,7 @@ func ResolveTribulation(c *gin.Context) {
 				}
 
 				// Recalculate next tribulation year based on the new rank!
-				nextYear, _ = models.GetNextTribulationInfo(newRank, ap.RankStartYear, ap.InternalYearsPassed)
+				nextYear, _ = models.GetNextTribulationInfoWithCounts(newRank, ap.RankStartYear, map[string]int{})
 				ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 			}
 		}
@@ -466,11 +472,11 @@ func ResolveTribulation(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE immortal_apertures 
-			SET state = $1, tribulation_count = $2, next_tribulation_year = $3, aperture_hp = $4,
-				rank_start_year = $5, earth_calamity_count = $6, heavenly_tribulation_count = $7,
-				grand_tribulation_count = $8, myriad_tribulation_count = $9, chaos_calamity_count = $10
-			WHERE id = $11
-		`, ap.State, ap.TribulationCount, ap.NextTribulationYear, ap.ApertureHP,
+			SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
+				rank_start_year = $4, earth_calamity_count = $5, heavenly_tribulation_count = $6,
+				grand_tribulation_count = $7, myriad_tribulation_count = $8, chaos_calamity_count = $9
+			WHERE id = $10
+		`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
 			ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount,
 			ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
 		if err != nil {
@@ -524,11 +530,11 @@ func ResolveTribulation(c *gin.Context) {
 
 			_, _ = tx.Exec(`
 				UPDATE immortal_apertures 
-				SET state = $1, tribulation_count = $2, next_tribulation_year = $3, aperture_hp = $4,
-					rank_start_year = $5, earth_calamity_count = $6, heavenly_tribulation_count = $7,
-					grand_tribulation_count = $8, myriad_tribulation_count = $9, chaos_calamity_count = $10
-				WHERE id = $11
-			`, ap.State, ap.TribulationCount, ap.NextTribulationYear, ap.ApertureHP,
+				SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
+					rank_start_year = $4, earth_calamity_count = $5, heavenly_tribulation_count = $6,
+					grand_tribulation_count = $7, myriad_tribulation_count = $8, chaos_calamity_count = $9
+				WHERE id = $10
+			`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
 				ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount,
 				ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
 
@@ -597,13 +603,13 @@ func ResolveTribulation(c *gin.Context) {
 				UPDATE immortal_apertures 
 				SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
 					earth_calamity_count = $4, heavenly_tribulation_count = $5, grand_tribulation_count = $6,
-					myriad_tribulation_count = $7, chaos_calamity_count = $8, tribulation_count = $9,
+					myriad_tribulation_count = $7, chaos_calamity_count = $8,
 					area_size = GREATEST(0, CAST(area_size AS numeric) * 0.9),
 					time_rate = GREATEST(1.0, time_rate * 0.9)
-				WHERE id = $10
+				WHERE id = $9
 			`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
 				ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
-				ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.TribulationCount, ap.ID)
+				ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
 
 			_, _ = tx.Exec(`
 				UPDATE tribulation_events
@@ -661,7 +667,6 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		MaxApertureHP            float64
 		InternalYearsPassed      float64
 		NextTribulationYear      float64
-		TribulationCount         int
 		EssenceProductionPerYear int
 		RankStartYear            float64
 		EarthCalamityCount       int
@@ -673,11 +678,11 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 	}
 
 	err := db.DB.QueryRow(`
-		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, tribulation_count, essence_production_per_year,
+		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state
 		FROM immortal_apertures
 		WHERE id = $1
-	`, apertureID).Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.EssenceProductionPerYear,
+	`, apertureID).Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.EssenceProductionPerYear,
 		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State)
 	if err != nil {
 		return err
@@ -693,17 +698,31 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		return err
 	}
 
-	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
+	counts := map[string]int{
+		"EARTH_CALAMITY":       ap.EarthCalamityCount,
+		"HEAVENLY_TRIBULATION": ap.HeavenlyTribulationCount,
+		"GRAND_TRIBULATION":    ap.GrandTribulationCount,
+		"MYRIAD_TRIBULATION":   ap.MyriadTribulationCount,
+		"CHAOS_CALAMITY":       ap.ChaosCalamityCount,
+	}
+	calcNextYear, calcNextType := models.GetNextTribulationInfoWithCounts(rank, ap.RankStartYear, counts)
 
 	triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 	storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
 	if storedYear < triggerYear {
 		triggerYear = storedYear
+		if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
+			calcNextType = scheduledType
+		}
+	} else if math.Abs(storedYear-triggerYear) < 0.001 {
+		if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
+			calcNextType = scheduledType
+		}
 	}
 
 	if ap.InternalYearsPassed >= triggerYear {
 		spawnType := calcNextType
-		err = spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, ap.InternalYearsPassed, spawnType, 1.0)
+		err = spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.EarthCalamityCount+ap.HeavenlyTribulationCount+ap.GrandTribulationCount+ap.MyriadTribulationCount+ap.ChaosCalamityCount+1, ap.ApertureHP, ap.InternalYearsPassed, spawnType, 1.0)
 		if err != nil {
 			return err
 		}
@@ -907,7 +926,7 @@ func isPlayerOnline(playerID string) bool {
 func CheckAndTriggerTribulations() error {
 	// Query stable apertures
 	rows, err := db.DB.Query(`
-		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, tribulation_count, essence_production_per_year,
+		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at
 		FROM immortal_apertures
 		WHERE state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING')
@@ -924,7 +943,6 @@ func CheckAndTriggerTribulations() error {
 		MaxApertureHP            float64
 		InternalYearsPassed      float64
 		NextTribulationYear      float64
-		TribulationCount         int
 		EssenceProductionPerYear int
 		RankStartYear            float64
 		EarthCalamityCount       int
@@ -938,7 +956,7 @@ func CheckAndTriggerTribulations() error {
 	apertures := []ApertureCheck{}
 	for rows.Next() {
 		var ap ApertureCheck
-		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.EssenceProductionPerYear,
+		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.EssenceProductionPerYear,
 			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt); err == nil {
 			apertures = append(apertures, ap)
 		}
@@ -1223,12 +1241,26 @@ func CheckAndTriggerTribulations() error {
 				rank = pd.rank
 			}
 
-			calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
+			counts := map[string]int{
+				"EARTH_CALAMITY":       ap.EarthCalamityCount,
+				"HEAVENLY_TRIBULATION": ap.HeavenlyTribulationCount,
+				"GRAND_TRIBULATION":    ap.GrandTribulationCount,
+				"MYRIAD_TRIBULATION":   ap.MyriadTribulationCount,
+				"CHAOS_CALAMITY":       ap.ChaosCalamityCount,
+			}
+			calcNextYear, calcNextType := models.GetNextTribulationInfoWithCounts(rank, ap.RankStartYear, counts)
 
 			triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 			storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
 			if storedYear < triggerYear {
 				triggerYear = storedYear
+				if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
+					calcNextType = scheduledType
+				}
+			} else if math.Abs(storedYear-triggerYear) < 0.001 {
+				if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
+					calcNextType = scheduledType
+				}
 			}
 
 			if newYearsPassed >= triggerYear {
@@ -1255,7 +1287,7 @@ func CheckAndTriggerTribulations() error {
 				`, newYearsPassed, ap.ID)
 
 				spawnType := calcNextType
-				err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
+				err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.EarthCalamityCount+ap.HeavenlyTribulationCount+ap.GrandTribulationCount+ap.MyriadTribulationCount+ap.ChaosCalamityCount+1, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
 				if err != nil {
 					logger.S.Errorf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
 				}
@@ -1584,10 +1616,10 @@ func autoResolveEvent(eventID string, playerID string) {
 	// Fetch current counters from aperture
 	var ap models.ImmortalAperture
 	_ = tx.QueryRow(`
-		SELECT id, aperture_hp, max_aperture_hp, tribulation_count, next_tribulation_year,
+		SELECT id, aperture_hp, max_aperture_hp, next_tribulation_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, internal_years_passed
 		FROM immortal_apertures WHERE id = $1
-	`, ev.ApertureID).Scan(&ap.ID, &ap.ApertureHP, &ap.MaxApertureHP, &ap.TribulationCount, &ap.NextTribulationYear,
+	`, ev.ApertureID).Scan(&ap.ID, &ap.ApertureHP, &ap.MaxApertureHP, &ap.NextTribulationYear,
 		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount,
 		&ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.InternalYearsPassed)
 	if err != nil {
@@ -1619,11 +1651,11 @@ func autoResolveEvent(eventID string, playerID string) {
 		UPDATE immortal_apertures 
 		SET state = 'DAMAGED', next_tribulation_year = $1, aperture_hp = $2,
 			earth_calamity_count = $3, heavenly_tribulation_count = $4, grand_tribulation_count = $5,
-			myriad_tribulation_count = $6, chaos_calamity_count = $7, tribulation_count = $8
-		WHERE id = $9
+			myriad_tribulation_count = $6, chaos_calamity_count = $7
+		WHERE id = $8
 	`, nextYear, newHP,
 		ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
-		ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.TribulationCount, ev.ApertureID)
+		ap.MyriadTribulationCount, ap.ChaosCalamityCount, ev.ApertureID)
 
 	_, _ = tx.Exec(`
 		UPDATE tribulation_events
