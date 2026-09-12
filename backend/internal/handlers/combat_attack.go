@@ -1237,12 +1237,15 @@ func CombatAttack(c *gin.Context) {
 				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
 				if parseErr == nil {
 					var targetHP float64
-					if errHP := tx.QueryRow("SELECT hp FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetHP); errHP == nil {
+					var targetX, targetY int
+					var targetRegion string
+					if errHP := tx.QueryRow("SELECT hp, x, y, current_region FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetHP, &targetX, &targetY, &targetRegion); errHP == nil {
 						targetHP -= 30.0
 						if targetHP < 10.0 {
 							targetHP = 10.0
 						}
-						_, _ = tx.Exec("UPDATE players SET hp = $1 WHERE id = $2", targetHP, targetUUID)
+						hubRegion, hubX, hubY := NearestHub(targetX, targetY)
+						_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
 					}
 					dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID)
 					if dropSummary != "" {

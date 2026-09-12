@@ -314,7 +314,42 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			}
 
 			var lootDetailLogs []string
-			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
+			if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && !isVirtual {
+				if player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
+					targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
+					if parseErr == nil {
+						var targetHP float64
+						var targetX, targetY int
+						var targetRegion string
+						if errHP := tx.QueryRow("SELECT hp, x, y, current_region FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetHP, &targetX, &targetY, &targetRegion); errHP == nil {
+							targetHP -= 30.0
+							if targetHP < 10.0 {
+								targetHP = 10.0
+							}
+							hubRegion, hubX, hubY := NearestHub(targetX, targetY)
+							_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
+						}
+						dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID)
+						if dropSummary != "" {
+							pvpMsg := fmt.Sprintf("Chiến thắng PVP vang dội! Rơi rớt từ bại binh: %s.", dropSummary)
+							lootDetailLogs = append(lootDetailLogs, pvpMsg)
+							logs = append(logs, simulator.CombatLog{
+								Turn:   simState.Turn,
+								Action: "LOOT",
+								Detail: pvpMsg,
+							})
+						} else {
+							pvpMsg := "Chiến thắng PVP vang dội! Bại binh không có tài sản rơi rớt."
+							lootDetailLogs = append(lootDetailLogs, pvpMsg)
+							logs = append(logs, simulator.CombatLog{
+								Turn:   simState.Turn,
+								Action: "LOOT",
+								Detail: pvpMsg,
+							})
+						}
+					}
+				}
+			} else if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
 				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
 				if err == nil {
 					loot := RollLoot(lt, player.ActiveCombat.EnemyRank)
@@ -522,7 +557,13 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
 		} else {
 			player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
-			dropSummary := applyDeathDrop(tx, player, nil)
+			var winnerID *uuid.UUID
+			if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
+				if tUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil {
+					winnerID = &tUUID
+				}
+			}
+			dropSummary := applyDeathDrop(tx, player, winnerID)
 			if dropSummary != "" {
 				defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
 			} else {
