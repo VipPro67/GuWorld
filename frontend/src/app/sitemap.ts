@@ -35,14 +35,13 @@ const wikiGuidePages = [
 async function fetchGuList(): Promise<GuItem[]> {
   try {
     // Thêm timeout 3 giây để tránh bị treo 60s nếu backend chưa sẵn sàng
-    const res = await fetch(`${backendUrl}/api/dictionary`, {
+    const res = await fetch(`${backendUrl}/api/dictionary/gus`, {
       cache: "no-store",
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return [];
     const data = await res.json();
-    const gu: Record<string, GuItem> = data.gu || {};
-    return Object.values(gu);
+    return Array.isArray(data) ? data : Object.values(data || {});
   } catch {
     return [];
   }

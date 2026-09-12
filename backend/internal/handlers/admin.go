@@ -963,46 +963,46 @@ func AdminListPlayerGus(c *gin.Context) {
 }
 
 type AdminUpdatePlayerRequest struct {
-	Rank                 *int               `json:"rank"`
-	SubRank              *int               `json:"sub_rank"`
-	AptitudeType         *string            `json:"aptitude_type"`
-	AptitudePercent      *float64           `json:"aptitude_percent"`
-	AptitudeGrade        *string            `json:"aptitude_grade"`
-	CurrentMana          *float64           `json:"current_mana"`
-	MaxMana              *float64           `json:"max_mana"`
-	HP                   *float64           `json:"hp"`
-	BaseHP               *float64           `json:"base_hp"`
-	WallProgress         *float64           `json:"wall_progress"`
-	HumanQi              *float64           `json:"human_qi"`
-	Lifespan             *float64           `json:"lifespan"`
-	CurrentRegion        *string            `json:"current_region"`
-	X                    *int               `json:"x"`
-	Y                    *int               `json:"y"`
-	IsAdmin              *bool              `json:"is_admin"`
-	SoulHP               *float64           `json:"soul_hp"`
-	MaxSoul              *float64           `json:"max_soul"`
-	SoulTier             *string            `json:"soul_tier"`
-	ExploreCount         *int               `json:"explore_count"`
-	ApertureStress       *float64           `json:"aperture_stress"`
-	Bio                  *string            `json:"bio"`
-	AvatarURL            *string            `json:"avatar_url"`
-	Race                 *string            `json:"race"`
-	Gender               *string            `json:"gender"`
-	Constitution         *string            `json:"constitution"`
-	Statuses             *models.StatusList `json:"statuses"`
-	CurrentThought       *float64           `json:"current_thought"`
-	MaxThought           *float64           `json:"max_thought"`
-	ThoughtRegenRate     *float64           `json:"thought_regen_rate"`
-	TimeSpeedMultiplier  *float64           `json:"time_speed_multiplier"`
-	NeedsSoulRefine      *bool              `json:"needs_soul_refine"`
-	SelectedTitle        *string            `json:"selected_title"`
-	SelectedFrame        *string            `json:"selected_frame"`
-	FakeRank             *int               `json:"fake_rank"`
-	FakeSubRank          *int               `json:"fake_sub_rank"`
-	FakeVitalGu          *string            `json:"fake_vital_gu"`
-	IsDisguised          *bool              `json:"is_disguised"`
-	NeedsOnboarding      *bool              `json:"needs_onboarding"`
-	ImmortalJade         *float64           `json:"immortal_jade"`
+	Rank                *int               `json:"rank"`
+	SubRank             *int               `json:"sub_rank"`
+	AptitudeType        *string            `json:"aptitude_type"`
+	AptitudePercent     *float64           `json:"aptitude_percent"`
+	AptitudeGrade       *string            `json:"aptitude_grade"`
+	CurrentMana         *float64           `json:"current_mana"`
+	MaxMana             *float64           `json:"max_mana"`
+	HP                  *float64           `json:"hp"`
+	BaseHP              *float64           `json:"base_hp"`
+	WallProgress        *float64           `json:"wall_progress"`
+	HumanQi             *float64           `json:"human_qi"`
+	Lifespan            *float64           `json:"lifespan"`
+	CurrentRegion       *string            `json:"current_region"`
+	X                   *int               `json:"x"`
+	Y                   *int               `json:"y"`
+	IsAdmin             *bool              `json:"is_admin"`
+	SoulHP              *float64           `json:"soul_hp"`
+	MaxSoul             *float64           `json:"max_soul"`
+	SoulTier            *string            `json:"soul_tier"`
+	ExploreCount        *int               `json:"explore_count"`
+	ApertureStress      *float64           `json:"aperture_stress"`
+	Bio                 *string            `json:"bio"`
+	AvatarURL           *string            `json:"avatar_url"`
+	Race                *string            `json:"race"`
+	Gender              *string            `json:"gender"`
+	Constitution        *string            `json:"constitution"`
+	Statuses            *models.StatusList `json:"statuses"`
+	CurrentThought      *float64           `json:"current_thought"`
+	MaxThought          *float64           `json:"max_thought"`
+	ThoughtRegenRate    *float64           `json:"thought_regen_rate"`
+	TimeSpeedMultiplier *float64           `json:"time_speed_multiplier"`
+	NeedsSoulRefine     *bool              `json:"needs_soul_refine"`
+	SelectedTitle       *string            `json:"selected_title"`
+	SelectedFrame       *string            `json:"selected_frame"`
+	FakeRank            *int               `json:"fake_rank"`
+	FakeSubRank         *int               `json:"fake_sub_rank"`
+	FakeVitalGu         *string            `json:"fake_vital_gu"`
+	IsDisguised         *bool              `json:"is_disguised"`
+	NeedsOnboarding     *bool              `json:"needs_onboarding"`
+	ImmortalJade        *float64           `json:"immortal_jade"`
 }
 
 // AdminUpdatePlayer allows admins to edit a wide range of player attributes in one call.
@@ -2384,32 +2384,32 @@ func AdminImportTable(c *gin.Context) {
 		if err := models.LoadItemRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Item registry after import: %v", err)
 		}
-		cache.Delete("game_dictionary_unified")
+		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	case "gu":
 		if err := models.LoadGuRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Gu registry after import: %v", err)
 		}
-		cache.Delete("game_dictionary_unified")
+		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	case "constitution":
 		if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
 		}
-		cache.Delete("game_dictionary_unified")
+		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	case "race":
 		if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Race registry after import: %v", err)
 		}
-		cache.Delete("game_dictionary_unified")
+		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	case "status":
 		if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Status registry after import: %v", err)
 		}
-		cache.Delete("game_dictionary_unified")
+		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	case "monster", "loot_table":
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 		}
-		cache.Delete("game_dictionary_unified")
+		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	case "region", "map_cell", "monster_spawn":
 		if err := LoadZoneRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Zone registry after import: %v", err)
@@ -2417,7 +2417,7 @@ func AdminImportTable(c *gin.Context) {
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 		}
-		cache.Delete("game_dictionary_unified")
+		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	case "quest":
 		if err := LoadQuestRegistry(); err != nil {
 			logger.S.Warnf("failed to reload Quest registry after import: %v", err)
@@ -4121,7 +4121,7 @@ func AdminCreateLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_loot_table", "id=%s name=%s", req.ID, req.Name)
-	cache.Delete("game_dictionary_unified")
+	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo bảng loot"})
 }
 
@@ -4162,7 +4162,7 @@ func AdminUpdateLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_loot_table", "id=%s", tableID)
-	cache.Delete("game_dictionary_unified")
+	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật bảng loot"})
 }
 
@@ -4178,7 +4178,7 @@ func AdminDeleteLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_loot_table", "id=%s", tableID)
-	cache.Delete("game_dictionary_unified")
+	cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa bảng loot"})
 }
 

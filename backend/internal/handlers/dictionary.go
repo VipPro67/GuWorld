@@ -54,6 +54,83 @@ type DictionaryResponse struct {
 	MonsterSpawns []WikiMonsterSpawn       `json:"monster_spawns"`
 }
 
+func flatGuDictionary() []models.GuDictionaryItem {
+	flatGu := make([]models.GuDictionaryItem, 0)
+	for _, ranks := range models.GuRegistry {
+		for _, item := range ranks {
+			flatGu = append(flatGu, item)
+		}
+	}
+	return flatGu
+}
+
+func getCachedDictionaryPart(c *gin.Context, key string, target interface{}, build func() interface{}) {
+	if err := cache.GetJSON(key, target); err == nil {
+		c.JSON(http.StatusOK, target)
+		return
+	}
+
+	value := build()
+	_ = cache.SetJSON(key, value, 24*time.Hour)
+	c.JSON(http.StatusOK, value)
+}
+
+// GetGuDictionary returns only the Gu catalog used by gameplay screens.
+func GetGuDictionary(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_gus", &[]models.GuDictionaryItem{}, func() interface{} {
+		return flatGuDictionary()
+	})
+}
+
+// GetItemDictionary returns only the item catalog used by gameplay screens.
+func GetItemDictionary(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_items", &map[string]models.ItemSpec{}, func() interface{} {
+		return models.ItemRegistry
+	})
+}
+
+// GetMonsterDictionary returns only the monster catalog used by gameplay screens.
+func GetMonsterDictionary(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_monsters", &map[string]models.MonsterTemplate{}, func() interface{} {
+		return models.MonsterRegistry
+	})
+}
+
+// GetConstitutionDictionary returns only the constitution catalog.
+func GetConstitutionDictionary(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_constitutions", &[]gamefx.ConstitutionDef{}, func() interface{} {
+		return gamefx.AllConstitutions()
+	})
+}
+
+// GetRaceDictionary returns only the race catalog.
+func GetRaceDictionary(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_races", &[]gamefx.RaceDef{}, func() interface{} {
+		return gamefx.AllRaces()
+	})
+}
+
+// GetLootTables returns only the loot table catalog used by the public wiki.
+func GetLootTables(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_loot_tables", &[]models.LootTable{}, func() interface{} {
+		return loadAllLootTables(c)
+	})
+}
+
+// GetDictionaryRegions returns only the public wiki region catalog.
+func GetDictionaryRegions(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_regions", &[]WikiRegion{}, func() interface{} {
+		return buildWikiRegions()
+	})
+}
+
+// GetMonsterSpawns returns only the public wiki monster spawn catalog.
+func GetMonsterSpawns(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_monster_spawns", &[]WikiMonsterSpawn{}, func() interface{} {
+		return buildWikiMonsterSpawns()
+	})
+}
+
 // GetDictionary returns the unified Gu and Item master catalogs, cached in Redis
 func GetDictionary(c *gin.Context) {
 	var resp DictionaryResponse
@@ -64,12 +141,7 @@ func GetDictionary(c *gin.Context) {
 		return
 	}
 
-	flatGu := make([]models.GuDictionaryItem, 0)
-	for _, ranks := range models.GuRegistry {
-		for _, item := range ranks {
-			flatGu = append(flatGu, item)
-		}
-	}
+	flatGu := flatGuDictionary()
 
 	resp = DictionaryResponse{
 		Gu:            flatGu,

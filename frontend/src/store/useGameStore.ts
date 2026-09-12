@@ -987,6 +987,18 @@ interface GameState {
   constitutionDictionary: Record<string, EffectDictionaryEntry>;
   raceDictionary: Record<string, EffectDictionaryEntry>;
   dictionaryLoaded: boolean;
+  dictionaryPartsLoaded: {
+    gus: boolean;
+    items: boolean;
+    monsters: boolean;
+    constitutions: boolean;
+    races: boolean;
+  };
+  fetchGuDictionary: () => Promise<void>;
+  fetchItemDictionary: () => Promise<void>;
+  fetchMonsterDictionary: () => Promise<void>;
+  fetchConstitutionDictionary: () => Promise<void>;
+  fetchRaceDictionary: () => Promise<void>;
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
   regions: Region[];
@@ -1656,6 +1668,67 @@ export const useGameStore = create<GameState>((set, get) => {
     return formatted;
   };
 
+  type DictionaryPart = keyof GameState["dictionaryPartsLoaded"];
+
+  const markDictionaryPartLoaded = (part: DictionaryPart) => {
+    set((state) => {
+      const dictionaryPartsLoaded = {
+        ...state.dictionaryPartsLoaded,
+        [part]: true,
+      };
+      return {
+        dictionaryPartsLoaded,
+        dictionaryLoaded: Object.values(dictionaryPartsLoaded).every(Boolean),
+      };
+    });
+  };
+
+  const fetchDictionaryPart = async (part: DictionaryPart): Promise<void> => {
+    if (get().dictionaryPartsLoaded[part]) return;
+
+    await fetchWithDedupe(`fetchDictionary:${part}`, async () => {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/dictionary/${part}`);
+        if (!response.ok) throw new Error(`Failed to load ${part} dictionary`);
+        const data = await response.json();
+
+        if (part === "gus") {
+          const guArray = Array.isArray(data) ? data : Object.values(data || {});
+          const guMap: Record<string, GuSpec> = {};
+          const guByRank: Record<string, Record<number, GuSpec>> = {};
+          for (const item of guArray as GuSpec[]) {
+            if (!guByRank[item.id]) guByRank[item.id] = {};
+            guByRank[item.id][item.rank] = item;
+            if (!guMap[item.id] || item.rank > guMap[item.id].rank) {
+              guMap[item.id] = item;
+            }
+          }
+          set({ guDictionary: guMap, guByRank });
+        } else if (part === "items") {
+          set({ itemDictionary: data || {} });
+        } else if (part === "monsters") {
+          set({ monsterDictionary: data || {} });
+        } else if (part === "constitutions") {
+          const constitutionDictionary: Record<string, EffectDictionaryEntry> = {};
+          for (const entry of (Array.isArray(data) ? data : [])) {
+            constitutionDictionary[entry.key] = entry;
+          }
+          set({ constitutionDictionary });
+        } else {
+          const raceDictionary: Record<string, EffectDictionaryEntry> = {};
+          for (const entry of (Array.isArray(data) ? data : [])) {
+            raceDictionary[entry.key] = entry;
+          }
+          set({ raceDictionary });
+        }
+
+        markDictionaryPartLoaded(part);
+      } catch (err: any) {
+        console.error(`${part} dictionary fetch failed:`, err.message);
+      }
+    });
+  };
+
   return ({
   player: null,
   manaSnapshot: null,
@@ -1677,6 +1750,13 @@ export const useGameStore = create<GameState>((set, get) => {
   constitutionDictionary: {},
   raceDictionary: {},
   dictionaryLoaded: false,
+  dictionaryPartsLoaded: {
+    gus: false,
+    items: false,
+    monsters: false,
+    constitutions: false,
+    races: false,
+  },
   recipes: [],
   recipesLoaded: false,
   quests: [],
@@ -1752,6 +1832,12 @@ export const useGameStore = create<GameState>((set, get) => {
   sectMines: [],
   feedbacks: [],
   feedbackComments: {},
+
+  fetchGuDictionary: () => fetchDictionaryPart("gus"),
+  fetchItemDictionary: () => fetchDictionaryPart("items"),
+  fetchMonsterDictionary: () => fetchDictionaryPart("monsters"),
+  fetchConstitutionDictionary: () => fetchDictionaryPart("constitutions"),
+  fetchRaceDictionary: () => fetchDictionaryPart("races"),
 
   setView: (view) => useUIStore.getState().setView(view),
   setShowChangelog: (v) => useUIStore.getState().setShowChangelog(v),
@@ -3010,50 +3096,13 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchDictionary: async () => {
-    await fetchWithDedupe("fetchDictionary", async () => {
-      try {
-        const response = await authFetch(`${BACKEND_URL}/api/dictionary`);
-        if (!response.ok) {
-          throw new Error("Failed to load global metadata");
-        }
-        const data = await response.json();
-        const guArray = data.gu || [];
-        const guMap: Record<string, GuSpec> = {};
-        const guByRank: Record<string, Record<number, GuSpec>> = {};
-        if (Array.isArray(guArray)) {
-          for (const item of guArray) {
-            if (!guByRank[item.id]) guByRank[item.id] = {};
-            guByRank[item.id][item.rank] = item;
-            const existing = guMap[item.id];
-            if (!existing || item.rank > existing.rank) {
-              guMap[item.id] = item;
-            }
-          }
-        }
-        const constitutionDict: Record<string, EffectDictionaryEntry> = {};
-        const constitutionArr = Array.isArray(data.constitutions) ? data.constitutions : [];
-        for (const c of constitutionArr) {
-          constitutionDict[c.key] = c;
-        }
-        const raceDict: Record<string, EffectDictionaryEntry> = {};
-        const raceArr = Array.isArray(data.races) ? data.races : [];
-        for (const r of raceArr) {
-          raceDict[r.key] = r;
-        }
-        set({
-          guDictionary: guMap,
-          guByRank,
-          itemDictionary: data.items || {},
-          monsterDictionary: data.monsters || {},
-          constitutionDictionary: constitutionDict,
-          raceDictionary: raceDict,
-          dictionaryLoaded: true,
-        });
-      } catch (err: any) {
-        console.error("Dictionary fetch failed:", err.message);
-        set({ dictionaryLoaded: true });
-      }
-    });
+    await Promise.all([
+      fetchDictionaryPart("gus"),
+      fetchDictionaryPart("items"),
+      fetchDictionaryPart("monsters"),
+      fetchDictionaryPart("constitutions"),
+      fetchDictionaryPart("races"),
+    ]);
   },
 
   fetchRecipes: async () => {

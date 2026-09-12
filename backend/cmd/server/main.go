@@ -71,7 +71,7 @@ func main() {
 	if err := cache.Connect(); err != nil {
 		logger.S.Fatalf("Redis connection failed (required): %v", err)
 	} else {
-		_ = cache.Delete("game_dictionary_unified")
+		_ = cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	}
 
 	// Initialize rate limiter store (Redis primary, in-memory fallback)

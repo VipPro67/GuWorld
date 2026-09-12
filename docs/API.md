@@ -35,6 +35,14 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | GET | `/dictionary` | Public Gu + item + monster + constitution + race + loot + region + spawn dictionary. Response: `{gu, items, monsters, constitutions, races, loot_tables, regions, monster_spawns}` — `constitutions` và `races` là mảng `{key, name, effects}` (effects là JSON theo format trong `docs/GAME_DATA.md`). `loot_tables` là mảng `{id, name, entries}` (entries chứa item_id/gu_id + chance + min/max qty). `regions` là mảng `WikiRegion {id, name, description, min_rank, max_rank, parent_id, zone_type, pool_weights}` (pool_weights chứa resources[] và wild_gus[]). `monster_spawns` là mảng `{region_id, monster_id, chance, min_rank, max_rank, is_boss_spawn}`. |
+| GET | `/dictionary/gus` | Public Gu dictionary only. Returns a flat array containing every Gu rank. |
+| GET | `/dictionary/items` | Public item dictionary only. Returns the item map keyed by item ID. |
+| GET | `/dictionary/monsters` | Public monster dictionary only. Returns the monster map keyed by monster ID. |
+| GET | `/dictionary/constitutions` | Public constitution dictionary only. Returns an array of `{key, name, effects}`. |
+| GET | `/dictionary/races` | Public race dictionary only. Returns an array of `{key, name, effects}`. |
+| GET | `/dictionary/loot-tables` | Public loot table dictionary only. |
+| GET | `/dictionary/regions` | Public wiki region dictionary only. |
+| GET | `/dictionary/monster-spawns` | Public wiki monster spawn dictionary only. |
 | GET | `/recipes` | Public refining recipes. Thêm query param ?all=true để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. |
 | POST | `/auth/send-otp` | Send OTP via email to register. |
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |

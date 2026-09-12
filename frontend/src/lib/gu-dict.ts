@@ -88,14 +88,13 @@ const BACKEND_URL = process.env.INTERNAL_BACKEND_URL || process.env.NEXT_PUBLIC_
 
 export async function fetchAllGus(): Promise<GuDictionaryItem[]> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/dictionary`, {
+    const res = await fetch(`${BACKEND_URL}/api/dictionary/gus`, {
       cache: "force-cache",
       next: { revalidate: 3600 },
     });
     if (!res.ok) return [];
     const data = await res.json();
-    const gu: Record<string, GuDictionaryItem> = data.gu || {};
-    return Object.values(gu);
+    return Array.isArray(data) ? data : Object.values(data || {});
   } catch {
     return [];
   }
@@ -219,25 +218,34 @@ export async function fetchDictionaryUnified(): Promise<{
   monsterSpawns: WikiMonsterSpawn[];
 }> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/dictionary`, {
+    const request = (part: string) => fetch(`${BACKEND_URL}/api/dictionary/${part}`, {
       cache: "force-cache",
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
-    const data = await res.json();
-    const gu: Record<string, GuDictionaryItem> = data.gu || {};
-    const itemsRecord: Record<string, ItemSpec> = data.items || {};
-    const monstersRecord: Record<string, MonsterTemplate> = data.monsters || {};
-    
-    const gus = Object.values(gu);
+    const [guRes, itemRes, monsterRes, lootRes, regionRes, spawnRes] = await Promise.all([
+      request("gus"),
+      request("items"),
+      request("monsters"),
+      request("loot-tables"),
+      request("regions"),
+      request("monster-spawns"),
+    ]);
+    if ([guRes, itemRes, monsterRes, lootRes, regionRes, spawnRes].some((res) => !res.ok)) {
+      return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
+    }
+
+    const guData = await guRes.json();
+    const itemsRecord: Record<string, ItemSpec> = await itemRes.json();
+    const monstersRecord: Record<string, MonsterTemplate> = await monsterRes.json();
+    const gus = Array.isArray(guData) ? guData : Object.values(guData || {});
     const items = Object.values(itemsRecord).map((item) => ({
       ...item,
       item_type: item.item_type || item.type || "Material",
     }));
     const monsters = Object.values(monstersRecord);
-    const lootTables: LootTable[] = data.loot_tables || [];
-    const regions: WikiRegion[] = data.regions || [];
-    const monsterSpawns: WikiMonsterSpawn[] = data.monster_spawns || [];
+    const lootTables: LootTable[] = await lootRes.json();
+    const regions: WikiRegion[] = await regionRes.json();
+    const monsterSpawns: WikiMonsterSpawn[] = await spawnRes.json();
     
     return { gus, items, monsters, lootTables, regions, monsterSpawns };
   } catch {

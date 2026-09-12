@@ -42,11 +42,11 @@ type ActiveEffect struct {
 	PhantomDamageScale   float64 `json:"phantom_damage_scale,omitempty"`
 
 	// Combat modifier fields
-	IgnoreDefense       float64 `json:"ignore_defense,omitempty"`       // flat defense ignored
-	IgnoreDefensePct    float64 `json:"ignore_defense_pct,omitempty"`   // % defense ignored (0..1)
-	CritRateBoost       float64 `json:"crit_rate_boost,omitempty"`      // extra crit chance (0..1)
-	AllStatsBuffPct     float64 `json:"all_stats_buff_percent,omitempty"` // % buff to all stats (0..1)
-	SpeedBoostFlat      float64 `json:"speed_boost_flat,omitempty"`     // flat speed bonus
+	IgnoreDefense    float64 `json:"ignore_defense,omitempty"`         // flat defense ignored
+	IgnoreDefensePct float64 `json:"ignore_defense_pct,omitempty"`     // % defense ignored (0..1)
+	CritRateBoost    float64 `json:"crit_rate_boost,omitempty"`        // extra crit chance (0..1)
+	AllStatsBuffPct  float64 `json:"all_stats_buff_percent,omitempty"` // % buff to all stats (0..1)
+	SpeedBoostFlat   float64 `json:"speed_boost_flat,omitempty"`       // flat speed bonus
 
 	// Shorthand status effect fields — tier value (e.g. "freeze": 1 = speed T1)
 	// Normalized to ApplyStatus + StatusDurationTicks during loading.
@@ -483,7 +483,7 @@ func LoadGuRegistry(db *sql.DB) error {
 
 	GuRegistry = newRegistry
 	logger.S.Infof("Loaded %d Gu bugs from database registry into memory cache", count)
-	_ = cache.Delete("game_dictionary_unified")
+	_ = cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 
 	allPathsCache = nil
 	logger.S.Infof("Built all-paths cache: %d unique dao paths", len(AllGuPaths()))
