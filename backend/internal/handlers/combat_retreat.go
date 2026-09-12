@@ -413,33 +413,34 @@ func Flee(c *gin.Context) {
 			isExploration := player.ActiveCombat.CombatMode != "virtual" && !isTribulation
 			isMine := player.ActiveCombat.MineSlotID > 0
 			if isExploration {
+				deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 				player.HP = 1.0
-				player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
+				player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
 
 				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã thấy ở an toàn.")
+
+				// Death penalty applies to real PvE exploration and normal PvP only.
+				// Mine and arena (virtual) defeats never drop items/stones.
+				if !isMine {
+					var winnerID *uuid.UUID
+					if player.ActiveCombat.TargetPlayerID != "" {
+						if winner, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
+							winnerID = &winner
+						}
+					}
+					dropSummary := applyDeathDropRecord(tx, &authID, winnerID, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+					_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
+					if dropSummary != "" {
+						if winnerID != nil {
+							turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và bị đối thủ cướp đoạt: %s.", dropSummary))
+						} else {
+							turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và rơi rớt mất: %s.", dropSummary))
+						}
+					}
+				}
 			} else {
 				player.HP = 1.0
 				turnLogs = append(turnLogs, "Đạo hữu bại trận!")
-			}
-
-			// Death penalty applies to real PvE exploration and normal PvP only.
-			// Mine and arena (virtual) defeats never drop items/stones.
-			if isExploration && !isMine {
-				var winnerID *uuid.UUID
-				if player.ActiveCombat.TargetPlayerID != "" {
-					if winner, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
-						winnerID = &winner
-					}
-				}
-				dropSummary := applyDeathDropRecord(tx, &authID, winnerID)
-				_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
-				if dropSummary != "" {
-					if winnerID != nil {
-						turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và bị đối thủ cướp đoạt: %s.", dropSummary))
-					} else {
-						turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và rơi rớt mất: %s.", dropSummary))
-					}
-				}
 			}
 			player.ActiveCombat = nil
 		}
@@ -503,10 +504,10 @@ func Flee(c *gin.Context) {
 		player.HP -= damage
 
 		if player.HP <= 0 {
+			deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 			player.HP = 1.0
-			player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
-
-			dropSummary := applyDeathDropRecord(tx, &authID, nil)
+			dropSummary := applyDeathDropRecord(tx, &authID, nil, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+			player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
 			droppedOnFlee = true
 			_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
 

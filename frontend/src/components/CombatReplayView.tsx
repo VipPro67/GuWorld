@@ -280,6 +280,7 @@ const actionIcon = (action: string) => {
     case "SHIELD_BREAK": case "SHIELD_PIERCE": case "SHIELD_BYPASS_ATTACK": return <Swords className="w-3 h-3" />;
     case "DAMAGE": return <Swords className="w-3 h-3" />;
     case "DOT_TICK": return <Droplets className="w-3 h-3" />;
+    case "GU_BACKLASH": return <Zap className="w-3 h-3 text-red-400" />;
     case "DIED": return <Skull className="w-3 h-3" />;
     case "LIFESTEAL": return <FlaskConical className="w-3 h-3" />;
     case "STUNNED": return <Zap className="w-3 h-3" />;
@@ -300,6 +301,7 @@ const actionColor = (action: string) => {
     case "HEAL": case "ITEM_HEAL": return "text-emerald-400";
     case "SHIELD_GAIN": case "SHIELD_ABSORB": case "DEFEND": return "text-cyan-400";
     case "DOT_TICK": return "text-yellow-400";
+    case "GU_BACKLASH": return "text-red-400 font-semibold";
     case "DIED": return "text-rose-500";
     case "LIFESTEAL": return "text-pink-400";
     case "BATTLE_START": case "BATTLE_END": return "text-amber-400";
@@ -1104,7 +1106,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           {visibleLogs.map((log, idx) => {
             const isTurnStart = log.action === "TURN_START";
             const isBattleBoundary = log.action === "BATTLE_START" || log.action === "BATTLE_END";
-            const isAction = ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY", "SHIELD_PIERCE", "BUFF", "DEFEND", "SHIELD_BYPASS_ATTACK", "EFFECT_EXPIRED", "SLOW_APPLIED", "SLOW1_APPLIED", "SLOW_DAMAGE_APPLIED", "WEAK_APPLIED", "FREEZE_APPLIED", "SILENCE_APPLIED", "THORNS_BUFF", "REGEN_BUFF", "ATK_UP_BUFF", "DEF_UP_BUFF", "TAUNT_BUFF", "TRIGGERED", "INSUFFICIENT_MANA", "PATH_MASTERY_GAIN", "SUMMONED", "TRANSFORM", "DISPEL", "INTERRUPT", "CHAOS_GAMBLE", "LIFESTEAL_SHIELD", "EVADE"].includes(log.action);
+            const isAction = ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY", "SHIELD_PIERCE", "BUFF", "DEFEND", "SHIELD_BYPASS_ATTACK", "EFFECT_EXPIRED", "SLOW_APPLIED", "SLOW1_APPLIED", "SLOW_DAMAGE_APPLIED", "WEAK_APPLIED", "FREEZE_APPLIED", "SILENCE_APPLIED", "THORNS_BUFF", "REGEN_BUFF", "ATK_UP_BUFF", "DEF_UP_BUFF", "TAUNT_BUFF", "TRIGGERED", "INSUFFICIENT_MANA", "PATH_MASTERY_GAIN", "SUMMONED", "TRANSFORM", "DISPEL", "INTERRUPT", "CHAOS_GAMBLE", "LIFESTEAL_SHIELD", "EVADE", "GU_BACKLASH"].includes(log.action);
 
             if (isTurnStart) {
               return (

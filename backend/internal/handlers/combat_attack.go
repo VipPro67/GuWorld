@@ -480,7 +480,7 @@ func CombatAttack(c *gin.Context) {
 						} else {
 							refCaster.HP -= backlashHP
 						}
-						*logs = append(*logs, fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %.0f HP (còn %.0f HP)!", refCaster.Name, backlashHP, refCaster.HP))
+						*logs = append(*logs, fmt.Sprintf("[Phản Phệ] %s chịu %.0f sát thương phản phệ do dùng %s (Rank %d > Rank %d, còn %.0f HP)!", refCaster.Name, backlashHP, spec.Name, spec.Rank, refCaster.Rank, refCaster.HP))
 						if refCaster.HP == 0 {
 							*logs = append(*logs, fmt.Sprintf("%s đã gục ngã do bị phản phệ!", refCaster.Name))
 							return
@@ -1244,14 +1244,14 @@ func CombatAttack(c *gin.Context) {
 						if targetHP < 10.0 {
 							targetHP = 10.0
 						}
+						dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
 						hubRegion, hubX, hubY := NearestHub(targetX, targetY)
 						_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
-					}
-					dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID)
-					if dropSummary != "" {
-						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt từ bại binh: %s.", dropSummary))
-					} else {
-						ctx.Logs = append(ctx.Logs, "Chiến thắng PVP vang dội! Bại binh không còn gì đáng giá để cướp đoạt.")
+						if dropSummary != "" {
+							ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt từ bại binh: %s.", dropSummary))
+						} else {
+							ctx.Logs = append(ctx.Logs, "Chiến thắng PVP vang dội! Bại binh không còn gì đáng giá để cướp đoạt.")
+						}
 					}
 				}
 			}

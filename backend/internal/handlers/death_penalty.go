@@ -161,8 +161,14 @@ func reduceSatKhiOnDeath(tx *sql.Tx, playerID uuid.UUID) {
 	_, _ = tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, playerID)
 }
 
+type DeathPos struct {
+	Region string
+	X      int
+	Y      int
+}
+
 // applyDeathDrop applies the death penalty to a fully-loaded in-memory loser.
-func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID) string {
+func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, deathPos ...DeathPos) string {
 	mult, satKhiLevel := getSatKhiMultiplier(tx, loser.ID)
 	remainingGus, droppedGus := selectEligibleGus(loser.GuInventory, mult, satKhiLevel)
 	loser.GuInventory = remainingGus
@@ -178,11 +184,16 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID) strin
 	loser.PrimevalStones -= primevalLoss
 	loser.ImmortalStones -= immortalLoss
 
-	return persistDeathDrop(tx, loser.ID, winnerID, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel)
+	dp := deathPos
+	if len(dp) == 0 && loser.CurrentRegion != "" {
+		dp = []DeathPos{{Region: loser.CurrentRegion, X: loser.X, Y: loser.Y}}
+	}
+
+	return persistDeathDrop(tx, loser.ID, winnerID, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, dp...)
 }
 
 // applyDeathDropRecord applies the death penalty to a player record that is not fully loaded in memory.
-func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID) string {
+func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, deathPos ...DeathPos) string {
 	var primevalStones, immortalStones int64
 	err := tx.QueryRow(`
 		SELECT primeval_stones, immortal_stones
@@ -206,7 +217,7 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID) string {
 	allGus, _ := db.LoadPlayerGus(tx, loserID.String(), false)
 	_, droppedGus := selectEligibleGus(allGus, mult, satKhiLevel)
 
-	return persistDeathDrop(tx, *loserID, winnerID, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel)
+	return persistDeathDrop(tx, *loserID, winnerID, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, deathPos...)
 }
 
 type DroppedItem struct {
@@ -224,7 +235,7 @@ type GroundLootData struct {
 }
 
 // persistDeathDrop writes the computed losses to DB, creates a map_ground_drops record, and builds summary.
-func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primevalLoss, immortalLoss int64, droppedGus models.GuInventory, mult float64, satKhiLevel int) string {
+func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primevalLoss, immortalLoss int64, droppedGus models.GuInventory, mult float64, satKhiLevel int, deathPos ...DeathPos) string {
 	var lost []string
 	lootData := GroundLootData{
 		PrimevalStones: primevalLoss,
@@ -288,44 +299,64 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 		reduceSatKhiOnDeath(tx, loserID)
 	}
 
-	if len(lost) == 0 {
-		return ""
-	}
-	summary := joinDropList(lost)
-	if satKhiLevel > 0 {
-		summary += fmt.Sprintf(" [Oán Khí Tầng %d: Mất đồ x%.1f]", satKhiLevel, mult)
-	}
-
-	// Tạo bản ghi map_ground_drops tại vị trí của người thua
 	var loserRegion sql.NullString
 	var loserX, loserY int
 	var loserName string
 	_ = tx.QueryRow(`SELECT current_region, x, y, username FROM players WHERE id = $1`, loserID).Scan(&loserRegion, &loserX, &loserY, &loserName)
+
+	if len(deathPos) > 0 && deathPos[0].Region != "" {
+		loserRegion.String = deathPos[0].Region
+		loserRegion.Valid = true
+		loserX = deathPos[0].X
+		loserY = deathPos[0].Y
+	}
 
 	var killerName string
 	if winnerID != nil {
 		_ = tx.QueryRow(`SELECT username FROM players WHERE id = $1`, *winnerID).Scan(&killerName)
 	}
 
-	if loserRegion.Valid && loserRegion.String != "" {
-		lootBytes, _ := json.Marshal(lootData)
-		_, _ = tx.Exec(`
-			INSERT INTO map_ground_drops (
-				region_id, x, y, loser_id, loser_name, killer_id, killer_name,
-				loot_data, protected_until, expires_at
-			) VALUES (
-				$1, $2, $3, $4, $5, $6, $7,
-				$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '30 minutes'
-			)
-		`, loserRegion.String, loserX, loserY, loserID, loserName, winnerID, killerName, lootBytes)
+	summary := ""
+	if len(lost) > 0 {
+		summary = joinDropList(lost)
+		if satKhiLevel > 0 {
+			summary += fmt.Sprintf(" [Oán Khí Tầng %d: Mất đồ x%.1f]", satKhiLevel, mult)
+		}
+
+		if loserRegion.Valid && loserRegion.String != "" {
+			lootBytes, _ := json.Marshal(lootData)
+			_, _ = tx.Exec(`
+				INSERT INTO map_ground_drops (
+					region_id, x, y, loser_id, loser_name, killer_id, killer_name,
+					loot_data, protected_until, expires_at
+				) VALUES (
+					$1, $2, $3, $4, $5, $6, $7,
+					$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '30 minutes'
+				)
+			`, loserRegion.String, loserX, loserY, loserID, loserName, winnerID, killerName, lootBytes)
+		}
 	}
 
 	// Notify loser and (PvP) winner — best-effort, non-fatal.
-	notify.Send(tx, loserID, "death_drop", "Tử đạo - mất tài sản",
-		fmt.Sprintf("Bạn đã tử đạo và đánh rơi tài sản tại (%d, %d): %s.", loserX, loserY, summary))
 	if winnerID != nil {
-		notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
-			fmt.Sprintf("Bạn đã hạ gục %s! Tài sản của đối phương rơi tại (%d, %d): %s.", loserName, loserX, loserY, summary))
+		attackerName := killerName
+		if attackerName == "" {
+			attackerName = "Kẻ thù"
+		}
+		if summary != "" {
+			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
+				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d) và rơi rớt tài sản: %s. Bạn đã được truyền tống về Vùng An Toàn!", attackerName, loserX, loserY, summary))
+			notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
+				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s]! Tài sản của đối phương rơi tại (%d, %d): %s.", loserName, loserX, loserY, summary))
+		} else {
+			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
+				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d). May mắn không bị rơi rớt tài sản! Bạn đã được truyền tống về Vùng An Toàn!", attackerName, loserX, loserY))
+			notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
+				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s] tại (%d, %d)! Đối phương không có tài sản rơi rớt.", loserName, loserX, loserY))
+		}
+	} else if summary != "" {
+		notify.Send(tx, loserID, "death_drop", "Tử đạo - Mất tài sản",
+			fmt.Sprintf("Bạn đã tử đạo và đánh rơi tài sản tại (%d, %d): %s.", loserX, loserY, summary))
 	}
 
 	auditlog.Log(db.DB, auditlog.Entry{

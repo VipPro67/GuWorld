@@ -566,6 +566,48 @@ func Simulate(state *CombatState) []CombatLog {
 				actor.GuUsedCounts[a.SourceID]++
 			}
 
+			guRank := 1
+			if a.Rank > 0 {
+				guRank = a.Rank
+			}
+			backlashDamage := 0.0
+			if a.BacklashDamage > 0 {
+				backlashDamage = a.BacklashDamage
+			} else if a.ActionType == "GU_SKILL" {
+				backlashDamage = gamefx.HigherRankHPCost(guRank, actor.Rank, actor.MaxHP)
+			}
+
+			if backlashDamage > 0 {
+				actor.HP -= backlashDamage
+				if actor.HP < 0 {
+					actor.HP = 0
+				}
+				guName := a.Name
+				if guName == "" {
+					guName = "Cổ trùng"
+				}
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "GU_BACKLASH",
+					Damage:    backlashDamage,
+					Detail:    fmt.Sprintf("%s chịu %d sát thương phản phệ do dùng %s (Rank %d > Rank %d)!", actor.Name, int(backlashDamage), guName, guRank, actor.Rank),
+				})
+				if actor.HP == 0 {
+					actor.IsDead = true
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "DIED",
+						Detail:    fmt.Sprintf("%s đã gục ngã do phản phệ Cổ!", actor.Name),
+					})
+					res.abort = true
+					return res
+				}
+			}
+
 			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
 				remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
 				if remaining > 0 {
@@ -641,44 +683,6 @@ func Simulate(state *CombatState) []CombatLog {
 
 			res.executed = true
 			res.hasDamage = a.ActionType == "BASIC_ATTACK" || a.Damage > 0
-
-			backlashDamage := 0.0
-			if a.BacklashDamage > 0 {
-				backlashDamage = a.BacklashDamage
-			} else {
-				guRank := 1
-				if a.Rank > 0 {
-					guRank = a.Rank
-				}
-				backlashDamage = gamefx.HigherRankHPCost(guRank, actor.Rank, actor.MaxHP)
-			}
-
-			if backlashDamage > 0 {
-				actor.HP -= backlashDamage
-				if actor.HP < 0 {
-					actor.HP = 0
-				}
-				turnLogs = append(turnLogs, CombatLog{
-					Turn:      turn,
-					ActorId:   actor.ID,
-					ActorName: actor.Name,
-					Action:    "GU_BACKLASH",
-					Damage:    backlashDamage,
-					Detail:    fmt.Sprintf("%s chịu %d sát thương phản phệ do dùng Cổ chuyển cao hơn bản thân!", actor.Name, int(backlashDamage)),
-				})
-				if actor.HP == 0 {
-					actor.IsDead = true
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "DIED",
-						Detail:    fmt.Sprintf("%s đã gục ngã do phản phệ Cổ!", actor.Name),
-					})
-					res.abort = true
-					return res
-				}
-			}
 
 			firstTarget := resolved[0]
 
