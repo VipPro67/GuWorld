@@ -1336,12 +1336,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   // the movement so markers appear progressively instead of popping in.
   const investigationRange = useWorldStore((s) => s.investigationRange);
   useEffect(() => {
-    if (!appReady || !gamePlayer) return;
+    if (!appReady || !useGameStore.getState().player) return;
     const pollCells = () => {
-      fetchNearbyCells(gamePlayer.x, gamePlayer.y, investigationRange);
+      const player = useGameStore.getState().player;
+      if (player) fetchNearbyCells(player.x, player.y, useWorldStore.getState().investigationRange);
     };
     const pollPlayers = () => {
-      fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, investigationRange);
+      const player = useGameStore.getState().player;
+      if (player) fetchNearbyPlayers(player.x, player.y, useWorldStore.getState().investigationRange);
       pruneStalePlayers();
     };
     const prefetch = () => {
@@ -1401,7 +1403,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
     const onWorldCell = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (!detail || !detail.x || !detail.y) return;
+      if (!detail || detail.x === undefined || detail.y === undefined) return;
       // When a cell is cleared, invalidate it immediately from cache so markers disappear.
       if (detail.type === "cell_cleared" || detail.type === "monster_killed") {
         invalidateCell(detail.x, detail.y);
@@ -1428,7 +1430,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     let lastPrefetchPoll = Date.now();
     const unifiedTick = () => {
       const now = Date.now();
-      // WS push after move-path makes 30s cell poll redundant; keep 60s as fallback.
+      // WebSocket tile commands make frequent cell polling redundant; keep 60s as fallback.
       if (now - lastCellsPoll >= 60000) {
         lastCellsPoll = now;
         pollCells();
@@ -1449,7 +1451,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       window.removeEventListener("gu_world_cells", onWorldCells);
       clearInterval(intervalId);
     };
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, fetchObjects, mergeWSCells]);
+    // Read current coordinates inside each tick: position changes must not tear
+    // down this effect and immediately launch another group of map requests.
+  }, [appReady, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, fetchObjects, mergeWSCells, invalidateCell]);
 
   // Keep the live X/Y position in sync with the game player when idle.
   useEffect(() => {

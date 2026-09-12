@@ -6,6 +6,16 @@ export interface WSMessage {
   channel?: string;
   data?: unknown;
   payload?: unknown;
+  request_id?: string;
+  ok?: boolean;
+  status?: number;
+}
+
+export class WebSocketRequestError extends Error {
+  constructor(message: string, public readonly status = 0) {
+    super(message);
+    this.name = "WebSocketRequestError";
+  }
 }
 
 export class WebSocketManager {
@@ -26,6 +36,7 @@ export class WebSocketManager {
   private onTokenRefresh: (() => void) | null = null;
   private subscriptionRefCounts = new Map<string, number>();
   private connectionRefCounts = 0;
+  private pendingRequests = new Map<string, { resolve: (data: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(url: string = DEFAULT_WS_URL) {
     this.url = url;
@@ -105,6 +116,7 @@ export class WebSocketManager {
             // ignore
           }
           this.ws = null;
+          this.rejectPendingRequests(new WebSocketRequestError("Kết nối WebSocket đã đóng"));
         }
 
         const wsUrl = `${this.url}?token=${encodeURIComponent(token)}`;
@@ -213,6 +225,27 @@ export class WebSocketManager {
     }
   }
 
+  public request<T>(channel: string, payload?: unknown, timeoutMs = 30000): Promise<T> {
+    if (!this.isConnected()) return Promise.reject(new WebSocketRequestError("WebSocket chưa kết nối"));
+    const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(requestId);
+        reject(new WebSocketRequestError("WebSocket request timeout"));
+      }, timeoutMs);
+      this.pendingRequests.set(requestId, { resolve: resolve as (data: unknown) => void, reject, timer });
+      try {
+        this.ws!.send(JSON.stringify({ type: "command", channel, request_id: requestId, payload }));
+      } catch (error) {
+        clearTimeout(timer);
+        this.pendingRequests.delete(requestId);
+        reject(error instanceof Error ? error : new WebSocketRequestError(String(error)));
+      }
+    });
+  }
+
   private sendSubscription(channel: string) {
     if (this.isConnected()) {
       this.send("subscribe", channel, { channel });
@@ -227,7 +260,7 @@ export class WebSocketManager {
 
   private handleMessage(raw: string) {
     // Message size validation: reject oversized messages
-    const MAX_MESSAGE_SIZE = 65536; // 64KB
+    const MAX_MESSAGE_SIZE = 4 * 1024 * 1024; // World tile responses may exceed 64KB.
     if (raw.length > MAX_MESSAGE_SIZE) {
       console.warn(`[WebSocket] Message too large (${raw.length} bytes), dropping`);
       return;
@@ -240,6 +273,20 @@ export class WebSocketManager {
         const trimmed = line.trim();
         if (!trimmed) continue;
         const msg = JSON.parse(trimmed) as WSMessage;
+
+        if (msg.type === "command.result" && msg.request_id) {
+          const pending = this.pendingRequests.get(msg.request_id);
+          if (pending) {
+            clearTimeout(pending.timer);
+            this.pendingRequests.delete(msg.request_id);
+            if (msg.ok) pending.resolve(msg.data);
+            else {
+              const body = msg.data as { error?: string } | undefined;
+              pending.reject(new WebSocketRequestError(body?.error || "WebSocket request failed", msg.status));
+            }
+          }
+          continue;
+        }
 
         if (msg.type === "pong") {
           // Clear pong timeout since we received a pong
@@ -269,6 +316,14 @@ export class WebSocketManager {
     } catch (err) {
       console.warn("[WebSocket] Failed to parse message:", raw, err);
     }
+  }
+
+  private rejectPendingRequests(error: Error) {
+    for (const pending of this.pendingRequests.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pendingRequests.clear();
   }
 
   private startHeartbeat() {

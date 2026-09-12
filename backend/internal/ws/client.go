@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 1048576 // 1 MB
+	writeWait               = 10 * time.Second
+	pongWait                = 60 * time.Second
+	pingPeriod              = (pongWait * 9) / 10
+	maxMessageSize          = 1048576 // 1 MB
 	maxConnectionsPerPlayer = 3
 )
 
@@ -63,6 +63,7 @@ type Client struct {
 	hub      *Hub
 	shard    *ShardedHub
 	clientIP string
+	commands chan WSMessage
 
 	mu            sync.Mutex
 	subscriptions map[string]struct{}
@@ -104,6 +105,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 		subscriptions: make(map[string]struct{}),
 		clientIP:      clientIP,
 		shard:         shub,
+		commands:      make(chan WSMessage, 16),
 	}
 
 	client.hub.register <- client
@@ -129,6 +131,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	}
 
 	go client.writePump()
+	go client.commandPump()
 	go client.readPump()
 
 	// Send initial snapshot
@@ -136,8 +139,8 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 		snapshot, err := handlers.LoadPlayerRealtimeSnapshot(playerID)
 		if err == nil {
 			msg, _ := json.Marshal(struct {
-				Type    string                        `json:"type"`
-				Channel string                        `json:"channel"`
+				Type    string                          `json:"type"`
+				Channel string                          `json:"channel"`
 				Data    handlers.PlayerRealtimeSnapshot `json:"data"`
 			}{
 				Type:    "event",
@@ -220,6 +223,52 @@ func (c *Client) handleMessage(msg WSMessage) {
 		case c.send <- pong:
 		default:
 		}
+	case "command":
+		if msg.RequestID == "" {
+			c.sendCommandResponse(msg, http.StatusBadRequest, json.RawMessage(`{"error":"request_id is required"}`))
+			return
+		}
+		switch msg.Channel {
+		case "world.move_path", "world.cells_rect", "world.objects":
+			select {
+			case c.commands <- msg:
+			default:
+				c.sendCommandResponse(msg, http.StatusTooManyRequests, json.RawMessage(`{"error":"WebSocket command queue is full"}`))
+			}
+		default:
+			c.sendCommandResponse(msg, http.StatusNotFound, json.RawMessage(`{"error":"Unknown command"}`))
+		}
+	}
+}
+
+func (c *Client) commandPump() {
+	for {
+		select {
+		case <-c.done:
+			return
+		case msg := <-c.commands:
+			status, data := handlers.HandleWorldWSCommand(c.playerID, msg.Channel, msg.Payload)
+			c.sendCommandResponse(msg, status, data)
+		}
+	}
+}
+
+func (c *Client) sendCommandResponse(request WSMessage, status int, data json.RawMessage) {
+	response, err := json.Marshal(struct {
+		Type      string          `json:"type"`
+		Channel   string          `json:"channel"`
+		RequestID string          `json:"request_id"`
+		OK        bool            `json:"ok"`
+		Status    int             `json:"status"`
+		Data      json.RawMessage `json:"data"`
+	}{"command.result", request.Channel, request.RequestID, status >= 200 && status < 300, status, data})
+	if err != nil {
+		return
+	}
+	select {
+	case c.send <- response:
+	default:
+		c.Close()
 	}
 }
 

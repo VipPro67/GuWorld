@@ -338,6 +338,22 @@ WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa p
 | `combat` | S→C | Biến động chiến đấu realtime |
 | `notification` | S→C | Thông báo mới (chuông thông báo) |
 
+### Lệnh WorldMap qua WebSocket
+
+WorldMap ưu tiên dùng cùng kết nối WebSocket để tránh tạo nhiều HTTP request khi
+di chuyển và kéo camera. Client gửi envelope
+`{type:"command", channel, request_id, payload}` và nhận
+`{type:"command.result", channel, request_id, ok, status, data}`. Các lệnh hiện có:
+
+| Channel | Payload | Tương đương HTTP |
+| --- | --- | --- |
+| `world.move_path` | `{x,y}` | `POST /explore/move-path` |
+| `world.cells_rect` | `{min_x,min_y,max_x,max_y}` | `GET /explore/cells/rect` |
+| `world.objects` | `{}` | `GET /explore/objects` |
+
+Danh tính người chơi luôn lấy từ phiên WebSocket đã xác thực, không lấy từ
+payload. Các HTTP endpoint vẫn được giữ làm fallback khi WebSocket chưa kết nối.
+
 ### SSE realtime — `GET /events` (Auth) [Deprecated Fallback]
 
 Stream hợp nhất (`StreamUnifiedEvents`) giữ lại làm fallback cho authenticated player. Các event-type:
@@ -383,4 +399,3 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 | GET | `/death-arena/rewards` | Lấy danh sách phần thưởng giải đấu của bản thân. |
 | POST | `/death-arena/rewards/:id/claim` | Nhận phần thưởng giải đấu. |
 | GET | `/death-arena/history` | Lịch sử các mùa giải Đấu Trường Sinh Tử trước. |
-

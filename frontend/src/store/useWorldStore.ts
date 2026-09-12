@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { useGameStore, type Player } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
+import { wsManager } from "@/lib/websocket";
 
 export interface WorldObject {
   id?: string;
@@ -186,6 +187,11 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   fetchObjects: async () => {
     set({ loading: true, error: null });
     try {
+      if (wsManager.isConnected()) {
+        const data = await wsManager.request<WorldObject[]>("world.objects", {}, 15000);
+        set({ objects: Array.isArray(data) ? data : [], loading: false });
+        return;
+      }
       const res = await fetch(`${BACKEND_URL}/api/explore/objects`, { headers: authHeaders("GET") });
       if (!res.ok) throw new Error("Không thể tải các điểm trên bản đồ");
       const data = await res.json();
@@ -198,6 +204,11 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   movePath: async (x: number, y: number) => {
     set({ isMoving: true, error: null });
     try {
+      if (wsManager.isConnected()) {
+        return await wsManager.request<{ player: Partial<Player> & Pick<Player, "x" | "y">; log: string; combat_triggered: boolean; reached: boolean; skip_result?: unknown }>(
+          "world.move_path", { x: Math.round(x), y: Math.round(y) }, 60000,
+        );
+      }
       const res = await fetch(`${BACKEND_URL}/api/explore/move-path`, {
         method: "POST",
         headers: { ...authHeaders("POST"), "Content-Type": "application/json" },
@@ -390,10 +401,17 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
 
   fetchCellsRect: async (minX, minY, maxX, maxY) => {
     try {
-      const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${Math.round(minX)}&min_y=${Math.round(minY)}&max_x=${Math.round(maxX)}&max_y=${Math.round(maxY)}`;
-      const res = await fetch(url, { headers: authHeaders("GET") });
-      if (!res.ok) throw new Error("Không thể tải dữ liệu bản đồ");
-      const data = await res.json();
+      let data: unknown;
+      if (wsManager.isConnected()) {
+        data = await wsManager.request<NearbyCell[]>("world.cells_rect", {
+          min_x: Math.round(minX), min_y: Math.round(minY), max_x: Math.round(maxX), max_y: Math.round(maxY),
+        }, 30000);
+      } else {
+        const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${Math.round(minX)}&min_y=${Math.round(minY)}&max_x=${Math.round(maxX)}&max_y=${Math.round(maxY)}`;
+        const res = await fetch(url, { headers: authHeaders("GET") });
+        if (!res.ok) throw new Error("Không thể tải dữ liệu bản đồ");
+        data = await res.json();
+      }
       const cells: NearbyCell[] = Array.isArray(data) ? data : [];
       set((s) => {
         const cache = { ...s.cellCache };
