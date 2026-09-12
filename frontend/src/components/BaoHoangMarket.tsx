@@ -183,18 +183,21 @@ export function BaoHoangMarket({
     return 4;
   };
   const getUpfrontFee = () => {
-    const tier = getFeeTier(durationHours);
     if (listingType === "AUCTION") {
+      const tier = getFeeTier(durationHours);
       return [20, 40, 80, 200][tier - 1];
     }
-    return [5, 10, 20, 50][tier - 1];
+    // MARKET: 4% of total listed price
+    const totalQty = itemType === "Material" ? quantity : itemType === "Gu" ? selectedGus.length : 1;
+    const totalPrice = (totalQty || 1) * price;
+    return Math.round(totalPrice * 0.04);
   };
   const getCommissionRateText = () => {
-    const tier = getFeeTier(durationHours);
     if (listingType === "AUCTION") {
-      return ["5%", "6%", "8%", "12%"][tier - 1];
+      return "15%";
     }
-    return ["2%", "3%", "5%", "8%"][tier - 1];
+    // MARKET: 6% fixed
+    return "6%";
   };
 
   const createListing = async () => {
@@ -220,14 +223,25 @@ export function BaoHoangMarket({
       setMessage({ type: "error", text: "Đơn giá/Giá khởi điểm phải lớn hơn 0." });
       return;
     }
+    if (listingType === "AUCTION" && (durationHours < 1 || durationHours > 24)) {
+      setMessage({ type: "error", text: "Thời gian đấu giá phải từ 1 đến 24 giờ (dưới 1 ngày)." });
+      return;
+    }
+    if (listingType === "MARKET" && (durationHours < 1 || durationHours > 168)) {
+      setMessage({ type: "error", text: "Thời gian đăng bán chợ chỉ từ 1 đến 7 ngày (tối đa 168 giờ)." });
+      return;
+    }
     if (durationHours < 1) {
       setMessage({ type: "error", text: "Thời gian đăng bán phải tối thiểu là 1 giờ." });
       return;
     }
 
     const upfrontFee = getUpfrontFee();
-    if (player.primeval_stones < upfrontFee) {
-      setMessage({ type: "error", text: `Đạo hữu không đủ Nguyên Thạch đóng phí cơ bản (cần ${upfrontFee} Nguyên Thạch).` });
+    const upfrontCurrency = listingType === "MARKET" && currency === "immortal" ? "immortal" : "primeval";
+    const balance = upfrontCurrency === "immortal" ? player.immortal_stones : player.primeval_stones;
+    const currencyText = upfrontCurrency === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
+    if (balance < upfrontFee) {
+      setMessage({ type: "error", text: `Đạo hữu không đủ ${currencyText} đóng phí cơ bản (cần ${upfrontFee} ${currencyText}).` });
       return;
     }
 
@@ -649,7 +663,10 @@ export function BaoHoangMarket({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setListingType("AUCTION")}
+                  onClick={() => {
+                    setListingType("AUCTION");
+                    if (durationHours > 24) setDurationHours(24);
+                  }}
                   className={`flex-1 py-2 text-xs font-serif font-bold rounded-lg transition-all cursor-pointer min-w-[100px] ${
                     listingType === "AUCTION"
                       ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
@@ -1053,11 +1070,24 @@ export function BaoHoangMarket({
                     }}
                     className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif cursor-pointer"
                   >
-                    <option value={24}>1 Ngày (24 Giờ)</option>
-                    <option value={72}>3 Ngày (72 Giờ)</option>
-                    <option value={168}>7 Ngày (168 Giờ)</option>
-                    <option value={720}>30 Ngày (720 Giờ)</option>
-                    <option value="custom">Tùy chọn mốc thời gian...</option>
+                    {listingType === "AUCTION" ? (
+                      <>
+                        <option value={1}>1 Giờ</option>
+                        <option value={2}>2 Giờ</option>
+                        <option value={4}>4 Giờ</option>
+                        <option value={6}>6 Giờ</option>
+                        <option value={12}>12 Giờ</option>
+                        <option value={24}>24 Giờ (1 Ngày)</option>
+                        <option value="custom">Tùy chọn mốc thời gian (dưới 24h)...</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value={24}>1 Ngày (24 Giờ)</option>
+                        <option value={72}>3 Ngày (72 Giờ)</option>
+                        <option value={168}>7 Ngày (168 Giờ)</option>
+                        <option value="custom">Tùy chọn mốc thời gian (dưới 7 ngày)...</option>
+                      </>
+                    )}
                   </select>
                 </label>
               </div>
@@ -1078,7 +1108,8 @@ export function BaoHoangMarket({
                           if (val) {
                             const diffMs = new Date(val).getTime() - Date.now();
                             const hours = Math.ceil(diffMs / 3600000);
-                            setDurationHours(Math.max(1, hours));
+                            const cappedHours = listingType === "AUCTION" ? Math.min(24, Math.max(1, hours)) : Math.min(168, Math.max(1, hours));
+                            setDurationHours(cappedHours);
                           }
                         }}
                         className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-850 rounded-lg p-2 text-xs text-zinc-350 focus:outline-none font-mono cursor-pointer"
@@ -1144,10 +1175,10 @@ export function BaoHoangMarket({
               <div className="space-y-2.5">
                 <div className="flex justify-between items-center text-zinc-400">
                   <span>Phí Đăng Upfront:</span>
-                  <span className="text-zinc-200 font-bold">{getUpfrontFee()} Nguyên Thạch</span>
+                  <span className="text-zinc-200 font-bold">{getUpfrontFee()} {listingType === "MARKET" && currency === "immortal" ? "Tiên Nguyên" : "Nguyên Thạch"}</span>
                 </div>
                 <div className="flex justify-between items-center text-zinc-500 text-[10px] leading-tight pl-2">
-                  <span>* Thanh toán tức thì bằng Nguyên Thạch và không được hoàn lại kể cả khi hủy giao dịch.</span>
+                  <span>* Thanh toán tức thì bằng {listingType === "MARKET" && currency === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch"} (4% giá đặt đối với Cửa hàng) và không được hoàn lại.</span>
                 </div>
                 
                 <div className="h-px bg-zinc-900 my-2" />
@@ -1318,14 +1349,24 @@ export function BaoHoangMarket({
 
                     <div className="flex gap-2 items-center">
                       {isSelf ? (
-                        <button
-                          disabled={actionLoading}
-                          onClick={() => handleCancel(listing.id)}
-                          className="px-3.5 py-1.5 rounded-xl bg-rose-950/20 border border-rose-900/30 hover:border-rose-500/50 hover:bg-rose-950/40 text-rose-300 font-bold font-serif text-[10px] cursor-pointer transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Hủy Bán
-                        </button>
+                        (() => {
+                          const isAuctionWithBid = listing.listing_type === "AUCTION" && !!listing.highest_bidder_id;
+                          return (
+                            <button
+                              disabled={actionLoading || isAuctionWithBid}
+                              onClick={() => handleCancel(listing.id)}
+                              title={isAuctionWithBid ? "Đã có người đặt giá, không thể hủy phiên đấu giá" : "Hủy đăng bán"}
+                              className={`px-3.5 py-1.5 rounded-xl font-bold font-serif text-[10px] transition-all flex items-center gap-1 active:scale-95 ${
+                                isAuctionWithBid
+                                  ? "bg-zinc-900 border border-zinc-800 text-zinc-600 cursor-not-allowed"
+                                  : "bg-rose-950/20 border border-rose-900/30 hover:border-rose-500/50 hover:bg-rose-950/40 text-rose-300 cursor-pointer disabled:opacity-50"
+                              }`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              {isAuctionWithBid ? "Đã Có Thầu" : "Hủy Bán"}
+                            </button>
+                          );
+                        })()
                       ) : (
                         <>
                           {listing.listing_type === "MARKET" || listing.listing_type === "TRADE" ? (

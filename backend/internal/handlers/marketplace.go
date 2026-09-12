@@ -58,7 +58,10 @@ func getFeeTier(durationHours int) int {
 	}
 }
 
-func getUpfrontFee(listingType string, durationHours int) int64 {
+func getUpfrontFee(listingType string, durationHours int, totalListedPrice int64) int64 {
+	if listingType == "MARKET" {
+		return int64(math.Round(float64(totalListedPrice) * 0.04))
+	}
 	tier := getFeeTier(durationHours)
 	if listingType == "AUCTION" {
 		switch tier {
@@ -72,44 +75,17 @@ func getUpfrontFee(listingType string, durationHours int) int64 {
 			return 200
 		}
 	}
-	// MARKET
-	switch tier {
-	case 1:
-		return 5
-	case 2:
-		return 10
-	case 3:
-		return 20
-	default:
-		return 50
-	}
+	return 0
 }
 
 func getCommissionPct(listingType string, durationHours int) float64 {
-	tier := getFeeTier(durationHours)
+	if listingType == "MARKET" {
+		return 0.06
+	}
 	if listingType == "AUCTION" {
-		switch tier {
-		case 1:
-			return 0.05
-		case 2:
-			return 0.06
-		case 3:
-			return 0.08
-		default:
-			return 0.12
-		}
+		return 0.15
 	}
-	// MARKET
-	switch tier {
-	case 1:
-		return 0.02
-	case 2:
-		return 0.03
-	case 3:
-		return 0.05
-	default:
-		return 0.08
-	}
+	return 0.0
 }
 
 func CreateListing(c *gin.Context) {
@@ -132,6 +108,14 @@ func CreateListing(c *gin.Context) {
 	}
 	if req.ListingType != "MARKET" && req.ListingType != "AUCTION" && req.ListingType != "TRADE" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "listing_type phải là MARKET, AUCTION hoặc TRADE"})
+		return
+	}
+	if req.ListingType == "AUCTION" && (req.DurationHours < 1 || req.DurationHours > 24) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thời gian đấu giá phải từ 1 đến 24 giờ (dưới 1 ngày)"})
+		return
+	}
+	if req.ListingType == "MARKET" && (req.DurationHours < 1 || req.DurationHours > 168) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thời gian đăng bán chợ chỉ từ 1 đến 7 ngày (tối đa 168 giờ)"})
 		return
 	}
 
@@ -187,16 +171,40 @@ func CreateListing(c *gin.Context) {
 		}
 	}
 
-	// Calculate and charge upfront listing fee (always in Primeval Stones)
-	upfrontFee := getUpfrontFee(req.ListingType, req.DurationHours)
+	// Calculate quantity for upfront fee calculation
+	var effectiveQty int64 = req.Quantity
+	if req.ItemType == "Gu" {
+		if len(req.GuInstanceIDs) > 0 {
+			effectiveQty = int64(len(req.GuInstanceIDs))
+		} else if req.GuInstanceID != "" {
+			effectiveQty = 1
+		}
+	} else if req.ItemType == "Recipe" {
+		effectiveQty = 1
+	}
+	if effectiveQty <= 0 {
+		effectiveQty = 1
+	}
+
+	totalListedPrice := req.Price * effectiveQty
+	upfrontFee := getUpfrontFee(req.ListingType, req.DurationHours, totalListedPrice)
 	if req.ListingType == "TRADE" {
 		upfrontFee = 0
 	}
-	if player.PrimevalStones < upfrontFee {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Nguyên Thạch)", upfrontFee)})
-		return
+
+	if req.ListingType == "MARKET" && req.Currency == "immortal" {
+		if player.ImmortalStones < upfrontFee {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Tiên Nguyên Thạch)", upfrontFee)})
+			return
+		}
+		player.ImmortalStones -= upfrontFee
+	} else {
+		if player.PrimevalStones < upfrontFee {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Nguyên Thạch)", upfrontFee)})
+			return
+		}
+		player.PrimevalStones -= upfrontFee
 	}
-	player.PrimevalStones -= upfrontFee
 
 	var itemDataJSON []byte
 	var guIDsToSell []string
@@ -325,7 +333,7 @@ func CreateListing(c *gin.Context) {
 			return
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, human_qi=$3 WHERE id=$4`, player.EquippedGus, player.PrimevalStones, player.HumanQi, player.ID)
+	_, err = tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
 		return
@@ -1076,13 +1084,18 @@ func CancelListing(c *gin.Context) {
 	var itemType, status, listingType string
 	var rawItemData []byte
 	var qty int
-	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status,listing_type FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &status, &listingType)
+	var highestBidderID sql.NullString
+	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status,listing_type,highest_bidder_id FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &status, &listingType, &highestBidderID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy listing"})
 		return
 	}
 	if sellerID != authID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không phải chủ listing"})
+		return
+	}
+	if listingType == "AUCTION" && highestBidderID.Valid && highestBidderID.String != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể hủy phiên đấu giá khi đã có người đặt giá"})
 		return
 	}
 	itemData := ""

@@ -202,7 +202,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/shop/bao-hoang/listings` |
 | POST | `/shop/bao-hoang/buy` |
 | POST | `/shop/bao-hoang/bid` |
-| POST | `/shop/bao-hoang/cancel` |
+| POST | `/shop/bao-hoang/cancel` | Hủy đơn đăng bán. Nếu là `AUCTION` và đã có người đặt giá (`highest_bidder_id`), yêu cầu bị từ chối. |
 | POST | `/shop/bao-hoang/settle` |
 | POST | `/trade/initiate` |
 | GET | `/trade/active` |
@@ -213,6 +213,10 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/trade/offer/:id` | Body có thể chứa `recipes: [{"recipe_id": "..."}]` cùng với stones/gus/materials. |
 | POST | `/trade/lock/:id` |
 | POST | `/trade/confirm/:id` |
+
+**Quy định phí & thời gian Bảo Hoàng Thiên:**
+- **Cửa hàng (`MARKET`):** Phí Upfront thu ngay lập tức khi đăng lên kệ = **4% giá trị niêm yết** (`price * quantity`), khấu trừ theo loại tiền tệ của đơn hàng (Nguyên Thạch / Tiên Nguyên Thạch). Phí hoa hồng khi bán thành công = **6%** doanh thu.
+- **Đấu giá (`AUCTION`):** Phí hoa hồng khi đấu giá thành công = **15%** giá thắng thầu. Thời gian đấu giá giới hạn từ **1 đến 24 giờ** (dưới 1 ngày). Không được hủy đơn đấu giá khi đã có người đặt giá (`highest_bidder_id`).
 
 **Loại tiền theo rank (Thương Đội):** `/shop/list` trả thêm `rank` và `currency` cho mỗi món hàng; `/shop/buy` trừ và `/shop/sell` / `/shop/sell-bulk` trả theo loại tiền tương ứng rank của món (item/Gu/bí phương): **rank < 6 → Nguyên Thạch (`primeval_stones`), rank ≥ 6 → Tiên Nguyên Thạch (`immortal_stones`)**. Quy tắc tập trung ở `pkg/pricing.StoneTierByRank`.
 

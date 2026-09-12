@@ -217,7 +217,12 @@ export const UtilitiesView: React.FC = () => {
             <div>
               {activeTab === "seal" ? (
                 <p>
-                  <strong>Phong Ấn Cổ:</strong> Phong ấn Cổ trùng của đạo hữu vào một trạng thái ngủ sâu, giúp chúng không bị đói hoặc chết, đồng thời giải phóng dung lượng Không khiếu. Cần tiêu hao <span className="text-amber-400 font-semibold">1 Đá Phong Ấn</span> cho mỗi lần thực hiện.
+                  <strong>Phong Ấn Cổ:</strong> Phong ấn Cổ trùng của đạo hữu vào một trạng thái ngủ sâu, <p className="text-gray-300">
+                    nhưng chúng
+                    <span className="font-bold text-red-500">VẪN BỊ ĐÓI và CHẾT</span>,
+                    chỉ là
+                    <span className="font-semibold text-yellow-400">giảm độ no chậm hơn</span>.
+                  </p> Cần tiêu hao <span className="text-amber-400 font-semibold">1 Đá Phong Ấn</span> cho mỗi lần thực hiện.
                 </p>
               ) : (
                 <p>
