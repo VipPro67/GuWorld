@@ -550,7 +550,7 @@ func AdminRemovePlayerGu(c *gin.Context) {
 	}
 	removedGuID := gu.GuID
 
-	if err := db.RemovePlayerGu(tx, instanceID); err != nil {
+	if err := db.RemovePlayerGuForPlayer(tx, playerID.String(), instanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ trùng"})
 		return
 	}

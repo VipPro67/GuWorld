@@ -125,6 +125,20 @@ func RemovePlayerGu(tx Execer, instanceID string) error {
 	return err
 }
 
+// RemovePlayerGuForPlayer deletes one Gu instance only when it belongs to the player.
+func RemovePlayerGuForPlayer(tx Execer, playerID, instanceID string) error {
+	result, err := tx.Exec(`DELETE FROM player_gu WHERE player_id = $1 AND id = $2`, playerID, instanceID)
+	if err != nil {
+		return err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return err
+	} else if affected != 1 {
+		return fmt.Errorf("player_gu instance %q does not belong to player %q", instanceID, playerID)
+	}
+	return nil
+}
+
 // RemovePlayerGus deletes multiple Gu instances by their instance ids in a single query.
 func RemovePlayerGus(tx Execer, instanceIDs []string) error {
 	if len(instanceIDs) == 0 {
@@ -132,6 +146,39 @@ func RemovePlayerGus(tx Execer, instanceIDs []string) error {
 	}
 	_, err := tx.Exec(`DELETE FROM player_gu WHERE id = ANY($1::text[])`, pq.Array(instanceIDs))
 	return err
+}
+
+// RemovePlayerGusForPlayer deletes Gu instances only when they belong to the player.
+func RemovePlayerGusForPlayer(tx Execer, playerID string, instanceIDs []string) error {
+	if len(instanceIDs) == 0 {
+		return nil
+	}
+	result, err := tx.Exec(`DELETE FROM player_gu WHERE player_id = $1 AND id = ANY($2::text[])`, playerID, pq.Array(instanceIDs))
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	uniqueIDs := uniqueStrings(instanceIDs)
+	if affected != int64(len(uniqueIDs)) {
+		return fmt.Errorf("deleted %d of %d player_gu instances for player %q", affected, len(uniqueIDs), playerID)
+	}
+	return nil
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 // UpdatePlayerGusBulk updates the mutable fields of multiple Gu instances in a

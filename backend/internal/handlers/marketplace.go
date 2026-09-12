@@ -270,12 +270,12 @@ func CreateListing(c *gin.Context) {
 			return
 		}
 
-	player.GuInventory = newInventory
-	player.EquippedGus = []string{}
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-	}
-	req.Quantity = int64(len(guIDsToSell))
+		player.GuInventory = newInventory
+		player.EquippedGus = []string{}
+		for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+		}
+		req.Quantity = int64(len(guIDsToSell))
 
 		itemDataJSON, err = json.Marshal(gusToSell)
 		if err != nil {
@@ -321,7 +321,7 @@ func CreateListing(c *gin.Context) {
 	}
 	AddHumanQi(&player, 5.0)
 	if req.ItemType == "Gu" {
-		if err := db.RemovePlayerGus(tx, guIDsToSell); err != nil {
+		if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), guIDsToSell); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
 			return
 		}

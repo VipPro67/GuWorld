@@ -1321,9 +1321,9 @@ func RechargeWithStones(c *gin.Context) {
 			RequestSummary: fmt.Sprintf("%d Tiên Nguyên Thạch → %d Tiên Nguyên", stonesToUse, int(manaGain)),
 			Metadata: map[string]interface{}{
 				"stones_change": -stonesToUse,
-				"mana_change": int(manaGain),
+				"mana_change":   int(manaGain),
 			},
-			IPAddress:      c.ClientIP(), Success: true,
+			IPAddress: c.ClientIP(), Success: true,
 		})
 
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
@@ -1401,9 +1401,9 @@ func RechargeWithStones(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %.4f%% chân nguyên", stonesToUse, addedMana),
 		Metadata: map[string]interface{}{
 			"stones_change": -stonesToUse,
-			"mana_change": addedMana,
+			"mana_change":   addedMana,
 		},
-		IPAddress:      c.ClientIP(), Success: true,
+		IPAddress: c.ClientIP(), Success: true,
 	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
@@ -4166,7 +4166,7 @@ func DropGu(c *gin.Context) {
 	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
 		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
-	if err := db.RemovePlayerGu(tx, droppedInstanceID); err != nil {
+	if err := db.RemovePlayerGuForPlayer(tx, player.ID.String(), droppedInstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
 		return
 	}
@@ -4251,7 +4251,7 @@ func DropGus(c *gin.Context) {
 	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
 		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
-	if err := db.RemovePlayerGus(tx, req.GuInstanceIDs); err != nil {
+	if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), req.GuInstanceIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
 		return
 	}
