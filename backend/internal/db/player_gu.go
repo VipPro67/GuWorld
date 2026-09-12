@@ -260,10 +260,41 @@ func SyncPlayerGus(tx *sql.Tx, playerID string, before models.GuInventory, after
 	// Gus, it must call RemovePlayerGu/RemovePlayerGus explicitly BEFORE
 	// SyncPlayerGus. This prevents silent Gu loss from handler bugs.
 	if len(removed) > 0 {
-		for _, id := range removed {
-			gu := beforeIndex[id]
-			logger.S.Errorf("SyncPlayerGus player=%s SKIP_DELETE id=%s gu=%s(rank=%d,hunger=%d,state=%s,vital=%v,equipped=%v) — handler should call RemovePlayerGu explicitly!",
-				playerID, id, gu.GuID, gu.Rank, gu.Hunger, gu.Status, gu.IsVital, gu.Equipped)
+		// Explicit deletes happen before SyncPlayerGus in consumption flows
+		// such as refining and feeding. Only warn for rows that still exist,
+		// which indicates that the handler forgot the explicit delete.
+		rows, err := tx.Query(`
+			SELECT id
+			FROM player_gu
+			WHERE player_id = $1 AND id = ANY($2::text[])`, playerID, pq.Array(removed))
+		if err != nil {
+			logger.S.Warnf("SyncPlayerGus player=%s could not verify removed Gus: %v", playerID, err)
+		} else {
+			defer rows.Close()
+			remaining := make(map[string]struct{})
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					logger.S.Warnf("SyncPlayerGus player=%s could not read removed Gu verification: %v", playerID, err)
+					remaining = nil
+					break
+				}
+				remaining[id] = struct{}{}
+			}
+			if err := rows.Err(); err != nil {
+				logger.S.Warnf("SyncPlayerGus player=%s could not finish removed Gu verification: %v", playerID, err)
+				remaining = nil
+			}
+			if remaining != nil {
+				for _, id := range removed {
+					if _, exists := remaining[id]; !exists {
+						continue
+					}
+					gu := beforeIndex[id]
+					logger.S.Errorf("SyncPlayerGus player=%s SKIP_DELETE id=%s gu=%s(rank=%d,hunger=%d,state=%s,vital=%v,equipped=%v) — handler should call RemovePlayerGu explicitly!",
+						playerID, id, gu.GuID, gu.Rank, gu.Hunger, gu.Status, gu.IsVital, gu.Equipped)
+				}
+			}
 		}
 	}
 	// ── END SAFETY ────────────────────────────────────────────────────
@@ -411,7 +442,7 @@ func GuInventoryAggregateEquipped(playerRef string) string {
 }
 
 // EquippedTimeSpeedBonus sums the passive time_speed_multiplier contributed by
-// a player's equipped ACTIVE Gus. It queries player_gu and looks up the memory 
+// a player's equipped ACTIVE Gus. It queries player_gu and looks up the memory
 // registry, avoiding complex JSONB SQL queries that trigger JIT compilation.
 func EquippedTimeSpeedBonus(q Queryer, playerID string) (float64, error) {
 	rows, err := q.Query(`

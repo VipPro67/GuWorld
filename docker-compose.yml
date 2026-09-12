@@ -29,6 +29,9 @@ services:
       - REDIS_SSL=false
       - JWT_SECRET=guworld_cultivation_secret_key_change_me
       - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn,https://cogioi.io.vn
+      - AUTH_COOKIE_DOMAIN=.cogioi.io.vn
+      - AUTH_COOKIE_SECURE=true
+      - AUTH_COOKIE_SAMESITE=none
       - WS_ALLOWED_ORIGINS=http://localhost:3000,https://cogioi.io.vn,https://www.cogioi.io.vn,https://api.cogioi.io.vn
     depends_on:
       redis:
