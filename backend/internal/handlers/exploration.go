@@ -826,11 +826,6 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	if hpTooLowForExplore(&player, req.X, req.Y) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Máu của Đạo hữu quá thấp (< 20%), chưa sẵn sàng ra ngoài khám phá. Hãy về Trấn (HUB) hồi phục trước khi tiếp tục hành trình."})
-		return
-	}
-
 	if player.ActiveCombat != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
 		return
@@ -1100,11 +1095,6 @@ func MovePlayerPath(c *gin.Context) {
 
 	if player.HP <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"})
-		return
-	}
-
-	if hpTooLowForExplore(&player, req.X, req.Y) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Máu của Đạo hữu quá thấp (< 20%), chưa sẵn sàng ra ngoài khám phá. Hãy về Trấn (HUB) hồi phục trước khi tiếp tục hành trình."})
 		return
 	}
 
