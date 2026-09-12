@@ -198,7 +198,7 @@ func ClaimAchievement(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Nhận thành tựu [%s] %s! Phần thưởng: %s Nhân Khí +%.0f.", ach.Icon, ach.Name, ach.RewardLabel, qiGained),
 	})
 }

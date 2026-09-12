@@ -102,7 +102,7 @@ func RefineSoul(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Luyện Hồn thành công! Hồn phách đột phá lên %s, nhưng bị suy yếu do gió Lạc Phách (Soul HP giảm mạnh). Hãy dưỡng hồn để khôi phục. Nhân Khí +%.0f.", newTier, qiGained),
 	})
 }

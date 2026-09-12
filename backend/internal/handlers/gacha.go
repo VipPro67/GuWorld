@@ -452,7 +452,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 	}
 
 	if quantity == 1 {
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"reward":  rewards[0],
 			"rewards": rewards,
 			"message": buildGachaRewardLabel(rewards[0]) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
@@ -463,7 +463,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 		if discounted {
 			discountMsg = " Đã giảm 10% chi phí mở."
 		}
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"rewards": rewards,
 			"message": fmt.Sprintf("Mở %d lần thành công! Nhân Khí +%.0f.%s\n", quantity, qiGained, discountMsg) + announcement,
 		})

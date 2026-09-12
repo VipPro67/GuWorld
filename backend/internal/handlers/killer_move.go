@@ -422,7 +422,7 @@ func CastKillerMove(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"event":            eventType,
 		"success":          succeeded,
 		"killer_move":      move,

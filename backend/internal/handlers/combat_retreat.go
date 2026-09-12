@@ -173,7 +173,7 @@ func Retreat(c *gin.Context) {
 	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbAfter)
 	logger.S.Infof("Retreat player=%s invBefore=%d invAfter=%d added=%d dbBefore=%d dbAfterTx=%d dbAfter=%d",
 		player.ID, inventoryBefore, inventoryAfter, inventoryAfter-inventoryBefore, dbBefore, dbAfterTx, dbAfter)
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"log": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
@@ -218,7 +218,7 @@ func Flee(c *gin.Context) {
 		ClearPendingPlayerQueues(player.ID.String())
 		_ = cache.Delete("player_snapshot:" + player.ID.String())
 		PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionOnly(c, http.StatusOK, player, gin.H{
 			"log": "Không có trận chiến nào đang diễn ra, đạo hữu an toàn rút lui.",
 		})
 		return
@@ -396,7 +396,8 @@ func Flee(c *gin.Context) {
 
 			setWorldPosFromPlayer(&player)
 
-			responseWithPlayer(c, http.StatusOK, player, gin.H{
+			player.GuInventory, _ = db.LoadPlayerGus(db.DB, player.ID.String(), false)
+			respondActionWithInventory(c, http.StatusOK, player, gin.H{
 				"flee_success": false,
 				"victory":      true,
 				"defeat":       false,
@@ -470,7 +471,19 @@ func Flee(c *gin.Context) {
 
 		setWorldPosFromPlayer(&player)
 
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		if defeat {
+			player.GuInventory, _ = db.LoadPlayerGus(db.DB, player.ID.String(), false)
+			respondActionWithInventory(c, http.StatusOK, player, gin.H{
+				"flee_success": false,
+				"victory":      false,
+				"logs":         turnLogs,
+				"enemy":        enemyCombatState,
+				"defeat":       defeat,
+			})
+			return
+		}
+
+		respondActionOnly(c, http.StatusOK, player, gin.H{
 			"flee_success": false,
 			"victory":      false,
 			"logs":         turnLogs,
@@ -483,6 +496,7 @@ func Flee(c *gin.Context) {
 	isTribulation := player.ActiveCombat.TribulationEventID != "" || player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation" || player.ActiveCombat.EnemyType == "TRIBULATION_BOSS" || player.ActiveCombat.EnemyType == "TRIBULATION_MONSTER"
 	isExploration := player.ActiveCombat.CombatMode != "virtual" && !isTribulation && player.ActiveCombat.MineSlotID == 0 && player.ActiveCombat.EnemyType != "PVP"
 
+	droppedOnFlee := false
 	if isExploration {
 		maxHP := gamefx.EffectiveMaxHP(&player)
 		damage := maxHP * 0.20 // Lose 20% Max HP
@@ -493,6 +507,7 @@ func Flee(c *gin.Context) {
 			player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
 
 			dropSummary := applyDeathDropRecord(tx, &authID, nil)
+			droppedOnFlee = true
 			_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
 
 			if dropSummary != "" {
@@ -535,7 +550,15 @@ func Flee(c *gin.Context) {
 
 	setWorldPosFromPlayer(&player)
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	if droppedOnFlee {
+		player.GuInventory, _ = db.LoadPlayerGus(db.DB, player.ID.String(), false)
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
+			"log": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+		})
+		return
+	}
+
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"log": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }

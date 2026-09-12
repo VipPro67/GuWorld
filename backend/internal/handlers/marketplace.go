@@ -829,8 +829,7 @@ func BuyListing(c *gin.Context) {
 	}
 	notify.Send(db.DB, authID, "market_bought", "Mua hàng thành công",
 		fmt.Sprintf("Bạn đã mua %d %s với giá %d %s.", purchaseQty, itemName, totalPrice, currencyName))
-	buyer.MaterialsInventory = loadMaterialsInventory(buyer.ID.String())
-	responseWithPlayer(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
+	respondActionWithInventory(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
 
 func SettleExpiredAuctions(c *gin.Context) {

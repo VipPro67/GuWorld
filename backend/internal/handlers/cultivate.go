@@ -165,7 +165,7 @@ func BreakWall(c *gin.Context) {
 
 			tx.Commit()
 
-			responseWithPlayer(c, http.StatusOK, player, gin.H{
+			respondActionWithInventory(c, http.StatusOK, player, gin.H{
 				"success": false,
 				"chance":  chance,
 				"message": msg + " Nhân Khí +1.",
@@ -356,7 +356,7 @@ func UseRelicGu(c *gin.Context) {
 		Success:   true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Relic Gu consumed. Instant advancement!"})
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": "Relic Gu consumed. Instant advancement!"})
 }
 
 // Ascension attempts to break through from Rank 5 Peak to Rank 6 Gu Immortal
@@ -481,7 +481,7 @@ func Ascension(c *gin.Context) {
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"success": success, "message": msg})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"success": success, "message": msg})
 }
 
 // Tribulation handles the heavenly tribulation event for Immortals
@@ -549,7 +549,7 @@ func Tribulation(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu! Nhân Khí +5."})
+	respondActionOnly(c, http.StatusOK, player, gin.H{"message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu! Nhân Khí +5."})
 }
 
 // CompleteQuestRequest defines body to complete a main quest
@@ -605,7 +605,7 @@ func ClearStress(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Không khiếu đã được tịnh hóa thành công! Giảm 50%% áp lực. Nhân Khí +%.0f.", qiGained),
 	})
 }

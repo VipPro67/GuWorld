@@ -928,14 +928,14 @@ func RefineGu(c *gin.Context) {
 
 	// Return response
 	if isSuccess {
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"status":         statusStr,
 			"message":        statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 			"new_gu":         newGuInstance,
 			"rate_breakdown": breakdown,
 		})
 	} else {
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"status":         statusStr,
 			"message":        statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 			"rate_breakdown": breakdown,
@@ -1145,7 +1145,7 @@ func DeduceRecipe(c *gin.Context) {
 		Success:   true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":         message + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		"inspiration":     inspirationFlash,
 		"improvement":     improvement,

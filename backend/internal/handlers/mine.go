@@ -263,6 +263,12 @@ func OccupyMineSlot(c *gin.Context) {
 		return
 	}
 
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -270,7 +276,7 @@ func OccupyMineSlot(c *gin.Context) {
 	}
 	invalidateMineSlotsCache()
 
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d! Nhân Khí +5.", rarity, req.SlotID)})
+	respondActionOnly(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d! Nhân Khí +5.", rarity, req.SlotID)})
 }
 
 func ClaimMineRewards(c *gin.Context) {
@@ -332,6 +338,12 @@ func ClaimMineRewards(c *gin.Context) {
 		return
 	}
 
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -339,7 +351,7 @@ func ClaimMineRewards(c *gin.Context) {
 	}
 	invalidateMineSlotsCache()
 
-	c.JSON(http.StatusOK, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": "Nhận thưởng tích lũy thành công!",
 		"rewards": gin.H{
 			"stones": stones,
@@ -408,6 +420,12 @@ func AbandonMineSlot(c *gin.Context) {
 		return
 	}
 
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -415,7 +433,7 @@ func AbandonMineSlot(c *gin.Context) {
 	}
 	invalidateMineSlotsCache()
 
-	c.JSON(http.StatusOK, gin.H{
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"message": "Từ bỏ mỏ linh thạch thành công, đã nhận toàn bộ phần thưởng tích lũy!",
 		"rewards": gin.H{
 			"stones": stones,
@@ -598,7 +616,7 @@ func AttackMineSlot(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Khởi động chiến đấu chiếm mỏ thành công! Nhân Khí +3."})
+	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": "Khởi động chiến đấu chiếm mỏ thành công! Nhân Khí +3."})
 }
 
 // StartMineMonsterWorker runs periodically to assign monsters to abandoned mines

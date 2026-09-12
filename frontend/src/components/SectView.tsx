@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName } from "@/store/useGameStore";
 import { translatePath, parsePaths } from "@/lib/translate";
 import {
@@ -430,10 +430,14 @@ export const SectView: React.FC = () => {
   const canPromote = promotionReq && player.rank >= promotionReq.reqRank && mySectStatus!.member!.contribution_points >= promotionReq.points;
 
   // Donation materials listing
-  const playerMaterials = Object.entries(player.materials_inventory || {}).filter(([_, qty]) => qty > 0);
+  const playerMaterials = useMemo(() => {
+    return Object.entries(player.materials_inventory || {}).filter(([_, qty]) => qty > 0);
+  }, [player.materials_inventory]);
 
   // Donation Gu listing (Filter out Vital Gu and equipped Gu)
-  const playerDonatableGus = (player.gu_inventory || []).filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD");
+  const playerDonatableGus = useMemo(() => {
+    return (player.gu_inventory || []).filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD");
+  }, [player.gu_inventory]);
 
   // Pricing helpers matching backend/pkg/pricing
   const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];

@@ -446,5 +446,5 @@ func CompleteQuest(c *gin.Context) {
 
 	rewardStr := buildRewardLabel(quest.Rewards)
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": quest.Message + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": quest.Message + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)})
 }

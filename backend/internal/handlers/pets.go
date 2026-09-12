@@ -132,6 +132,12 @@ func FeedPet(c *gin.Context) {
 		return
 	}
 
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin người chơi"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
@@ -155,7 +161,7 @@ func FeedPet(c *gin.Context) {
 		Success:   true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"pet_id":     petID,
 		"nickname":   nickname,
 		"hunger":     newHunger,

@@ -281,7 +281,7 @@ func RedeemGiftCode(c *gin.Context) {
 
 	auditlog.Logf(db.DB, &playerID, "gift_code.redeem", "code=%s rewards=%s", gc.Code, string(rewardsJSON))
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": "Nhập mã quà thành công!" + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }

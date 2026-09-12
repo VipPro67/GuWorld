@@ -1634,7 +1634,7 @@ func CombatAttack(c *gin.Context) {
 		}()
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"logs":    ctx.Logs,
 		"enemy":   player.ActiveCombat,
 		"victory": victory,

@@ -903,14 +903,21 @@ interface AuthResponse {
   token?: string;
 }
 
-interface ExploreResponse {
-  player: Player;
-  reward_stones: number;
+// Slim action response carrying only inventory deltas.
+// Player stat changes (hp, mana, stones, rank, etc.) arrive via WebSocket.
+interface ActionInventoryResponse {
+  success?: boolean;
+  message?: string;
+  gu_inventory?: GuInstance[];
+  materials_inventory?: Record<string, number>;
+}
+
+interface ExploreResponse extends ActionInventoryResponse {
+  reward_stones?: number;
   log: string;
 }
 
-interface FeedResponse {
-  player: Player;
+interface FeedResponse extends ActionInventoryResponse {
   message: string;
 }
 
@@ -1625,6 +1632,38 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   };
 
+  // applyInventoryFromResponse updates only the inventory-related player fields
+  // (gu_inventory, materials_inventory) from a slim action API response.
+  // All other player state changes (hp, mana, stones, combat, position, rank, etc.)
+  // are handled by the WebSocket player.updated / delta events.
+  const applyInventoryFromResponse = (data: any) => {
+    const currentPlayer = get().player;
+    if (!currentPlayer) return;
+    const updates: Partial<Player> = {};
+    if (data.gu_inventory !== undefined) {
+      // Re-use the same sparse/equipped logic from setPlayerFromServer
+      const incomingInv: GuInstance[] = data.gu_inventory || [];
+      updates.gu_inventory = incomingInv;
+      // Recompute equipped_gus from the incoming inventory
+      const equippedSet = new Set<string>();
+      incomingInv.forEach((g) => { if (g.equipped) equippedSet.add(g.instance_id); });
+      updates.equipped_gus = Array.from(equippedSet);
+    }
+    if (data.materials_inventory !== undefined) {
+      updates.materials_inventory = data.materials_inventory ?? {};
+    }
+    if (Object.keys(updates).length > 0) {
+      const merged = normalizePlayer({ ...currentPlayer, ...updates });
+      if (merged) {
+        set({
+          player: merged,
+          guInventoryLoaded: updates.gu_inventory !== undefined ? true : get().guInventoryLoaded,
+          manaSnapshot: createManaSnapshotFromPlayer(merged, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate),
+        });
+      }
+    }
+  };
+
   const translateCache = new Map<string, string>();
 
   const translateIDs = (msg: string): string => {
@@ -2012,7 +2051,8 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(errData.error || "Không thể hoàn tất thiết lập.");
       }
 
-      const player: Player = await response.json();
+      const responseData = await response.json();
+      const player: Player = responseData.player;
       setPlayerFromServer(player);
       get().addLog(`Thiết lập ban đầu hoàn tất! Khu vực: ${player.current_region}`);
       return true;
@@ -2979,7 +3019,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: ExploreResponse = await response.json();
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.log);
     } catch (err: any) {
       set({ error: err.message });
@@ -3015,7 +3055,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: FeedResponse = await response.json();
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message);
       get().addToast(data.message, "success");
     } catch (err: any) {
@@ -3052,7 +3092,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: FeedResponse = await response.json();
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message);
       get().addToast(data.message, "success");
     } catch (err: any) {
@@ -3088,7 +3128,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: FeedResponse = await response.json();
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message);
       get().addToast(data.message, "success");
     } catch (err: any) {
@@ -3206,7 +3246,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Hợp luyện thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message);
       get().addToast(data.message, data.status === "success" ? "success" : "error");
       return data;
@@ -3246,7 +3286,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Thôi diễn thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       // update completion rate in local recipes state
       set((state) => ({
         recipes: state.recipes.map((r) =>
@@ -3288,7 +3328,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Trùng kích thất bại."); }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Trùng kích hoàn tất.");
       return { success: data.success, message: data.message };
     } catch (err: any) {
@@ -3314,7 +3354,6 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nạp nguyên thạch thất bại.");
 
-      setPlayerFromServer(data.player);
       get().addLog(data.message || "Nạp nguyên thạch thành công.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -3340,7 +3379,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể dùng Cổ Xá Lợi."); }
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Đã sử dụng Cổ Xá Lợi.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -3362,7 +3401,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Thăng tiên thất bại."); }
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Thăng tiên hoàn tất.");
       return { success: data.success, message: data.message };
     } catch (err: any) {
@@ -3386,7 +3425,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể nhận thưởng nhiệm vụ."); }
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addToast(data.message || "Hoàn thành nhiệm vụ.", "success");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -3409,7 +3448,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mã quà không hợp lệ."); }
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Đổi mã quà thành công!");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -3448,7 +3487,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Nhận thưởng thất bại."); }
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().fetchAchievements();
       get().addLog(data.message || "Nhận thưởng thành tựu thành công!");
       return { success: true, message: data.message };
@@ -3510,7 +3549,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mở Đá  thất bại."); }
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Mở Đá  thành công!");
       return { success: true, message: data.message, reward: data.reward, rewards: data.rewards };
     } catch (err: any) {
@@ -3605,7 +3644,6 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể kích hoạt thiên kiếp."); }
-      setPlayerFromServer(data.player);
       get().addLog(data.message || "Thiên kiếp giáng lâm.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -3643,7 +3681,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Khám phá thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.log);
       
       // Handle skip battle result from explore
@@ -3688,7 +3726,6 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tịnh hóa Không khiếu thất bại.");
 
-      setPlayerFromServer(data.player);
       get().addLog(data.message || "Tịnh hóa Không khiếu hoàn tất.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -3846,15 +3883,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thi triển sát chiêu thất bại.");
-      const updatedPlayer = data.player
-        ? data.player
-        : {
-            ...player,
-            active_combat: data.active_combat ?? player.active_combat,
-            current_mana: typeof data.current_mana === "number" ? data.current_mana : player.current_mana,
-            hp: typeof data.hp === "number" ? data.hp : player.hp,
-          };
-      setPlayerFromServer(updatedPlayer);
+      applyInventoryFromResponse(data);
       if (data.logs && Array.isArray(data.logs)) {
         data.logs.forEach((logLine: string) => get().addLog(logLine));
       }
@@ -3909,7 +3938,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Tấn công thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       if (data.logs && Array.isArray(data.logs)) {
         data.logs.forEach((logLine: string) => {
           get().addLog(logLine);
@@ -4058,7 +4087,6 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       set({ activeCombatReplay: null });
-      setPlayerFromServer(data.player);
       useUIStore.getState().setView("dashboard");
       get().addLog(data.log || "Đạo hữu đã rút lui an toàn.");
     } catch (err: any) {
@@ -4119,7 +4147,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       if (data.flee_success === false) {
-        setPlayerFromServer(data.player);
+        applyInventoryFromResponse(data);
         if (data.logs && Array.isArray(data.logs)) {
           data.logs.forEach((logLine: string) => {
             get().addLog(logLine);
@@ -4145,7 +4173,7 @@ export const useGameStore = create<GameState>((set, get) => {
         else if (combat.tribulation_event_id) returnView = "aperture";
       }
       set({ activeCombatReplay: null });
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       useUIStore.getState().setView(returnView);
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
       return data;
@@ -4523,7 +4551,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Giao dịch thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Mua hàng thành công!");
       return true;
     } catch (err: any) {
@@ -4550,7 +4578,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Bán hàng thành công!");
       return true;
     } catch (err: any) {
@@ -4574,7 +4602,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Bán hàng thành công!");
       return true;
     } catch (err: any) {
@@ -4598,7 +4626,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Đã vứt Cổ trùng.");
       return true;
     } catch (err: any) {
@@ -4621,7 +4649,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Đã vứt Cổ trùng hàng loạt.");
       return true;
     } catch (err: any) {
@@ -4658,7 +4686,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Thao tác trang bị thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       const successMsg = data.message || (equip ? "Trang bị Cổ trùng thành công!" : "Tháo Cổ trùng thành công!");
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -4694,7 +4722,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Tháo cổ trùng thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       if (data.message) {
         get().addLog(data.message);
         get().addToast(data.message, "success");
@@ -4735,7 +4763,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Cập nhật trạng thái thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.message || "Cập nhật trạng thái Cổ trùng thành công!");
     } catch (err: any) {
       set({ error: err.message });
@@ -4772,7 +4800,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Thiết lập Bản Mệnh Cổ thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       const successMsg = data.message || "Thiết lập Bản Mệnh Cổ thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -4811,7 +4839,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Sử dụng Cổ trùng thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       const successMsg = data.message || "Sử dụng Cổ trùng thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -4850,7 +4878,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Sử dụng vật phẩm thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       const successMsg = data.message || "Sử dụng vật phẩm thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -4891,7 +4919,7 @@ export const useGameStore = create<GameState>((set, get) => {
         return false;
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       const successMsg = data.message || "Đã sử dụng vật phẩm.";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -4936,7 +4964,7 @@ export const useGameStore = create<GameState>((set, get) => {
           continue;
         }
 
-        setPlayerFromServer(data.player);
+        applyInventoryFromResponse(data);
         const successMsg = data.message || `Đã sử dụng Cổ trùng ${guInstanceId}.`;
         get().addLog(successMsg);
         get().addToast(successMsg, "success");
@@ -4981,7 +5009,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Di chuyển thất bại.");
       }
 
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addLog(data.log || "Di chuyển thành công.");
       
       // Handle skip battle result
@@ -5473,7 +5501,6 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
-      setPlayerFromServer(data.player);
       useUIStore.getState().setView("arena");
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
@@ -5932,7 +5959,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bắt thất bại");
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       if (data.captured) {
         get().addToast(data.message || "Bắt thành công!", "success");
         await get().fetchPlayerPets();
@@ -6449,7 +6476,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Sử dụng Cổ trùng Can Đảm thất bại.");
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addToast(data.message || "Tráng hồn thành công!", "success");
       get().addLog(data.message || "Đã sử dụng 1x Can Đảm Cổ để tráng đại linh hồn.");
       return true;
@@ -6469,7 +6496,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Luyện hồn thất bại.");
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       get().addToast(data.message || "Luyện hồn thành công!", "success");
       get().addLog(data.message || "Đã luyện hồn tại Lạc Phách Cốc, nén ép linh hồn ngưng thực.");
       return true;
@@ -6568,7 +6595,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hành động phó bản thất bại.");
       
-      setPlayerFromServer(data.player);
+      applyInventoryFromResponse(data);
       if (data.session) {
         set({ activeInstanceSession: data.session });
         if (data.session.status !== "ACTIVE") {

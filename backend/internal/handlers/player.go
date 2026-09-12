@@ -945,7 +945,7 @@ func CompleteOnboarding(c *gin.Context) {
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	setWorldPosFromPlayer(&player)
-	c.JSON(http.StatusOK, player)
+	c.JSON(http.StatusOK, gin.H{"player": player})
 }
 
 // LoginRequest represents credentials login payload.
@@ -1326,7 +1326,7 @@ func RechargeWithStones(c *gin.Context) {
 			IPAddress: c.ClientIP(), Success: true,
 		})
 
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionOnly(c, http.StatusOK, player, gin.H{
 			"message": fmt.Sprintf("Luyện hóa thành công %d Tiên Nguyên Thạch thành %d hạt Tiên Nguyên!", stonesToUse, int(manaGain)),
 		})
 		return
@@ -1406,7 +1406,7 @@ func RechargeWithStones(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Nạp %d nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
 	})
 }
@@ -1977,7 +1977,7 @@ func FeedGu(c *gin.Context) {
 	if feedEventMsg != "" {
 		msg += " " + feedEventMsg
 	}
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": msg,
 	})
 }
@@ -2193,7 +2193,7 @@ func FeedGroup(c *gin.Context) {
 		Success:   true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Đã cho ăn thành công %d con %s! Tiêu hao: %s.", fedCount, specs.Name, foodStr),
 	})
 }
@@ -2399,7 +2399,7 @@ func FeedAll(c *gin.Context) {
 		Success:   true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Cho tất cả Cổ trùng ăn thành công! Đã khôi phục cho %d Cổ trùng. Tiêu hao: %s.", fedCount, foodStr),
 	})
 }
@@ -2478,6 +2478,8 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 }
 
 // responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory and CompletedQuests are populated.
+// Use only for GET/session endpoints (auth/me, player/status) where full player initialization is required.
+// For action endpoints, prefer respondActionWithInventory, respondActionGuOnly, or respondActionOnly.
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
@@ -2488,6 +2490,67 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 	resp := gin.H{"player": player}
+	for _, e := range extra {
+		for k, v := range e {
+			resp[k] = v
+		}
+	}
+	c.JSON(status, resp)
+}
+
+// respondActionWithInventory replaces responseWithPlayer for action endpoints that modify
+// gu_inventory and/or materials_inventory. It publishes the WS snapshot (for hp/mana/stones/combat
+// realtime updates) and returns a slim payload with only inventory data + extra fields.
+// This eliminates the completed_quests and unlocked_recipes DB queries from every action response.
+func respondActionWithInventory(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	player.MaxMana = gamefx.EffectiveMaxMana(&player)
+	player.BaseHP = gamefx.EffectiveMaxHP(&player)
+	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	resp := gin.H{
+		"success":             true,
+		"gu_inventory":        player.GuInventory,
+		"materials_inventory": loadMaterialsInventory(player.ID.String()),
+	}
+	for _, e := range extra {
+		for k, v := range e {
+			resp[k] = v
+		}
+	}
+	c.JSON(status, resp)
+}
+
+// respondActionGuOnly replaces responseWithPlayer for action endpoints that only modify
+// gu_inventory (feed, equip, drop, status changes). No materials DB query is made.
+func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	player.MaxMana = gamefx.EffectiveMaxMana(&player)
+	player.BaseHP = gamefx.EffectiveMaxHP(&player)
+	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	resp := gin.H{
+		"success":      true,
+		"gu_inventory": player.GuInventory,
+	}
+	for _, e := range extra {
+		for k, v := range e {
+			resp[k] = v
+		}
+	}
+	c.JSON(status, resp)
+}
+
+// respondActionOnly replaces responseWithPlayer for action endpoints whose player state changes
+// are fully covered by the WS snapshot (hp, mana, stones, position, combat, rank, wall_progress).
+// No inventory data is returned — the frontend relies on the WS player.updated event.
+func respondActionOnly(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	player.MaxMana = gamefx.EffectiveMaxMana(&player)
+	player.BaseHP = gamefx.EffectiveMaxHP(&player)
+	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	resp := gin.H{"success": true}
 	for _, e := range extra {
 		for k, v := range e {
 			resp[k] = v
@@ -3322,7 +3385,7 @@ func EquipGu(c *gin.Context) {
 		auditlog.Logf(db.DB, &authID, "gu.unequip_invalid", "count=%d instances=%s", len(cleaned), strings.Join(cleanedIDs, ","))
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": statusMsg})
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": statusMsg})
 }
 
 // UnequipAllGu unequips all equipped Gu except the Vital Gu.
@@ -3393,7 +3456,7 @@ func UnequipAllGu(c *gin.Context) {
 	}
 
 	if unequippedCount == 0 {
-		responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Không có Cổ trùng nào có thể tháo."})
+		respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": "Không có Cổ trùng nào có thể tháo."})
 		return
 	}
 
@@ -3416,7 +3479,7 @@ func UnequipAllGu(c *gin.Context) {
 
 	auditlog.Logf(db.DB, &authID, "gu.unequip_all", "count=%d", unequippedCount)
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã tháo thành công %d Cổ trùng!", unequippedCount)})
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã tháo thành công %d Cổ trùng!", unequippedCount)})
 }
 
 // UpdateGuStatusRequest defines body to change status of owned Gu instance
@@ -3543,7 +3606,7 @@ func UpdateGuStatus(c *gin.Context) {
 		})
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Cập nhật trạng thái Cổ trùng thành %s thành công!", req.Status),
 	})
 }
@@ -3735,7 +3798,7 @@ func UseItem(c *gin.Context) {
 	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
 }
 
 type UseItemsRequest struct {
@@ -3966,7 +4029,7 @@ func UseItems(c *gin.Context) {
 	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": finalMessage})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": finalMessage})
 }
 
 // SetVitalGuRequest represents the payload to select a vital Gu
@@ -4032,7 +4095,7 @@ func SetVitalGu(c *gin.Context) {
 	}
 
 	if targetGu.IsVital {
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionGuOnly(c, http.StatusOK, player, gin.H{
 			"message": "Cổ trùng này đã là Bản Mệnh Cổ của đạo hữu rồi.",
 		})
 		return
@@ -4108,7 +4171,7 @@ func SetVitalGu(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ | hadVital=%v", targetGu.GuID, hadVital),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ thành công!%s", targetGu.GuID, backlashMessage),
 	})
 }
@@ -4186,7 +4249,7 @@ func DropGu(c *gin.Context) {
 		EntityID: req.GuInstanceID, RequestSummary: "Vứt bỏ Cổ trùng khỏi túi đồ",
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Đã vứt bỏ Cổ trùng khỏi túi đồ."})
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": "Đã vứt bỏ Cổ trùng khỏi túi đồ."})
 }
 
 // DropGusRequest represents request payload to drop multiple Gu instances.
@@ -4271,7 +4334,7 @@ func DropGus(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("Vứt bỏ hàng loạt %d Cổ trùng khỏi túi đồ", len(req.GuInstanceIDs)),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã vứt bỏ %d Cổ trùng khỏi túi đồ.", foundCount)})
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã vứt bỏ %d Cổ trùng khỏi túi đồ.", foundCount)})
 }
 
 // UseGuRequest represents request payload to use a consumable Gu
@@ -4462,7 +4525,7 @@ func UseConsumableGu(c *gin.Context) {
 		Success:   true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
@@ -4583,7 +4646,7 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }

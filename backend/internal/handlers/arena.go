@@ -285,7 +285,7 @@ func ChallengeArena(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Khiêu chiến Võ Đài bắt đầu! Nhân Khí +%.0f.", qiGained),
 	})
 }

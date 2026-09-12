@@ -594,8 +594,7 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 
-	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Giao dịch thành công! Nhân Khí +%.0f.", qiGained)})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Giao dịch thành công! Nhân Khí +%.0f.", qiGained)})
 }
 
 type SellShopRequest struct {
@@ -826,8 +825,7 @@ func SellShopItem(c *gin.Context) {
 		Success:   true,
 	})
 
-	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận %s! Nhân Khí +%.0f.", sellCurrencyName, qiGained)})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận %s! Nhân Khí +%.0f.", sellCurrencyName, qiGained)})
 }
 
 type SellShopItemInfo struct {
@@ -1122,6 +1120,5 @@ func SellShopItemsBulk(c *gin.Context) {
 	notify.Send(db.DB, authID, "shop_sell", "Bán Hàng Tiệm Buôn",
 		fmt.Sprintf("Đã bán sỉ %d loại vật phẩm/Cổ trùng, thu về %s.", len(req.Items), gainSummary))
 
-	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận %s! Nhân Khí +%.0f.", len(req.Items), gainSummary, qiGained)})
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận %s! Nhân Khí +%.0f.", len(req.Items), gainSummary, qiGained)})
 }

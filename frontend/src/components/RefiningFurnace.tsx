@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { GamePanel, GameCard } from "@/components/ui";
 // UI migrated to shared components
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
@@ -165,10 +165,12 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const requiredSlots = getRequiredSlots();
 
   // Find all Gus currently in player inventory that are NOT dead and NOT slotted
-  const slottedIds = Object.values(slottedGus);
-  const availableInventoryGus = (player.gu_inventory || []).filter(
-    (gu) => gu.status !== "DEAD" && !slottedIds.includes(gu.instance_id)
-  );
+  const slottedIds = useMemo(() => Object.values(slottedGus), [slottedGus]);
+  const availableInventoryGus = useMemo(() => {
+    return (player.gu_inventory || []).filter(
+      (gu) => gu.status !== "DEAD" && !slottedIds.includes(gu.instance_id)
+    );
+  }, [player.gu_inventory, slottedIds]);
 
   const getBestCandidateForRefine = (guId: string, rank: number): GuInstance | undefined => {
     const candidates = availableInventoryGus.filter(g => g.gu_id === guId && g.rank === rank);

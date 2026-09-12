@@ -898,7 +898,7 @@ func MovePlayer(c *gin.Context) {
 			ClearPendingPlayerQueues(player.ID.String())
 			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
 			// Include skip summary in response
-			responseWithPlayer(c, http.StatusOK, player, gin.H{
+			respondActionWithInventory(c, http.StatusOK, player, gin.H{
 				"log":              logMsg,
 				"combat_triggered": false,
 				"skip_result":      skipSummary,
@@ -956,7 +956,7 @@ func MovePlayer(c *gin.Context) {
 	// Calculate fresh stats
 	newStats := CalculatePlayerStats(&player)
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"log":              logMsg,
 		"combat_triggered": combatTriggered,
 		"stats":            newStats,

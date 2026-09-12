@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, guSpecFor } from "@/store/useGameStore";
 import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
@@ -158,30 +158,32 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       };
     });
 
-  const sellableGus = Object.entries(
-    (player.gu_inventory || [])
-      .filter((gu) => !gu.is_vital && !gu.equipped && gu.status !== "DEAD")
-      .reduce((acc, gu) => {
-        const key = `${gu.gu_id}@${gu.rank}`;
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-  ).map(([key, count]) => {
-    const guId = key.split("@")[0];
-    const rank = Number(key.split("@")[1]) || 1;
-    const spec = guSpecFor(guId, rank) || guDictionary[guId];
-    return {
-      id: guId,
-      name: spec?.name || guId,
-      description: spec?.description || "Cổ trùng bản thân nuôi dưỡng.",
-      type: "Gu" as const,
-      owned: count,
-      price: getItemSellPrice(guId, "Gu", rank),
-      rank,
-      currency: stoneTier(rank),
-      paths: spec?.path || [],
-    };
-  });
+  const sellableGus = useMemo(() => {
+    return Object.entries(
+      (player.gu_inventory || [])
+        .filter((gu) => !gu.is_vital && !gu.equipped && gu.status !== "DEAD")
+        .reduce((acc, gu) => {
+          const key = `${gu.gu_id}@${gu.rank}`;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+    ).map(([key, count]) => {
+      const guId = key.split("@")[0];
+      const rank = Number(key.split("@")[1]) || 1;
+      const spec = guSpecFor(guId, rank) || guDictionary[guId];
+      return {
+        id: guId,
+        name: spec?.name || guId,
+        description: spec?.description || "Cổ trùng bản thân nuôi dưỡng.",
+        type: "Gu" as const,
+        owned: count,
+        price: getItemSellPrice(guId, "Gu", rank),
+        rank,
+        currency: stoneTier(rank),
+        paths: spec?.path || [],
+      };
+    });
+  }, [player.gu_inventory, guDictionary]);
 
   const sellableRecipes = (player.unlocked_recipes || []).map((recipe) => {
     const targetGuID = recipe.recipe_id.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();

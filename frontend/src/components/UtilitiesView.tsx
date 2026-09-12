@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useGameStore, GuInstance, guSpecFor } from "@/store/useGameStore";
 import { Lock, Unlock, Search, ShieldAlert, Sparkles, HelpCircle, AlertCircle, Layers } from "lucide-react";
 import { translateGuType, translatePath } from "@/lib/translate";
@@ -41,28 +41,30 @@ export const UtilitiesView: React.FC = () => {
   const guList = player.gu_inventory || [];
 
   // Filter Gu bugs depending on action tab
-  const filteredGuList = guList.filter((gu) => {
-    const spec = guSpecFor(gu.gu_id, gu.rank);
-    const name = spec?.name || gu.gu_id;
-    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRank = selectedRank === "all" || gu.rank.toString() === selectedRank;
+  const filteredGuList = useMemo(() => {
+    return guList.filter((gu) => {
+      const spec = guSpecFor(gu.gu_id, gu.rank);
+      const name = spec?.name || gu.gu_id;
+      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesRank = selectedRank === "all" || gu.rank.toString() === selectedRank;
 
-    if (activeTab === "seal") {
-      // Seal tab: show active or sleeping Gu bugs that are NOT already sealed, NOT dead, NOT vital, and NOT equipped
-      return (
-        matchesSearch &&
-        matchesRank &&
-        gu.status !== "SEALED" &&
-        gu.status !== "DEAD" &&
-        !gu.is_vital &&
-        !gu.equipped
-      );
-    } else if (activeTab === "unseal") {
-      // Unseal tab: show only sealed Gu bugs
-      return matchesSearch && matchesRank && gu.status === "SEALED";
-    }
-    return false;
-  });
+      if (activeTab === "seal") {
+        // Seal tab: show active or sleeping Gu bugs that are NOT already sealed, NOT dead, NOT vital, and NOT equipped
+        return (
+          matchesSearch &&
+          matchesRank &&
+          gu.status !== "SEALED" &&
+          gu.status !== "DEAD" &&
+          !gu.is_vital &&
+          !gu.equipped
+        );
+      } else if (activeTab === "unseal") {
+        // Unseal tab: show only sealed Gu bugs
+        return matchesSearch && matchesRank && gu.status === "SEALED";
+      }
+      return false;
+    });
+  }, [guList, searchTerm, selectedRank, activeTab]);
 
   const handleSealGu = async (gu: GuInstance, name: string) => {
     if (actionLoading || processingId) return;

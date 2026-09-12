@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock, BookOpen } from "lucide-react";
@@ -291,62 +291,160 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   };
 
   // Filter materials (only those with qty > 0 and matching searchTerm)
-  const filteredMaterials = Object.keys(itemDictionary)
-    .filter((key) => {
-      const qty = materials[key] || 0;
-      if (qty <= 0) return false;
+  const filteredMaterials = useMemo(() => {
+    return Object.keys(itemDictionary)
+      .filter((key) => {
+        const qty = materials[key] || 0;
+        if (qty <= 0) return false;
 
-      const spec = itemDictionary[key];
+        const spec = itemDictionary[key];
+        if (!spec) return false;
+        const matchesSearch =
+          spec.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          spec.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (spec.item_type && spec.item_type.toLowerCase().includes(searchTerm.toLowerCase()));
+        return matchesSearch;
+      })
+      .map((key) => ({ key, spec: itemDictionary[key], qty: materials[key] }));
+  }, [itemDictionary, materials, searchTerm]);
+
+  const consumableMaterialRows = useMemo(() => {
+    return filteredMaterials.filter(({ spec }) => isConsumableItem(spec));
+  }, [filteredMaterials]);
+
+  // Dynamic filters calculation
+  const allPaths = useMemo(() => {
+    return Array.from(
+      new Set(
+        guList.map((gu) => {
+          const spec = guSpecFor(gu.gu_id, gu.rank);
+          return spec?.path && spec.path.length > 0 ? spec.path[0] : null;
+        }).filter(Boolean)
+      )
+    ) as string[];
+  }, [guList]);
+
+  const allRanks = useMemo(() => {
+    return Array.from(
+      new Set(
+        guList.map((gu) => gu.rank).filter((r): r is number => r !== undefined)
+      )
+    ).sort((a, b) => a - b);
+  }, [guList]);
+
+  // Filter Gu bugs matching searchTerm, path, and rank
+  const filteredGus = useMemo(() => {
+    return guList.filter((gu) => {
+      const spec = guSpecFor(gu.gu_id, gu.rank) || {
+        name: gu.gu_id,
+        description: "Cổ trùng chưa được giải nghĩa.",
+        path: [] as string[],
+        gu_type: "",
+      };
       const matchesSearch =
         spec.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         spec.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (spec.item_type && spec.item_type.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesSearch;
-    })
-    .map((key) => ({ key, spec: itemDictionary[key], qty: materials[key] }));
+        (spec.path && spec.path.some(p => p.toLowerCase().includes(searchTerm.toLowerCase()))) ||
+        (spec.gu_type && spec.gu_type.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  const consumableMaterialRows = filteredMaterials.filter(({ spec }) => isConsumableItem(spec));
+      const matchesPath = selectedPath === "all" || (spec.path && spec.path.includes(selectedPath));
+      const matchesRank = selectedRank === "all" || (gu.rank !== undefined && gu.rank === parseInt(selectedRank, 10));
 
-  // Dynamic filters calculation
-  const allPaths = Array.from(
-    new Set(
-      guList.map((gu) => {
-        const spec = guSpecFor(gu.gu_id, gu.rank);
-        return spec?.path && spec.path.length > 0 ? spec.path[0] : null;
-      }).filter(Boolean)
-    )
-  ) as string[];
+      return matchesSearch && matchesPath && matchesRank;
+    });
+  }, [guList, searchTerm, selectedPath, selectedRank]);
 
-  const allRanks = Array.from(
-    new Set(
-      guList.map((gu) => gu.rank).filter((r): r is number => r !== undefined)
-    )
-  ).sort((a, b) => a - b);
+  const eligibleGus = useMemo(() => {
+    return filteredGus.filter(isEligibleForCurrentAction);
+  }, [filteredGus]);
 
-  // Filter Gu bugs matching searchTerm, path, and rank
-  const filteredGus = guList.filter((gu) => {
-    const spec = guSpecFor(gu.gu_id, gu.rank) || {
-      name: gu.gu_id,
-      description: "Cổ trùng chưa được giải nghĩa.",
-      path: [] as string[],
-      gu_type: "",
-    };
-    const matchesSearch =
-      spec.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      spec.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (spec.path && spec.path.some(p => p.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-      (spec.gu_type && spec.gu_type.toLowerCase().includes(searchTerm.toLowerCase()));
+  const selectedEligibleCount = useMemo(() => {
+    return eligibleGus.filter(g => selectedGuIds[g.instance_id]).length;
+  }, [eligibleGus, selectedGuIds]);
 
-    const matchesPath = selectedPath === "all" || (spec.path && spec.path.includes(selectedPath));
-    const matchesRank = selectedRank === "all" || (gu.rank !== undefined && gu.rank === parseInt(selectedRank, 10));
-
-    return matchesSearch && matchesPath && matchesRank;
-  });
-
-  const eligibleGus = filteredGus.filter(isEligibleForCurrentAction);
-  const selectedEligibleCount = eligibleGus.filter(g => selectedGuIds[g.instance_id]).length;
   const isAllEligibleSelected = eligibleGus.length > 0 && selectedEligibleCount === eligibleGus.length;
   // Not used for Gu use mode anymore – only for batch drop
+
+  const guGroups = useMemo(() => {
+    const groupsMap: Record<string, GuInstance[]> = {};
+    filteredGus.forEach((gu) => {
+      const groupKey = `${gu.gu_id}::${gu.rank ?? 0}`;
+      if (!groupsMap[groupKey]) {
+        groupsMap[groupKey] = [];
+      }
+      groupsMap[groupKey].push(gu);
+    });
+
+    const statusPriority = {
+      'ACTIVE': 1,
+      'SLEEPING': 2,
+      'SEALED': 3,
+      'DYING': 4,
+      'DEAD': 5
+    };
+
+    const groups = Object.entries(groupsMap).map(([groupKey, instances]) => {
+      const [guId, rankStr] = groupKey.split("::");
+      const groupRank = parseInt(rankStr, 10) || 0;
+      const spec = (guSpecFor(guId, groupRank) || {
+        id: guId,
+        name: guId,
+        rank: groupRank || 1,
+        path: ["Unknown Path"],
+        gu_type: "Phàm Cổ",
+        base_mana_cost: 0,
+        effects: {},
+        hunger_rate: 0,
+        food_types: ["unknown"],
+        max_hunger: 100,
+        description: "Cổ trùng chưa được giải nghĩa.",
+      }) as GuSpec;
+
+      const instancesCopy = [...instances];
+      instancesCopy.sort((a, b) => {
+        if (a.is_vital !== b.is_vital) return a.is_vital ? -1 : 1;
+        if (a.equipped !== b.equipped) return a.equipped ? -1 : 1;
+        const pA = statusPriority[a.status as keyof typeof statusPriority] || 9;
+        const pB = statusPriority[b.status as keyof typeof statusPriority] || 9;
+        if (pA !== pB) return pA - pB;
+        return b.hunger - a.hunger;
+      });
+
+      const hasVital = instancesCopy.some(inst => inst.is_vital);
+      const activeCount = instancesCopy.filter(inst => inst.status === "ACTIVE").length;
+      const sleepingCount = instancesCopy.filter(inst => inst.status === "SLEEPING").length;
+      const sealedCount = instancesCopy.filter(inst => inst.status === "SEALED").length;
+      const dyingCount = instancesCopy.filter(inst => inst.status === "DYING").length;
+      const deadCount = instancesCopy.filter(inst => inst.status === "DEAD").length;
+      const equippedCount = instancesCopy.filter(inst => inst.equipped).length;
+
+      return {
+        guId,
+        groupKey,
+        groupRank,
+        spec,
+        instances: instancesCopy,
+        hasVital,
+        activeCount,
+        sleepingCount,
+        sealedCount,
+        dyingCount,
+        deadCount,
+        equippedCount,
+      };
+    });
+
+    groups.sort((a, b) => {
+      if (a.hasVital !== b.hasVital) return a.hasVital ? -1 : 1;
+      const aEquipped = a.equippedCount > 0;
+      const bEquipped = b.equippedCount > 0;
+      if (aEquipped !== bEquipped) return aEquipped ? -1 : 1;
+      if (b.spec.rank !== a.spec.rank) return b.spec.rank - a.spec.rank;
+      return a.spec.name.localeCompare(b.spec.name);
+    });
+
+    return groups;
+  }, [filteredGus]);
 
   const handleSelectAllToggle = () => {
     const newSelected = { ...selectedGuIds };
@@ -714,86 +812,6 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             </div>
           ) : (
             (() => {
-              // Group the filtered Gu instances by gu_id + rank (a gu is identified by both ID and rank)
-              const groupsMap: Record<string, GuInstance[]> = {};
-              filteredGus.forEach((gu) => {
-                const groupKey = `${gu.gu_id}::${gu.rank ?? 0}`;
-                if (!groupsMap[groupKey]) {
-                  groupsMap[groupKey] = [];
-                }
-                groupsMap[groupKey].push(gu);
-              });
-
-              // Construct list of groups with stats
-              const guGroups = Object.entries(groupsMap).map(([groupKey, instances]) => {
-                const [guId, rankStr] = groupKey.split("::");
-                const groupRank = parseInt(rankStr, 10) || 0;
-                const spec = (guSpecFor(guId, groupRank) || {
-                  id: guId,
-                  name: guId,
-                  rank: groupRank || 1,
-                  path: ["Unknown Path"],
-                  gu_type: "Phàm Cổ",
-                  base_mana_cost: 0,
-                  effects: {},
-                  hunger_rate: 0,
-                  food_types: ["unknown"],
-                  max_hunger: 100,
-                  description: "Cổ trùng chưa được giải nghĩa.",
-                }) as GuSpec;
-
-                // Sort instances: Vital first, then Equipped first, then ACTIVE > SLEEPING > SEALED > Hunger (descending)
-                const statusPriority = {
-                  'ACTIVE': 1,
-                  'SLEEPING': 2,
-                  'SEALED': 3,
-                  'DYING': 4,
-                  'DEAD': 5
-                };
-
-                instances.sort((a, b) => {
-                  if (a.is_vital !== b.is_vital) return a.is_vital ? -1 : 1;
-                  if (a.equipped !== b.equipped) return a.equipped ? -1 : 1;
-                  const pA = statusPriority[a.status as keyof typeof statusPriority] || 9;
-                  const pB = statusPriority[b.status as keyof typeof statusPriority] || 9;
-                  if (pA !== pB) return pA - pB;
-                  return b.hunger - a.hunger;
-                });
-
-                const hasVital = instances.some(inst => inst.is_vital);
-                const activeCount = instances.filter(inst => inst.status === "ACTIVE").length;
-                const sleepingCount = instances.filter(inst => inst.status === "SLEEPING").length;
-                const sealedCount = instances.filter(inst => inst.status === "SEALED").length;
-                const dyingCount = instances.filter(inst => inst.status === "DYING").length;
-                const deadCount = instances.filter(inst => inst.status === "DEAD").length;
-                const equippedCount = instances.filter(inst => inst.equipped).length;
-
-                return {
-                  guId,
-                  groupKey,
-                  groupRank,
-                  spec,
-                  instances,
-                  hasVital,
-                  activeCount,
-                  sleepingCount,
-                  sealedCount,
-                  dyingCount,
-                  deadCount,
-                  equippedCount,
-                };
-              });
-
-              // Sort groups: hasVital first, then equipped first, then Rank descending, then Name ascending
-              guGroups.sort((a, b) => {
-                if (a.hasVital !== b.hasVital) return a.hasVital ? -1 : 1;
-                const aEquipped = a.equippedCount > 0;
-                const bEquipped = b.equippedCount > 0;
-                if (aEquipped !== bEquipped) return aEquipped ? -1 : 1;
-                if (b.spec.rank !== a.spec.rank) return b.spec.rank - a.spec.rank;
-                return a.spec.name.localeCompare(b.spec.name);
-              });
-
               // Split into equipped and rest
               const equippedGroups = guGroups.filter(g => g.equippedCount > 0);
               const restGroups = guGroups.filter(g => g.equippedCount === 0);

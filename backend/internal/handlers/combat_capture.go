@@ -208,7 +208,7 @@ func CaptureMonster(c *gin.Context) {
 			return
 		}
 
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionGuOnly(c, http.StatusOK, player, gin.H{
 			"captured":         true,
 			"monster_name":     enemyName,
 			"monster_id":       monTemplate.ID,
@@ -243,7 +243,7 @@ func CaptureMonster(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"captured":       false,
 		"monster_name":   player.ActiveCombat.EnemyName,
 		"capture_chance": chance,

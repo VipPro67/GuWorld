@@ -364,7 +364,7 @@ func UseGuOnMap(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":          strings.Join(logs, " "),
 		"logs":             logs,
 		"effect_type":      effectType,
@@ -554,7 +554,7 @@ func UseKillerMoveOnMap(c *gin.Context) {
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": strings.Join(logs, " "),
 		"logs":    logs,
 	})

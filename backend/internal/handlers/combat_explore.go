@@ -184,7 +184,7 @@ func ExploreNode(c *gin.Context) {
 
 				setWorldPosFromPlayer(&player)
 
-				responseWithPlayer(c, http.StatusOK, player, gin.H{
+				respondActionWithInventory(c, http.StatusOK, player, gin.H{
 					"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 					"combat_triggered": false,
 					"skip_result":      skipSummary,
@@ -274,7 +274,7 @@ func ExploreNode(c *gin.Context) {
 
 	setWorldPosFromPlayer(&player)
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		"combat_triggered": combatTriggered,
 	})

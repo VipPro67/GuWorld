@@ -731,7 +731,7 @@ func ActionInstance(c *gin.Context) {
 			return
 		}
 
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"message": "Phó bản thất bại! " + logResult,
 			"session": session,
 		})
@@ -791,7 +791,7 @@ func ActionInstance(c *gin.Context) {
 
 		// Reload session for response
 		session.CurrentStage = nextStage
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"message":  fmt.Sprintf("Hành động thành công! Nhân Khí +%.0f.", qiGained),
 			"session":  session,
 			"template": template,
@@ -869,7 +869,7 @@ func ActionInstance(c *gin.Context) {
 		}
 
 		session.Status = "COMPLETED"
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		respondActionWithInventory(c, http.StatusOK, player, gin.H{
 			"message": "Phó bản hoàn thành! " + logResult + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 			"session": session,
 		})
@@ -907,7 +907,7 @@ func ActionInstance(c *gin.Context) {
 	}
 
 	session.Status = "FAILED"
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": "Đạo hữu thất bại thảm hại trong cuộc thám hiểm này!",
 		"session": session,
 	})

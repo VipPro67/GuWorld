@@ -750,7 +750,7 @@ func DonateStones(c *gin.Context) {
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %d điểm cống hiến", req.Amount, req.Amount),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"message":             fmt.Sprintf("Quyên góp thành công! Nhân Khí +%.0f.", qiGained),
 		"primeval_stones":     player.PrimevalStones,
 		"contribution_points": m.ContributionPoints,
@@ -940,7 +940,7 @@ func DonateMaterials(c *gin.Context) {
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s x%d → %d điểm", materialName, req.Amount, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":             fmt.Sprintf("Quyên góp linh tài thành công! Nhân Khí +%.0f.", qiGained),
 		"contribution_points": m.ContributionPoints,
 	})
@@ -1108,9 +1108,8 @@ func DonateGu(c *gin.Context) {
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s → %d điểm", guName, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	respondActionGuOnly(c, http.StatusOK, player, gin.H{
 		"message":             fmt.Sprintf("Quyên góp Cổ trùng thành công! Nhân Khí +%.0f.", qiGained),
-		"gu_inventory":        player.GuInventory,
 		"contribution_points": m.ContributionPoints,
 	})
 }
@@ -1252,7 +1251,7 @@ func DonateRecipe(c *gin.Context) {
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s (%.0f%%) → %d điểm", itemName, progress.CompletionRate, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":             fmt.Sprintf("Quyên góp Bí phương thành công! Nhân Khí +%.0f.", qiGained),
 		"contribution_points": m.ContributionPoints,
 	})
@@ -1658,7 +1657,7 @@ func DonateBulk(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":             fmt.Sprintf("Quyên góp hàng loạt thành công! Nhân Khí +%.0f.", qiGained),
 		"contribution_points": m.ContributionPoints,
 	})
@@ -1962,7 +1961,7 @@ func BuyFromSectVault(c *gin.Context) {
 			msg += " Cổ đang đói lả (Độ no = 1), hãy cho ăn sớm để tránh chết đói!"
 		}
 	}
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": msg,
 		"member":  m,
 	})
@@ -2299,7 +2298,7 @@ func CompleteSectMission(c *gin.Context) {
 		Success:   true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + strconv.FormatInt(sm.RewardContribution, 10) + " Điểm cống hiến.",
 		"contribution_points": m.ContributionPoints,
 	})
@@ -2551,7 +2550,7 @@ func CreateSect(c *gin.Context) {
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Chúc mừng đạo hữu %s đã lập phái thành công! Tông môn %s chính thức được thành lập.", player.Username, req.Name))
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	respondActionOnly(c, http.StatusOK, player, gin.H{
 		"message": "Khai tông lập phái thành công! Chào mừng Chưởng môn của \"" + req.Name + "\"!",
 	})
 }
