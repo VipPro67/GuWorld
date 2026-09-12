@@ -240,7 +240,11 @@ export const TradeRoomModal: React.FC = () => {
   };
 
   const getGuRank = (identifier: string) => {
-    // If it is an instance ID found in gu_details
+    const rankFromDetails = activeTrade.gu_ranks?.[identifier];
+    if (typeof rankFromDetails === "number" && rankFromDetails > 0) {
+      return rankFromDetails;
+    }
+
     const guIdFromDetails = activeTrade.gu_details?.[identifier];
     if (guIdFromDetails) {
       return guDictionary[guIdFromDetails]?.rank || 1;
@@ -252,7 +256,7 @@ export const TradeRoomModal: React.FC = () => {
     // If it is an instance ID from local inventory
     const localGu = (player.gu_inventory || []).find((g) => g.instance_id === identifier);
     if (localGu) {
-      return guDictionary[localGu.gu_id]?.rank || 1;
+      return localGu.rank || guDictionary[localGu.gu_id]?.rank || 1;
     }
     return 1;
   };
@@ -280,7 +284,7 @@ export const TradeRoomModal: React.FC = () => {
     (g) => {
       if (g.is_vital || g.equipped || g.status === "DEAD") return false;
       if (tradeFilterRank !== "all") {
-        const rank = guDictionary[g.gu_id]?.rank || g.rank || 0;
+        const rank = g.rank || guDictionary[g.gu_id]?.rank || 0;
         if (rank !== tradeFilterRank) return false;
       }
       return true;
@@ -576,12 +580,12 @@ export const TradeRoomModal: React.FC = () => {
                         {!myLocked && tradeableGus.length > 0 && (
                           <div className="flex items-center gap-1.5 flex-wrap bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
                             <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
-                            {Array.from(new Set(tradeableGus.map(g => guDictionary[g.gu_id]?.rank || g.rank || 1))).sort((a,b)=>a-b).map(rank => (
+                            {Array.from(new Set(tradeableGus.map(g => g.rank || guDictionary[g.gu_id]?.rank || 1))).sort((a,b)=>a-b).map(rank => (
                               <button
                                 key={rank}
                                 type="button"
                                 onClick={() => {
-                                  const rankGus = tradeableGus.filter(g => (guDictionary[g.gu_id]?.rank || g.rank || 1) === rank).map(g => g.instance_id);
+                                  const rankGus = tradeableGus.filter(g => (g.rank || guDictionary[g.gu_id]?.rank || 1) === rank).map(g => g.instance_id);
                                   const currentGus = [...(myOffer?.gus || [])];
                                   const updatedGus = Array.from(new Set([...currentGus, ...rankGus]));
                                   updateTradeOffer(activeTrade.id, {
@@ -636,8 +640,10 @@ export const TradeRoomModal: React.FC = () => {
                           (() => {
                             const grouped: Record<string, GuInstance[]> = {};
                             filteredGus.forEach((gu) => {
-                              if (!grouped[gu.gu_id]) grouped[gu.gu_id] = [];
-                              grouped[gu.gu_id].push(gu);
+                              const rank = gu.rank || guDictionary[gu.gu_id]?.rank || 1;
+                              const groupKey = `${gu.gu_id}:${rank}`;
+                              if (!grouped[groupKey]) grouped[groupKey] = [];
+                              grouped[groupKey].push(gu);
                             });
 
                             const entries = Object.entries(grouped);
@@ -645,10 +651,11 @@ export const TradeRoomModal: React.FC = () => {
                               return <p className="text-xs text-zinc-600 italic text-center py-4">Không tìm thấy Cổ trùng nào phù hợp</p>;
                             }
 
-                            return entries.map(([guId, list]) => {
+                            return entries.map(([groupKey, list]) => {
+                              const guId = list[0].gu_id;
                               const name = guDictionary[guId]?.name || guId;
-                              const rank = guDictionary[guId]?.rank || 1;
-                              const isExpanded = !!expandedGus[guId];
+                              const rank = list[0].rank || guDictionary[guId]?.rank || 1;
+                              const isExpanded = !!expandedGus[groupKey];
                               
                               // Count how many instances in this group are already selected in myOffer
                               const selectedCountInGroup = list.filter(g => (myOffer?.gus || []).includes(g.instance_id)).length;
@@ -657,7 +664,7 @@ export const TradeRoomModal: React.FC = () => {
                                 <div key={guId} className="border border-zinc-900 bg-zinc-950/40 rounded-xl overflow-hidden">
                                   {/* Group Header Row */}
                                   <div
-                                    onClick={() => toggleGuGroup(guId)}
+                                    onClick={() => toggleGuGroup(groupKey)}
                                     className="p-3 flex justify-between items-center cursor-pointer hover:bg-zinc-950/80 transition-all select-none font-serif text-xs"
                                   >
                                     <div className="flex items-center gap-2 flex-wrap">

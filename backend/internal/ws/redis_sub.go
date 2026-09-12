@@ -62,6 +62,11 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 		for msg := range ch {
 			clientChannel, clientMsg := formatClientEvent(msg.Channel, []byte(msg.Payload))
 
+			if len(msg.Channel) >= 6 && msg.Channel[:6] == "trade:" {
+				shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
+				continue
+			}
+
 			shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
 			if clientChannel != msg.Channel {
 				shub.BroadcastToChannel(ChannelName(clientChannel), clientMsg, uuid.Nil)

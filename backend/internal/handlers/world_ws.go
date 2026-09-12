@@ -27,6 +27,10 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 		method = http.MethodPost
 		target = "/api/explore/move-path"
 		body = payload
+	case "chat.send":
+		method = http.MethodPost
+		target = "/api/chat/bao-hoang/send"
+		body = payload
 	case "world.cells_rect":
 		var req struct {
 			MinX int `json:"min_x"`
@@ -65,15 +69,21 @@ func HandleWorldWSCommand(playerID uuid.UUID, command string, payload json.RawMe
 		limit = middleware.RateLimitByPlayer(240, time.Minute)
 	case "world.objects":
 		limit = middleware.RateLimitByPlayer(30, time.Minute)
+	case "chat.send":
+		limit = middleware.RateLimitByPlayer(30, time.Minute)
 	}
-	limit(c)
-	if c.IsAborted() {
-		return recorder.Code, json.RawMessage(append([]byte(nil), bytes.TrimSpace(recorder.Body.Bytes())...))
+	if limit != nil {
+		limit(c)
+		if c.IsAborted() {
+			return recorder.Code, json.RawMessage(append([]byte(nil), bytes.TrimSpace(recorder.Body.Bytes())...))
+		}
 	}
 
 	switch command {
 	case "world.move_path":
 		MovePlayerPath(c)
+	case "chat.send":
+		SendBaoHoangChat(c)
 	case "world.cells_rect":
 		GetCellsRect(c)
 	case "world.objects":

@@ -106,6 +106,57 @@ func TestHub_IsConnected(t *testing.T) {
 	}
 }
 
+func TestShardedHub_TradeEventsStayPlayerScoped(t *testing.T) {
+	hub := InitShardedHub()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = hub.Stop(ctx)
+	}()
+
+	firstPlayerID := uuid.New()
+	secondPlayerID := uuid.New()
+	firstClient := newTestClient(hub, firstPlayerID)
+	secondClient := newTestClient(hub, secondPlayerID)
+	hub.Register(firstClient)
+	hub.Register(secondClient)
+	time.Sleep(20 * time.Millisecond)
+
+	firstTradeChannel := ChannelName("trade:" + firstPlayerID.String())
+	secondTradeChannel := ChannelName("trade:" + secondPlayerID.String())
+	hub.Subscribe(firstClient, firstTradeChannel)
+	hub.Subscribe(secondClient, secondTradeChannel)
+
+	payload := []byte(`{"type":"event","channel":"trade","data":{"trade":{"id":"trade-1"}}}`)
+	hub.BroadcastToChannel(firstTradeChannel, payload, uuid.Nil)
+
+	select {
+	case message := <-firstClient.send:
+		if string(message) != string(payload) {
+			t.Fatalf("expected payload %s, got %s", string(payload), string(message))
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for trade event")
+	}
+
+	select {
+	case message := <-secondClient.send:
+		t.Fatalf("unexpected trade event received by another player: %s", string(message))
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func newTestClient(hub *ShardedHub, playerID uuid.UUID) *Client {
+	return &Client{
+		playerID:      playerID,
+		send:          make(chan []byte, 10),
+		done:          make(chan struct{}),
+		hub:           hub.GetClientShard(playerID),
+		shard:         hub,
+		subscriptions: make(map[string]struct{}),
+	}
+}
+
 func TestShardedHub_UnregisterAndBroadcast(t *testing.T) {
 	shub := InitShardedHub()
 	defer func() {
@@ -167,4 +218,3 @@ func TestShardedHub_UnregisterAndBroadcast(t *testing.T) {
 		shard.mu.RUnlock()
 	}
 }
-

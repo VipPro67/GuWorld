@@ -77,11 +77,14 @@ func LoadActiveTrade(authID uuid.UUID) (any, error) {
 	_ = db.DB.QueryRow(`SELECT `+db.GuInventoryAggregate("players.id")+` FROM players WHERE id = $1`, receiverID).Scan(&receiverGuInv)
 
 	guDetails := make(map[string]string)
+	guRanks := make(map[string]int)
 	for _, g := range senderGuInv {
 		guDetails[g.InstanceID] = g.GuID
+		guRanks[g.InstanceID] = g.Rank
 	}
 	for _, g := range receiverGuInv {
 		guDetails[g.InstanceID] = g.GuID
+		guRanks[g.InstanceID] = g.Rank
 	}
 
 	return gin.H{
@@ -98,5 +101,6 @@ func LoadActiveTrade(authID uuid.UUID) (any, error) {
 		"receiver_confirmed": receiverConfirmed,
 		"status":             status,
 		"gu_details":         guDetails,
+		"gu_ranks":           guRanks,
 	}, nil
 }

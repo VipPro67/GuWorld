@@ -5509,20 +5509,12 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   sendBaoHoangChat: async (content, channel) => {
-    const { token, actionLoading, logout } = get();
+    const { token, actionLoading } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/chat/bao-hoang/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, channel }),
-      });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Gửi tin nhắn thất bại");
+      const data = await wsManager.request<{ message?: string }>("chat.send", { content, channel });
       get().addLog(data.message || "Đã phát truyền tin nhắn!");
-      if (data.player) setPlayerFromServer(data.player);
       return true;
     } catch (err: any) {
       set({ error: err.message });
