@@ -108,8 +108,6 @@ func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) 
 		clientChannel = "combat"
 	case len(redisChannel) >= 12 && redisChannel[:12] == "death_arena:":
 		clientChannel = "death_arena"
-	case len(redisChannel) >= 10 && redisChannel[:10] == "chat:sect:":
-		clientChannel = "chat:sect"
 	case len(redisChannel) >= 11 && redisChannel[:11] == "world:cells:":
 		clientChannel = "world:cells"
 	default:

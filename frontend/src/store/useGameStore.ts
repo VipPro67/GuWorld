@@ -2334,8 +2334,10 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
-      // Listen for chat:sect
-      wsManager.subscribe("chat:sect", (payload: any) => {
+      // Listen only to the current sect's channel. The backend publishes sect
+      // chat on chat:sect:<sect_id>; a shared channel would leak messages.
+      const sectChannel = get().mySectStatus?.sect_id ? `chat:sect:${get().mySectStatus.sect_id}` : null;
+      const unsubscribeSectChat = sectChannel ? wsManager.subscribe(sectChannel, (payload: any) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
@@ -2381,7 +2383,7 @@ export const useGameStore = create<GameState>((set, get) => {
         } catch (err) {
           console.error("Failed to process sect chat event", err);
         }
-      });
+      }) : () => {};
 
       // Listen for notification
       wsManager.subscribe("notification", (payload: any) => {
@@ -2440,6 +2442,7 @@ export const useGameStore = create<GameState>((set, get) => {
       (window as any).__gu_ws_cleanup = () => {
         unsubscribePlayer();
         unsubscribeTrade();
+        unsubscribeSectChat();
         unsubscribeDeathArena();
         releaseConnection();
       };

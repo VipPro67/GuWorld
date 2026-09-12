@@ -127,7 +127,6 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	err = db.DB.QueryRow("SELECT sect_id FROM sect_members WHERE player_id = $1", playerID).Scan(&sectID)
 	if err == nil && sectID != "" {
 		shub.Subscribe(client, ChannelName("chat:sect:"+sectID))
-		shub.Subscribe(client, ChannelName("chat:sect"))
 	}
 
 	go client.writePump()
@@ -214,6 +213,15 @@ func (c *Client) handleMessage(msg WSMessage) {
 		if err := json.Unmarshal(msg.Payload, &sub); err != nil {
 			logger.S.Warnf("Invalid subscribe payload from %s: %v", c.playerID, err)
 			return
+		}
+		if strings.HasPrefix(sub.Channel, "chat:sect:") {
+			requestedSectID := strings.TrimPrefix(sub.Channel, "chat:sect:")
+			var memberSectID string
+			err := db.DB.QueryRow("SELECT sect_id FROM sect_members WHERE player_id = $1", c.playerID).Scan(&memberSectID)
+			if err != nil || requestedSectID == "" || requestedSectID != memberSectID {
+				logger.S.Warnf("Rejected sect chat subscription for %s to %s", c.playerID, requestedSectID)
+				return
+			}
 		}
 		c.shard.Subscribe(c, ChannelName(sub.Channel))
 	case "ping":
