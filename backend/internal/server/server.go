@@ -670,6 +670,10 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
 		api.POST("/explore/use_killer_move", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseKillerMoveOnMap)
 
+		// Ground drops / Chiến lợi phẩm trên bản đồ
+		api.GET("/world/drops", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetTileGroundDrops)
+		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
+
 		// Shop — group: 30/min, per player: 10/min
 		api.GET("/shop/packages", middleware.AuthRequired(), handlers.GetPremiumShopPackages)
 		api.GET("/shop/list", handlers.GetShopList)

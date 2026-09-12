@@ -43,6 +43,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const stageRef = useRef<Container>(new Container());
   const regionsContainerRef = useRef<Container>(new Container());
   const objectsContainerRef = useRef<Container>(new Container());
+  const dropsContainerRef = useRef<Container>(new Container());
   const monstersContainerRef = useRef<Container>(new Container());
   const playersContainerRef = useRef<Container>(new Container());
   const fogRef = useRef<Graphics>(new Graphics());
@@ -98,6 +99,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const fetchObjects = useWorldStore((s) => s.fetchObjects);
   const guDictionary = useGameStore((s) => s.guDictionary);
   const itemDictionary = useGameStore((s) => s.itemDictionary);
+  const groundDrops = useGameStore((s) => s.groundDrops);
   const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
   const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
   const selectedTarget = useWorldStore((s) => s.selectedTarget);
@@ -387,7 +389,13 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
               } else {
                 isMovingRef.current = false;
                 setMoving(false);
-                selectObject(null);
+                const currentDrops = useGameStore.getState().groundDrops;
+                const dropAtTarget = currentDrops.find((d) => d.x === tx && d.y === ty);
+                if (dropAtTarget) {
+                  useGameStore.getState().lootGroundDrop(dropAtTarget.id);
+                } else {
+                  selectObject(null);
+                }
               }
             });
           } else {
@@ -427,10 +435,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const nearby = s.nearbyCells.find((c) => c.x === tx && c.y === ty);
       const persistent = s.objects.find((c) => c.x === tx && c.y === ty);
       const nearbyPl = s.nearbyPlayers.find((p) => p.x === tx && p.y === ty);
+      const dropOnTile = useGameStore.getState().groundDrops.find((d) => d.x === tx && d.y === ty);
 
-      if (nearby || persistent || nearbyPl) {
-        const cellType = nearby ? nearby.cell_type : persistent ? persistent.cell_type : "Player";
-        const contentId = nearby ? nearby.content : persistent ? persistent.content_id : nearbyPl?.username || "";
+      if (nearby || persistent || nearbyPl || dropOnTile) {
+        const cellType = nearby ? nearby.cell_type : persistent ? persistent.cell_type : dropOnTile ? "GroundDrop" : "Player";
+        const contentId = nearby ? nearby.content : persistent ? persistent.content_id : dropOnTile ? dropOnTile.id : nearbyPl?.username || "";
         const rank = nearby?.rank || persistent?.rank || 1;
 
         if (cellType === "Monster" || cellType === "Boss" || cellType === "WildGu") {
@@ -452,6 +461,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           // Already selected, proceed to move
           moveTargetRef.current = { x: tx, y: ty };
           performMove(tx, ty);
+        } else if (dropOnTile) {
+          s.selectObject({
+            id: dropOnTile.id,
+            region_id: dropOnTile.region_id,
+            x: tx,
+            y: ty,
+            cell_type: "GroundDrop",
+            content_id: dropOnTile.id,
+            dropData: dropOnTile,
+          });
         } else if (nearbyPl) {
           s.selectObject({
             id: nearbyPl.id,
@@ -548,7 +567,13 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     (obj: WorldObject) => {
       const s = useWorldStore.getState();
       if (s.selectedObject && s.selectedObject.x === obj.x && s.selectedObject.y === obj.y) {
-        if (obj.x === (gamePlayer?.x ?? 0) && obj.y === (gamePlayer?.y ?? 0)) return;
+        if (obj.x === (gamePlayer?.x ?? 0) && obj.y === (gamePlayer?.y ?? 0)) {
+          if (obj.cell_type === "GroundDrop") {
+            const dropId = obj.dropData?.id || obj.id;
+            if (dropId) useGameStore.getState().lootGroundDrop(dropId);
+          }
+          return;
+        }
         moveTargetRef.current = { x: obj.x, y: obj.y };
         performMove(obj.x, obj.y);
       } else {
@@ -686,6 +711,83 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       }
     },
     [handleObjectClick, monsterDictionary, itemDictionary, guDictionary],
+  );
+
+  const drawGroundDrops = useCallback(
+    (drops: typeof groundDrops) => {
+      const container = dropsContainerRef.current;
+      container.removeChildren();
+
+      for (const drop of drops) {
+        const g = new Graphics();
+        const size = 0.65;
+
+        // Outer pulsing glow aura
+        g.circle(0, 0, size + 0.2);
+        g.fill({ color: 0xf59e0b, alpha: 0.35 });
+
+        // Golden pouch / loot chest shape
+        g.roundRect(-size / 2, -size / 2, size, size * 0.8, 0.15);
+        g.fill({ color: 0xd97706 });
+        g.stroke({ color: 0xfef08a, width: 0.08 });
+
+        // Shiny gem accent in center
+        g.poly([0, -size / 4, size / 4, 0, 0, size / 4, -size / 4, 0]);
+        g.fill({ color: 0xfde047 });
+
+        g.eventMode = "static";
+        g.cursor = "pointer";
+        g.on("pointerdown", (event) => {
+          event.stopPropagation();
+          handleObjectClick({
+            id: drop.id,
+            region_id: "",
+            x: drop.x,
+            y: drop.y,
+            cell_type: "GroundDrop",
+            content_id: drop.id,
+            dropData: drop,
+          });
+        });
+
+        g.position.set(drop.x + 0.5, drop.y + 0.5);
+        container.addChild(g);
+
+        // Label above loot bag (scaled dynamically with camera targetScale)
+        const label = new Text({
+          text: `🎁 Hài cốt: ${drop.loser_name}`,
+          style: {
+            fontSize: 11,
+            fill: 0xfcd34d,
+            fontFamily: "sans-serif",
+            stroke: { color: 0x000000, width: 2 },
+          },
+        });
+        label.anchor.set(0.5, 1);
+        label.y = -0.6;
+
+        const labelContainer = new Container();
+        labelContainer.name = "drop-label";
+        labelContainer.eventMode = "static";
+        labelContainer.cursor = "pointer";
+        labelContainer.on("pointerdown", (event) => {
+          event.stopPropagation();
+          handleObjectClick({
+            id: drop.id,
+            region_id: "",
+            x: drop.x,
+            y: drop.y,
+            cell_type: "GroundDrop",
+            content_id: drop.id,
+            dropData: drop,
+          });
+        });
+        labelContainer.position.set(drop.x + 0.5, drop.y + 0.5);
+        labelContainer.addChild(label);
+        container.addChild(labelContainer);
+      }
+    },
+    [handleObjectClick, groundDrops],
   );
 
   const drawPlayers = useCallback(
@@ -1117,6 +1219,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       stageRef.current.addChild(regionsContainerRef.current);
       stageRef.current.addChild(fogRef.current);
       stageRef.current.addChild(objectsContainerRef.current);
+      stageRef.current.addChild(dropsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
       stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);
@@ -1127,6 +1230,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       drawPlayer();
       drawRegions(regions);
       drawObjects(displayObjects);
+      drawGroundDrops(groundDrops);
       drawMonsters(nearbyCells);
       drawPlayers(nearbyPlayers);
       drawFog();
@@ -1175,6 +1279,17 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
                 if (sub instanceof Text) {
                   sub.scale.set(targetScale);
                   sub.y = -0.6 - (6 * targetScale);
+                }
+              }
+            }
+          }
+
+          // Ground drop labels (scaled identically to monster labels)
+          for (const child of dropsContainerRef.current.children) {
+            if (child.name === "drop-label") {
+              for (const sub of child.children) {
+                if (sub instanceof Text) {
+                  sub.scale.set(targetScale);
                 }
               }
             }
@@ -1329,6 +1444,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     if (!appReady || !appRef.current) return;
     drawPlayers(nearbyPlayers);
   }, [appReady, nearbyPlayers, drawPlayers]);
+
+  useEffect(() => {
+    if (!appReady || !appRef.current) return;
+    drawGroundDrops(groundDrops);
+  }, [appReady, groundDrops, drawGroundDrops]);
 
   // Poll nearby cells (monsters / resources) around the player while the map
   // is open so markers stay fresh as the player moves. A separate, faster poll

@@ -387,6 +387,74 @@ func GetGrid(c *gin.Context) {
 		}
 	}
 
+	// Ground drops query within visible radius
+	type GroundDropItem struct {
+		ID             string         `json:"id"`
+		RegionID       string         `json:"region_id"`
+		X              int            `json:"x"`
+		Y              int            `json:"y"`
+		LoserID        string         `json:"loser_id"`
+		LoserName      string         `json:"loser_name"`
+		KillerID       string         `json:"killer_id,omitempty"`
+		KillerName     string         `json:"killer_name,omitempty"`
+		LootData       GroundLootData `json:"loot_data"`
+		IsProtected    bool           `json:"is_protected"`
+		ProtectedUntil *time.Time     `json:"protected_until,omitempty"`
+		ExpiresAt      time.Time      `json:"expires_at"`
+		CreatedAt      time.Time      `json:"created_at"`
+	}
+
+	groundDrops := []GroundDropItem{}
+	minX := player.X - visualVisionRadius
+	maxX := player.X + visualVisionRadius
+	minY := player.Y - visualVisionRadius
+	maxY := player.Y + visualVisionRadius
+
+	dropRows, errDrops := tx.Query(`
+		SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
+		       loot_data, protected_until, expires_at, created_at
+		FROM map_ground_drops
+		WHERE region_id = $1
+		  AND x BETWEEN $2 AND $3
+		  AND y BETWEEN $4 AND $5
+		  AND expires_at > NOW()
+		ORDER BY created_at DESC
+	`, player.CurrentRegion, minX, maxX, minY, maxY)
+	if errDrops == nil {
+		defer dropRows.Close()
+		now := time.Now()
+		for dropRows.Next() {
+			var d GroundDropItem
+			var killerID, killerName sql.NullString
+			var lootBytes []byte
+			var protectedUntil sql.NullTime
+
+			if errScan := dropRows.Scan(
+				&d.ID, &d.RegionID, &d.X, &d.Y, &d.LoserID, &d.LoserName,
+				&killerID, &killerName, &lootBytes, &protectedUntil, &d.ExpiresAt, &d.CreatedAt,
+			); errScan == nil {
+				if killerID.Valid {
+					d.KillerID = killerID.String
+				}
+				if killerName.Valid {
+					d.KillerName = killerName.String
+				}
+				if protectedUntil.Valid {
+					d.ProtectedUntil = &protectedUntil.Time
+				}
+				json.Unmarshal(lootBytes, &d.LootData)
+
+				if protectedUntil.Valid && protectedUntil.Time.After(now) {
+					if killerID.Valid && killerID.String != player.ID.String() {
+						d.IsProtected = true
+					}
+				}
+
+				groundDrops = append(groundDrops, d)
+			}
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		logger.S.Error("GetGrid commit warning:", err)
 	}
@@ -398,6 +466,7 @@ func GetGrid(c *gin.Context) {
 		"cells":          cells,
 		"stats":          stats,
 		"players_on_map": nearbyPlayers,
+		"ground_drops":   groundDrops,
 		"world_width":    WorldWidth,
 		"world_height":   WorldHeight,
 	})
@@ -445,71 +514,101 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	combatTriggered := false
 	pvpTriggered := false
 
-	// Player-initiated PVP: another active player stands on the destination.
+	// Player-initiated PVP: attack target player within attack range (default <= 2 tiles, plus stats bonus)
 	if attackTargetID != "" {
-		var targetPlayer models.Player
-		queryStr := `
-			SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.path_masteries, ` + db.GuInventoryAggregate("p.id") + `, COALESCE(ia.dao_marks, '{}'::jsonb), p.combat_settings
-			FROM players p
-			LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-			WHERE p.x = $1 AND p.y = $2 AND p.id != $3
-			  AND p.last_mana_update >= NOW() - INTERVAL '15 minutes'
-		`
-		var errTarget error
-		if player.PartyID != nil {
-			queryStr += ` AND (p.party_id IS NULL OR p.party_id != $4)`
-			errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID, player.PartyID).Scan(
-				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
-			)
-		} else {
-			errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID).Scan(
-				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
-			)
-		}
-		if errTarget == nil && attackTargetID == targetPlayer.ID.String() {
-			combatTriggered = true
-			pvpTriggered = true
-			targetStats := CalculatePlayerStats(&targetPlayer)
-
-			enemyHP := targetPlayer.HP
-			if enemyHP <= 0 {
-				enemyHP = targetPlayer.BaseHP
-			}
-			if enemyHP <= 0 {
-				enemyHP = 100.0
-			}
-			enemyMaxHP := gamefx.EffectiveMaxHP(&targetPlayer)
-			if enemyMaxHP <= 0 {
-				enemyMaxHP = 100.0
+		targetUUID, errUUID := uuid.Parse(attackTargetID)
+		if errUUID == nil {
+			var targetPlayer models.Player
+			queryStr := `
+				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.x, p.y, p.avatar_url, p.path_masteries, ` + db.GuInventoryAggregate("p.id") + `, COALESCE(ia.dao_marks, '{}'::jsonb), p.combat_settings
+				FROM players p
+				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+				WHERE p.id = $1 AND p.id != $2
+				  AND p.last_mana_update >= NOW() - INTERVAL '15 minutes'
+			`
+			var errTarget error
+			if player.PartyID != nil {
+				queryStr += ` AND (p.party_id IS NULL OR p.party_id != $3)`
+				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID, player.PartyID).Scan(
+					&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
+					&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
+					&targetPlayer.X, &targetPlayer.Y, &targetPlayer.AvatarURL,
+					&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
+				)
+			} else {
+				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID).Scan(
+					&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
+					&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
+					&targetPlayer.X, &targetPlayer.Y, &targetPlayer.AvatarURL,
+					&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
+				)
 			}
 
-			pvpCombat := models.CombatState{
-				EnemyTemplateID:     targetPlayer.ID.String(),
-				EnemyName:           targetPlayer.Username,
-				EnemyAvatarURL:      targetPlayer.AvatarURL,
-				EnemyType:           "PVP",
-				CombatMode:          "real",
-				EnemyHP:             enemyHP,
-				EnemyMaxHP:          enemyMaxHP,
-				EnemyMana:           targetPlayer.CurrentMana,
-				EnemyMaxMana:        targetPlayer.MaxMana,
-				EnemyDamage:         targetStats["attack"],
-				EnemyDefense:        targetStats["defense"],
-				EnemySpeed:          targetStats["speed"],
-				EnemyRank:           targetPlayer.Rank,
-				EnemySubRank:        targetPlayer.SubRank,
-				EnemyGuInventory:    filterGuLoadout(targetPlayer.GuInventory, targetPlayer.CombatSettings),
-				EnemyDaoMarks:       targetPlayer.DaoMarks,
-				EnemyPathMasteries:  targetPlayer.PathMasteries,
-				EnemyCombatSettings: &targetPlayer.CombatSettings,
-				TargetPlayerID:      targetPlayer.ID.String(),
+			if errTarget == nil {
+				// Distance check: Chebyshev distance max(|x1-x2|, |y1-y2|)
+				dx := math.Abs(float64(targetPlayer.X - player.X))
+				dy := math.Abs(float64(targetPlayer.Y - player.Y))
+				dist := int(math.Max(dx, dy))
+
+				// Range requirement: base 2 tiles + bonus stats (attack_range / combat_range)
+				stats := CalculatePlayerStats(player)
+				bonusRange := int(stats["attack_range"]) + int(stats["combat_range"])
+				maxPvPRange := 2 + bonusRange
+
+				// Safe zone check
+				z1 := FindZoneAt(player.X, player.Y)
+				z2 := FindZoneAt(targetPlayer.X, targetPlayer.Y)
+				isSafe1 := z1 != nil && (z1.ZoneType == "HUB" || z1.ZoneType == "SAFE_ZONE")
+				isSafe2 := z2 != nil && (z2.ZoneType == "HUB" || z2.ZoneType == "SAFE_ZONE")
+
+				if isSafe1 || isSafe2 {
+					return "Không thể tấn công trong Vùng An Toàn!", false, nil
+				}
+
+				if dist <= maxPvPRange {
+					combatTriggered = true
+					pvpTriggered = true
+					targetStats := CalculatePlayerStats(&targetPlayer)
+
+					enemyHP := targetPlayer.HP
+					if enemyHP <= 0 {
+						enemyHP = targetPlayer.BaseHP
+					}
+					if enemyHP <= 0 {
+						enemyHP = 100.0
+					}
+					enemyMaxHP := gamefx.EffectiveMaxHP(&targetPlayer)
+					if enemyMaxHP <= 0 {
+						enemyMaxHP = 100.0
+					}
+
+					pvpCombat := models.CombatState{
+						EnemyTemplateID:     targetPlayer.ID.String(),
+						EnemyName:           targetPlayer.Username,
+						EnemyAvatarURL:      targetPlayer.AvatarURL,
+						EnemyType:           "PVP",
+						CombatMode:          "real",
+						EnemyHP:             enemyHP,
+						EnemyMaxHP:          enemyMaxHP,
+						EnemyMana:           targetPlayer.CurrentMana,
+						EnemyMaxMana:        targetPlayer.MaxMana,
+						EnemyDamage:         targetStats["attack"],
+						EnemyDefense:        targetStats["defense"],
+						EnemySpeed:          targetStats["speed"],
+						EnemyRank:           targetPlayer.Rank,
+						EnemySubRank:        targetPlayer.SubRank,
+						EnemyGuInventory:    filterGuLoadout(targetPlayer.GuInventory, targetPlayer.CombatSettings),
+						EnemyDaoMarks:       targetPlayer.DaoMarks,
+						EnemyPathMasteries:  targetPlayer.PathMasteries,
+						EnemyCombatSettings: &targetPlayer.CombatSettings,
+						TargetPlayerID:      targetPlayer.ID.String(),
+					}
+					player.ActiveCombat = &pvpCombat
+					logMsg = fmt.Sprintf("Khai chiến! Đạo hữu tấn công Cổ Sư %s tại khoảng cách %d ô!", targetPlayer.Username, dist)
+				} else {
+					return fmt.Sprintf("Khoảng cách quá xa (%d ô)! Cần tiếp cận đối phương trong vòng %d ô để khai chiến.", dist, maxPvPRange), false, nil
+				}
 			}
-			player.ActiveCombat = &pvpCombat
-			logMsg = fmt.Sprintf("Ngươi chủ động tuyên chiến và tấn công Cổ Sư %s tại tọa độ (%d, %d)!", targetPlayer.Username, player.X, player.Y)
 		}
 	}
 

@@ -32,12 +32,13 @@ const GuQuickBar = dynamic(() => import("./GuQuickBar").then(m => m.GuQuickBar),
 const TargetHud = dynamic(() => import("./TargetHud").then(m => m.TargetHud), { ssr: false });
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; borderColor: string; bgColor: string }> = {
-  Boss:     { icon: "⚔️",  label: "Boss",        color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
-  Monster:  { icon: "🐺",  label: "Yêu Thú",     color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
-  Resource: { icon: "💎",  label: "Linh Tài",    color: "text-emerald-300", borderColor: "border-emerald-500/30", bgColor: "bg-emerald-950/60" },
-  WildGu:   { icon: "🐛",  label: "Cổ Trùng",    color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
-  Empty:    { icon: "🏯",  label: "Địa Điểm",    color: "text-amber-300",   borderColor: "border-amber-500/30",   bgColor: "bg-amber-950/60" },
-  Player:   { icon: "🥷",  label: "Cổ Sư",       color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
+  Boss:       { icon: "⚔️",  label: "Boss",            color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
+  Monster:    { icon: "🐺",  label: "Yêu Thú",         color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
+  Resource:   { icon: "💎",  label: "Linh Tài",        color: "text-emerald-300", borderColor: "border-emerald-500/30", bgColor: "bg-emerald-950/60" },
+  WildGu:     { icon: "🐛",  label: "Cổ Trùng",        color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
+  Empty:      { icon: "🏯",  label: "Địa Điểm",        color: "text-amber-300",   borderColor: "border-amber-500/30",   bgColor: "bg-amber-950/60" },
+  Player:     { icon: "🥷",  label: "Cổ Sư",           color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
+  GroundDrop: { icon: "🎁",  label: "Chiến Lợi Phẩm", color: "text-amber-300",   borderColor: "border-amber-500/40",   bgColor: "bg-amber-950/70" },
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
@@ -91,6 +92,11 @@ export function WorldPage() {
   // Party
   const fetchPartyStatus = useGameStore((s) => s.fetchPartyStatus);
   const fetchPartyInvitations = useGameStore((s) => s.fetchPartyInvitations);
+
+  // Ground Drops
+  const groundDrops = useGameStore((s) => s.groundDrops);
+  const fetchGroundDrops = useGameStore((s) => s.fetchGroundDrops);
+  const lootGroundDrop = useGameStore((s) => s.lootGroundDrop);
 
   const [mapMode, setMapMode] = useState<"select" | "drag">("select");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -154,7 +160,8 @@ export function WorldPage() {
     if (!regionsLoaded) fetchRegions();
     fetchPartyStatus();
     fetchPartyInvitations();
-  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations]);
+    fetchGroundDrops();
+  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops]);
 
   const setInvestigationRange = useWorldStore((s) => s.setInvestigationRange);
 
@@ -445,6 +452,8 @@ export function WorldPage() {
                     ? itemDictionary[selectedObject.content_id]?.name || selectedObject.content_id
                     : selectedObject.cell_type === "WildGu"
                     ? guDictionary[selectedObject.content_id]?.name || selectedObject.content_id
+                    : selectedObject.cell_type === "GroundDrop"
+                    ? `Hài cốt: ${(selectedObject.dropData || groundDrops.find(d => d.id === selectedObject.id))?.loser_name || "Vô danh"}`
                     : selectedObject.content_id}
                 </div>
                 <div className="text-[10px] text-zinc-500 font-serif">
@@ -464,23 +473,70 @@ export function WorldPage() {
               </div>
             )}
 
+            {selectedObject.cell_type === "GroundDrop" && (() => {
+              const drop = selectedObject.dropData || groundDrops.find(d => d.id === selectedObject.id);
+              if (!drop) return null;
+              const protExpiry = drop.protected_until ? new Date(drop.protected_until) : null;
+              const isProtected = drop.is_protected || (protExpiry ? protExpiry.getTime() > Date.now() : false);
+              const isKiller = gamePlayer?.id && drop.killer_id === gamePlayer.id;
+
+              return (
+                <div className="mb-3 space-y-1.5 text-xs font-serif">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 bg-zinc-900/60 p-2 rounded-lg border border-zinc-800">
+                    <span>⚔️ Kẻ diệt: <strong className="text-amber-400">{drop.killer_name || "Yêu thú/Hệ thống"}</strong></span>
+                    {isProtected ? (
+                      isKiller ? (
+                        <span className="text-emerald-400 text-[10px] font-bold">✨ Quyền riêng</span>
+                      ) : (
+                        <span className="text-rose-400 text-[10px] font-bold">🔒 Khóa Killer</span>
+                      )
+                    ) : (
+                      <span className="text-amber-400 text-[10px] font-bold">🔓 Tự do nhặt</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-[11px] text-amber-200/90 bg-amber-950/30 p-2 rounded-lg border border-amber-900/40 font-mono">
+                    <div>💎 {drop.loot_data?.primeval_stones || 0} Đá NT</div>
+                    <div>✨ {drop.loot_data?.immortal_stones || 0} Tiên Thạch</div>
+                    {drop.loot_data?.items && drop.loot_data.items.length > 0 && (
+                      <div>📦 {drop.loot_data.items.length} Vật phẩm</div>
+                    )}
+                    {drop.loot_data?.gus && drop.loot_data.gus.length > 0 && (
+                      <div>🐛 {drop.loot_data.gus.length} Cổ trùng</div>
+                    )}
+                    {drop.loot_data?.recipes && drop.loot_data.recipes.length > 0 && (
+                      <div>📜 {drop.loot_data.recipes.length} Công thức</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex gap-2.5">
               {selectedObject.cell_type === "Player" ? (
-                <>
-                  <button
-                    disabled={isMoving}
-                    title={isMoving ? "Đang di chuyển..." : (gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y) ? "Tấn Công" : "Tiếp Cận"}
-                    onClick={async () => {
-                      if (gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y) {
-                        movePlayer(selectedObject.x, selectedObject.y, selectedObject.id);
-                      } else {
-                        window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
-                      }
-                    }}
-                    className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-red-600 hover:bg-red-500 shadow-red-950/30 disabled:opacity-60 text-white text-base transition-all cursor-pointer shadow-lg"
-                  >
-                    <span>⚔️</span>
-                  </button>
+                (() => {
+                  const dx = Math.abs((gamePlayer?.x ?? 0) - selectedObject.x);
+                  const dy = Math.abs((gamePlayer?.y ?? 0) - selectedObject.y);
+                  const dist = Math.max(dx, dy);
+                  const inPvPRange = dist <= 2;
+
+                  return (
+                    <>
+                      <button
+                        disabled={isMoving}
+                        title={isMoving ? "Đang di chuyển..." : inPvPRange ? "Tấn Công (PvP)" : "Tiếp Cận Đối Phương"}
+                        onClick={async () => {
+                          if (inPvPRange) {
+                            movePlayer(gamePlayer!.x, gamePlayer!.y, selectedObject.id);
+                          } else {
+                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                          }
+                        }}
+                        className={`flex-1 flex items-center justify-center py-2.5 rounded-xl ${
+                          inPvPRange ? "bg-red-600 hover:bg-red-500 shadow-red-950/30" : "bg-amber-600 hover:bg-amber-500 shadow-amber-950/30"
+                        } disabled:opacity-60 text-white text-base transition-all cursor-pointer shadow-lg`}
+                      >
+                        <span>{inPvPRange ? "⚔️" : "🏃"}</span>
+                      </button>
                   <button
                     title="Trinh Thám"
                     onClick={() => fetchPlayerProfile(selectedObject.content_id)}
@@ -510,6 +566,36 @@ export function WorldPage() {
                     </button>
                   )}
                 </>
+              );
+                })()
+              ) : selectedObject.cell_type === "GroundDrop" ? (
+                gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y ? (
+                  <button
+                    onClick={async () => {
+                      const drop = selectedObject.dropData || groundDrops.find(d => d.id === selectedObject.id);
+                      const res = await lootGroundDrop(drop?.id || selectedObject.id!);
+                      if (res?.success) {
+                        selectObject(null);
+                      }
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 shadow-amber-950/30 text-white text-sm font-bold font-serif transition-all cursor-pointer shadow-lg"
+                  >
+                    <span>🎁</span>
+                    <span>Lụm</span>
+                  </button>
+                ) : (
+                  <button
+                    disabled={isMoving}
+                    title="Tiếp Cận Chiến Lợi Phẩm"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 shadow-amber-950/30 text-white text-sm font-bold font-serif transition-all cursor-pointer shadow-lg"
+                  >
+                    <span>🏃</span>
+                    <span>Tiếp Cận</span>
+                  </button>
+                )
               ) : (
                 <button
                   disabled={isMoving || !!selectedObject.cleared}

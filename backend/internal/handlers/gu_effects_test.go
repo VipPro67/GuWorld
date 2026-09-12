@@ -25,7 +25,7 @@ func TestCleanupInvalidEquipped(t *testing.T) {
 	now := time.Now()
 	hourAgo := now.Add(-time.Hour)
 	p := &models.Player{
-		CultivationState: models.CultivationState{Rank: 6},
+		CultivationState: models.CultivationState{Rank: 1},
 		GuInventory: models.GuInventory{
 			{InstanceID: "over-rank", GuID: "GU_STRENGTH", Rank: 9, Status: "ACTIVE", Equipped: true},
 			{InstanceID: "consumable", GuID: "GU_CONSUMABLE", Rank: 1, Status: "ACTIVE", Equipped: true},

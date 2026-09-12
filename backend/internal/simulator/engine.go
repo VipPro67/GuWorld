@@ -643,16 +643,14 @@ func Simulate(state *CombatState) []CombatLog {
 			res.hasDamage = a.ActionType == "BASIC_ATTACK" || a.Damage > 0
 
 			backlashDamage := 0.0
-			if actor.Kind == "Player" {
+			if a.BacklashDamage > 0 {
+				backlashDamage = a.BacklashDamage
+			} else {
 				guRank := 1
 				if a.Rank > 0 {
 					guRank = a.Rank
 				}
-				if guRank > actor.Rank {
-					diff := guRank - actor.Rank
-					backlashPct := float64(diff) * 0.15
-					backlashDamage = actor.MaxHP * backlashPct
-				}
+				backlashDamage = gamefx.HigherRankHPCost(guRank, actor.Rank, actor.MaxHP)
 			}
 
 			if backlashDamage > 0 {

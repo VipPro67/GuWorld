@@ -3187,9 +3187,9 @@ func flushGrowthOnUnequip(player *models.Player, gu *models.GuInstance, spec *mo
 }
 
 // cleanupInvalidEquipped unequips every non-vital ACTIVE equipped Gu that is no
-// longer valid to wear: unknown spec, Consumable type, or a rank above the
-// player's rank (e.g. left over from a cultivation rank drop). Returns the
-// removed instances so callers can persist and audit the cleanup.
+// longer valid to wear: unknown spec, Consumable type, or invalid tier rank
+// (e.g. Mortal user equipped with Immortal Gu). Returns the removed instances
+// so callers can persist and audit the cleanup.
 func cleanupInvalidEquipped(player *models.Player) []models.GuInstance {
 	cleaned := []models.GuInstance{}
 	for i := range player.GuInventory {
@@ -3198,7 +3198,7 @@ func cleanupInvalidEquipped(player *models.Player) []models.GuInstance {
 			continue
 		}
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if ok && spec.Type != "Consumable" && spec.Rank <= player.Rank {
+		if ok && spec.Type != "Consumable" && gamefx.CanEquipGu(player.Rank, spec.Rank) {
 			continue
 		}
 		gu.Equipped = false
@@ -3315,9 +3315,9 @@ func EquipGu(c *gin.Context) {
 				return
 			}
 
-			// Rank restriction: cannot equip a Gu of higher rank than the player
-			if specOk && spec.Rank > player.Rank {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể trang bị Cổ trùng Rank %d cao hơn tu vi %s của đạo hữu!", spec.Rank, getRankName(player.Rank))})
+			// Rank restriction: Phàm Cổ Sư cannot equip Tiên Cổ (Rank 6+)
+			if specOk && !gamefx.CanEquipGu(player.Rank, spec.Rank) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Phàm Cổ Sư (%s) không thể trang bị Tiên Cổ %s (Rank %d)!", getRankName(player.Rank), spec.Name, spec.Rank)})
 				return
 			}
 

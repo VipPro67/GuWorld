@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
-import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home } from "lucide-react";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home, Gift, Skull, Package } from "lucide-react";
 
 import { LogConsole } from "./LogConsole";
 import { GamePanel, GameButton } from "@/components/ui";
@@ -59,7 +59,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     world_height?: number;
   } | null>(null);
 
-  const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm, addToast } = useGameStore();
+  const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm, addToast, groundDrops, fetchGroundDrops, lootGroundDrop } = useGameStore();
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
@@ -102,6 +102,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     if (data) {
       setGridData(data);
     }
+    fetchGroundDrops();
   };
 
   useEffect(() => {
@@ -492,6 +493,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                         (p: { x: number; y: number; id: string; username: string; avatar_url: string }) => p.x === x && p.y === y
                       ) || [];
 
+                  const cellDrops = isOutOfBounds ? [] : groundDrops.filter((d) => d.x === x && d.y === y);
+
                   return (
                     <div
                       key={`${x},${y}`}
@@ -521,6 +524,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                                       ? "Cổ trùng hoang dã"
                                       : cellData.cell_type
                                   }: ${getEntityName(cellData.cell_type, cellData.content)}`
+                                : ""
+                            }${
+                              cellDrops.length > 0
+                                ? ` | Chiến lợi phẩm rơi từ: ${cellDrops.map((d) => d.loser_name).join(", ")}`
                                 : ""
                             }${
                               otherPlayersOnCell.length > 0
@@ -567,6 +574,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             )}
                           </div>
                         )}
+                        {!isOutOfBounds && cellDrops.length > 0 && (
+                          <span title={`Túi đồ rơi từ ${cellDrops.map((d) => d.loser_name).join(", ")}`}>
+                            <Gift className="w-5 h-5 text-amber-400 animate-bounce drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                          </span>
+                        )}
                         {!isOutOfBounds && getCellIcon(cellData.cell_type, cellData.content)}
                       </div>
 
@@ -603,8 +615,99 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           )}
         </div>
 
-        {/* Right Column: Party Manager, Temporary Loot & Cultivation Log */}
+        {/* Right Column: Party Manager & Ground Drops */}
         <div className="lg:col-span-4 space-y-6">
+          {/* Ground Drops Panel */}
+          {(() => {
+            const currentTileDrops = groundDrops.filter((d) => d.x === player.x && d.y === player.y);
+            return (
+              <div className="bg-zinc-950/40 border border-amber-900/40 rounded-3xl p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                  <h4 className="font-serif font-bold text-sm text-amber-400 flex items-center gap-1.5">
+                    <Gift className="w-4 h-4 text-amber-400" /> CHIẾN LỢI PHẨM RƠI ({currentTileDrops.length})
+                  </h4>
+                </div>
+
+                {currentTileDrops.length === 0 ? (
+                  <div className="text-[11px] text-zinc-500 italic py-2 text-center">
+                    Không có chiến lợi phẩm nào tại vị trí ({player.x}, {player.y}).
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                    {currentTileDrops.map((drop) => {
+                      const data = drop.loot_data || {};
+                      const primevalStones = data.primeval_stones ?? 0;
+                      const immortalStones = data.immortal_stones ?? 0;
+                      return (
+                        <div key={drop.id} className="bg-zinc-950/80 border border-amber-500/30 rounded-2xl p-3.5 space-y-2 text-left shadow-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-amber-300 font-serif flex items-center gap-1">
+                              💀 Hài Cốt: {drop.loser_name}
+                            </span>
+                            {drop.is_protected ? (
+                              <span className="text-[9px] text-amber-400 bg-amber-950/50 border border-amber-800/50 px-2 py-0.5 rounded font-mono">
+                                🔒 Khóa Killer
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-emerald-400 bg-emerald-950/50 border border-emerald-800/50 px-2 py-0.5 rounded font-mono">
+                                🔓 Tự do nhặt
+                              </span>
+                            )}
+                          </div>
+
+                          {drop.killer_name && (
+                            <div className="text-[10px] text-zinc-400 font-mono">
+                              Hạ gục bởi: <span className="text-rose-400 font-semibold">{drop.killer_name}</span>
+                            </div>
+                          )}
+
+                          {/* GroundLootData Content Display */}
+                          <div className="bg-zinc-900/80 rounded-xl p-2.5 space-y-1 text-[11px] font-mono border border-zinc-800">
+                            {primevalStones > 0 && (
+                              <div className="text-emerald-400 font-semibold">❖ +{primevalStones.toLocaleString()} Nguyên Thạch</div>
+                            )}
+                            {immortalStones > 0 && (
+                              <div className="text-purple-400 font-semibold">❖ +{immortalStones.toLocaleString()} Tiên Nguyên Thạch</div>
+                            )}
+                            {data.items && data.items.map((it: any, idx: number) => (
+                              <div key={idx} className="text-amber-300">
+                                📦 {it.quantity}x {itemDictionary[it.item_id]?.name || it.item_id}
+                              </div>
+                            ))}
+                            {data.gus && data.gus.map((g: any, idx: number) => (
+                              <div key={idx} className="text-cyan-300">
+                                🐛 Cổ trùng: {guDictionary[g.gu_id]?.name || g.gu_id} (Rank {g.rank})
+                              </div>
+                            ))}
+                            {data.recipes && data.recipes.map((r: string, idx: number) => (
+                              <div key={idx} className="text-indigo-300">
+                                📜 Bí phương: {guDictionary[r]?.name || r}
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await lootGroundDrop(drop.id);
+                            }}
+                            disabled={actionLoading || drop.is_protected}
+                            className={`w-full py-2 rounded-xl text-xs font-bold font-serif transition-all cursor-pointer ${
+                              drop.is_protected
+                                ? "bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed"
+                                : "bg-amber-950/40 border border-amber-500/40 text-amber-300 hover:bg-amber-950/70 hover:border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.1)] active:scale-[0.98]"
+                            }`}
+                          >
+                            {drop.is_protected ? `Đang Bảo Hộ Cho ${drop.killer_name || "Killer"}` : "Nhặt Tất Cả Chiến Lợi Phẩm"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
               <h4 className="font-serif font-bold text-sm text-amber-400 flex items-center gap-1.5">

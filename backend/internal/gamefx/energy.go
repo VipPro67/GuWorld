@@ -19,13 +19,17 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 		if guSpec.BaseManaCost > 0 {
 			baseCost = guSpec.BaseManaCost
 		}
+		cost := baseCost
 		if player.Rank > guSpec.Rank {
-			return baseCost / math.Pow(100, float64(player.Rank-guSpec.Rank))
+			cost = baseCost / math.Pow(100, float64(player.Rank-guSpec.Rank))
+		} else if player.Rank < guSpec.Rank {
+			cost = baseCost * HigherRankManaMultiplier(guSpec.Rank, player.Rank)
 		}
-		if player.Rank < guSpec.Rank {
-			return baseCost * HigherRankManaMultiplier(guSpec.Rank, player.Rank)
+		refineTier := RefineManaTier(player.Rank, player.GuInventory)
+		if refineTier > 0 {
+			cost *= 0.5
 		}
-		return baseCost
+		return cost
 	}
 
 	baseManaPct := 0.0
@@ -40,11 +44,9 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 		cost *= HigherRankManaMultiplier(guSpec.Rank, player.Rank)
 	}
 
-	if util.IsImmortalPlayer(player) {
-		refineTier := RefineManaTier(player.Rank, player.GuInventory)
-		if refineTier > 0 {
-			cost *= 0.5
-		}
+	refineTier := RefineManaTier(player.Rank, player.GuInventory)
+	if refineTier > 0 {
+		cost *= 0.5
 	}
 
 	return cost
@@ -63,13 +65,17 @@ func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionary
 		if guSpec.BaseManaCost > 0 {
 			baseCost = guSpec.BaseManaCost
 		}
+		cost := baseCost
 		if actor.Rank > guSpec.Rank {
-			return baseCost / math.Pow(100, float64(actor.Rank-guSpec.Rank))
+			cost = baseCost / math.Pow(100, float64(actor.Rank-guSpec.Rank))
+		} else if actor.Rank < guSpec.Rank {
+			cost = baseCost * HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
 		}
-		if actor.Rank < guSpec.Rank {
-			return baseCost * HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
+		refineTier := RefineManaTier(actor.Rank, actor.GuInventory)
+		if refineTier > 0 {
+			cost *= 0.5
 		}
-		return baseCost
+		return cost
 	}
 
 	baseManaPct := 0.0
@@ -84,11 +90,9 @@ func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionary
 		cost *= HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
 	}
 
-	if !isImmortal {
-		refineTier := RefineManaTier(actor.Rank, actor.GuInventory)
-		if refineTier > 0 {
-			cost *= 0.5
-		}
+	refineTier := RefineManaTier(actor.Rank, actor.GuInventory)
+	if refineTier > 0 {
+		cost *= 0.5
 	}
 
 	return cost
@@ -138,14 +142,34 @@ func HigherRankManaMultiplier(guRank, userRank int) float64 {
 
 // CanUseGuWithMana reports whether a user of the given rank may spend mana to
 // activate the given Gu. Mortal users (rank below the immortal threshold) are
-// blocked from using immortal Gu (rank >= threshold) that cost mana. The cost
-// multiplier returns +Inf for such combinations; callers should reject the use
-// entirely instead of leaking +Inf into mana pools.
+// blocked from using immortal Gu (rank >= threshold).
 func CanUseGuWithMana(userRank int, guSpec *models.GuDictionaryItem) bool {
-	if userRank < util.ImmortalRankThreshold && guSpec.Rank >= util.ImmortalRankThreshold && guSpec.BaseManaCost > 0 {
+	if userRank < util.ImmortalRankThreshold && guSpec.Rank >= util.ImmortalRankThreshold {
 		return false
 	}
 	return true
+}
+
+// CanEquipGu reports whether a user of playerRank can equip a Gu of guRank.
+// Mortals (rank < 6) can equip Mortal Gu (rank < 6).
+// Immortals (rank >= 6) can equip any Gu.
+// Mortals cannot equip Immortal Gu (rank >= 6).
+func CanEquipGu(playerRank, guRank int) bool {
+	if playerRank >= util.ImmortalRankThreshold {
+		return true
+	}
+	return guRank < util.ImmortalRankThreshold
+}
+
+// HigherRankHPCost returns the % MaxHP backlash damage incurred when using a Gu
+// whose rank is higher than the user's rank (15% MaxHP per rank difference).
+func HigherRankHPCost(guRank, userRank int, maxHP float64) float64 {
+	if guRank <= userRank {
+		return 0
+	}
+	diff := guRank - userRank
+	backlashPct := float64(diff) * 0.15
+	return maxHP * backlashPct
 }
 
 // RefineManaTier returns the highest refinement mana tier among equipped ACTIVE

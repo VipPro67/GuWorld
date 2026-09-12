@@ -614,6 +614,29 @@ export interface TribulationEnemy {
   updated_at: string;
 }
 
+export interface GroundDrop {
+  id: string;
+  region_id: string;
+  x: number;
+  y: number;
+  loser_id: string;
+  loser_name: string;
+  killer_id?: string;
+  killer_name?: string;
+  loot_data: {
+    primeval_stones?: number;
+    immortal_stones?: number;
+    items?: Array<{ item_id: string; category: string; quantity: number }>;
+    gus?: any[];
+    recipes?: string[];
+  };
+  is_protected: boolean;
+  protected_until?: string;
+  expires_at: string;
+  created_at: string;
+}
+
+
 export interface SpecialMechanic {
   event_trigger: string;
   action_code: string;
@@ -1157,6 +1180,9 @@ interface GameState {
   useItems: (itemIds: string[]) => Promise<boolean>;
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: any } | null>;
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; stats: any; players_on_map?: any[]; world_width?: number; world_height?: number } | null>;
+  groundDrops: GroundDrop[];
+  fetchGroundDrops: () => Promise<void>;
+  lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
   dropGus: (instanceIds: string[]) => Promise<boolean>;
   buyShopItem: (itemId: string, quantity: number, rank?: number) => Promise<boolean>;
@@ -5067,6 +5093,9 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data = await response.json();
+      if (data.ground_drops) {
+        set({ groundDrops: data.ground_drops });
+      }
       return data;
     } catch (err: any) {
       console.error("Grid fetch failed:", err.message);
@@ -7562,5 +7591,57 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addToast(err.message, "error");
       return false;
     } finally { set({ actionLoading: false }); }
+  },
+
+  groundDrops: [],
+  fetchGroundDrops: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/world/drops`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ groundDrops: data.drops || [] });
+      }
+    } catch (e) {
+      console.error("fetchGroundDrops error:", e);
+    }
+  },
+
+  lootGroundDrop: async (dropId) => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/world/drops/${dropId}/loot`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        get().addToast(data.error || "Nhặt chiến lợi phẩm thất bại", "error");
+        return { success: false, message: data.error };
+      }
+
+      const msg = data.message || "Thu thập chiến lợi phẩm thành công!";
+      get().addToast(msg, "success");
+
+      // Immediately remove the looted drop from state so map UI updates instantly
+      set({ groundDrops: get().groundDrops.filter((d) => d.id !== dropId) });
+
+      try {
+        const { useWorldStore } = await import("@/store/useWorldStore");
+        const ws = useWorldStore.getState();
+        if (ws.selectedObject?.id === dropId) {
+          ws.selectObject(null);
+        }
+        if (ws.addWorldLog) {
+          ws.addWorldLog(msg);
+        }
+      } catch (e) {}
+
+      await get().fetchGroundDrops();
+      if (get().player?.id) {
+        await get().fetchPlayerStatus(get().player!.id);
+      }
+      return { success: true, message: data.message, looted: data.looted };
+    } catch (e: any) {
+      get().addToast(e.message || "Lỗi kết nối", "error");
+      return null;
+    }
   },
 })});

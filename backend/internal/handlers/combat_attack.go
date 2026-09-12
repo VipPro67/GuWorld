@@ -473,14 +473,18 @@ func CombatAttack(c *gin.Context) {
 				dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
 				if errGu == nil && refCaster.CurrentMana >= cost {
 					refCaster.CurrentMana -= cost
-					if refCaster.Rank < spec.Rank {
-						backlashHP := 5.0
+					backlashHP := gamefx.HigherRankHPCost(spec.Rank, refCaster.Rank, refCaster.MaxHP)
+					if backlashHP > 0 {
 						if refCaster.HP <= backlashHP {
 							refCaster.HP = 0
 						} else {
 							refCaster.HP -= backlashHP
 						}
 						*logs = append(*logs, fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %.0f HP (còn %.0f HP)!", refCaster.Name, backlashHP, refCaster.HP))
+						if refCaster.HP == 0 {
+							*logs = append(*logs, fmt.Sprintf("%s đã gục ngã do bị phản phệ!", refCaster.Name))
+							return
+						}
 					}
 
 					// Apply weak debuff to damage

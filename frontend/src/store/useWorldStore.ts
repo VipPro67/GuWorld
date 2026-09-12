@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { useGameStore, type Player } from "@/store/useGameStore";
+import { useGameStore, type Player, type GroundDrop } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 import { wsManager } from "@/lib/websocket";
 
@@ -15,6 +15,7 @@ export interface WorldObject {
   rank?: number;
   respawn_seconds?: number;
   cleared?: boolean;
+  dropData?: GroundDrop;
 }
 
 export interface NearbyCell {

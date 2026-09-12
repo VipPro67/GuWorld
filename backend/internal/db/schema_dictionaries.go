@@ -320,6 +320,14 @@ func seedDefaultStatusRows() error {
 			`[]`,
 			"Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 95% tỉ lệ luyện cổ thành công.",
 		},
+		{
+			"sat_khi",
+			"Sát Khí Đồ Sát",
+			`{"death_drop_mult":1.5}`,
+			120,
+			`[]`,
+			"Tích tụ oán khí đồ sát. Khi bị đánh bại sẽ rơi thêm từ 50% đến 250% số lượng tài sản (tùy tầng Sát Khí).",
+		},
 	}
 
 	for _, s := range statuses {

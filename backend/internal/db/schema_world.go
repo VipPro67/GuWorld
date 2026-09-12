@@ -159,5 +159,28 @@ func schemaWorld() error {
 		return err
 	}
 
+	if err := execSchema("map_ground_drops", `
+	CREATE TABLE IF NOT EXISTS map_ground_drops (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		x INT NOT NULL,
+		y INT NOT NULL,
+		loser_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		loser_name VARCHAR(100) NOT NULL DEFAULT '',
+		killer_id UUID REFERENCES players(id) ON DELETE SET NULL,
+		killer_name VARCHAR(100) DEFAULT '',
+		loot_data JSONB NOT NULL DEFAULT '{}',
+		protected_until TIMESTAMP WITH TIME ZONE,
+		expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("map_ground_drops_location_idx", `
+	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_location ON map_ground_drops (region_id, x, y);`); err != nil {
+		return err
+	}
+
 	return nil
 }
+

@@ -870,7 +870,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 	}
 
 	if actor.Rank < spec.Rank {
-		act.BacklashDamage = 5.0 * float64(spec.Rank-actor.Rank)
+		act.BacklashDamage = gamefx.HigherRankHPCost(spec.Rank, actor.Rank, actor.MaxHP)
 	}
 
 	if spec.Effects.Active != nil {
