@@ -36,7 +36,7 @@ func processStatusExpiryTick(db *sql.DB) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT id, statuses
 		FROM players
-		WHERE statuses != '[]'::jsonb AND statuses::text LIKE '%expires_at%'
+		WHERE statuses @? '$[*] ? (exists(@.expires_at))'
 		LIMIT 200
 	`)
 	if err != nil {
@@ -69,6 +69,10 @@ func processStatusExpiryTick(db *sql.DB) {
 				purges = append(purges, playerStatusPurge{id: id, original: rawStatuses, statuses: b})
 			}
 		}
+	}
+	if err := rows.Err(); err != nil {
+		logger.S.Errorf("Status Expiry Worker Error reading players with expiring statuses: %v", err)
+		return
 	}
 
 	if len(purges) == 0 {

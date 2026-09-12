@@ -142,8 +142,6 @@ func BuyArenaShopItem(c *gin.Context) {
 		return
 	}
 
-	_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + $1, $2) WHERE id = $3", 5*quantity, MaxHumanQi, authID)
-
 	tx.Commit()
 
 	auditlog.Log(db.DB, auditlog.Entry{

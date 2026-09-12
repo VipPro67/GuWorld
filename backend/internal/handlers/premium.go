@@ -502,10 +502,6 @@ func BuyPremiumPackage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
 		return
 	}
-	if _, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Nhân Khí"})
-		return
-	}
 	if _, err = tx.Exec(`UPDATE wallets SET immortal_jade=$1, updated_at=CURRENT_TIMESTAMP WHERE user_id=$2`, wallet.ImmortalJade, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ví"})
 		return

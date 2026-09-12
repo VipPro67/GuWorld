@@ -1617,7 +1617,7 @@ func Explore(c *gin.Context) {
 	}
 
 	// 5. Persist changes
-	qiGained := AddHumanQi(&player, 3.0)
+	qiGained := 0.0
 	updateQuery := `
 		UPDATE players
 		SET current_mana = $1, primeval_stones = $2, last_mana_update = $3, human_qi = $4
@@ -1917,7 +1917,7 @@ func FeedGu(c *gin.Context) {
 		targetGu.Equipped = true
 	}
 
-	qiGained := AddHumanQi(&player, 2.0)
+	qiGained := 0.0
 
 	// 6. Update database
 	if len(eatenGuIDs) > 0 {
@@ -4362,7 +4362,7 @@ func UseConsumableGu(c *gin.Context) {
 
 	logMsg := strings.Join(logs, " ")
 
-	qiGained := AddHumanQi(&player, 3.0)
+	qiGained := 0.0
 
 	// Cổ trùng tiêu hao: cộng Path Mastery (Chân Ý)
 	if player.PathMasteries == nil {
@@ -4562,7 +4562,7 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	qiGained := AddHumanQi(&player, float64(3))
+	qiGained := 0.0
 
 	logMsg := strings.Join(logs, " ")
 	// Save to DB — support Gu stays in inventory, no need to rewrite inventory

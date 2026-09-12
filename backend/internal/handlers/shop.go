@@ -570,7 +570,7 @@ func BuyShopItem(c *gin.Context) {
 	}
 
 	// 6. Save player state
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 	if selectedItem.Type == "Gu" {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Cổ trùng mới vào CSDL"})
@@ -771,7 +771,7 @@ func SellShopItem(c *gin.Context) {
 	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
 		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 	if req.ItemType == "Gu" {
 		if err := db.RemovePlayerGus(tx, removedIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory changes"})
@@ -1070,7 +1070,7 @@ func SellShopItemsBulk(c *gin.Context) {
 		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 
-	qiGained := AddHumanQi(&player, float64(len(req.Items))*5.0)
+	qiGained := 0.0
 
 	if guSold {
 		if err := db.RemovePlayerGus(tx, removedIDs); err != nil {

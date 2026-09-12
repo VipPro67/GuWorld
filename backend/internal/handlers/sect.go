@@ -289,12 +289,6 @@ func JoinSect(c *gin.Context) {
 			return
 		}
 
-		_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, playerID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
-			return
-		}
-
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 			return
@@ -311,12 +305,6 @@ func JoinSect(c *gin.Context) {
 	`, sectID, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to join sect: " + err.Error()})
-		return
-	}
-
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 3, $1) WHERE id = $2", MaxHumanQi, playerID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 		return
 	}
 
@@ -732,8 +720,8 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
-	qiGained := AddHumanQi(&player, 5.0)
-	res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1, human_qi = LEAST(human_qi + $2, 100000.0) WHERE id = $3 AND primeval_stones >= $1`, req.Amount, qiGained, player.ID)
+	qiGained := 0.0
+	res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1`, req.Amount, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
 		return
@@ -891,7 +879,7 @@ func DonateMaterials(c *gin.Context) {
 	}
 
 	m.ContributionPoints += gainedContribution
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
@@ -1077,7 +1065,7 @@ func DonateGu(c *gin.Context) {
 	// Remove Gu
 	player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
 	m.ContributionPoints += int64(gainedContribution)
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
@@ -1196,7 +1184,7 @@ func DonateRecipe(c *gin.Context) {
 	}
 
 	m.ContributionPoints += int64(gainedContribution)
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
@@ -1630,9 +1618,7 @@ func DonateBulk(c *gin.Context) {
 		return
 	}
 
-	// Update Human Qi (5.0 per unique item type/instance donated)
-	numItems := len(req.Materials) + len(req.Gus) + len(req.Recipes)
-	qiGained := AddHumanQi(&player, 5.0*float64(numItems))
+	qiGained := 0.0
 
 	m.ContributionPoints += int64(totalGainedContribution)
 
@@ -1927,7 +1913,7 @@ func BuyFromSectVault(c *gin.Context) {
 		return
 	}
 
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
@@ -1962,13 +1948,13 @@ func BuyFromSectVault(c *gin.Context) {
 		EntityID:       m.SectID,
 		RequestSummary: fmt.Sprintf("%s | %s x%d | giá %d điểm cống hiến", req.ItemType, itemName, quantity, cost),
 		Metadata: map[string]interface{}{
-			"item_type": req.ItemType,
-			"item_id": req.ItemID,
-			"quantity": quantity,
-			"cost_contribution": cost,
+			"item_type":           req.ItemType,
+			"item_id":             req.ItemID,
+			"quantity":            quantity,
+			"cost_contribution":   cost,
 			"contribution_change": -cost,
 		},
-		IPAddress:      c.ClientIP(), Success: true,
+		IPAddress: c.ClientIP(), Success: true,
 	})
 	msg := fmt.Sprintf("Đổi thành công %d %s! Nhân Khí +%.0f.", quantity, itemName, qiGained)
 	if strings.ToLower(req.ItemType) == "gu" {

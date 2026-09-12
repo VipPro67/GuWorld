@@ -63,12 +63,6 @@ func CreateParty(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
@@ -420,12 +414,6 @@ func RespondToInvitation(c *gin.Context) {
 	_, err = tx.Exec("UPDATE players SET party_id = $1, current_region = $2, x = $3, y = $4 WHERE id = $5", partyID, leaderRegion, leaderX, leaderY, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin nhân vật"})
-		return
-	}
-
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 		return
 	}
 

@@ -319,7 +319,6 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên giao dịch"})
 		return
 	}
-	AddHumanQi(&player, 5.0)
 	if req.ItemType == "Gu" {
 		if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), guIDsToSell); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
@@ -570,7 +569,6 @@ func PlaceBid(c *gin.Context) {
 		}
 		notify.Send(db.DB, prevBidder.ID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %d %s.", current, currency))
 	}
-	AddHumanQi(&player, 3.0)
 
 	if currency == "primeval" {
 		_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, human_qi=$2 WHERE id=$3`, player.PrimevalStones, player.HumanQi, player.ID)
@@ -765,9 +763,6 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển giao vật phẩm"})
 		return
 	}
-
-	AddHumanQi(&buyer, 5.0)
-	AddHumanQi(&seller, 5.0)
 
 	if err := updatePlayerInventory(tx, buyer, buyerBefore); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật kho đồ người mua"})

@@ -31,6 +31,7 @@ const (
 )
 
 type RefineOutcome string
+
 const (
 	OutcomeSuccess      RefineOutcome = "SUCCESS"
 	OutcomeFailSafe     RefineOutcome = "FAIL_SAFE"
@@ -274,7 +275,7 @@ func calculateRefineManaCost(playerRank, targetRank int) (float64, error) {
 	if playerRank >= 6 && targetRank < 6 {
 		return 0, nil // Immortals refine Mortal Gu for effectively 0 cost
 	}
-	
+
 	if playerRank < 6 && targetRank < 6 {
 		baseCost := 20.0
 		if playerRank > targetRank {
@@ -284,7 +285,7 @@ func calculateRefineManaCost(playerRank, targetRank int) (float64, error) {
 		}
 		return baseCost, nil
 	}
-	
+
 	// Immortal refining Immortal Gu
 	baseCost := 10.0
 	if playerRank > targetRank {
@@ -380,7 +381,7 @@ func RefineGu(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ %s! Cần %.1f", unit, manaCost)})
 		return
 	}
-	
+
 	if player.PrimevalStones < recipe.PrimevalStonesCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough Primeval Stones"})
 		return
@@ -507,7 +508,7 @@ func RefineGu(c *gin.Context) {
 	if player.PathMasteries != nil {
 		refinementPoints = player.PathMasteries["refinement"]
 	}
-	
+
 	rankScale := 1.0
 	switch recipe.TargetRank {
 	case 1:
@@ -532,14 +533,18 @@ func RefineGu(c *gin.Context) {
 
 	masteryMultiplier := 1.0 + float64(targetPathPoints)
 	refinementDaoBonus := (0.00632 * math.Sqrt(float64(refinementMarks)) * masteryMultiplier) / rankScale
-	
+
 	refinementRealm := gamefx.PathMasteryLevel(refinementPoints)
 	refinementMasteryBonus := 0.0
 	switch refinementRealm {
-	case 1: refinementMasteryBonus = 0.05
-	case 2: refinementMasteryBonus = 0.10
-	case 3: refinementMasteryBonus = 0.18
-	case 4: refinementMasteryBonus = 0.25
+	case 1:
+		refinementMasteryBonus = 0.05
+	case 2:
+		refinementMasteryBonus = 0.10
+	case 3:
+		refinementMasteryBonus = 0.18
+	case 4:
+		refinementMasteryBonus = 0.25
 	}
 
 	// Luck Bonus
@@ -588,10 +593,14 @@ func RefineGu(c *gin.Context) {
 	// Apply Immortal Penalty to flat bonuses for Rank 6+
 	immortalPenalty := 1.0
 	switch recipe.TargetRank {
-	case 6: immortalPenalty = 2.0
-	case 7: immortalPenalty = 5.0
-	case 8: immortalPenalty = 20.0
-	case 9: immortalPenalty = 100.0
+	case 6:
+		immortalPenalty = 2.0
+	case 7:
+		immortalPenalty = 5.0
+	case 8:
+		immortalPenalty = 20.0
+	case 9:
+		immortalPenalty = 100.0
 	}
 
 	if immortalPenalty > 1.0 {
@@ -606,14 +615,14 @@ func RefineGu(c *gin.Context) {
 	// Final Rate Calculation
 	baseRate := recipe.SuccessRate
 	sumPositiveBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus
-	
+
 	rawPositiveRate := baseRate + sumPositiveBonus
 	completionPenalty := 1.0
 	if isForcedRefine {
 		completionPenalty = unlockedRate / 100.0
 		rawPositiveRate = rawPositiveRate * completionPenalty
 	}
-	
+
 	// Cap positive rate at 1.0 (100%) BEFORE applying negative debuff penalties
 	cappedPositiveRate := rawPositiveRate
 	if cappedPositiveRate > 1.0 {
@@ -631,7 +640,7 @@ func RefineGu(c *gin.Context) {
 
 	roll := rand.Float64()
 	outcome := determineRefineOutcome(roll, finalSuccessRate, refinementRealm, recipe.TargetRank)
-	
+
 	breakdown := RefineRateBreakdown{
 		BaseRate:           baseRate,
 		CompletionPenalty:  completionPenalty,
@@ -721,7 +730,7 @@ func RefineGu(c *gin.Context) {
 		if refineEventMsg != "" {
 			statusMsg += " " + refineEventMsg
 		}
-		
+
 		newGuInstance = models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       recipe.TargetGuID,
@@ -733,7 +742,7 @@ func RefineGu(c *gin.Context) {
 		}
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
-		
+
 		// Add refinement path mastery (Luyện Đạo)
 		refineGain := calculateRefinementPathGain(recipe.TargetRank, refinementRealm)
 		if refineGain > 0 {
@@ -764,7 +773,7 @@ func RefineGu(c *gin.Context) {
 		} else {
 			statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
 		}
-		
+
 		newInventory := models.GuInventory{}
 		for _, item := range player.GuInventory {
 			if seenInstances[item.InstanceID] {
@@ -790,7 +799,7 @@ func RefineGu(c *gin.Context) {
 		if refineEventMsg != "" {
 			statusMsg += " " + refineEventMsg
 		}
-		
+
 		if outcome == OutcomeFailBackfire {
 			hpLoss := gamefx.EffectiveMaxHP(&player) * 0.50
 			player.HP -= hpLoss
@@ -810,7 +819,7 @@ func RefineGu(c *gin.Context) {
 			}
 			statusMsg += " Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
 		}
-		
+
 		if hasVitalSurvived {
 			statusMsg += " Riêng Cổ Bản Mệnh vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
 		}
@@ -824,7 +833,7 @@ func RefineGu(c *gin.Context) {
 		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 
-	qiGained := AddHumanQi(&player, 10.0)
+	qiGained := 0.0
 
 	// Apply / escalate refine fatigue and backfire statuses
 	// Only trigger fatigue when refining Immortal Gu (Rank >= 6) or Gu with Rank >= player's Rank.
@@ -893,7 +902,7 @@ func RefineGu(c *gin.Context) {
 	if targetSpec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank); ok {
 		targetName = targetSpec.Name
 	}
-	
+
 	isSuccess := outcome == OutcomeSuccess
 
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -1032,7 +1041,7 @@ func DeduceRecipe(c *gin.Context) {
 	targetRealm := gamefx.PathMasteryLevel(targetPts)
 
 	realmMultiplier := 1.0 + float64(wisdomRealm)*3.0 + float64(refineRealm)*2.0 + float64(targetRealm)*1.0
-	
+
 	wisdomDaoMarks := int64(0)
 	if player.DaoMarks != nil {
 		wisdomDaoMarks = player.DaoMarks["wisdom"]
@@ -1041,14 +1050,22 @@ func DeduceRecipe(c *gin.Context) {
 
 	rankPenalty := 1.0
 	switch targetRank {
-	case 2: rankPenalty = 2.0
-	case 3: rankPenalty = 5.0
-	case 4: rankPenalty = 20.0
-	case 5: rankPenalty = 100.0
-	case 6: rankPenalty = 10000.0
-	case 7: rankPenalty = 1000000.0
-	case 8: rankPenalty = 100000000.0
-	case 9: rankPenalty = 10000000000.0
+	case 2:
+		rankPenalty = 2.0
+	case 3:
+		rankPenalty = 5.0
+	case 4:
+		rankPenalty = 20.0
+	case 5:
+		rankPenalty = 100.0
+	case 6:
+		rankPenalty = 10000.0
+	case 7:
+		rankPenalty = 1000000.0
+	case 8:
+		rankPenalty = 100000000.0
+	case 9:
+		rankPenalty = 10000000000.0
 	}
 
 	// Base improvement for Rank 1 is 10% - 25%
@@ -1090,7 +1107,7 @@ func DeduceRecipe(c *gin.Context) {
 		})
 	}
 
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	// Save back to database
 	updateQuery := `

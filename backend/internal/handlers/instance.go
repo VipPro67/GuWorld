@@ -132,10 +132,10 @@ type InstanceRewardAttainment struct {
 }
 
 type InstanceReward struct {
-	Materials      map[string]int64           `json:"materials"`
-	PrimevalStones int64                      `json:"primeval_stones"`
-	Attainment     *InstanceRewardAttainment  `json:"attainment"`
-	DaoMarks       map[string]int             `json:"dao_marks"`
+	Materials      map[string]int64          `json:"materials"`
+	PrimevalStones int64                     `json:"primeval_stones"`
+	Attainment     *InstanceRewardAttainment `json:"attainment"`
+	DaoMarks       map[string]int            `json:"dao_marks"`
 }
 
 type InstanceOption struct {
@@ -475,12 +475,6 @@ func EnterInstance(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, playerID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit: " + err.Error()})
 		return
@@ -504,10 +498,9 @@ func EnterInstance(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "Tiến vào phó bản \"" + template.Name + "\" thành công! Nhân Khí +2.",
-		"session":         session,
-		"template":        template,
-		"human_qi_gained": 2.0,
+		"message":  "Tiến vào phó bản \"" + template.Name + "\" thành công!",
+		"session":  session,
+		"template": template,
 	})
 }
 
@@ -689,7 +682,7 @@ func ActionInstance(c *gin.Context) {
 	player.SoulHP -= soulDeduct
 	player.HP -= float64(normalDeduct)
 
-	qiGained := AddHumanQi(&player, 3.0)
+	qiGained := 0.0
 
 	var logResult string
 	sessionFailed := false

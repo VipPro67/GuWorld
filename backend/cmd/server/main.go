@@ -156,7 +156,6 @@ func main() {
 	defer stop()
 
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
-	worker.StartStatusExpiryWorker(ctx, db.DB, 1*time.Minute)
 	worker.StartPetHungerWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartGrowthWorker(ctx, db.DB, 1*time.Hour)
 	handlers.StartTribulationWorker(ctx)

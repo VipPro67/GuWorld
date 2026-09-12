@@ -184,7 +184,7 @@ func ClaimAchievement(c *gin.Context) {
 		}
 	}
 
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	_, err = tx.Exec(`UPDATE players SET earned_achievements = $1, primeval_stones = $2, immortal_stones = $3, human_qi = $4 WHERE id = $5`,
 		earnedBytes, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)

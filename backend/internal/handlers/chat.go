@@ -79,8 +79,8 @@ func SendPrivateMail(c *gin.Context) {
 
 	// Deduct stone and add human qi atomically
 	player.PrimevalStones -= 1
-	qiGained := AddHumanQi(&player, 1.0)
-	_, err = tx.Exec("UPDATE players SET primeval_stones = GREATEST(0, primeval_stones - 1), human_qi = LEAST(100000.0, human_qi + 1.0) WHERE id = $1", player.ID)
+	qiGained := 0.0
+	_, err = tx.Exec("UPDATE players SET primeval_stones = GREATEST(0, primeval_stones - 1) WHERE id = $1", player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct primeval stones"})
 		return
@@ -255,8 +255,8 @@ func SendBaoHoangChat(c *gin.Context) {
 		player.PrimevalStones -= fee
 	}
 
-	qiGained := AddHumanQi(&player, 1.0)
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + $1, 100000.0) WHERE id = $2", qiGained, player.ID)
+	qiGained := 0.0
+	_, err = tx.Exec("UPDATE players SET primeval_stones = primeval_stones WHERE id = $1", player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
 		return

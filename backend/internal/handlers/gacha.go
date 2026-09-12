@@ -118,7 +118,7 @@ func getPrecomputedPools() *precomputedPools {
 
 	gachaPoolsMu.Lock()
 	defer gachaPoolsMu.Unlock()
-	
+
 	// Double check
 	if globalPrecomputedPools != nil && time.Since(gachaPoolsLastUpdate) < 1*time.Hour {
 		return globalPrecomputedPools
@@ -189,7 +189,7 @@ func getPrecomputedPools() *precomputedPools {
 					}
 					pc.recipesByRank[rankStr] = append(pc.recipesByRank[rankStr], entry)
 					pc.totalRecipeByRank[rankStr] += weight
-					
+
 					// Also add to an "all_recipes" bucket for open_mine_chest
 					pc.recipesByRank["all"] = append(pc.recipesByRank["all"], entry)
 					pc.totalRecipeByRank["all"] += weight
@@ -209,7 +209,7 @@ func (pc *precomputedPools) rollGu(rankKey string, excludedImmortal map[string]b
 	if len(pool) == 0 || total <= 0 {
 		return "", 0
 	}
-	
+
 	// Fast path: if no immortals to exclude, or rankKey doesn't contain immortal ranks, roll normally
 	r := rand.Float64() * total
 	for _, g := range pool {
@@ -412,7 +412,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 		}
 	}
 
-	qiGained := AddHumanQi(&player, float64(quantity))
+	qiGained := 0.0
 
 	updateQuery, updateArgs := buildGachaUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)

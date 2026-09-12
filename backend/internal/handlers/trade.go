@@ -33,7 +33,6 @@ func getGuName(guID string, rank int) string {
 	}
 	return guID
 }
-
 func getMaterialName(matID string) string {
 	if spec, ok := models.ItemRegistry[matID]; ok {
 		return spec.Name
@@ -282,12 +281,6 @@ func InitiateTrade(c *gin.Context) {
 	`, sender.ID, receiver.ID).Scan(&tradeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phòng giao dịch"})
-		return
-	}
-
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, sender.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 		return
 	}
 
@@ -584,12 +577,6 @@ func UpdateTradeOffer(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 1, $1) WHERE id = $2", MaxHumanQi, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
@@ -645,12 +632,6 @@ func LockTrade(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lock failed"})
-		return
-	}
-
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 1, $1) WHERE id = $2", MaxHumanQi, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 		return
 	}
 
@@ -893,9 +874,6 @@ func ConfirmTrade(c *gin.Context) {
 		sender.ImmortalStones += receiverOffer.ImmortalStones
 		receiver.PrimevalStones += senderOffer.PrimevalStones
 		receiver.ImmortalStones += senderOffer.ImmortalStones
-
-		AddHumanQi(&sender, 10.0)
-		AddHumanQi(&receiver, 10.0)
 
 		// Move the offered Gu instances to their new owners. Offered Gus can never
 		// be equipped or vital (validated above), so ownership is the only change;

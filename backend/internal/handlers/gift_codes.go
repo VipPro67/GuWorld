@@ -234,7 +234,7 @@ func RedeemGiftCode(c *gin.Context) {
 		return
 	}
 
-	qiGained := AddHumanQi(&player, 2.0)
+	qiGained := 0.0
 
 	updateQuery, updateArgs := buildGiftCodeUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
@@ -336,7 +336,7 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 				PlayerID:       player.ID.String(),
 				RecipeID:       r.ID,
 				CompletionRate: 100,
-				IsUnlocked:    true,
+				IsUnlocked:     true,
 			})
 			if err != nil {
 				return nil, err

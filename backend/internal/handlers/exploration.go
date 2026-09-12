@@ -488,25 +488,25 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			}
 
 			pvpCombat := models.CombatState{
-				EnemyTemplateID:    targetPlayer.ID.String(),
-				EnemyName:          targetPlayer.Username,
-				EnemyAvatarURL:     targetPlayer.AvatarURL,
-				EnemyType:          "PVP",
-				CombatMode:         "real",
-				EnemyHP:            enemyHP,
-				EnemyMaxHP:         enemyMaxHP,
-				EnemyMana:          targetPlayer.CurrentMana,
-				EnemyMaxMana:       targetPlayer.MaxMana,
-				EnemyDamage:        targetStats["attack"],
-				EnemyDefense:       targetStats["defense"],
-				EnemySpeed:         targetStats["speed"],
-				EnemyRank:          targetPlayer.Rank,
-				EnemySubRank:       targetPlayer.SubRank,
-				EnemyGuInventory:   filterGuLoadout(targetPlayer.GuInventory, targetPlayer.CombatSettings),
-				EnemyDaoMarks:      targetPlayer.DaoMarks,
-				EnemyPathMasteries: targetPlayer.PathMasteries,
+				EnemyTemplateID:     targetPlayer.ID.String(),
+				EnemyName:           targetPlayer.Username,
+				EnemyAvatarURL:      targetPlayer.AvatarURL,
+				EnemyType:           "PVP",
+				CombatMode:          "real",
+				EnemyHP:             enemyHP,
+				EnemyMaxHP:          enemyMaxHP,
+				EnemyMana:           targetPlayer.CurrentMana,
+				EnemyMaxMana:        targetPlayer.MaxMana,
+				EnemyDamage:         targetStats["attack"],
+				EnemyDefense:        targetStats["defense"],
+				EnemySpeed:          targetStats["speed"],
+				EnemyRank:           targetPlayer.Rank,
+				EnemySubRank:        targetPlayer.SubRank,
+				EnemyGuInventory:    filterGuLoadout(targetPlayer.GuInventory, targetPlayer.CombatSettings),
+				EnemyDaoMarks:       targetPlayer.DaoMarks,
+				EnemyPathMasteries:  targetPlayer.PathMasteries,
 				EnemyCombatSettings: &targetPlayer.CombatSettings,
-				TargetPlayerID:     targetPlayer.ID.String(),
+				TargetPlayerID:      targetPlayer.ID.String(),
 			}
 			player.ActiveCombat = &pvpCombat
 			logMsg = fmt.Sprintf("Ngươi chủ động tuyên chiến và tấn công Cổ Sư %s tại tọa độ (%d, %d)!", targetPlayer.Username, player.X, player.Y)
@@ -867,8 +867,6 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	qiGained := AddHumanQi(&player, 1.0)
-
 	// Auto-resolve combat if skip_battle is enabled
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
 		winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
@@ -901,7 +899,7 @@ func MovePlayer(c *gin.Context) {
 			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
 			// Include skip summary in response
 			responseWithPlayer(c, http.StatusOK, player, gin.H{
-				"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+				"log":              logMsg,
 				"combat_triggered": false,
 				"skip_result":      skipSummary,
 				"stats":            CalculatePlayerStats(&player),
@@ -959,7 +957,7 @@ func MovePlayer(c *gin.Context) {
 	newStats := CalculatePlayerStats(&player)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+		"log":              logMsg,
 		"combat_triggered": combatTriggered,
 		"stats":            newStats,
 	})
@@ -1152,7 +1150,7 @@ func MovePlayerPath(c *gin.Context) {
 		}
 	}
 
-	qiGained := AddHumanQi(&player, 1.0)
+	qiGained := 0.0
 
 	// Auto-resolve combat if skip_battle is enabled
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
@@ -1570,7 +1568,6 @@ func savePlayerMovement(tx *sql.Tx, player *models.Player, combatJSON any) error
 	if ZoneByID(player.CurrentRegion) == nil {
 		player.CurrentRegion = HubRegionID
 	}
-
 
 	// Movement awards resources and may mutate hunger/progress in the same
 	// transaction. Persist the complete authoritative result synchronously so a

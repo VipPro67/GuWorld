@@ -9,6 +9,27 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 )
 
+// APIResponse is the unified envelope for all HTTP responses.
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   *APIError   `json:"error,omitempty"`
+	Meta    *Meta       `json:"meta,omitempty"`
+}
+
+// APIError provides structured error details.
+type APIError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Details string `json:"details,omitempty"`
+}
+
+// Meta holds optional pagination, timestamps, etc.
+type Meta struct {
+	Timestamp string `json:"timestamp,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+}
+
 // HandleError is a helper to reduce error handling boilerplate.
 // Returns true if error was handled (response sent), false if err is nil.
 // Usage:
@@ -18,7 +39,7 @@ import (
 //	}
 func HandleError(c *gin.Context, err error, msg string) bool {
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": msg + ": " + err.Error()})
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", msg+": "+err.Error(), "")
 		return true
 	}
 	return false
@@ -27,11 +48,30 @@ func HandleError(c *gin.Context, err error, msg string) bool {
 // HandleErrorStatus is like HandleError but allows custom HTTP status.
 func HandleErrorStatus(c *gin.Context, err error, msg string, status int) bool {
 	if err != nil {
-		c.JSON(status, gin.H{"error": msg + ": " + err.Error()})
+		RespondError(c, status, "ERROR", msg+": "+err.Error(), "")
 		return true
 	}
 	return false
 }
+
+// RespondSuccess sends a standardized success response.
+func RespondSuccess(c *gin.Context, status int, data interface{}) {
+	c.JSON(status, APIResponse{Success: true, Data: data})
+}
+
+// RespondError sends a standardized error response.
+func RespondError(c *gin.Context, status int, code, message, details string) {
+	c.JSON(status, APIResponse{
+		Success: false,
+		Error:   &APIError{Code: code, Message: message, Details: details},
+	})
+}
+
+// RespondSuccessWithMeta sends a standardized success response with meta.
+func RespondSuccessWithMeta(c *gin.Context, status int, data interface{}, meta *Meta) {
+	c.JSON(status, APIResponse{Success: true, Data: data, Meta: meta})
+}
+
 
 // WithTx executes fn within a database transaction.
 // Automatically rolls back on error or panic, commits on success.

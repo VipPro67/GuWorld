@@ -46,6 +46,7 @@ func getNextSoulTier(tier string) string {
 		return "BACH_NHAN"
 	}
 }
+
 // RefineSoul Luyện Hồn tại Cốc Lạc Phách
 func RefineSoul(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
@@ -84,7 +85,7 @@ func RefineSoul(c *gin.Context) {
 		player.SoulHP = 1
 	}
 
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	_, err = tx.Exec(`
 		UPDATE players
@@ -105,5 +106,3 @@ func RefineSoul(c *gin.Context) {
 		"message": fmt.Sprintf("Luyện Hồn thành công! Hồn phách đột phá lên %s, nhưng bị suy yếu do gió Lạc Phách (Soul HP giảm mạnh). Hãy dưỡng hồn để khôi phục. Nhân Khí +%.0f.", newTier, qiGained),
 	})
 }
-
-

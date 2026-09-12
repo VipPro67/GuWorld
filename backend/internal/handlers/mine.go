@@ -263,12 +263,6 @@ func OccupyMineSlot(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
-		return
-	}
-
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -566,25 +560,25 @@ func AttackMineSlot(c *gin.Context) {
 
 		// Build PVP Mine Combat State (real mode: actual HP/mana, real resource cost)
 		pvpCombat = models.CombatState{
-			EnemyTemplateID:    defender.ID.String(),
-			EnemyName:          defender.Username,
-			EnemyType:          "PVP",
-			CombatMode:         "real",
-			EnemyHP:            enemyHP,
-			EnemyMaxHP:         enemyMaxHP,
-			EnemyMana:          defender.CurrentMana,
-			EnemyMaxMana:       defender.MaxMana,
-			EnemyDamage:        defenderStats["attack"],
-			EnemyDefense:       defenderStats["defense"],
-			EnemySpeed:         defenderStats["speed"],
-			EnemyRank:          defender.Rank,
-			EnemySubRank:       defender.SubRank,
-			EnemyGuInventory:   filterGuLoadout(defender.GuInventory, defender.CombatSettings),
-			EnemyDaoMarks:      defender.DaoMarks,
-			EnemyPathMasteries: defender.PathMasteries,
+			EnemyTemplateID:     defender.ID.String(),
+			EnemyName:           defender.Username,
+			EnemyType:           "PVP",
+			CombatMode:          "real",
+			EnemyHP:             enemyHP,
+			EnemyMaxHP:          enemyMaxHP,
+			EnemyMana:           defender.CurrentMana,
+			EnemyMaxMana:        defender.MaxMana,
+			EnemyDamage:         defenderStats["attack"],
+			EnemyDefense:        defenderStats["defense"],
+			EnemySpeed:          defenderStats["speed"],
+			EnemyRank:           defender.Rank,
+			EnemySubRank:        defender.SubRank,
+			EnemyGuInventory:    filterGuLoadout(defender.GuInventory, defender.CombatSettings),
+			EnemyDaoMarks:       defender.DaoMarks,
+			EnemyPathMasteries:  defender.PathMasteries,
 			EnemyCombatSettings: &defender.CombatSettings,
-			TargetPlayerID:     defender.ID.String(),
-			MineSlotID:         req.SlotID,
+			TargetPlayerID:      defender.ID.String(),
+			MineSlotID:          req.SlotID,
 		}
 	}
 
@@ -887,4 +881,3 @@ func AssignMonstersToEmptyMines() {
 func invalidateMineSlotsCache() {
 	_ = cache.Delete("mine_slots_list")
 }
-

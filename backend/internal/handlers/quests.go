@@ -411,7 +411,7 @@ func CompleteQuest(c *gin.Context) {
 		return
 	}
 
-	qiGained := AddHumanQi(&player, 5.0)
+	qiGained := 0.0
 
 	updateQuery, updateArgs := buildQuestUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)

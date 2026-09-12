@@ -79,7 +79,7 @@ func SacrificeNPC(c *gin.Context) {
 	if player.AptitudePercent > 99 {
 		player.AptitudePercent = 99
 	}
-	
+
 	// Dynamically update Aptitude Type
 	if player.AptitudePercent >= 80 {
 		player.AptitudeType = "Giáp"
@@ -94,7 +94,7 @@ func SacrificeNPC(c *gin.Context) {
 	// 5. Increase Aperture Stress (+40)
 	player.ApertureStress += 40.0
 
-	qiGained := AddHumanQi(&player, 10.0)
+	qiGained := 0.0
 
 	// 6. Save back to DB
 	_, err = tx.Exec(`
@@ -113,10 +113,10 @@ func SacrificeNPC(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":       fmt.Sprintf("Hiến tế thành công %s! Huyết Sọ Cổ đã nghiền nát cốt nhục đệ tử, chuyển hóa chân huyết nâng cao tư chất Không khiếu của đạo hữu (+5%% tư chất). Nhân Khí +%.0f.", npcName, qiGained),
-		"old_aptitude":  oldAptitude,
-		"new_aptitude":  player.AptitudePercent,
-		"aptitude_type": player.AptitudeType,
+		"message":         fmt.Sprintf("Hiến tế thành công %s! Huyết Sọ Cổ đã nghiền nát cốt nhục đệ tử, chuyển hóa chân huyết nâng cao tư chất Không khiếu của đạo hữu (+5%% tư chất). Nhân Khí +%.0f.", npcName, qiGained),
+		"old_aptitude":    oldAptitude,
+		"new_aptitude":    player.AptitudePercent,
+		"aptitude_type":   player.AptitudeType,
 		"aperture_stress": player.ApertureStress,
 	})
 }

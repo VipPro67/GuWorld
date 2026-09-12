@@ -22,6 +22,10 @@ type QueryRower interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 // PlayerService handles player persistence and state management.
 type PlayerService struct {
 	db *sql.DB
@@ -42,6 +46,7 @@ func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models
 	if err != nil {
 		return player, err
 	}
+	s.cleanExpiredStatuses(q, &player)
 
 	if s.db != nil {
 		var qy db.Queryer
@@ -70,6 +75,7 @@ func (s *PlayerService) LoadForUpdateEquipped(tx *sql.Tx, id uuid.UUID) (models.
 	if err != nil {
 		return player, err
 	}
+	s.cleanExpiredStatuses(tx, &player)
 	if s.db != nil {
 		if inv, errR := db.LoadPlayerGus(tx, id.String(), true); errR == nil {
 			player.GuInventory = inv
@@ -86,6 +92,7 @@ func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player,
 	if err != nil {
 		return player, err
 	}
+	s.cleanExpiredStatuses(q, &player)
 	if s.db != nil {
 		var qy db.Queryer
 		if tx, ok := q.(db.Queryer); ok {
@@ -98,6 +105,34 @@ func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player,
 		}
 	}
 	return player, nil
+}
+
+// cleanExpiredStatuses lazily persists status cleanup for players that are
+// actually loaded by a request. The original JSON condition prevents a stale
+// read from overwriting a status granted concurrently.
+func (s *PlayerService) cleanExpiredStatuses(q QueryRower, player *models.Player) {
+	exec, ok := q.(execer)
+	if !ok {
+		return
+	}
+	original, err := player.Statuses.Value()
+	if err != nil || !player.Statuses.Expire(time.Now()) {
+		return
+	}
+
+	cleaned, err := player.Statuses.Value()
+	if err != nil {
+		logger.S.Warnf("Failed to serialize expired statuses for player %s: %v", player.ID, err)
+		return
+	}
+	_, err = exec.Exec(`
+		UPDATE players
+		SET statuses = $1
+		WHERE id = $2 AND statuses = $3
+	`, cleaned, player.ID, original)
+	if err != nil {
+		logger.S.Warnf("Failed to lazily clean expired statuses for player %s: %v", player.ID, err)
+	}
 }
 
 // loadRow loads the player row, active combat state and materials inventory,
@@ -303,7 +338,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 	effMaxHP := gamefx.EffectiveMaxHP(player)
 	player.HPRegenRate = (effMaxHP*0.05 + gamefx.Get(player).HPRegenBonus) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
 
-	player.SoulRegenRate = (float64(player.MaxSoul) * 0.10) * (1.0 + gamefx.Get(player).SoulRegenBonus) + models.SoulRegenTickPerHour(player.GuInventory, player.Rank)
+	player.SoulRegenRate = (float64(player.MaxSoul)*0.10)*(1.0+gamefx.Get(player).SoulRegenBonus) + models.SoulRegenTickPerHour(player.GuInventory, player.Rank)
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
