@@ -2325,8 +2325,17 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
-      // Listen for chat:general
-      wsManager.subscribe("chat:general", (payload: any) => {
+      const currentPlayer = get().player;
+      const hasConnectingHeaven = currentPlayer?.gu_inventory?.some(
+        (gu) => gu.gu_id === "GU_CONNECTING_HEAVEN" && gu.status !== "DEAD"
+      ) ?? false;
+      const hasDivineSense = currentPlayer?.gu_inventory?.some(
+        (gu) => gu.gu_id === "GU_DIVINE_SENSE" && gu.status !== "DEAD"
+      ) ?? false;
+
+      // Bảo Hoàng Thiên is restricted to players owning both required Gu.
+      const unsubscribeGeneralChat = hasConnectingHeaven && hasDivineSense
+        ? wsManager.subscribe("chat:general", (payload: any) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
@@ -2372,7 +2381,8 @@ export const useGameStore = create<GameState>((set, get) => {
         } catch (err) {
           console.error("Failed to process general chat event", err);
         }
-      });
+      })
+        : () => {};
 
       // Listen only to the current sect's channel. The backend publishes sect
       // chat on chat:sect:<sect_id>; a shared channel would leak messages.
@@ -2484,6 +2494,7 @@ export const useGameStore = create<GameState>((set, get) => {
       (window as any).__gu_ws_cleanup = () => {
         unsubscribePlayer();
         unsubscribeTrade();
+        unsubscribeGeneralChat();
         unsubscribeSectChat();
         unsubscribeDeathArena();
         releaseConnection();
