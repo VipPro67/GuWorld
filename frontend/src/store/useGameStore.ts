@@ -1965,14 +1965,19 @@ export const useGameStore = create<GameState>((set, get) => {
 
     const token = get().token!;
 
+    // Mark the shared subscription as claimed before awaiting the socket.
+    // Login and page effects can request it in the same render cycle.
+    set({ playerEventsConnected: true });
+
     // Acquire connection with reference counting
     const releaseConnection = wsManager.acquireConnection(token);
 
     try {
       wsManager.connect(token).then(() => {
-        set({ playerEventsConnected: true, playerEventsRetries: 0 });
+        set({ playerEventsRetries: 0 });
       }).catch((err) => {
         console.warn("[WebSocket] Connection failed", err);
+        set({ playerEventsConnected: false });
         releaseConnection();
       });
 

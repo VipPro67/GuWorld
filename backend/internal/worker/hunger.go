@@ -189,15 +189,15 @@ func batchApplyOnTickEffects(db *sql.DB) {
 	var updatePrimeval []float64
 	var updateImmortal []float64
 
-	for pid, s := range stoneMap {
+	for pid := range stoneMap {
 		ps := tickStones[pid]
 		is := tickImmortal[pid]
 		if ps == 0 && is == 0 {
 			continue
 		}
 		updateIDs = append(updateIDs, pid)
-		updatePrimeval = append(updatePrimeval, s.primeval+ps)
-		updateImmortal = append(updateImmortal, s.immortal+is)
+		updatePrimeval = append(updatePrimeval, ps)
+		updateImmortal = append(updateImmortal, is)
 	}
 
 	if len(updateIDs) == 0 {
@@ -207,8 +207,8 @@ func batchApplyOnTickEffects(db *sql.DB) {
 	// 5. Batch UPDATE
 	_, err = db.Exec(`
 		UPDATE players AS p SET
-			primeval_stones = v.ps,
-			immortal_stones = v.is2
+			primeval_stones = p.primeval_stones + v.ps,
+			immortal_stones = p.immortal_stones + v.is2
 		FROM (SELECT unnest($1::uuid[]) AS id,
 		             unnest($2::float8[]) AS ps,
 		             unnest($3::float8[]) AS is2) v
