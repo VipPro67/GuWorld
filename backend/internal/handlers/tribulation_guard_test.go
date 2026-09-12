@@ -3,6 +3,8 @@ package handlers
 import (
 	"math"
 	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 func TestGuardNextTribulationYear(t *testing.T) {
@@ -36,6 +38,12 @@ func TestGuardNextTribulationYear(t *testing.T) {
 			currentYears: 100.05,
 			expected:     111.0,
 		},
+		{
+			name:         "Corrupted / stale past year (e.g. 100 when current is 13770)",
+			nextYear:     100.0,
+			currentYears: 13770.0,
+			expected:     13780.0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -45,5 +53,19 @@ func TestGuardNextTribulationYear(t *testing.T) {
 				t.Errorf("guardNextTribulationYear(%v, %v) = %v; want %v", tt.nextYear, tt.currentYears, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestTribulationNextYearHighYearsPassed(t *testing.T) {
+	// Rank 6 with 13770 years passed: next milestone must be 13780 (Earth Calamity)
+	nextYear, tribType := models.GetNextTribulationInfo(6, 0, 13770.0)
+	if nextYear != 13780.0 || tribType != "EARTH_CALAMITY" {
+		t.Errorf("GetNextTribulationInfo(6, 0, 13770) = (%v, %v); want (13780, EARTH_CALAMITY)", nextYear, tribType)
+	}
+
+	// At 13790 years passed: next milestone is 13800 (Heavenly Tribulation)
+	nextYear, tribType = models.GetNextTribulationInfo(6, 0, 13790.0)
+	if nextYear != 13800.0 || tribType != "HEAVENLY_TRIBULATION" {
+		t.Errorf("GetNextTribulationInfo(6, 0, 13790) = (%v, %v); want (13800, HEAVENLY_TRIBULATION)", nextYear, tribType)
 	}
 }

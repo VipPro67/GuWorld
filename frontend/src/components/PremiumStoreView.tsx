@@ -177,6 +177,9 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Mua gói thất bại");
       setWallet(data.wallet);
+      if (data.player) {
+        useGameStore.getState().setPlayerFromServer(data.player);
+      }
       setShopMessage("Mua gói thành công, phần thưởng đã nhập kho.");
       await fetchShopPackages();
     } catch (err) {
@@ -214,6 +217,9 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đổi đá thất bại");
       setWallet(data.wallet);
+      if (data.player) {
+        useGameStore.getState().setPlayerFromServer(data.player);
+      }
       setWalletRefreshKey((k) => k + 1);
       setExchangeMessage(`Đổi thành công ${amount.toLocaleString()} ${sourceLabel} → ${gain.toLocaleString()} ${targetLabel}.`);
       setExchangeError(false);

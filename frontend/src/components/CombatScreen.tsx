@@ -50,6 +50,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
+  const resolveTribulation = useGameStore((state) => state.resolveTribulation);
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
   const fetchMineSlots = useGameStore((state) => state.fetchMineSlots);
   const killerMoves = useGameStore((state) => state.killerMoves);
@@ -147,6 +148,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [investigationLevel, enemy]);
 
   const handleStartSimulation = async () => {
+    const tribulationEventId = isPracticeMode ? undefined : player.active_combat?.tribulation_event_id;
     const loadout = {
       GuIds: selectedGuIds.map(id => eligibleGus.find(g => g.instance_id === id)?.gu_id || id),
       KillerMoveIds: selectedKillerMoveIds,
@@ -168,6 +170,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       setSimulationLogs(result.logs);
       setSimulationWinner(result.winner);
       setSimulationCombatants(result.combatants || []);
+
+      if (result.winner === "Phe Ta" && tribulationEventId) {
+        await resolveTribulation(tribulationEventId);
+      }
 
       // Show mine rewards as toast if present
       if (Array.isArray(result.logs)) {

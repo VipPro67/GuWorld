@@ -807,6 +807,10 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete purchase"})
 		return
 	}
+	if sellerID != authID {
+		ClearPendingPlayerQueues(sellerID.String())
+		PublishPlayerRealtimeEvent(sellerID, PlayerEventUpdated)
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",

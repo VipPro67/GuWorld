@@ -2485,6 +2485,8 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	player.CompletedQuests = loadCompletedQuests(player.ID.String())
 	player.UnlockedRecipes = loadUnlockedRecipes(player.ID.String())
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -4439,6 +4441,9 @@ func UseConsumableGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,

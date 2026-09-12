@@ -2336,7 +2336,9 @@ export const useGameStore = create<GameState>((set, get) => {
 
       // Listen only to the current sect's channel. The backend publishes sect
       // chat on chat:sect:<sect_id>; a shared channel would leak messages.
-      const sectChannel = get().mySectStatus?.sect_id ? `chat:sect:${get().mySectStatus.sect_id}` : null;
+      const sectStatus = get().mySectStatus;
+      const sectId = sectStatus?.member?.sect_id ?? sectStatus?.sect?.id;
+      const sectChannel = sectId ? `chat:sect:${sectId}` : null;
       const unsubscribeSectChat = sectChannel ? wsManager.subscribe(sectChannel, (payload: any) => {
         try {
           // Handle append-only updates (single new message)
@@ -3876,6 +3878,7 @@ export const useGameStore = create<GameState>((set, get) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
 
+    const tribulationEventId = player.active_combat?.tribulation_event_id;
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/attack`, {
@@ -3911,6 +3914,10 @@ export const useGameStore = create<GameState>((set, get) => {
         data.logs.forEach((logLine: string) => {
           get().addLog(logLine);
         });
+      }
+      if (data.victory && tribulationEventId) {
+        set({ actionLoading: false });
+        await get().resolveTribulation(tribulationEventId);
       }
       return data;
     } catch (err: any) {

@@ -391,14 +391,7 @@ func ResolveTribulation(c *gin.Context) {
 		var username string
 		_ = tx.QueryRow(`SELECT rank, username FROM players WHERE id = $1`, playerID).Scan(&playerRank, &username)
 
-		counts := map[string]int{
-			"EARTH_CALAMITY":       ap.EarthCalamityCount,
-			"HEAVENLY_TRIBULATION": ap.HeavenlyTribulationCount,
-			"GRAND_TRIBULATION":    ap.GrandTribulationCount,
-			"MYRIAD_TRIBULATION":   ap.MyriadTribulationCount,
-			"CHAOS_CALAMITY":       ap.ChaosCalamityCount,
-		}
-		nextYear, _ := models.GetNextTribulationInfoWithCounts(playerRank, ap.RankStartYear, counts)
+		nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.InternalYearsPassed)
 		ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 
 		// Check breakthrough conditions
@@ -440,7 +433,7 @@ func ResolveTribulation(c *gin.Context) {
 				}
 
 				// Recalculate next tribulation year based on the new rank!
-				nextYear, _ = models.GetNextTribulationInfoWithCounts(newRank, ap.RankStartYear, map[string]int{})
+				nextYear, _ = models.GetNextTribulationInfo(newRank, ap.RankStartYear, ap.InternalYearsPassed)
 				ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 			}
 		}
@@ -698,25 +691,20 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		return err
 	}
 
-	counts := map[string]int{
-		"EARTH_CALAMITY":       ap.EarthCalamityCount,
-		"HEAVENLY_TRIBULATION": ap.HeavenlyTribulationCount,
-		"GRAND_TRIBULATION":    ap.GrandTribulationCount,
-		"MYRIAD_TRIBULATION":   ap.MyriadTribulationCount,
-		"CHAOS_CALAMITY":       ap.ChaosCalamityCount,
-	}
-	calcNextYear, calcNextType := models.GetNextTribulationInfoWithCounts(rank, ap.RankStartYear, counts)
+	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
 
 	triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 	storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
-	if storedYear < triggerYear {
-		triggerYear = storedYear
-		if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
-			calcNextType = scheduledType
-		}
-	} else if math.Abs(storedYear-triggerYear) < 0.001 {
-		if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
-			calcNextType = scheduledType
+	if storedYear >= ap.InternalYearsPassed || (ap.InternalYearsPassed-storedYear < 10.0) {
+		if storedYear < triggerYear {
+			triggerYear = storedYear
+			if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
+				calcNextType = scheduledType
+			}
+		} else if math.Abs(storedYear-triggerYear) < 0.001 {
+			if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
+				calcNextType = scheduledType
+			}
 		}
 	}
 
@@ -852,13 +840,18 @@ func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
 // guardNextTribulationYear ensures the next scheduled tribulation never lands
 // behind the current internal year (e.g. after a rank-up, where the new rank's
 // schedule is computed from intervals smaller than the already-passed year).
-// A milestone exactly equal to the current year is left as-is so that two types
-// due at the same milestone resolve one right after the other instead of drifting.
+// A milestone within the current 10-year window (e.g. overdue by a few moments)
+// is left as-is so that due events trigger cleanly.
+// If nextYear is more than 10 years in the past (e.g. corrupted or stale data),
+// it is pushed forward to the next valid milestone strictly greater than currentYears.
 // Also guards against math.MaxFloat64 (infinity) returned when no valid tribulation
 // type exists for the current rank (e.g., rank < 6 or rank > 9).
 func guardNextTribulationYear(nextYear, currentYears float64) float64 {
 	if math.IsInf(nextYear, 0) || nextYear == math.MaxFloat64 {
 		return math.Ceil(currentYears) + 10
+	}
+	if currentYears-nextYear > 10.0 {
+		return math.Floor(currentYears/10)*10 + 10
 	}
 	return math.Round(nextYear)
 }
@@ -1241,25 +1234,20 @@ func CheckAndTriggerTribulations() error {
 				rank = pd.rank
 			}
 
-			counts := map[string]int{
-				"EARTH_CALAMITY":       ap.EarthCalamityCount,
-				"HEAVENLY_TRIBULATION": ap.HeavenlyTribulationCount,
-				"GRAND_TRIBULATION":    ap.GrandTribulationCount,
-				"MYRIAD_TRIBULATION":   ap.MyriadTribulationCount,
-				"CHAOS_CALAMITY":       ap.ChaosCalamityCount,
-			}
-			calcNextYear, calcNextType := models.GetNextTribulationInfoWithCounts(rank, ap.RankStartYear, counts)
+			calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
 
 			triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 			storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
-			if storedYear < triggerYear {
-				triggerYear = storedYear
-				if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
-					calcNextType = scheduledType
-				}
-			} else if math.Abs(storedYear-triggerYear) < 0.001 {
-				if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
-					calcNextType = scheduledType
+			if storedYear >= ap.InternalYearsPassed || (ap.InternalYearsPassed-storedYear < 10.0) {
+				if storedYear < triggerYear {
+					triggerYear = storedYear
+					if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
+						calcNextType = scheduledType
+					}
+				} else if math.Abs(storedYear-triggerYear) < 0.001 {
+					if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
+						calcNextType = scheduledType
+					}
 				}
 			}
 

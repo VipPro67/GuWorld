@@ -526,7 +526,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		Metadata:       map[string]interface{}{"price_jade": pkg.PriceJade, "jade_before": jadeBefore, "jade_after": wallet.ImmortalJade},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Mua gói thành công. Nhân Khí +10.", "wallet": wallet, "rewards": pkg.Rewards})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Mua gói thành công. Nhân Khí +10.", "wallet": wallet, "rewards": pkg.Rewards})
 }
 
 const (
@@ -676,7 +676,7 @@ func ExchangeStones(c *gin.Context) {
 		}()),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Đổi đá thành công", "wallet": wallet})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Đổi đá thành công", "wallet": wallet})
 }
 
 func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
