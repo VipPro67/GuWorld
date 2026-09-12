@@ -1597,9 +1597,6 @@ export const SectView: React.FC = () => {
               <p className="text-xs text-zinc-500 mt-0.5">
                 Dùng điểm cống hiến môn phái để đổi lấy thiên tài địa bảo, cổ trùng hay công thức bí truyền.
               </p>
-              <p className="text-[10px] text-amber-500/80 mt-0.5 font-mono">
-                ⚠️ Cổ trong Bảo khố vẫn hao Độ No mỗi 3 giờ ngang mức hoạt động; về 0 sẽ chết và bị xóa khỏi kho.
-              </p>
             </div>
 
             {/* Sub Tabs */}

@@ -92,6 +92,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
+  const [guSubTab, setGuSubTab] = useState<"equipped" | "rest">("equipped");
   const [selectedPath, setSelectedPath] = useState<string>("all");
   const [selectedRank, setSelectedRank] = useState<string>("all");
 
@@ -446,6 +447,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     return groups;
   }, [filteredGus]);
 
+  const { equippedGroups, restGroups, equippedBugCount, restBugCount } = useMemo(() => {
+    const equipped = guGroups.filter(g => g.equippedCount > 0);
+    const rest = guGroups.filter(g => g.equippedCount === 0);
+    const eqCount = equipped.reduce((sum, g) => sum + g.equippedCount, 0);
+    const rCount = rest.reduce((sum, g) => sum + g.instances.length, 0);
+    return {
+      equippedGroups: equipped,
+      restGroups: rest,
+      equippedBugCount: eqCount,
+      restBugCount: rCount,
+    };
+  }, [guGroups]);
+
   const handleSelectAllToggle = () => {
     const newSelected = { ...selectedGuIds };
     if (isAllEligibleSelected) {
@@ -512,42 +526,79 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
         {/* Dynamic Filters for Gu bugs */}
         {selectedTab === "gu" && (
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 relative">
-              <select
-                value={selectedPath}
-                onChange={(e) => setSelectedPath(e.target.value)}
-                className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 12px center',
-                  backgroundSize: '14px'
-                }}
-              >
-                <option value="all">Tất cả Lưu Phái</option>
-                {allPaths.map(path => (
-                  <option key={path} value={path}>{translatePath(path)}</option>
-                ))}
-              </select>
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative">
+                <select
+                  value={selectedPath}
+                  onChange={(e) => setSelectedPath(e.target.value)}
+                  className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 12px center',
+                    backgroundSize: '14px'
+                  }}
+                >
+                  <option value="all">Tất cả Lưu Phái</option>
+                  {allPaths.map(path => (
+                    <option key={path} value={path}>{translatePath(path)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1 relative">
+                <select
+                  value={selectedRank}
+                  onChange={(e) => setSelectedRank(e.target.value)}
+                  className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 12px center',
+                    backgroundSize: '14px'
+                  }}
+                >
+                  <option value="all">Tất cả Bậc (Rank)</option>
+                  {allRanks.map(rank => (
+                    <option key={rank} value={rank}>Bậc {rank}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="flex-1 relative">
-              <select
-                value={selectedRank}
-                onChange={(e) => setSelectedRank(e.target.value)}
-                className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 12px center',
-                  backgroundSize: '14px'
-                }}
+
+            {/* Sub-tab selection: Đang Trang Bị vs Còn Lại */}
+            <div className="flex gap-2 bg-zinc-950/60 p-1.5 rounded-xl border border-zinc-900">
+              <button
+                type="button"
+                onClick={() => setGuSubTab("equipped")}
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  guSubTab === "equipped"
+                    ? "bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 font-bold shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
+                }`}
               >
-                <option value="all">Tất cả Bậc (Rank)</option>
-                {allRanks.map(rank => (
-                  <option key={rank} value={rank}>Bậc {rank}</option>
-                ))}
-              </select>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Đang Trang Bị</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/40 font-mono">
+                  {equippedBugCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGuSubTab("rest")}
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  guSubTab === "rest"
+                    ? "bg-amber-950/40 text-amber-400 border border-amber-500/30 font-bold shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                <span>Rảnh Rỗi</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/40 font-mono">
+                  {restBugCount}
+                </span>
+              </button>
             </div>
           </div>
         )}
@@ -812,10 +863,6 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             </div>
           ) : (
             (() => {
-              // Split into equipped and rest
-              const equippedGroups = guGroups.filter(g => g.equippedCount > 0);
-              const restGroups = guGroups.filter(g => g.equippedCount === 0);
-
               const renderGroup = ({
                 guId,
                 groupKey,
@@ -1393,27 +1440,38 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
               return (
                 <GamePanel variant="default" className="space-y-6">
-                  {equippedGroups.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-bold text-emerald-400 mb-3 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        Đang Trang Bị ({equippedGroups.reduce((sum, g) => sum + g.equippedCount, 0)})
-                      </h3>
-                      <div className="space-y-4">
-                        {equippedGroups.map(renderGroup)}
+                  {guSubTab === "equipped" ? (
+                    equippedGroups.length > 0 ? (
+                      <div>
+                        <h3 className="text-xs font-bold text-emerald-400 mb-3 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Đang Trang Bị ({equippedBugCount})
+                        </h3>
+                        <div className="space-y-4">
+                          {equippedGroups.map(renderGroup)}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {restGroups.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-bold text-zinc-500 mb-3 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                        Còn Lại ({restGroups.reduce((sum, g) => sum + g.instances.length, 0)})
-                      </h3>
-                      <div className="space-y-4">
-                        {restGroups.map(renderGroup)}
+                    ) : (
+                      <div className="text-center py-8 text-xs text-zinc-500 font-mono italic border border-dashed border-zinc-900 rounded-xl">
+                        Chưa có Cổ trùng nào đang xuất trận.
                       </div>
-                    </div>
+                    )
+                  ) : (
+                    restGroups.length > 0 ? (
+                      <div>
+                        <h3 className="text-xs font-bold text-amber-400/90 mb-3 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          Rảnh Rỗi ({restBugCount})
+                        </h3>
+                        <div className="space-y-4">
+                          {restGroups.map(renderGroup)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-xs text-zinc-500 font-mono italic border border-dashed border-zinc-900 rounded-xl">
+                        Không có Cổ trùng nào khác trong túi đồ.
+                      </div>
+                    )
                   )}
                 </GamePanel>
               );
