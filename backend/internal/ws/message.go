@@ -4,10 +4,11 @@ import "encoding/json"
 
 // WSMessage is the envelope for all WebSocket messages.
 type WSMessage struct {
-	Type    string          `json:"type"`
-	Channel string          `json:"channel,omitempty"`
-	Payload json.RawMessage `json:"payload,omitempty"`
-	Version int             `json:"version,omitempty"`
+	Type      string          `json:"type"`
+	Channel   string          `json:"channel,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+	Version   int             `json:"version,omitempty"`
+	RequestID string          `json:"request_id,omitempty"`
 }
 
 // SubscribeMsg is sent by the client to subscribe to a channel.
