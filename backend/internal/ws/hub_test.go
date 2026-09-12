@@ -106,6 +106,19 @@ func TestHub_IsConnected(t *testing.T) {
 	}
 }
 
+func TestIsPlayerScopedChannel(t *testing.T) {
+	for _, channel := range []string{"player:abc", "combat:abc", "trade:abc", "notif:abc"} {
+		if !isPlayerScopedChannel(channel) {
+			t.Fatalf("expected %q to be player-scoped", channel)
+		}
+	}
+	for _, channel := range []string{"player", "combat", "chat:world"} {
+		if isPlayerScopedChannel(channel) {
+			t.Fatalf("expected %q not to be player-scoped", channel)
+		}
+	}
+}
+
 func TestShardedHub_TradeEventsStayPlayerScoped(t *testing.T) {
 	hub := InitShardedHub()
 	defer func() {

@@ -693,7 +693,7 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		return err
 	}
 
-		calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
+	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
 
 	triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 	storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
@@ -904,8 +904,6 @@ func isPlayerOnline(playerID string) bool {
 	}
 	return time.Since(la.Time) <= tribulationOnlineWindow
 }
-
-
 func CheckAndTriggerTribulations() error {
 	// Query stable apertures
 	rows, err := db.DB.Query(`
@@ -917,7 +915,6 @@ func CheckAndTriggerTribulations() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
 	type ApertureCheck struct {
 		ID                       string
@@ -946,8 +943,6 @@ func CheckAndTriggerTribulations() error {
 			apertures = append(apertures, ap)
 		}
 	}
-
-
 
 	if len(apertures) > 0 {
 		// ── Batch-read: player lifespan, time_speed, rank (1 query) ──────────
@@ -1027,10 +1022,24 @@ func CheckAndTriggerTribulations() error {
 		}
 
 		// ── Accumulate batch writes ───────────────────────────────────────────
-		type lifespanUp struct{ id string; val float64 }
-		type manaUp struct{ id string; val float64 }
-		type nodeUp struct{ id string; hp int; destroyed bool }
-		type vhUp struct{ id string; pop int; happy, oppress float64 }
+		type lifespanUp struct {
+			id    string
+			decay float64
+		}
+		type manaUp struct {
+			id  string
+			val float64
+		}
+		type nodeUp struct {
+			id        string
+			hp        int
+			destroyed bool
+		}
+		type vhUp struct {
+			id             string
+			pop            int
+			happy, oppress float64
+		}
 		type msgIns struct{ receiver, content string }
 
 		var lifeUps []lifespanUp
@@ -1062,8 +1071,9 @@ func CheckAndTriggerTribulations() error {
 				continue
 			}
 
-			newLifespan := math.Max(0.0, currentLifespan-(realYearsPassed*timeSpeedMultiplier))
-			lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, val: newLifespan})
+			lifespanDecay := realYearsPassed * timeSpeedMultiplier
+			newLifespan := math.Max(0.0, currentLifespan-lifespanDecay)
+			lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, decay: lifespanDecay})
 
 			if newLifespan <= 0.0 {
 				// Freeze aperture (keep per-aperture Exec: different SET clause)
@@ -1206,22 +1216,22 @@ func CheckAndTriggerTribulations() error {
 				}
 			}
 
-// Tribulation scheduling
-		pd := pMap[ap.PlayerID]
-		rank := 0
-		if pd != nil {
-			rank = pd.rank
-		}
+			// Tribulation scheduling
+			pd := pMap[ap.PlayerID]
+			rank := 0
+			if pd != nil {
+				rank = pd.rank
+			}
 
-	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
+			calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
 
-		triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
-		storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
-		if storedYear < triggerYear {
-			triggerYear = storedYear
-		}
+			triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
+			storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
+			if storedYear < triggerYear {
+				triggerYear = storedYear
+			}
 
-		if newYearsPassed >= triggerYear {
+			if newYearsPassed >= triggerYear {
 				if !isPlayerOnline(ap.PlayerID) {
 					_, _ = db.DB.Exec(`
 						UPDATE immortal_apertures
@@ -1269,9 +1279,9 @@ func CheckAndTriggerTribulations() error {
 					vals := make([]float64, len(lifeUps))
 					for i, u := range lifeUps {
 						ids[i] = u.id
-						vals[i] = u.val
+						vals[i] = u.decay
 					}
-					_, _ = tx.Exec(`UPDATE players AS p SET lifespan = v.val FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS val) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
+					_, _ = tx.Exec(`UPDATE players AS p SET lifespan = GREATEST(0.0, p.lifespan - v.decay) FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS decay) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
 				}
 
 				// Batch UPDATE player mana
@@ -2145,18 +2155,18 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 }
 
 func RegenerateImmortalApertures() error {
-		// Cheap guard: skip the UPDATE entirely when no aperture needs healing.
-		var needsHealing bool
-		if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM immortal_apertures WHERE state != 'DESTROYED' AND aperture_hp < max_aperture_hp)`).Scan(&needsHealing); err != nil {
-			return err
-		}
-		if !needsHealing {
-			return nil
-		}
+	// Cheap guard: skip the UPDATE entirely when no aperture needs healing.
+	var needsHealing bool
+	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM immortal_apertures WHERE state != 'DESTROYED' AND aperture_hp < max_aperture_hp)`).Scan(&needsHealing); err != nil {
+		return err
+	}
+	if !needsHealing {
+		return nil
+	}
 
-		// Heal aperture_hp by 0.5% of max_aperture_hp per minute (minimum 10 HP per minute)
-		// If state is DAMAGED and aperture_hp reaches max_aperture_hp, set state back to STABLE
-		_, err := db.DB.Exec(`
+	// Heal aperture_hp by 0.5% of max_aperture_hp per minute (minimum 10 HP per minute)
+	// If state is DAMAGED and aperture_hp reaches max_aperture_hp, set state back to STABLE
+	_, err := db.DB.Exec(`
 			UPDATE immortal_apertures
 			SET 
 				aperture_hp = LEAST(max_aperture_hp, aperture_hp + GREATEST(10, max_aperture_hp / 200)),
@@ -2173,8 +2183,8 @@ func RegenerateImmortalApertures() error {
 				updated_at = NOW()
 			WHERE state != 'DESTROYED' AND aperture_hp < max_aperture_hp
 		`)
-		return err
-	}
+	return err
+}
 
 func StartTribulationWorker(ctx context.Context) {
 	ticker60 := time.NewTicker(60 * time.Second)

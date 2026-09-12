@@ -49,6 +49,7 @@ func processStatusExpiryTick(db *sql.DB) {
 
 	type playerStatusPurge struct {
 		id       string
+		original []byte
 		statuses []byte
 	}
 	var purges []playerStatusPurge
@@ -65,7 +66,7 @@ func processStatusExpiryTick(db *sql.DB) {
 		}
 		if list.Expire(now) {
 			if b, err := json.Marshal(list); err == nil {
-				purges = append(purges, playerStatusPurge{id: id, statuses: b})
+				purges = append(purges, playerStatusPurge{id: id, original: rawStatuses, statuses: b})
 			}
 		}
 	}
@@ -76,19 +77,22 @@ func processStatusExpiryTick(db *sql.DB) {
 
 	// Batch UPDATE using unnest for all affected players in one query
 	ids := make([]string, len(purges))
+	originalStatuses := make([]string, len(purges))
 	statuses := make([]string, len(purges))
 	for i, p := range purges {
 		ids[i] = p.id
+		originalStatuses[i] = string(p.original)
 		statuses[i] = string(p.statuses)
 	}
 
 	_, err = db.ExecContext(ctx, `
-		WITH updates(id, statuses) AS (
-			SELECT unnest($1::text[]), unnest($2::text[])
+		WITH updates(id, original_statuses, statuses) AS (
+			SELECT unnest($1::text[]), unnest($2::text[]), unnest($3::text[])
 		)
 		UPDATE players p SET statuses = u.statuses::jsonb
-		FROM updates u WHERE p.id = u.id::uuid
-	`, pq.Array(ids), pq.Array(statuses))
+		FROM updates u
+		WHERE p.id = u.id::uuid AND p.statuses = u.original_statuses::jsonb
+	`, pq.Array(ids), pq.Array(originalStatuses), pq.Array(statuses))
 	if err != nil {
 		logger.S.Errorf("Status Expiry Worker Error batch updating: %v", err)
 		return

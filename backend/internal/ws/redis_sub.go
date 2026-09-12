@@ -62,7 +62,7 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 		for msg := range ch {
 			clientChannel, clientMsg := formatClientEvent(msg.Channel, []byte(msg.Payload))
 
-			if len(msg.Channel) >= 6 && msg.Channel[:6] == "trade:" {
+			if isPlayerScopedChannel(msg.Channel) {
 				shub.BroadcastToChannel(ChannelName(msg.Channel), clientMsg, uuid.Nil)
 				continue
 			}
@@ -84,6 +84,15 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 			backoffDelay = min(backoffDelay*2, maxBackoffDelay)
 		}
 	}
+}
+
+func isPlayerScopedChannel(channel string) bool {
+	for _, prefix := range []string{"player:", "combat:", "trade:", "notif:"} {
+		if len(channel) >= len(prefix) && channel[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
 }
 
 func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) {
