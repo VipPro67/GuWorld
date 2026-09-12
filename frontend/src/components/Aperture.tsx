@@ -204,7 +204,6 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
         return;
       }
 
-      const rate = (aperture.time_rate || 1.0) * (timeSpeedMultiplier > 0 ? timeSpeedMultiplier : 1.0);
       const internalYearsLeft = aperture.next_tribulation_year - aperture.internal_years_passed;
       if (internalYearsLeft <= 0) {
         setTimeLeftText("Đang ập đến");
@@ -213,9 +212,11 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
         return;
       }
 
-      const remainingRealSeconds = (internalYearsLeft * 36000.0) / rate;
-      const updatedAtMs = new Date(aperture.updated_at).getTime();
-      const arrivalTimeMs = updatedAtMs + remainingRealSeconds * 1000;
+      const fallbackRate = (aperture.time_rate || 1.0) * (timeSpeedMultiplier > 0 ? timeSpeedMultiplier : 1.0);
+      const fallbackSeconds = (internalYearsLeft * 36000.0) / fallbackRate;
+      const fallbackArrivalMs = new Date(aperture.updated_at).getTime() + fallbackSeconds * 1000;
+      const backendArrivalMs = aperture.next_tribulation_at ? new Date(aperture.next_tribulation_at).getTime() : NaN;
+      const arrivalTimeMs = Number.isFinite(backendArrivalMs) ? backendArrivalMs : fallbackArrivalMs;
       const now = Date.now();
       const diff = arrivalTimeMs - now;
 
@@ -252,7 +253,7 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier]);
+  }, [aperture.next_tribulation_at, aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier]);
 
   if (isCompact) {
     return (

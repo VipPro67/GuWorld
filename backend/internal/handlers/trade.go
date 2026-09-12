@@ -332,13 +332,22 @@ func AcceptTrade(c *gin.Context) {
 		return
 	}
 
-	_, err = db.DB.Exec(`
+	result, err := db.DB.Exec(`
 		UPDATE trades 
 		SET status = 'ACCEPTED', updated_at = NOW() 
 		WHERE id = $1 AND receiver_id = $2 AND status = 'PENDING'
 	`, tradeID, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chấp nhận giao dịch"})
+		return
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận trạng thái giao dịch"})
+		return
+	}
+	if rowsAffected != 1 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Giao dịch không còn ở trạng thái chờ chấp nhận"})
 		return
 	}
 
@@ -373,9 +382,9 @@ func DeclineTrade(c *gin.Context) {
 	notifyTradeParticipants(senderID, receiverID)
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.decline", EntityType: "trade",
-		EntityID: tradeID,
+		EntityID:       tradeID,
 		RequestSummary: fmt.Sprintf("người nhận=%s (%s) đã từ chối giao dịch từ người gửi=%s (%s)", receiverName, receiverID, senderName, senderID),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã từ chối giao dịch"})
 }
@@ -413,9 +422,9 @@ func CancelTrade(c *gin.Context) {
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.cancel", EntityType: "trade",
-		EntityID: tradeID,
+		EntityID:       tradeID,
 		RequestSummary: fmt.Sprintf("người hủy=%s (%s) đã hủy giao dịch giữa người gửi=%s (%s) và người nhận=%s (%s)", cancellerName, authID, senderName, senderID, receiverName, receiverID),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy giao dịch"})
 }

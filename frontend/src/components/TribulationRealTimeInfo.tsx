@@ -23,7 +23,6 @@ export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = (
         return;
       }
 
-      const rate = (aperture.time_rate || 1.0) * (timeSpeedMultiplier > 0 ? timeSpeedMultiplier : 1.0);
       const internalYearsLeft = aperture.next_tribulation_year - aperture.internal_years_passed;
       if (internalYearsLeft <= 0) {
         setTimeLeftText("Đang ập đến");
@@ -32,9 +31,12 @@ export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = (
         return;
       }
 
-      const remainingRealSeconds = (internalYearsLeft * 36000.0) / rate;
-      const updatedAtMs = new Date(aperture.updated_at).getTime();
-      const arrivalTimeMs = updatedAtMs + remainingRealSeconds * 1000;
+      // Prefer the backend timestamp, which includes all effective time-speed bonuses.
+      const fallbackRate = (aperture.time_rate || 1.0) * (timeSpeedMultiplier > 0 ? timeSpeedMultiplier : 1.0);
+      const fallbackSeconds = (internalYearsLeft * 36000.0) / fallbackRate;
+      const fallbackArrivalMs = new Date(aperture.updated_at).getTime() + fallbackSeconds * 1000;
+      const backendArrivalMs = aperture.next_tribulation_at ? new Date(aperture.next_tribulation_at).getTime() : NaN;
+      const arrivalTimeMs = Number.isFinite(backendArrivalMs) ? backendArrivalMs : fallbackArrivalMs;
       const now = Date.now();
       const diff = arrivalTimeMs - now;
 

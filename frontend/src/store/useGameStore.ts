@@ -507,6 +507,7 @@ export interface ImmortalAperture {
   essence_production_per_year: number;
   internal_years_passed: number;
   next_tribulation_year: number;
+  next_tribulation_at?: string | null;
   tribulation_count: number;
   rank_start_year: number;
   earth_calamity_count: number;
@@ -4401,6 +4402,7 @@ export const useGameStore = create<GameState>((set, get) => {
       await get().fetchActiveTrade();
       return true;
     } catch (err: any) {
+      await get().fetchActiveTrade();
       get().addToast(err.message, "error");
       return false;
     }

@@ -6,32 +6,33 @@ import (
 )
 
 type ImmortalAperture struct {
-	ID                       string    `json:"id"`
-	PlayerID                 string    `json:"player_id"`
-	Grade                    string    `json:"grade"` // 'LOW' | 'MID' | 'HIGH' | 'EXTREME'
-	TimeRate                 float64   `json:"time_rate"`
-	ApertureHP               float64   `json:"aperture_hp"`
-	MaxApertureHP            float64   `json:"max_aperture_hp"`
-	AreaSize                 int64     `json:"area_size"`
-	ImmortalEssence          int       `json:"immortal_essence"`
-	EssenceProductionPerYear int       `json:"essence_production_per_year"`
-	InternalYearsPassed      float64   `json:"internal_years_passed"`
-	NextTribulationYear      float64   `json:"next_tribulation_year"`
-	TribulationCount         int       `json:"tribulation_count"`
-	RankStartYear            float64   `json:"rank_start_year"`
-	EarthCalamityCount       int       `json:"earth_calamity_count"`
-	HeavenlyTribulationCount  int       `json:"heavenly_tribulation_count"`
-	GrandTribulationCount     int       `json:"grand_tribulation_count"`
-	MyriadTribulationCount    int       `json:"myriad_tribulation_count"`
-	ChaosCalamityCount        int       `json:"chaos_calamity_count"`
-	State                    string    `json:"state"` // 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED'
+	ID                       string      `json:"id"`
+	PlayerID                 string      `json:"player_id"`
+	Grade                    string      `json:"grade"` // 'LOW' | 'MID' | 'HIGH' | 'EXTREME'
+	TimeRate                 float64     `json:"time_rate"`
+	ApertureHP               float64     `json:"aperture_hp"`
+	MaxApertureHP            float64     `json:"max_aperture_hp"`
+	AreaSize                 int64       `json:"area_size"`
+	ImmortalEssence          int         `json:"immortal_essence"`
+	EssenceProductionPerYear int         `json:"essence_production_per_year"`
+	InternalYearsPassed      float64     `json:"internal_years_passed"`
+	NextTribulationYear      float64     `json:"next_tribulation_year"`
+	NextTribulationAt        *time.Time  `json:"next_tribulation_at,omitempty"`
+	TribulationCount         int         `json:"tribulation_count"`
+	RankStartYear            float64     `json:"rank_start_year"`
+	EarthCalamityCount       int         `json:"earth_calamity_count"`
+	HeavenlyTribulationCount int         `json:"heavenly_tribulation_count"`
+	GrandTribulationCount    int         `json:"grand_tribulation_count"`
+	MyriadTribulationCount   int         `json:"myriad_tribulation_count"`
+	ChaosCalamityCount       int         `json:"chaos_calamity_count"`
+	State                    string      `json:"state"` // 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED'
 	DaoMarks                 DaoMarksMap `json:"dao_marks"`
-	CreatedAt                time.Time `json:"created_at"`
-	UpdatedAt                time.Time `json:"updated_at"`
-	Temperature              float64   `json:"temperature,omitempty"`
-	Humidity                 float64   `json:"humidity,omitempty"`
-	Qi                       float64   `json:"qi,omitempty"`
-	Terrain                  string    `json:"terrain,omitempty"`
+	CreatedAt                time.Time   `json:"created_at"`
+	UpdatedAt                time.Time   `json:"updated_at"`
+	Temperature              float64     `json:"temperature,omitempty"`
+	Humidity                 float64     `json:"humidity,omitempty"`
+	Qi                       float64     `json:"qi,omitempty"`
+	Terrain                  string      `json:"terrain,omitempty"`
 }
 
 type DaoMark struct {
@@ -380,6 +381,3 @@ func CalculateTribulationReward(rank int, tribType string, difficulty int) int {
 		return 250 + difficulty*50
 	}
 }
-
-
-

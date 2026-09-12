@@ -255,6 +255,7 @@ func GetImmortalAperture(c *gin.Context) {
 
 	ap.CreatedAt = createdAt
 	ap.UpdatedAt = updatedAt
+	effectiveTimeRate := 0.0
 
 	// Project internal_years_passed forward based on real time elapsed since updated_at.
 	// This ensures the frontend always gets accurate time values even if other handlers
@@ -270,6 +271,7 @@ func GetImmortalAperture(c *gin.Context) {
 			if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
 				tsm += bonus
 			}
+			effectiveTimeRate = ap.TimeRate * tsm
 			elapsedInternalYears := elapsedSec * ap.TimeRate * tsm / 36000.0
 			ap.InternalYearsPassed += elapsedInternalYears
 			ap.UpdatedAt = now
@@ -289,6 +291,12 @@ func GetImmortalAperture(c *gin.Context) {
 	if (ap.State == "STABLE" || ap.State == "DAMAGED") && ap.NextTribulationYear > 0 && ap.InternalYearsPassed >= ap.NextTribulationYear {
 		_ = checkAndTriggerSingleAperture(ap.ID)
 		_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ap.ID).Scan(&ap.State)
+	}
+
+	if (ap.State == "STABLE" || ap.State == "DAMAGED") && effectiveTimeRate > 0 && ap.NextTribulationYear > ap.InternalYearsPassed {
+		remainingInternalYears := ap.NextTribulationYear - ap.InternalYearsPassed
+		arrival := ap.UpdatedAt.Add(time.Duration(remainingInternalYears/effectiveTimeRate*36000.0) * time.Second)
+		ap.NextTribulationAt = &arrival
 	}
 
 	c.JSON(http.StatusOK, ap)
@@ -720,17 +728,17 @@ func PlaceApertureNode(c *gin.Context) {
 				consumedGuName = spec.Name
 			}
 			auditlog.Log(db.DB, auditlog.Entry{
-				PlayerID:   &playerID,
-				Action:     "aperture.consume_gu",
-				EntityType: "gu_instance",
-				EntityID:   guInstanceID,
+				PlayerID:       &playerID,
+				Action:         "aperture.consume_gu",
+				EntityType:     "gu_instance",
+				EntityID:       guInstanceID,
 				RequestSummary: fmt.Sprintf("Tiêu hao Cổ trùng %s (rank %d) để xây dựng %s", consumedGuName, guRank, template.Name),
 				Metadata: map[string]interface{}{
-					"gu_id":       requiredGuID,
-					"gu_name":     consumedGuName,
-					"gu_rank":     guRank,
-					"node_name":   template.Name,
-					"node_type":   template.NodeType,
+					"gu_id":     requiredGuID,
+					"gu_name":   consumedGuName,
+					"gu_rank":   guRank,
+					"node_name": template.Name,
+					"node_type": template.NodeType,
 				},
 				IPAddress: c.ClientIP(),
 				Success:   true,
