@@ -65,6 +65,7 @@ export function WorldPage() {
   const feedGu = useGameStore((s) => s.feedGu);
   const feedGuGroup = useGameStore((s) => s.feedGuGroup);
   const feedAllGu = useGameStore((s) => s.feedAllGu);
+  const unequipAllGu = useGameStore((s) => s.unequipAllGu);
   const actionLoading = useGameStore((s) => s.actionLoading);
   const equipGu = useGameStore((s) => s.equipGu);
   const useItem = useGameStore((s) => s.useItem);
@@ -242,6 +243,7 @@ export function WorldPage() {
                   onFeed={feedGu}
                   onFeedGroup={feedGuGroup}
                   onFeedAll={feedAllGu}
+                  onUnequipAll={unequipAllGu}
                   actionLoading={actionLoading}
                   guDictionary={guDictionary}
                   itemDictionary={itemDictionary}

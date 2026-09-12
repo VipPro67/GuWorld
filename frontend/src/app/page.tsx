@@ -152,6 +152,8 @@ export default function Home() {
     ])
   );
 
+  const unequipAllGu = useGameStore((s) => s.unequipAllGu);
+
   const currentView = useUIStore((s) => s.currentView);
   const setView = useUIStore((s) => s.setView);
   const showChangelog = useUIStore((s) => s.showChangelog);
@@ -358,6 +360,7 @@ export default function Home() {
               onFeed={feedGu}
               onFeedGroup={feedGuGroup}
               onFeedAll={feedAllGu}
+              onUnequipAll={unequipAllGu}
               actionLoading={actionLoading}
               guDictionary={guDictionary}
               itemDictionary={itemDictionary}

@@ -14,6 +14,7 @@ interface GuInventoryProps {
   onFeed: (guInstanceId: string) => Promise<void>;
   onFeedGroup?: (guId: string, rank?: number) => Promise<void>;
   onFeedAll?: () => Promise<void>;
+  onUnequipAll?: () => Promise<void>;
   actionLoading: boolean;
   guDictionary: Record<string, GuSpec>;
   itemDictionary: Record<string, ItemSpec>;
@@ -55,6 +56,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   onFeed,
   onFeedGroup,
   onFeedAll,
+  onUnequipAll,
   actionLoading,
   guDictionary,
   itemDictionary,
@@ -80,6 +82,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [feedingId, setFeedingId] = useState<string | null>(null);
   const [feedingGroupGuId, setFeedingGroupGuId] = useState<string | null>(null);
   const [feedingAll, setFeedingAll] = useState<boolean>(false);
+  const [unequippingAll, setUnequippingAll] = useState<boolean>(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [equippingId, setEquippingId] = useState<string | null>(null);
   const [usingId, setUsingId] = useState<string | null>(null);
@@ -95,6 +98,13 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [guSubTab, setGuSubTab] = useState<"equipped" | "rest">("equipped");
   const [selectedPath, setSelectedPath] = useState<string>("all");
   const [selectedRank, setSelectedRank] = useState<string>("all");
+
+  // Reset batch selection when switching subtab
+  const handleSubTabChange = (tab: "equipped" | "rest") => {
+    setGuSubTab(tab);
+    setIsBatchMode(false);
+    setSelectedGuIds({});
+  };
 
   // The player status snapshot only carries equipped/vital Gus; lazy-load the
   // full inventory when the management view is opened.
@@ -120,12 +130,43 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   };
 
   const handleFeedAllClick = async () => {
-    if (!onFeedAll) return;
     setFeedingAll(true);
     try {
-      await onFeedAll();
+      const activeGroups = guSubTab === "equipped" ? equippedGroups : restGroups;
+      let fedAny = false;
+      for (const group of activeGroups) {
+        const hungryCount = group.instances.filter(
+          inst => inst.status !== "DEAD" && inst.status !== "SEALED" && inst.hunger < group.spec.max_hunger
+        ).length;
+        if (hungryCount > 0 && onFeedGroup) {
+          await onFeedGroup(group.guId, group.spec.rank);
+          fedAny = true;
+        }
+      }
+      if (!fedAny) {
+        if (onFeedAll && activeGroups.length === 0) {
+          await onFeedAll();
+        } else {
+          useGameStore.getState().addToast(
+            guSubTab === "equipped"
+              ? "Không có Cổ trùng đang xuất trận nào cần cho ăn."
+              : "Không có Cổ trùng trong túi nào cần cho ăn.",
+            "info"
+          );
+        }
+      }
     } finally {
       setFeedingAll(false);
+    }
+  };
+
+  const handleUnequipAllClick = async () => {
+    const unequipFn = onUnequipAll || useGameStore.getState().unequipAllGu;
+    setUnequippingAll(true);
+    try {
+      await unequipFn();
+    } finally {
+      setUnequippingAll(false);
     }
   };
 
@@ -570,7 +611,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             <div className="flex gap-2 bg-zinc-950/60 p-1.5 rounded-xl border border-zinc-900">
               <button
                 type="button"
-                onClick={() => setGuSubTab("equipped")}
+                onClick={() => handleSubTabChange("equipped")}
                 className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   guSubTab === "equipped"
                     ? "bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 font-bold shadow-sm"
@@ -586,7 +627,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
               <button
                 type="button"
-                onClick={() => setGuSubTab("rest")}
+                onClick={() => handleSubTabChange("rest")}
                 className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   guSubTab === "rest"
                     ? "bg-amber-950/40 text-amber-400 border border-amber-500/30 font-bold shadow-sm"
@@ -830,7 +871,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   </>
                 ) : (
                   <>
-                    {onFeedAll && (
+                    {(onFeedAll || onFeedGroup) && (
                       <button
                         type="button"
                         disabled={actionLoading || feedingAll}
@@ -840,7 +881,17 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         {feedingAll ? "🌱 Đang Cho Ăn..." : "🌱 Cho Ăn Tất Cả"}
                       </button>
                     )}
-                    {onDropGus && (
+                    {guSubTab === "equipped" && (
+                      <button
+                        type="button"
+                        disabled={actionLoading || unequippingAll || equippedBugCount === 0}
+                        onClick={handleUnequipAllClick}
+                        className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {unequippingAll ? "🛡️ Đang Tháo..." : "🛡️ Tháo Tất Cả"}
+                      </button>
+                    )}
+                    {onDropGus && guSubTab === "rest" && (
                       <button
                         type="button"
                         onClick={() => {
