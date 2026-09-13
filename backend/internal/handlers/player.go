@@ -5086,7 +5086,7 @@ func GoogleCallback(c *gin.Context) {
 
 	// 1. Try to search by google_id
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses
 		FROM players
 		WHERE google_id = $1
 	`, googleUser.ID).Scan(
@@ -5101,7 +5101,7 @@ func GoogleCallback(c *gin.Context) {
 		&player.Lifespan, &player.TimeSpeedMultiplier,
 		&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
 	)
 
 	if err == nil {
@@ -5114,7 +5114,7 @@ func GoogleCallback(c *gin.Context) {
 	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
+			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses
 			FROM players
 			WHERE email = $1
 		`, googleUser.Email).Scan(
@@ -5129,7 +5129,7 @@ func GoogleCallback(c *gin.Context) {
 			&player.Lifespan, &player.TimeSpeedMultiplier,
 			&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
 			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
+			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
 		)
 
 		if err == nil {

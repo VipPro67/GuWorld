@@ -157,7 +157,7 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       COALESCE(needs_onboarding, false),
 		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
    COALESCE(immortal_state, '{}'), growth_data,
-		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses,
+		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses,
 		       COALESCE(version, 0)
 FROM players
 		WHERE id = $1
@@ -186,7 +186,7 @@ FROM players
 		&player.CurrentThought, &player.MaxThought, &player.RegenRate,
 		&player.ImmortalState,
 		&player.GrowthData,
-		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
+		&player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
 		&player.Version,
 	)
 	if err != nil {
@@ -260,8 +260,13 @@ FROM players
 
 // setDefaults initializes default values for empty fields.
 func (s *PlayerService) setDefaults(player *models.Player) {
-	if player.Lifespan <= 0 {
-		player.Lifespan = 100.0
+	dummyP := models.Player{}
+	dummyP.Race = player.Race
+	if gamefx.Get(&dummyP).Immortal {
+		player.IsDead = false
+	} else if player.Lifespan <= 0 {
+		player.Lifespan = 0
+		player.IsDead = true
 	}
 	if player.TimeSpeedMultiplier <= 0 {
 		player.TimeSpeedMultiplier = 1.0
@@ -404,12 +409,17 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			}
 		}
 
-		yearsPassed := (secondsPassed * effectiveBase) / 36000.0
-		player.Lifespan -= yearsPassed
-		if player.Lifespan < 0 {
-			player.Lifespan = 0
+		dummyP := models.Player{}
+		dummyP.Race = player.Race
+		if !gamefx.Get(&dummyP).Immortal {
+			yearsPassed := (secondsPassed * effectiveBase) / 36000.0
+			player.Lifespan -= yearsPassed
+			if player.Lifespan <= 0 {
+				player.Lifespan = 0
+				player.IsDead = true
+			}
+			poolChanged = true
 		}
-		poolChanged = true
 	}
 
 	if player.ApertureStress > 0 && !player.LastCultivateTime.IsZero() {
@@ -492,11 +502,11 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
 			    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
-			    version = version + 1
-			WHERE id = $11
+			    is_dead = $11, version = version + 1
+			WHERE id = $12
 		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
 		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
+		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.IsDead, player.ID)
 	if err != nil {
 		return player, err
 	}
