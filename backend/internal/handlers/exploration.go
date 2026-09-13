@@ -524,7 +524,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				FROM players p
 				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 				WHERE p.id = $1 AND p.id != $2
-				  AND p.last_mana_update >= NOW() - INTERVAL '15 minutes'
+				  AND (p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes')
 			`
 			var errTarget error
 			if player.PartyID != nil {
@@ -542,6 +542,14 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					&targetPlayer.X, &targetPlayer.Y, &targetPlayer.AvatarURL,
 					&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
 				)
+			}
+
+			if errTarget != nil {
+				var exists bool
+				_ = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE id = $1)`, targetUUID).Scan(&exists)
+				if exists {
+					return "Cổ Sư này hiện đang quy ẩn (Offline), không thể khai chiến!", false, nil
+				}
 			}
 
 			if errTarget == nil {
@@ -1603,7 +1611,7 @@ func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int) []Worl
 		SELECT id, username, COALESCE(avatar_url, ''), x, y
 		FROM players
 		WHERE id != $1
-		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
+		  AND (last_activity >= NOW() - INTERVAL '5 minutes' OR last_mana_update >= NOW() - INTERVAL '5 minutes')
 		  AND x >= $2 AND x <= $3
 		  AND y >= $4 AND y <= $5
 	`, authID, x-r, x+r, y-r, y+r)

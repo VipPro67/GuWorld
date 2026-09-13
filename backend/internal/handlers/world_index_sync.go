@@ -51,7 +51,7 @@ func loadActiveWorldPositions() []WorldPosEntry {
 	rows, err := db.DB.Query(`
 		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, ''), last_mana_update
 		FROM players
-		WHERE last_mana_update >= NOW() - INTERVAL '16 minutes'
+		WHERE (last_activity >= NOW() - INTERVAL '5 minutes' OR last_mana_update >= NOW() - INTERVAL '5 minutes')
 	`)
 	if err != nil {
 		logger.S.Warnf("world index sync: query failed: %v", err)
