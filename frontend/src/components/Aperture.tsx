@@ -823,7 +823,7 @@ export const Aperture: React.FC<ApertureProps> = ({
               </div>
               {(() => {
                 const raceLabels: Record<string, string> = {
-                  human: "Nhân Tộc", fur_people: "Người Lông", merman: "Nhân Ngư",
+                  human: "Nhân Tộc", cuong_thi: "Cương Thi", fur_people: "Người Lông", merman: "Nhân Ngư",
                   feathered: "Vũ Dân", inkman: "Mặc Nhân", rockman: "Thạch Nhân",
                   snowman: "Tuyết Dân", variant_beastman: "Thú Nhân", dragonman: "Long Nhân",
                   giant_sun_descendant: "Cự Dương Huyết Mạch",

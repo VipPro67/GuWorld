@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -898,13 +899,14 @@ func CollectApertureResource(c *gin.Context) {
 	var areaSize int64
 	var timeRate float64
 	var pTSM float64
+	var pRace string
 	err = tx.QueryRow(`
-		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, ''), COALESCE(n.level, 1), p.time_speed_multiplier
+		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, ''), COALESCE(n.level, 1), p.time_speed_multiplier, COALESCE(p.race, '')
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		JOIN players p ON a.player_id = p.id
 		WHERE n.id = $1 AND a.player_id = $2
-	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey, &n.Level, &pTSM)
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey, &n.Level, &pTSM, &pRace)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
@@ -922,12 +924,17 @@ func CollectApertureResource(c *gin.Context) {
 	if timeRate <= 0 {
 		timeRate = 1.0
 	}
-	tsm := pTSM
-	if tsm <= 0 {
-		tsm = 1.0
-	}
-	if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
-		tsm += bonus
+	tsm := 1.0
+	dummyP := models.Player{}
+	dummyP.Race = pRace
+	if !gamefx.Get(&dummyP).Immortal {
+		tsm = pTSM
+		if tsm <= 0 {
+			tsm = 1.0
+		}
+		if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
+			tsm += bonus
+		}
 	}
 	effectiveTimeRate := timeRate * tsm
 	if effectiveTimeRate <= 0 {
@@ -1296,12 +1303,13 @@ func CollectAllApertureResources(c *gin.Context) {
 	var areaSize int64
 	var timeRate float64
 	var pTSM float64
+	var pRace string
 	err = tx.QueryRow(`
-		SELECT a.id, a.area_size, COALESCE(a.time_rate, 1.0), p.time_speed_multiplier
+		SELECT a.id, a.area_size, COALESCE(a.time_rate, 1.0), p.time_speed_multiplier, COALESCE(p.race, '')
 		FROM immortal_apertures a
 		JOIN players p ON a.player_id = p.id
 		WHERE a.player_id = $1
-	`, playerID).Scan(&apertureID, &areaSize, &timeRate, &pTSM)
+	`, playerID).Scan(&apertureID, &areaSize, &timeRate, &pTSM, &pRace)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Tiên Khiếu."})
 		return
@@ -1309,12 +1317,17 @@ func CollectAllApertureResources(c *gin.Context) {
 	if timeRate <= 0 {
 		timeRate = 1.0
 	}
-	tsm := pTSM
-	if tsm <= 0 {
-		tsm = 1.0
-	}
-	if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
-		tsm += bonus
+	tsm := 1.0
+	dummyP := models.Player{}
+	dummyP.Race = pRace
+	if !gamefx.Get(&dummyP).Immortal {
+		tsm = pTSM
+		if tsm <= 0 {
+			tsm = 1.0
+		}
+		if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
+			tsm += bonus
+		}
 	}
 	effectiveTimeRate := timeRate * tsm
 	if effectiveTimeRate <= 0 {
@@ -1860,7 +1873,7 @@ func SetApertureTimeRate(c *gin.Context) {
 	now := time.Now()
 	res, err := tx.Exec(`
 		UPDATE immortal_apertures ia
-		SET internal_years_passed = ia.internal_years_passed + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ia.updated_at))) * ia.time_rate * (p.time_speed_multiplier + COALESCE((SELECT SUM((gd.effects->'passive'->>'time_speed_multiplier')::double precision) FROM player_gu pg JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank WHERE pg.player_id = p.id AND pg.equipped = true AND pg.state = 'ACTIVE'), 0)) / 36000.0,
+		SET internal_years_passed = ia.internal_years_passed + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ia.updated_at))) * ia.time_rate * (CASE WHEN p.race = 'cuong_thi' THEN 1.0 ELSE (p.time_speed_multiplier + COALESCE((SELECT SUM((gd.effects->'passive'->>'time_speed_multiplier')::double precision) FROM player_gu pg JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank WHERE pg.player_id = p.id AND pg.equipped = true AND pg.state = 'ACTIVE'), 0)) END) / 36000.0,
 			time_rate = $1, updated_at = $2
 		FROM players p
 		WHERE ia.player_id = p.id AND ia.player_id = $3

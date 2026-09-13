@@ -919,7 +919,7 @@ func isPlayerOnline(playerID string) bool {
 func CheckAndTriggerTribulations() error {
 	// Query stable apertures
 	rows, err := db.DB.Query(`
-		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
+		SELECT id, player_id, time_rate, area_size, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at
 		FROM immortal_apertures
 		WHERE state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING')
@@ -932,6 +932,7 @@ func CheckAndTriggerTribulations() error {
 		ID                       string
 		PlayerID                 string
 		TimeRate                 float64
+		AreaSize                 float64
 		ApertureHP               float64
 		MaxApertureHP            float64
 		InternalYearsPassed      float64
@@ -949,7 +950,7 @@ func CheckAndTriggerTribulations() error {
 	apertures := []ApertureCheck{}
 	for rows.Next() {
 		var ap ApertureCheck
-		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.EssenceProductionPerYear,
+		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.AreaSize, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.EssenceProductionPerYear,
 			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt); err == nil {
 			apertures = append(apertures, ap)
 		}
@@ -961,6 +962,8 @@ func CheckAndTriggerTribulations() error {
 			lifespan float64
 			ts       float64
 			rank     int
+			race     string
+			isDead   bool
 		}
 		pMap := make(map[string]*pdata, len(apertures))
 		{
@@ -968,12 +971,12 @@ func CheckAndTriggerTribulations() error {
 			for i, ap := range apertures {
 				pids[i] = ap.PlayerID
 			}
-			if pRows, qErr := db.DB.Query(`SELECT id, lifespan, time_speed_multiplier, rank FROM players WHERE id = ANY($1::text[])`, pq.Array(pids)); qErr == nil {
+			if pRows, qErr := db.DB.Query(`SELECT id, lifespan, time_speed_multiplier, rank, COALESCE(race, ''), COALESCE(is_dead, false) FROM players WHERE id = ANY($1::text[])`, pq.Array(pids)); qErr == nil {
 				defer pRows.Close()
 				for pRows.Next() {
 					var id string
 					var d pdata
-					if err := pRows.Scan(&id, &d.lifespan, &d.ts, &d.rank); err == nil {
+					if err := pRows.Scan(&id, &d.lifespan, &d.ts, &d.rank, &d.race, &d.isDead); err == nil {
 						pMap[id] = &d
 					}
 				}
@@ -1066,36 +1069,66 @@ func CheckAndTriggerTribulations() error {
 
 			// Look up player data from batch
 			currentLifespan := 100.0
+			playerRace := ""
+			isDead := false
 			if pd, ok := pMap[ap.PlayerID]; ok {
 				currentLifespan = pd.lifespan
 				timeSpeedMultiplier = pd.ts
+				playerRace = pd.race
+				isDead = pd.isDead
 			}
 
-			if timeSpeedMultiplier <= 0 {
+			if isDead {
+				continue
+			}
+
+			dummyP := models.Player{}
+			dummyP.Race = playerRace
+			isImmortal := gamefx.Get(&dummyP).Immortal
+
+			if isImmortal {
 				timeSpeedMultiplier = 1.0
-			}
-			if bonus, err := db.EquippedTimeSpeedBonus(db.DB, ap.PlayerID); err == nil {
-				timeSpeedMultiplier += bonus
+			} else {
+				if timeSpeedMultiplier <= 0 {
+					timeSpeedMultiplier = 1.0
+				}
+				if bonus, err := db.EquippedTimeSpeedBonus(db.DB, ap.PlayerID); err == nil {
+					timeSpeedMultiplier += bonus
+				}
 			}
 
-			if currentLifespan <= 0.0 {
-				continue
-			}
+			if isImmortal {
+				// Dead Aperture (Tử Khiếu) Decay: LOW grade (~3M area / ~12.5 rate) takes ~5 days
+				decayRate := 0.0017 * (1.0 + realYearsPassed)
+				decayArea := 400 * (1.0 + realYearsPassed)
+				newRate := math.Max(0.5, ap.TimeRate-decayRate)
+				newArea := math.Max(50.0, ap.AreaSize-decayArea)
+				if newRate != ap.TimeRate || newArea != ap.AreaSize {
+					ap.TimeRate = newRate
+					ap.AreaSize = newArea
+					_, _ = db.DB.Exec(`UPDATE immortal_apertures SET time_rate = $1, area_size = $2, updated_at = NOW() WHERE id = $3`, newRate, newArea, ap.ID)
+				}
+			} else {
+				if currentLifespan <= 0.0 {
+					continue
+				}
 
-			lifespanDecay := realYearsPassed * timeSpeedMultiplier
-			newLifespan := math.Max(0.0, currentLifespan-lifespanDecay)
-			lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, decay: lifespanDecay})
+				lifespanDecay := realYearsPassed * timeSpeedMultiplier
+				newLifespan := math.Max(0.0, currentLifespan-lifespanDecay)
+				lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, decay: lifespanDecay})
 
-			if newLifespan <= 0.0 {
-				// Freeze aperture (keep per-aperture Exec: different SET clause)
-				_, _ = db.DB.Exec(`
-					UPDATE immortal_apertures
-					SET time_rate = 1.0, aperture_hp = max_aperture_hp / 10, state = 'DAMAGED', updated_at = NOW()
-					WHERE id = $1
-				`, ap.ID)
-				msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!"})
-				logger.S.Warnf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
-				continue
+				if newLifespan <= 0.0 {
+					_, _ = db.DB.Exec(`UPDATE players SET is_dead = true WHERE id = $1`, ap.PlayerID)
+					// Freeze aperture (keep per-aperture Exec: different SET clause)
+					_, _ = db.DB.Exec(`
+						UPDATE immortal_apertures
+						SET time_rate = 1.0, aperture_hp = max_aperture_hp / 10, state = 'DAMAGED', updated_at = NOW()
+						WHERE id = $1
+					`, ap.ID)
+					msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!"})
+					logger.S.Warnf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
+					continue
+				}
 			}
 
 			subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 36000.0
@@ -1306,13 +1339,22 @@ func CheckAndTriggerTribulations() error {
 
 				// Batch UPDATE player mana
 				if len(manaUps) > 0 {
-					ids := make([]string, len(manaUps))
-					vals := make([]float64, len(manaUps))
-					for i, u := range manaUps {
-						ids[i] = u.id
-						vals[i] = u.val
+					ids := make([]string, 0, len(manaUps))
+					vals := make([]float64, 0, len(manaUps))
+					for _, u := range manaUps {
+						if pd, ok := pMap[u.id]; ok {
+							dummyP := models.Player{}
+							dummyP.Race = pd.race
+							if gamefx.Get(&dummyP).DisableManaRegen {
+								continue
+							}
+						}
+						ids = append(ids, u.id)
+						vals = append(vals, u.val)
 					}
-					_, _ = tx.Exec(`UPDATE players AS p SET current_mana = LEAST(p.max_mana, p.current_mana + v.val), last_mana_update = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS val) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
+					if len(ids) > 0 {
+						_, _ = tx.Exec(`UPDATE players AS p SET current_mana = LEAST(p.max_mana, p.current_mana + v.val), last_mana_update = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS val) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
+					}
 				}
 
 				// Batch UPDATE node HP

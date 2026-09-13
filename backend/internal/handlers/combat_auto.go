@@ -232,7 +232,12 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 	if loveLifespanPenalty > 0 {
-		player.Lifespan = math.Max(1.0, player.Lifespan-loveLifespanPenalty)
+		if !gamefx.Get(&player).Immortal {
+			player.Lifespan = math.Max(0.0, player.Lifespan-loveLifespanPenalty)
+			if player.Lifespan <= 0 {
+				player.IsDead = true
+			}
+		}
 	}
 	if loveStonesPenalty {
 		player.PrimevalStones = player.PrimevalStones / 2
@@ -680,8 +685,8 @@ func AutoCombatStart(c *gin.Context) {
 				_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
 			}
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
-			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.ImmortalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, is_dead = $9, version = version + 1 WHERE id = $10`
+			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.ImmortalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.IsDead, player.ID)
 		}
 	} else {
 		if isVirtual {
@@ -745,8 +750,8 @@ func AutoCombatStart(c *gin.Context) {
 				Detail: defeatMsg,
 			})
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, immortal_stones = $9, path_masteries = $10, version = version + 1 WHERE id = $11`
-			args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, immortal_stones = $9, path_masteries = $10, is_dead = $11, version = version + 1 WHERE id = $12`
+			args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.IsDead, player.ID)
 		}
 	}
 

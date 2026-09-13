@@ -140,6 +140,21 @@ func addEffects(dst *Effects, src Effects) {
 	dst.SoulDefenseBonus += src.SoulDefenseBonus
 	dst.SoulRegenBonus += src.SoulRegenBonus
 	dst.ApertureStressBonus += src.ApertureStressBonus
+	if src.Immortal {
+		dst.Immortal = true
+	}
+	if src.DisableHPRegen {
+		dst.DisableHPRegen = true
+	}
+	if src.DisableManaRegen {
+		dst.DisableManaRegen = true
+	}
+	if src.DisableResourceRegen {
+		dst.DisableResourceRegen = true
+	}
+	if src.DisableSoulRegen {
+		dst.DisableSoulRegen = true
+	}
 	if dst.BlockedActions == nil {
 		dst.BlockedActions = map[string]bool{}
 	}

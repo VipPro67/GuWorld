@@ -26,8 +26,18 @@ Khi đăng ký, đạo hữu mặc định Nhân Tộc  và chọn **Giới tín
 | Thú Nhân (`variant_beastman`) | +8% tấn công, +5% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | Long Nhân (`dragonman`) | +10% tấn công, +10% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | Cự Dương Huyết Mạch (`giant_sun_descendant`) | +5 Vận, +5% hiệu quả tu luyện |
+| Cương Thi (`cuong_thi`) | **Bất tử tuổi thọ** (thọ nguyên không bao giờ cạn); **Cấm tự hồi phục** HP, Chân Nguyên/Tiên Nguyên, Nguyên Lực, Thần Hồn. Khi ở trạng thái Tiên Cương: gia tốc thời gian khóa ở `1.0`, Tiên Khiếu thành Tiên Khiếu Chết và bị suy thoái `time_rate` & `area_size` theo thời gian |
 
 Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` (seed từ `data/Race.csv`): admin thêm chủng tộc mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Chủng tộc" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
+
+### Tuổi thọ & Trạng thái Tử Vong (is_dead)
+
+- **Cơ chế Tuổi thọ**: Cổ sư tiêu hao thọ nguyên theo thời gian thực (tốc độ hao mòn = thời gian thực × `time_speed_multiplier`).
+- **Rơi vào Cõi Chết (`is_dead`)**: Khi thọ nguyên giảm xuống $\le 0$, Cổ sư bị chuyển sang trạng thái tử vong (`is_dead = true`). Trong trạng thái này, mọi thao tác tu luyện, trùng kích, chiến đấu, thám hiểm và đào quặng bị phong tỏa hoàn toàn cho tới khi sử dụng **Thọ Nguyên Cổ** khôi phục tuổi thọ hoặc chuyển chủng tộc.
+- **Tiên Cương (Chủng tộc Cương Thi)**:
+  - **Bất tử tuổi thọ**: Thọ nguyên không bị suy giảm theo thời gian.
+  - **Phong tỏa Hồi phục**: Bị cấm tự động hồi phục HP (`DisableHPRegen`), Chân Nguyên/Tiên Nguyên (`DisableManaRegen`), Nguyên Lực (`DisableResourceRegen`) và Thần Hồn (`DisableSoulRegen`).
+  - **Tiên Khiếu Chết (Dead Aperture)**: Khi Cổ Tiên chuyển sang Cương Thi, gia tốc thời gian cá nhân `time_speed_multiplier` bị cố định ở `1.0` (không thể tăng tốc), đồng thời Tiên Khiếu ngưng trệ thành Tiên Khiếu Chết, liên tục bị suy thoái giảm dần diện tích (`area_size`) và tốc độ thời gian (`time_rate`) theo thời gian thực (~0.00175 rate/phút & ~416.67 area/phút).
 
 **Giới tính:** Nam (`male`) / Nữ (`female`) — chưa có hiệu ứng (chỉ hiển thị).
 

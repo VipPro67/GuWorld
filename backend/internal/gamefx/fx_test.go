@@ -215,3 +215,26 @@ func abs(v float64) float64 {
 	}
 	return v
 }
+
+func TestCuongThiRaceEffects(t *testing.T) {
+	p := &models.Player{}
+	p.Race = "cuong_thi"
+	fx := Get(p)
+	if !fx.Immortal {
+		t.Errorf("expected cuong_thi to be immortal")
+	}
+	if !fx.DisableHPRegen || !fx.DisableManaRegen || !fx.DisableResourceRegen || !fx.DisableSoulRegen {
+		t.Errorf("expected cuong_thi to have all regen disabled: %+v", fx)
+	}
+}
+
+func TestDeadPlayerBlockedAction(t *testing.T) {
+	p := &models.Player{}
+	p.IsDead = true
+	if !HasBlockedAction(p, "explore") {
+		t.Errorf("expected dead player to have explore action blocked")
+	}
+	if !HasBlockedAction(p, "cultivate") {
+		t.Errorf("expected dead player to have cultivate action blocked")
+	}
+}

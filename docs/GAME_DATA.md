@@ -147,11 +147,12 @@ Bảng `race_dictionary`:
 | `name` | VARCHAR(200) | Tên tiếng Việt hiển thị |
 | `effects` | JSONB | Các effect của chủng tộc (cùng format `effects` như thể chất bên dưới) |
 
-Danh sách hiện tại (10 chủng tộc):
+Danh sách hiện tại (11 chủng tộc):
 
 | Key | Tên Việt | Hiệu ứng |
 | --- | --- | --- |
 | `human` | Nhân Tộc | Không bonus đặc biệt (mặc định) |
+| `cuong_thi` | Cương Thi | Bất tử tuổi thọ (không giảm thọ); Cấm hồi HP, Mana, Nguyên Lực, Thần Hồn |
 | `fur_people` | Người Lông | +10% tỉ lệ Luyện Cổ thành công |
 | `merman` | Nhân Ngư | Thủy Đạo +10% affinity, +5% sát thương Thủy Đạo |
 | `feathered` | Vũ Dân | +10% tốc độ, Không Gian Đạo +5% affinity |

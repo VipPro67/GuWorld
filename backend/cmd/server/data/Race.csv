@@ -1,5 +1,6 @@
 key,name,effects
 ,(Không),{}
+cuong_thi,Cương Thi,"{""immortal"": true, ""disable_hp_regen"": true, ""disable_mana_regen"": true, ""disable_resource_regen"": true, ""disable_soul_regen"": true}"
 dragonman,Long Nhân,"{""refine"": -0.1, ""stat_mods"": {""attack"": 0.10, ""defense"": 0.10}}"
 feathered,Vũ Dân,"{""dao_mark"": {""space"": 0.05}, ""stat_mods"": {""speed"": 0.10}}"
 fur_people,Người Lông,"{""refine"": 0.10}"

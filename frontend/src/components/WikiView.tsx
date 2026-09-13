@@ -566,8 +566,8 @@ export const WikiView: React.FC = () => {
                   </tr>
                   <tr>
                     <td className="p-3 font-bold text-zinc-200">Thọ nguyên (Lifespan)</td>
-                    <td className="p-3">Tuổi thọ còn lại của cơ thể, hao mòn dần theo thời gian thực (nhân với hệ số thời gian tu luyện).</td>
-                    <td className="p-3">Về 0 đồng nghĩa sinh mệnh tàn lụi — cần tăng tu vi hoặc dùng ngoại lực kéo dài.</td>
+                    <td className="p-3">Tuổi thọ còn lại của cơ thể, hao mòn dần theo thời gian thực (tỷ lệ thuận với hệ số gia tốc thời gian tu luyện).</td>
+                    <td className="p-3">Về 0 đồng nghĩa sinh mệnh tàn lụi (<span className="text-red-400 font-semibold">is_dead</span>) — bị khóa mọi hoạt động tu luyện & chiến đấu. Cần dùng Thọ Nguyên Cổ hoặc chuyển thành Cương Thi.</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-bold text-zinc-200">Áp lực vách khiếu</td>
@@ -586,7 +586,7 @@ export const WikiView: React.FC = () => {
       title: "Thuộc tính & Áp lực vách khiếu",
       category: "gameplay",
       subCategory: "gameplay-character",
-      keywords: ["stress", "áp lực", "vách khiếu", "không khiếu", "aperture stress", "nứt", "rớt cấp", "tịnh thủy", "chủng tộc", "thể chất", "trạng thái"],
+      keywords: ["stress", "áp lực", "vách khiếu", "không khiếu", "aperture stress", "nứt", "rớt cấp", "tịnh thủy", "chủng tộc", "thể chất", "trạng thái", "tuổi thọ", "thọ nguyên", "cương thi", "tiên cương", "tử vong", "is_dead"],
       content: (
         <div className="space-y-6">
           <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/20 flex gap-3 items-start">
@@ -605,17 +605,45 @@ export const WikiView: React.FC = () => {
               <li>Mỗi lần click nút <strong>Trùng Kích Vách Khiếu</strong>, thanh áp lực tăng thêm <strong>+5</strong>.</li>
               <li>Thanh áp lực tự động suy giảm theo thời gian thực: cứ <strong>mỗi 2 giờ đời thật</strong>, áp lực giảm đi <strong>phân nửa</strong>.</li>
               <li>Nếu áp lực vượt mốc <strong>80%</strong>, hiệu quả trùng kích chỉ còn <strong>25%</strong> so với bình thường.</li>
-              <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: đạo hữu <strong>mất vĩnh viễn 5% Chân Nguyên tối đa</strong>, tiến độ vách khiếu về 0, áp lực giảm về 50% và <strong>rớt xuống một Tiểu Cảnh Giới (hoặc một Chuyển nếu đang ở Sơ Giai)</strong>!</li>
+              <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: đạo hữu <strong>mất vĩnh viễn 5% Chân Nguyên tối đa</strong>, tiến độ vách khiếu về 0, áp lực giảm về 50% và <strong>rớt xuống một Tiểu Cảnh Giới (hoặc một Chuyển đang ở Sơ Giai)</strong>!</li>
             </ul>
             <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-900 text-xs leading-relaxed text-zinc-400">
               💡 <strong>Mẹo:</strong> Sử dụng vật phẩm tiêu hao <strong>Tịnh Thủy Cổ</strong> để lập tức thanh lọc, đưa thanh Áp lực vách khiếu về 0% ngay tức khắc.
             </div>
           </div>
 
+          {/* Lifespan & Death / Cương Thi Section */}
+          <div className="space-y-4 pt-4 border-t border-zinc-900">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-400" />
+              <span>Hệ Thống Tuổi Thọ, Trạng Thái Tử Vong & Tiên Cương</span>
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 space-y-2">
+                <h4 className="font-bold text-red-400 font-serif">1. Tuổi Thọ & Trạng Thái Tử Vong (is_dead)</h4>
+                <p className="text-zinc-400 leading-relaxed">
+                  • Tuổi thọ của Cổ sư bị hao mòn liên tục theo thời gian thực (nhân với hệ số gia tốc <span className="font-mono text-amber-300">time_speed_multiplier</span>).<br />
+                  • Khi tuổi thọ tụt về <strong>0</strong>, nhân vật đi vào trạng thái tử vong (<span className="text-red-400 font-mono">is_dead = true</span>).<br />
+                  • Cổ sư tử vong bị phong tỏa hoàn toàn các thao tác chiến đấu, khai thác, thám hiểm và tu luyện cho đến khi dùng <strong>Thọ Nguyên Cổ</strong> kéo dài tuổi thọ hoặc biến đổi chủng tộc.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 space-y-2">
+                <h4 className="font-bold text-emerald-400 font-serif">2. Chủng Tộc Cương Thi (Tiên Cương)</h4>
+                <p className="text-zinc-400 leading-relaxed">
+                  • <strong>Bất tử tuổi thọ:</strong> Thọ nguyên không bao giờ suy giảm theo thời gian.<br />
+                  • <strong>Debuff Tử Thi:</strong> Bị phong tỏa hoàn toàn tự hồi phục HP, Chân Nguyên / Tiên Nguyên, Nguyên Lực và Thần Hồn.<br />
+                  • <strong>Tiên Khiếu Chết:</strong> Gia tốc thời gian cá nhân bị cố định ở <span className="font-mono text-amber-300">1.0</span> (không thể tăng tốc), đồng thời Tiên Khiếu bị suy thoái giảm dần diện tích (<span className="font-mono">area_size</span>) và tốc độ thời gian (<span className="font-mono">time_rate</span>) theo thời gian thực.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Thuộc tính thân thể</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Ngoài tu vi, hồ sơ còn ghi nhận <strong>Chủng tộc</strong> (Nhân Tộc, Người Lông, Nhân Ngư, Thạch Nhân, Long Nhân...), <strong>Giới tính</strong>, <strong>Thể chất</strong> (Hoang Cổ Nguyệt Thể, Thanh Liên Đại Nhật Thể...) và mảng <strong>Trạng thái</strong> (ví dụ Trọng Thương giảm 20% chiến lực). Các giá trị này mang hiệu ứng riêng lên tu luyện và chiến đấu, xem chi tiết trong mục Hồ Sơ.
+              Ngoài tu vi, hồ sơ còn ghi nhận <strong>Chủng tộc</strong> (Nhân Tộc, Cương Thi, Người Lông, Nhân Ngư, Thạch Nhân, Long Nhân...), <strong>Giới tính</strong>, <strong>Thể chất</strong> (Hoang Cổ Nguyệt Thể, Thanh Liên Đại Nhật Thể...) và mảng <strong>Trạng thái</strong> (ví dụ Trọng Thương giảm 20% chiến lực). Các giá trị này mang hiệu ứng riêng lên tu luyện và chiến đấu, xem chi tiết trong mục Hồ Sơ.
             </p>
           </div>
         </div>
@@ -1030,6 +1058,13 @@ export const WikiView: React.FC = () => {
               <h4 className="font-bold text-zinc-200">Người Tuyết</h4>
               <p className="text-zinc-500 leading-relaxed">
                 Tộc nhân sinh sống tại băng nguyên. Khóc ra Lệ Băng (tiên tài trân quý Băng đạo) dùng để luyện các loại Tiên Cổ hệ Băng Tuyết.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 space-y-2 text-xs">
+              <h4 className="font-bold text-emerald-400">Cương Thi (Tiên Cương)</h4>
+              <p className="text-zinc-500 leading-relaxed">
+                Chủng tộc tử thi bất tử thọ nguyên. Cấm tự hồi sinh mệnh/chân nguyên/thần hồn, khóa time_speed về 1.0 và Tiên Khiếu suy thoái theo thời gian thực.
               </p>
             </div>
           </div>

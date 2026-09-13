@@ -55,6 +55,16 @@ type Effects struct {
 	// ApertureStressBonus is an additive multiplier on the aperture stress
 	// (áp lực không khiếu) gained per trùng kích attempt. 1.0 => stress ×2.
 	ApertureStressBonus float64 `json:"aperture_stress_bonus"`
+	// Immortal indicates if the character's lifespan never decreases.
+	Immortal bool `json:"immortal"`
+	// DisableHPRegen disables HP regeneration.
+	DisableHPRegen bool `json:"disable_hp_regen"`
+	// DisableManaRegen disables Mana regeneration.
+	DisableManaRegen bool `json:"disable_mana_regen"`
+	// DisableResourceRegen disables Tiên/Chân Nguyên recovery.
+	DisableResourceRegen bool `json:"disable_resource_regen"`
+	// DisableSoulRegen disables Soul/Thần Hồn regeneration.
+	DisableSoulRegen bool `json:"disable_soul_regen"`
 	// BlockedActions is the set of gameplay actions currently gated by active
 	// statuses (keys: gamefx.Action* constants, e.g. "explore", "cultivate").
 	// Handlers consult it via HasBlockedAction before executing a flow.
@@ -235,6 +245,9 @@ func StatusDisplayName(status string) string {
 func HasBlockedAction(p *models.Player, action string) bool {
 	if p == nil {
 		return false
+	}
+	if p.IsDead {
+		return true
 	}
 	return Get(p).BlockedActions[action]
 }

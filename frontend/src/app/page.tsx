@@ -542,6 +542,24 @@ export default function Home() {
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-y-auto space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed pr-1 custom-scrollbar">
+              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.3</strong> — Tuổi Thọ, Trạng Thái Tử Vong & Tiên Cương:</p>
+              <div className="space-y-2">
+                <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">⏳</span>
+                  <div>
+                    <span className="font-bold text-red-400">Cơ chế Tuổi Thọ & Trạng Thái Tử Vong (is_dead)</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Thọ nguyên tiêu hao dần theo thời gian thực (nhân hệ số gia tốc time_speed). Khi tuổi thọ giảm về 0, Cổ sư rơi vào cõi chết và bị phong tỏa mọi hoạt động chiến đấu, thám hiểm, tu luyện cho tới khi khôi phục tuổi thọ.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🧟</span>
+                  <div>
+                    <span className="font-bold text-emerald-300">Chủng Tộc Cương Thi (Tiên Cương) & Tiên Khiếu Chết</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Cương Thi sở hữu năng lực Bất Tử Tuổi Thọ, đổi lại bị cấm tự hồi phục HP, Chân Nguyên/Tiên Nguyên, Nguyên Lực, Hồn Phách. Khi lên Tiên Cương, gia tốc thời gian khóa ở 1.0 và Tiên Khiếu bị suy thoái giảm dần diện tích và tốc độ thời gian.</p>
+                  </div>
+                </div>
+              </div>
+
               <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.2</strong> — Hợp Luyện & Cảnh Giới Chân Ý:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
@@ -715,6 +733,26 @@ export default function Home() {
       )}
 
       {activeTrade && activeTrade.status === "ACCEPTED" && <TradeRoomModal />}
+
+      {/* Dead Player Overlay */}
+      {player && player.is_dead && (
+        <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-red-900/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl shadow-red-950/50">
+            <div className="w-16 h-16 bg-red-950/50 border border-red-800/40 rounded-full flex items-center justify-center mx-auto text-red-500 text-3xl font-extrabold animate-pulse">
+              ☠️
+            </div>
+            <h2 className="text-xl font-serif font-extrabold text-red-500 tracking-wide">
+              Thọ Nguyên Đã Cạn!
+            </h2>
+            <p className="text-xs text-zinc-400 font-serif leading-relaxed">
+              Tuổi thọ của cổ sư <span className="text-red-400 font-bold">{player.username}</span> đã giảm về 0. Thể xác và thần hồn của đạo hữu đã rơi vào cõi chết.
+            </p>
+            <div className="p-3 bg-red-950/20 border border-red-900/20 rounded-xl text-[11px] text-red-300 font-mono">
+              Mọi hoạt động tu luyện, giao tranh và đi săn đã bị phong ấn. Hãy tìm kiếm sự hỗ trợ hoặc phương pháp tái sinh để hồi sinh bản thể!
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Floating Chat Box */}
       {player && <GlobalChatOverlay />}

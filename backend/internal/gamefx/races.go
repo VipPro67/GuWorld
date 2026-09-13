@@ -25,6 +25,13 @@ var RaceRegistry = make(map[string]RaceDef)
 func defaultRaces() []RaceDef {
 	return []RaceDef{
 		{Key: "human", Name: "Nhân Tộc", Effects: Effects{}},
+		{Key: "cuong_thi", Name: "Cương Thi", Effects: Effects{
+			Immortal:             true,
+			DisableHPRegen:       true,
+			DisableManaRegen:     true,
+			DisableResourceRegen: true,
+			DisableSoulRegen:     true,
+		}},
 		{Key: "fur_people", Name: "Người Lông", Effects: Effects{RefineBonus: 0.10}},
 		{Key: "merman", Name: "Nhân Ngư", Effects: Effects{DaoNganBonus: map[string]float64{"water": 0.10}, PathDamageBonus: map[string]float64{"water": 0.05}}},
 		{Key: "feathered", Name: "Vũ Dân", Effects: Effects{StatMods: map[string]float64{"speed": 0.10}, DaoNganBonus: map[string]float64{"space": 0.05}}},

@@ -518,7 +518,12 @@ func CombatAttack(c *gin.Context) {
 						if healVal <= 0 {
 							healVal = 30.0
 						}
-						healVal *= (1.0 + gamefx.Get(&player).HealingReceivedBonus)
+						fx := gamefx.Get(&player)
+						if fx.DisableHPRegen {
+							healVal = 0.0
+						} else {
+							healVal *= (1.0 + fx.HealingReceivedBonus)
+						}
 						refCaster.HP += healVal
 						if refCaster.HP > refCaster.MaxHP {
 							refCaster.HP = refCaster.MaxHP

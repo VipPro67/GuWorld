@@ -66,6 +66,7 @@ export const PlayerProfileModal: React.FC = () => {
 
   const raceLabels: Record<string, string> = {
     human: "Nhân Tộc",
+    cuong_thi: "Cương Thi",
     fur_people: "Người Lông",
     merman: "Nhân Ngư",
     feathered: "Vũ Dân",
