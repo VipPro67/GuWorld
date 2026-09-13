@@ -11,12 +11,12 @@ import (
 )
 
 type PracticeStartRequest struct {
-	Loadout      simulator.CombatLoadout `json:"loadout"`
-	DummyHP      float64                 `json:"dummy_hp"`
-	DummyShield  float64                 `json:"dummy_shield"`
-	DummyAtk     float64                 `json:"dummy_atk"`
-	DummyDef     float64                 `json:"dummy_def"`
-	DummySpeed   float64                 `json:"dummy_speed"`
+	Loadout     simulator.CombatLoadout `json:"loadout"`
+	DummyHP     float64                 `json:"dummy_hp"`
+	DummyShield float64                 `json:"dummy_shield"`
+	DummyAtk    float64                 `json:"dummy_atk"`
+	DummyDef    float64                 `json:"dummy_def"`
+	DummySpeed  float64                 `json:"dummy_speed"`
 }
 
 // PracticeCombatStart initializes and simulates a practice combat against a custom dummy.
@@ -111,7 +111,7 @@ func PracticeCombatStart(c *gin.Context) {
 			break
 		}
 	}
-	
+
 	// Add END event
 	endEvent := simulator.CombatLog{
 		Turn:   simState.Turn + 1,

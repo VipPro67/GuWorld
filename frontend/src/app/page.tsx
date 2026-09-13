@@ -642,7 +642,7 @@ export default function Home() {
                   <span className="text-lg shrink-0 mt-0.5">🐉</span>
                   <div>
                     <span className="font-bold text-fuchsia-300">Thăng Tiên theo Nhân Khí</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Tỉ lệ thành công Thăng Tiên tỉ lệ thuận với Nhân Khí (tối đa 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên và khai mở Tiên Khiếu — cấp bậc Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên.</p>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Tỉ lệ thành công Thăng Tiên tính theo Tư chất (Giáp: 20% gốc, Ất/Bính/Đinh: 5% gốc) + Bonus Nhân Khí (+20% mỗi 100k Nhân Khí tích lũy, trần tối đa 500.000, cap 90% thành công). Thành công lên Lục Chuyển Cổ Tiên và khai mở Tiên Khiếu.</p>
                   </div>
                 </div>
               </div>

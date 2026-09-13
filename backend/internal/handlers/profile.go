@@ -16,21 +16,21 @@ import (
 )
 
 type PlayerProfileResponse struct {
-	Username        string            `json:"username"`
-	Rank            int               `json:"rank"`
-	SubRank         int               `json:"sub_rank"`
-	AptitudeType    string            `json:"aptitude_type"`
-	AptitudePercent int               `json:"aptitude_percent"`
-	CurrentMana     float64           `json:"current_mana"`
-	MaxMana         float64           `json:"max_mana"`
-	PrimevalStones  int64             `json:"primeval_stones"`
-	ImmortalStones  int64             `json:"immortal_stones"`
-	HP              float64           `json:"hp"`
-	BaseHP          float64           `json:"base_hp"`
-	SectName        string            `json:"sect_name"`
-	EquippedGus     []string          `json:"equipped_gus"`
-	ScoutingStatus  string            `json:"scouting_status"`
-	StatusType      string            `json:"status_type"` // "success", "partial", "failure"
+	Username        string             `json:"username"`
+	Rank            int                `json:"rank"`
+	SubRank         int                `json:"sub_rank"`
+	AptitudeType    string             `json:"aptitude_type"`
+	AptitudePercent int                `json:"aptitude_percent"`
+	CurrentMana     float64            `json:"current_mana"`
+	MaxMana         float64            `json:"max_mana"`
+	PrimevalStones  int64              `json:"primeval_stones"`
+	ImmortalStones  int64              `json:"immortal_stones"`
+	HP              float64            `json:"hp"`
+	BaseHP          float64            `json:"base_hp"`
+	SectName        string             `json:"sect_name"`
+	EquippedGus     []string           `json:"equipped_gus"`
+	ScoutingStatus  string             `json:"scouting_status"`
+	StatusType      string             `json:"status_type"` // "success", "partial", "failure"
 	DominantPath    string             `json:"dominant_path"`
 	DaoMarks        models.DaoMarksMap `json:"dao_marks"`
 	PathMasteries   map[string]int     `json:"path_masteries"`
@@ -112,7 +112,7 @@ func GetPlayerProfile(c *gin.Context) {
 	var targetDaoMarks models.DaoMarksMap
 
 	query := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, `+db.GuInventoryAggregate("p.id")+`, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised, COALESCE(p.race, ''), COALESCE(p.gender, ''), COALESCE(p.constitution, ''), p.statuses
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, ` + db.GuInventoryAggregate("p.id") + `, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised, COALESCE(p.race, ''), COALESCE(p.gender, ''), COALESCE(p.constitution, ''), p.statuses
 		FROM players p
 		WHERE p.username = $1
 	`

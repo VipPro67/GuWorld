@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+import { BACKEND_URL } from "./config";
 const DEFAULT_WS_URL = BACKEND_URL.replace(/^http/, "ws") + "/api/ws";
 
 export interface WSMessage {

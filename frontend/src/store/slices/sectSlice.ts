@@ -1,0 +1,910 @@
+import type { StateCreator } from "zustand";
+import { authFetch } from "@/lib/auth";
+import { BACKEND_URL } from "@/lib/config";
+import type { Sect, MySectStatus, SectMission, SectMemberInfo, SectJoinRequest, SectPromotionRequest, SectMine } from "@/store/useGameStore";
+
+let fetchMySectStatusPromise: Promise<void> | null = null;
+
+export interface SectSlice {
+  sects: Sect[];
+  mySectStatus: MySectStatus | null;
+  sectMissions: SectMission[];
+  sectMembers: SectMemberInfo[];
+  sectJoinRequests: SectJoinRequest[];
+  sectPromotionRequests: SectPromotionRequest[];
+  sectMines: SectMine[];
+  fetchSects: () => Promise<void>;
+  joinSect: (sectId: string) => Promise<boolean>;
+  cancelSectJoinRequest: () => Promise<boolean>;
+  leaveSect: () => Promise<boolean>;
+  fetchMySectStatus: () => Promise<void>;
+  promoteSectRank: () => Promise<boolean>;
+  donateSectStones: (amount: number) => Promise<boolean>;
+  donateSectMaterials: (materialId: string, amount: number) => Promise<boolean>;
+  donateSectGu: (guInstanceId: string) => Promise<boolean>;
+  donateSectRecipe: (recipeId: string) => Promise<boolean>;
+  donateSectBulk: (payload: {
+    materials: { material_id: string; amount: number }[];
+    gus: { gu_instance_id: string }[];
+    recipes: { recipe_id: string }[];
+  }) => Promise<boolean>;
+  buyFromSectVault: (itemType: string, itemId: string, quantity?: number, rank?: number) => Promise<boolean>;
+  fetchSectMissions: () => Promise<void>;
+  acceptSectMission: (missionId: string) => Promise<boolean>;
+  completeSectMission: (missionId: string) => Promise<boolean>;
+  deleteSectMission: (missionId: string) => Promise<boolean>;
+  abandonSectMission: (missionId: string) => Promise<boolean>;
+  createSect: (name: string, description: string, region: string) => Promise<boolean>;
+  fetchSectMembers: () => Promise<void>;
+  setMemberRank: (memberId: string, rank: string) => Promise<boolean>;
+  kickMember: (memberId: string) => Promise<boolean>;
+  createCustomMission: (payload: {
+    title: string;
+    description: string;
+    mission_type: string;
+    target_id: string;
+    target_amount: number;
+    reward_contribution: number;
+    required_member_rank: string;
+    duration_hours?: number;
+  }) => Promise<boolean>;
+  stockSectVault: (itemType: 'gu' | 'material' | 'recipe', itemId: string, quantity: number) => Promise<boolean>;
+  stockSectVaultBulk: (items: { item_type: 'gu' | 'material' | 'recipe'; item_id: string; quantity: number }[]) => Promise<boolean>;
+  upgradeSect: () => Promise<boolean>;
+  toggleSectApproval: (requireApproval: boolean) => Promise<boolean>;
+  toggleSectPromotionApproval: (requirePromotionApproval: boolean) => Promise<boolean>;
+  paySectSalary: () => Promise<boolean>;
+  fetchJoinRequests: () => Promise<void>;
+  actionJoinRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
+  fetchPromotionRequests: () => Promise<void>;
+  actionPromotionRequest: (requestId: string, action: "approve" | "reject") => Promise<boolean>;
+  fetchSectMines: () => Promise<void>;
+  attackSectMine: (slotId: number, attackerId?: string) => Promise<boolean>;
+  assignSectMineDefender: (mineId: number, defenderType: 'member' | 'beast', playerId?: string, monsterId?: string, monsterRank?: number) => Promise<boolean>;
+  removeSectMineDefender: (defenderId: string) => Promise<boolean>;
+}
+
+export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get) => ({
+  sects: [],
+  mySectStatus: null,
+  sectMissions: [],
+  sectMembers: [],
+  sectJoinRequests: [],
+  sectPromotionRequests: [],
+  sectMines: [],
+
+  fetchSects: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ sects: data || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch sects:", err);
+      get().addToast("Lỗi tải danh sách tông môn.", "error");
+    }
+  },
+
+  joinSect: async (sectId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/${sectId}/join`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gia nhập tông môn thất bại.");
+      get().addToast(data.message || "Gia nhập tông môn thành công!", "success");
+      get().addLog(data.message || `Gia nhập tông môn: ${sectId}`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  leaveSect: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/leave`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Rời tông môn thất bại.");
+      get().addToast(data.message || "Đã rời tông môn!", "info");
+      get().addLog(data.message || "Rời tông môn.");
+      set({ mySectStatus: null });
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  cancelSectJoinRequest: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/join-request/cancel`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy đơn xin gia nhập thất bại.");
+      get().addToast(data.message || "Đã hủy đơn xin gia nhập tông môn!", "info");
+      get().addLog(data.message || "Hủy đơn xin gia nhập tông môn.");
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchMySectStatus: async () => {
+    if (fetchMySectStatusPromise) return fetchMySectStatusPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/sects/me`);
+        if (response.status === 401) { logout(); return; }
+        if (response.ok) {
+          const data = await response.json();
+          set({ mySectStatus: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch my sect status:", err);
+        get().addToast("Lỗi tải thông tin tông môn.", "error");
+      } finally {
+        fetchMySectStatusPromise = null;
+      }
+    };
+    fetchMySectStatusPromise = executeFetch();
+    return fetchMySectStatusPromise;
+  },
+
+  promoteSectRank: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/promote`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Khảo hạch thăng cấp thất bại.");
+      get().addToast(data.message || "Thăng cấp thành công!", "success");
+      get().addLog(data.message || "Thăng cấp tông môn.");
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  donateSectStones: async (amount: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/donate/stones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
+      get().addToast(data.message || "Quyên góp Nguyên Thạch thành công!", "success");
+      get().addLog(data.message || `Quyên góp ${amount} Nguyên Thạch.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  donateSectMaterials: async (materialId: string, amount: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/donate/materials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ material_id: materialId, amount }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
+      get().addToast(data.message || "Quyên góp nguyên liệu thành công!", "success");
+      get().addLog(data.message || `Quyên góp ${amount}x ${materialId}.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  donateSectGu: async (guInstanceId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/donate/gu`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_instance_id: guInstanceId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
+      get().addToast(data.message || "Quyên góp Cổ trùng thành công!", "success");
+      get().addLog(data.message || `Quyên góp Cổ trùng.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  donateSectRecipe: async (recipeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/donate/recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipe_id: recipeId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
+      get().addToast(data.message || "Quyên góp Bí phương thành công!", "success");
+      get().addLog(data.message || `Quyên góp Bí phương.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  donateSectBulk: async (payload: {
+    materials: { material_id: string; amount: number }[];
+    gus: { gu_instance_id: string }[];
+    recipes: { recipe_id: string }[];
+  }) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/donate/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Quyên góp hàng loạt thất bại.");
+      get().addToast(data.message || "Quyên góp hàng loạt thành công!", "success");
+      get().addLog(data.message || `Quyên góp hàng loạt vật phẩm.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  buyFromSectVault: async (itemType: string, itemId: string, quantity = 1, rank?: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/vault/buy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_type: itemType, item_id: itemId, quantity, rank }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Trao đổi vật phẩm thất bại.");
+      get().addToast(data.message || "Trao đổi vật phẩm thành công!", "success");
+      get().addLog(data.message || `Đổi ${itemType}: ${itemId} x${quantity} từ bảo khố.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchSectMissions: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ sectMissions: data || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch sect missions:", err);
+      get().addToast("Lỗi tải nhiệm vụ tông môn.", "error");
+    }
+  },
+
+  acceptSectMission: async (missionId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/accept`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nhận nhiệm vụ thất bại.");
+      get().addToast(data.message || "Nhận nhiệm vụ thành công!", "success");
+      get().addLog(data.message || `Nhận nhiệm vụ tông môn: ${missionId}`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  completeSectMission: async (missionId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/complete`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hoàn thành nhiệm vụ thất bại.");
+      get().addToast(data.message || "Hoàn thành nhiệm vụ thành công!", "success");
+      get().addLog(data.message || `Hoàn thành nhiệm vụ tông môn: ${missionId}`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  deleteSectMission: async (missionId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Xóa nhiệm vụ thất bại.");
+      get().addToast(data.message || "Đã xóa nhiệm vụ tông môn!", "success");
+      get().addLog(data.message || `Xóa nhiệm vụ tông môn: ${missionId}`);
+      await get().fetchSectMissions();
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  abandonSectMission: async (missionId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/abandon`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy nhiệm vụ thất bại.");
+      get().addToast(data.message || "Đã hủy nhiệm vụ tông môn!", "success");
+      get().addLog(data.message || `Hủy nhiệm vụ tông môn: ${missionId}`);
+      await get().fetchMySectStatus();
+      await get().fetchSectMissions();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  createSect: async (name: string, description: string, region: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description, region }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Lập phái thất bại.");
+      get().addToast(data.message || "Khai tông lập phái thành công!", "success");
+      get().addLog(data.message || `Lập phái: ${name}`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchSectMembers: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/me/members`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ sectMembers: data || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch sect members:", err);
+      get().addToast("Lỗi tải thành viên tông môn.", "error");
+    }
+  },
+
+  setMemberRank: async (memberId: string, rank: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/members/${memberId}/rank`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rank }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Điều chỉnh chức vụ thất bại.");
+      get().addToast(data.message || "Đã điều chỉnh chức vụ!", "success");
+      get().addLog(data.message || `Điều chỉnh chức vụ thành viên: ${memberId} sang ${rank}`);
+      await get().fetchSectMembers();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  kickMember: async (memberId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/members/${memberId}/kick`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Trục xuất đệ tử thất bại.");
+      get().addToast(data.message || "Đã trục xuất đệ tử!", "info");
+      get().addLog(data.message || `Trục xuất đệ tử: ${memberId}`);
+      await get().fetchSectMembers();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  createCustomMission: async (payload) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: payload.title,
+          description: payload.description,
+          mission_type: payload.mission_type,
+          target_id: payload.target_id,
+          target_amount: payload.target_amount,
+          reward_contribution: payload.reward_contribution,
+          required_member_rank: payload.required_member_rank,
+          duration_hours: payload.duration_hours,
+        }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Phát hành nhiệm vụ thất bại.");
+      get().addToast(data.message || "Đã phát hành nhiệm vụ môn phái!", "success");
+      get().addLog(data.message || `Phát hành nhiệm vụ: ${payload.title}`);
+      await get().fetchSectMissions();
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  stockSectVault: async (itemType, itemId, quantity) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/vault/stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item_type: itemType,
+          item_id: itemId,
+          quantity: quantity,
+        }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
+      get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
+      get().addLog(`Nhập bảo khố: ${quantity}x ${itemId}`);
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  stockSectVaultBulk: async (items) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/vault/stock/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
+      get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
+      get().addLog(`Nhập bảo khố hàng loạt: ${items.length} mặt hàng`);
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  upgradeSect: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/upgrade`, {
+        method: "POST",
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nâng cấp tông môn thất bại.");
+      get().addToast(data.message || "Nâng cấp tông môn thành công!", "success");
+      get().addLog(`Nâng cấp tông môn: Cấp ${data.new_level}`);
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  toggleSectApproval: async (requireApproval) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/toggle-approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ require_approval: requireApproval }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
+      get().addToast(data.message || "Đã cập nhật cài đặt duyệt thành viên!", "success");
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  toggleSectPromotionApproval: async (requirePromotionApproval) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/toggle-promotion-approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ require_promotion_approval: requirePromotionApproval }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
+      get().addToast(data.message || "Đã cập nhật cài đặt duyệt lên cấp!", "success");
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  paySectSalary: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/pay-salary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Phát lương thất bại.");
+      get().addToast(data.message || "Đã phát lương thành công!", "success");
+      await get().fetchMySectStatus();
+      await get().fetchSectMembers();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchJoinRequests: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/join-requests`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ sectJoinRequests: data || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch join requests:", err);
+      get().addToast("Lỗi tải yêu cầu gia nhập.", "error");
+    }
+  },
+
+  actionJoinRequest: async (requestId, action) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/join-requests/${requestId}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
+      get().addToast(data.message || "Thao tác thành công!", "success");
+      await get().fetchJoinRequests();
+      await get().fetchSectMembers();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchPromotionRequests: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/promotion-requests`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ sectPromotionRequests: data || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch promotion requests:", err);
+      get().addToast("Lỗi tải yêu cầu thăng chức.", "error");
+    }
+  },
+
+  actionPromotionRequest: async (requestId, action) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/promotion-requests/${requestId}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
+      get().addToast(data.message || "Thao tác thành công!", "success");
+      await get().fetchPromotionRequests();
+      await get().fetchSectMembers();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchSectMines: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/mines`, { method: "GET" });
+      if (!response.ok) throw new Error("Failed to fetch sect mines");
+      const data = await response.json();
+      set({ sectMines: data || [] });
+    } catch (err) {
+      console.error("Failed to fetch sect mines", err);
+    }
+  },
+
+  attackSectMine: async (slotId: number, attackerId?: string) => {
+    const { token, actionLoading, logout, addToast, addLog } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/attack`, {
+        method: "POST",
+        body: JSON.stringify({ mine_id: slotId, attacker_id: attackerId || "" }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Lỗi khi tấn công Lãnh địa");
+      addToast(data.message || "Đã tấn công Lãnh địa Tông môn!", data.won ? "success" : "info");
+      addLog(data.message || "Tấn công Lãnh địa Tông môn.");
+      get().fetchPlayerProfile(
+        get().player?.username || ""
+      ); // To refresh combat state
+      get().fetchSectMines();
+      return true;
+    } catch (err: any) {
+      addToast(err.message || "Lỗi khi tấn công Lãnh địa", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  assignSectMineDefender: async (mineId, defenderType, playerId, monsterId, monsterRank) => {
+    const { token, actionLoading, logout, addToast, addLog } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/defend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mine_id: mineId,
+          defender_type: defenderType,
+          player_id: playerId || "",
+          monster_id: monsterId || "",
+          monster_rank: monsterRank || 1,
+        }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bố trí phòng thủ thất bại.");
+      addToast(data.message || "Đã bố trí phòng thủ!", "success");
+      addLog(data.message || "Bố trí phòng thủ lãnh địa.");
+      get().fetchSectMines();
+      get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      addToast(err.message || "Lỗi bố trí phòng thủ", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  removeSectMineDefender: async (defenderId: string) => {
+    const { token, actionLoading, logout, addToast, addLog } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/undefend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defender_id: defenderId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Rút phòng thủ thất bại.");
+      addToast(data.message || "Đã rút phòng thủ!", "success");
+      addLog(data.message || "Rút phòng thủ lãnh địa.");
+      get().fetchSectMines();
+      get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      addToast(err.message || "Lỗi rút phòng thủ", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+});

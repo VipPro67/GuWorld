@@ -137,7 +137,7 @@ func BreakWall(c *gin.Context) {
 		chance := GetBreakthroughChance(player.Rank, player.AptitudeType)
 
 		if rand.Float64() > chance {
-			player.CurrentMana *= 0.8                                                  // mất 20% chân nguyên
+			player.CurrentMana *= 0.8                                                 // mất 20% chân nguyên
 			player.WallProgress = math.Min(1.0, math.Max(0, player.WallProgress-0.1)) // mất 10% tiến độ
 
 			msg = fmt.Sprintf(
@@ -187,8 +187,8 @@ func BreakWall(c *gin.Context) {
 			if player.Rank >= 6 {
 				player.MaxMana = 999999999.0
 			}
-			if player.HumanQi > 100000.0 {
-				player.HumanQi = 100000.0
+			if player.HumanQi > MaxHumanQi {
+				player.HumanQi = MaxHumanQi
 			}
 			msg = "Chúc mừng! Bạn đã trùng kích vỡ nát được một tầng khiếu, tiến lên tu vi cao hơn!"
 		}
@@ -245,6 +245,7 @@ func GetBreakthroughChance(rank int, aptitude string) float64 {
 		3: 0.2,
 		4: 0.3,
 		5: 0.4,
+		6: 0.8,
 	}
 
 	chance := baseChance
@@ -319,8 +320,8 @@ func UseRelicGu(c *gin.Context) {
 
 	// Increase human_qi by 30 for breakthrough
 	player.HumanQi += 30.0
-	if player.HumanQi > 100000.0 {
-		player.HumanQi = 100000.0
+	if player.HumanQi > MaxHumanQi {
+		player.HumanQi = MaxHumanQi
 	}
 
 	updateQuery := `
@@ -399,9 +400,11 @@ func Ascension(c *gin.Context) {
 		return
 	}
 
-	// Human Qi contributes up to +20% bonus chance at cap (100k)
+	// Base chance determined by player Aptitude (Tư chất)
+	baseChance := GetBreakthroughChance(6, player.AptitudeType)
+
+	// Human Qi contributes +20% bonus chance per 100k Human Qi
 	qiBonus := (player.HumanQi / requiredHumanQi) * 0.20
-	baseChance := 0.10 // 10% base
 	totalChance := baseChance + qiBonus
 
 	// Cap chance at 90%

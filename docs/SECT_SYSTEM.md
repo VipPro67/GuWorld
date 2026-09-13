@@ -38,7 +38,7 @@ Cấu trúc chính:
   - API phát lương cho tông môn.
 - `backend/internal/handlers/sect_warfare.go`
   - Quản lý mỏ khoáng, phòng thủ và tấn công lãnh thổ.
-- `backend/internal/handlers/admin.go`
+- `backend/internal/handlers/admin_sects.go`
   - Các API admin giám sát/điều chỉnh dữ liệu tông môn.
 
 ### 2.2 Schema & dữ liệu

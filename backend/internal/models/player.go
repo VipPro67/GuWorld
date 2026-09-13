@@ -272,7 +272,7 @@ type CombatState struct {
 	Enemies           []Combatant `json:"enemies,omitempty"`
 	// PetSoulCharged marks that pet deployment soul cost was already paid for
 	// this combat, preventing a double charge when InitializeCombatState is
-	// re-invoked (e.g. combat_attack.go when Allies is empty).
+	// re-invoked (e.g. combat setup when Allies is empty).
 	PetSoulCharged bool `json:"pet_soul_charged,omitempty"`
 	// TribulationEventID links this combat to a tribulation (tai kiếp) event.
 	// When non-empty, enemies overflow damage spills into the Immortal Aperture.

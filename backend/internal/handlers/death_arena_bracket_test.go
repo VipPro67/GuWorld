@@ -36,10 +36,10 @@ func TestNextPowerOf2(t *testing.T) {
 
 func TestBracketRoundsCalculation(t *testing.T) {
 	tests := []struct {
-		teamCount    int
-		totalRounds  int
-		slots        int
-		byes         int
+		teamCount   int
+		totalRounds int
+		slots       int
+		byes        int
 	}{
 		{2, 1, 2, 0},
 		{3, 2, 4, 1},

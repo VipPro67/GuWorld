@@ -473,7 +473,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		gacha.Use(middleware.AuthRequired())
 		gacha.Use(middleware.RateLimitByGroup("gacha", 200, time.Minute))
 		gacha.GET("/pools", handlers.GetGachaPools)
-		gacha.Use(middleware.RateLimitByPlayer(5, time.Minute))
+		gacha.Use(middleware.RateLimitByPlayer(1, time.Minute))
 		{
 			gacha.POST("/open", handlers.OpenGacha)
 			gacha.POST("/open10", handlers.OpenGacha10)
@@ -561,7 +561,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/practice", handlers.PracticeCombatStart)
-			combat.POST("/attack", handlers.CombatAttack)
 			combat.POST("/cast-killer-move", handlers.CastKillerMove)
 			combat.POST("/capture", handlers.CaptureMonster)
 			combat.GET("/history", handlers.ListCombatHistory)

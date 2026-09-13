@@ -14,8 +14,8 @@ import (
 // ---------- Request types ----------
 
 type AssignWorkerRequest struct {
-	VariantHumanID    string `json:"variant_human_id" binding:"required"`
-	AssignedPopulation int   `json:"assigned_population" binding:"required,min=0"`
+	VariantHumanID     string `json:"variant_human_id" binding:"required"`
+	AssignedPopulation int    `json:"assigned_population" binding:"required,min=0"`
 }
 
 type CreateRefinementJobRequest struct {
@@ -66,14 +66,14 @@ func GetApertureNodeWorkers(c *gin.Context) {
 	defer rows.Close()
 
 	type WorkerInfo struct {
-		ID                string  `json:"id"`
-		NodeID            string  `json:"node_id"`
-		VariantHumanID    string  `json:"variant_human_id"`
-		Race              string  `json:"race"`
-		Population        int     `json:"population"`
+		ID                 string `json:"id"`
+		NodeID             string `json:"node_id"`
+		VariantHumanID     string `json:"variant_human_id"`
+		Race               string `json:"race"`
+		Population         int    `json:"population"`
 		AssignedPopulation int    `json:"assigned_population"`
-		CreatedAt         string  `json:"created_at"`
-		UpdatedAt         string  `json:"updated_at"`
+		CreatedAt          string `json:"created_at"`
+		UpdatedAt          string `json:"updated_at"`
 	}
 
 	var list []WorkerInfo

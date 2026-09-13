@@ -25,10 +25,10 @@ type SectMemberSalaryInfo struct {
 }
 
 type PaySectSalaryResponse struct {
-	Message      string                 `json:"message"`
-	TotalSalary  int64                  `json:"total_salary"`
-	SectFunds    int64                  `json:"sect_funds"`
-	PaidMembers  []SectMemberSalaryInfo `json:"paid_members"`
+	Message     string                 `json:"message"`
+	TotalSalary int64                  `json:"total_salary"`
+	SectFunds   int64                  `json:"sect_funds"`
+	PaidMembers []SectMemberSalaryInfo `json:"paid_members"`
 }
 
 var rankSalaryBonus = map[string]int64{
@@ -150,7 +150,7 @@ func PaySectSalary(c *gin.Context) {
 		}
 	}
 
-var pid uuid.UUID
+	var pid uuid.UUID
 	for _, m := range members {
 		pid = m.PlayerID
 		auditlog.Log(db.DB, auditlog.Entry{

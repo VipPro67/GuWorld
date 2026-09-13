@@ -55,7 +55,7 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 			return colAlive[0].GridX, colAlive[0].GridY, true
 		}
 	}
-	
+
 	// Final fallback: prioritize GridX (1,2,3) then GridY (1,2,3)
 	for _, col := range []int{1, 2, 3} {
 		for _, targetY := range []int{1, 2, 3} {

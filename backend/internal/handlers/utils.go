@@ -72,7 +72,6 @@ func RespondSuccessWithMeta(c *gin.Context, status int, data interface{}, meta *
 	c.JSON(status, APIResponse{Success: true, Data: data, Meta: meta})
 }
 
-
 // WithTx executes fn within a database transaction.
 // Automatically rolls back on error or panic, commits on success.
 // Usage:

@@ -102,8 +102,12 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - cẩn thận áp lực không khiếu
 ### Thăng Tiên và Độ Kiếp
 
-- Ngũ Chuyển Đỉnh phong (Chuyển 5, SubRank 4) có thể thăng tiên khi Nhân Khí đạt mức mong muốn.
-- **Tỉ lệ thành công tuyến tính theo Nhân Khí:** `chance = NhânKhí / 100.000`. 0 Nhân Khí → 0%, 40.000 → 40%, 100.000 → chắc chắn thành công.
+- Ngũ Chuyển Đỉnh phong (Chuyển 5, SubRank 4) có thể thăng tiên khi Nhân Khí đạt từ 100.000 trở lên.
+- **Tỉ lệ thành công phụ thuộc vào Tư chất và Nhân Khí:**
+  - **Tỉ lệ gốc (`baseChance`):** Giáp: `20%`, Ất/Bính/Đinh: `5%` (tính từ `GetBreakthroughChance(6, Aptitude)` với phạt Rank 6 là 80%).
+  - **Bonus Nhân Khí:** Mỗi 100.000 Nhân Khí cộng thêm `+20%` tỉ lệ (`qiBonus = (NhânKhí / 100.000) * 20%`).
+  - **Giới hạn tối đa:** Tổng tỉ lệ thành công tối đa là **90%**.
+  - **Ví dụ tại 100.000 Nhân Khí:** Giáp = 40%, Ất/Bính/Đinh = 25%. Để đạt max 90%, Tư chất Giáp cần 350.000 Nhân Khí, các tư chất còn lại cần 425.000 Nhân Khí.
 - **Thành công:** lên Lục Chuyển Cổ Tiên, nhận 10 Tiên Nguyên Thạch, Đạo Ngân Thiên/Địa = 100. Kiếp đầu tiên giáng lâm vào **năm nội bộ thứ 10**, tương đương khoảng **2–10 giờ đời thật** tùy phẩm chất Tiên Khiếu (xem mục Gia tốc thời gian). **Tiên Khiếu được khai mở ngay**, phẩm cấp được định đoạt theo Nhân Khí tại thời điểm thăng tiên (xem mục Tiên khiếu).
 - **Thất bại:** Nhân Khí về 0, tu vi phế bỏ rơi về Nhất Chuyển Sơ giai, mất hết tiến độ phá vách.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
@@ -137,7 +141,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 
 ### Nhân Khí (Human Qi)
 
-- Nhân Khí là tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa **100.000**.
+- Nhân Khí là tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa **500.000**.
 - Mọi hoạt động lớn đều tích lũy Nhân Khí (tăng theo `human_qi`, lưu trực tiếp vào DB):
   - Chiến đấu: thắng +20, thua +5; tự động chiến +3; rút lui +2, bỏ chạy +1.
   - Mua/bán tại cửa hàng +5; đổi vật phẩm đấu trường +5.
@@ -607,7 +611,7 @@ Hệ thống cung cấp trang Hướng Dẫn Tân Thủ chi tiết từng bướ
 4. **Lắp ráp Sát Chiêu & Luyện Cổ:** Chế tạo nâng cấp Cổ trùng tại lò luyện và tự do phối hợp Cổ trùng tạo Sát Chiêu độc bản.
 5. **Ải Cốt truyện & Đấu Trường:** Đi ải cốt truyện và khiêu chiến Cổ sư khác kiếm Chiến Công đổi đồ.
 6. **Thương hội & Tông môn:** Đấu giá vật phẩm tự do tại Bảo Hoàng Thiên và các hoạt động quyên góp, giao dịch bảo khố Tông Môn.
-7. **Thăng Tiên:** Đột phá lên Lục Chuyển Cổ Tiên ở Ngũ Chuyển Đỉnh Phong dựa trên tích lũy Nhân Khí (chance tỷ lệ thuận với Nhân Khí, tối đa 100k = 100% thành công). Thất bại phế bỏ tu vi về Nhất Chuyển.
+7. **Thăng Tiên:** Đột phá lên Lục Chuyển Cổ Tiên ở Ngũ Chuyển Đỉnh Phong dựa trên Tư chất và tích lũy Nhân Khí (yêu cầu tối thiểu 100k Nhân Khí, xác suất gốc theo tư chất + bonus Nhân Khí, tối đa 90%). Thất bại phế bỏ tu vi về Nhất Chuyển.
 
 ## 20. Bảng Quy Đổi Đơn Vị Số Lượng (Vạn, Ức, Kinh...)
 

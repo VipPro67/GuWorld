@@ -133,4 +133,3 @@ func TestStartCombat_AllyFiltering(t *testing.T) {
 		t.Fatalf("expected only party member %s to be notified, got %+v", partyMemberID, notified)
 	}
 }
-

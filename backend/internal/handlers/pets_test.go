@@ -62,7 +62,7 @@ func TestNoCompoundOnRemerge(t *testing.T) {
 	// Simulate: merge 2 into 2 (count 2 -> 4) using stored stat rebasing.
 	// This must equal scaling a fresh base by 4^0.65 (no compound blow-up).
 	base := 100.0
-	pack2 := packScaledStat(base, 2)           // what a pack of 2 stores
+	pack2 := packScaledStat(base, 2)                 // what a pack of 2 stores
 	pack4 := packScaledStat(rebaseStat(pack2, 2), 4) // remerge result
 	want := packScaledStat(base, 4)
 	if math.Abs(pack4-want) > 0.2 {

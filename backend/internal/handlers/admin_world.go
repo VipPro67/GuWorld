@@ -98,26 +98,26 @@ func AdminListRegions(c *gin.Context) {
 		if parentID.Valid {
 			r.ParentID = parentID.String
 		}
-if poolRaw != "" {
-		_ = json.Unmarshal([]byte(poolRaw), &r.PoolWeights)
-	}
-	if safeZoneX.Valid {
-		val := int(safeZoneX.Int64)
-		r.SafeZoneX = &val
-	}
-	if safeZoneY.Valid {
-		val := int(safeZoneY.Int64)
-		r.SafeZoneY = &val
-	}
-	list = append(list, r)
+		if poolRaw != "" {
+			_ = json.Unmarshal([]byte(poolRaw), &r.PoolWeights)
+		}
+		if safeZoneX.Valid {
+			val := int(safeZoneX.Int64)
+			r.SafeZoneX = &val
+		}
+		if safeZoneY.Valid {
+			val := int(safeZoneY.Int64)
+			r.SafeZoneY = &val
+		}
+		list = append(list, r)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":       list,
-		"total":      total,
-		"page":       page,
-		"page_size":  pageSize,
-		"last_page":  (total + pageSize - 1) / pageSize,
+		"data":      list,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+		"last_page": (total + pageSize - 1) / pageSize,
 	})
 }
 
@@ -210,7 +210,7 @@ func AdminUpdateRegion(c *gin.Context) {
 		parentID = nil
 	}
 
-query := `UPDATE regions 
+	query := `UPDATE regions 
           SET name = $1, description = $2, width = $3, height = $4, min_rank = $5, max_rank = $6, 
               is_active = $7, parent_id = $8, zone_type = $9, min_x = $10, min_y = $11, 
               max_x = $12, max_y = $13, entry_x = $14, entry_y = $15, safe_zone_x = $16, safe_zone_y = $17, pool_weights = $18, updated_at = NOW()
@@ -370,11 +370,11 @@ func AdminListMapCells(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":       list,
-		"total":      total,
-		"page":       page,
-		"page_size":  pageSize,
-		"last_page":  (total + pageSize - 1) / pageSize,
+		"data":      list,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+		"last_page": (total + pageSize - 1) / pageSize,
 	})
 }
 

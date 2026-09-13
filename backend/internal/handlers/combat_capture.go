@@ -209,13 +209,13 @@ func CaptureMonster(c *gin.Context) {
 		}
 
 		respondActionGuOnly(c, http.StatusOK, player, gin.H{
-			"captured":         true,
-			"monster_name":     enemyName,
-			"monster_id":       monTemplate.ID,
-			"monster_type":     enemyType,
-			"capture_chance":   chance,
-			"roll":             roll,
-			"message":          fmt.Sprintf("Bắt thành công %s!", enemyName),
+			"captured":       true,
+			"monster_name":   enemyName,
+			"monster_id":     monTemplate.ID,
+			"monster_type":   enemyType,
+			"capture_chance": chance,
+			"roll":           roll,
+			"message":        fmt.Sprintf("Bắt thành công %s!", enemyName),
 		})
 		return
 	}

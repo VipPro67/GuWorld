@@ -220,7 +220,7 @@ func ClaimReferralReward(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "referral.claim", EntityType: "referral",
 		RequestSummary: fmt.Sprintf("nhận thưởng sư đồ mốc %d từ %s", req.Milestone, refereeUUID.String()),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
@@ -321,13 +321,13 @@ func SimulateDeposit(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "deposit.simulate", EntityType: "player",
 		RequestSummary: fmt.Sprintf("nạp %d Nguyên Thạch (admin simulated)", req.Stones),
-		Metadata: map[string]interface{}{"stones": req.Stones, "new_stones": currentStones},
-		IPAddress: c.ClientIP(), Success: true,
+		Metadata:       map[string]interface{}{"stones": req.Stones, "new_stones": currentStones},
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "Nạp Nguyên Thạch thành công (Simulated)!",
+		"message":          "Nạp Nguyên Thạch thành công (Simulated)!",
 		"deposited_stones": req.Stones,
-		"new_stones":      currentStones,
+		"new_stones":       currentStones,
 	})
 }
 
@@ -403,7 +403,7 @@ func GetReferralStats(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse referee details"})
 			return
 		}
-		
+
 		r.IsVerified = r.Rank >= 2 || completedQuests
 		referees = append(referees, r)
 	}
@@ -505,7 +505,7 @@ func BindReferralCode(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "referral.bind", EntityType: "referral",
 		RequestSummary: fmt.Sprintf("nhập mã giới thiệu %s từ người chơi %s", trimmedRef, referrerID.String()),
-		IPAddress: clientIP, Success: true,
+		IPAddress:      clientIP, Success: true,
 	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Nhập mã giới thiệu thành công!"})

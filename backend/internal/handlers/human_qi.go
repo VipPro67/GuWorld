@@ -5,7 +5,7 @@ import (
 )
 
 // MaxHumanQi caps the amount of Nhân Khí a player can hold.
-const MaxHumanQi = 100000.0
+const MaxHumanQi = 500000.0
 
 // AddHumanQi increases a player's Nhân Khí and returns how much was actually gained.
 func AddHumanQi(player *models.Player, amount float64) float64 {

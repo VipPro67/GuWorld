@@ -1,0 +1,846 @@
+import type { StateCreator } from "zustand";
+import { authFetch } from "@/lib/auth";
+import { BACKEND_URL } from "@/lib/config";
+import { createManaSnapshotFromPlayer } from "@/store/useGameStore";
+import type {
+  ImmortalAperture,
+  DaoMark,
+  ApertureResourceNode,
+  ApertureVariantHuman,
+  ApertureNodeWorker,
+  ApertureRefinementJob,
+  ApertureSettlement,
+  ApertureVariantNPC,
+  TribulationEvent,
+  TribulationEnemy,
+} from "@/store/useGameStore";
+
+let fetchAperturePromise: Promise<void> | null = null;
+let fetchApertureNodesPromise: Promise<void> | null = null;
+let fetchVariantHumansPromise: Promise<void> | null = null;
+
+export interface ApertureSlice {
+  aperture: ImmortalAperture | null;
+  daoMarks: DaoMark[];
+  apertureNodes: ApertureResourceNode[];
+  variantHumans: ApertureVariantHuman[];
+  activeTribulation: { event: TribulationEvent; enemies: TribulationEnemy[] } | null;
+  fetchAperture: () => Promise<void>;
+  fetchDaoMarks: () => Promise<void>;
+  fetchApertureNodes: () => Promise<void>;
+  fetchVariantHumans: () => Promise<void>;
+  placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => Promise<boolean>;
+  collectResourceNode: (nodeId: string) => Promise<boolean>;
+  collectAllResourceNodes: () => Promise<boolean>;
+  uninstallApertureNode: (nodeId: string) => Promise<boolean>;
+  deleteApertureNode: (nodeId: string) => Promise<boolean>;
+  setApertureTimeRate: (rate: number) => Promise<boolean>;
+  setApertureLabor: (race: string, intensity: string) => Promise<boolean>;
+  repairApertureNode: (nodeId: string) => Promise<boolean>;
+  repairAllApertureNodes: () => Promise<boolean>;
+  upgradeApertureNode: (nodeId: string) => Promise<boolean>;
+  fetchActiveTribulation: () => Promise<void>;
+  engageTribulationCombat: (eventId: string) => Promise<boolean>;
+  resolveTribulation: (eventId: string) => Promise<boolean>;
+  nodeWorkers: ApertureNodeWorker[];
+  refinementQueue: ApertureRefinementJob[];
+  settlements: ApertureSettlement[];
+  variantNPCs: ApertureVariantNPC[];
+  fetchNodeWorkers: (nodeId: string) => Promise<void>;
+  assignWorkerToNode: (nodeId: string, variantHumanId: string, population: number) => Promise<boolean>;
+  removeWorkerFromNode: (nodeId: string, workerId: string) => Promise<boolean>;
+  fetchRefinementQueue: () => Promise<void>;
+  createRefinementJob: (recipeId: string, mode: string, targetQuantity: number) => Promise<boolean>;
+  deleteRefinementJob: (jobId: string) => Promise<boolean>;
+  fetchSettlements: () => Promise<void>;
+  upgradeSettlement: (settlementId: string, data: { name?: string; population_capacity?: number; housing?: number; food_storage?: number }) => Promise<boolean>;
+  fetchNPCs: () => Promise<void>;
+  assignNPCRole: (npcId: string, role: string) => Promise<boolean>;
+  dismissNPC: (npcId: string) => Promise<boolean>;
+  useGutsGu: () => Promise<boolean>;
+  refineSoul: () => Promise<boolean>;
+}
+
+export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (set, get) => ({
+  aperture: null,
+  daoMarks: [],
+  apertureNodes: [],
+  variantHumans: [],
+  nodeWorkers: [],
+  refinementQueue: [],
+  settlements: [],
+  variantNPCs: [],
+  activeTribulation: null,
+
+  fetchAperture: async () => {
+    if (fetchAperturePromise) return fetchAperturePromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (!response.ok) {
+          set({ aperture: null });
+          return;
+        }
+        const data = await response.json();
+        set({ aperture: data });
+        const player = get().player;
+        if (player) {
+          set({ manaSnapshot: createManaSnapshotFromPlayer(player, get().guDictionary, get().constitutionDictionary, data.time_rate) });
+        }
+      } catch (err) {
+        console.error("Failed to fetch aperture:", err);
+        get().addToast("Lỗi tải tiên thể.", "error");
+        set({ aperture: null });
+      } finally {
+        fetchAperturePromise = null;
+      }
+    };
+    fetchAperturePromise = executeFetch();
+    return fetchAperturePromise;
+  },
+
+  fetchDaoMarks: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/dao-marks`);
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      if (response.ok) {
+        const data = await response.json();
+        set({ daoMarks: data });
+      }
+    } catch (err) {
+      console.error("Failed to fetch Dao Marks:", err);
+      get().addToast("Lỗi tải dấu đạo.", "error");
+    }
+  },
+
+  fetchApertureNodes: async () => {
+    if (fetchApertureNodesPromise) return fetchApertureNodesPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          set({ apertureNodes: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch aperture nodes:", err);
+        get().addToast("Lỗi tải tiên thể.", "error");
+      } finally {
+        fetchApertureNodesPromise = null;
+      }
+    };
+    fetchApertureNodesPromise = executeFetch();
+    return fetchApertureNodesPromise;
+  },
+
+  placeApertureNode: async (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ node_type: nodeType, x, y, path, prod_key: prodKey }),
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể xây dựng điểm tài nguyên");
+      }
+      get().addToast(data.message || "Xây dựng mỏ tài nguyên thành công!", "success");
+      get().addLog(data.message || "Đã đặt điểm tài nguyên mới.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  collectResourceNode: async (nodeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/collect`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể thu hoạch tài nguyên");
+      }
+      get().addToast(data.message || "Thu hoạch thành công!", "success");
+      get().addLog(data.message || "Thu hoạch tài nguyên thành công.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  collectAllResourceNodes: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/collect-all`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể thu hoạch tài nguyên");
+      }
+      get().addToast(data.message || "Thu hoạch hàng loạt thành công!", "success");
+      get().addLog(data.message || "Thu hoạch hàng loạt tài nguyên thành công.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  uninstallApertureNode: async (nodeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/uninstall`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể tháo dỡ mỏ tài nguyên");
+      }
+      get().addToast(data.message || "Tháo dỡ thành công!", "success");
+      get().addLog(data.message || "Đã tháo dỡ mỏ tài nguyên.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  deleteApertureNode: async (nodeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể san phẳng mỏ tài nguyên");
+      }
+      get().addToast(data.message || "San phẳng thành công!", "success");
+      get().addLog(data.message || "Đã san phẳng mỏ tài nguyên.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  fetchVariantHumans: async () => {
+    if (fetchVariantHumansPromise) return fetchVariantHumansPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          set({ variantHumans: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch variant humans:", err);
+        get().addToast("Lỗi tải tiên thể.", "error");
+      } finally {
+        fetchVariantHumansPromise = null;
+      }
+    };
+    fetchVariantHumansPromise = executeFetch();
+    return fetchVariantHumansPromise;
+  },
+
+  // --- Node Workers ---
+  fetchNodeWorkers: async (nodeId: string) => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ nodeWorkers: data.workers || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch node workers:", err);
+    }
+  },
+
+  assignWorkerToNode: async (nodeId: string, variantHumanId: string, population: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variant_human_id: variantHumanId, assigned_population: population }),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Phân công lao động thành công", "success");
+        get().fetchNodeWorkers(nodeId);
+        return true;
+      }
+      const data = await response.json();
+      get().addToast(data.error || "Lỗi phân công", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  removeWorkerFromNode: async (nodeId: string, workerId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers/${workerId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Đã xóa phân công", "success");
+        get().fetchNodeWorkers(nodeId);
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // --- Refinement Queue ---
+  fetchRefinementQueue: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ refinementQueue: data.queue || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch refinement queue:", err);
+    }
+  },
+
+  createRefinementJob: async (recipeId: string, mode: string, targetQuantity: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipe_id: recipeId, mode, target_quantity: targetQuantity }),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Tạo lệnh luyện cổ thành công", "success");
+        get().fetchRefinementQueue();
+        return true;
+      }
+      const data = await response.json();
+      get().addToast(data.error || "Lỗi tạo lệnh", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  deleteRefinementJob: async (jobId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue/${jobId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Đã xóa lệnh luyện cổ", "success");
+        get().fetchRefinementQueue();
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // --- Settlements ---
+  fetchSettlements: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ settlements: data.settlements || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch settlements:", err);
+    }
+  },
+
+  upgradeSettlement: async (settlementId: string, data: { name?: string; population_capacity?: number; housing?: number; food_storage?: number }) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements/${settlementId}/upgrade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Cập nhật settlement thành công", "success");
+        get().fetchSettlements();
+        return true;
+      }
+      const res = await response.json();
+      get().addToast(res.error || "Lỗi cập nhật", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // --- Variant NPCs ---
+  fetchNPCs: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ variantNPCs: data.npcs || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch NPCs:", err);
+    }
+  },
+
+  assignNPCRole: async (npcId: string, role: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Phân công vai trò thành công", "success");
+        get().fetchNPCs();
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  dismissNPC: async (npcId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Đã sa thải NPC", "success");
+        get().fetchNPCs();
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  setApertureTimeRate: async (rate: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/time-rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ time_rate: rate }),
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể điều chỉnh dòng thời gian");
+      }
+      get().addToast(data.message || "Điều chỉnh dòng thời gian thành công!", "success");
+      get().addLog(data.message || "Đã điều chỉnh dòng thời gian Tiên Khiếu.");
+      await get().fetchAperture();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  setApertureLabor: async (race: string, intensity: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/labor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race, labor_intensity: intensity }),
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể điều chỉnh cường độ lao động");
+      }
+      get().addToast(data.message || "Điều chỉnh cường độ lao động thành công!", "success");
+      get().addLog(data.message || "Đã điều chỉnh cường độ lao động của dị nhân.");
+      await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  repairApertureNode: async (nodeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/repair`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể sửa chữa điểm tài nguyên");
+      }
+      get().addToast(data.message || "Sửa chữa thành công!", "success");
+      get().addLog(data.message || "Đã sửa chữa điểm tài nguyên.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  repairAllApertureNodes: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/repair-all`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể sửa chữa công trình");
+      }
+      get().addToast(data.message || "Sửa chữa hàng loạt thành công!", "success");
+      get().addLog(data.message || "Đã sửa chữa hàng loạt công trình.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  upgradeApertureNode: async (nodeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/upgrade`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể nâng cấp công trình");
+      }
+      get().addToast(data.message || "Nâng cấp thành công!", "success");
+      get().addLog(data.message || "Đã nâng cấp công trình.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  fetchActiveTribulation: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/active`);
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      if (response.ok) {
+        const data = await response.json();
+        set({ activeTribulation: data });
+      }
+    } catch (err) {
+      console.error("Failed to fetch active tribulation:", err);
+      get().addToast("Lỗi tải thiên kiếp.", "error");
+    }
+  },
+
+  engageTribulationCombat: async (eventId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/engage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Xuất trận thất bại");
+      }
+      get().addLog(data.message || "Xuất trận nghênh chiến quái tai kiếp.");
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  resolveTribulation: async (eventId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/resolve`, {
+        method: "POST",
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Kết toán tai kiếp thất bại");
+      }
+      get().addToast(data.message || "Kết toán tai kiếp hoàn thành!", "success");
+      get().addLog(data.message || "Kết toán tai kiếp hoàn thành.");
+      await get().initializeSession();
+      await get().fetchAperture();
+      await get().fetchDaoMarks();
+      set({ activeTribulation: null });
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  useGutsGu: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/soul/use-guts`, { method: "POST" });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Sử dụng Cổ trùng Can Đảm thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addToast(data.message || "Tráng hồn thành công!", "success");
+      get().addLog(data.message || "Đã sử dụng 1x Can Đảm Cổ để tráng đại linh hồn.");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  refineSoul: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/soul/refine`, { method: "POST" });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Luyện hồn thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addToast(data.message || "Luyện hồn thành công!", "success");
+      get().addLog(data.message || "Đã luyện hồn tại Lạc Phách Cốc, nén ép linh hồn ngưng thực.");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+});

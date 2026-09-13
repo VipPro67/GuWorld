@@ -121,7 +121,6 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| POST | `/combat/attack` | |
 | POST | `/combat/capture` | Bắt quái vật làm sủng vật. |
 | POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `hub_nam_cuong`). |
 | POST | `/explore/retreat/:id` | |

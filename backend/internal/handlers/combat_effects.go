@@ -17,7 +17,7 @@ func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) floa
 func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem, applyDao bool, bonuses ...map[string]float64) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
 	// Mortal users cannot use immortal Gu that cost mana.
 	if !gamefx.CanUseGuWithMana(actor.Rank, guSpec) {
-		return 0, 0, 0, fmt.Errorf("Tu vi %s chưa đủ để sử dụng Tiên Cổ %s (Rank %d) có hao phí!", getRankName(actor.Rank), guSpec.Name, guSpec.Rank)
+		return 0, 0, 0, fmt.Errorf("Tu vi %s chưa đủ để sử dụng Tiên Cổ %s (Rank %d) có hao phí!", models.GetRankName(actor.Rank), guSpec.Name, guSpec.Rank)
 	}
 
 	powerScale := 1.0
@@ -26,6 +26,11 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	var baseDef float64
 	if guSpec.Effects.Active != nil {
 		baseDmg = guSpec.Effects.Active.DamageFlat
+		if baseDmg == 0 && guSpec.Effects.Active.DamageMult > 0 {
+			baseDmg = actor.BaseAttack * guSpec.Effects.Active.DamageMult
+		} else if baseDmg > 0 && guSpec.Effects.Active.DamageMult > 1.0 {
+			baseDmg *= guSpec.Effects.Active.DamageMult
+		}
 		baseDef = guSpec.Effects.Active.ShieldFlat
 	}
 

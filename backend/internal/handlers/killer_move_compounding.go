@@ -10,10 +10,10 @@ import (
 
 // CompoundEffectInfo describes an emergent effect created by combining Gu.
 type CompoundEffectInfo struct {
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	Value       float64 `json:"value"`
-	Description string  `json:"description"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Value       float64  `json:"value"`
+	Description string   `json:"description"`
 	Sources     []string `json:"sources"`
 }
 
@@ -212,69 +212,69 @@ var compoundRules = []compoundRule{
 
 // SynergyRecipe defines a named killer move recipe from specific Gu combinations.
 type SynergyRecipe struct {
-	Name        string
-	CoreGuIDs   []string
-	SupportGuIDs []string
-	Description string
-	BonusDamage float64
+	Name           string
+	CoreGuIDs      []string
+	SupportGuIDs   []string
+	Description    string
+	BonusDamage    float64
 	BonusStability float64
 	SpecialEffect  string
 }
 
 var synergyRecipes = []SynergyRecipe{
 	{
-		Name:        "Tứ Hải Tửu Trận",
-		CoreGuIDs:   []string{"GU_LIQUOR_WORM"},
-		SupportGuIDs: []string{"GU_FOUR_FLAVORS_LIQUOR", "GU_SEVEN_FRAGRANCES_LIQUOR", "GU_NINE_EYES_LIQUOR"},
-		Description: "Tửu đạo chân truyền tứ đại tửu trùng phối hợp tinh luyện chân nguyên đến cực hạn.",
-		BonusDamage: 1.0,
+		Name:           "Tứ Hải Tửu Trận",
+		CoreGuIDs:      []string{"GU_LIQUOR_WORM"},
+		SupportGuIDs:   []string{"GU_FOUR_FLAVORS_LIQUOR", "GU_SEVEN_FRAGRANCES_LIQUOR", "GU_NINE_EYES_LIQUOR"},
+		Description:    "Tửu đạo chân truyền tứ đại tửu trùng phối hợp tinh luyện chân nguyên đến cực hạn.",
+		BonusDamage:    1.0,
 		BonusStability: 20,
-		SpecialEffect: "tửu trận — giảm mana cost 50%, tăng hiệu quả tinh luyện",
+		SpecialEffect:  "tửu trận — giảm mana cost 50%, tăng hiệu quả tinh luyện",
 	},
 	{
-		Name:        "Đại Lực Thần Quyền",
-		CoreGuIDs:   []string{"GU_CHARGING_CRASH"},
-		SupportGuIDs: []string{"GU_TEN_JUN_STRENGTH", "GU_JUN_STRENGTH", "GU_SELF_STRENGTH"},
-		Description: "Hội tụ khí lực ngàn quân đấm ra một quyền phá núi.",
-		BonusDamage: 2.0,
+		Name:           "Đại Lực Thần Quyền",
+		CoreGuIDs:      []string{"GU_CHARGING_CRASH"},
+		SupportGuIDs:   []string{"GU_TEN_JUN_STRENGTH", "GU_JUN_STRENGTH", "GU_SELF_STRENGTH"},
+		Description:    "Hội tụ khí lực ngàn quân đấm ra một quyền phá núi.",
+		BonusDamage:    2.0,
 		BonusStability: 10,
-		SpecialEffect: "xuyên phá — sát thương xuyên giáp 50%",
+		SpecialEffect:  "xuyên phá — sát thương xuyên giáp 50%",
 	},
 	{
-		Name:        "Âm Dương Lưỡng Nghi",
-		CoreGuIDs:   []string{"GU_MOONLIGHT"},
-		SupportGuIDs: []string{"GU_LITTLE_LIGHT"},
-		Description: "Nguyệt quang và nhật quang hòa quyện tạo thành đòn tấn công âm dương.",
-		BonusDamage: 1.8,
+		Name:           "Âm Dương Lưỡng Nghi",
+		CoreGuIDs:      []string{"GU_MOONLIGHT"},
+		SupportGuIDs:   []string{"GU_LITTLE_LIGHT"},
+		Description:    "Nguyệt quang và nhật quang hòa quyện tạo thành đòn tấn công âm dương.",
+		BonusDamage:    1.8,
 		BonusStability: 12,
-		SpecialEffect: "lưỡng nghi — sát thương gấp đôi nếu đối thủ là Cổ Sư âm hoặc dương thuần chất",
+		SpecialEffect:  "lưỡng nghi — sát thương gấp đôi nếu đối thủ là Cổ Sư âm hoặc dương thuần chất",
 	},
 	{
-		Name:        "Huyết Sát Trận",
-		CoreGuIDs:   []string{"GU_BLOOD_MOON"},
-		SupportGuIDs: []string{"GU_BLOOD_ASSET", "GU_BLOOD_SKULL"},
-		Description: "Huyết đạo sát trận dùng máu tế tăng uy lực sát chiêu.",
-		BonusDamage: 2.2,
+		Name:           "Huyết Sát Trận",
+		CoreGuIDs:      []string{"GU_BLOOD_MOON"},
+		SupportGuIDs:   []string{"GU_BLOOD_ASSET", "GU_BLOOD_SKULL"},
+		Description:    "Huyết đạo sát trận dùng máu tế tăng uy lực sát chiêu.",
+		BonusDamage:    2.2,
 		BonusStability: 8,
-		SpecialEffect: "huyết tế — tiêu hao 10% HP hiện tại, tăng 50% sát thương",
+		SpecialEffect:  "huyết tế — tiêu hao 10% HP hiện tại, tăng 50% sát thương",
 	},
 	{
-		Name:        "Huyền Ảnh Sát",
-		CoreGuIDs:   []string{"GU_BLOOD_MOON"},
-		SupportGuIDs: []string{"GU_SHADOW", "GU_SHADOW_STEPS"},
-		Description: "Huyết nguyệt hòa với bóng tối tạo ra đòn tấn công không thể né tránh.",
-		BonusDamage: 1.6,
+		Name:           "Huyền Ảnh Sát",
+		CoreGuIDs:      []string{"GU_BLOOD_MOON"},
+		SupportGuIDs:   []string{"GU_SHADOW", "GU_SHADOW_STEPS"},
+		Description:    "Huyết nguyệt hòa với bóng tối tạo ra đòn tấn công không thể né tránh.",
+		BonusDamage:    1.6,
 		BonusStability: 10,
-		SpecialEffect: "huyền ảnh — tấn công từ bóng tối, đối thủ không thể né tránh",
+		SpecialEffect:  "huyền ảnh — tấn công từ bóng tối, đối thủ không thể né tránh",
 	},
 	{
-		Name:        "Ngũ Hành Sơn Hà",
-		CoreGuIDs:   []string{"GU_CANOPY"},
-		SupportGuIDs: []string{"GU_IRON_BONE", "GU_EARTH_WORM"},
-		Description: "Ngưng tụ sơn hà chi lực bảo hộ Cổ Sư không thể phá vỡ.",
-		BonusDamage: 0.5,
+		Name:           "Ngũ Hành Sơn Hà",
+		CoreGuIDs:      []string{"GU_CANOPY"},
+		SupportGuIDs:   []string{"GU_IRON_BONE", "GU_EARTH_WORM"},
+		Description:    "Ngưng tụ sơn hà chi lực bảo hộ Cổ Sư không thể phá vỡ.",
+		BonusDamage:    0.5,
 		BonusStability: 18,
-		SpecialEffect: "sơn hà — phòng ngự tăng 100%, chống mọi hiệu ứng khống chế",
+		SpecialEffect:  "sơn hà — phòng ngự tăng 100%, chống mọi hiệu ứng khống chế",
 	},
 }
 

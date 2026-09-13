@@ -54,9 +54,9 @@ type DBStatsResponse struct {
 
 // RedisStatsResponse represents Redis connection health and performance.
 type RedisStatsResponse struct {
-	Connected    bool    `json:"connected"`
+	Connected     bool    `json:"connected"`
 	PingLatencyMs float64 `json:"ping_latency_ms"`
-	Error        string  `json:"error,omitempty"`
+	Error         string  `json:"error,omitempty"`
 }
 
 // ServerMetadata contains host and runtime process metadata.
@@ -78,12 +78,12 @@ type WebSocketStatsResponse struct {
 
 // FullSystemStats aggregates all subsystems into a single status report.
 type FullSystemStats struct {
-	Server    ServerMetadata          `json:"server"`
-	CPU       monitor.CPUMetrics      `json:"cpu"`
-	Memory    monitor.MemoryMetrics   `json:"memory"`
-	Database  DBStatsResponse         `json:"database"`
-	Redis     RedisStatsResponse      `json:"redis"`
-	WebSocket WebSocketStatsResponse  `json:"websocket"`
+	Server    ServerMetadata         `json:"server"`
+	CPU       monitor.CPUMetrics     `json:"cpu"`
+	Memory    monitor.MemoryMetrics  `json:"memory"`
+	Database  DBStatsResponse        `json:"database"`
+	Redis     RedisStatsResponse     `json:"redis"`
+	WebSocket WebSocketStatsResponse `json:"websocket"`
 }
 
 // collectSystemStats builds the complete system diagnostic state.

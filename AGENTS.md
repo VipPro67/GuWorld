@@ -24,8 +24,8 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 
 ## Backend Conventions (agent would likely miss)
 
-- **No service layer.** Handlers are fat (combat.go: 2400+ lines, player.go: 95KB). All gameplay logic is in `backend/internal/handlers/`.
-- **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). When adding **new columns** to existing tables, you MUST append an `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` statement immediately after the `CREATE TABLE` to automatically patch existing databases without requiring the user to wipe their data. Modify SQL in `schema_*.go` accordingly. Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` maps each registration region to its hub (`startingRegionHubs` in `player.go`) and falls back to `Southern_Border`.
+- **No service layer.** Handlers are fat but split per domain in `backend/internal/handlers/` (e.g. `player_auth.go`, `player_inventory.go`, `player_stats.go`, `player_explore.go`, `player_daongan.go`, `player_profile.go`, `combat.go`: 2400+ lines). All gameplay logic lives there.
+- **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). When adding **new columns** to existing tables, you MUST append an `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` statement immediately after the `CREATE TABLE` to automatically patch existing databases without requiring the user to wipe their data. Modify SQL in `schema_*.go` accordingly. Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` (`player_auth.go`) maps each registration region to its hub and falls back to `Southern_Border`.
 - **DB reset note:** `players.race`, `players.constitution`, `players.current_region` have FKs. `InitSchema` pre-seeds the `''` race/constitution keys and the `Southern_Border` region so registration works before CSV import; race/constitution registry loaders filter out `''` keys.
 - CSV data is managed through the Admin panel.
 - CSV files are not automatically seeded on startup.
@@ -41,7 +41,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 
 ## Frontend Conventions
 
-- **Zustand store is both state + API client.** `frontend/src/store/useGameStore.ts` has no separate service/API layer. Methods like `store.attackEnemy()` call fetch + update state.
+- **Zustand store is both state + API client.** `frontend/src/store/useGameStore.ts` composes domain slices from `frontend/src/store/slices/*.ts` (notifications, mine, party, chat, arena, feedback, betting, gacha, achievements, pets, instance, marketplace, sect, aperture, trade, inventory, combat, cultivation, profile, auth, referrals, misc). Slices are `StateCreator<any, any, any, Slice>` and use `get()` for cross-cutting calls (`addToast`, `addLog`, `initializeSession`, `applyInventoryFromResponse`, `setPlayerFromServer`). No separate service/API layer; methods call fetch + update state. Shared helpers live in `frontend/src/lib/{auth,config,fetch}.ts`.
 - **Optimistic updates** in combat and some actions; handle rollback on failure.
 - **SSE subscriptions** in Zustand for player events, trade, chat. Player events now have auto-reconnect with exponential backoff.
 - **Next.js 16 has breaking changes.** Check `node_modules/next/dist/docs/` before writing framework-specific code.
@@ -64,7 +64,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - `backend/internal/db/schema_*.go` — per-domain table DDL (columns, indexes, FK)
 - `backend/internal/handlers/*.go` — all feature logic (no service layer)
 - `backend/internal/simulator/engine.go` — deterministic auto-battle loop, combat log format
-- `frontend/src/store/useGameStore.ts` — Zustand + API client + SSE
+- `frontend/src/store/useGameStore.ts` — Zustand root store composing domain slices in `frontend/src/store/slices/` + shared SSE wiring
 - `frontend/src/app/` — Next.js App Router pages
 ## AI Agent Workflow
 

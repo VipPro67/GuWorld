@@ -13,18 +13,18 @@ import (
 // --- Monster Spawns Handlers ---
 
 type MonsterSpawnRow struct {
-	ID             string `json:"id"`
-	RegionID       string `json:"region_id"`
-	MonsterID      string `json:"monster_id"`
-	X              int    `json:"x"`
-	Y              int    `json:"y"`
-	SpawnMode      string `json:"spawn_mode"`
-	Chance         float64`json:"chance"`
-	RespawnSeconds int    `json:"respawn_seconds"`
-	MinRank        int    `json:"min_rank"`
-	MaxRank        int    `json:"max_rank"`
-	IsBossSpawn    bool   `json:"is_boss_spawn"`
-	IsActive       bool   `json:"is_active"`
+	ID             string  `json:"id"`
+	RegionID       string  `json:"region_id"`
+	MonsterID      string  `json:"monster_id"`
+	X              int     `json:"x"`
+	Y              int     `json:"y"`
+	SpawnMode      string  `json:"spawn_mode"`
+	Chance         float64 `json:"chance"`
+	RespawnSeconds int     `json:"respawn_seconds"`
+	MinRank        int     `json:"min_rank"`
+	MaxRank        int     `json:"max_rank"`
+	IsBossSpawn    bool    `json:"is_boss_spawn"`
+	IsActive       bool    `json:"is_active"`
 }
 
 func AdminListMonsterSpawns(c *gin.Context) {
@@ -312,14 +312,14 @@ func AdminDeleteDungeon(c *gin.Context) {
 // --- Sect Mines Handlers ---
 
 type SectMineRow struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	Rarity           string   `json:"rarity"`
-	OccupierSectID   string   `json:"occupier_sect_id"`
-	OccupierSectName string   `json:"occupier_sect_name"`
-	ShieldUntil      *string  `json:"shield_until"`
-	PendingFunds     int64    `json:"pending_funds"`
-	PendingMaterials string   `json:"pending_materials"`
+	ID               string  `json:"id"`
+	Name             string  `json:"name"`
+	Rarity           string  `json:"rarity"`
+	OccupierSectID   string  `json:"occupier_sect_id"`
+	OccupierSectName string  `json:"occupier_sect_name"`
+	ShieldUntil      *string `json:"shield_until"`
+	PendingFunds     int64   `json:"pending_funds"`
+	PendingMaterials string  `json:"pending_materials"`
 }
 
 func AdminListSectMines(c *gin.Context) {
@@ -385,23 +385,23 @@ func AdminUpdateSectMine(c *gin.Context) {
 // --- Aperture Sub-entities (Nodes & Variant Humans) ---
 
 type ApertureNodeRow struct {
-	ID                       string  `json:"id"`
-	ApertureID               string  `json:"aperture_id"`
-	NodeType                 string  `json:"node_type"`
-	Name                     string  `json:"name"`
-	Path                     string  `json:"path"`
-	Level                    int     `json:"level"`
-	HP                       int     `json:"hp"`
-	MaxHP                    int     `json:"max_hp"`
-	X                        int     `json:"x"`
-	Y                        int     `json:"y"`
-	ProductionType           string  `json:"production_type"`
-	ProductionAmount         float64 `json:"production_amount"`
-	ProductionIntervalHours  float64 `json:"production_interval_hours"`
-	IsDestroyed              bool    `json:"is_destroyed"`
-	NodeCategory             string  `json:"node_category"`
-	DefensePower             float64 `json:"defense_power"`
-	AttackRange              float64 `json:"attack_range"`
+	ID                      string  `json:"id"`
+	ApertureID              string  `json:"aperture_id"`
+	NodeType                string  `json:"node_type"`
+	Name                    string  `json:"name"`
+	Path                    string  `json:"path"`
+	Level                   int     `json:"level"`
+	HP                      int     `json:"hp"`
+	MaxHP                   int     `json:"max_hp"`
+	X                       int     `json:"x"`
+	Y                       int     `json:"y"`
+	ProductionType          string  `json:"production_type"`
+	ProductionAmount        float64 `json:"production_amount"`
+	ProductionIntervalHours float64 `json:"production_interval_hours"`
+	IsDestroyed             bool    `json:"is_destroyed"`
+	NodeCategory            string  `json:"node_category"`
+	DefensePower            float64 `json:"defense_power"`
+	AttackRange             float64 `json:"attack_range"`
 }
 
 func AdminListApertureNodes(c *gin.Context) {

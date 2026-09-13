@@ -27,6 +27,48 @@ export interface NearbyCell {
   sub_rank?: number;
 }
 
+type CellCacheState = {
+  cellCache: Record<string, NearbyCell>;
+  nearbyCells: NearbyCell[];
+  nearbyWindow: { x: number; y: number; r: number } | null;
+};
+
+// Merge newly loaded cells into the cache, bound memory near the player window,
+// and re-derive the visible nearbyCells window. Shared by fetchCellsRect and mergeWSCells.
+function mergeCellCache(s: CellCacheState, cells: NearbyCell[]): { cellCache: Record<string, NearbyCell>; nearbyCells: NearbyCell[] } {
+  const cache = { ...s.cellCache };
+  for (const c of cells) {
+    cache[`${c.x},${c.y}`] = c;
+  }
+  // Bound memory: keep cells near the player window, drop the far ones.
+  const keys = Object.keys(cache);
+  if (keys.length > 150000) {
+    const w = s.nearbyWindow;
+    if (w) {
+      const keep = Math.max(w.r, 300) * 3;
+      for (const key of keys) {
+        const [cx, cy] = key.split(",").map(Number);
+        if (Math.abs(cx - w.x) > keep || Math.abs(cy - w.y) > keep) {
+          delete cache[key];
+        }
+      }
+    }
+  }
+  // Derive the visible window from whatever chunks have been loaded so far.
+  let nearbyCells = s.nearbyCells;
+  const w = s.nearbyWindow;
+  if (w) {
+    nearbyCells = [];
+    for (const key of Object.keys(cache)) {
+      const [cx, cy] = key.split(",").map(Number);
+      if (cx >= w.x - w.r && cx <= w.x + w.r && cy >= w.y - w.r && cy <= w.y + w.r) {
+        nearbyCells.push(cache[key]);
+      }
+    }
+  }
+  return { cellCache: cache, nearbyCells };
+}
+
 export interface NearbyPlayer {
   id: string;
   username: string;
@@ -72,26 +114,8 @@ export interface SelectedTarget {
   maxHp: number;
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-
-const getCookie = (name: string): string | null => {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-};
-
-const authHeaders = (method?: string): Record<string, string> => {
-  const headers: Record<string, string> = {};
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("gu_auth_token");
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-  }
-  const csrfToken = getCookie("gu_csrf_token");
-  if (csrfToken && method && method !== "GET" && method !== "HEAD") {
-    headers["X-CSRF-Token"] = csrfToken;
-  }
-  return headers;
-};
+import { BACKEND_URL } from "@/lib/config";
+import { authFetch } from "@/lib/auth";
 
 interface WorldStoreState {
   objects: WorldObject[];
@@ -193,7 +217,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         set({ objects: Array.isArray(data) ? data : [], loading: false });
         return;
       }
-      const res = await fetch(`${BACKEND_URL}/api/explore/objects`, { headers: authHeaders("GET") });
+      const res = await authFetch(`${BACKEND_URL}/api/explore/objects`);
       if (!res.ok) throw new Error("Không thể tải các điểm trên bản đồ");
       const data = await res.json();
       set({ objects: Array.isArray(data) ? data : [], loading: false });
@@ -210,9 +234,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
           "world.move_path", { x: Math.round(x), y: Math.round(y) }, 60000,
         );
       }
-      const res = await fetch(`${BACKEND_URL}/api/explore/move-path`, {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/move-path`, {
         method: "POST",
-        headers: { ...authHeaders("POST"), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ x: Math.round(x), y: Math.round(y) }),
       });
       const body = await res.text();
@@ -255,9 +279,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       const tx = targetX || (curTarget ? curTarget.x : 0);
       const ty = targetY || (curTarget ? curTarget.y : 0);
 
-      const res = await fetch(`${BACKEND_URL}/api/explore/use_gu`, {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/use_gu`, {
         method: "POST",
-        headers: { ...authHeaders("POST"), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gu_instance_id: guInstanceId, target_x: tx, target_y: ty }),
       });
       const body = await res.text();
@@ -330,9 +354,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   teleportToRegion: async (regionId: string) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(`${BACKEND_URL}/api/explore/teleport`, {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/teleport`, {
         method: "POST",
-        headers: { ...authHeaders("POST"), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ region_id: regionId }),
       });
       const body = await res.text();
@@ -409,45 +433,12 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         }, 30000);
       } else {
         const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${Math.round(minX)}&min_y=${Math.round(minY)}&max_x=${Math.round(maxX)}&max_y=${Math.round(maxY)}`;
-        const res = await fetch(url, { headers: authHeaders("GET") });
+        const res = await authFetch(url);
         if (!res.ok) throw new Error("Không thể tải dữ liệu bản đồ");
         data = await res.json();
       }
       const cells: NearbyCell[] = Array.isArray(data) ? data : [];
-      set((s) => {
-        const cache = { ...s.cellCache };
-        for (const c of cells) {
-          cache[`${c.x},${c.y}`] = c;
-        }
-        // Bound memory: keep cells near the player window, drop the far ones.
-        const keys = Object.keys(cache);
-        if (keys.length > 150000) {
-          const w = s.nearbyWindow;
-          if (w) {
-            const keep = Math.max(w.r, 300) * 3;
-            for (const key of keys) {
-              const [cx, cy] = key.split(",").map(Number);
-              if (Math.abs(cx - w.x) > keep || Math.abs(cy - w.y) > keep) {
-                delete cache[key];
-              }
-            }
-          }
-        }
-        // Derive the visible window from whatever chunks have been loaded so
-        // far; markers appear progressively as prefetch tiles resolve.
-        let nearbyCells = s.nearbyCells;
-        const w = s.nearbyWindow;
-        if (w) {
-          nearbyCells = [];
-          for (const key of Object.keys(cache)) {
-            const [cx, cy] = key.split(",").map(Number);
-            if (cx >= w.x - w.r && cx <= w.x + w.r && cy >= w.y - w.r && cy <= w.y + w.r) {
-              nearbyCells.push(cache[key]);
-            }
-          }
-        }
-        return { cellCache: cache, nearbyCells };
-      });
+      set((s) => mergeCellCache(s, cells));
     } catch (err) {
       console.error("fetchCellsRect error:", err instanceof Error ? err.message : err);
     }
@@ -473,45 +464,13 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   },
 
   mergeWSCells: (cells: NearbyCell[]) => {
-    set((s) => {
-      const cache = { ...s.cellCache };
-      for (const c of cells) {
-        cache[`${c.x},${c.y}`] = c;
-      }
-      // Bound memory: keep cells near the player window, drop the far ones.
-      const keys = Object.keys(cache);
-      if (keys.length > 150000) {
-        const w = s.nearbyWindow;
-        if (w) {
-          const keep = Math.max(w.r, 300) * 3;
-          for (const key of keys) {
-            const [cx, cy] = key.split(",").map(Number);
-            if (Math.abs(cx - w.x) > keep || Math.abs(cy - w.y) > keep) {
-              delete cache[key];
-            }
-          }
-        }
-      }
-      // Derive the visible window from whatever chunks have been loaded so far.
-      let nearbyCells = s.nearbyCells;
-      const w = s.nearbyWindow;
-      if (w) {
-        nearbyCells = [];
-        for (const key of Object.keys(cache)) {
-          const [cx, cy] = key.split(",").map(Number);
-          if (cx >= w.x - w.r && cx <= w.x + w.r && cy >= w.y - w.r && cy <= w.y + w.r) {
-            nearbyCells.push(cache[key]);
-          }
-        }
-      }
-      return { cellCache: cache, nearbyCells };
-    });
+    set((s) => mergeCellCache(s, cells));
   },
 
   fetchNearbyPlayers: async (x, y, r) => {
     try {
       const url = `${BACKEND_URL}/api/explore/players?x=${Math.round(x)}&y=${Math.round(y)}&r=${Math.round(r)}`;
-      const res = await fetch(url, { headers: authHeaders("GET") });
+      const res = await authFetch(url);
       if (!res.ok) throw new Error("Không thể tải người chơi trên bản đồ");
       const data = await res.json();
       const players: NearbyPlayer[] = Array.isArray(data) ? data : [];

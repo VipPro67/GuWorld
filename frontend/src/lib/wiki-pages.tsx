@@ -139,7 +139,7 @@ export const wikiPages: WikiPage[] = [
                   <strong>Đạo Ngân vận hành tốt hơn:</strong> Đạo Ngân hiển thị và áp dụng hiệu ứng chính xác cho cả đồng đội lẫn địch trong chiến đấu tự động.
                 </li>
                 <li>
-                  <strong>Thăng Tiên theo Nhân Khí:</strong> Tỉ lệ thành công tỉ lệ thuận với Nhân Khí (0 → 0%, 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên, nhận thưởng và khai mở Tiên Khiếu — phẩm cấp Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên. Thất bại: Nhân Khí về 0, tu vi phế bỏ rơi về Nhất Chuyển.
+                  <strong>Thăng Tiên theo Nhân Khí:</strong> Tỉ lệ thành công = Xác suất gốc Tư chất (Giáp: 20%, Ất/Bính/Đinh: 5%) + Bonus Nhân Khí (+20% mỗi 100k Nhân Khí, cap 90%). Thành công lên Lục Chuyển Cổ Tiên và khai mở Tiên Khiếu. Thất bại: Nhân Khí về 0, tu vi phế bỏ rơi về Nhất Chuyển.
                 </li>
               </ul>
             </div>
@@ -456,7 +456,22 @@ export const wikiPages: WikiPage[] = [
                 Khi đạt <strong>Ngũ Chuyển Đỉnh Phong</strong>, đạo hữu có thể tiến hành thăng tiên để đột phá thành <strong>Cổ Tiên (Lục Chuyển trở lên)</strong>.
               </p>
               <p>
-                Tích lũy <strong>Nhân Khí (Human Qi)</strong> thông qua các hoạt động hàng ngày trước khi thăng tiên để gia tăng tỉ lệ thành công (tối đa 100k Nhân Khí = chắc chắn 100% thành công). Nếu thăng tiên thất bại, tu vi sẽ bị phế bỏ rơi về Nhất Chuyển.
+                Yêu cầu tối thiểu <strong>100.000 Nhân Khí</strong> để tiến hành Thăng Tiên. Tỉ lệ thành công phụ thuộc vào <strong>Tư chất</strong> và <strong>Nhân Khí tích lũy</strong> (giới hạn tối đa 500.000 Nhân Khí, tổng tỉ lệ cap tại <strong>90%</strong>):
+              </p>
+              <div className="bg-zinc-950/80 border border-[var(--border)] rounded-lg p-3 my-2 space-y-1 font-mono text-[11px]">
+                <div className="text-amber-400 font-bold">📊 Công thức: Tỉ lệ = Xác suất gốc Tư chất + (Nhân Khí ÷ 100.000) × 20%</div>
+                <div className="text-[var(--text-secondary)]">• <strong>Tư chất Giáp:</strong> 20% gốc</div>
+                <div className="text-[var(--text-secondary)]">• <strong>Tư chất Ất / Bính / Đinh:</strong> 5% gốc</div>
+                <div className="text-emerald-400 border-t border-zinc-800 pt-1 mt-1">
+                  💡 <strong>Ví dụ cụ thể:</strong><br />
+                  • <strong>Tư chất Giáp (100k Nhân Khí):</strong> 20% + 20% = <strong>40% tỉ lệ thành công</strong>.<br />
+                  • <strong>Tư chất Giáp (350k Nhân Khí):</strong> 20% + 70% = <strong>90% tỉ lệ thành công</strong> (Đạt trần 90%).<br />
+                  • <strong>Tư chất Ất/Bính/Đinh (100k Nhân Khí):</strong> 5% + 20% = <strong>25% tỉ lệ thành công</strong>.<br />
+                  • <strong>Tư chất Ất/Bính/Đinh (425k Nhân Khí):</strong> 5% + 85% = <strong>90% tỉ lệ thành công</strong> (Đạt trần 90%).
+                </div>
+              </div>
+              <p className="text-rose-400/90 italic">
+                ⚠️ Nếu thăng tiên thất bại, không khiếu vỡ nát, Nhân Khí về 0 và tu vi phế bỏ hoàn toàn về Nhất Chuyển Sơ Gia!
               </p>
               <p>
                 Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Kiếp đầu tiên giáng lâm vào <strong>năm nội bộ thứ 10</strong> — tính ra khoảng <strong>2–10 giờ đời thật</strong> tùy phẩm chất Tiên Khiếu (1 năm nội bộ = 10 giờ đời thật ÷ hệ số gia tốc time_rate 10–55×). Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.
@@ -779,8 +794,8 @@ export const wikiPages: WikiPage[] = [
                 </tr>
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Nhân Khí (Human Qi)</td>
-                  <td className="p-3">Tích luỹ qua mọi hoạt động tu tiên. Giới hạn 100.000.</td>
-                  <td className="p-3">Quyết định tỉ lệ Thăng Tiên (100k = 100%) và phẩm cấp Tiên Khiếu (Thấp, Trung, Cao, Cực Hạn).</td>
+                  <td className="p-3">Tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa 500.000.</td>
+                  <td className="p-3">Quyết định tỉ lệ Thăng Tiên thành công (mỗi 100k Nhân Khí +20% tỉ lệ, cap 90%) và phẩm cấp Tiên Khiếu khi mở.</td>
                 </tr>
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Tư chất Không Khiếu</td>

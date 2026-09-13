@@ -70,7 +70,7 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 
 	// Mortal users cannot use immortal Gu that cost mana.
 	if !gamefx.CanUseGuWithMana(player.Rank, spec) {
-		return fmt.Errorf("Tu vi %s chưa đủ để sử dụng Tiên Cổ %s (Rank %d) có hao phí!", getRankName(player.Rank), spec.Name, spec.Rank)
+		return fmt.Errorf("Tu vi %s chưa đủ để sử dụng Tiên Cổ %s (Rank %d) có hao phí!", models.GetRankName(player.Rank), spec.Name, spec.Rank)
 	}
 
 	// Rule 3: Energy cost
@@ -458,14 +458,14 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		return fmt.Sprintf("Hiến tế huyết mạch thành công! Tư chất Không khiếu tăng lên %d%%.", player.AptitudePercent), nil
 	case "RANK_PROGRESS":
 		if spec.Rank != player.Rank {
-			return "", fmt.Errorf("%s chỉ dùng cho %s", spec.Name, getRankName(spec.Rank))
+			return "", fmt.Errorf("%s chỉ dùng cho %s", spec.Name, models.GetRankName(spec.Rank))
 		}
 		if player.SubRank >= 4 {
 			return "", fmt.Errorf("Xá Lợi Cổ không thể đột phá đại cảnh giới")
 		}
 		player.SubRank++
 		stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
-		return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, getRankName(player.Rank), stageNames[player.SubRank]), nil
+		return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, models.GetRankName(player.Rank), stageNames[player.SubRank]), nil
 	case "APERTURE_PETRIFICATION":
 		player.SubRank = 4
 		player.MaxMana -= 15
@@ -494,7 +494,7 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 	case "FORCE_RANK_UP":
 		player.SubRank = 1
 		player.Rank++
-		return fmt.Sprintf("Đột phá đại cảnh giới lên %s Sơ Giai!", getRankName(player.Rank)), nil
+		return fmt.Sprintf("Đột phá đại cảnh giới lên %s Sơ Giai!", models.GetRankName(player.Rank)), nil
 	case "MANA_POLLUTION":
 		player.MaxMana = math.Round(player.MaxMana * 0.90)
 		if player.CurrentMana > player.MaxMana {

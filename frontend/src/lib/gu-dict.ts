@@ -84,7 +84,7 @@ export interface GuDictionaryItem {
   target_type?: string;
 }
 
-const BACKEND_URL = process.env.INTERNAL_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+import { INTERNAL_BACKEND_URL as BACKEND_URL } from "./config";
 
 export async function fetchAllGus(): Promise<GuDictionaryItem[]> {
   try {

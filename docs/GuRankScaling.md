@@ -67,5 +67,5 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 ## 5. Kiểm chứng
 
 - Sau khi sửa CSV: chạy audit script so mỗi rank (min/max dmg, shield, heal, passive) với bảng chuẩn; sai lệch > ±35% cần soi lại.
-- Áp dụng không cần restart server: Admin → tab "Dữ liệu" → Import (`admin.go: AdminImportData` → `SeedFromCSV` + `LoadGuRegistry`).
+- Áp dụng không cần restart server: Admin → tab "Dữ liệu" → Import (`admin_data.go: AdminImportData` → `SeedFromCSV` + `LoadGuRegistry`).
 - Với seed mới từ đầu: `db.go: seedGusFromCSV` upsert `INSERT ... ON CONFLICT (id, rank) DO UPDATE`.

@@ -27,13 +27,13 @@ type CombatHistoryEntry struct {
 }
 
 type CombatSummary struct {
-	TotalDamageDealt  float64 `json:"total_damage_dealt"`
-	TotalDamageTaken  float64 `json:"total_damage_taken"`
-	ShieldsUsed       float64 `json:"shields_used"`
-	FinalPlayerHP     float64 `json:"final_player_hp"`
-	ItemsUsed         int     `json:"items_used"`
-	StonesUsed        int64   `json:"stones_used"`
-	LootCount         int     `json:"loot_count"`
+	TotalDamageDealt float64 `json:"total_damage_dealt"`
+	TotalDamageTaken float64 `json:"total_damage_taken"`
+	ShieldsUsed      float64 `json:"shields_used"`
+	FinalPlayerHP    float64 `json:"final_player_hp"`
+	ItemsUsed        int     `json:"items_used"`
+	StonesUsed       int64   `json:"stones_used"`
+	LootCount        int     `json:"loot_count"`
 }
 
 // SaveCombatHistory persists a completed combat result to the combat_history table.
@@ -99,7 +99,7 @@ func ListCombatHistory(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.QueryContext(c.Request.Context(), 
+	rows, err := db.DB.QueryContext(c.Request.Context(),
 		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
 		 FROM combat_history WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`,
 		authID,
@@ -141,7 +141,7 @@ func GetCombatHistory(c *gin.Context) {
 	}
 
 	var e CombatHistoryEntry
-	err := db.DB.QueryRowContext(c.Request.Context(), 
+	err := db.DB.QueryRowContext(c.Request.Context(),
 		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
 		 FROM combat_history WHERE id = $1 AND player_id = $2`,
 		id, authID,

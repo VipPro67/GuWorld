@@ -18,8 +18,10 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 | `backend/ArenaShopItem.csv` | 26 | Shop đấu trường (tiền ARENA_COIN). |
 | `backend/PremiumShopPackage.csv` | 4 | Gói premium shop mua bằng ví. |
 | `backend/TopupPackage.csv` | 5 | Gói nạp tiền. |
+| `backend/data/ApertureNodeTemplate.csv` | 8 | Template node Tiên Khiếu (khu trồng/chăn nuôi/khai thác + phòng thủ WALL/WATCHTOWER/GUARDIAN_STATUE/BARRACKS/FORCE_FIELD): cost, prod, HP, defense, attack range, cost Gu, zone. Đọc trực tiếp lúc khởi động vào `ResourceNodeTemplates` (không qua Admin); sửa CSV + restart. |
+| `backend/data/disposable_email_domains.txt` | 969 | Danh sách domain email tạm thời bị chặn khi đăng ký (mỗi dòng 1 domain, `#` comment). Đọc lúc khởi động; để trống = không chặn. |
 
-`PremiumShopPackage.csv` và `TopupPackage.csv` nằm ở `backend/cmd/server/data/` và được **đọc trực tiếp từ CSV mỗi lần request** (không seed qua Admin; sửa CSV là đổi gói). Loader `handlerCSVPath` tìm theo thứ tự `data/` → `cmd/server/data/` → legacy paths.
+`PremiumShopPackage.csv` và `TopupPackage.csv` nằm ở `backend/cmd/server/data/` và được **đọc trực tiếp từ CSV mỗi lần request** (không seed qua Admin; sửa CSV là đổi gói). Loader `handlerCSVPath` tìm theo thứ tự `data/` → `cmd/server/data/` → legacy paths. `ApertureNodeTemplate.csv` và `disposable_email_domains.txt` cũng đọc trực tiếp lúc khởi động (cache trong memory), không seed qua Admin.
 
 ## Registry runtime
 
@@ -433,7 +435,7 @@ Các trường quan trọng trong dictionary:
 
 ### Status chiến đấu (combat)
 
-Hệ thống status in-combat xử lý ở hai nơi: **simulator** (`backend/internal/simulator/` — auto-battle) và legacy (`backend/internal/handlers/combat_attack.go` — manual). Status là struct `models.StatusEffect{Type, Value, Turns}` hoặc `simulator.Effect{ID,Type,Tier,Value,Duration}`; DoT/HoT là `simulator.DoTEffect`. Thứ tự tick một lượt xem `docs/STATUS_EFFECTS.md` (phần Flow xử lý mỗi lượt).
+Hệ thống status in-combat xử lý ở **simulator** (`backend/internal/simulator/` — auto-battle/manual đều dùng deterministic simulation). Status là struct `models.StatusEffect{Type, Value, Turns}` hoặc `simulator.Effect{ID,Type,Tier,Value,Duration}`; DoT/HoT là `simulator.DoTEffect`. Thứ tự tick một lượt xem `docs/STATUS_EFFECTS.md` (phần Flow xử lý mỗi lượt).
 
 **14 constant status đã code trong simulator (`simulator/models.go`):**
 

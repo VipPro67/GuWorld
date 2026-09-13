@@ -132,7 +132,7 @@ Các nơi ghi `players.x/y` (đã rà soát, `tribulation_enemies` KHÔNG phải
 6. `combat_retreat.go` flee failed — `Set` sau commit.
 7. `combat_retreat.go` flee success — `Set` sau commit.
 8. `combat_auto.go` defeat → NearestHub — `Set` sau commit.
-9. `combat_attack.go` defeat → NearestHub — `Set` sau commit.
+9. `combat_retreat.go` defeat → NearestHub — `Set` sau commit.
 
 (1)(2) là đường realtime chính; còn lại được sync worker 30s bảo hiểm nếu lỡ.
 

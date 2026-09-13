@@ -179,7 +179,7 @@ func immortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec)
 func minRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["min_rank"]
 	if float64(player.Rank) < val {
-		return "", fmt.Errorf("Yêu cầu tu vi tối thiểu %s để sử dụng %s.", getRankName(int(val)), item.Name)
+		return "", fmt.Errorf("Yêu cầu tu vi tối thiểu %s để sử dụng %s.", models.GetRankName(int(val)), item.Name)
 	}
 	return "", nil
 }
@@ -187,7 +187,7 @@ func minRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (str
 func maxRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["max_rank"]
 	if float64(player.Rank) > val {
-		return "", fmt.Errorf("Tu vi vượt quá giới hạn tối đa %s để sử dụng %s.", getRankName(int(val)), item.Name)
+		return "", fmt.Errorf("Tu vi vượt quá giới hạn tối đa %s để sử dụng %s.", models.GetRankName(int(val)), item.Name)
 	}
 	return "", nil
 }
@@ -271,7 +271,6 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 			msg += matMsg
 		}
 	}
-
 
 	return msg, nil
 }

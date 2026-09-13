@@ -5,6 +5,7 @@ import { Swords, Trophy, Shield, Heart, ScrollText, Users, Play, ArrowLeft } fro
 import { CombatReplayView, type CombatLogEntry } from "./CombatReplayView";
 import { FormattedText } from "./FormattedText";
 import { Num } from "./Num";
+import { useGameStore } from "@/store/useGameStore";
 
 export interface CombatantInfo {
   id: string;
@@ -21,6 +22,8 @@ export interface CombatantInfo {
   eliminated?: boolean;
   grid_x?: number;
   grid_y?: number;
+  gu_inventory?: Array<Record<string, unknown>>;
+  guInventory?: Array<Record<string, unknown>>;
 }
 
 export function extractCombatantsFromLogs(
@@ -152,26 +155,22 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
     return extractCombatantsFromLogs(logs, playerName);
   }, [combatants, logs, playerName]);
 
-  // Separate allies & enemies (with fallback for playerName matching)
-  const allies = useMemo(
-    () =>
-      effectiveCombatants.filter(
-        (c) =>
-          c.kind === "ally" ||
-          (playerName && (c.name === playerName || c.id === playerName))
-      ),
-    [effectiveCombatants, playerName]
-  );
+  const guDictionary = useGameStore((state) => state.guDictionary || {});
 
-  const enemies = useMemo(
-    () =>
-      effectiveCombatants.filter(
-        (c) =>
-          c.kind === "enemy" &&
-          (!playerName || (c.name !== playerName && c.id !== playerName))
-      ),
-    [effectiveCombatants, playerName]
-  );
+  // Separate allies & enemies cleanly
+  const allies = useMemo(() => {
+    const list = effectiveCombatants.filter((c) => c.kind === "ally");
+    if (list.length > 0) return list;
+    if (playerName) {
+      return effectiveCombatants.filter((c) => c.name === playerName || c.id === playerName);
+    }
+    return [];
+  }, [effectiveCombatants, playerName]);
+
+  const enemies = useMemo(() => {
+    const allySet = new Set(allies.map((a) => a.id));
+    return effectiveCombatants.filter((c) => !allySet.has(c.id) && (c.kind === "enemy" || allies.length === 0));
+  }, [effectiveCombatants, allies]);
 
   // Derive names if not passed
   const displayTeamA =
@@ -475,41 +474,72 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                       typeof m.eliminated === "boolean"
                         ? m.eliminated
                         : hp <= 0;
+                    const rawGus = m.gu_inventory || m.guInventory;
+                    const mGus = Array.isArray(rawGus)
+                      ? rawGus.filter((g: Record<string, unknown>) => g && g.equipped !== false && g.status !== "DORMANT" && g.status !== "DEAD")
+                      : [];
 
                     return (
                       <div
                         key={m.id || idx}
-                        className={`p-3 rounded-xl flex justify-between items-center text-xs border ${
+                        className={`p-3 rounded-xl flex flex-col gap-1.5 text-xs border ${
                           isDead
                             ? "bg-zinc-950/50 border-zinc-900 text-zinc-500"
                             : "bg-zinc-900/60 border-zinc-800 text-zinc-200"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-zinc-100">
-                            {m.name}
-                          </span>
-                          {m.rank && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
-                              Cảnh giới {m.rank}
+                        <div className="flex justify-between items-center w-full">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-zinc-100">
+                              {m.name}
                             </span>
-                          )}
+                            {m.rank && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
+                                Cảnh giới {m.rank}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-mono">
+                              <Heart className="w-3 h-3 text-rose-400" />
+                              <Num value={Math.round(hp)} /> / <Num value={Math.round(maxHp)} />
+                            </span>
+                            {isDead ? (
+                              <span className="text-[10px] text-rose-400 font-bold bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900/50">
+                                Hạ gục
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900/50">
+                                Sống sót
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-mono">
-                            <Heart className="w-3 h-3 text-rose-400" />
-                            <Num value={Math.round(hp)} /> / <Num value={Math.round(maxHp)} />
-                          </span>
-                          {isDead ? (
-                            <span className="text-[10px] text-rose-400 font-bold bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900/50">
-                              Hạ gục
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900/50">
-                              Sống sót
-                            </span>
-                          )}
-                        </div>
+                        {mGus.length > 0 && (
+                          <div className="pt-1.5 border-t border-zinc-800/60 flex flex-wrap gap-1">
+                            {mGus.map((gu: Record<string, unknown>, gIdx: number) => {
+                              const guId = String(gu.gu_id || gu.guId || gu.id || "");
+                              const rank = Number(gu.rank || gu.gu_rank || 1);
+                              const spec = guDictionary[guId];
+                              const name = spec?.name || guId || "Cổ trùng";
+                              const isVital = Boolean(gu.is_vital || gu.isVital);
+                              return (
+                                <span
+                                  key={gIdx}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 ${
+                                    isVital
+                                      ? "bg-amber-950/40 border-amber-600/50 text-amber-300 font-semibold"
+                                      : "bg-zinc-800/80 border-zinc-700/60 text-zinc-300"
+                                  }`}
+                                  title={`${name} (Hạng ${rank})`}
+                                >
+                                  {name}
+                                  <span className="text-[9px] opacity-75 font-mono">H{rank}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -536,41 +566,72 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                       typeof m.eliminated === "boolean"
                         ? m.eliminated
                         : hp <= 0;
+                    const rawGus = m.gu_inventory || m.guInventory;
+                    const mGus = Array.isArray(rawGus)
+                      ? rawGus.filter((g: Record<string, unknown>) => g && g.equipped !== false && g.status !== "DORMANT" && g.status !== "DEAD")
+                      : [];
 
                     return (
                       <div
                         key={m.id || idx}
-                        className={`p-3 rounded-xl flex justify-between items-center text-xs border ${
+                        className={`p-3 rounded-xl flex flex-col gap-1.5 text-xs border ${
                           isDead
                             ? "bg-zinc-950/50 border-zinc-900 text-zinc-500"
                             : "bg-zinc-900/60 border-zinc-800 text-zinc-200"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-zinc-100">
-                            {m.name}
-                          </span>
-                          {m.rank && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
-                              Cảnh giới {m.rank}
+                        <div className="flex justify-between items-center w-full">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-zinc-100">
+                              {m.name}
                             </span>
-                          )}
+                            {m.rank && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
+                                Cảnh giới {m.rank}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-mono">
+                              <Heart className="w-3 h-3 text-rose-400" />
+                              <Num value={Math.round(hp)} /> / <Num value={Math.round(maxHp)} />
+                            </span>
+                            {isDead ? (
+                              <span className="text-[10px] text-rose-400 font-bold bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900/50">
+                                Hạ gục
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900/50">
+                                Sống sót
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] text-zinc-400 flex items-center gap-1 font-mono">
-                            <Heart className="w-3 h-3 text-rose-400" />
-                            <Num value={Math.round(hp)} /> / <Num value={Math.round(maxHp)} />
-                          </span>
-                          {isDead ? (
-                            <span className="text-[10px] text-rose-400 font-bold bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900/50">
-                              Hạ gục
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900/50">
-                              Sống sót
-                            </span>
-                          )}
-                        </div>
+                        {mGus.length > 0 && (
+                          <div className="pt-1.5 border-t border-zinc-800/60 flex flex-wrap gap-1">
+                            {mGus.map((gu: Record<string, unknown>, gIdx: number) => {
+                              const guId = String(gu.gu_id || gu.guId || gu.id || "");
+                              const rank = Number(gu.rank || gu.gu_rank || 1);
+                              const spec = guDictionary[guId];
+                              const name = spec?.name || guId || "Cổ trùng";
+                              const isVital = Boolean(gu.is_vital || gu.isVital);
+                              return (
+                                <span
+                                  key={gIdx}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 ${
+                                    isVital
+                                      ? "bg-amber-950/40 border-amber-600/50 text-amber-300 font-semibold"
+                                      : "bg-zinc-800/80 border-zinc-700/60 text-zinc-300"
+                                  }`}
+                                  title={`${name} (Hạng ${rank})`}
+                                >
+                                  {name}
+                                  <span className="text-[9px] opacity-75 font-mono">H{rank}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })

@@ -1,0 +1,781 @@
+import type { StateCreator } from "zustand";
+import { authFetch } from "@/lib/auth";
+import { BACKEND_URL } from "@/lib/config";
+import type { GuInstance, GroundDrop, Player, FeedResponse } from "@/store/useGameStore";
+
+let fetchGuInventoryPromise: Promise<void> | null = null;
+
+export interface InventorySlice {
+  guInventoryLoaded: boolean;
+  fetchGuInventory: () => Promise<void>;
+  feedGu: (guInstanceId: string) => Promise<void>;
+  feedGuGroup: (guId: string, rank?: number) => Promise<void>;
+  feedAllGu: () => Promise<void>;
+  buyShopItem: (itemId: string, quantity: number, rank?: number) => Promise<boolean>;
+  sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe", rank?: number) => Promise<boolean>;
+  sellShopItemsBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe"; rank?: number }[]) => Promise<boolean>;
+  dropGu: (instanceId: string) => Promise<boolean>;
+  dropGus: (instanceIds: string[]) => Promise<boolean>;
+  equipGu: (instanceId: string, equip: boolean) => Promise<void>;
+  unequipAllGu: () => Promise<void>;
+  updateGuStatus: (instanceId: string, status: string) => Promise<void>;
+  setVitalGu: (instanceId: string) => Promise<void>;
+  useGu: (instanceId: string) => Promise<void>;
+  useGus: (instanceIds: string[]) => Promise<boolean>;
+  useItem: (itemId: string) => Promise<void>;
+  useItems: (itemIds: string[]) => Promise<boolean>;
+  movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: any } | null>;
+  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; stats: any; players_on_map?: any[]; world_width?: number; world_height?: number } | null>;
+  groundDrops: GroundDrop[];
+  fetchGroundDrops: () => Promise<void>;
+  lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
+}
+
+export const createInventorySlice: StateCreator<any, any, any, InventorySlice> = (set, get) => ({
+  guInventoryLoaded: false,
+  groundDrops: [],
+
+  fetchGuInventory: async () => {
+    if (fetchGuInventoryPromise) return fetchGuInventoryPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
+
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch inventory");
+        }
+
+        const data: { gu_inventory: GuInstance[]; equipped_gus: string[] } = await response.json();
+        const currentPlayer = get().player;
+        if (!currentPlayer) return;
+
+        get().setPlayerFromServer({
+          ...currentPlayer,
+          gu_inventory: data.gu_inventory,
+          equipped_gus: data.equipped_gus,
+        });
+        set({ guInventoryLoaded: true });
+      } catch (err: any) {
+        console.error("Gu inventory fetch failed:", err.message);
+      } finally {
+        fetchGuInventoryPromise = null;
+      }
+    };
+    fetchGuInventoryPromise = executeFetch();
+    return fetchGuInventoryPromise;
+  },
+
+  feedGu: async (guInstanceId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ gu_instance_id: guInstanceId }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể cho ăn.");
+      }
+
+      const data: FeedResponse = await response.json();
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message);
+      get().addToast(data.message, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Cho Cổ ăn thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  feedGuGroup: async (guId, rank) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-group`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ gu_id: guId, ...(rank ? { rank } : {}) }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể cho ăn hàng loạt.");
+      }
+
+      const data: FeedResponse = await response.json();
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message);
+      get().addToast(data.message, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Cho ăn hàng loạt thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  feedAllGu: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể cho tất cả Cổ trùng ăn.");
+      }
+
+      const data: FeedResponse = await response.json();
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message);
+      get().addToast(data.message, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Cho tất cả Cổ trùng ăn thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  buyShopItem: async (itemId, quantity, rank = 0) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return false;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/buy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          player_id: player.id,
+          item_id: itemId,
+          quantity: quantity,
+          rank: rank,
+        }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Giao dịch thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Mua hàng thành công!");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Mua hàng thất bại: ${err.message}`);
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+
+  sellShopItem: async (itemId, quantity, itemType, rank = 0) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/sell`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: player.id, item_id: itemId, quantity, item_type: itemType, rank }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Bán hàng thành công!");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Bán hàng thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  sellShopItemsBulk: async (items) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/sell-bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: player.id, items }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Bán hàng thành công!");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Bán hàng thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  dropGu: async (instanceId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/drop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_instance_id: instanceId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Đã vứt Cổ trùng.");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Vứt Cổ thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+  dropGus: async (instanceIds) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/drop-batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_instance_ids: instanceIds }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Đã vứt Cổ trùng hàng loạt.");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Vứt Cổ hàng loạt thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+  equipGu: async (instanceId, equip) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/equip`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          instance_id: instanceId,
+          equip: equip,
+        }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Thao tác trang bị thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      const successMsg = data.message || (equip ? "Trang bị Cổ trùng thành công!" : "Tháo Cổ trùng thành công!");
+      get().addLog(successMsg);
+      get().addToast(successMsg, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Thao tác trang bị thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  unequipAllGu: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/unequip-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Tháo cổ trùng thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      if (data.message) {
+        get().addLog(data.message);
+        get().addToast(data.message, "success");
+      }
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Tháo cổ trùng thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  updateGuStatus: async (instanceId, status) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          instance_id: instanceId,
+          status: status,
+        }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Cập nhật trạng thái thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Cập nhật trạng thái Cổ trùng thành công!");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Lỗi cập nhật trạng thái: ${err.message}`);
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  setVitalGu: async (instanceId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/set-vital`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gu_instance_id: instanceId,
+        }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Thiết lập Bản Mệnh Cổ thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      const successMsg = data.message || "Thiết lập Bản Mệnh Cổ thành công!";
+      get().addLog(successMsg);
+      get().addToast(successMsg, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Lỗi thiết lập Bản Mệnh Cổ: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  useGu: async (instanceId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/use-gu`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gu_instance_id: instanceId,
+        }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Sử dụng Cổ trùng thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      const successMsg = data.message || "Sử dụng Cổ trùng thành công!";
+      get().addLog(successMsg);
+      get().addToast(successMsg, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Lỗi sử dụng Cổ trùng: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  useItem: async (itemId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/use-item`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          item_id: itemId,
+        }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Sử dụng vật phẩm thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      const successMsg = data.message || "Sử dụng vật phẩm thành công!";
+      get().addLog(successMsg);
+      get().addToast(successMsg, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Sử dụng vật phẩm thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  useItems: async (itemIds) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading || !itemIds?.length) return false;
+
+    set({ actionLoading: true, error: null });
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/use-items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ item_ids: itemIds }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        set({ error: data.error });
+        get().addLog(`Sử dụng vật phẩm thất bại: ${data.error}`);
+        get().addToast(data.error || "Không thể sử dụng vật phẩm.", "error");
+        return false;
+      }
+
+      get().applyInventoryFromResponse(data);
+      const successMsg = data.message || "Đã sử dụng vật phẩm.";
+      get().addLog(successMsg);
+      get().addToast(successMsg, "success");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Sử dụng vật phẩm thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  useGus: async (instanceIds) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading || !instanceIds?.length) return false;
+
+    set({ actionLoading: true, error: null });
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const guInstanceId of instanceIds) {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/inventory/use-gu`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ gu_instance_id: guInstanceId }),
+        });
+
+        if (response.status === 401) {
+          logout();
+          throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+          failedCount += 1;
+          get().addToast(data.error || `Không thể sử dụng Cổ trùng ${guInstanceId}.`, "error");
+          continue;
+        }
+
+        get().applyInventoryFromResponse(data);
+        const successMsg = data.message || `Đã sử dụng Cổ trùng ${guInstanceId}.`;
+        get().addLog(successMsg);
+        get().addToast(successMsg, "success");
+        successCount += 1;
+      } catch (err: any) {
+        failedCount += 1;
+        set({ error: err.message });
+        get().addLog(`Sử dụng Cổ trùng thất bại: ${err.message}`);
+        get().addToast(err.message, "error");
+      }
+    }
+
+    set({ actionLoading: false });
+    return successCount > 0 && failedCount === 0;
+  },
+
+  movePlayer: async (x, y, attackTargetId?) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/move`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          x: x,
+          y: y,
+          attack_target_id: attackTargetId,
+        }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Di chuyển thất bại.");
+      }
+
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.log || "Di chuyển thành công.");
+      
+      // Handle skip battle result
+      if (data.skip_result) {
+        const skipResult = data.skip_result;
+        if (skipResult.winner === "Phe Ta") {
+          get().addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!`, "success");
+          if (skipResult.mine_occupied) {
+            get().addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
+          }
+        } else {
+          get().addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
+        }
+      }
+      
+      return data;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Di chuyển thất bại: ${err.message}`);
+      return null;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  fetchGrid: async () => {
+    const { token, logout } = get();
+    if (!token) return null;
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/grid`, {
+        headers: {
+        },
+      });
+
+      if (response.status === 401) {
+        logout();
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to load map grid viewport");
+      }
+
+      const data = await response.json();
+      if (data.ground_drops) {
+        set({ groundDrops: data.ground_drops });
+      }
+      return data;
+    } catch (err: any) {
+      console.error("Grid fetch failed:", err.message);
+      get().addToast("Lỗi tải bản đồ.", "error");
+      return null;
+    }
+  },
+
+  fetchGroundDrops: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/world/drops`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ groundDrops: data.drops || [] });
+      }
+    } catch (e) {
+      console.error("fetchGroundDrops error:", e);
+    }
+  },
+
+  lootGroundDrop: async (dropId) => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/world/drops/${dropId}/loot`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        get().addToast(data.error || "Nhặt chiến lợi phẩm thất bại", "error");
+        return { success: false, message: data.error };
+      }
+
+      const msg = data.message || "Thu thập chiến lợi phẩm thành công!";
+      get().addToast(msg, "success");
+
+      // Immediately remove the looted drop from state so map UI updates instantly
+      set({ groundDrops: get().groundDrops.filter((d: any) => d.id !== dropId) });
+
+      try {
+        const { useWorldStore } = await import("@/store/useWorldStore");
+        const ws = useWorldStore.getState();
+        if (ws.selectedObject?.id === dropId) {
+          ws.selectObject(null);
+        }
+        if (ws.addWorldLog) {
+          ws.addWorldLog(msg);
+        }
+      } catch (e) {}
+
+      await get().fetchGroundDrops();
+      if (get().player?.id) {
+        await get().fetchPlayerStatus(get().player!.id);
+      }
+      return { success: true, message: data.message, looted: data.looted };
+    } catch (e: any) {
+      get().addToast(e.message || "Lỗi kết nối", "error");
+      return null;
+    }
+  },
+});

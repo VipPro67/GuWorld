@@ -1923,6 +1923,13 @@ function WallControls() {
   if (!player) return <div className="text-xs text-zinc-500 text-center py-2">Không có thông tin người chơi</div>;
 
   if (player.rank === 5 && player.sub_rank === 4 && (player.wall_progress ?? 0) >= 1) {
+    const apt = player.aptitude_type || "Đinh";
+    const isGiap = apt === "Giáp" || apt === "A";
+    const baseChance = isGiap ? 20 : 5;
+    const humanQi = player.human_qi || 0;
+    const qiBonus = (humanQi / 100000) * 20;
+    const totalChance = Math.min(90, baseChance + qiBonus);
+
     return (
       <div className="w-full space-y-3.5">
         <div className="w-full flex flex-col items-center justify-center p-4 border border-rose-950 bg-rose-950/20 rounded-2xl shadow-[inset_0_0_12px_rgba(244,63,94,0.1)]">
@@ -1930,20 +1937,36 @@ function WallControls() {
             <ShieldAlert className="w-4 h-4 text-rose-500 animate-bounce" />
             Cơ Hội Thăng Tiên
           </div>
-          <div className="text-[10.5px] text-zinc-400 mb-3 text-center leading-relaxed">
-            Ngươi đã đạt tới Ngũ Chuyển Đỉnh Phong. Nhân khí tích lũy: <span className="font-bold text-amber-400 font-mono">{player.human_qi?.toFixed(1) || 0}</span> <br />
-            Thăng Tiên là quá trình độ kiếp cực kỳ nguy hiểm, nếu thất bại tu vi sẽ vỡ nát!
+          <div className="text-[10.5px] text-zinc-400 mb-3 text-center leading-relaxed max-w-md">
+            Ngươi đã đạt tới Ngũ Chuyển Đỉnh Phong. Nhân khí tích lũy: <span className="font-bold text-amber-400 font-mono">{(humanQi).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} / 500.000</span> <br />
+            Thăng Tiên là quá trình độ kiếp cực kỳ nguy hiểm, nếu thất bại tu vi sẽ phế bỏ về Nhất Chuyển!
           </div>
+
+          <div className="w-full max-w-sm bg-zinc-950/70 border border-rose-900/40 rounded-xl p-2.5 mb-3 text-xs space-y-1 font-mono">
+            <div className="flex justify-between text-zinc-400">
+              <span>Tư chất ({apt}):</span>
+              <span className="text-emerald-400 font-bold">+{baseChance}% gốc</span>
+            </div>
+            <div className="flex justify-between text-zinc-400">
+              <span>Bonus Nhân Khí (+20%/100k):</span>
+              <span className="text-amber-400 font-bold">+{qiBonus.toFixed(1)}%</span>
+            </div>
+            <div className="border-t border-zinc-800 pt-1 flex justify-between font-bold">
+              <span className="text-rose-300">Tỉ lệ thành công:</span>
+              <span className="text-rose-400 text-sm">{totalChance.toFixed(1)}% {totalChance >= 90 && "(Đạt Trần 90%)"}</span>
+            </div>
+          </div>
+
           <button
             className="px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer transition-all active:scale-95 uppercase tracking-wider"
             onClick={async () => {
-              if (await store.showConfirm("Thăng tiên là cửu tử nhất sinh! Ngươi đã chuẩn bị kỹ?")) {
+              if (await store.showConfirm(`Tỉ lệ thăng tiên hiện tại của ngươi là ${totalChance.toFixed(1)}%. Thăng tiên là cửu tử nhất sinh, nếu thất bại tu vi phế bỏ về Nhất Chuyển! Ngươi quyết định dấn thân?`)) {
                 const res = await store.ascension();
                 if (res) store.addToast(res.message, "success");
               }
             }}
           >
-            Liều Mạng Thăng Tiên
+            Liều Mạng Thăng Tiên ({totalChance.toFixed(1)}%)
           </button>
         </div>
 

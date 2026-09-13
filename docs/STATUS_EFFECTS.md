@@ -344,7 +344,7 @@ if netDmg < 1 { netDmg = 1 }
 1. Add constant to `statusfx/status.go`
 2. Add entry to `statusfx.Registry` in `statusfx/spec.go` with `StatusSpec`
 3. Add behaviour hook in `simulator/status_apply.go`
-4. Add to `handlers/combat_attack.go` for manual combat
+4. (Manual turn-based combat đã bỏ; status in-combat chỉ chạy qua simulator/auto-battle.)
 
 ### Special Mechanic Action Code
 1. Add case to `handleActionCode()` in `handlers/gu_effects.go`
