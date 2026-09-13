@@ -123,7 +123,7 @@ func AutoCombatStart(c *gin.Context) {
 			PathMasteries: ally.PathMasteries,
 		}
 		if ally.ID == player.ID.String() {
-			cInst.GuInventory = player.GuInventory
+			cInst.GuInventory = filterCombatGuInventory(player.GuInventory, req.Loadout.GuIds, player.CombatSettings)
 		}
 		combatantInfos = append(combatantInfos, cInst)
 	}
@@ -581,7 +581,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	var autoRestoreMana bool
 	var manaThreshold float64
 
-	if isInitiator && reqLoadout != nil {
+	if isInitiator && reqLoadout != nil && (len(reqLoadout.GuIds) > 0 || len(reqLoadout.KillerMoveIds) > 0) {
 		selectedGuIDs = reqLoadout.GuIds
 		selectedKMIDs = reqLoadout.KillerMoveIds
 		autoHealHP = reqLoadout.AutoHealHP
@@ -589,7 +589,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		autoRestoreMana = reqLoadout.AutoRestoreMana
 		manaThreshold = reqLoadout.ManaThreshold
 	} else {
-		// Non-initiator: use the player's saved combat loadout (gu_priorities)
+		// Non-initiator or initiator with empty loadout priorities:
+		// use the player's saved combat loadout (gu_priorities)
 		// when configured, otherwise fall back to all equipped active Gus.
 		settings := player.CombatSettings
 		if len(settings.GuPriorities) > 0 {
@@ -626,11 +627,18 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			}
 		}
 
-		// Use saved settings
-		autoHealHP = player.CombatSettings.AutoHealHP
-		healThreshold = player.CombatSettings.HealThreshold
-		autoRestoreMana = player.CombatSettings.AutoRestoreMana
-		manaThreshold = player.CombatSettings.ManaThreshold
+		// Use saved settings or loadout overrides
+		if reqLoadout != nil {
+			autoHealHP = reqLoadout.AutoHealHP
+			healThreshold = reqLoadout.HealThreshold
+			autoRestoreMana = reqLoadout.AutoRestoreMana
+			manaThreshold = reqLoadout.ManaThreshold
+		} else {
+			autoHealHP = player.CombatSettings.AutoHealHP
+			healThreshold = player.CombatSettings.HealThreshold
+			autoRestoreMana = player.CombatSettings.AutoRestoreMana
+			manaThreshold = player.CombatSettings.ManaThreshold
+		}
 	}
 
 	// Add selected Gus

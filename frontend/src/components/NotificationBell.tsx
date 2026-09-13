@@ -41,8 +41,7 @@ export const NotificationBell: React.FC = () => {
 
   useEffect(() => {
     void fetchUnreadNotificationsCount();
-    void fetchNotifications();
-  }, [fetchNotifications, fetchUnreadNotificationsCount]);
+  }, [fetchUnreadNotificationsCount]);
 
   useEffect(() => {
     if (open) {

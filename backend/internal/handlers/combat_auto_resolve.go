@@ -65,7 +65,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			PathMasteries: ally.PathMasteries,
 		}
 		if ally.ID == player.ID.String() {
-			cInst.GuInventory = player.GuInventory
+			cInst.GuInventory = filterCombatGuInventory(player.GuInventory, nil, player.CombatSettings)
 		}
 		combatantInfos = append(combatantInfos, cInst)
 	}
@@ -470,7 +470,9 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 ||
 		active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 ||
 		active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
-		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0
+		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
+		active.IgnoreDefense > 0 || active.IgnoreDefensePct > 0 || active.CritRateBoost > 0 ||
+		active.AllStatsBuffPct > 0 || active.SpeedBoostFlat > 0 || active.SummonGrowthPhantoms
 }
 
 func computeGlobalGuDamageMultiplier(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {

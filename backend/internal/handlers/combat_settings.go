@@ -56,6 +56,42 @@ func filterGuLoadout(inv models.GuInventory, cs models.AutoCombatConfig) models.
 	return result
 }
 
+// filterCombatGuInventory restricts a player's Gu inventory for combat display & history.
+// 1. When explicit selectedGuIDs are provided (len > 0), only display those selected Gus.
+// 2. When no explicit selectedGuIDs are provided, display the Gus configured in combat settings (cs.GuPriorities).
+//    If settings is also empty, fall back to all equipped active combat Gus.
+func filterCombatGuInventory(inv models.GuInventory, selectedGuIDs []string, cs models.AutoCombatConfig) models.GuInventory {
+	if len(inv) == 0 {
+		return inv
+	}
+	if len(selectedGuIDs) > 0 {
+		byID := make(map[string]models.GuInstance, len(inv))
+		for _, g := range inv {
+			if !g.Equipped || g.Status != "ACTIVE" {
+				continue
+			}
+			if best, exists := byID[g.GuID]; !exists || g.Rank > best.Rank {
+				byID[g.GuID] = g
+			}
+		}
+		seen := make(map[string]bool, len(selectedGuIDs))
+		result := make(models.GuInventory, 0, len(selectedGuIDs))
+		for _, guID := range selectedGuIDs {
+			if seen[guID] {
+				continue
+			}
+			seen[guID] = true
+			if g, ok := byID[guID]; ok {
+				result = append(result, g)
+			}
+		}
+		if len(result) > 0 {
+			return result
+		}
+	}
+	return filterGuLoadout(inv, cs)
+}
+
 // GetCombatSettings returns the player's persistent auto-combat settings.
 func GetCombatSettings(c *gin.Context) {
 	authID, ok := middleware.GetPlayerID(c)

@@ -133,3 +133,40 @@ func TestStartCombat_AllyFiltering(t *testing.T) {
 		t.Fatalf("expected only party member %s to be notified, got %+v", partyMemberID, notified)
 	}
 }
+
+func TestFilterCombatGuInventory_WithExplicitSelectedGuIDs(t *testing.T) {
+	setupGuRegistry(t)
+	inv := models.GuInventory{
+		{InstanceID: "a1", GuID: "GU_A", Rank: 1, Status: "ACTIVE", Equipped: true},
+		{InstanceID: "b1", GuID: "GU_B", Rank: 1, Status: "ACTIVE", Equipped: true},
+		{InstanceID: "c1", GuID: "GU_C", Rank: 1, Status: "ACTIVE", Equipped: true},
+	}
+	cs := models.AutoCombatConfig{GuPriorities: []models.GuTactic{
+		{GuID: "GU_C", Priority: 1},
+	}}
+
+	// Explicit selectedGuIDs provided -> must return ONLY GU_B
+	got := filterCombatGuInventory(inv, []string{"GU_B"}, cs)
+	if len(got) != 1 || got[0].GuID != "GU_B" {
+		t.Fatalf("expected only GU_B, got %+v", got)
+	}
+}
+
+func TestFilterCombatGuInventory_FallbackToSettings(t *testing.T) {
+	setupGuRegistry(t)
+	inv := models.GuInventory{
+		{InstanceID: "a1", GuID: "GU_A", Rank: 1, Status: "ACTIVE", Equipped: true},
+		{InstanceID: "b1", GuID: "GU_B", Rank: 1, Status: "ACTIVE", Equipped: true},
+		{InstanceID: "c1", GuID: "GU_C", Rank: 1, Status: "ACTIVE", Equipped: true},
+	}
+	cs := models.AutoCombatConfig{GuPriorities: []models.GuTactic{
+		{GuID: "GU_C", Priority: 1},
+		{GuID: "GU_A", Priority: 2},
+	}}
+
+	// No explicit selectedGuIDs provided -> fallback to settings (GU_C, GU_A)
+	got := filterCombatGuInventory(inv, nil, cs)
+	if len(got) != 2 || got[0].GuID != "GU_C" || got[1].GuID != "GU_A" {
+		t.Fatalf("expected [GU_C, GU_A] from settings, got %+v", got)
+	}
+}

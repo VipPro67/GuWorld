@@ -43,14 +43,16 @@ export const createNotificationsSlice: StateCreator<any, any, any, Notifications
   fetchUnreadNotificationsCount: async () => {
     const { token } = get();
     if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/notifications/unread-count`);
-      if (!response.ok) return;
-      const data = await response.json();
-      set({ unreadNotifications: typeof data.unread === "number" ? data.unread : 0 });
-    } catch (err) {
-      console.error("fetch unread count failed", err);
-    }
+    await fetchWithDedupe("fetchUnreadNotificationsCount", async () => {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/player/notifications/unread-count`);
+        if (!response.ok) return;
+        const data = await response.json();
+        set({ unreadNotifications: typeof data.unread === "number" ? data.unread : 0 });
+      } catch (err) {
+        console.error("fetch unread count failed", err);
+      }
+    });
   },
 
   markNotificationRead: async (id) => {
