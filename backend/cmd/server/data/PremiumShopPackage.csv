@@ -1,5 +1,0 @@
-id,name,price_jade,rewards,description,min_rank,min_sub_rank,limit_count,limit_period
-pkg_stone_small,Hộp Đá Tu Luyện (Nhỏ),100,"[{""currency"":""PRIMEVAL_STONE"",""amount"":10000}]",Hộp phúc lợi 10.000 Nguyên Thạch cho Cổ sư bắt đầu.,1,0,1,ACCOUNT
-pkg_dan_small,Hộp Đan Dược Tu Luyện,300,"[{""itemId"":""ITEM_HEALING_PELLET_LARGE"",""quantity"":10},{""itemId"":""ITEM_HEALING_PELLET_MEDIUM"",""quantity"":20}]",Hộp đan dược hồi phục gồm 10 Đại Hồi Huyết Đan và 20 Trung Hồi Huyết Đan.,1,0,2,WEEK
-pkg_stone_large,Hộp Đá Tu Luyện (Lớn),500,"[{""currency"":""PRIMEVAL_STONE"",""amount"":50000},{""currency"":""IMMORTAL_ESSENCE_STONE"",""amount"":30}]",Hộp phúc lợi 50.000 Nguyên Thạch và 30 Tiên Nguyên Thạch.,1,0,1,WEEK
-pkg_immortal,Hộp Tiên Nguyên Phúc Lợi,1000,"[{""currency"":""IMMORTAL_ESSENCE_STONE"",""amount"":50}]",Hộp phúc lợi 50 Tiên Nguyên Thạch cho bậc Cổ Tiên.,6,0,1,MONTH
