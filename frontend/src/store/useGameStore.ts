@@ -2846,6 +2846,8 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       void get().fetchMySectStatus();
       void get().fetchGuInventory();
+      void get().fetchNotifications();
+      void get().fetchUnreadNotificationsCount();
       try {
         get().subscribePlayerEvents();
         get().subscribeTradeEvents();

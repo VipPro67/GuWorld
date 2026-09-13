@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle, PawPrint, Users } from "lucide-react";
 import { CombatReplayView } from "./CombatReplayView";
+import { CombatReportView } from "./CombatReportView";
 import { Num } from "./Num";
 import { getPathColor } from "@/lib/utils";
 import { masteryKeyForPoints, masteryLevelForPoints, pathLabels } from "@/lib/translate";
@@ -1438,17 +1439,91 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 </div>
   );
 
-  const renderReplayPhase = () => (
-    <CombatReplayView
-      logs={simulationLogs as any}
-      combatants={simulationCombatants as any}
-      winner={simulationWinner || "Phe Địch"}
-      onBack={handleExitSimulation}
-      playerName={player.username}
-      apertureHp={enemy?.aperture_hp ?? 0}
-      apertureMaxHp={enemy?.aperture_max_hp ?? 0}
-    />
-  );
+  const renderReplayPhase = () => {
+    const displayCombatants = (() => {
+      const list: Record<string, unknown>[] = [];
+      const pObj = player as unknown as Record<string, unknown>;
+
+      // 1. Ally (Player)
+      list.push({
+        id: player.id,
+        name: player.username,
+        kind: "ally",
+        max_hp: player.base_hp || player.hp || 1000,
+        hp: player.hp ?? 1000,
+        max_mana: player.max_mana || 100,
+        mana: player.current_mana ?? 100,
+        rank: player.rank || 1,
+        grid_x: 0,
+        grid_y: 0,
+        avatar_url: pObj.avatar_url,
+      });
+
+      // 2. If simulationCombatants provided
+      if (simulationCombatants && simulationCombatants.length > 0) {
+        simulationCombatants.forEach((c) => {
+          const isPlayer = c.name === player.username || c.id === player.id;
+          if (isPlayer) {
+            list[0] = { ...list[0], ...c, kind: "ally", grid_x: 0, grid_y: 0 };
+          } else {
+            list.push({
+              ...c,
+              kind: "enemy",
+              grid_x: (c.grid_x as number | undefined) ?? 4,
+              grid_y: (c.grid_y as number | undefined) ?? (list.length - 1),
+            });
+          }
+        });
+        return list;
+      }
+
+      // 3. Fallback from enemy active combat state if simulationCombatants empty
+      if (enemy) {
+        const enemyList = (enemy.enemies && enemy.enemies.length > 0)
+          ? enemy.enemies
+          : [{
+              id: "enemy_1",
+              name: enemy.enemy_name || "Kẻ Địch",
+              max_hp: enemy.enemy_max_hp || 1000,
+              hp: enemy.enemy_hp || 1000,
+              rank: 1,
+            }];
+
+        enemyList.forEach((e: Record<string, unknown>, idx: number) => {
+          list.push({
+            id: String(e.id || `enemy_${idx}`),
+            name: String(e.name || enemy.enemy_name || "Kẻ Địch"),
+            kind: "enemy",
+            max_hp: e.max_hp || 1000,
+            hp: e.hp ?? e.max_hp ?? 1000,
+            max_mana: e.max_mana || 100,
+            mana: e.current_mana ?? 100,
+            rank: e.rank || 1,
+            grid_x: 4,
+            grid_y: idx,
+            kind_detail: e.kind || enemy.enemy_type || "",
+          });
+        });
+      }
+
+      return list;
+    })();
+
+    return (
+      <CombatReportView
+        logs={simulationLogs as unknown as Parameters<typeof CombatReportView>[0]["logs"]}
+        combatants={displayCombatants as unknown as Parameters<typeof CombatReportView>[0]["combatants"]}
+        winner={simulationWinner || "Phe Địch"}
+        onBack={handleExitSimulation}
+        playerName={player.username}
+        teamAName={player.username || "Phe Ta"}
+        teamBName={enemy?.enemy_name || "Kẻ Địch"}
+        title="Chiến Báo Trận Đấu Mô Phỏng"
+        apertureHp={enemy?.aperture_hp ?? 0}
+        apertureMaxHp={enemy?.aperture_max_hp ?? 0}
+      />
+    );
+  };
 
   return (
     <GamePanel variant="default" className="w-full mx-auto">

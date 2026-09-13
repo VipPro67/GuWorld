@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
-import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock, BookOpen } from "lucide-react";
+import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock, BookOpen, Copy, Check } from "lucide-react";
 import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
 import { GamePanel } from "@/components/ui";
@@ -71,6 +71,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   onDropGus,
 }) => {
   const [selectedGuIds, setSelectedGuIds] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
   // Single-item quantity use mode (Items tab)
   const [useMultipleItemId, setUseMultipleItemId] = useState<string | null>(null);
@@ -1221,9 +1222,29 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                         }
                                       />
                                     )}
-                                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-850">
-                                      #{gu.instance_id.slice(0, 6)}
-                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(gu.instance_id);
+                                        setCopiedId(gu.instance_id);
+                                        setTimeout(() => setCopiedId(null), 2000);
+                                        useGameStore.getState().addToast(`Đã copy ID Cổ trùng: ${gu.instance_id}`, "success");
+                                      }}
+                                      className="text-[10px] font-mono text-zinc-400 hover:text-amber-400 bg-zinc-900 hover:bg-amber-950/40 px-1.5 py-0.5 rounded border border-zinc-850 hover:border-amber-500/50 cursor-pointer active:scale-95 transition-all inline-flex items-center gap-1 group/id"
+                                      title={`Click để copy full ID: ${gu.instance_id}`}
+                                    >
+                                      {copiedId === gu.instance_id ? (
+                                        <span className="text-emerald-400 font-bold flex items-center gap-0.5">
+                                          <Check className="w-3 h-3 text-emerald-400" /> Copied
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-2.5 h-2.5 opacity-50 group-hover/id:opacity-100 transition-opacity" />
+                                          #{gu.instance_id.slice(0, 6)}
+                                        </>
+                                      )}
+                                    </button>
                                     {gu.is_vital && (
                                       <span className="text-[8px] font-bold text-amber-400 font-mono">👑 Bản Mệnh</span>
                                     )}

@@ -44,8 +44,8 @@ interface CombatantReplayInfo {
   sub_rank?: number;
   dao_marks?: Record<string, number>;
   path_masteries?: Record<string, number>;
-  gu_inventory?: Array<any>;
-  guInventory?: Array<any>;
+  gu_inventory?: Array<Record<string, unknown>>;
+  guInventory?: Array<Record<string, unknown>>;
   avatar_url?: string;
 }
 
@@ -351,27 +351,94 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           subRank: c.sub_rank || 0,
           daoMarks: c.dao_marks,
           pathMasteries: c.path_masteries,
-          guInventory: c.gu_inventory || c.guInventory,
+          guInventory: (c.gu_inventory || c.guInventory) as CombatantState["guInventory"],
           avatarUrl: c.avatar_url,
         };
       }
       return map;
     }
 
-    const map: Record<string, CombatantState> = {};
+    // Check log snapshot if initialCombatants is empty
     for (const log of logs) {
+      const snap = (log as unknown as Record<string, unknown>).snapshot as
+        | { allies?: Record<string, unknown>[]; enemies?: Record<string, unknown>[] }
+        | undefined;
+      if (snap && (snap.allies || snap.enemies)) {
+        const map: Record<string, CombatantState> = {};
+        if (Array.isArray(snap.allies)) {
+          snap.allies.forEach((a, idx) => {
+            const id = String(a.id || `ally_${idx}`);
+            map[id] = {
+              id,
+              name: String(a.name || "Phe Ta"),
+              kind: "ally",
+              maxHp: Number(a.max_hp || a.maxHp || 1000),
+              hp: Number(a.hp ?? a.max_hp ?? 1000),
+              maxMp: Number(a.max_mana || a.maxMana || 0),
+              mp: Number(a.mana ?? a.current_mana ?? 0),
+              shield: Number(a.shield || 0),
+              gridX: Number(a.grid_x && Number(a.grid_x) >= 1 && Number(a.grid_x) <= 3 ? a.grid_x : (idx % 3) + 1),
+              gridY: Number(a.grid_y && Number(a.grid_y) >= 1 && Number(a.grid_y) <= 3 ? a.grid_y : Math.floor(idx / 3) + 1),
+              damage: Number(a.damage || 0),
+              defense: Number(a.defense || 0),
+              speed: Number(a.speed || 0),
+              kindDetail: String(a.kind || ""),
+              rank: Number(a.rank || 1),
+              subRank: Number(a.sub_rank || 0),
+              avatarUrl: (a.avatar_url as string) || undefined,
+            };
+          });
+        }
+        if (Array.isArray(snap.enemies)) {
+          snap.enemies.forEach((e, idx) => {
+            const id = String(e.id || `enemy_${idx}`);
+            map[id] = {
+              id,
+              name: String(e.name || "Kẻ Địch"),
+              kind: "enemy",
+              maxHp: Number(e.max_hp || e.maxHp || 1000),
+              hp: Number(e.hp ?? e.max_hp ?? 1000),
+              maxMp: Number(e.max_mana || e.maxMana || 0),
+              mp: Number(e.mana ?? e.current_mana ?? 0),
+              shield: Number(e.shield || 0),
+              gridX: Number(e.grid_x && Number(e.grid_x) >= 1 && Number(e.grid_x) <= 3 ? e.grid_x : (idx % 3) + 1),
+              gridY: Number(e.grid_y && Number(e.grid_y) >= 1 && Number(e.grid_y) <= 3 ? e.grid_y : Math.floor(idx / 3) + 1),
+              damage: Number(e.damage || 0),
+              defense: Number(e.defense || 0),
+              speed: Number(e.speed || 0),
+              kindDetail: String(e.kind || ""),
+              rank: Number(e.rank || 1),
+              subRank: Number(e.sub_rank || 0),
+              avatarUrl: (e.avatar_url as string) || undefined,
+            };
+          });
+        }
+        if (Object.keys(map).length > 0) return map;
+      }
+    }
+
+    const map: Record<string, CombatantState> = {};
+    let allyCount = 0;
+    let enemyCount = 0;
+
+    for (const log of logs) {
+      const isActorAlly = playerName && (log.actor_name === playerName || log.actor_id === playerName);
+      const isTargetAlly = playerName && (log.target_name === playerName || log.target_id === playerName);
+
       if (log.actor_id && !map[log.actor_id]) {
+        const isAlly = Boolean(isActorAlly);
+        const idx = isAlly ? allyCount++ : enemyCount++;
         map[log.actor_id] = {
           id: log.actor_id,
           name: log.actor_name || "???",
-          kind: "enemy",
+          kind: isAlly ? "ally" : "enemy",
           maxHp: 1000,
           hp: 1000,
           maxMp: 0,
           mp: 0,
           shield: 0,
-          gridX: 1,
-          gridY: 2,
+          gridX: (idx % 3) + 1,
+          gridY: Math.floor(idx / 3) + 1,
           damage: 0,
           defense: 0,
           speed: 0,
@@ -381,17 +448,19 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
         };
       }
       if (log.target_id && !map[log.target_id]) {
+        const isAlly = Boolean(isTargetAlly);
+        const idx = isAlly ? allyCount++ : enemyCount++;
         map[log.target_id] = {
           id: log.target_id,
           name: log.target_name || log.target_id,
-          kind: "enemy",
+          kind: isAlly ? "ally" : "enemy",
           maxHp: 1000,
           hp: 1000,
           maxMp: 0,
           mp: 0,
           shield: 0,
-          gridX: 1,
-          gridY: 2,
+          gridX: (idx % 3) + 1,
+          gridY: Math.floor(idx / 3) + 1,
           damage: 0,
           defense: 0,
           speed: 0,
@@ -402,7 +471,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
       }
     }
     return map;
-  }, [initialCombatants, logs]);
+  }, [initialCombatants, logs, playerName]);
 
   const [state, dispatch] = useReducer(replayReducer, {
     combatantStates: parsedCombatants,
@@ -614,7 +683,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             {/* HP number */}
             <div className="text-[7px] font-mono mt-0.5">
               <span className={c.hp <= 0 ? 'text-zinc-700' : 'text-zinc-400'}>
-                {Math.round(c.hp)}/{Math.round(c.maxHp)}
+                <Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} />
               </span>
             </div>
 
@@ -624,11 +693,15 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
                   <div
                     className="h-full rounded-full bg-purple-500/70 transition-all"
-                    style={{ width: `${c.maxMp > 0 ? Math.min(100, (c.mp / c.maxMp) * 100) : 0}%` }}
+                    style={{ width: `${c.rank >= 6 ? 100 : c.maxMp > 0 ? Math.min(100, (c.mp / c.maxMp) * 100) : 0}%` }}
                   />
                 </div>
                 <div className="text-[6px] font-mono text-purple-400/70 mt-0.5">
-                  MP {Math.round(c.mp)}/{Math.round(c.maxMp)}
+                  {c.rank >= 6 ? (
+                    <>Tiên Nguyên <Num value={Math.round(c.mp)} /></>
+                  ) : (
+                    <>MP <Num value={Math.round(c.mp)} /> / <Num value={Math.round(c.maxMp)} /></>
+                  )}
                 </div>
               </>
             )}
@@ -716,8 +789,17 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
             {/* Vital stats */}
             <div className="grid grid-cols-2 gap-2 bg-zinc-950/60 rounded-xl p-3 mt-2">
-              <div><span className="text-zinc-500">Sinh lực</span><br /><span className="text-emerald-400 font-bold text-sm"><Num value={c.hp} />/<Num value={c.maxHp} /></span></div>
-              <div><span className="text-zinc-500">Chân nguyên</span><br /><span className="text-purple-400 font-bold text-sm"><Num value={c.mp} />/<Num value={c.maxMp} /></span></div>
+              <div><span className="text-zinc-500">Sinh lực</span><br /><span className="text-emerald-400 font-bold text-sm"><Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} /></span></div>
+              <div>
+                <span className="text-zinc-500">{c.rank >= 6 ? "Tiên nguyên" : "Chân nguyên"}</span><br />
+                <span className="text-purple-400 font-bold text-sm">
+                  {c.rank >= 6 ? (
+                    <Num value={Math.round(c.mp)} />
+                  ) : (
+                    <><Num value={Math.round(c.mp)} /> / <Num value={Math.round(c.maxMp)} /></>
+                  )}
+                </span>
+              </div>
               <div><span className="text-zinc-500">Tấn công</span><br /><span className="text-rose-400 font-bold"><Num value={c.damage} /></span></div>
               <div><span className="text-zinc-500">Phòng thủ</span><br /><span className="text-blue-400 font-bold"><Num value={c.defense} /></span></div>
               <div><span className="text-zinc-500">Tốc độ</span><br /><span className="text-cyan-400 font-bold"><Num value={c.speed} /></span></div>
@@ -762,17 +844,19 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               <div className="border-t border-zinc-800 pt-2 mt-2">
                 <span className="text-zinc-500 text-[10px]">Cổ Trùng Trang Bị ({c.guInventory.length}):</span>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {c.guInventory.map((g: any, idx: number) => {
-                    const rawId = g.gu_id || g.guId || g.GuID || g.id || "";
-                    const specName = (guDictionary && guDictionary[rawId]?.name) || g.gu_name || g.name || g.GuName || rawId || "Cổ trùng";
-                    const isImmortal = (g.rank || 0) >= 6;
+                  {c.guInventory.map((g, idx: number) => {
+                    const item = g as Record<string, unknown>;
+                    const rawId = String(item.gu_id || item.guId || item.GuID || item.id || "");
+                    const specName = (guDictionary && guDictionary[rawId]?.name) || String(item.gu_name || item.name || item.GuName || rawId || "Cổ trùng");
+                    const rankVal = Number(item.rank || g.rank || 1);
+                    const isImmortal = rankVal >= 6;
                     return (
                       <span key={idx} className={`text-[10px] px-2 py-0.5 rounded-md font-medium border ${
                         isImmortal 
                           ? 'bg-amber-950/40 text-amber-300 border-amber-700/60 shadow-[0_0_8px_rgba(245,158,11,0.2)]' 
                           : 'bg-purple-950/40 text-purple-300 border-purple-800/60'
                       }`}>
-                        {isImmortal ? '✦ ' : ''}{specName} <span className="text-[9px] opacity-75 font-mono">(R{g.rank || 1})</span>
+                        {isImmortal ? '✦ ' : ''}{specName} <span className="text-[9px] opacity-75 font-mono">(R{rankVal})</span>
                       </span>
                     );
                   })}
@@ -1026,14 +1110,19 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             <span className="text-[10px] text-zinc-600 ml-auto">{allies.length} chiến binh</span>
           </h3>
           <div className="grid grid-cols-3 gap-1.5">
-            {[1, 2, 3].map(gridX => (
-              [3, 2, 1].map(gridY => {
-                const cellCombatant = Object.values(state.combatantStates).find(
-                  c => c.kind === "ally" && c.gridX === gridX && c.gridY === gridY
-                );
+            {[1, 2, 3].map((gridX) =>
+              [3, 2, 1].map((gridY) => {
+                const list = Object.values(state.combatantStates).filter((c) => c.kind === "ally");
+                const cellCombatant =
+                  list.find((c) => c.gridX === gridX && c.gridY === gridY) ||
+                  list.find((c, idx) => {
+                    const gx = c.gridX >= 1 && c.gridX <= 3 ? c.gridX : (idx % 3) + 1;
+                    const gy = c.gridY >= 1 && c.gridY <= 3 ? c.gridY : Math.floor(idx / 3) + 1;
+                    return gx === gridX && gy === gridY;
+                  });
                 return renderGridCell(cellCombatant, gridX, gridY);
               })
-            ))}
+            )}
           </div>
         </div>
 
@@ -1045,14 +1134,19 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             <span className="text-[10px] text-zinc-600 ml-auto">{enemies.length} mục tiêu</span>
           </h3>
           <div className="grid grid-cols-3 gap-1.5">
-            {[1, 2, 3].map(gridX => (
-              [1, 2, 3].map(gridY => {
-                const cellCombatant = Object.values(state.combatantStates).find(
-                  c => c.kind === "enemy" && c.gridX === gridX && c.gridY === gridY
-                );
+            {[1, 2, 3].map((gridX) =>
+              [1, 2, 3].map((gridY) => {
+                const list = Object.values(state.combatantStates).filter((c) => c.kind === "enemy");
+                const cellCombatant =
+                  list.find((c) => c.gridX === gridX && c.gridY === gridY) ||
+                  list.find((c, idx) => {
+                    const gx = c.gridX >= 1 && c.gridX <= 3 ? c.gridX : (idx % 3) + 1;
+                    const gy = c.gridY >= 1 && c.gridY <= 3 ? c.gridY : Math.floor(idx / 3) + 1;
+                    return gx === gridX && gy === gridY;
+                  });
                 return renderGridCell(cellCombatant, gridX, gridY);
               })
-            ))}
+            )}
           </div>
         </div>
       </div>

@@ -11,7 +11,8 @@ import {
   Heart,
   Eye,
 } from "lucide-react";
-import { CombatReplayView, type CombatLogEntry } from "./CombatReplayView";
+import { CombatReportView } from "./CombatReportView";
+import type { CombatLogEntry } from "./CombatReplayView";
 import { Num } from "./Num";
 
 export const CombatHistoryView: React.FC = () => {
@@ -44,12 +45,15 @@ export const CombatHistoryView: React.FC = () => {
 
     return (
       <div className="w-full mx-auto px-4 py-4">
-        <CombatReplayView
+        <CombatReportView
           logs={replayLogs}
-          combatants={combatants}
+          combatants={combatants as unknown as Parameters<typeof CombatReportView>[0]["combatants"]}
           winner={selectedEntry.winner}
           onBack={() => { setSelectedEntry(null); setReplayLogs([]); }}
           playerName={player?.username}
+          teamAName={player?.username || "Phe Ta"}
+          teamBName={selectedEntry.enemy_name || selectedEntry.enemy_type || "Kẻ Địch"}
+          title={`Chiến Báo - vs ${selectedEntry.enemy_name || selectedEntry.enemy_type || "Kẻ Địch"}`}
         />
       </div>
     );

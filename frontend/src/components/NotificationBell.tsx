@@ -35,13 +35,21 @@ function relativeTime(iso: string): string {
 }
 
 export const NotificationBell: React.FC = () => {
-  const { notifications, unreadNotifications, fetchNotifications, markNotificationRead, markAllNotificationsRead } = useGameStore();
+  const { notifications, unreadNotifications, fetchNotifications, fetchUnreadNotificationsCount, markNotificationRead, markAllNotificationsRead } = useGameStore();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open) fetchNotifications();
-  }, [open, fetchNotifications]);
+    void fetchUnreadNotificationsCount();
+    void fetchNotifications();
+  }, [fetchNotifications, fetchUnreadNotificationsCount]);
+
+  useEffect(() => {
+    if (open) {
+      void fetchNotifications();
+      void fetchUnreadNotificationsCount();
+    }
+  }, [open, fetchNotifications, fetchUnreadNotificationsCount]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
