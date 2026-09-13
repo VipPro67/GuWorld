@@ -271,7 +271,7 @@ func UpgradeApertureNode(c *gin.Context) {
 	}
 
 	// Calculate upgrade cost: base cost * level * 1.5
-	template, ok := ResourceNodeTemplates[n.NodeType]
+	template, ok := GetResourceNodeTemplate(n.NodeType)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại node không hợp lệ"})
 		return

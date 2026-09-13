@@ -40,10 +40,21 @@ type ResourceNodeTemplate struct {
 // rebalance aperture nodes without a code change.
 var ResourceNodeTemplates = loadResourceNodeTemplates()
 
+func GetResourceNodeTemplate(nodeType string) (ResourceNodeTemplate, bool) {
+	nodeType = strings.TrimSpace(nodeType)
+	if len(ResourceNodeTemplates) == 0 {
+		ResourceNodeTemplates = loadResourceNodeTemplates()
+	}
+	t, ok := ResourceNodeTemplates[nodeType]
+	return t, ok
+}
+
 func loadResourceNodeTemplates() map[string]ResourceNodeTemplate {
 	f, err := os.Open(csvPath("ApertureNodeTemplate.csv"))
 	if err != nil {
-		logger.S.Warnf("aperture node templates not found: %v", err)
+		if logger.S != nil {
+			logger.S.Warnf("aperture node templates not found: %v", err)
+		}
 		return map[string]ResourceNodeTemplate{}
 	}
 	defer f.Close()
@@ -55,7 +66,9 @@ func parseResourceNodeTemplates(r io.Reader) map[string]ResourceNodeTemplate {
 
 	rows, err := csv.NewReader(r).ReadAll()
 	if err != nil || len(rows) < 2 {
-		logger.S.Errorf("failed to parse aperture node templates: %v", err)
+		if logger.S != nil {
+			logger.S.Errorf("failed to parse aperture node templates: %v", err)
+		}
 		return templates
 	}
 	header := make(map[string]int, len(rows[0]))
@@ -109,7 +122,7 @@ func resolveNodeProdKey(n models.ApertureResourceNode) string {
 	var prodKey string
 	if n.ProductionKey != "" {
 		prodKey = n.ProductionKey
-	} else if template, ok := ResourceNodeTemplates[n.NodeType]; ok && template.ProdKey != "" {
+	} else if template, ok := GetResourceNodeTemplate(n.NodeType); ok && template.ProdKey != "" {
 		prodKey = template.ProdKey
 	} else if strings.Contains(n.Name, "(") && strings.Contains(n.Name, ")") {
 		start := strings.Index(n.Name, "(")

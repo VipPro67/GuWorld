@@ -159,6 +159,9 @@ func GetGrid(c *gin.Context) {
 				&d.ID, &d.RegionID, &d.X, &d.Y, &d.LoserID, &d.LoserName,
 				&killerID, &killerName, &lootBytes, &protectedUntil, &d.ExpiresAt, &d.CreatedAt,
 			); errScan == nil {
+				if IsSafeZone(d.RegionID, d.X, d.Y) {
+					continue
+				}
 				if killerID.Valid {
 					d.KillerID = killerID.String
 				}

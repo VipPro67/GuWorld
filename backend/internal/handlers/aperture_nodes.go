@@ -37,12 +37,15 @@ func PlaceApertureNode(c *gin.Context) {
 		return
 	}
 
+	req.NodeType = strings.TrimSpace(req.NodeType)
+	req.ProdKey = strings.TrimSpace(req.ProdKey)
+
 	if req.X < 0 || req.X >= 20 || req.Y < 0 || req.Y >= 20 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ nằm ngoài ranh giới Tiên Khiếu (0-19)."})
 		return
 	}
 
-	template, valid := ResourceNodeTemplates[req.NodeType]
+	template, valid := GetResourceNodeTemplate(req.NodeType)
 	if !valid {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại tài nguyên xây dựng không tồn tại"})
 		return

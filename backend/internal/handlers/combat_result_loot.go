@@ -32,17 +32,23 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 					if targetHP < 10.0 {
 						targetHP = 10.0
 					}
-					dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
-					hubRegion, hubX, hubY := NearestHub(targetX, targetY)
-					_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
-					if dropSummary != "" {
-						pvpMsg := fmt.Sprintf("Chiến thắng PVP vang dội! Rơi rớt từ bại binh: %s.", dropSummary)
-						lootDetailLogs = append(lootDetailLogs, pvpMsg)
-						notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg)
+					if activeCombat.MineSlotID <= 0 {
+						dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
+						hubRegion, hubX, hubY := NearestHub(targetX, targetY)
+						_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
+						if dropSummary != "" {
+							pvpMsg := fmt.Sprintf("Chiến thắng PVP vang dội! Rơi rớt từ bại binh: %s.", dropSummary)
+							lootDetailLogs = append(lootDetailLogs, pvpMsg)
+							notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg)
+						} else {
+							pvpMsg := "Chiến thắng PVP vang dội! Bại binh không có tài sản rơi rớt."
+							lootDetailLogs = append(lootDetailLogs, pvpMsg)
+							notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg)
+						}
 					} else {
-						pvpMsg := "Chiến thắng PVP vang dội! Bại binh không có tài sản rơi rớt."
+						_, _ = tx.Exec("UPDATE players SET hp = $1, active_combat = NULL WHERE id = $2", targetHP, targetUUID)
+						pvpMsg := "Đánh chiếm Mỏ thành công! Bại binh bị tước quyền chiếm giữ."
 						lootDetailLogs = append(lootDetailLogs, pvpMsg)
-						notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg)
 					}
 				}
 			}

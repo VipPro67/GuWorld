@@ -100,3 +100,31 @@ func TestGenerateCellStableAcrossCalls(t *testing.T) {
 		}
 	}
 }
+
+func TestIsSafeZone(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "Southern_Border", ZoneType: ZoneTypeHub, MinX: 14000, MinY: 9000, MaxX: 16000, MaxY: 11000},
+		{ID: "hub_trung_chau", ZoneType: ZoneTypeHub, MinX: 14950, MinY: 4950, MaxX: 15050, MaxY: 5050},
+		{ID: "tan_thu_coc_trung_chau", ZoneType: ZoneTypeSafe, MinX: 14500, MinY: 4500, MaxX: 15500, MaxY: 5500},
+		{ID: "dai_vuc_nam_cuong", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999},
+	}
+	zoneReg.byID = make(map[string]*models.Region)
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+
+	if !IsSafeZone("Southern_Border", 15000, 10000) {
+		t.Errorf("expected Southern_Border at (15000, 10000) to be a safe zone")
+	}
+	if !IsSafeZone("hub_trung_chau", 15000, 5000) {
+		t.Errorf("expected hub_trung_chau to be a safe zone")
+	}
+	if !IsSafeZone("tan_thu_coc_trung_chau", 15000, 5000) {
+		t.Errorf("expected tan_thu_coc_trung_chau to be a safe zone")
+	}
+	if IsSafeZone("dai_vuc_nam_cuong", 1000, 1000) {
+		t.Errorf("expected wilderness dai_vuc_nam_cuong at (1000, 1000) NOT to be a safe zone")
+	}
+}

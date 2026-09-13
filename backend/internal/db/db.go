@@ -371,7 +371,12 @@ func SeedFromCSV() error {
 func csvPath(filename string) string {
 	candidates := []string{
 		filepath.Join("data", filename),
-		filepath.Join("cmd/server/data", filename),
+		filepath.Join("backend", "data", filename),
+		filepath.Join("cmd", "server", "data", filename),
+		filepath.Join("backend", "cmd", "server", "data", filename),
+		filepath.Join("..", "data", filename),
+		filepath.Join("..", "..", "data", filename),
+		filepath.Join("..", "cmd", "server", "data", filename),
 		filename,
 		filepath.Join("..", filename),
 		filepath.Join("..", "..", filename),

@@ -342,7 +342,7 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 			summary += fmt.Sprintf(" [Oán Khí Tầng %d: Mất đồ x%.1f]", satKhiLevel, mult)
 		}
 
-		if loserRegion.Valid && loserRegion.String != "" {
+		if loserRegion.Valid && loserRegion.String != "" && !IsSafeZone(loserRegion.String, loserX, loserY) {
 			lootBytes, _ := json.Marshal(lootData)
 			_, _ = tx.Exec(`
 				INSERT INTO map_ground_drops (

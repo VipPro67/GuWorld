@@ -117,6 +117,10 @@ func GetTileGroundDrops(c *gin.Context) {
 			continue
 		}
 
+		if IsSafeZone(d.RegionID, d.X, d.Y) {
+			continue
+		}
+
 		if killerID.Valid {
 			d.KillerID = killerID.String
 		}

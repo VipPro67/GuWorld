@@ -85,10 +85,8 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				maxPvPRange := 2 + bonusRange
 
 				// Safe zone check
-				z1 := FindZoneAt(player.X, player.Y)
-				z2 := FindZoneAt(targetPlayer.X, targetPlayer.Y)
-				isSafe1 := z1 != nil && (z1.ZoneType == "HUB" || z1.ZoneType == "SAFE_ZONE")
-				isSafe2 := z2 != nil && (z2.ZoneType == "HUB" || z2.ZoneType == "SAFE_ZONE")
+				isSafe1 := IsSafeZone(player.CurrentRegion, player.X, player.Y)
+				isSafe2 := IsSafeZone(targetPlayer.CurrentRegion, targetPlayer.X, targetPlayer.Y)
 
 				if isSafe1 || isSafe2 {
 					return "Không thể tấn công trong Vùng An Toàn!", false, nil
@@ -262,6 +260,10 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				}
 			}
 		case "PVP":
+			if IsSafeZone(player.CurrentRegion, player.X, player.Y) {
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Vùng An Toàn yên bình, phong cảnh thanh bình.", player.X, player.Y)
+				break
+			}
 			var targetPlayer models.Player
 			err := tx.QueryRow(`
 				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.combat_settings

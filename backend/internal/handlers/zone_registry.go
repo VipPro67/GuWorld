@@ -355,6 +355,24 @@ func DeriveRegionAt(x, y int) string {
 	return HubRegionID
 }
 
+// IsSafeZone returns true if the region or coordinates belong to a HUB or SAFE_ZONE.
+func IsSafeZone(regionID string, x, y int) bool {
+	if z := FindZoneAt(x, y); z != nil {
+		if z.ZoneType == ZoneTypeHub || z.ZoneType == ZoneTypeSafe {
+			return true
+		}
+	}
+	if z := ZoneByID(regionID); z != nil {
+		if z.ZoneType == ZoneTypeHub || z.ZoneType == ZoneTypeSafe {
+			return true
+		}
+	}
+	if regionID == HubRegionID || regionID == "Southern_Border" || strings.HasPrefix(regionID, "hub_") || strings.HasPrefix(regionID, "tan_thu_coc_") {
+		return true
+	}
+	return false
+}
+
 // GetSafePoint returns safe coordinates for a region (fallback to entry point)
 func GetSafePoint(regionID string) (int, int) {
 	if z := ZoneByID(regionID); z != nil {

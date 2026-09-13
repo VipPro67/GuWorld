@@ -1,0 +1,203 @@
+id,name,type,max_hp,base_attack,base_defense,gu_inventory,item_inventory,dao_marks,path_masteries,ai_profile,loot_table_id,description,is_active
+boss_dan_qing_scholar,Đan Thanh Đại Họa Sư,Boss,2500,190,125,[],{},{},{},beast_aggressive,loot_boss_dan_qing_scholar,"Cổ sư Họa đạo ngũ chuyển đỉnh phong, vẽ tranh xuất quỷ nhập thần tạo ra bức họa trục tuyệt thế.",True
+boss_wolf_king,Vạn Thú Cuồng Lang Vương,Boss,650,45,20,[],{},{},{},boss_balanced,loot_boss_wolf_king,Thủ lĩnh tối cao của Lang Triều Thanh Mao Sơn gầm thét triệu hoán vạn thú.,True
+monster_abyssal_ghost_scorpion,U Minh Thần Hạt,Elite,5500,420,310,[],{},{},{},beast_basic,loot_monster_abyssal_ghost_scorpion,Bọ cạp u minh thượng cổ canh giữ cánh cổng Sinh Tử Môn.,True
+monster_ancient_blade_spirit_asura,Thượng Cổ Đao Phách Tu La,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_blade_spirit_asura,"Tu la sinh ra từ chiến trường thượng cổ, cầm đao xé rách hồn phách chứa đao phách tiên tủy.",True
+monster_ancient_blood_golem,Cổ Huyết Nham Ma,Elite,600,65,28,[],{},{},{},beast_basic,loot_monster_ancient_blood_golem,Nham thạch ngưng tụ huyết khí ngàn năm xuất hiện tại các vùng đất Huyết đạo cổ đại.,True
+monster_ancient_calamity_destroyer,Thượng Cổ Diệt Thế Viêm Ma,Elite,1750,154,98,[],{},{},{},beast_basic,loot_monster_ancient_calamity_destroyer,Viêm ma thượng cổ phun ra tương lôi hỏa diệt thế thiêu rụi tiên khiếu.,True
+monster_ancient_cloud_canvas_dragon,Thượng Cổ Vân Họa Long,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_cloud_canvas_dragon,Thượng cổ long tộc ngự mây dệt lụa thất thải vẽ nên thiên địa phong vân.,True
+monster_ancient_creation_womb_titan,Thượng Cổ Tạo Hóa Thai Thạch Ma,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_creation_womb_titan,Người đá khổng lồ ấp ủ tạo hóa thai thạch trong lồng ngực tự khai sinh sinh mệnh mới.,True
+monster_ancient_desert_ghost_king,Hoang Thú Sa Mạc Quỷ Vương,Boss,3000,220,150,[],{},{},{},boss_aggressive,loot_monster_ancient_desert_ghost_king,Quỷ vương sa mạc hấp thu tiên khí trở thành hoang thú cấp sáu.,True
+monster_ancient_divine_tree_spirit,Thượng Cổ Thần Mộc Tinh,Elite,6800,410,390,[],{},{},{},beast_basic,loot_monster_ancient_divine_tree_spirit,Linh thụ vạn năm nâng đỡ thiên địa ngưng tụ mộc tâm bất hủ.,True
+monster_ancient_dream_lotus_spirit,Thượng Cổ Mộng Liên Tinh,Elite,1750,154,98,[],{},{},{},beast_basic,loot_monster_ancient_dream_lotus_spirit,Linh thảo hoa sen kết tinh từ vạn tầng mộng cảnh nở rộ giữa u minh hư không.,True
+monster_ancient_flying_sword_dragon,Thượng Cổ Phi Kiếm Long,Boss,6500,480,340,[],{},{},{},boss_aggressive,loot_monster_ancient_flying_sword_dragon,Cự long ngậm kiếm khí bay lượn chín tầng trời thi hành thiên luật.,True
+monster_ancient_formation_pillar_titan,Thượng Cổ Trận Cột Cự Nhân,Elite,1750,154,98,[],{},{},{},beast_basic,loot_monster_ancient_formation_pillar_titan,Cự nhân vai vác trận trụ chống đỡ phong ba thiên địa đại trận.,True
+monster_ancient_heaven_stealing_dragon,Thượng Cổ Thâu Thiên Bích Long,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_heaven_stealing_dragon,"Long thú mang đạo ngân Thâu Thiên của Đạo Thiên Ma Tôn, có thể đánh cắp đạo ngân đối thủ.",True
+monster_ancient_lava_python,Thượng Cổ Dung Nham Mãng,Elite,4800,390,280,[],{},{},{},beast_basic,loot_monster_ancient_lava_python,Mãng xà dung nham nuốt lửa địa tâm đột phá thành thượng cổ hoang thú.,True
+monster_ancient_luck_cloud_dragon,Thượng Cổ Kim Vận Long,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_luck_cloud_dragon,Rồng vàng vận đạo uốn lượn mang lại phúc duyên tột bực cho người tiêu diệt.,True
+monster_ancient_mirage_dragon_clam,Thượng Cổ Thận Long Trai,Elite,1750,154,98,[],{},{},{},beast_basic,loot_monster_ancient_mirage_dragon_clam,"Trai rồng thượng cổ chuyển đổi hư thực, nhả ra hạt châu tương hoán không gian.",True
+monster_ancient_mountain_lifting_ape,Thượng Cổ Bạt Sơn Cự Hầu,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_mountain_lifting_ape,"Hầu vương tay nhấc vạn ngọn núi, cốt cách cứng như cương nham bạt sơn.",True
+monster_ancient_myriad_beast_king,Thượng Cổ Vạn Thú Tôn Vương,Boss,7200,490,360,[],{},{},{},boss_aggressive,loot_monster_ancient_myriad_beast_king,Chúa tể muôn loài dã thú cổ xưa nắm lệnh bài ngự thú và thánh huyết nhân đạo.,True
+monster_ancient_nether_reaper,Thượng Cổ U Minh Cốt Ma,Elite,1750,154,98,[],{},{},{},beast_basic,loot_monster_ancient_nether_reaper,Cốt ma vung lưỡi hái tước đoạt sinh mệnh của vạn linh trong hắc ám.,True
+monster_ancient_nine_nether_ice_dragon,Thượng Cổ Cửu U Băng Long,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_nine_nether_ice_dragon,Băng long cất tiếng gầm đóng băng vạn dặm sơn hà tạo thành cực băng tinh thể.,True
+monster_ancient_star_sea_whale,Thượng Cổ Tinh Hải Cự Kình,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_star_sea_whale,"Cá voi bơi qua biển sao tinh hải, chứa đựng tinh hải tủy quý hiếm.",True
+monster_ancient_taotie_devourer,Thượng Cổ Thao Thiết Thú,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_taotie_devourer,"Thần thú Thao Thiết có cái bụng nuốt chửng hải vực, dạ dày bất hoại tiêu hóa vạn vật.",True
+monster_ancient_tribulation_emperor,Thượng Cổ Thiên Kiếp Ma Vương,Boss,3500,266,175,[],{},{},{},beast_aggressive,loot_monster_ancient_tribulation_emperor,Ma vương hội tụ kiếp lôi của thiên kiếp giáng phạt cổ tiên thất chuyển.,True
+monster_ancient_white_gold_golem,Thượng Cổ Bạch Kim Cự Thú,Elite,1750,154,98,[],{},{},{},beast_basic,loot_monster_ancient_white_gold_golem,Cự thú bằng bạch kim cửu thiên thân thể cứng rắn bất hoại trước đao kiếm.,True
+monster_baby_bear,Ấu Hùng,Normal,75,10,4,[],{},{},{},beast_basic,loot_monster_baby_bear,Gấu con ngốc nghếch dã ngoại béo ú nghịch ngợm những hình nộm cỏ do cổ sư bỏ lại.,True
+monster_baby_blood_spider,Huyết Nhện Con,Normal,55,9,2,[],{},{},{},beast_basic,loot_monster_baby_blood_spider,"Nhện huyết non dã ngoại bò quanh cồn cát, nọc độc chưa mạnh nhưng tơ máu dính chặt.",True
+monster_blade_beetle,Thiết Nhận Giáp Trùng,Normal,75,11,8,[],{},{},{},beast_basic,loot_monster_blade_beetle,Bọ cánh cứng với chiếc vỏ cứng như lưỡi đao sắt.,True
+monster_blade_beetle_commander,Trảm Thiết Đao Tướng,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_blade_beetle_commander,"Đao tướng thiết giáp chém sắt như chém bùn, mang đao hồn thiết sa.",True
+monster_blood_bat,Huyết Dực Ma Bức,Elite,300,42,12,[],{},{},{},beast_basic,loot_monster_blood_bat,Dơi hút máu đột biến với đôi cánh đẫm máu gieo rắc kinh hoàng.,True
+monster_blood_hound,Huyết Liệp Khuyển,Normal,140,22,8,[],{},{},{},beast_basic,loot_monster_blood_hound,Chó săn đẫm máu Huyết đạo lang thang vùng sa mạc đỏ Tây Mạc.,True
+monster_blood_lake_python,Tử Sa Huyết Mãng,Elite,360,40,18,[],{},{},{},beast_basic,loot_monster_blood_lake_python,Huyết xà ngâm mình trong hồ cát đỏ Tử Sa Tây Mạc.,True
+monster_blood_sand_scorpion,Huyết Sa Hoàng Kim Hạt,Elite,300,38,22,[],{},{},{},beast_basic,loot_monster_blood_sand_scorpion,"Bọ cạp khổng lồ ẩn nấp dưới cát đỏ Huyết Sa Khâu Tây Mạc, hút máu sinh linh dã thú.",True
+monster_blood_spider,Xích Ti Huyết Chu,Elite,180,26,7,[],{},{},{},beast_basic,loot_monster_blood_spider,Nhện đỏ phun tơ máu kịch độc ẩn nấp trong các động đá ẩm ướt.,True
+monster_blood_sword_asura_lord,Huyết Kiếm Tu La Vương,Boss,39000,2750,1700,[],{},{},{},boss_aggressive,loot_monster_blood_sword_asura_lord,"Ma vương tu la cầm kiếm huyết sát, chém đứt âm dương, mở lối tử môn.",True
+monster_boar_king,Dã Trư Vương,Elite,150,16,8,[],{},{},{},beast_basic,loot_monster_boar_king,Lợn rừng đầu đàn thân hình hộ pháp mang theo sức mạnh một trư.,True
+monster_bone_dog,Cốt Thương Dã Khuyển,Normal,110,18,8,[],{},{},{},beast_basic,loot_monster_bone_dog,Chó săn biến dị toàn thân mọc gai xương nhọn hoắt tại Bạch Cốt Sơn.,True
+monster_bone_general,Bạch Cốt Tướng Quân,Boss,550,42,22,[],{},{},{},boss_balanced,loot_monster_bone_general,Thủ vệ khôi lỗi ngưng tụ từ vạn bộ hài cốt của Bạch Cốt Đạo Nhân.,True
+monster_bone_marrow_golem,Thiên Cốt Nham Ma,Elite,1450,125,110,[],{},{},{},beast_basic,loot_monster_bone_marrow_golem,Cự nhân ngàn năm đúc từ cốt tủy và thạch anh.,True
+monster_cave_centipede,Địa Huyệt Ngô Công,Elite,280,35,14,[],{},{},{},beast_basic,loot_monster_cave_centipede,Rết khổng lồ trăm chân đào hầm dưới lòng đất Nam Cương.,True
+monster_chaos_calamity_boss,Hỗn Độn Thần Ma,Tribulation_Boss,8000,650,150,[],{},{},{},boss_balanced,loot_monster_chaos_calamity_boss,Hỗn Độn Chi Giới xâm lấn sức mạnh hủy diệt toàn bộ thiên địa thế giới.,True
+monster_chimera_beast,Biến Huyễn Dị Thú Khôi,Elite,750,82,50,[],{},{},{},beast_basic,loot_monster_chimera_beast,Dị thú vạn biến hấp thu huyết nhục trăm loài.,True
+monster_clay_boar,Bản Trư,Normal,65,9,3,[],{},{},{},beast_basic,loot_monster_clay_boar,"Heo đất dã ngoại béo tròn thích đằm bùn hắc tất, da dày thô kệch dã ngoại.",True
+monster_cloud_dragon_beast,Vân Long Hộ Vệ Thú,Elite,1300,130,95,[],{},{},{},beast_basic,loot_monster_cloud_dragon_beast,Linh thú hình rồng ẩn hiện trong mây trời ngập tràn bão tố.,True
+monster_collapse_iron_beast,Băng Hoại Hắc Giáp Thú,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_collapse_iron_beast,Thú giáp đen hủy diệt kết cấu địa tầng tạo thành vực sâu sụp đổ.,True
+monster_colored_pigment_spirit,Thạch Thanh Họa Linh,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_colored_pigment_spirit,Tinh linh khoáng thạch đa sắc dùng để điều chế màu vẽ thần bí.,True
+monster_creation_clay_puppet,Tạo Hóa Thổ Khôi Lỗi,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_creation_clay_puppet,Khôi lỗi đất sét có sinh cơ tự sinh trưởng do Tạo Hóa chi đạo ban tặng.,True
+monster_creation_earth_beetle,Tạo Hóa Giáp Trùng,Normal,140,19,15,[],{},{},{},beast_basic,loot_monster_creation_earth_beetle,Bọ cánh cứng sống trong lòng đất ngậm sinh cơ tạo vật.,True
+monster_creation_life_deer,Tạo Hóa Tức Lộc,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_creation_life_deer,"Nai thần bước tới đâu hoa cỏ nở rộ tới đó, tiết ra sinh cơ tức lộ.",True
+monster_creation_sprout_spirit,Tạo Hóa Nha Linh,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_creation_sprout_spirit,Mầm sống sơ sinh mang theo đạo ngân Tạo Hóa tự nhiên.,True
+monster_crescent_crocodile,Nguyệt Nha Bích Ba Ngạc,Elite,340,36,22,[],{},{},{},beast_basic,loot_monster_crescent_crocodile,Cá sấu vảy xanh ẩn mình dưới làn nước lạnh hồ Nguyệt Nha.,True
+monster_dan_qing_crane,Đan Thanh Linh Hạc,Elite,500,44,28,[],{},{},{},beast_basic,loot_monster_dan_qing_crane,"Hạc tiên mỏ đen cánh vẽ tranh, uống mực đan thanh làm thức ăn.",True
+monster_dan_qing_spirit_butterfly,Đan Thanh Mặc Điệp,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_dan_qing_spirit_butterfly,"Loài bướm sinh ra từ mực đan thanh, cánh rực rỡ sắc họa quyển.",True
+monster_dao_spirit,Đạo Linh Hư Ảnh,Elite,520,58,22,[],{},{},{},beast_basic,loot_monster_dao_spirit,Linh thể vô hình ngưng tụ từ đạo quy tắc thiên địa tại Hắc Thiên chứa đựng tinh hoa vạn đạo.,True
+monster_dark_squid,Ám Ảnh Hải Khôi Ô Tặc,Elite,460,50,20,[],{},{},{},beast_basic,loot_monster_dark_squid,Mực khổng lồ phun mực đen phong tỏa tầm nhìn Cổ Sư.,True
+monster_dark_swamp_python,Hắc Thủy U Mãng,Boss,680,50,22,[],{},{},{},boss_balanced,loot_monster_dark_swamp_python,Mãng xà hắc thủy ngàn năm ẩn thân trong vực sâu Âm Lưu Cự Hác.,True
+monster_decay_bone_beetle,Hủ Cốt Giáp Trùng,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_decay_bone_beetle,"Bọ cánh cứng gặm nhấm xương tàn, tiết ra tử khí hủ cốt phấn.",True
+monster_deep_sea_horror,Thâm Hải Cự Thú,Elite,700,68,30,[],{},{},{},beast_basic,loot_monster_deep_sea_horror,Quái vật biển sâu mang kích thước tựa hòn đảo nhỏ.,True
+monster_desert_ghost_boss,Sa Mạc Quỷ Vương,Boss,800,65,24,[],{},{},{},boss_balanced,loot_monster_desert_ghost_boss,Vạn thú hồn vương gầm thét trong bão cát xanh Sa Mạc Thanh Quỷ.,True
+monster_desert_ghost_wraith,Âm Hồn Nhai Quỷ Linh,Normal,180,30,10,[],{},{},{},beast_basic,loot_monster_desert_ghost_wraith,Oán linh sa mạc gào thét bám víu vách đá Âm Hồn Nhai.,True
+monster_desolate_blood_fiend,Sát Lục Hoang Thi,Elite,3000,215,125,[],{},{},{},beast_basic,loot_monster_desolate_blood_fiend,Thi thể hoang thú tẩm huyết hải ngàn năm sinh ra linh trí khát sát.,True
+monster_desolate_cave_centipede,Hoang Thú Địa Huyệt Ngô Công,Elite,2500,180,120,[],{},{},{},beast_basic,loot_monster_desolate_cave_centipede,Địa Huyệt Ngô Công tu luyện ngàn năm lột xác thành Hoang thú cấp sáu.,True
+monster_desolate_creation_spring_turtle,Tạo Hóa Tuyền Hoang Quy,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_creation_spring_turtle,Hoang thú rùa thần mai vác suối nguồn tạo hóa sinh sôi vạn vật.,True
+monster_desolate_death_hydra,Tử Vực Hoang Mãng,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_death_hydra,"Hoang thú cự xà tắm trong minh hà tử thủy, thở ra u lộ tử vực chí độc.",True
+monster_desolate_destruction_rhino,Toái Liệt Hoang Tê,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_destruction_rhino,Tê giác hoang thú một sừng va chạm làm sụp đổ không gian và vỡ nát pháp tắc.,True
+monster_desolate_dream_tapir,Mộng Yểm Hoang Thú,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_dream_tapir,Dị thú ăn mộng dệt nên tiên ty mộng ảo bao trùm tiên khiếu.,True
+monster_desolate_fire_phoenix,Liệt Diễm Hoang Điểu,Elite,2700,225,115,[],{},{},{},beast_basic,loot_monster_desolate_fire_phoenix,Loài chim lửa bất tử bay lượn trên chín tầng mây trắng.,True
+monster_desolate_formation_golem,Hộ Thể Hoang Thạch Ma,Elite,3200,170,160,[],{},{},{},beast_basic,loot_monster_desolate_formation_golem,Khôi lỗi hộ thành bất hoại xây đắp từ linh thạch vạn cổ.,True
+monster_desolate_formless_phantom,Vô Tướng Hoang Ma,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_formless_phantom,"Hoang ma không hình không tướng, biến ảo ngàn vạn hư ảnh khó lòng nắm bắt.",True
+monster_desolate_frost_mammoth,Cực Băng Hoang Tượng,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_frost_mammoth,"Voi ma mút khổng lồ ngự trị vùng cực hàn, ngà voi là thiên cổ băng tủy kết tinh.",True
+monster_desolate_hairy_man_chieftain,Mao Dân Hoang Thú Tù Trưởng,Elite,2800,185,135,[],{},{},{},beast_basic,loot_monster_desolate_hairy_man_chieftain,Tù trưởng người lông cổ xưa nắm giữ thuật luyện đan và nô dịch.,True
+monster_desolate_ink_carp,Tiên Mặc Hoang Cẩm Lý,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_ink_carp,"Cá chép bơi lội trong ao mực tiên gia, quẫy đuôi làm dấy lên sóng mực thần kỳ.",True
+monster_desolate_iron_blade_bear,Trảm Thiết Hoang Hùng,Elite,2900,210,140,[],{},{},{},beast_basic,loot_monster_desolate_iron_blade_bear,Gấu hoang thú khổng lồ vuốt sắc bén như tiên kiếm trảm thiết.,True
+monster_desolate_lightning_tree,Lôi Đình Hoang Thụ,Elite,2600,195,130,[],{},{},{},beast_basic,loot_monster_desolate_lightning_tree,Cây sấm sét hoang dại ngàn năm ngưng kết mộc hạch sấm sét.,True
+monster_desolate_luck_hound,Hoang Thú Chân Dương Vận Khuyển,Elite,2800,200,140,[],{},{},{},beast_basic,loot_monster_desolate_luck_hound,Vận khuyển hoang thú mang vận may cực thịnh của cự dương tiên tôn.,True
+monster_desolate_thief_ape,Đạo Kiếp Hoang Hầu,Elite,1500,132,84,[],{},{},{},beast_basic,loot_monster_desolate_thief_ape,"Khỉ hoang mang đạo ngân Đạo đạo, tay đeo tiên ti sa thâu thiên hoán nhật.",True
+monster_destruction_ant,Toái Diệt Hắc Nghĩ,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_destruction_ant,Loài kiến mang lực chấn động phá toái nham thạch kim loại.,True
+monster_dream_bubble_spirit,Mộng Cảnh Bọt Khí Linh,Normal,480,48,32,[],{},{},{},beast_basic,loot_monster_dream_bubble_spirit,"Bọt khí mộng cảnh trôi bồng bềnh, giam cầm linh hồn kẻ lạc bước.",True
+monster_dream_butterfly,Mộng Huyễn Hoa Điệp,Normal,110,18,9,[],{},{},{},beast_basic,loot_monster_dream_butterfly,Bướm hoa huyễn ảo tạo ra mộng cảnh mê hoặc.,True
+monster_dream_dao_supreme_avatar,Mộng Cảnh Vô Thượng Pháp Thân,Boss,34000,2600,1750,[],{},{},{},boss_aggressive,loot_monster_dream_dao_supreme_avatar,"Hóa thân tối thượng của Mộng Đạo, thâu đoạt tinh tú và hư không.",True
+monster_dream_mist_fox,Mộng Vụ Linh Hồ,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_dream_mist_fox,Hồ ly ẩn hiện trong sương mù mộng cảnh tạo ra ảo giác vô tận.,True
+monster_dream_soul_phantom,Mộng Cảnh Huyễn Ma,Elite,1200,135,80,[],{},{},{},beast_basic,loot_monster_dream_soul_phantom,"Ảo ảnh sinh ra từ mộng cảnh sâu thẳm, nuốt chửng tri thức và cảm xúc.",True
+monster_earth_calamity_boss,Địa Tai Thần Ma,Tribulation_Boss,1000,120,30,[],{},{},{},boss_balanced,loot_monster_earth_calamity_boss,Thần ma sinh ra từ Địa Tai khi Cổ Tiên thăng cấp tiên khiếu.,True
+monster_earth_elemental,Thổ Nguyên Tinh,Normal,70,9,4,[],{},{},{},beast_basic,loot_monster_earth_elemental,"Khôi lỗi đất dã ngoại hình thành từ thổ khí tích tụ trăm năm, cơ thể cứng cáp.",True
+monster_earth_trench_centipede,Địa Câu Thâm Ngô,Boss,900,72,30,[],{},{},{},boss_balanced,loot_monster_earth_trench_centipede,Hoang thú Địa Đạo ngự trị đáy vực sâu nứt gãy của Trung Châu.,True
+monster_east_sea_dragonfish,Đông Hải Thượng Cổ Long Ngư,Boss,1000,85,45,[],{},{},{},boss_balanced,loot_monster_east_sea_dragonfish,"Dị chủng Long Ngư khổng lồ hấp thu Thủy đạo đạo ngân lâu năm tiến hóa, sừng sững bảo hộ Long Ngư Đảo Đông Hải.",True
+monster_evil_cultivator,Ma Đạo Cổ Sư Tán Tu,HumanCultivator,160,22,8,[],{},{},{},beast_basic,loot_monster_evil_cultivator,Tán tu ma đạo chuyên săn giết đồng đạo lấy máu và tài liệu luyện cổ.,True
+monster_featherman_scout,Vũ Nhân Trinh Sát,Normal,100,16,6,[],{},{},{},beast_basic,loot_monster_featherman_scout,Dị nhân người chim bay lượn trên thảo nguyên và tầng mây.,True
+monster_fire_mouse,Ly Hỏa Thử,Normal,50,8,1,[],{},{},{},beast_basic,loot_monster_fire_mouse,Chuột lửa nhỏ dã ngoại mang linh hỏa nhảy nhót tìm kiếm vụn sắt và bột giấy khô làm tổ.,True
+monster_fire_refine_beast,Luyện Diễm Linh Điểu,Elite,380,45,16,[],{},{},{},beast_basic,loot_monster_fire_refine_beast,Chim thần mang ngọn lửa đan đạo tại Bất Bại Cốc Trung Châu.,True
+monster_fire_refine_crab,Luyện Hỏa Bàng Cua,Normal,150,21,16,[],{},{},{},beast_basic,loot_monster_fire_refine_crab,"Cua lửa sống dưới cát nóng, tỏa khói luyện đan.",True
+monster_flower_butterfly,Linh Hoa Điệp,Normal,45,7,1,[],{},{},{},beast_basic,loot_monster_flower_butterfly,"Loài bướm lung linh hút mật hoa Nguyệt Lan dã ngoại, lấp lánh phấn tinh quang.",True
+monster_flying_fox,Thiên Đề Phi Hồ,Normal,160,24,10,[],{},{},{},beast_basic,loot_monster_flying_fox,Cáo bay sải cánh lượn quanh mây mù núi Thiên Đề Sơn.,True
+monster_formation_spirit_grass,Trận Linh Thảo,Normal,60,8,4,[],{},{},{},beast_basic,loot_monster_formation_spirit_grass,Cỏ linh trận pháp hấp thu linh khí trận đạo.,True
+monster_fortune_flow_badger,Lưu Vận Điềm Điêu,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_fortune_flow_badger,"Linh điêu mang vận khí tốt lành, tích trữ đồng tiền cổ vận.",True
+monster_fortune_frost_beast,Hàn Nguyệt Cát Tường Thú,Elite,700,78,55,[],{},{},{},beast_basic,loot_monster_fortune_frost_beast,Dị thú tuyết mang theo ánh trăng bạc và phúc vận.,True
+monster_frost_cicada,Hàn Băng Thiền,Normal,180,22,14,[],{},{},{},beast_basic,loot_monster_frost_cicada,Ve sầu mùa đông mang theo hàn khí lạnh giá.,True
+monster_genesis_lotus_will_avatar,Nguyên Liên Tiên Tôn Họa Ý Thần Thân,Boss,4500,342,225,[],{},{},{},beast_aggressive,loot_monster_genesis_lotus_will_avatar,"Pháp thân cửu chuyển của Nguyên Liên Tiên Tôn, nắm giữ sắc màu sơ khai khai thiên lập địa.",True
+monster_ghost_bat,Quỷ Dơi,Normal,120,22,6,[],{},{},{},beast_basic,loot_monster_ghost_bat,Dơi bóng ma bay lượn quấy nhiễu hang động Vạn Bức Động.,True
+monster_ghost_scorpion,Quỷ Hạt Tử,Elite,380,44,16,[],{},{},{},beast_basic,loot_monster_ghost_scorpion,Bọ cạp bóng ma mang nọc độc trực tiếp công kích linh hồn.,True
+monster_glacial_bone_wolf,Băng Cốt Tuyết Lang,Normal,360,36,24,[],{},{},{},beast_basic,loot_monster_glacial_bone_wolf,Sói tuyết có khung xương bằng băng tủy ngưng kết triệu năm.,True
+monster_gluttonous_pig_emperor,Bách Vị Trư Hoàng,Boss,2500,190,125,[],{},{},{},beast_aggressive,loot_monster_gluttonous_pig_emperor,"Trư hoàng khổng lồ ngự trị hải khẩu, chứa đựng mỹ thực linh tửu dịch thượng phẩm.",True
+monster_gourmet_toad,Bách Vị Linh Cáp,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_gourmet_toad,"Cóc quý nuốt vạn loại mỹ thực, trong bụng tiết ra linh trấp thơm ngát.",True
+monster_grand_calamity_boss,Hạo Kiếp Thần Ma,Tribulation_Boss,3000,300,70,[],{},{},{},boss_balanced,loot_monster_grand_calamity_boss,Hạo kiếp chấn động vạn vật thử thách sinh tử của Bát Chuyển Cổ Tiên.,True
+monster_heaven_law_cloud_beast,Thiên Luật Vân Thú,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_heaven_law_cloud_beast,Dị thú tạo thành từ mây trời và đạo tắc thiên luật nghiêm ngặt.,True
+monster_heaven_order_falcon,Thiên Luật Thần Ưng,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_heaven_order_falcon,"Thần ưng chấp pháp thiên luật, móng vuốt mang theo trật tự thạch.",True
+monster_heaven_sparrow,Thiên Uy Linh Tước,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_heaven_sparrow,Linh tước bay lượn tầng mây mang theo tia thiên uy nhược tức.,True
+monster_heaven_tribulation_boss,Thiên Kiếp Thần Ma,Tribulation_Boss,1800,180,45,[],{},{},{},boss_balanced,loot_monster_heaven_tribulation_boss,Thần ma ngưng tụ từ Thiên Kiếp uy năng hủy thiên diệt địa.,True
+monster_herb_rabbit,Dược Dã Thố,Normal,50,8,2,[],{},{},{},beast_basic,loot_monster_herb_rabbit,Thỏ ngọc hoang dã dã ngoại thường gặm nhấm cỏ tiên tri tâm và tích tụ dược tính trị thương.,True
+monster_hu_tien_fox,Hồ Tiên Biến Hóa Phi Hồ,Elite,360,45,18,[],{},{},{},beast_basic,loot_monster_hu_tien_fox,"Dị chủng phi hồ hấp thu tinh niệm Trí đạo của Hồ Tiên, có khả năng huyễn hóa khôn lường.",True
+monster_immemorial_celestial_star_beast,Thái Cổ Cửu Thiên Tinh Thú,Boss,14500,1000,720,[],{},{},{},boss_aggressive,loot_monster_immemorial_celestial_star_beast,Cự thú tinh tú thái cổ thông hiểu vạn cơ thiên hạ vang ngân tiên nhạc.,True
+monster_immemorial_chaos_ice_beast,Thái Cổ Hỗn Độn Băng Thú,Boss,4000,304,200,[],{},{},{},beast_aggressive,loot_monster_immemorial_chaos_ice_beast,Cổ thú từ thời hồng hoang phong tỏa nghịch lưu hà bằng hỗn độn băng giới.,True
+monster_immemorial_creation_ruin_golem,Thái Cổ Tạo Hóa Diệt Ma,Boss,16000,1050,780,[],{},{},{},boss_aggressive,loot_monster_immemorial_creation_ruin_golem,Khổng ma mang quyền năng sáng thế tạo hóa và hủy diệt vạn vật.,True
+monster_immemorial_divine_feaster,Thái Cổ Bách Vị Thần Ma,Boss,4000,304,200,[],{},{},{},beast_aggressive,loot_monster_immemorial_divine_feaster,"Thần ma Thực đạo thái cổ nuốt chửng tinh hà, mỡ thần tích tụ vạn vị thơm béo.",True
+monster_immemorial_dragon_turtle,Thái Cổ Long Quy Thần Thú,Boss,15000,900,850,[],{},{},{},boss_aggressive,loot_monster_immemorial_dragon_turtle,Thần thú rùa rồng mang trên lưng tức nhưỡng thái cổ chở che thiên địa.,True
+monster_immemorial_dream_phoenix,Thái Cổ Mộng Huyễn Thần Điểu,Boss,14000,980,700,[],{},{},{},boss_aggressive,loot_monster_immemorial_dream_phoenix,Chim thần mộng ảo tự do bay lượn giữa thực tại và giấc mơ.,True
+monster_immemorial_heaven_will_avatar,Thái Cổ Thiên Ý Hóa Thân,Boss,4000,304,200,[],{},{},{},beast_aggressive,loot_monster_immemorial_heaven_will_avatar,"Hóa thân thiên ý ngưng kết từ mệnh số thiên địa, bao bọc bởi vận mệnh tiên mạc.",True
+monster_immemorial_human_ancestor_will,Thái Cổ Nhân Tổ Tàn Niệm,Boss,4000,304,200,[],{},{},{},beast_aggressive,loot_monster_immemorial_human_ancestor_will,"Ý chí tàn lưu của Nhân Tổ thời thượng cổ, mang theo quả tim nhân đức thánh thiện khai sinh nhân đạo.",True
+monster_immemorial_landscape_phoenix,Thái Cổ Giang Sơn Họa Điểu,Boss,4000,304,200,[],{},{},{},beast_aggressive,loot_monster_immemorial_landscape_phoenix,"Phượng hoàng tiên họa mang giang sơn ngũ vực trên đôi cánh, nước mắt là thần mặc vạn cổ.",True
+monster_immemorial_law_ruler_spirit,Thái Cổ Luật Lệnh Thần Thú,Boss,4000,304,200,[],{},{},{},beast_aggressive,loot_monster_immemorial_law_ruler_spirit,"Thần thú trấn giữ pháp đình thiên địa, ban bố đại đạo luật lệnh phiến nghiêm minh.",True
+monster_immemorial_lightning_eel,Thái Cổ Lôi Man Ngư,Boss,12000,850,600,[],{},{},{},boss_aggressive,loot_monster_immemorial_lightning_eel,Thái cổ hoang thú lôi đình mạn ngư chúa tể vùng biển loạn lưu.,True
+monster_immemorial_myriad_jun_titan,Thái Cổ Vạn Quân Thần Ma,Boss,4000,304,200,[],{},{},{},beast_aggressive,loot_monster_immemorial_myriad_jun_titan,"Cự thần lực đạo gánh vác càn khôn vạn quân, tủy xương mang sức mạnh nâng trời khai sơn.",True
+monster_immemorial_soul_beast,Đãng Hồn Thái Cổ Hồn Thú,Boss,2500,210,60,[],{},{},{},boss_balanced,loot_monster_immemorial_soul_beast,Hồn thú khổng lồ hấp thụ chấn động của Đãng Hồn Sơn hồn phách vạn trượng.,True
+monster_immemorial_sword_emperor,Thái Cổ Kiếm Ma Chi Linh,Boss,13500,1100,650,[],{},{},{},boss_aggressive,loot_monster_immemorial_sword_emperor,Kiếm linh ngàn vạn năm dung hợp lôi kiếp và đao tủy trảm phá càn khôn.,True
+monster_iron_bear,Thiết Giáp Hùng,Elite,260,22,22,[],{},{},{},beast_basic,loot_monster_iron_bear,Gấu lớn da bọc giáp đen dày như thép sở hữu cự lực bài sơn đảo hải.,True
+monster_iron_bull,Man Ngưu Thú Vương,Elite,350,45,30,[],{},{},{},beast_basic,loot_monster_iron_bull,"Bò rừng khổng lồ mình đồng da sắt, gân cốt cường tráng vô song.",True
+monster_jade_golem,Ngọc Thạch Cự Nhân,Elite,320,28,26,[],{},{},{},beast_basic,loot_monster_jade_golem,Người đá ngọc bích bảo hộ cơ quan cấm địa Tam Vương Sơn.,True
+monster_kill_intent_puppet,Sát Ý Thiết Khôi Lỗi,Elite,320,48,28,[],{},{},{},beast_basic,loot_monster_kill_intent_puppet,"Khôi lỗi bằng sắt bị sát khí nhập hồn, giết chóc không ngừng.",True
+monster_koi_fish,Cẩm Lý Ngư,Normal,50,6,2,[],{},{},{},beast_basic,loot_monster_koi_fish,"Cá chép gấm rực rỡ dã ngoại bơi lội dưới hồ xuân thủy, vảy rực linh quang.",True
+monster_lava_python,Mãng Xà Dung Nham,Elite,360,42,20,[],{},{},{},beast_basic,loot_monster_lava_python,Mãng xà khổng lồ bơi lội trong dòng dung nham sâu ngàn trượng Địa Câu.,True
+monster_lightning_eel,Lôi Điện Mạn Ngư,Elite,480,60,18,[],{},{},{},beast_basic,loot_monster_lightning_eel,Lươn biển phóng điện cao thế làm tê liệt vạn vật xung quanh.,True
+monster_lightning_wolf,Điện Lang,Normal,90,15,5,[],{},{},{},beast_basic,loot_monster_lightning_wolf,Sói điện bẩm sinh mang điện lưu tốc độ cực nhanh trong mùa lang triều Thanh Mao.,True
+monster_luck_hound,Chân Dương Vận Khuyển,Elite,480,52,25,[],{},{},{},beast_basic,loot_monster_luck_hound,Linh khuyển bảo vệ Bát Thập Bát Giác Chân Dương Lâu mang khí vận nghịch thiên.,True
+monster_meditation_stone_golem,Ngộ Đạo Thạch Ma,Elite,380,40,35,[],{},{},{},beast_basic,loot_monster_meditation_stone_golem,Người đá hấp thụ tuế nguyệt và linh thủy ngộ ra đạo lý.,True
+monster_meteor_firefly,Lưu Tinh Huỳnh Thú,Normal,360,36,24,[],{},{},{},beast_basic,loot_monster_meteor_firefly,"Dị thú phát sáng như sao sa, rơi rớt thiết toái thạch từ trời.",True
+monster_mirage_clam,Thận Lâu Trai,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_mirage_clam,Trai khổng lồ thở ra cát quang tạo thành lầu các hải thị thận lâu.,True
+monster_mirror_turtle,Bình Kính Minh Tưởng Quy,Elite,550,38,36,[],{},{},{},beast_basic,loot_monster_mirror_turtle,Rùa thần ngàn năm mai phẳng như gương soi tại Bình Kính Hải.,True
+monster_myriad_tribulation_boss,Vạn Kiếp Thần Ma,Tribulation_Boss,5000,450,100,[],{},{},{},boss_balanced,loot_monster_myriad_tribulation_boss,Vạn kiếp giáng lâm chỉ có Tôn Giả Cửu Chuyển mới đủ sức đối kháng.,True
+monster_mystic_formation_general,Huyền Trận Vạn Binh Ma,Boss,900,95,65,[],{},{},{},boss_aggressive,loot_monster_mystic_formation_general,Thống lĩnh trận pháp thời cổ mang hào khí anh hùng.,True
+monster_nether_sand_wraith,Sinh Tử Sa Ma,Elite,6500,520,410,[],{},{},{},beast_basic,loot_monster_nether_sand_wraith,Linh hồn cát u minh ngưng kết từ khí tức Sinh Tử Môn.,True
+monster_night_mist,U Dạ Sương,Elite,105,13,5,[],{},{},{},beast_elite,loot_monster_night_mist,"Màn sương lạnh đêm dã ngoại ngưng tụ tinh hoa cực quang, dã thú chạm phải đông cứng.",True
+monster_night_mist_lord,U Dạ Sương Vương,Boss,420,48,30,[],{},{},{},boss_aggressive,loot_monster_night_mist_lord,"Sương đêm ngưng tụ thành linh quỷ, mang theo máu song sinh và dạ sương.",True
+monster_night_wolf,Dạ Lang Thảo Nguyên,Normal,130,20,7,[],{},{},{},beast_basic,loot_monster_night_wolf,Sói săn đêm hung hãn của các bộ lạc thảo nguyên Bắc Nguyên.,True
+monster_nine_heavens_primordial_emperor,Cửu Thiên Nguyên Thủy Thần Hoàng,Boss,35000,2500,1800,[],{},{},{},boss_aggressive,loot_monster_nine_heavens_primordial_emperor,"Thần hoàng tối cao ngự trị cửu thiên, chưởng quản thái dương và phong lôi thiên hạ.",True
+monster_origin_sea_immortal_sovereign,Nguyên Hải Thủy Ma Tôn,Boss,36000,2450,1850,[],{},{},{},boss_aggressive,loot_monster_origin_sea_immortal_sovereign,Cực đạo thủy ma tôn giả khởi phát từ nguyên hải cửu thiên.,True
+monster_phantom_chameleon,Huyễn Sắc Thuẫn Thú,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_phantom_chameleon,Tắc kè biến ảo lớp da bảo vệ theo môi trường xung quanh hoàn hảo.,True
+monster_phantom_smoke_moth,Huyễn Yên Nga,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_phantom_smoke_moth,Bướm đêm hư ảo tỏa ra khói sương mờ mịt mê hoặc đối thủ.,True
+monster_primordial_qi_dragon,Thái Cổ Khí Long Boss,Boss,1800,140,48,[],{},{},{},boss_balanced,loot_monster_primordial_qi_dragon,Hoang thú Khí Đạo Thái Cổ sinh ra từ nguyên khí thuần khiết của Khí Hải.,True
+monster_quicksand_worm,Hoàng Sa Khí Giáp Hạt,Elite,420,48,26,[],{},{},{},beast_basic,loot_monster_quicksand_worm,Bọ cạp khổng lồ giáp vàng chìm nổi trong biển cát lún Lưu Sa Hải.,True
+monster_reverse_flow_spirit,Nghịch Lưu Thủy Linh Boss,Boss,3000,240,80,[],{},{},{},boss_balanced,loot_monster_reverse_flow_spirit,Linh thể sinh ra từ sóng nước Nghịch Lưu Hà phản chấn vạn kiếp sát chiêu.,True
+monster_river_of_time_lord,Quang Âm Chi Chủ,Boss,38000,2400,1900,[],{},{},{},boss_aggressive,loot_monster_river_of_time_lord,"Chủ nhân bí ẩn của sông Thời Gian, nắm giữ khởi nguyên dòng chảy sinh mệnh.",True
+monster_rule_marking_beetle,Quy Củ Giáp Trùng,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_rule_marking_beetle,Trùng giáp có vạch đường kẻ thẳng tắp tự nhiên mang đạo tắc Quy củ.,True
+monster_sand_wraith,Thanh Quỷ Sa,Elite,300,38,14,[],{},{},{},beast_basic,loot_monster_sand_wraith,Hồn thú Sa Mạc Thanh Quỷ ngưng tụ từ oán khí tử sĩ chiến trường.,True
+monster_scholar_puppet,Thư Đồng Khôi Lỗi,Elite,160,24,14,[],{},{},{},beast_basic,loot_monster_scholar_puppet,Khôi lỗi hình thư đồng ghi chép trận pháp và luật tắc.,True
+monster_sea_beast,Loạn Lưu Hải Thú,Normal,350,45,18,[],{},{},{},beast_basic,loot_monster_sea_beast,Thủy quái thích ứng với các dòng nước xoáy hỗn loạn Đông Hải.,True
+monster_shadow_beast,Ám Ảnh Thú,Elite,240,32,12,[],{},{},{},beast_basic,loot_monster_shadow_beast,Dị thú vô hình hòa lẫn trong bóng tối của Âm Lưu Cự Hác.,True
+monster_shadow_glimpse_boss,Lược Ảnh Ma Vương,Boss,650,56,22,[],{},{},{},boss_balanced,loot_monster_shadow_glimpse_boss,Ma vương thống trị Hải Câu Ám Ảnh thoắt ẩn thoắt hiện trong đáy biển.,True
+monster_shadow_spider_cub,Diệu Thủ Ấu Chu,Normal,120,12,8,[],{},{},{},beast_basic,loot_monster_shadow_spider_cub,"Nhện bóng đêm di chuyển không tiếng động, nhả tơ thâu đoạt vật phẩm.",True
+monster_shattering_shock_ore,Chấn Toái Nham Ma,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_shattering_shock_ore,Nham ma có năng lượng chấn động rung chuyển tan nát đất đá xung quanh.,True
+monster_six_headed_serpent,Lục Đầu Xà Vương,Boss,1500,145,90,[],{},{},{},boss_aggressive,loot_monster_six_headed_serpent,Mãng xà sáu đầu hung tợn thống trị đầm lầy chết chóc.,True
+monster_slaughter_pup,Sát Lục Ấu Khuyển,Normal,130,22,12,[],{},{},{},beast_basic,loot_monster_slaughter_pup,"Chó săn non hấp thu sát khí chiến trường, khát máu hung hãn.",True
+monster_snow_yeti,Tuyết Nguyên Nhân Tuyết Ma,Elite,500,55,30,[],{},{},{},beast_basic,loot_monster_snow_yeti,Sinh vật tuyết khổng lồ bảo vệ vùng đất của tộc Người Tuyết Bắc Nguyên.,True
+monster_soul_devourer,Phệ Hồn Trùng,Elite,320,48,10,[],{},{},{},beast_basic,loot_monster_soul_devourer,Bầy bọ chuyên gặm nhấm hồn phách Cổ Sư sa cơ trong sa mạc.,True
+monster_soul_gate_godfiend,Sinh Tử Môn U Hồn Thần Ma,Boss,4000,350,100,[],{},{},{},boss_balanced,loot_monster_soul_gate_godfiend,Thần ma trấn giữ cánh cửa phân định sinh tử của U Hồn Ma Tôn.,True
+monster_sound_golem,Âm Ba Khôi Lỗi,Elite,100,12,5,[],{},{},{},beast_elite,loot_monster_sound_golem,Khôi lỗi kết tinh từ âm thanh cộng hưởng giữa thung lũng dã ngoại gầm vang dã ngoại.,True
+monster_sound_spirit_beast,Âm Ba Linh Thú,Normal,130,18,7,[],{},{},{},beast_basic,loot_monster_sound_spirit_beast,Linh thú phát ra âm thanh dị thường chuyên tụ tập nơi có quặng Âm Thạch.,True
+monster_spirit_deer,Linh Lộc,Elite,110,13,5,[],{},{},{},beast_elite,loot_monster_spirit_deer,"Hươu linh dã ngoại chạy nhanh như gió, mang tiên tính, sừng tỏa ánh huỳnh dã ngoại.",True
+monster_spirit_guardian,Thủ Vệ Sơn Thần,Elite,350,34,24,[],{},{},{},beast_basic,loot_monster_spirit_guardian,Thủ vệ sơn lâm tụ linh khí thiên địa trấn thủ các vùng đất linh mạch.,True
+monster_starlight_beast,Tinh Quang Huỳnh Thú,Elite,350,40,18,[],{},{},{},beast_basic,loot_monster_starlight_beast,Dị thú Tinh Đạo lấp lánh như vạn đốm đom đóm trời đêm Hồ Tiên Phúc Địa.,True
+monster_star_river_serpent,Tinh Hà Linh Xà,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_star_river_serpent,"Xà tinh hấp thụ ánh sao đêm, vảy sáng lấp lánh như dải ngân hà.",True
+monster_stone_ape,Thạch Hầu,Normal,70,12,4,[],{},{},{},beast_basic,loot_monster_stone_ape,Khỉ đá nhanh nhẹn ưa thích cướp bóc đan dược và rượu trúc của Cổ Sư.,True
+monster_stone_man,Thạch Nhân Thổ Cư,Normal,120,14,12,[],{},{},{},beast_basic,loot_monster_stone_man,Dị nhân Thạch Nhân sinh sống dưới lòng đất Nam Cương mang trái tim đất đá.,True
+monster_sword_bird,Trảm Kiếm Điểu,Normal,220,38,12,[],{},{},{},beast_basic,loot_monster_sword_bird,Chim ưng mang lông vũ cứng như kiếm thép tại Lạc Thiên Cốc.,True
+monster_sword_intent_golem,Kiếm Ý Tàn Linh Boss,Boss,850,68,26,[],{},{},{},boss_balanced,loot_monster_sword_intent_golem,Ý chí kiếm đạo bất diệt của Á Tiên Tôn Bạc Thanh ngưng tụ thành hình.,True
+monster_sword_sakura,Kiếm Ý Anh Đào,Elite,100,14,4,[],{},{},{},beast_elite,loot_monster_sword_sakura,"Gốc hoa anh đào tích tụ kiếm ý sắc bén dã ngoại dã dã, cánh hoa rơi buốt giá tựa kiếm khí.",True
+monster_thief_monkey,Đạo Chỉ Linh Hầu,Normal,125,20,10,[],{},{},{},beast_basic,loot_monster_thief_monkey,Khỉ nhanh nhẹn thừa hưởng đạo hạnh Thâu Đạo chuyên trộm cắp.,True
+monster_three_kings_boss,Tam Vương Khôi Lỗi,Boss,750,55,28,[],{},{},{},boss_balanced,loot_monster_three_kings_boss,Thần thông cơ quan lưu lại từ truyền thừa Tam Vương Phúc Địa.,True
+monster_thunder_cloud_eagle,Lôi Vân Thần Ưng,Elite,650,85,45,[],{},{},{},beast_basic,loot_monster_thunder_cloud_eagle,"Đại bàng ngự trị mây sấm, xé rách hư không.",True
+monster_tide_dragon,Thái Cổ Triều Long,Boss,1500,120,45,[],{},{},{},boss_balanced,loot_monster_tide_dragon,Long tộc Thái Cổ hoành hành vùng nước xiết Loạn Lưu Hải.,True
+monster_tomb_death_specter,U Mộ Tử Quỷ,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_tomb_death_specter,"Tử quỷ canh giữ cổ mộ, mọc ra u mộ tử đài hút lấy tinh huyết người sống.",True
+monster_treasure_rat,Kim Ngân Thử,Elite,90,11,4,[],{},{},{},beast_elite,loot_monster_treasure_rat,"Chuột tìm kho báu dã ngoại tinh khôn, chuyên đào bới và gặm nhấm các mạch khoáng thạch.",True
+monster_tribulation_beast,Kiếp Lực Ma Vật,Tribulation_Monster,200,28,8,[],{},{},{},beast_basic,loot_monster_tribulation_beast,Ma vật huyễn hóa từ kiếp lực thiên địa.,True
+monster_unseen_theft_rat,Vô Hình Thâu Khí Thử,Elite,750,66,42,[],{},{},{},beast_basic,loot_monster_unseen_theft_rat,"Chuột trộm vô hình vô ảnh, có thể thâu đoạt nguyên khí trong chớp mắt.",True
+monster_vampire_bat_king,Vạn Bức Ma Vương,Boss,720,62,22,[],{},{},{},boss_balanced,loot_monster_vampire_bat_king,Chúa tể Vạn Bức Động Tây Mạc sở hữu âm ba xé toạc màng nhĩ.,True
+monster_venom_centipede,Bách Độc Ngô Công,Elite,110,14,6,[],{},{},{},beast_elite,loot_monster_venom_centipede,Con rết trăm chân dã ngoại kịch độc ẩn nấp sâu dưới hốc đá mục nát dã ngoại.,True
+monster_void_theft_badger,Không Không Đạo Điêu,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_void_theft_badger,"Linh điêu xé rách hư không, chuyên lấy trộm túi trữ vật của cổ sư.",True
+monster_wandering,Cổ Sư Lang Thang,HumanCultivator,150,20,8,[],{},{},{},beast_basic,loot_monster_wandering,Tán tu Cổ Sư phiêu bạt giang hồ tìm kiếm cơ duyên.,True
+monster_wan_xa_poison_snake,Vạn Xà Cốc Độc Mãng,Normal,200,28,10,[],{},{},{},beast_basic,loot_monster_wan_xa_poison_snake,Loài độc mãng khổng lồ mang kịch độc xà đạo sinh sống tại thung lũng Vạn Xà Nam Cương.,True
+monster_water_serpent,Hải Xà,Elite,500,55,22,[],{},{},{},beast_basic,loot_monster_water_serpent,Rắn biển vảy xanh khổng lồ bơi lội với tốc độ cực hạn.,True
+monster_white_hair_wolf,Bạch Phát Lang,Elite,120,15,5,[],{},{},{},beast_elite,loot_monster_white_hair_wolf,Sói tuyết bờm bạc dã ngoại kiêu hãnh thống lĩnh đàn sói dã ngoại cấp thấp dã ngoại.,True
+monster_wild_boar,Dã Trư,Normal,60,9,3,[],{},{},{},beast_basic,loot_monster_wild_boar,Lợn rừng hoang dã phổ biến tại chân núi Thanh Mao Sơn.,True
+monster_wind_bee,Phong Bạo Độc Phong,Normal,50,11,2,[],{},{},{},beast_basic,loot_monster_wind_bee,Bầy ong gió tại các hẻm núi thu thập Phong Mật bồi dưỡng Hùng Lực Cổ.,True
+monster_wine_monkey,Tửu Cổ Hầu,Normal,60,10,2,[],{},{},{},beast_basic,loot_monster_wine_monkey,"Lũ khỉ nghịch ngợm dã ngoại có bí quyết ủ rượu từ các loại quả dã ngoại, say xỉn suốt ngày.",True
+monster_wine_monkey_king,Hầu Nhi Tửu Vương,Boss,450,52,32,[],{},{},{},boss_aggressive,loot_monster_wine_monkey_king,Vua khỉ ủ ra thứ rượu bốn vị nức tiếng cổ giới.,True
+monster_withered_bone_wraith,Khô Tịch Cốt Linh,Normal,360,36,24,[],{},{},{},beast_basic,loot_monster_withered_bone_wraith,"Hồn cốt khô héo ngàn năm, chạm vào đâu nơi đó tịch diệt sinh cơ.",True
+monster_wolf_brush_golem,Lang Hào Bút Khôi Lỗi,Elite,1000,88,56,[],{},{},{},beast_basic,loot_monster_wolf_brush_golem,Khôi lỗi tạo hình cây bút lông sói vung mực hóa thành kiếm ý bức nhân.,True
+monster_wolf_leader,Bách Thú Độc Lang Vương,Elite,220,25,10,[],{},{},{},beast_basic,loot_monster_wolf_leader,Lang vương thống lĩnh trăm con sói hoang dã móng vuốt mang kịch độc tê liệt.,True
+monster_world_tree_primordial_spirit,Thế Giới Thụ Cổ Linh,Boss,42000,2300,2100,[],{},{},{},boss_aggressive,loot_monster_world_tree_primordial_spirit,"Hồn thiêng của cây Thế Giới cắm rễ vào đại địa, cành lá vươn tới thiên hà.",True
+monster_year_beast_tiger,Thái Cổ Dần Hổ Niên Thú,Boss,2200,180,55,[],{},{},{},boss_balanced,loot_monster_year_beast_tiger,Thái Cổ Niên Thú hình hổ dũng mãnh ngự trị trên dòng sông Quang Âm.,True
+monster_linh_thao_ke,Linh Thảo Kê,Normal,100,15,8,[],{},{},{},beast_basic,loot_monster_linh_thao_ke,"Linh điểu có ngoại hình giống gà dã sinh, thích ăn linh thảo và côn trùng cấp thấp.",True
+monster_doc_ngoc_thu,Độc Ngọc Thú,Elite,2000,120,80,[],{},{},{},beast_aggressive,loot_monster_doc_ngoc_thu,"Quái thú mang giáp ngọc lục bảo độc lạ, nọc độc có thể ăn mòn cả chân nguyên.",True
+monster_thai_co_tinh_linh,Thái Cổ Tinh Linh,Boss,20000,1200,850,[],{},{},{},boss_balanced,loot_monster_thai_co_tinh_linh,Cổ thú tinh linh ngưng tụ từ ánh sáng sao trời vạn năm trong Thái Cổ Tinh Hà.,True

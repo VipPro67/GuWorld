@@ -48,6 +48,8 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 	}
 	if isTribulation {
 		defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
+	} else if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+		defeatMsg = "Thất bại trong trận tranh đoạt Mỏ! May mắn không tổn hại đến bản thể và tài sản."
 	} else {
 		deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 		var winnerID *uuid.UUID
