@@ -407,12 +407,8 @@ func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int) (m
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.GusPct*mult)
-	maxCount := deathPenaltyConfig.GusMaxCount + satKhiLevel*10
 
-	count := int(math.Ceil(float64(len(eligible)) * effectivePct / 100))
-	if count > maxCount {
-		count = maxCount
-	}
+	count := int(math.Ceil(float64(len(eligible)) * effectivePct / 100.0))
 	if count > len(eligible) {
 		count = len(eligible)
 	}
@@ -434,7 +430,7 @@ func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int) (m
 	return remaining, dropped
 }
 
-// dropMaterials samples a portion of the loser's real inventory and removes it. Returns dropped items and human-readable lost lines.
+// dropMaterials samples a portion of the loser's real inventory by percentage and removes it in batch. Returns dropped items and human-readable lost lines.
 func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) ([]DroppedItem, []string) {
 	rows, err := tx.Query(`
 		SELECT item_id, category, quantity
@@ -465,9 +461,8 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.ItemsTypePct*mult)
-	maxPerType := deathPenaltyConfig.ItemsMaxPerType + satKhiLevel*10
 
-	pickCount := int(math.Ceil(float64(len(items)) * effectivePct / 100))
+	pickCount := int(math.Ceil(float64(len(items)) * effectivePct / 100.0))
 	if pickCount > len(items) {
 		pickCount = len(items)
 	}
@@ -476,17 +471,23 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 
 	var dropped []DroppedItem
 	var lost []string
+	itemsByCat := make(map[string]map[string]int64)
+
 	for _, r := range items[:pickCount] {
-		qty := 1 + rand.Intn(maxPerType)
+		// Calculated percentage of stack quantity
+		qty := int(math.Ceil(float64(r.quantity) * effectivePct / 100.0))
 		if qty > r.quantity {
 			qty = r.quantity
 		}
 		if qty <= 0 {
-			continue
+			qty = 1
 		}
-		if err := InventorySvc.RemoveItem(tx, loserID.String(), r.itemID, r.category, int64(qty)); err != nil {
-			continue
+
+		if itemsByCat[r.category] == nil {
+			itemsByCat[r.category] = make(map[string]int64)
 		}
+		itemsByCat[r.category][r.itemID] = int64(qty)
+
 		dropped = append(dropped, DroppedItem{
 			ItemID:   r.itemID,
 			Category: r.category,
@@ -498,10 +499,16 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 		}
 		lost = append(lost, fmt.Sprintf("%dx %s", qty, name))
 	}
+
+	// Batch remove inventory items by category
+	for cat, itemMap := range itemsByCat {
+		_ = InventorySvc.BulkRemoveItems(tx, loserID.String(), cat, itemMap)
+	}
+
 	return dropped, lost
 }
 
-// dropRecipes samples a portion of the loser's unlocked recipes and removes them. Returns dropped recipe IDs and human-readable lost lines.
+// dropRecipes samples a portion of the loser's unlocked recipes by percentage and removes them in batch. Returns dropped recipe IDs and human-readable lost lines.
 func dropRecipes(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) ([]string, []string) {
 	rows, err := tx.Query(`
 		SELECT recipe_id FROM player_recipe_progress
@@ -525,35 +532,29 @@ func dropRecipes(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) (
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.RecipesPct*mult)
-	maxCount := deathPenaltyConfig.RecipesMaxCount + satKhiLevel*10
 
-	pickCount := int(math.Ceil(float64(len(recipeIDs)) * effectivePct / 100))
-	if pickCount > maxCount {
-		pickCount = maxCount
-	}
+	pickCount := int(math.Ceil(float64(len(recipeIDs)) * effectivePct / 100.0))
 	if pickCount > len(recipeIDs) {
 		pickCount = len(recipeIDs)
 	}
 
 	rand.Shuffle(len(recipeIDs), func(i, j int) { recipeIDs[i], recipeIDs[j] = recipeIDs[j], recipeIDs[i] })
 
-	var droppedIDs []string
+	droppedIDs := recipeIDs[:pickCount]
 	var lost []string
-	for _, id := range recipeIDs[:pickCount] {
-		existing, _ := RecipeSvc.Get(tx, loserID.String(), id)
-		if existing == nil {
-			continue
-		}
-		if err := RecipeSvc.Delete(tx, loserID.String(), id); err != nil {
-			continue
-		}
-		droppedIDs = append(droppedIDs, id)
+	for _, id := range droppedIDs {
 		name := id
 		if guDef, ok := models.GetGuAny(id); ok && guDef.Name != "" {
 			name = guDef.Name
 		}
 		lost = append(lost, fmt.Sprintf("Bí phương %s", name))
 	}
+
+	// Batch delete recipes in a single query
+	if len(droppedIDs) > 0 {
+		_ = RecipeSvc.DeleteBatch(tx, loserID.String(), droppedIDs)
+	}
+
 	return droppedIDs, lost
 }
 

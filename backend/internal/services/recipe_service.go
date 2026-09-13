@@ -3,6 +3,8 @@ package services
 import (
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // RecipeProgress represents a player's progress on a single refining recipe.
@@ -97,8 +99,54 @@ func (s *RecipeService) Upsert(tx *sql.Tx, r *RecipeProgress) error {
 	return err
 }
 
+// UpsertBatch inserts or updates multiple recipe progress rows in a single batch query.
+func (s *RecipeService) UpsertBatch(tx *sql.Tx, recipes []*RecipeProgress) error {
+	if len(recipes) == 0 {
+		return nil
+	}
+	if len(recipes) == 1 {
+		return s.Upsert(tx, recipes[0])
+	}
+	playerIDs := make([]string, len(recipes))
+	recipeIDs := make([]string, len(recipes))
+	completionRates := make([]float64, len(recipes))
+	isUnlocked := make([]bool, len(recipes))
+	deduceCounts := make([]int, len(recipes))
+	favorites := make([]bool, len(recipes))
+
+	for i, r := range recipes {
+		playerIDs[i] = r.PlayerID
+		recipeIDs[i] = r.RecipeID
+		completionRates[i] = r.CompletionRate
+		isUnlocked[i] = r.IsUnlocked
+		deduceCounts[i] = r.DeduceCount
+		favorites[i] = r.Favorite
+	}
+
+	_, err := s.exec(tx, `
+		INSERT INTO player_recipe_progress (player_id, recipe_id, completion_rate, is_unlocked, deduce_count, favorite, updated_at)
+		SELECT unnest($1::text[]), unnest($2::text[]), unnest($3::double precision[]), unnest($4::boolean[]), unnest($5::integer[]), unnest($6::boolean[]), NOW()
+		ON CONFLICT (player_id, recipe_id) DO UPDATE SET
+			completion_rate = EXCLUDED.completion_rate,
+			is_unlocked = EXCLUDED.is_unlocked,
+			deduce_count = EXCLUDED.deduce_count,
+			favorite = EXCLUDED.favorite,
+			updated_at = NOW()
+	`, pq.Array(playerIDs), pq.Array(recipeIDs), pq.Array(completionRates), pq.Array(isUnlocked), pq.Array(deduceCounts), pq.Array(favorites))
+	return err
+}
+
 // Delete removes a recipe progress row.
 func (s *RecipeService) Delete(tx *sql.Tx, playerID, recipeID string) error {
 	_, err := s.exec(tx, `DELETE FROM player_recipe_progress WHERE player_id = $1 AND recipe_id = $2`, playerID, recipeID)
+	return err
+}
+
+// DeleteBatch removes multiple recipe progress rows for a player in a single batch query.
+func (s *RecipeService) DeleteBatch(tx *sql.Tx, playerID string, recipeIDs []string) error {
+	if len(recipeIDs) == 0 {
+		return nil
+	}
+	_, err := s.exec(tx, `DELETE FROM player_recipe_progress WHERE player_id = $1 AND recipe_id = ANY($2)`, playerID, pq.Array(recipeIDs))
 	return err
 }

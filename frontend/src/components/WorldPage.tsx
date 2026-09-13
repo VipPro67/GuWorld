@@ -335,10 +335,27 @@ export function WorldPage() {
                 </span>
               </div>
             </div>
-            <div className="text-emerald-400 font-bold text-center mt-1">
-              {currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}
+            <div className="flex flex-col items-center justify-center mt-1">
+              <div className="text-emerald-400 font-bold text-sm flex items-center gap-1.5">
+                <span>{currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}</span>
+              </div>
+              <div className="mt-1">
+                {currentZone?.zone_type === "HUB" || currentZone?.zone_type === "SAFE_ZONE" ? (
+                  <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-md bg-emerald-950/90 text-emerald-400 border border-emerald-500/40 shadow-sm" title="Vùng An Toàn: Nghiêm cấm đồ sát / Không thể PvP">
+                    🛡️ Vùng An Toàn (Cấm PvP)
+                  </span>
+                ) : currentZone?.zone_type === "PVP_ZONE" ? (
+                  <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-md bg-red-950/90 text-red-400 border border-red-500/40 animate-pulse shadow-sm" title="Vùng PvP Nguy Hiểm: Tự do đồ sát, nguy cơ rơi đồ cao!">
+                    ⚔️ Vùng PvP (Tự Do Đồ Sát)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-md bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-sm" title="Vùng Dã Ngoại: Cho phép giao tranh PvP">
+                    ⚠️ Vùng Dã Ngoại (PvP Mở)
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+            <div className="text-[10px] text-zinc-400 font-mono mt-1 text-center">
               X:{Math.round(liveX || gamePlayer.x)} Y:{Math.round(liveY || gamePlayer.y)}
             </div>
           </div>

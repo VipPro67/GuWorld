@@ -589,7 +589,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
     const largeZones = regs.filter((r) => r.zone_type === "NGU_VUC");
     const namedZones = regs.filter((r) => r.zone_type === "KHU_VUC");
-    const hub = regs.filter((r) => r.zone_type === "HUB");
+    const hub = regs.filter((r) => r.zone_type === "HUB" || r.zone_type === "SAFE_ZONE");
+    const pvpZones = regs.filter((r) => r.zone_type === "PVP_ZONE");
 
     const baseColors = [0x2d5f3f, 0x3f5f2d, 0x5f4f2d, 0x4f2d5f, 0x2d3f5f, 0x5f2d3f];
     const colorFor = (idx: number) => baseColors[idx % baseColors.length];
@@ -636,10 +637,21 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const rx = z.min_x, ry = z.min_y, rw = z.max_x - z.min_x + 1, rh = z.max_y - z.min_y + 1;
       const g = new Graphics();
       g.rect(rx, ry, rw, rh);
-      g.fill({ color: 0xfbbf24, alpha: 0.18 });
-      g.stroke({ color: 0xfbbf24, width: 3, alpha: 0.9 });
+      g.fill({ color: 0x10b981, alpha: 0.15 });
+      g.stroke({ color: 0x34d399, width: 3, alpha: 0.9 });
       container.addChild(g);
-      addRegionLabel(z, rx, ry, rw, rh, 0xfde047, 36, "HUB"); // Hub label
+      addRegionLabel(z, rx, ry, rw, rh, 0x6ee7b7, 36, "HUB"); // Hub / Safe label
+    });
+
+    pvpZones.forEach((z) => {
+      if (z.min_x === undefined || z.max_x === undefined || z.min_y === undefined || z.max_y === undefined) return;
+      const rx = z.min_x, ry = z.min_y, rw = z.max_x - z.min_x + 1, rh = z.max_y - z.min_y + 1;
+      const g = new Graphics();
+      g.rect(rx, ry, rw, rh);
+      g.fill({ color: 0xef4444, alpha: 0.20 });
+      g.stroke({ color: 0xf87171, width: 3, alpha: 0.9 });
+      container.addChild(g);
+      addRegionLabel(z, rx, ry, rw, rh, 0xfca5a5, 36, "PVP_ZONE"); // PVP zone label
     });
   }, []);
 

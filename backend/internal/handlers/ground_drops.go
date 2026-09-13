@@ -252,21 +252,27 @@ func LootGroundDrop(c *gin.Context) {
 
 	// 2. Materials & Items
 	if len(loot.Items) > 0 {
+		batchEntries := make([]services.ItemBatchEntry, 0, len(loot.Items))
 		for _, item := range loot.Items {
-			if errAdd := InventorySvc.AddItem(tx, player.ID.String(), item.ItemID, item.Category, int64(item.Quantity)); errAdd != nil {
-				logger.S.Errorf("Failed to add ground drop item %s to player %s: %v", item.ItemID, player.ID, errAdd)
-				continue
-			}
+			batchEntries = append(batchEntries, services.ItemBatchEntry{
+				ItemID:   item.ItemID,
+				Category: item.Category,
+				Quantity: int64(item.Quantity),
+			})
 			itemName := item.ItemID
 			if spec, ok := models.ItemRegistry[item.ItemID]; ok && spec.Name != "" {
 				itemName = spec.Name
 			}
 			logs = append(logs, fmt.Sprintf("%dx %s", item.Quantity, itemName))
 		}
+		if errAdd := InventorySvc.AddItemsBatch(tx, player.ID.String(), batchEntries); errAdd != nil {
+			logger.S.Errorf("Failed to add ground drop items to player %s: %v", player.ID, errAdd)
+		}
 	}
 
 	// 3. Gus
 	if len(loot.Gus) > 0 {
+		newGus := make([]models.GuInstance, 0, len(loot.Gus))
 		for _, g := range loot.Gus {
 			newGu := models.GuInstance{
 				InstanceID: "gu-" + uuid.New().String(),
@@ -276,35 +282,36 @@ func LootGroundDrop(c *gin.Context) {
 				Status:     "ACTIVE",
 				Equipped:   false,
 			}
-			if errGu := db.AddPlayerGu(tx, player.ID.String(), newGu); errGu != nil {
-				logger.S.Errorf("Failed to add looted Gu %s to player %s: %v", g.GuID, player.ID, errGu)
-				continue
-			}
+			newGus = append(newGus, newGu)
 			guName := g.GuID
 			if spec, ok := models.GetGuAny(g.GuID); ok && spec.Name != "" {
 				guName = spec.Name
 			}
 			logs = append(logs, fmt.Sprintf("Cổ trùng [%s]", guName))
 		}
+		if errGu := db.AddPlayerGusBulk(tx, player.ID.String(), newGus); errGu != nil {
+			logger.S.Errorf("Failed to add looted Gus to player %s: %v", player.ID, errGu)
+		}
 	}
 
 	// 4. Recipes
 	if len(loot.Recipes) > 0 {
+		recipesToUpsert := make([]*services.RecipeProgress, 0, len(loot.Recipes))
 		for _, rID := range loot.Recipes {
 			rec := &services.RecipeProgress{
 				PlayerID:   player.ID.String(),
 				RecipeID:   rID,
 				IsUnlocked: true,
 			}
-			if errRec := RecipeSvc.Upsert(tx, rec); errRec != nil {
-				logger.S.Errorf("Failed to add looted recipe %s to player %s: %v", rID, player.ID, errRec)
-				continue
-			}
+			recipesToUpsert = append(recipesToUpsert, rec)
 			recName := rID
 			if guDef, ok := models.GetGuAny(rID); ok && guDef.Name != "" {
 				recName = guDef.Name
 			}
 			logs = append(logs, fmt.Sprintf("Bí phương [%s]", recName))
+		}
+		if errRec := RecipeSvc.UpsertBatch(tx, recipesToUpsert); errRec != nil {
+			logger.S.Errorf("Failed to add looted recipes to player %s: %v", player.ID, errRec)
 		}
 	}
 

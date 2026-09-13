@@ -514,7 +514,7 @@ export const ImmortalApertureView: React.FC = () => {
   const overgrazing = herbCount > plantCount && carnCount === 0 && plantCount > 0;
 
   // Bulk action helpers
-  const bulkCollectableNodes = apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && canCollect(n, aperture?.time_rate ?? 1.0));
+  const bulkCollectableNodes = apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && canCollect(n, effectiveTimeRate));
   const bulkReadyCount = bulkCollectableNodes.length;
   const bulkDamagedNodes = apertureNodes.filter(n => n.is_destroyed || n.hp < n.max_hp);
   const bulkRepairCount = bulkDamagedNodes.length;
@@ -1600,7 +1600,7 @@ return (
                             <div className="text-xs text-slate-400 flex justify-between">
                               <span>Thời gian tích tụ:</span>
                               <span className="text-amber-400 font-semibold">
-                                <CountdownTimer node={selectedNode} timeRate={aperture?.time_rate || 1.0} />
+                                <CountdownTimer node={selectedNode} timeRate={effectiveTimeRate} />
                               </span>
                             </div>
                           )}
@@ -1608,7 +1608,7 @@ return (
                           {/* Collect timing indicator - only for resource nodes */}
                           {!selectedNode.is_destroyed && selectedNode.node_category !== "DEFENSE" && (
                             <div className="pt-2">
-                              {canCollect(selectedNode, aperture?.time_rate) ? (
+                              {canCollect(selectedNode, effectiveTimeRate) ? (
                                 <button
                                   onClick={() => handleCollect(selectedNode.id)}
                                   disabled={actionLoading}
@@ -1843,6 +1843,8 @@ return (
                                   const getItemCountForPath = (pathName: string) => {
                                     const rawPath = pathName.replace(/ Path$/i, '').trim().toLowerCase();
                                     return Object.values(itemDictionary || {}).filter(item => {
+                                      const itemType = (item.type || item.item_type || "").toString();
+                                      if (["Currency", "Consumable"].includes(itemType)) return false;
                                       const itemPaths = parseItemPaths(item.path).map(p => p.toLowerCase().replace(/ path$/i, '').trim());
                                       return itemPaths.includes(rawPath);
                                     }).length;

@@ -3,8 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { GlobalProviders } from "@/components/GlobalProviders";
-import { Analytics } from "@vercel/analytics/next"
-import { DisableDevTools } from "@/components/DisableDevTools";
+//import { Analytics } from "@vercel/analytics/next"
+//import { DisableDevTools } from "@/components/DisableDevTools";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -81,8 +81,8 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <DisableDevTools />
-        <Analytics />
+        {/* <DisableDevTools /> */}
+        {/* <Analytics /> */}
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           <GlobalProviders>{children}</GlobalProviders>
         </ThemeProvider>

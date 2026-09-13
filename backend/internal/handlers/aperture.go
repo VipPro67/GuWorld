@@ -572,6 +572,15 @@ func PlaceApertureNode(c *gin.Context) {
 		return
 	}
 
+	if req.ProdKey != "" {
+		if itemSpec, exists := models.ItemRegistry[req.ProdKey]; exists {
+			if itemSpec.Type == "Currency" || itemSpec.Type == "Consumable" || itemSpec.ItemType == "Currency" || itemSpec.ItemType == "Consumable" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể sản xuất vật phẩm loại Currency hoặc Consumable trong mỏ tài nguyên"})
+				return
+			}
+		}
+	}
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -888,12 +897,14 @@ func CollectApertureResource(c *gin.Context) {
 	var lastCol sql.NullTime
 	var areaSize int64
 	var timeRate float64
+	var pTSM float64
 	err = tx.QueryRow(`
-		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, ''), COALESCE(n.level, 1)
+		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, ''), COALESCE(n.level, 1), p.time_speed_multiplier
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
+		JOIN players p ON a.player_id = p.id
 		WHERE n.id = $1 AND a.player_id = $2
-	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey, &n.Level)
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey, &n.Level, &pTSM)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
@@ -911,6 +922,17 @@ func CollectApertureResource(c *gin.Context) {
 	if timeRate <= 0 {
 		timeRate = 1.0
 	}
+	tsm := pTSM
+	if tsm <= 0 {
+		tsm = 1.0
+	}
+	if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
+		tsm += bonus
+	}
+	effectiveTimeRate := timeRate * tsm
+	if effectiveTimeRate <= 0 {
+		effectiveTimeRate = 1.0
+	}
 
 	// 2. Validate production timer
 	lastTime := time.Now().Add(-24 * time.Hour) // default
@@ -919,11 +941,11 @@ func CollectApertureResource(c *gin.Context) {
 	}
 
 	elapsed := time.Since(lastTime)
-	elapsedInternal := time.Duration(float64(elapsed) * timeRate)
+	elapsedInternal := time.Duration(float64(elapsed) * effectiveTimeRate)
 	requiredHoursInternal := time.Duration(n.ProductionIntervalHours) * time.Hour
 	if elapsedInternal < requiredHoursInternal {
 		remainingInternal := requiredHoursInternal - elapsedInternal
-		remainingReal := time.Duration(float64(remainingInternal) / timeRate)
+		remainingReal := time.Duration(float64(remainingInternal) / effectiveTimeRate)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Mỏ đang tích lũy tài nguyên, vui lòng đợi thêm %d phút.", int(remainingReal.Minutes()))})
 		return
 	}
@@ -1273,15 +1295,30 @@ func CollectAllApertureResources(c *gin.Context) {
 	var apertureID uuid.UUID
 	var areaSize int64
 	var timeRate float64
+	var pTSM float64
 	err = tx.QueryRow(`
-		SELECT id, area_size, COALESCE(time_rate, 1.0) FROM immortal_apertures WHERE player_id = $1
-	`, playerID).Scan(&apertureID, &areaSize, &timeRate)
+		SELECT a.id, a.area_size, COALESCE(a.time_rate, 1.0), p.time_speed_multiplier
+		FROM immortal_apertures a
+		JOIN players p ON a.player_id = p.id
+		WHERE a.player_id = $1
+	`, playerID).Scan(&apertureID, &areaSize, &timeRate, &pTSM)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Tiên Khiếu."})
 		return
 	}
 	if timeRate <= 0 {
 		timeRate = 1.0
+	}
+	tsm := pTSM
+	if tsm <= 0 {
+		tsm = 1.0
+	}
+	if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
+		tsm += bonus
+	}
+	effectiveTimeRate := timeRate * tsm
+	if effectiveTimeRate <= 0 {
+		effectiveTimeRate = 1.0
 	}
 
 	// 2. Load all active nodes
@@ -1337,7 +1374,7 @@ func CollectAllApertureResources(c *gin.Context) {
 		if intervalHours <= 0 {
 			intervalHours = 1
 		}
-		intervalDuration := time.Duration(float64(intervalHours*3600)/timeRate) * time.Second
+		intervalDuration := time.Duration(float64(intervalHours*3600)/effectiveTimeRate) * time.Second
 
 		var elapsed time.Duration
 		if n.LastCollectedAt != nil {
