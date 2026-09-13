@@ -125,8 +125,110 @@ type ApertureVariantHuman struct {
 	Oppression     float64   `json:"oppression"`
 	RebellionRate  float64   `json:"rebellion_rate"`
 	LaborIntensity string    `json:"labor_intensity"` // 'LOW', 'NORMAL', 'HIGH', 'EXPLOIT'
+	Prosperity     float64   `json:"prosperity"`
+	GuMasterCount  int       `json:"gu_master_count"`
+	GuImmortalCount int      `json:"gu_immortal_count"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// ApertureNodeWorker represents variant human workers assigned to a resource node.
+type ApertureNodeWorker struct {
+	ID                string    `json:"id"`
+	NodeID            string    `json:"node_id"`
+	VariantHumanID    string    `json:"variant_human_id"`
+	AssignedPopulation int      `json:"assigned_population"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// RefinementMode constants for aperture_refinement_queue.
+const (
+	RefineModeFixedCount       = "FIXED_COUNT"
+	RefineModeUntilSuccess     = "UNTIL_SUCCESS"
+	RefineModeUntilMaterial    = "UNTIL_MATERIAL_EMPTY"
+	RefineModeMaintainStock    = "MAINTAIN_STOCK"
+)
+
+// ApertureRefinementQueue represents an auto-refinement job for variant humans.
+type ApertureRefinementQueue struct {
+	ID              string    `json:"id"`
+	ApertureID      string    `json:"aperture_id"`
+	RecipeID        string    `json:"recipe_id"`
+	Mode            string    `json:"mode"`     // FIXED_COUNT, UNTIL_SUCCESS, UNTIL_MATERIAL_EMPTY, MAINTAIN_STOCK
+	TargetQuantity  int       `json:"target_quantity"`
+	CurrentQuantity int       `json:"current_quantity"`
+	Priority        int       `json:"priority"`
+	Enabled         bool      `json:"enabled"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// ApertureVariantSettlement represents a settlement for a variant human race.
+type ApertureVariantSettlement struct {
+	ID                 string    `json:"id"`
+	ApertureID         string    `json:"aperture_id"`
+	Race               string    `json:"race"`
+	Name               string    `json:"name"`
+	SettlementType     string    `json:"settlement_type"` // VILLAGE, TOWN, CITY, TRIBE
+	PopulationCapacity int       `json:"population_capacity"`
+	Housing            int       `json:"housing"`
+	FoodStorage        int       `json:"food_storage"`
+	Security           float64   `json:"security"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// ApertureVariantEvent represents a society event (rebellion, genius birth, etc.).
+type ApertureVariantEvent struct {
+	ID          string     `json:"id"`
+	ApertureID  string     `json:"aperture_id"`
+	EventType   string     `json:"event_type"`   // REBELLION, GENIUS_BIRTH, IMMORTAL_ASCENSION, MIGRATION, DISASTER
+	Race        string     `json:"race"`
+	Severity    string     `json:"severity"`      // LOW, MEDIUM, HIGH, CRITICAL
+	Description string     `json:"description"`
+	Effects     string     `json:"effects"`       // JSONB
+	Resolved    bool       `json:"resolved"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ResolvedAt  *time.Time `json:"resolved_at,omitempty"`
+}
+
+// Society event type constants.
+const (
+	EventTypeRebellion      = "REBELLION"
+	EventTypeGeniusBirth    = "GENIUS_BIRTH"
+	EventTypeImmortalAscend = "IMMORTAL_ASCENSION"
+	EventTypeMigration      = "MIGRATION"
+	EventTypeDisaster       = "DISASTER"
+	EventTypeFoodShortage   = "FOOD_SHORTAGE"
+)
+
+// NPC role/path constants.
+const (
+	NPCRoleNone     = "NONE"
+	NPCRoleRefiner  = "REFINER"
+	NPCRoleMiner    = "MINER"
+	NPCRoleFarmer   = "FARMER"
+	NPCRoleScholar  = "SCHOLAR"
+	NPCRoleGeneral  = "GENERAL"
+	NPCRoleGovernor = "GOVERNOR"
+)
+
+// ApertureVariantNPC represents a named Gu Master / Gu Immortal NPC within an aperture.
+type ApertureVariantNPC struct {
+	ID          string    `json:"id"`
+	ApertureID  string    `json:"aperture_id"`
+	Race        string    `json:"race"`
+	Name        string    `json:"name"`
+	Rank        int       `json:"rank"`
+	SubRank     int       `json:"sub_rank"`
+	Path        string    `json:"path"`
+	Role        string    `json:"role"`
+	Loyalty     float64   `json:"loyalty"`
+	Talent      float64   `json:"talent"`
+	Status      string    `json:"status"` // IDLE, REFINING, MINING, TRAINING, DEAD
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type TribTypeConfig struct {

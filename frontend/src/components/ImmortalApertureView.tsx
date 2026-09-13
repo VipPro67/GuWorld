@@ -168,6 +168,9 @@ export const ImmortalApertureView: React.FC = () => {
     daoMarks,
     apertureNodes,
     variantHumans,
+    settlements,
+    variantNPCs,
+    refinementQueue,
     activeTribulation,
     itemDictionary,
     actionLoading,
@@ -175,6 +178,9 @@ export const ImmortalApertureView: React.FC = () => {
     fetchDaoMarks,
     fetchApertureNodes,
     fetchVariantHumans,
+    fetchSettlements,
+    fetchNPCs,
+    fetchRefinementQueue,
     placeApertureNode,
     collectResourceNode,
     collectAllResourceNodes,
@@ -195,12 +201,13 @@ export const ImmortalApertureView: React.FC = () => {
     dictionaryLoaded,
   } = useGameStore();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "ecosystem" | "variant_humans">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "variant_humans">("overview");
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [showHealMenu, setShowHealMenu] = useState(false);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
+  const [variantSubTab, setVariantSubTab] = useState<"overview" | "settlements" | "npcs" | "refine" | "ecosystem">("overview");
   const [buildCategory, setBuildCategory] = useState<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense">("khu_trong");
   const [pendingBuildZone, setPendingBuildZone] = useState<string | null>(null);
   const [buildPath, setBuildPath] = useState<string>("Wisdom Path");
@@ -252,9 +259,12 @@ export const ImmortalApertureView: React.FC = () => {
       fetchApertureNodes();
     } else if (activeTab === "tribulation") {
       fetchActiveTribulation();
-    } else if (activeTab === "ecosystem" || activeTab === "variant_humans") {
+    } else if (activeTab === "variant_humans") {
       fetchVariantHumans();
       fetchApertureNodes();
+      fetchSettlements();
+      fetchNPCs();
+      fetchRefinementQueue();
     }
   }, [activeTab]);
 
@@ -588,7 +598,6 @@ return (
           { id: "overview", label: "Tổng Quan", icon: <Activity className="w-4 h-4 shrink-0" />, disabled: false },
           { id: "map", label: "Bản Đồ & Phòng Thủ", icon: <MapIcon className="w-4 h-4 shrink-0" />, disabled: false, badge: aperture?.state === "TRIBULATION_ACTIVE" ? <span className="absolute top-0 right-0 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span></span> : undefined },
           { id: "dao", label: "Bảng Đạo Ngân", icon: <Layers className="w-4 h-4 shrink-0" />, disabled: false },
-          { id: "ecosystem", label: "Hệ Sinh Thái", icon: <Leaf className="w-4 h-4 shrink-0" />, disabled: false },
           { id: "variant_humans", label: "Dị Nhân", icon: <Users className="w-4 h-4 shrink-0" />, disabled: false },
         ]}
         activeId={activeTab}
@@ -2137,480 +2146,405 @@ return (
         )}
 
 
-
-        {/* TAB 5: ECOSYSTEM */}
-        {activeTab === "ecosystem" && (
-          <div className="space-y-6">
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center gap-2">
-                  <Leaf className="w-5 h-5 text-emerald-400" />
-                  Quản Lý Chuỗi Sinh Thái Tiên Khiếu
-                </h2>
-                <p className="text-sm text-slate-400 mt-2 leading-relaxed">
-                  Tiên Khiếu là một hệ sinh thái thu nhỏ. Đạo hữu phải duy trì sự cân bằng giữa các loài Thực vật, Thú ăn cỏ, Thú ăn thịt và Dị nhân để tối ưu hóa sản lượng tài nguyên và tránh tàn phá Tiên Khiếu.
-                </p>
-              </div>
-
-              {/* Status Banner */}
-              {(() => {
-                if (starvationHerb) {
-                  return (
-                    <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-start gap-3 text-rose-300">
-                      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 animate-pulse text-rose-400" />
-                      <div>
-                        <div className="font-bold text-sm">Thú Ăn Cỏ Đang Chết Đói!</div>
-                        <div className="text-xs mt-1">Không có bất kỳ nguồn Thực vật nào đang hoạt động. Bãi Chăn Thả Hươu Linh bị giảm 80% hiệu năng sản sinh tài nguyên. Hãy trồng thêm thực vật ngay lập tức!</div>
-                      </div>
-                    </div>
-                  );
-                }
-                if (starvationCarn) {
-                  return (
-                    <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-start gap-3 text-rose-300">
-                      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 animate-pulse text-rose-400" />
-                      <div>
-                        <div className="font-bold text-sm">Thú Ăn Thịt Đang Chết Đói!</div>
-                        <div className="text-xs mt-1">Không có bãi chăn thả Thú ăn cỏ nào khả dụng. Hang Sói Bạc bị giảm 80% hiệu năng sản sinh tài nguyên do cạn kiệt thức ăn. Hãy chăn thả Thú ăn cỏ!</div>
-                      </div>
-                    </div>
-                  );
-                }
-                if (overgrazing) {
-                  return (
-                    <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-3 text-amber-300">
-                      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 animate-pulse text-amber-400" />
-                      <div>
-                        <div className="font-bold text-sm">Hiện Tượng Quá Tải Gặm Nhấm!</div>
-                        <div className="text-xs mt-1">Dân số Thú ăn cỏ vượt quá lượng Thực vật hiện có, và thiếu Thú ăn thịt để kiểm soát. Các nguồn Thực vật bị giảm 50% hiệu suất và sẽ mất 5% độ bền (HP) mỗi năm Tiên Khiếu. Hãy bổ sung Thú ăn thịt hoặc giảm bớt Thú ăn cỏ!</div>
-                      </div>
-                    </div>
-                  );
-                }
-                if (plantCount > 0 || herbCount > 0 || carnCount > 0) {
-                  return (
-                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-start gap-3 text-emerald-300">
-                      <Check className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
-                      <div>
-                        <div className="font-bold text-sm">Hệ Sinh Thái Cân Bằng</div>
-                        <div className="text-xs mt-1">Chuỗi thức ăn đang vận hành ổn định. {herbCount > 0 && !overgrazing && "Nhờ thú ăn cỏ chăn thả tự nhiên, các nguồn Thực vật nhận được phân hữu cơ giúp gia tăng +25% sản lượng."}</div>
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-center text-xs text-slate-500">
-                    Hệ sinh thái trống rỗng. Hãy xây dựng các điểm tài nguyên Thực vật để khởi đầu sinh mệnh.
-                  </div>
-                );
-              })()}
-
-              {/* Grid Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-xs text-slate-400 font-medium">Thực Vật (Plants)</span>
-                    <div className="text-2xl font-black text-emerald-400 flex items-baseline gap-1">
-                      {plantCount} <span className="text-xs text-slate-500 font-medium">mỏ</span>
-                    </div>
-                    <span className="text-[10px] text-slate-500">Nguyệt Lan, Thanh Trúc, Kiếm Diệp</span>
-                  </div>
-                  <Leaf className="w-10 h-10 text-emerald-500/20 shrink-0" />
-                </div>
-
-                <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-xs text-slate-400 font-medium">Thú Ăn Cỏ (Herbivores)</span>
-                    <div className="text-2xl font-black text-amber-400 flex items-baseline gap-1">
-                      {herbCount} <span className="text-xs text-slate-500 font-medium">mỏ</span>
-                    </div>
-                    <span className="text-[10px] text-slate-500">Bãi chăn thả Hươu Linh</span>
-                  </div>
-                  <span className="text-3xl select-none opacity-20 shrink-0">🦌</span>
-                </div>
-
-                <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-xs text-slate-400 font-medium">Thú Ăn Thịt (Carnivores)</span>
-                    <div className="text-2xl font-black text-rose-400 flex items-baseline gap-1">
-                      {carnCount} <span className="text-xs text-slate-500 font-medium">mỏ</span>
-                    </div>
-                    <span className="text-[10px] text-slate-500">Hang Sói Bạc dã hoang</span>
-                  </div>
-                  <span className="text-3xl select-none opacity-20 shrink-0">🐺</span>
-                </div>
-              </div>
-
-              {/* Food Chain Diagram */}
-              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-6 space-y-4">
-                <h3 className="text-sm font-bold text-slate-200">Sơ Đồ Chuỗi Cung Ứng Thức Ăn</h3>
-                
-                <div className="flex flex-col md:flex-row items-center justify-center gap-6 py-4">
-                  {/* Plant Card */}
-                  <div className={`w-full md:w-56 p-4 rounded-xl border text-center space-y-2 ${
-                    plantCount === 0 ? "bg-slate-950/40 border-slate-800 text-slate-500" :
-                    overgrazing ? "bg-amber-950/20 border-amber-500/40 text-amber-300" :
-                    "bg-emerald-950/20 border-emerald-500/40 text-emerald-300"
-                  }`}>
-                    <Leaf className="w-6 h-6 mx-auto mb-1 opacity-80" />
-                    <div className="font-bold text-xs uppercase tracking-wider">Mức 1: Thực Vật</div>
-                    <div className="text-lg font-black">{plantCount} Mỏ Hoạt Động</div>
-                    <div className="text-[10px] opacity-75">Tạo Lương Thực & Nguyên Liệu</div>
-                  </div>
-
-                  {/* Arrow 1 */}
-                  <div className="text-slate-600 font-bold text-lg rotate-90 md:rotate-0">➔</div>
-
-                  {/* Herbivore Card */}
-                  <div className={`w-full md:w-56 p-4 rounded-xl border text-center space-y-2 ${
-                    herbCount === 0 ? "bg-slate-950/40 border-slate-800 text-slate-500" :
-                    starvationHerb ? "bg-rose-950/20 border-rose-500/40 text-rose-300" :
-                    "bg-amber-950/20 border-amber-500/40 text-amber-300"
-                  }`}>
-                    <span className="text-xl block mb-1">🦌</span>
-                    <div className="font-bold text-xs uppercase tracking-wider">Mức 2: Thú Ăn Cỏ</div>
-                    <div className="text-lg font-black">{herbCount} Mỏ Hoạt Động</div>
-                    <div className="text-[10px] opacity-75">
-                      {starvationHerb ? "Đang đói khát" : "Cần 1+ Thực Vật"}
-                    </div>
-                  </div>
-
-                  {/* Arrow 2 */}
-                  <div className="text-slate-600 font-bold text-lg rotate-90 md:rotate-0">➔</div>
-
-                  {/* Carnivore Card */}
-                  <div className={`w-full md:w-56 p-4 rounded-xl border text-center space-y-2 ${
-                    carnCount === 0 ? "bg-slate-950/40 border-slate-800 text-slate-500" :
-                    starvationCarn ? "bg-rose-950/20 border-rose-500/40 text-rose-300" :
-                    "bg-rose-950/10 border-rose-500/30 text-rose-300"
-                  }`}>
-                    <span className="text-xl block mb-1">🐺</span>
-                    <div className="font-bold text-xs uppercase tracking-wider">Mức 3: Thú Ăn Thịt</div>
-                    <div className="text-lg font-black">{carnCount} Mỏ Hoạt Động</div>
-                    <div className="text-[10px] opacity-75">
-                      {starvationCarn ? "Đang đói khát" : "Cần 1+ Thú Ăn Cỏ"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Food & Population Balance Card */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Food balance info */}
-                <div className="bg-slate-950/50 p-5 rounded-xl border border-slate-800 space-y-4">
-                  <h3 className="font-bold text-sm text-slate-200">Cung Cấp Lương Thực Dị Nhân</h3>
-                  <p className="text-xs text-slate-400">
-                    Dị nhân định cư trong Tiên Khiếu cần lương thực từ Thực vật và Thú ăn cỏ để sinh sống. Thiếu lương thực sẽ làm giảm nghiêm trọng Hạnh Phúc (-10/năm) và tăng nguy cơ nổi loạn.
-                  </p>
-
-                  <div className="space-y-3 pt-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400 font-medium">Tổng sản lượng lương thực:</span>
-                      <span className="text-emerald-400 font-bold">{totalFoodProd} đơn vị / năm</span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400 font-medium">Tiêu thụ của Dị nhân ({totalVariantHumanPop} người):</span>
-                      <span className="text-rose-400 font-bold">{foodNeeded.toFixed(2)} đơn vị / năm</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-850 flex justify-between items-center text-xs">
-                      <span className="text-slate-400 font-medium">Cân đối lương thực:</span>
-                      {foodSurplus ? (
-                        <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold rounded">
-                          Thặng Dư (+2 Hạnh Phúc/năm)
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold rounded animate-pulse">
-                          Thiếu Thụt (-10 Hạnh Phúc/năm)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Conflicts summary */}
-                <div className="bg-slate-950/50 p-5 rounded-xl border border-slate-800 space-y-3">
-                  <h3 className="font-bold text-sm text-slate-200 flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                    Cơ Chế Xung Đột Đạo Ngân Địa Hình
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Đạo ngân của các thuộc tính đối nghịch đặt cạnh nhau (khoảng cách Chebyshev ≤ 2) sẽ gây bài xích, giảm 50% sản lượng và gây 10% sát thương HP/năm lên các điểm tài nguyên đó.
-                  </p>
-
-                  {/* Conflict list */}
-                  {(() => {
-                    const conflictsList: { n1: ApertureResourceNode; n2: ApertureResourceNode }[] = [];
-                    const checkedPairs = new Set<string>();
-
-                    apertureNodes.forEach((n1) => {
-                      if (n1.is_destroyed) return;
-                      const conflictingOther = checkConflict(n1, apertureNodes);
-                      if (conflictingOther) {
-                        const pairKey = n1.id < conflictingOther.id ? `${n1.id}:${conflictingOther.id}` : `${conflictingOther.id}:${n1.id}`;
-                        if (!checkedPairs.has(pairKey)) {
-                          checkedPairs.add(pairKey);
-                          conflictsList.push({ n1, n2: conflictingOther });
-                        }
-                      }
-                    });
-
-                    if (conflictsList.length === 0) {
-                      return (
-                        <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-emerald-400 text-xs text-center font-medium">
-                          Tuyệt vời! Tiên Khiếu không có xung đột Đạo ngân nào.
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
-                        {conflictsList.map(({ n1, n2 }, idx) => (
-                          <div key={idx} className="p-2 bg-rose-950/20 border border-rose-900/30 rounded-lg text-[10px] text-rose-300 flex justify-between items-center gap-2">
-                            <span>
-                              <strong>{n1.name}</strong> ({n1.x},{n1.y}) ❌ <strong>{n2.name}</strong> ({n2.x},{n2.y})
-                            </span>
-                            <span className="text-rose-500 font-bold shrink-0">Xung Đột</span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6: VARIANT HUMANS */}
+        {/* TAB 5: VARIANT HUMANS — Dinh Nhan Tien Khieu */}
         {activeTab === "variant_humans" && (
           <div className="space-y-6">
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-amber-400" />
-                  Bảng Điều Khiển Bộ Tộc Dị Nhân
-                </h2>
-                <p className="text-sm text-slate-400 mt-2 leading-relaxed">
-                  Nuôi dưỡng, cai quản các tộc Dị nhân định cư trong Tiên Khiếu. Thiết lập cường độ lao động để gia tăng sản xuất hoặc ổn định hạnh phúc của bộ tộc nhằm triệt tiêu nguy cơ nổi loạn.
-                </p>
+            {/* Sub-tab Navigation */}
+            <GameTabs
+              items={[
+                { id: "overview", label: "Tổng Quan", icon: <Users className="w-4 h-4 shrink-0" /> },
+                { id: "settlements", label: "Thành Trì", icon: <MapIcon className="w-4 h-4 shrink-0" /> },
+                { id: "npcs", label: "Cổ Sư", icon: <Sparkles className="w-4 h-4 shrink-0" /> },
+                { id: "refine", label: "Luyện Cổ Tự Động", icon: <Flame className="w-4 h-4 shrink-0" /> },
+                { id: "ecosystem", label: "Sinh Thái", icon: <Leaf className="w-4 h-4 shrink-0" /> },
+              ]}
+              activeId={variantSubTab}
+              onChange={(id) => setVariantSubTab(id as any)}
+              variant="pills"
+              size="sm"
+              scrollable={true}
+            />
+
+            {/* SUB-TAB: OVERVIEW — Race Cards */}
+            {variantSubTab === "overview" && (
+              <div className="space-y-6">
+                <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-amber-400" />
+                      Bảng Điều Khiển Bộ Tộc Dị Nhân
+                    </h2>
+                    <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+                      Nuôi dưỡng, cai quản các tộc Dị nhân định cư trong Tiên Khiếu. Thiết lập cường độ lao động để gia tăng sản xuất hoặc ổn định hạnh phúc của bộ tộc nhằm triệt tiêu nguy cơ nổi loạn.
+                    </p>
+                  </div>
+
+                  {/* Variant Humans List */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {(() => {
+                      const racesList: {
+                        race: 'HAIRY_MAN' | 'ROCKMAN' | 'FEATHERMAN';
+                        name: string;
+                        desc: string;
+                        icon: string;
+                        settlementType: string;
+                        buffLabel: string;
+                      }[] = [
+                        {
+                          race: "HAIRY_MAN",
+                          name: "Tộc Người Lông",
+                          desc: "Kẻ lập dị giỏi luyện Cổ trùng. Dân số sinh ra nô lệ giúp giảm thời gian và chi phí luyện Cổ.",
+                          icon: "🧔",
+                          settlementType: "HAIRY_MAN_SETTLEMENT",
+                          buffLabel: "Tạo nguyên liệu: Nô Lệ Người Lông"
+                        },
+                        {
+                          race: "ROCKMAN",
+                          name: "Tộc Người Đá",
+                          desc: "Tộc nhân sống sâu dưới lòng đất. Dân số gia tăng sản lượng khai khoáng của mỏ Ngọc Thạch & Nguyên Thạch.",
+                          icon: "🗿",
+                          settlementType: "ROCKMAN_TRIBE",
+                          buffLabel: "Sản lượng Quặng Mỏ"
+                        },
+                        {
+                          race: "FEATHERMAN",
+                          name: "Tộc Người Lông Vũ",
+                          desc: "Bộ tộc tự do có cánh trên lưng. Giúp giảm thiểu sát thương của thiên địa tai kiếp lên Tiên Khiếu.",
+                          icon: "🦅",
+                          settlementType: "FEATHERMAN_CANYON",
+                          buffLabel: "Giảm sát thương Kiếp nạn"
+                        }
+                      ];
+
+                      return racesList.map((raceInfo) => {
+                        const record = variantHumans.find((v) => v.race === raceInfo.race);
+                        const population = record ? record.population : 0;
+                        const happiness = record ? record.happiness : 70;
+                        const oppression = record ? record.oppression : 0;
+                        const laborIntensity = record ? record.labor_intensity : "NORMAL";
+                        const prosperity = record ? record.prosperity : 50;
+                        const guMasters = record ? record.gu_master_count : 0;
+
+                        const settlementCount = apertureNodes.filter(
+                          (n) => !n.is_destroyed && n.node_type === raceInfo.settlementType
+                        ).length;
+                        const maxPop = 200 * settlementCount;
+
+                        const rebellionRate = (100.0 - happiness + oppression) / 4.0;
+                        const showRebellionAlert = happiness < 30.0 || oppression > 70.0;
+
+                        let buffValue = "";
+                        if (raceInfo.race === "HAIRY_MAN") {
+                          buffValue = `Sản sinh nô lệ luyện Cổ`;
+                        } else if (raceInfo.race === "ROCKMAN") {
+                          const rockmanBonus = Math.min(50, population * 0.1);
+                          buffValue = `+${rockmanBonus.toFixed(1)}% sản lượng`;
+                        } else if (raceInfo.race === "FEATHERMAN") {
+                          const featherReduction = Math.min(50, population * 0.1);
+                          buffValue = `-${featherReduction.toFixed(1)}% HP hao tổn`;
+                        }
+
+                        const laborLabels: Record<string, string> = {
+                          LOW: "Nhàn Hạ (x0.7)",
+                          NORMAL: "Bình Thường (x1.0)",
+                          HIGH: "Lao Dịch (x1.5)",
+                          EXPLOIT: "Bóc Lột (x2.0)"
+                        };
+
+                        const handleLaborChange = async (intensity: string) => {
+                          let confirmText = `Đạo hữu muốn đổi cường độ lao động của tộc ${raceInfo.name} thành ${laborLabels[intensity]}?`;
+                          if (intensity === "HIGH") {
+                            confirmText = `⚠️ CẢNH BÁO: Thiết lập cường độ 'Lao Dịch' (x1.5 sản lượng) sẽ giảm 10 Hạnh phúc và tăng 10 Áp bức của tộc này mỗi năm.`;
+                          } else if (intensity === "EXPLOIT") {
+                            confirmText = `💥 CẢNH BÁO CỰC KỲ NGUY HIỂM: Thiết lập cường độ 'Bóc Lột' (x2.0 sản lượng) sẽ khiến tộc nhân bị kiệt quệ, giảm 25 Hạnh phúc và tăng 25 Áp bức mỗi năm!`;
+                          }
+                          
+                          if (await showConfirm(confirmText)) {
+                            await handleSetLabor(raceInfo.race, intensity);
+                          }
+                        };
+
+                        return (
+                          <div key={raceInfo.race} className="bg-slate-950/60 border border-slate-850 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-5 transition-all">
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <span className="text-3xl select-none">{raceInfo.icon}</span>
+                                <div>
+                                  <h3 className="font-extrabold text-sm text-slate-100">{raceInfo.name}</h3>
+                                  <span className="text-[10px] text-slate-500">Định cư: {settlementCount} bộ lạc</span>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-relaxed min-h-[40px]">{raceInfo.desc}</p>
+
+                              <div className="space-y-1.5">
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-slate-400">Dân số:</span>
+                                  <span className="font-bold text-slate-200">{population} / {maxPop}</span>
+                                </div>
+                                <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                                  <div className="h-full bg-cyan-500 transition-all duration-500"
+                                    style={{ width: `${maxPop > 0 ? Math.min(100, (population / maxPop) * 100) : 0}%` }} />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2 pt-1">
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-400">Hạnh Phúc:</span>
+                                    <span className={`font-bold ${happiness < 30 ? "text-rose-400" : happiness > 60 ? "text-emerald-400" : "text-amber-400"}`}>
+                                      {happiness.toFixed(1)}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                    <div className={`h-full transition-all duration-500 ${happiness < 30 ? "bg-rose-500" : happiness > 60 ? "bg-emerald-500" : "bg-amber-500"}`}
+                                      style={{ width: `${happiness}%` }} />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-400">Áp Bức:</span>
+                                    <span className={`font-bold ${oppression > 70 ? "text-rose-400" : "text-slate-400"}`}>
+                                      {oppression.toFixed(1)}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                    <div className={`h-full transition-all duration-500 ${oppression > 70 ? "bg-rose-500" : "bg-slate-500"}`}
+                                      style={{ width: `${oppression}%` }} />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2 text-center text-[9px]">
+                                <div className="p-1.5 bg-slate-900/60 rounded-lg">
+                                  <div className="text-slate-500">Thịnh Vượng</div>
+                                  <div className="font-bold text-amber-400">{prosperity.toFixed(0)}</div>
+                                </div>
+                                <div className="p-1.5 bg-slate-900/60 rounded-lg">
+                                  <div className="text-slate-500">Cổ Sư</div>
+                                  <div className="font-bold text-purple-400">{guMasters}</div>
+                                </div>
+                                <div className="p-1.5 bg-slate-900/60 rounded-lg">
+                                  <div className="text-slate-500">Nổi Loạn</div>
+                                  <div className={`font-bold ${showRebellionAlert ? "text-rose-400" : "text-emerald-400"}`}>{rebellionRate.toFixed(0)}%</div>
+                                </div>
+                              </div>
+
+                              <div className="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-lg flex items-center justify-between text-[10px]">
+                                <span className="text-slate-400">Nguy cơ:</span>
+                                <span className={`font-black ${showRebellionAlert ? "text-rose-400 animate-pulse" : "text-amber-400"}`}>
+                                  {showRebellionAlert ? "Nguy hiểm" : "Ổn định"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-4 pt-3 border-t border-slate-850">
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] text-slate-400 font-semibold block">Cường Độ Lao Động</label>
+                                <div className="grid grid-cols-2 gap-1 text-[9px] font-bold">
+                                  {["LOW", "NORMAL", "HIGH", "EXPLOIT"].map((mode) => (
+                                    <button key={mode} onClick={() => handleLaborChange(mode)} disabled={actionLoading}
+                                      className={`py-1.5 px-1 rounded transition border ${laborIntensity === mode ? "bg-amber-500/20 border-amber-500/40 text-amber-300" : "bg-slate-900 border-transparent text-slate-400 hover:text-slate-200"}`}>
+                                      {mode === "LOW" ? "Nhàn Nhã" : mode === "NORMAL" ? "Bình Thường" : mode === "HIGH" ? "Lao Dịch" : "Bóc Lột"}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl text-[10px] flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="text-slate-400 font-medium">{raceInfo.buffLabel}</div>
+                                </div>
+                                <div className="text-emerald-400 font-extrabold text-right shrink-0">{buffValue}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Variant Humans List */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {(() => {
-                  const racesList: {
-                    race: 'HAIRY_MAN' | 'ROCKMAN' | 'FEATHERMAN';
-                    name: string;
-                    desc: string;
-                    icon: string;
-                    settlementType: string;
-                    buffLabel: string;
-                  }[] = [
-                    {
-                      race: "HAIRY_MAN",
-                      name: "Tộc Người Lông",
-                      desc: "Kẻ lập dị giỏi luyện Cổ trùng. Dân số sinh ra nô lệ giúp giảm thời gian và chi phí luyện Cổ.",
-                      icon: "🧔",
-                      settlementType: "HAIRY_MAN_SETTLEMENT",
-                      buffLabel: "Tạo nguyên liệu: Nô Lệ Người Lông"
-                    },
-                    {
-                      race: "ROCKMAN",
-                      name: "Tộc Người Đá",
-                      desc: "Tộc nhân sống sâu dưới lòng đất. Dân số gia tăng sản lượng khai khoáng của mỏ Ngọc Thạch & Nguyên Thạch.",
-                      icon: "🗿",
-                      settlementType: "ROCKMAN_TRIBE",
-                      buffLabel: "Sản lượng Quặng Mỏ"
-                    },
-                    {
-                      race: "FEATHERMAN",
-                      name: "Tộc Người Lông Vũ",
-                      desc: "Bộ tộc tự do có cánh trên lưng. Giúp giảm thiểu sát thương của thiên địa tai kiếp lên Tiên Khiếu.",
-                      icon: "🦅",
-                      settlementType: "FEATHERMAN_CANYON",
-                      buffLabel: "Giảm sát thương Kiếp nạn"
-                    }
-                  ];
-
-                  return racesList.map((raceInfo) => {
-                    const record = variantHumans.find((v) => v.race === raceInfo.race);
-                    const population = record ? record.population : 0;
-                    const happiness = record ? record.happiness : 70;
-                    const oppression = record ? record.oppression : 0;
-                    const laborIntensity = record ? record.labor_intensity : "NORMAL";
-
-                    // Calculate settlement counts and max capacity
-                    const settlementCount = apertureNodes.filter(
-                      (n) => !n.is_destroyed && n.node_type === raceInfo.settlementType
-                    ).length;
-                    const maxPop = 200 * settlementCount;
-
-                    // rebellion rate matching backend
-                    const rebellionRate = (100.0 - happiness + oppression) / 4.0;
-                    const showRebellionAlert = happiness < 30.0 || oppression > 70.0;
-
-                    // Calculate Buff Percentage
-                    let buffValue = "";
-                    if (raceInfo.race === "HAIRY_MAN") {
-                      buffValue = `Sản sinh nô lệ luyện Cổ`;
-                    } else if (raceInfo.race === "ROCKMAN") {
-                      const rockmanBonus = Math.min(50, population * 0.1);
-                      buffValue = `+${rockmanBonus.toFixed(1)}% sản lượng`;
-                    } else if (raceInfo.race === "FEATHERMAN") {
-                      const featherReduction = Math.min(50, population * 0.1);
-                      buffValue = `-${featherReduction.toFixed(1)}% HP hao tổn`;
-                    }
-
-                    const laborLabels: Record<string, string> = {
-                      LOW: "Nhàn Hạ (x0.7)",
-                      NORMAL: "Bình Thường (x1.0)",
-                      HIGH: "Lao Dịch (x1.5)",
-                      EXPLOIT: "Bóc Lột (x2.0)"
-                    };
-
-                    const handleLaborChange = async (intensity: string) => {
-                      let confirmText = `Đạo hữu muốn đổi cường độ lao động của tộc ${raceInfo.name} thành ${laborLabels[intensity]}?`;
-                      if (intensity === "HIGH") {
-                        confirmText = `⚠️ CẢNH BÁO: Thiết lập cường độ 'Lao Dịch' (x1.5 sản lượng) sẽ giảm 10 Hạnh phúc và tăng 10 Áp bức của tộc này mỗi năm. Đạo hữu có chắc chắn?`;
-                      } else if (intensity === "EXPLOIT") {
-                        confirmText = `💥 CẢNH BÁO CỰC KỲ NGUY HIỂM: Thiết lập cường độ 'Bóc Lột' (x2.0 sản lượng) sẽ khiến tộc nhân bị kiệt quệ, giảm 25 Hạnh phúc và tăng 25 Áp bức mỗi năm! Tỷ lệ nổi loạn phá hủy Tiên Khiếu sẽ tăng vọt! Đạo hữu có chắc chắn?`;
-                      }
-                      
-                      if (await showConfirm(confirmText)) {
-                        await handleSetLabor(raceInfo.race, intensity);
-                      }
-                    };
-
-                    return (
-                      <div key={raceInfo.race} className="bg-slate-950/60 border border-slate-850 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-5 transition-all">
-                        <div className="space-y-3">
-                          {/* Name & Icon */}
-                          <div className="flex items-center gap-3">
-                            <span className="text-3xl select-none">{raceInfo.icon}</span>
+            {/* SUB-TAB: SETTLEMENTS */}
+            {variantSubTab === "settlements" && (
+              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-4">
+                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                  <MapIcon className="w-5 h-5 text-cyan-400" />
+                  Thành Trì Dị Nhân
+                </h2>
+                <p className="text-xs text-slate-400">Xây dựng và nâng cấp thành trì để tăng sức chứa dân số và kho lương thực.</p>
+                {settlements.length === 0 ? (
+                  <div className="text-center text-xs text-slate-500 py-8">Chưa có thành trì nào. Hãy xây dựng cơ sở định cư trên bản đồ.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {settlements.map((s) => {
+                      const raceIcons: Record<string, string> = { HAIRY_MAN: "🧔", ROCKMAN: "🗿", FEATHERMAN: "🦅" };
+                      return (
+                        <div key={s.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-4 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl">{raceIcons[s.race] || "🏘️"}</span>
                             <div>
-                              <h3 className="font-extrabold text-sm text-slate-100">{raceInfo.name}</h3>
-                              <span className="text-[10px] text-slate-500">Định cư: {settlementCount} bộ lạc</span>
+                              <div className="font-bold text-sm text-slate-100">{s.name || s.settlement_type}</div>
+                              <div className="text-[10px] text-slate-500">{s.race}</div>
                             </div>
                           </div>
-
-                          <p className="text-[10px] text-slate-400 leading-relaxed min-h-[40px]">
-                            {raceInfo.desc}
-                          </p>
-
-                          {/* Population */}
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-slate-400">Dân số:</span>
-                              <span className="font-bold text-slate-200">
-                                {population} / {maxPop}
-                              </span>
-                            </div>
-                            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
-                              <div
-                                className="h-full bg-cyan-500 transition-all duration-500"
-                                style={{ width: `${maxPop > 0 ? Math.min(100, (population / maxPop) * 100) : 0}%` }}
-                              />
-                            </div>
-                            {settlementCount === 0 && (
-                              <div className="text-[9px] text-rose-400 font-semibold leading-tight flex items-start gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                <span>Chưa có cơ sở định cư! Dân số sẽ hao hụt 10% / năm.</span>
-                              </div>
-                            )}
+                          <div className="space-y-1.5 text-[10px]">
+                            <div className="flex justify-between"><span className="text-slate-400">Sức chứa:</span><span className="text-cyan-400 font-bold">{s.population_capacity}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Nhà ở:</span><span className="text-amber-400 font-bold">{s.housing}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Kho lương:</span><span className="text-emerald-400 font-bold">{s.food_storage}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">An ninh:</span><span className="text-rose-400 font-bold">{s.security.toFixed(0)}%</span></div>
                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-                          {/* Happiness & Oppression */}
-                          <div className="space-y-2 pt-1">
-                            {/* Happiness */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px]">
-                                <span className="text-slate-400">Độ Hạnh Phúc:</span>
-                                <span className={`font-bold ${happiness < 30 ? "text-rose-400" : happiness > 60 ? "text-emerald-400" : "text-amber-400"}`}>
-                                  {happiness.toFixed(1)} / 100
-                                </span>
-                              </div>
-                              <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full transition-all duration-500 ${happiness < 30 ? "bg-rose-500" : happiness > 60 ? "bg-emerald-500" : "bg-amber-500"}`}
-                                  style={{ width: `${happiness}%` }}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Oppression */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px]">
-                                <span className="text-slate-400">Độ Áp Bức:</span>
-                                <span className={`font-bold ${oppression > 70 ? "text-rose-400" : "text-slate-400"}`}>
-                                  {oppression.toFixed(1)} / 100
-                                </span>
-                              </div>
-                              <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full transition-all duration-500 ${oppression > 70 ? "bg-rose-500" : "bg-slate-500"}`}
-                                  style={{ width: `${oppression}%` }}
-                                />
-                              </div>
-                            </div>
+            {/* SUB-TAB: NPCs */}
+            {variantSubTab === "npcs" && (
+              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-4">
+                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                  Cổ Sư Dị Nhân
+                </h2>
+                <p className="text-xs text-slate-400">Quản lý các Cổ Sư được sinh ra từ dân số dị nhân. Phân công vai trò để tối ưu hiệu suất.</p>
+                {variantNPCs.length === 0 ? (
+                  <div className="text-center text-xs text-slate-500 py-8">Chưa có Cổ Sư nào. Dân số đủ lớn sẽ tự sinh ra Cổ Sư.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {variantNPCs.map((npc) => {
+                      const raceIcons: Record<string, string> = { HAIRY_MAN: "🧔", ROCKMAN: "🗿", FEATHERMAN: "🦅" };
+                      const rankLabels: Record<number, string> = { 1: "Sơ Giai", 2: "Trung Giai", 3: "Hậu Giai", 4: "Đỉnh Phong", 5: "Siêu Việt" };
+                      return (
+                        <div key={npc.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
+                          <span className="text-2xl">{raceIcons[npc.race] || "👤"}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-xs text-slate-100 truncate">{npc.name}</div>
+                            <div className="text-[9px] text-slate-500">Rank {npc.rank} · {rankLabels[npc.rank] || "?"} · {npc.path}</div>
+                            <div className="text-[9px] text-slate-500">Loyal: {npc.loyalty.toFixed(0)} · Talent: {npc.talent.toFixed(0)}</div>
                           </div>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${npc.status === "IDLE" ? "bg-slate-800 text-slate-400" : "bg-amber-500/20 text-amber-400"}`}>
+                            {npc.role}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-                          {/* Rebellion risk indicator */}
-                          <div className="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-lg flex items-center justify-between text-[10px]">
-                            <span className="text-slate-400">Nguy cơ nổi loạn:</span>
-                            <div className="flex items-center gap-1.5">
-                              {showRebellionAlert ? (
-                                <span className="flex h-2 w-2 shrink-0">
-                                  <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-rose-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                                </span>
-                              ) : null}
-                              <span className={`font-black ${showRebellionAlert ? "text-rose-400 animate-pulse font-extrabold" : "text-amber-400"}`}>
-                                {rebellionRate.toFixed(1)}% {showRebellionAlert ? "(Nguy hiểm)" : "(Ổn định)"}
-                              </span>
+            {/* SUB-TAB: REFINEMENT QUEUE */}
+            {variantSubTab === "refine" && (
+              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-4">
+                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-orange-400" />
+                  Luyện Cổ Tự Động
+                </h2>
+                <p className="text-xs text-slate-400">Mao Dân sẽ tự động luyện cổ theo lệnh trong hàng đợi. Đặt nguyên liệu vào kho Tiên Khiếu để bắt đầu.</p>
+                {refinementQueue.length === 0 ? (
+                  <div className="text-center text-xs text-slate-500 py-8">Chưa có lệnh luyện cổ nào. Hãy tạo lệnh mới từ kho物品.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {refinementQueue.map((job) => (
+                      <div key={job.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Flame className="w-4 h-4 text-orange-400" />
+                          <div>
+                            <div className="text-xs font-bold text-slate-100">{job.recipe_id}</div>
+                            <div className="text-[9px] text-slate-500">
+                              {job.mode} · Mục tiêu: {job.target_quantity} · Đã luyện: {job.current_quantity}
                             </div>
                           </div>
                         </div>
-
-                        {/* Labor Intensity Selector & Global Buffs */}
-                        <div className="space-y-4 pt-3 border-t border-slate-850">
-                          {/* Selector */}
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] text-slate-400 font-semibold block">Cường Độ Lao Động</label>
-                            <div className="grid grid-cols-2 gap-1 text-[9px] font-bold">
-                              {["LOW", "NORMAL", "HIGH", "EXPLOIT"].map((mode) => (
-                                <button
-                                  key={mode}
-                                  onClick={() => handleLaborChange(mode)}
-                                  disabled={actionLoading}
-                                  className={`py-1.5 px-1 rounded transition border ${
-                                    laborIntensity === mode
-                                      ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
-                                      : "bg-slate-900 border-transparent text-slate-400 hover:text-slate-200"
-                                  }`}
-                                >
-                                  {mode === "LOW" ? "Nhàn Nhã" : mode === "NORMAL" ? "Bình Thường" : mode === "HIGH" ? "Lao Dịch" : "Bóc Lột"}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Buff value card */}
-                          <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl text-[10px] flex items-center justify-between gap-2">
-                            <div>
-                              <div className="text-slate-400 font-medium">{raceInfo.buffLabel}</div>
-                              <div className="text-slate-500 text-[8px] mt-0.5">Sinh hiệu toàn bản đồ</div>
-                            </div>
-                            <div className="text-emerald-400 font-extrabold text-right shrink-0">{buffValue}</div>
-                          </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${job.enabled ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-500"}`}>
+                            {job.enabled ? "Đang chạy" : "Tạm dừng"}
+                          </span>
                         </div>
                       </div>
-                    );
-                  });
-                })()}
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
+            )}
+
+            {/* SUB-TAB: ECOSYSTEM */}
+            {variantSubTab === "ecosystem" && (
+              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <Leaf className="w-5 h-5 text-emerald-400" />
+                    Chuỗi Sinh Thái Tiên Khiếu
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">Duy trì cân bằng thực vật → thú ăn cỏ → thú ăn thịt để tối ưu sản lượng.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 text-center space-y-1">
+                    <Leaf className="w-8 h-8 mx-auto text-emerald-500/40" />
+                    <div className="text-xl font-black text-emerald-400">{plantCount}</div>
+                    <div className="text-[10px] text-slate-400">Thực Vật</div>
+                  </div>
+                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 text-center space-y-1">
+                    <span className="text-2xl">🦌</span>
+                    <div className="text-xl font-black text-amber-400">{herbCount}</div>
+                    <div className="text-[10px] text-slate-400">Thú Ăn Cỏ</div>
+                  </div>
+                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 text-center space-y-1">
+                    <span className="text-2xl">🐺</span>
+                    <div className="text-xl font-black text-rose-400">{carnCount}</div>
+                    <div className="text-[10px] text-slate-400">Thú Ăn Thịt</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <h3 className="text-xs font-bold text-slate-200">Cung Cấp Lương Thực</h3>
+                    <div className="space-y-1.5 text-[10px]">
+                      <div className="flex justify-between"><span className="text-slate-400">Sản lượng:</span><span className="text-emerald-400 font-bold">{totalFoodProd} / năm</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Tiêu thụ ({totalVariantHumanPop} người):</span><span className="text-rose-400 font-bold">{foodNeeded.toFixed(0)} / năm</span></div>
+                      <div className="flex justify-between pt-1 border-t border-slate-800">
+                        <span className="text-slate-400">Cân đối:</span>
+                        {foodSurplus ? (
+                          <span className="text-emerald-400 font-bold">Thặng Dư ✓</span>
+                        ) : (
+                          <span className="text-rose-400 font-bold animate-pulse">Thiếu Thụt ✗</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <h3 className="text-xs font-bold text-slate-200 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Xung Đột Đạo Ngân</h3>
+                    {(() => {
+                      const conflictsList: { n1: ApertureResourceNode; n2: ApertureResourceNode }[] = [];
+                      const checkedPairs = new Set<string>();
+                      apertureNodes.forEach((n1) => {
+                        if (n1.is_destroyed) return;
+                        const conflictingOther = checkConflict(n1, apertureNodes);
+                        if (conflictingOther) {
+                          const pairKey = n1.id < conflictingOther.id ? `${n1.id}:${conflictingOther.id}` : `${conflictingOther.id}:${n1.id}`;
+                          if (!checkedPairs.has(pairKey)) { checkedPairs.add(pairKey); conflictsList.push({ n1, n2: conflictingOther }); }
+                        }
+                      });
+                      if (conflictsList.length === 0) return <div className="text-[10px] text-emerald-400 text-center py-2">Không có xung đột</div>;
+                      return (
+                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                          {conflictsList.map(({ n1, n2 }, idx) => (
+                            <div key={idx} className="text-[9px] text-rose-300 flex justify-between">
+                              <span>{n1.name} ❌ {n2.name}</span>
+                              <span className="text-rose-500">Xung Đột</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

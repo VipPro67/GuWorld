@@ -575,6 +575,67 @@ export interface ApertureVariantHuman {
   oppression: number;
   rebellion_rate: number;
   labor_intensity: 'LOW' | 'NORMAL' | 'HIGH' | 'EXPLOIT';
+  prosperity: number;
+  gu_master_count: number;
+  gu_immortal_count: number;
+  food_stored: number;
+  food_per_capita: number;
+  population_growth_rate: number;
+  mortality_rate: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApertureNodeWorker {
+  id: string;
+  node_id: string;
+  variant_human_id: string;
+  race: string;
+  population: number;
+  assigned_population: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApertureRefinementJob {
+  id: string;
+  aperture_id: string;
+  recipe_id: string;
+  mode: 'FIXED_COUNT' | 'UNTIL_SUCCESS' | 'UNTIL_MATERIAL_EMPTY' | 'MAINTAIN_STOCK';
+  target_quantity: number;
+  current_quantity: number;
+  priority: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApertureSettlement {
+  id: string;
+  aperture_id: string;
+  race: string;
+  name: string;
+  settlement_type: string;
+  population_capacity: number;
+  housing: number;
+  food_storage: number;
+  security: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApertureVariantNPC {
+  id: string;
+  aperture_id: string;
+  race: string;
+  name: string;
+  rank: number;
+  sub_rank: number;
+  path: string;
+  role: string;
+  loyalty: number;
+  talent: number;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -1332,6 +1393,23 @@ interface GameState {
   engageTribulationCombat: (eventId: string) => Promise<boolean>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
 
+  // Phase 1-3: Variant Economy
+  nodeWorkers: ApertureNodeWorker[];
+  refinementQueue: ApertureRefinementJob[];
+  settlements: ApertureSettlement[];
+  variantNPCs: ApertureVariantNPC[];
+  fetchNodeWorkers: (nodeId: string) => Promise<void>;
+  assignWorkerToNode: (nodeId: string, variantHumanId: string, population: number) => Promise<boolean>;
+  removeWorkerFromNode: (nodeId: string, workerId: string) => Promise<boolean>;
+  fetchRefinementQueue: () => Promise<void>;
+  createRefinementJob: (recipeId: string, mode: string, targetQuantity: number) => Promise<boolean>;
+  deleteRefinementJob: (jobId: string) => Promise<boolean>;
+  fetchSettlements: () => Promise<void>;
+  upgradeSettlement: (settlementId: string, data: { name?: string; population_capacity?: number; housing?: number; food_storage?: number }) => Promise<boolean>;
+  fetchNPCs: () => Promise<void>;
+  assignNPCRole: (npcId: string, role: string) => Promise<boolean>;
+  dismissNPC: (npcId: string) => Promise<boolean>;
+
   // Soul foundation actions
   useGutsGu: () => Promise<boolean>;
   refineSoul: () => Promise<boolean>;
@@ -1883,6 +1961,10 @@ export const useGameStore = create<GameState>((set, get) => {
   daoMarks: [],
   apertureNodes: [],
   variantHumans: [],
+  nodeWorkers: [],
+  refinementQueue: [],
+  settlements: [],
+  variantNPCs: [],
   activeTribulation: null,
   activeInstanceSession: null,
   activeInstanceTemplate: null,
@@ -6274,6 +6356,245 @@ export const useGameStore = create<GameState>((set, get) => {
     };
     fetchVariantHumansPromise = executeFetch();
     return fetchVariantHumansPromise;
+  },
+
+  // --- Node Workers ---
+  fetchNodeWorkers: async (nodeId: string) => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ nodeWorkers: data.workers || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch node workers:", err);
+    }
+  },
+
+  assignWorkerToNode: async (nodeId: string, variantHumanId: string, population: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variant_human_id: variantHumanId, assigned_population: population }),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Phân công lao động thành công", "success");
+        get().fetchNodeWorkers(nodeId);
+        return true;
+      }
+      const data = await response.json();
+      get().addToast(data.error || "Lỗi phân công", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  removeWorkerFromNode: async (nodeId: string, workerId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers/${workerId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Đã xóa phân công", "success");
+        get().fetchNodeWorkers(nodeId);
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // --- Refinement Queue ---
+  fetchRefinementQueue: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ refinementQueue: data.queue || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch refinement queue:", err);
+    }
+  },
+
+  createRefinementJob: async (recipeId: string, mode: string, targetQuantity: number) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipe_id: recipeId, mode, target_quantity: targetQuantity }),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Tạo lệnh luyện cổ thành công", "success");
+        get().fetchRefinementQueue();
+        return true;
+      }
+      const data = await response.json();
+      get().addToast(data.error || "Lỗi tạo lệnh", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  deleteRefinementJob: async (jobId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue/${jobId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Đã xóa lệnh luyện cổ", "success");
+        get().fetchRefinementQueue();
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // --- Settlements ---
+  fetchSettlements: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ settlements: data.settlements || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch settlements:", err);
+    }
+  },
+
+  upgradeSettlement: async (settlementId: string, data: { name?: string; population_capacity?: number; housing?: number; food_storage?: number }) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements/${settlementId}/upgrade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Cập nhật settlement thành công", "success");
+        get().fetchSettlements();
+        return true;
+      }
+      const res = await response.json();
+      get().addToast(res.error || "Lỗi cập nhật", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // --- Variant NPCs ---
+  fetchNPCs: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs`);
+      if (response.status === 401) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ variantNPCs: data.npcs || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch NPCs:", err);
+    }
+  },
+
+  assignNPCRole: async (npcId: string, role: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Phân công vai trò thành công", "success");
+        get().fetchNPCs();
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  dismissNPC: async (npcId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401) { logout(); return false; }
+      if (response.ok) {
+        get().addToast("Đã sa thải NPC", "success");
+        get().fetchNPCs();
+        return true;
+      }
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
   },
 
   setApertureTimeRate: async (rate: number) => {

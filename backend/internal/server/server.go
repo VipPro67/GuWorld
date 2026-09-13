@@ -586,6 +586,25 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			aperture.POST("/nodes/:id/repair", handlers.RepairApertureNode)
 			aperture.POST("/nodes/:id/upgrade", handlers.UpgradeApertureNode)
 			aperture.GET("/variant-humans", handlers.GetApertureVariantHumans)
+
+			// Phase 1: Variant Economy — node workers
+			aperture.GET("/nodes/:id/workers", handlers.GetApertureNodeWorkers)
+			aperture.POST("/nodes/:id/workers", handlers.AssignWorkerToNode)
+			aperture.DELETE("/nodes/:id/workers/:worker_id", handlers.RemoveWorkerFromNode)
+
+			// Phase 1: Variant Economy — refinement queue
+			aperture.GET("/refinement-queue", handlers.ListRefinementQueue)
+			aperture.POST("/refinement-queue", handlers.CreateRefinementJob)
+			aperture.DELETE("/refinement-queue/:job_id", handlers.DeleteRefinementJob)
+
+			// Phase 2: Society — settlements
+			aperture.GET("/settlements", handlers.GetSettlements)
+			aperture.POST("/settlements/:settlement_id/upgrade", handlers.UpgradeSettlement)
+
+			// Phase 3: Variant NPCs
+			aperture.GET("/npcs", handlers.GetApertureNPCs)
+			aperture.POST("/npcs/:npc_id/role", handlers.AssignNPCRole)
+			aperture.DELETE("/npcs/:npc_id", handlers.DismissNPC)
 		}
 
 		// Dao Marks — group: 20/min, per player: 15/min

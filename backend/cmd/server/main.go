@@ -172,6 +172,9 @@ func main() {
 	worker.StartSectMaintenanceWorker(ctx, db.DB, 24*time.Hour)
 	handlers.StartLastActivityFlusher(ctx)
 	worker.StartBatchPersister(ctx, 5*time.Second)
+	worker.StartVariantProductionWorker(ctx, db.DB, 10*time.Minute) // Phase 1: auto-production tick
+	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute) // Phase 2: society simulation tick
+	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute) // Phase 3: Gu Master spawning
 	if cache.Client != nil {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)
 	}

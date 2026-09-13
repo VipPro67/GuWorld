@@ -21,6 +21,10 @@ type LeaderboardEntry struct {
 	SubRank         int     `json:"sub_rank"`
 	Value           float64 `json:"value"`
 	ValueLabel      string  `json:"value_label"`
+	X               *int    `json:"x,omitempty"`
+	Y               *int    `json:"y,omitempty"`
+	Region          string  `json:"region,omitempty"`
+	IsOnline        bool    `json:"is_online"`
 }
 
 type LeaderboardResponse struct {
@@ -105,6 +109,7 @@ func GetLeaderboard(c *gin.Context) {
 		"primeval_stones": true,
 		"gu_strongest":    true,
 		"immortal_stones": true,
+		"sat_khi":         true,
 	}
 	if !validCategories[category] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category: " + category})
@@ -149,10 +154,13 @@ func GetLeaderboard(c *gin.Context) {
 			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank,
 				CASE WHEN p.rank >= 6 THEN (COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0)) ELSE p.sub_rank END as sub_rank,
 				CASE WHEN p.rank >= 6 THEN (p.rank * 10000 + COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0))::float8 ELSE (p.rank * 10 + p.sub_rank)::float8 END as val,
-				CASE WHEN p.rank >= 6 THEN p.rank::text || '.' || (COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0))::text ELSE p.rank::text || '.' || p.sub_rank::text END as label
+				CASE WHEN p.rank >= 6 THEN p.rank::text || '.' || (COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0))::text ELSE p.rank::text || '.' || p.sub_rank::text END as label,
+				p.x, p.y, COALESCE(r.name, p.current_region, ''),
+				(p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes') as is_online
 			FROM players p
 			JOIN leaderboard_settings ls ON p.id = ls.player_id
 			LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+			LEFT JOIN regions r ON p.current_region = r.id
 			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			ORDER BY p.rank DESC, 
 				CASE WHEN p.rank >= 6 THEN (COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0)) ELSE p.sub_rank END DESC
@@ -161,9 +169,12 @@ func GetLeaderboard(c *gin.Context) {
 		query = `
 			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank, p.sub_rank,
 				p.primeval_stones::float8 as val,
-				p.primeval_stones::text as label
+				p.primeval_stones::text as label,
+				p.x, p.y, COALESCE(r.name, p.current_region, ''),
+				(p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes') as is_online
 			FROM players p
 			JOIN leaderboard_settings ls ON p.id = ls.player_id
+			LEFT JOIN regions r ON p.current_region = r.id
 			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			ORDER BY p.primeval_stones DESC
 			LIMIT 50`
@@ -177,10 +188,13 @@ func GetLeaderboard(c *gin.Context) {
 			)
 			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank, p.sub_rank,
 				COALESCE(gm.max_gu_rank, 0)::float8 as val,
-				COALESCE(gm.max_gu_rank::text, '0') as label
+				COALESCE(gm.max_gu_rank::text, '0') as label,
+				p.x, p.y, COALESCE(r.name, p.current_region, ''),
+				(p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes') as is_online
 			FROM players p
 			JOIN leaderboard_settings ls ON p.id = ls.player_id
 			LEFT JOIN gu_max gm ON gm.id = p.id
+			LEFT JOIN regions r ON p.current_region = r.id
 			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			ORDER BY val DESC
 			LIMIT 50`
@@ -188,11 +202,35 @@ func GetLeaderboard(c *gin.Context) {
 		query = `
 			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank, p.sub_rank,
 				p.immortal_stones as val,
-				p.immortal_stones::text as label
+				p.immortal_stones::text as label,
+				p.x, p.y, COALESCE(r.name, p.current_region, ''),
+				(p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes') as is_online
 			FROM players p
 			JOIN leaderboard_settings ls ON p.id = ls.player_id
+			LEFT JOIN regions r ON p.current_region = r.id
 			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			ORDER BY p.immortal_stones DESC
+			LIMIT 50`
+	case "sat_khi":
+		query = `
+			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank, p.sub_rank,
+				COALESCE(sk.level, 0)::float8 as val,
+				'Tầng ' || COALESCE(sk.level, 0)::text as label,
+				p.x, p.y, COALESCE(r.name, p.current_region, ''),
+				(p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes') as is_online
+			FROM players p
+			JOIN leaderboard_settings ls ON p.id = ls.player_id
+			LEFT JOIN regions r ON p.current_region = r.id
+			JOIN LATERAL (
+				SELECT (elem->>'value')::int as level
+				FROM jsonb_array_elements(COALESCE(p.statuses, '[]'::jsonb)) elem
+				WHERE elem->>'id' = 'sat_khi'
+				  AND (elem->>'expires_at' IS NULL OR (elem->>'expires_at')::timestamptz > NOW())
+				LIMIT 1
+			) sk ON true
+			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
+			  AND sk.level > 0
+			ORDER BY sk.level DESC, p.last_activity DESC
 			LIMIT 50`
 	}
 
@@ -208,9 +246,16 @@ func GetLeaderboard(c *gin.Context) {
 	for rows.Next() {
 		var entry LeaderboardEntry
 		var label string
-		if err := rows.Scan(&entry.PlayerID, &entry.Username, &entry.AvatarURL, &entry.CultivationRank, &entry.SubRank, &entry.Value, &label); err == nil {
+		var x, y int
+		var region string
+		var isOnline bool
+		if err := rows.Scan(&entry.PlayerID, &entry.Username, &entry.AvatarURL, &entry.CultivationRank, &entry.SubRank, &entry.Value, &label, &x, &y, &region, &isOnline); err == nil {
 			entry.Position = pos
 			entry.ValueLabel = label
+			entry.X = &x
+			entry.Y = &y
+			entry.Region = region
+			entry.IsOnline = isOnline || isPlayerOnline(entry.PlayerID)
 			entries = append(entries, entry)
 			pos++
 		}
@@ -297,6 +342,22 @@ func buildRankQuery(category string) string {
 					ROW_NUMBER() OVER (ORDER BY p.immortal_stones DESC) as position
 				FROM players p
 				JOIN leaderboard_settings ls ON p.id = ls.player_id
+				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
+			) sub WHERE sub.id = $1`
+	case "sat_khi":
+		return `
+			SELECT position, val FROM (
+				SELECT p.id, COALESCE(sk.level, 0)::float8 as val,
+					ROW_NUMBER() OVER (ORDER BY COALESCE(sk.level, 0) DESC) as position
+				FROM players p
+				JOIN leaderboard_settings ls ON p.id = ls.player_id
+				LEFT JOIN LATERAL (
+					SELECT (elem->>'value')::int as level
+					FROM jsonb_array_elements(COALESCE(p.statuses, '[]'::jsonb)) elem
+					WHERE elem->>'id' = 'sat_khi'
+					  AND (elem->>'expires_at' IS NULL OR (elem->>'expires_at')::timestamptz > NOW())
+					LIMIT 1
+				) sk ON true
 				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			) sub WHERE sub.id = $1`
 	}

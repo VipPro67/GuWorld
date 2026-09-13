@@ -142,6 +142,147 @@ func schemaAperture() error {
 		return err
 	}
 
+	// --- Phase 1: Variant Human Economy columns ---
+	if err := execSchema("variant_humans_prosperity_upgrade", `
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS prosperity DOUBLE PRECISION NOT NULL DEFAULT 50.0;
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS gu_master_count INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS gu_immortal_count INTEGER NOT NULL DEFAULT 0;
+	`); err != nil {
+		return err
+	}
+
+	// --- Phase 1: Node Worker Assignment ---
+	if err := execSchema("aperture_node_workers", `
+	CREATE TABLE IF NOT EXISTS aperture_node_workers (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		node_id UUID NOT NULL REFERENCES aperture_resource_nodes(id) ON DELETE CASCADE,
+		variant_human_id UUID NOT NULL REFERENCES aperture_variant_humans(id) ON DELETE CASCADE,
+		assigned_population INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		UNIQUE (node_id, variant_human_id)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_node_workers_node_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_node_workers_node ON aperture_node_workers (node_id);
+	`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_node_workers_variant_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_node_workers_variant ON aperture_node_workers (variant_human_id);
+	`); err != nil {
+		return err
+	}
+
+	// --- Phase 1: Refinement Queue ---
+	if err := execSchema("aperture_refinement_queue", `
+	CREATE TABLE IF NOT EXISTS aperture_refinement_queue (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		recipe_id VARCHAR(100) NOT NULL,
+		mode VARCHAR(20) NOT NULL DEFAULT 'FIXED_COUNT',
+		target_quantity INTEGER NOT NULL DEFAULT 1,
+		current_quantity INTEGER NOT NULL DEFAULT 0,
+		priority INTEGER NOT NULL DEFAULT 0,
+		enabled BOOLEAN NOT NULL DEFAULT true,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_refinement_queue_aperture_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_refinement_queue_aperture ON aperture_refinement_queue (aperture_id);
+	`); err != nil {
+		return err
+	}
+
+	// --- Phase 2: Society Simulation columns ---
+	if err := execSchema("variant_humans_society_upgrade", `
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS food_stored DOUBLE PRECISION NOT NULL DEFAULT 0;
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS food_per_capita DOUBLE PRECISION NOT NULL DEFAULT 1.0;
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS population_growth_rate DOUBLE PRECISION NOT NULL DEFAULT 0.001;
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS mortality_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0005;
+	`); err != nil {
+		return err
+	}
+
+	// --- Phase 2: Settlements ---
+	if err := execSchema("aperture_variant_settlements", `
+	CREATE TABLE IF NOT EXISTS aperture_variant_settlements (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		race VARCHAR(50) NOT NULL,
+		name VARCHAR(100),
+		settlement_type VARCHAR(50) NOT NULL DEFAULT 'VILLAGE',
+		population_capacity INTEGER NOT NULL DEFAULT 10000,
+		housing INTEGER NOT NULL DEFAULT 0,
+		food_storage INTEGER NOT NULL DEFAULT 5000,
+		security DOUBLE PRECISION NOT NULL DEFAULT 50.0,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		UNIQUE (aperture_id, race)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_variant_settlements_aperture_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_variant_settlements_aperture ON aperture_variant_settlements (aperture_id);
+	`); err != nil {
+		return err
+	}
+
+	// --- Phase 2: Variant Events (rebellion, genius birth, migration, etc.) ---
+	if err := execSchema("aperture_variant_events", `
+	CREATE TABLE IF NOT EXISTS aperture_variant_events (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		event_type VARCHAR(50) NOT NULL,
+		race VARCHAR(50),
+		severity VARCHAR(20) NOT NULL DEFAULT 'LOW',
+		description TEXT,
+		effects JSONB NOT NULL DEFAULT '{}',
+		resolved BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		resolved_at TIMESTAMP WITH TIME ZONE
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_variant_events_aperture_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_variant_events_aperture ON aperture_variant_events (aperture_id, resolved);
+	`); err != nil {
+		return err
+	}
+
+	// --- Phase 3: Variant Human NPCs (Gu Masters, Gu Immortals) ---
+	if err := execSchema("aperture_variant_npcs", `
+	CREATE TABLE IF NOT EXISTS aperture_variant_npcs (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		race VARCHAR(50) NOT NULL,
+		name VARCHAR(100) NOT NULL,
+		rank INTEGER NOT NULL DEFAULT 1,
+		sub_rank INTEGER NOT NULL DEFAULT 0,
+		path VARCHAR(50) NOT NULL DEFAULT 'REFINEMENT',
+		role VARCHAR(50) NOT NULL DEFAULT 'NONE',
+		loyalty DOUBLE PRECISION NOT NULL DEFAULT 100.0,
+		talent DOUBLE PRECISION NOT NULL DEFAULT 50.0,
+		status VARCHAR(20) NOT NULL DEFAULT 'IDLE',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_variant_npcs_aperture_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_variant_npcs_aperture ON aperture_variant_npcs (aperture_id);
+	`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_variant_npcs_race_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_variant_npcs_race ON aperture_variant_npcs (aperture_id, race);
+	`); err != nil {
+		return err
+	}
+
 	if err := execSchema("tribulation_events", `
 	CREATE TABLE IF NOT EXISTS tribulation_events (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import { GamePanel, GameButton, GameCard, GameTabs } from "@/components/ui";
 import { useGameStore } from "@/store/useGameStore";
-import { Trophy, Eye, EyeOff, Users, RefreshCw, Coins, Sparkles, Bug, Star } from "lucide-react";
+import { Trophy, Eye, EyeOff, Users, RefreshCw, Coins, Sparkles, Bug, Star, Skull, MapPin } from "lucide-react";
 // UI migrated to shared components
 import { Num } from "./Num";
 
@@ -12,6 +12,7 @@ const CATEGORIES = [
   { id: "primeval_stones", label: "Nguyên Thạch", icon: Coins, color: "yellow" },
   { id: "gu_strongest", label: "Cổ Trùng", icon: Bug, color: "violet" },
   { id: "immortal_stones", label: "Tiên Nguyên", icon: Sparkles, color: "purple" },
+  { id: "sat_khi", label: "Sát Khí", icon: Skull, color: "rose" },
 ];
 
 const getRankName = (rank: number, sub: number): string => {
@@ -25,6 +26,26 @@ const getRankName = (rank: number, sub: number): string => {
   return rank >= 6 ? `${rName} • ${sub} Kiếp` : `${rName} • ${sName}`;
 };
 
+const getRegionDisplayName = (region: string, regions: any[]): string => {
+  if (!region) return "";
+  const found = regions?.find((r) => r.id === region || r.name === region);
+  if (found && found.name) return found.name;
+
+  const map: Record<string, string> = {
+    hub_nam_cuong: "Nam Cương Thành",
+    hub_trung_chau: "Trung Châu Thành",
+    hub_bac_nguyen: "Bắc Nguyên Thành",
+    hub_tay_mac: "Tây Mạc Thành",
+    hub_dong_hai: "Đông Hải Thành",
+    Southern_Border: "Nam Cương",
+    Northern_Plains: "Bắc Nguyên",
+    Central_Continent: "Trung Châu",
+    Western_Desert: "Tây Mạc",
+    Eastern_Sea: "Đông Hải",
+  };
+  return map[region] || region;
+};
+
 const getInitials = (username: string): string => {
   if (!username) return "?";
   return username.slice(0, 2).toUpperCase();
@@ -33,6 +54,9 @@ const getInitials = (username: string): string => {
 export const LeaderboardView: React.FC = () => {
   const {
     player,
+    regions,
+    regionsLoaded,
+    fetchRegions,
     leaderboardEntries,
     leaderboardCategory,
     myLeaderboardRank,
@@ -50,6 +74,9 @@ export const LeaderboardView: React.FC = () => {
   useEffect(() => {
     fetchLeaderboard(leaderboardCategory);
     fetchLeaderboardSettings();
+    if (!regionsLoaded) {
+      fetchRegions();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -135,6 +162,8 @@ export const LeaderboardView: React.FC = () => {
                   ? <Num value={Number(myLeaderboardRank.value)} />
                   : leaderboardCategory === "gu_strongest"
                   ? `Cấp ${myLeaderboardRank.value}`
+                  : leaderboardCategory === "sat_khi"
+                  ? `Tầng ${myLeaderboardRank.value}`
                   : myLeaderboardRank.value}
               </span>
             </div>
@@ -220,7 +249,7 @@ export const LeaderboardView: React.FC = () => {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span
                         onClick={() => !isMe && fetchPlayerProfile(entry.username)}
                         className={`font-serif text-sm font-bold truncate ${isMe ? "text-amber-400" : "text-zinc-200 cursor-pointer hover:text-amber-400 hover:underline decoration-dotted transition-colors"}`}
@@ -228,6 +257,19 @@ export const LeaderboardView: React.FC = () => {
                       >
                         {entry.username}
                       </span>
+
+                      {entry.is_online ? (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-1.5 py-0.2 rounded-full shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Online
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.2 rounded-full shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                          Offline
+                        </span>
+                      )}
+
                       {isMe && (
                         <span className="text-[8px] bg-amber-950/40 text-amber-500 border border-amber-900/30 px-1.5 py-0.2 rounded font-mono uppercase font-bold tracking-wider shrink-0">
                           Đại Diện
@@ -237,9 +279,15 @@ export const LeaderboardView: React.FC = () => {
                         <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20 shrink-0" />
                       )}
                     </div>
-                    <span className="text-[10px] text-zinc-500 font-mono">
-                      {getRankName(entry.cultivation_rank, entry.sub_rank)}
-                    </span>
+                    <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono flex-wrap">
+                      <span>{getRankName(entry.cultivation_rank, entry.sub_rank)}</span>
+                      {entry.x !== undefined && entry.y !== undefined && (
+                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                          • <MapPin className="w-3 h-3 text-amber-500/80 inline shrink-0" />
+                          ({entry.x}, {entry.y}) {entry.region ? `• ${getRegionDisplayName(entry.region, regions)}` : ""}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -251,6 +299,8 @@ export const LeaderboardView: React.FC = () => {
                       ? <Num value={Number(entry.value)} />
                       : leaderboardCategory === "gu_strongest"
                       ? `Cấp ${entry.value}`
+                      : leaderboardCategory === "sat_khi"
+                      ? `Tầng ${entry.value}`
                       : entry.value_label}
                   </div>
                   <div className="text-[9px] text-zinc-600 font-mono uppercase tracking-wider">
