@@ -51,9 +51,9 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 		SELECT vh.aperture_id, vh.race, vh.population, vh.gu_master_count, vh.prosperity
 		FROM aperture_variant_humans vh
 		JOIN immortal_apertures a ON a.id = vh.aperture_id
-		WHERE vh.population >= $1 AND a.state != 'DESTROYED'
+		WHERE vh.population >= $1 AND vh.gu_master_count < $2 AND a.state != 'DESTROYED'
 		ORDER BY vh.aperture_id, vh.race
-	`, spawnThresholdPop)
+	`, spawnThresholdPop, maxGuMastersPerRace)
 	if err != nil {
 		logger.S.Error("GuMasterSpawn: failed to query: ", err)
 		return
@@ -76,7 +76,7 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 		return
 	}
 
-	// Collect aperture IDs for NPC name generation.
+	// Collect candidates for NPC spawning.
 	type spawnCandidate struct {
 		apertureID string
 		race       string
@@ -87,16 +87,11 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 
 	var candidates []spawnCandidate
 	for _, r := range races {
-		if r.guMasters >= maxGuMastersPerRace {
-			continue
-		}
-
 		// Calculate spawn chance based on population and prosperity.
 		popFactor := float64(r.pop) / 10000.0
 		prosperityMod := 1.0 + (r.prosperity-50.0)/200.0 // prosperity 100 → 1.25x
 		chance := spawnChanceBase * popFactor * prosperityMod
 
-		// Labor intensity modifier: EXPLOIT reduces happiness which reduces chance.
 		if rand.Float64() < chance {
 			candidates = append(candidates, spawnCandidate{
 				apertureID: r.apertureID,
@@ -112,14 +107,22 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 		return
 	}
 
-	// Spawn NPCs.
+	// Spawn NPCs within a single transaction.
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.S.Errorf("GuMasterSpawn: begin tx error: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	spawnedCount := 0
 	for _, c := range candidates {
 		npcName := generateNPCName(c.race)
 		npcRank := rollGuMasterRank()
-		npcTalent := 20.0 + rand.Float64()*60.0 // 20-80
+		npcTalent := 20.0 + rand.Float64()*60.0  // 20-80
 		npcLoyalty := 50.0 + rand.Float64()*50.0 // 50-100
 
-		_, err := db.ExecContext(ctx, `
+		_, err := tx.ExecContext(ctx, `
 			INSERT INTO aperture_variant_npcs (aperture_id, race, name, rank, sub_rank, path, role, loyalty, talent, status)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'IDLE')
 		`, c.apertureID, c.race, npcName, npcRank, 0, "REFINEMENT", "NONE", npcLoyalty, npcTalent)
@@ -129,17 +132,26 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 		}
 
 		// Update gu_master_count.
-		_, err = db.ExecContext(ctx, `
+		_, err = tx.ExecContext(ctx, `
 			UPDATE aperture_variant_humans
 			SET gu_master_count = gu_master_count + 1, updated_at = NOW()
 			WHERE aperture_id = $1 AND race = $2
 		`, c.apertureID, c.race)
 		if err != nil {
 			logger.S.Errorf("GuMasterSpawn: update count for %s %s: %v", c.apertureID, c.race, err)
+			continue
 		}
+		spawnedCount++
 	}
 
-	logger.S.Infof("GuMasterSpawn: spawned %d new Gu Masters", len(candidates))
+	if err := tx.Commit(); err != nil {
+		logger.S.Errorf("GuMasterSpawn: commit tx error: %v", err)
+		return
+	}
+
+	if spawnedCount > 0 {
+		logger.S.Infof("GuMasterSpawn: spawned %d new Gu Masters", spawnedCount)
+	}
 }
 
 // rollGuMasterRank determines the rank of a newly spawned Gu Master.
@@ -156,25 +168,25 @@ func rollGuMasterRank() int {
 	return 4
 }
 
-// generateNPCName creates a culturally appropriate name for a variant human NPC.
-func generateNPCName(race string) string {
-	rand.Seed(time.Now().UnixNano())
-
-	prefixes := map[string][]string{
-		"HAIRY_MAN": {"Mao", "Hou", "Yuan", "Teng", "Guan", "Dai", "Shen", "Wu"},
-		"ROCKMAN":   {"Shi", "Yan", "Kuang", "Tu", "Feng", "Lei", "Qiao", "Chui"},
+var (
+	npcPrefixes = map[string][]string{
+		"HAIRY_MAN":  {"Mao", "Hou", "Yuan", "Teng", "Guan", "Dai", "Shen", "Wu"},
+		"ROCKMAN":    {"Shi", "Yan", "Kuang", "Tu", "Feng", "Lei", "Qiao", "Chui"},
 		"FEATHERMAN": {"Yu", "Ling", "Feng", "Yun", "Kong", "Ying", "Chi", "Xiang"},
 	}
-
-	suffixes := []string{"Shi", "Er", "San", "Si", "Wu", "Liu", "Qi", "Ba",
+	npcSuffixes = []string{"Shi", "Er", "San", "Si", "Wu", "Liu", "Qi", "Ba",
 		"Tian", "Di", "Ren", "He", "Ming", "Guang", "Da", "Chang"}
+)
 
-	p := prefixes[race]
-	if len(p) == 0 {
-		p = prefixes["HAIRY_MAN"]
+// generateNPCName creates a culturally appropriate name for a variant human NPC.
+func generateNPCName(race string) string {
+	p, ok := npcPrefixes[race]
+	if !ok || len(p) == 0 {
+		p = npcPrefixes["HAIRY_MAN"]
 	}
 
-	return fmt.Sprintf("%s%s", p[rand.Intn(len(p))], suffixes[rand.Intn(len(suffixes))])
+	return fmt.Sprintf("%s%s", p[rand.Intn(len(p))], npcSuffixes[rand.Intn(len(npcSuffixes))])
 }
+
 
 // --- NPC API handlers are in handlers/variant_economy.go ---

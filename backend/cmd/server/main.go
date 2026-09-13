@@ -168,7 +168,7 @@ func main() {
 	go handlers.StartDeathArenaWorker(ctx)
 	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
 	worker.StartSectMissionWorker(ctx, db.DB, 60*time.Second)
-	worker.StartSectTerritoryWorker(ctx, db.DB, 60*time.Second)
+	worker.StartSectTerritoryWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartSectMaintenanceWorker(ctx, db.DB, 24*time.Hour)
 	handlers.StartLastActivityFlusher(ctx)
 	worker.StartBatchPersister(ctx, 5*time.Second)

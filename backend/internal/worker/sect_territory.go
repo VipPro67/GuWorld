@@ -66,7 +66,7 @@ func sectMineBaseRate(rarity string) float64 {
 
 func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 	// ── Phase 0: Fetch all occupied mines ──
-	rows, err := db.Query(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT m.id, m.rarity, m.occupier_sect_id, m.pending_funds, m.pending_materials,
 		       COALESCE(m.last_claimed_at, m.occupied_at, now()), COALESCE(s.level, 1)
 		FROM sect_mines m
@@ -91,10 +91,10 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		return
 	}
 
-	// Filter to mines with elapsed time > 0
+	// Filter to mines with elapsed time >= 1 minute
 	var activeMines []territoryMineRow
 	for _, mr := range mines {
-		if time.Since(mr.lastClaimed).Minutes() > 0 {
+		if time.Since(mr.lastClaimed).Minutes() >= 1.0 {
 			activeMines = append(activeMines, mr)
 		}
 	}
@@ -114,7 +114,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		sectIDs = append(sectIDs, sid)
 	}
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		logger.S.Errorf("Sect Territory Worker: begin tx failed: %v", err)
 		return
@@ -125,7 +125,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 
 	// 1a. Defender counts per mine
 	defenderCountMap := map[int]int{}
-	if dRows, err := tx.Query(`SELECT mine_id, COUNT(*) FROM sect_mine_defenders WHERE mine_id = ANY($1::int[]) GROUP BY mine_id`, pq.Array(mineIDs)); err == nil {
+	if dRows, err := tx.QueryContext(ctx, `SELECT mine_id, COUNT(*) FROM sect_mine_defenders WHERE mine_id = ANY($1::int[]) GROUP BY mine_id`, pq.Array(mineIDs)); err == nil {
 		for dRows.Next() {
 			var mid, cnt int
 			if dRows.Scan(&mid, &cnt) == nil {
@@ -135,22 +135,9 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		dRows.Close()
 	}
 
-	// 1b. Member counts per sect
-	memberCountMap := map[string]int{}
-	if mRows, err := tx.Query(`SELECT sect_id, COUNT(*) FROM sect_members WHERE sect_id = ANY($1::text[]) GROUP BY sect_id`, pq.Array(sectIDs)); err == nil {
-		for mRows.Next() {
-			var sid string
-			var cnt int
-			if mRows.Scan(&sid, &cnt) == nil {
-				memberCountMap[sid] = cnt
-			}
-		}
-		mRows.Close()
-	}
-
-	// 1c. Defender player IDs per mine
+	// 1b. Defender player IDs per mine
 	defenderIDsByMine := map[int]map[string]bool{}
-	if dRows, err := tx.Query(`SELECT mine_id, player_id::text FROM sect_mine_defenders WHERE mine_id = ANY($1::int[]) AND defender_type = 'member'`, pq.Array(mineIDs)); err == nil {
+	if dRows, err := tx.QueryContext(ctx, `SELECT mine_id, player_id::text FROM sect_mine_defenders WHERE mine_id = ANY($1::int[]) AND defender_type = 'member'`, pq.Array(mineIDs)); err == nil {
 		for dRows.Next() {
 			var mid int
 			var pid string
@@ -164,10 +151,11 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		dRows.Close()
 	}
 
-	// 1d. Member player IDs per sect
+	// 1c. Member player IDs and counts per sect
 	memberIDsBySect := map[string][]string{}
+	memberCountMap := map[string]int{}
 	allMemberIDSet := map[string]bool{}
-	if mRows, err := tx.Query(`SELECT sect_id, player_id::text FROM sect_members WHERE sect_id = ANY($1::text[])`, pq.Array(sectIDs)); err == nil {
+	if mRows, err := tx.QueryContext(ctx, `SELECT sect_id, player_id::text FROM sect_members WHERE sect_id = ANY($1::text[])`, pq.Array(sectIDs)); err == nil {
 		for mRows.Next() {
 			var sid, pid string
 			if mRows.Scan(&sid, &pid) == nil {
@@ -176,6 +164,9 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 			}
 		}
 		mRows.Close()
+	}
+	for sid, members := range memberIDsBySect {
+		memberCountMap[sid] = len(members)
 	}
 
 	// All unique member player IDs for contribution credit
@@ -513,18 +504,18 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 				crCreditedAts = append(crCreditedAts, cr.newCreditedAt)
 			}
 
-			if _, err := tx.Exec(`
-				UPDATE sect_members sm SET
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE sm SET
 					contribution_points = sm.contribution_points + v.delta,
 					territory_pending = v.pending,
 					territory_credited_today = v.credited_today,
 					territory_credited_at = v.credited_at::date
-				FROM (SELECT unnest($1::uuid[]) AS player_id,
+				FROM sect_members sm
+				JOIN (SELECT unnest($1::uuid[]) AS player_id,
 				             unnest($2::int[]) AS delta,
 				             unnest($3::float8[]) AS pending,
 				             unnest($4::int[]) AS credited_today,
-				             unnest($5::text[]) AS credited_at) v
-				WHERE sm.player_id = v.player_id
+				             unnest($5::text[]) AS credited_at) v ON sm.player_id = v.player_id
 			`, pq.Array(crIDs), pq.Array(crDeltas), pq.Array(crPendings),
 				pq.Array(crCreditedTodays), pq.Array(crCreditedAts)); err != nil {
 				logger.S.Errorf("Sect Territory Worker: batch update contributions failed: %v", err)
