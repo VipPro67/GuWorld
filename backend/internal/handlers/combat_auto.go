@@ -421,6 +421,9 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		}
 		spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
 		if !ok {
+			spec, ok = models.GetGuAny(guInst.GuID)
+		}
+		if !ok {
 			continue
 		}
 		if hasCombatActiveEffects(&spec) {
@@ -569,7 +572,10 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	// Resolve a loadout GuID to its actual equipped instance spec (match ID + rank)
 	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
 		if inst, ok := equippedInstByGuID[guID]; ok {
-			return models.GetGu(guID, inst.Rank)
+			if spec, found := models.GetGu(guID, inst.Rank); found {
+				return spec, true
+			}
+			return models.GetGuAny(guID)
 		}
 		return models.GuDictionaryItem{}, false
 	}

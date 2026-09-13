@@ -109,9 +109,6 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	}
 	effectiveDamage *= gamefx.PathDamageMultiplierForPaths(guSpec.Path, pathDamage)
 	effectiveDefense = baseDef * powerScale * masteryMultiplier * daoMultiplier
-	if baseDef > 0 {
-		effectiveDefense += actor.BaseDefense * powerScale * masteryMultiplier * daoMultiplier
-	}
 
 	cost := gamefx.EnergyCostForCombatant(actor, guSpec)
 

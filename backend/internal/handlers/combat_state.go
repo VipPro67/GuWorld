@@ -19,6 +19,9 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		for _, g := range base.EnemyGuInventory {
 			if g.Equipped && g.Status == "ACTIVE" {
 				spec, ok := models.GetGu(g.GuID, g.Rank)
+				if !ok {
+					spec, ok = models.GetGuAny(g.GuID)
+				}
 				if ok && hasCombatActiveEffects(&spec) {
 					filteredGu = append(filteredGu, g)
 				}
