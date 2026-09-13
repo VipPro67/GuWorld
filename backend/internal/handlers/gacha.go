@@ -329,6 +329,10 @@ func runGachaOpen(c *gin.Context, forced int) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
 	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể rút quẻ!"})
+		return
+	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 10% discount when opening 10 or more times in one go

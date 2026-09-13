@@ -78,6 +78,11 @@ func AutoCombatStart(c *gin.Context) {
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể bắt đầu giao tranh!"})
+		return
+	}
+
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
 		return

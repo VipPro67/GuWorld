@@ -125,7 +125,7 @@ func (s *RecipeService) UpsertBatch(tx *sql.Tx, recipes []*RecipeProgress) error
 
 	_, err := s.exec(tx, `
 		INSERT INTO player_recipe_progress (player_id, recipe_id, completion_rate, is_unlocked, deduce_count, favorite, updated_at)
-		SELECT unnest($1::text[]), unnest($2::text[]), unnest($3::double precision[]), unnest($4::boolean[]), unnest($5::integer[]), unnest($6::boolean[]), NOW()
+		SELECT unnest($1::uuid[]), unnest($2::text[]), unnest($3::double precision[]), unnest($4::boolean[]), unnest($5::integer[]), unnest($6::boolean[]), NOW()
 		ON CONFLICT (player_id, recipe_id) DO UPDATE SET
 			completion_rate = EXCLUDED.completion_rate,
 			is_unlocked = EXCLUDED.is_unlocked,

@@ -329,6 +329,11 @@ func RefineGu(c *gin.Context) {
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể luyện Cổ!"})
+		return
+	}
+
 	// 2b. Verify player has unlocked the recipe
 	var unlockedRate float64 = 0.0
 	recipeProgress, err := RecipeSvc.Get(tx, player.ID.String(), req.RecipeID)

@@ -115,6 +115,11 @@ func CombatAttack(c *gin.Context) {
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể tham gia chiến đấu!"})
+		return
+	}
+
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
 		return
@@ -1524,6 +1529,7 @@ func CombatAttack(c *gin.Context) {
 
 		isTribulation := player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation"
 
+		deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 			if player.ActiveCombat.TargetPlayerID != "" {
 				if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
@@ -1535,10 +1541,21 @@ func CombatAttack(c *gin.Context) {
 			}
 			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")
 		} else if !isTribulation {
-			ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết.")
+			var winnerID *uuid.UUID
+			if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
+				if tUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil {
+					winnerID = &tUUID
+				}
+			}
+			dropSummary := applyDeathDrop(tx, &player, winnerID, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+			if dropSummary != "" {
+				ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary))
+			} else {
+				ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết.")
+			}
 		}
 
-		player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
+		player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
 
 		if isTribulation {
 			player.ImmortalStones /= 2

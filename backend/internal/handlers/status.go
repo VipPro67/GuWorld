@@ -99,6 +99,9 @@ func CleanExpiredPlayerStatuses(q execQuerier, rq rowQuerier, playerID uuid.UUID
 // statusBlockedMessage builds a Vietnamese error listing the statuses that
 // block the given action.
 func statusBlockedMessage(p *models.Player, action string) string {
+	if p != nil && p.IsDead {
+		return "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể thực hiện hành động này!"
+	}
 	defs := gamefx.BlockingStatuses(p, action)
 	if len(defs) == 0 {
 		return "Hành động hiện bị chặn bởi trạng thái."

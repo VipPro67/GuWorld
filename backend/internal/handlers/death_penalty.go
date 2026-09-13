@@ -284,7 +284,16 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 	var loserRegion sql.NullString
 	var loserX, loserY int
 	var loserName string
-	_ = tx.QueryRow(`SELECT current_region, x, y, username FROM players WHERE id = $1`, loserID).Scan(&loserRegion, &loserX, &loserY, &loserName)
+
+	if len(deathPos) > 0 && deathPos[0].Region != "" {
+		loserRegion.String = deathPos[0].Region
+		loserRegion.Valid = true
+		loserX = deathPos[0].X
+		loserY = deathPos[0].Y
+		_ = tx.QueryRow(`SELECT username FROM players WHERE id = $1`, loserID).Scan(&loserName)
+	} else {
+		_ = tx.QueryRow(`SELECT current_region, x, y, username FROM players WHERE id = $1`, loserID).Scan(&loserRegion, &loserX, &loserY, &loserName)
+	}
 
 	// Cổ trùng
 	if deathPenaltyConfig.GusEnabled && len(droppedGus) > 0 {
@@ -319,13 +328,6 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 	// Nếu người thua có Sát Khí, giảm 1 tầng Sát Khí sau khi trả nợ máu bằng tử đạo
 	if satKhiLevel > 0 {
 		reduceSatKhiOnDeath(tx, loserID)
-	}
-
-	if len(deathPos) > 0 && deathPos[0].Region != "" {
-		loserRegion.String = deathPos[0].Region
-		loserRegion.Valid = true
-		loserX = deathPos[0].X
-		loserY = deathPos[0].Y
 	}
 
 	var killerName string

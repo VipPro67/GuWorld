@@ -135,6 +135,10 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể tạo giao dịch Bảo Hoàng Thiên!"})
+		return
+	}
 
 	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
 		return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
@@ -500,6 +504,10 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể đấu giá Bảo Hoàng Thiên!"})
+		return
+	}
 
 	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
 		return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
@@ -657,6 +665,10 @@ func BuyListing(c *gin.Context) {
 	buyer, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load buyer details"})
+		return
+	}
+	if buyer.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể mua vật phẩm Bảo Hoàng Thiên!"})
 		return
 	}
 

@@ -2415,8 +2415,13 @@ func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (mode
 
 func setDefaultPlayerStatusFields(player *models.Player) {
 	// Unlocked recipes are now stored in player_recipe_progress table
-	if player.Lifespan <= 0 {
-		player.Lifespan = 100.0
+	dummyP := models.Player{}
+	dummyP.Race = player.Race
+	if gamefx.Get(&dummyP).Immortal {
+		player.IsDead = false
+	} else if player.Lifespan <= 0 {
+		player.Lifespan = 0
+		player.IsDead = true
 	}
 	if player.TimeSpeedMultiplier <= 0 {
 		if player.Rank >= 6 {
@@ -3738,6 +3743,15 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
+	if player.IsDead {
+		_, hasLifespanBoost := item.Effects["lifespan_boost"]
+		_, hasRaceChange := item.Effects["change_race"]
+		if !hasLifespanBoost && !hasRaceChange {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Chỉ có thể sử dụng Thọ Nguyên Cổ để hồi sinh!"})
+			return
+		}
+	}
+
 	// Determine which category the item is in (single query)
 	qty, itemCategory, err := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), req.ItemID, "consumables", "materials")
 	if err != nil || qty <= 0 {
@@ -3787,11 +3801,11 @@ func UseItem(c *gin.Context) {
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
 		    primeval_stones = $5, lifespan = $6, human_qi = $7,
-		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11
-		WHERE id = $12`,
+		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11, is_dead = $12
+		WHERE id = $13`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
-		player.Race, player.Constitution, player.SoulHP, player.MaxSoul,
+		player.Race, player.Constitution, player.SoulHP, player.MaxSoul, player.IsDead,
 		player.ID,
 	)
 	if err != nil {
@@ -3944,11 +3958,11 @@ func UseItems(c *gin.Context) {
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
 		    primeval_stones = $5, lifespan = $6, human_qi = $7,
-		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11
-		WHERE id = $12`,
+		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11, is_dead = $12
+		WHERE id = $13`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
-		player.Race, player.Constitution, player.SoulHP, player.MaxSoul,
+		player.Race, player.Constitution, player.SoulHP, player.MaxSoul, player.IsDead,
 		player.ID,
 	)
 	if err != nil {
