@@ -748,7 +748,9 @@ return (
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-400">Mốc tai kiếp kế tiếp</span>
-                    <span className="text-rose-400 font-semibold">{Math.round(aperture.next_tribulation_year)} năm</span>
+                    <span className="text-rose-400 font-semibold">
+                      {player?.race === "cuong_thi" ? "Tử Khiếu (Ngưng trệ)" : `${Math.round(aperture.next_tribulation_year)} năm`}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-400">Tổng số kiếp nạn vượt qua</span>
@@ -791,13 +793,13 @@ return (
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-400">Tiến độ tích kiếp lực</span>
                     <span className="text-amber-400 font-semibold">
-                      {Math.min(100, Math.max(0, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)).toFixed(1)}%
+                      {player?.race === "cuong_thi" ? "0.0% (Tử Khiếu)" : `${Math.min(100, Math.max(0, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)).toFixed(1)}%`}
                     </span>
                   </div>
                   <div className="w-full bg-slate-950/80 h-2 rounded-full overflow-hidden border border-slate-800">
                     <div
                       className="h-full bg-gradient-to-r from-cyan-500 to-amber-500"
-                      style={{ width: `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
+                      style={{ width: player?.race === "cuong_thi" ? "0%" : `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
                     />
                   </div>
                   <TribulationRealTimeInfo aperture={aperture} timeSpeedMultiplier={player?.time_speed_multiplier ?? 1} isCompact={false} />

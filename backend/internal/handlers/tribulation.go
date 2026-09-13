@@ -686,9 +686,17 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 	}
 
 	var rank int
-	err = db.DB.QueryRow(`SELECT rank FROM players WHERE id = $1`, ap.PlayerID).Scan(&rank)
+	var race string
+	err = db.DB.QueryRow(`SELECT rank, COALESCE(race, '') FROM players WHERE id = $1`, ap.PlayerID).Scan(&rank, &race)
 	if err != nil {
 		return err
+	}
+
+	dummyP := models.Player{}
+	dummyP.Race = race
+	if gamefx.Get(&dummyP).Immortal {
+		// Tiên Cương: Tử Khiếu ngưng trệ, tai kiếp không giáng xuống
+		return nil
 	}
 
 	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
@@ -920,7 +928,7 @@ func CheckAndTriggerTribulations() error {
 	// Query stable apertures
 	rows, err := db.DB.Query(`
 		SELECT id, player_id, time_rate, area_size, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
-			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at
+			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at, state
 		FROM immortal_apertures
 		WHERE state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING')
 	`)
@@ -945,13 +953,14 @@ func CheckAndTriggerTribulations() error {
 		MyriadTribulationCount   int
 		ChaosCalamityCount       int
 		TribulationPendingAt     sql.NullTime
+		State                    string
 	}
 
 	apertures := []ApertureCheck{}
 	for rows.Next() {
 		var ap ApertureCheck
 		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.AreaSize, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.EssenceProductionPerYear,
-			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt); err == nil {
+			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt, &ap.State); err == nil {
 			apertures = append(apertures, ap)
 		}
 	}
@@ -1282,6 +1291,20 @@ func CheckAndTriggerTribulations() error {
 						calcNextType = scheduledType
 					}
 				}
+			}
+
+			if isImmortal {
+				// Tiên Cương: Tử Khiếu ngưng trệ, tai kiếp ngưng giáng xuống
+				newState := ap.State
+				if newState == "TRIBULATION_PENDING" {
+					newState = "STABLE"
+				}
+				_, _ = db.DB.Exec(`
+					UPDATE immortal_apertures
+					SET internal_years_passed = $1, state = $2, tribulation_pending_at = NULL, updated_at = NOW()
+					WHERE id = $3
+				`, newYearsPassed, newState, ap.ID)
+				continue
 			}
 
 			if newYearsPassed >= triggerYear {

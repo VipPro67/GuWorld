@@ -290,15 +290,20 @@ func GetImmortalAperture(c *gin.Context) {
 		return
 	}
 
-	if (ap.State == "STABLE" || ap.State == "DAMAGED") && ap.NextTribulationYear > 0 && ap.InternalYearsPassed >= ap.NextTribulationYear {
-		_ = checkAndTriggerSingleAperture(ap.ID)
-		_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ap.ID).Scan(&ap.State)
-	}
+	isImmortalPlayer := gamefx.Get(&player).Immortal
+	if !isImmortalPlayer {
+		if (ap.State == "STABLE" || ap.State == "DAMAGED") && ap.NextTribulationYear > 0 && ap.InternalYearsPassed >= ap.NextTribulationYear {
+			_ = checkAndTriggerSingleAperture(ap.ID)
+			_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ap.ID).Scan(&ap.State)
+		}
 
-	if (ap.State == "STABLE" || ap.State == "DAMAGED") && effectiveTimeRate > 0 && ap.NextTribulationYear > ap.InternalYearsPassed {
-		remainingInternalYears := ap.NextTribulationYear - ap.InternalYearsPassed
-		arrival := ap.UpdatedAt.Add(time.Duration(remainingInternalYears/effectiveTimeRate*36000.0) * time.Second)
-		ap.NextTribulationAt = &arrival
+		if (ap.State == "STABLE" || ap.State == "DAMAGED") && effectiveTimeRate > 0 && ap.NextTribulationYear > ap.InternalYearsPassed {
+			remainingInternalYears := ap.NextTribulationYear - ap.InternalYearsPassed
+			arrival := ap.UpdatedAt.Add(time.Duration(remainingInternalYears/effectiveTimeRate*36000.0) * time.Second)
+			ap.NextTribulationAt = &arrival
+		}
+	} else {
+		ap.NextTribulationAt = nil
 	}
 
 	c.JSON(http.StatusOK, ap)

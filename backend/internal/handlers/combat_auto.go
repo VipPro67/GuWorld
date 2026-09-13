@@ -438,7 +438,7 @@ func AutoCombatStart(c *gin.Context) {
 							if targetHP < 10.0 {
 								targetHP = 10.0
 							}
-							dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
+							dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
 							hubRegion, hubX, hubY := NearestHub(targetX, targetY)
 							_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
 							if dropSummary != "" {
@@ -732,7 +732,7 @@ func AutoCombatStart(c *gin.Context) {
 						winnerID = &tUUID
 					}
 				}
-				dropSummary := applyDeathDrop(tx, &player, winnerID, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+				dropSummary := applyDeathDrop(tx, &player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
 				player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
 				if dropSummary != "" {
 					defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)

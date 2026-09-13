@@ -165,7 +165,7 @@ type DeathPos struct {
 }
 
 // applyDeathDrop applies the death penalty to a fully-loaded in-memory loser.
-func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, deathPos ...DeathPos) string {
+func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, isAggressor bool, deathPos ...DeathPos) string {
 	mult, satKhiLevel := getSatKhiMultiplier(tx, loser.ID)
 	remainingGus, droppedGus := selectEligibleGus(loser.GuInventory, mult, satKhiLevel)
 	loser.GuInventory = remainingGus
@@ -194,11 +194,11 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, death
 		dp = []DeathPos{{Region: loser.CurrentRegion, X: loser.X, Y: loser.Y}}
 	}
 
-	return persistDeathDrop(tx, loser.ID, winnerID, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, dp...)
+	return persistDeathDrop(tx, loser.ID, winnerID, isAggressor, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, dp...)
 }
 
 // applyDeathDropRecord applies the death penalty to a player record that is not fully loaded in memory.
-func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, deathPos ...DeathPos) string {
+func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, isAggressor bool, deathPos ...DeathPos) string {
 	var primevalStones, immortalStones int64
 	err := tx.QueryRow(`
 		SELECT primeval_stones, immortal_stones
@@ -230,7 +230,7 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, deathPos ...
 	allGus, _ := db.LoadPlayerGus(tx, loserID.String(), false)
 	_, droppedGus := selectEligibleGus(allGus, mult, satKhiLevel)
 
-	return persistDeathDrop(tx, *loserID, winnerID, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, deathPos...)
+	return persistDeathDrop(tx, *loserID, winnerID, isAggressor, primevalLoss, immortalLoss, droppedGus, mult, satKhiLevel, deathPos...)
 }
 
 type DroppedItem struct {
@@ -248,7 +248,7 @@ type GroundLootData struct {
 }
 
 // persistDeathDrop writes the computed losses to DB, creates a map_ground_drops record, and builds summary.
-func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primevalLoss, immortalLoss int64, droppedGus models.GuInventory, mult float64, satKhiLevel int, deathPos ...DeathPos) string {
+func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggressor bool, primevalLoss, immortalLoss int64, droppedGus models.GuInventory, mult float64, satKhiLevel int, deathPos ...DeathPos) string {
 	var lost []string
 	lootData := GroundLootData{
 		PrimevalStones: primevalLoss,
@@ -320,8 +320,8 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 		lost = append(lost, recipeLogs...)
 	}
 
-	// Nếu là chiến thắng PvP, tăng Sát Khí cho kẻ chiến thắng
-	if winnerID != nil {
+	// Nếu người thắng là kẻ chủ động tấn công (aggressor), tăng Sát Khí cho kẻ chiến thắng
+	if winnerID != nil && isAggressor {
 		AddSatKhiStatus(tx, winnerID)
 	}
 

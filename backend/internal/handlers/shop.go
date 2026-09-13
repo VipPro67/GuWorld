@@ -452,6 +452,10 @@ func BuyShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
 		return
 	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể mua sắm!"})
+		return
+	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 3.1 Enforce daily stock for virtual random-pool items (rank<5 Gus + food).

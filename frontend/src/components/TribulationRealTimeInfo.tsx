@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ImmortalAperture } from "@/store/useGameStore";
+import { ImmortalAperture, useGameStore } from "@/store/useGameStore";
 
 interface TribulationRealTimeInfoProps {
   aperture: ImmortalAperture;
@@ -10,12 +10,20 @@ interface TribulationRealTimeInfoProps {
 }
 
 export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, timeSpeedMultiplier = 1, isCompact }) => {
+  const playerRace = useGameStore((state) => state.player?.race);
   const [timeLeftText, setTimeLeftText] = useState<string>("");
   const [arrivalTimeText, setArrivalTimeText] = useState<string>("");
   const [isPassed, setIsPassed] = useState<boolean>(false);
 
   useEffect(() => {
     const updateTime = () => {
+      if (playerRace === "cuong_thi") {
+        setTimeLeftText("Ngưng trệ (Tử Khiếu)");
+        setArrivalTimeText("Không giáng kiếp");
+        setIsPassed(false);
+        return;
+      }
+
       if (aperture.state === "TRIBULATION_ACTIVE") {
         setTimeLeftText("Đang diễn ra");
         setArrivalTimeText("Đang chiến đấu");
@@ -73,7 +81,7 @@ export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = (
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier]);
+  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier, playerRace]);
 
   if (isCompact) {
     return (

@@ -1254,7 +1254,7 @@ func CombatAttack(c *gin.Context) {
 						if targetHP < 10.0 {
 							targetHP = 10.0
 						}
-						dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
+						dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
 						hubRegion, hubX, hubY := NearestHub(targetX, targetY)
 						_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
 						if dropSummary != "" {
@@ -1530,7 +1530,9 @@ func CombatAttack(c *gin.Context) {
 		isTribulation := player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation"
 
 		deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
-		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+		if isVirtual {
+			ctx.Logs = append(ctx.Logs, "Thua cuộc trong đấu trường ảnh! Bản thể không bị ảnh hưởng.")
+		} else if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 			if player.ActiveCombat.TargetPlayerID != "" {
 				if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
 					var rarity string
@@ -1547,7 +1549,7 @@ func CombatAttack(c *gin.Context) {
 					winnerID = &tUUID
 				}
 			}
-			dropSummary := applyDeathDrop(tx, &player, winnerID, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+			dropSummary := applyDeathDrop(tx, &player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
 			if dropSummary != "" {
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary))
 			} else {
@@ -1555,7 +1557,9 @@ func CombatAttack(c *gin.Context) {
 			}
 		}
 
-		player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
+		if !isVirtual {
+			player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
+		}
 
 		if isTribulation {
 			player.ImmortalStones /= 2

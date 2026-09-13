@@ -911,6 +911,10 @@ func MovePlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
 		return
 	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"})
+		return
+	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
@@ -1179,6 +1183,10 @@ func MovePlayerPath(c *gin.Context) {
 	if err != nil {
 		logger.S.Errorf("MovePlayerPath: failed to evaluate mana for player=%s: %v", authID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
+		return
+	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"})
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)

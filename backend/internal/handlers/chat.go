@@ -53,6 +53,10 @@ func SendPrivateMail(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player status"})
 		return
 	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể gửi tin nhắn!"})
+		return
+	}
 
 	// Rule: Sending messenger gu consumes 1 Primeval Stone
 	if player.PrimevalStones < 1 {
@@ -180,6 +184,10 @@ func SendBaoHoangChat(c *gin.Context) {
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+	if player.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể gửi tin nhắn!"})
 		return
 	}
 

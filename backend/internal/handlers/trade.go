@@ -226,6 +226,15 @@ func InitiateTrade(c *gin.Context) {
 		}
 	}
 
+	if sender.IsDead {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể giao dịch!"})
+		return
+	}
+	if receiver.IsDead {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương đã rơi vào cõi chết. Không thể giao dịch!"})
+		return
+	}
+
 	isCloseEnough := false
 	if sender.CurrentRegion == receiver.CurrentRegion {
 		dist := int(math.Max(math.Abs(float64(sender.X-receiver.X)), math.Abs(float64(sender.Y-receiver.Y))))
@@ -735,6 +744,11 @@ func ConfirmTrade(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
 				return
 			}
+		}
+
+		if sender.IsDead || receiver.IsDead {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Một trong hai bên tham gia giao dịch đã rơi vào cõi chết. Giao dịch bị hủy!"})
+			return
 		}
 
 		isCloseEnough := false
