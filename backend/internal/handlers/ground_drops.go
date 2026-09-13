@@ -342,6 +342,14 @@ func LootGroundDrop(c *gin.Context) {
 			fmt.Sprintf("Chiến lợi phẩm của bạn tại %s (%d, %d) đã bị %s nhặt mất: %s.", dropRegion, dropX, dropY, player.Username, summaryMsg))
 	}
 
+	// Notify killer if drop was looted by someone else (third party)
+	if killerID.Valid && killerID.String != "" && killerID.String != player.ID.String() {
+		if kUUID, errK := uuid.Parse(killerID.String); errK == nil && kUUID != loserID {
+			notify.Send(db.DB, kUUID, "ground_drop_looted_by_third_party", "Chiến lợi phẩm chiến trường",
+				fmt.Sprintf("Chiến lợi phẩm của kẻ thù [%s] do bạn hạ gục tại %s (%d, %d) đã bị Cổ Sư [%s] thu thập: %s.", loserName, dropRegion, dropX, dropY, player.Username, summaryMsg))
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Thu thập thành công chiến lợi phẩm của %s: %s", loserName, summaryMsg),
 		"looted":  logs,

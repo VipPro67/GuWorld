@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, CheckCheck, Package, Skull, ShoppingBag, Gavel, Coins, Info } from "lucide-react";
+import { Bell, CheckCheck, Package, Skull, ShoppingBag, Gavel, Coins, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { useGameStore, type PlayerNotification } from "@/store/useGameStore";
 
 const TYPE_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
@@ -34,8 +34,71 @@ function relativeTime(iso: string): string {
   return `${day} ngày trước`;
 }
 
+const NotificationItem: React.FC<{ notification: PlayerNotification }> = ({ notification: n }) => {
+  const { markNotificationRead } = useGameStore();
+  const [expanded, setExpanded] = useState(false);
+  const meta = TYPE_ICONS[n.type] || { icon: <Info className="w-4 h-4" />, color: "text-zinc-400" };
+  const isLong = (n.content || "").length > 80 || (n.content || "").includes("\n");
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!n.is_read) {
+      void markNotificationRead(n.id);
+    }
+    setExpanded((prev) => !prev);
+  };
+
+  const handleClick = () => {
+    if (!n.is_read) {
+      void markNotificationRead(n.id);
+    }
+  };
+
+  return (
+    <div
+      onClick={handleClick}
+      className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-[var(--bg-elevated)] transition-colors border-b border-[var(--border-default)] last:border-b-0 cursor-pointer ${
+        n.is_read ? "opacity-60" : ""
+      }`}
+    >
+      <span className={`mt-0.5 shrink-0 ${meta.color}`}>{meta.icon}</span>
+      <div className="flex-1 min-w-0">
+        <span className="block text-xs font-semibold text-[var(--text-primary)]">{n.title}</span>
+        <div
+          className={`text-[11px] text-zinc-300 mt-1 leading-relaxed ${
+            expanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"
+          }`}
+        >
+          {n.content}
+        </div>
+        <div className="flex items-center justify-between mt-1.5">
+          <span className="text-[10px] text-zinc-500">{relativeTime(n.created_at)}</span>
+          {isLong && (
+            <button
+              type="button"
+              onClick={handleToggle}
+              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors py-0.5 px-1.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer"
+            >
+              {expanded ? (
+                <>
+                  Thu gọn <ChevronUp className="w-3 h-3" />
+                </>
+              ) : (
+                <>
+                  Xem thêm <ChevronDown className="w-3 h-3" />
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+      {!n.is_read && <span className="mt-1 shrink-0 w-2 h-2 rounded-full bg-emerald-500" />}
+    </div>
+  );
+};
+
 export const NotificationBell: React.FC = () => {
-  const { notifications, unreadNotifications, fetchNotifications, fetchUnreadNotificationsCount, markNotificationRead, markAllNotificationsRead } = useGameStore();
+  const { notifications, unreadNotifications, fetchNotifications, fetchUnreadNotificationsCount, markAllNotificationsRead } = useGameStore();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -74,7 +137,7 @@ export const NotificationBell: React.FC = () => {
       </button>
 
       {open && (
-        <div className="fixed top-[56px] left-4 right-4 sm:absolute sm:top-auto sm:left-auto sm:right-0 sm:w-[360px] max-h-[70vh] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl shadow-2xl z-50">
+        <div className="fixed top-[56px] left-4 right-4 sm:absolute sm:top-auto sm:left-auto sm:right-0 sm:w-[380px] max-h-[75vh] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl shadow-2xl z-50">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)]">
             <span className="text-sm font-semibold text-[var(--text-primary)]">Thông báo</span>
             <button
@@ -90,26 +153,9 @@ export const NotificationBell: React.FC = () => {
             {notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-zinc-500">Chưa có thông báo nào.</div>
             ) : (
-              notifications.map((n: PlayerNotification) => {
-                const meta = TYPE_ICONS[n.type] || { icon: <Info className="w-4 h-4" />, color: "text-zinc-400" };
-                return (
-                  <button
-                    key={n.id}
-                    onClick={() => markNotificationRead(n.id)}
-                    className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-[var(--bg-elevated)] transition-colors border-b border-[var(--border-default)] last:border-b-0 cursor-pointer ${
-                      n.is_read ? "opacity-60" : ""
-                    }`}
-                  >
-                    <span className={`mt-0.5 shrink-0 ${meta.color}`}>{meta.icon}</span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-xs font-semibold text-[var(--text-primary)] truncate">{n.title}</span>
-                      <span className="block text-[11px] text-zinc-400 mt-0.5 line-clamp-2">{n.content}</span>
-                      <span className="block text-[10px] text-zinc-500 mt-1">{relativeTime(n.created_at)}</span>
-                    </span>
-                    {!n.is_read && <span className="mt-1 shrink-0 w-2 h-2 rounded-full bg-emerald-500" />}
-                  </button>
-                );
-              })
+              notifications.map((n: PlayerNotification) => (
+                <NotificationItem key={n.id} notification={n} />
+              ))
             )}
           </div>
         </div>
