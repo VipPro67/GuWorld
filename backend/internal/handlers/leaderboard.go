@@ -219,7 +219,7 @@ func GetLeaderboard(c *gin.Context) {
 				p.x, p.y, COALESCE(r.name, p.current_region, ''),
 				(p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes') as is_online
 			FROM players p
-			JOIN leaderboard_settings ls ON p.id = ls.player_id
+			LEFT JOIN leaderboard_settings ls ON p.id = ls.player_id
 			LEFT JOIN regions r ON p.current_region = r.id
 			JOIN LATERAL (
 				SELECT (elem->>'value')::int as level
@@ -228,7 +228,7 @@ func GetLeaderboard(c *gin.Context) {
 				  AND (elem->>'expires_at' IS NULL OR (elem->>'expires_at')::timestamptz > NOW())
 				LIMIT 1
 			) sk ON true
-			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
+			WHERE (p.is_admin IS NULL OR p.is_admin = false)
 			  AND sk.level > 0
 			ORDER BY sk.level DESC, p.last_activity DESC
 			LIMIT 50`
@@ -263,11 +263,25 @@ func GetLeaderboard(c *gin.Context) {
 
 	// Count total visible players
 	var totalPlayers int
-	_ = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT COUNT(*) FROM players p
-		JOIN leaderboard_settings ls ON p.id = ls.player_id
-		WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
-	`).Scan(&totalPlayers)
+	if category == "sat_khi" {
+		_ = db.DB.QueryRowContext(c.Request.Context(), `
+			SELECT COUNT(*) FROM players p
+			JOIN LATERAL (
+				SELECT (elem->>'value')::int as level
+				FROM jsonb_array_elements(COALESCE(p.statuses, '[]'::jsonb)) elem
+				WHERE elem->>'id' = 'sat_khi'
+				  AND (elem->>'expires_at' IS NULL OR (elem->>'expires_at')::timestamptz > NOW())
+				LIMIT 1
+			) sk ON true
+			WHERE (p.is_admin IS NULL OR p.is_admin = false) AND sk.level > 0
+		`).Scan(&totalPlayers)
+	} else {
+		_ = db.DB.QueryRowContext(c.Request.Context(), `
+			SELECT COUNT(*) FROM players p
+			JOIN leaderboard_settings ls ON p.id = ls.player_id
+			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
+		`).Scan(&totalPlayers)
+	}
 
 	// Cache the result
 	leaderboardCacheStore(category, entries, totalPlayers)
@@ -350,7 +364,7 @@ func buildRankQuery(category string) string {
 				SELECT p.id, COALESCE(sk.level, 0)::float8 as val,
 					ROW_NUMBER() OVER (ORDER BY COALESCE(sk.level, 0) DESC) as position
 				FROM players p
-				JOIN leaderboard_settings ls ON p.id = ls.player_id
+				LEFT JOIN leaderboard_settings ls ON p.id = ls.player_id
 				LEFT JOIN LATERAL (
 					SELECT (elem->>'value')::int as level
 					FROM jsonb_array_elements(COALESCE(p.statuses, '[]'::jsonb)) elem
@@ -358,7 +372,7 @@ func buildRankQuery(category string) string {
 					  AND (elem->>'expires_at' IS NULL OR (elem->>'expires_at')::timestamptz > NOW())
 					LIMIT 1
 				) sk ON true
-				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
+				WHERE (p.is_admin IS NULL OR p.is_admin = false) AND sk.level > 0
 			) sub WHERE sub.id = $1`
 	}
 	return ""

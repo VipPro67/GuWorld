@@ -179,8 +179,8 @@ export const LeaderboardView: React.FC = () => {
           </div>
           <div className="text-left bg-zinc-950/80 px-4 py-2 border border-zinc-900 rounded-xl">
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Trạng thái BXH</div>
-            <span className={`text-sm font-bold font-mono ${leaderboardShowOnLeaderboard ? "text-emerald-400" : "text-rose-400"}`}>
-              {leaderboardShowOnLeaderboard ? "Hiển thị" : "Ẩn"}
+            <span className={`text-sm font-bold font-mono ${leaderboardCategory === "sat_khi" ? "text-amber-400" : leaderboardShowOnLeaderboard ? "text-emerald-400" : "text-rose-400"}`}>
+              {leaderboardCategory === "sat_khi" ? "Công khai" : leaderboardShowOnLeaderboard ? "Hiển thị" : "Ẩn"}
             </span>
           </div>
         </div>
@@ -318,9 +318,11 @@ export const LeaderboardView: React.FC = () => {
           <div>
             <Users className="w-3 h-3 inline mr-1" />
             Tổng số {leaderboardTotalPlayers} người chơi đang tham gia bảng xếp hạng
-            {!leaderboardShowOnLeaderboard && (
+            {leaderboardCategory === "sat_khi" ? (
+              <span className="text-rose-400"> • BXH Sát Khí bắt buộc công khai đối với tất cả người chơi có Sát Khí</span>
+            ) : !leaderboardShowOnLeaderboard ? (
               <span className="text-rose-500"> • Bạn đang ẩn khỏi bảng xếp hạng</span>
-            )}
+            ) : null}
           </div>
           <div className="text-[9px] text-zinc-700">
             <RefreshCw className="w-2.5 h-2.5 inline mr-1" />
