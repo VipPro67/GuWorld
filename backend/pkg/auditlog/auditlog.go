@@ -46,7 +46,7 @@ func Log(q Querier, entry Entry) {
 	}
 
 	execDB := q
-	if db.DB != nil {
+	if execDB == nil && db.DB != nil {
 		execDB = db.DB
 	}
 	if execDB == nil {
@@ -54,15 +54,13 @@ func Log(q Querier, entry Entry) {
 		return
 	}
 
-	go func(target Querier, pID interface{}, mJSON string, e Entry) {
-		_, err := target.Exec(
-			`INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)`,
-			pID, e.Action, e.EntityType, e.EntityID, e.RequestSummary, mJSON, e.IPAddress, e.Success, e.ErrorMessage, time.Now().UTC(),
-		)
-		if err != nil {
-			logger.S.Warnf("auditlog: failed to insert action=%s player=%v: %v", e.Action, e.PlayerID, err)
-		}
-	}(execDB, pid, metaJSON, entry)
+	_, err := execDB.Exec(
+		`INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)`,
+		pid, entry.Action, entry.EntityType, entry.EntityID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
+	)
+	if err != nil {
+		logger.S.Warnf("auditlog: failed to insert action=%s player=%v: %v", entry.Action, entry.PlayerID, err)
+	}
 }
 
 func Logf(q Querier, playerID *uuid.UUID, action, format string, args ...interface{}) {
