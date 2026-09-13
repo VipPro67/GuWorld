@@ -743,6 +743,16 @@ func RefineGu(c *gin.Context) {
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
 
+		guName := newGuInstance.GuID
+		if targetSpec, ok := models.GetGu(newGuInstance.GuID, newGuInstance.Rank); ok && targetSpec.Name != "" {
+			guName = targetSpec.Name
+		}
+		refineSummary := fmt.Sprintf("Cổ Sư [%s] đã hợp luyện thành công Cổ trùng [%s] R%d!", player.Username, guName, newGuInstance.Rank)
+		_ = db.LogGuHistory(tx, newGuInstance.InstanceID, newGuInstance.GuID, newGuInstance.Rank, "CREATED_REFINE", &player.ID, nil, refineSummary, map[string]interface{}{
+			"recipe_id": req.RecipeID,
+			"gu_name":   guName,
+		})
+
 		// Add refinement path mastery (Luyện Đạo)
 		refineGain := calculateRefinementPathGain(recipe.TargetRank, refinementRealm)
 		if refineGain > 0 {

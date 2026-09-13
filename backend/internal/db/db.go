@@ -116,6 +116,7 @@ func InitSchema() error {
 		{"payment", schemaPayment},
 		{"beast_betting", schemaBeastBetting},
 		{"death_arena", schemaDeathArena},
+		{"gu_history", schemaGuHistory},
 	}
 	for _, s := range steps {
 		if err := s.fn(); err != nil {

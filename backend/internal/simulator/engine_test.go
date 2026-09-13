@@ -448,6 +448,59 @@ func TestPreAttackDefenseShieldPass(t *testing.T) {
 	}
 }
 
+// TestMonsterEqualRankGuNoBacklash verifies a Rank 3 monster casting a Rank 3 Gu suffers 0 backlash.
+func TestMonsterEqualRankGuNoBacklash(t *testing.T) {
+	monster := newTestCombatant("monster", "Enemy", 10000, 100)
+	monster.Rank = 3
+	monster.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "Thanh Long Cổ", Rank: 3, Damage: 50},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{newTestCombatant("player", "Player", 10000, 0)},
+		Enemies: []*CombatantAuto{monster},
+	}
+
+	logs := Simulate(state)
+
+	for _, l := range logs {
+		if l.Action == "GU_BACKLASH" && l.ActorId == "monster" {
+			t.Fatalf("expected 0 backlash for equal rank Gu, but got backlash log: %s", l.Detail)
+		}
+	}
+}
+
+// TestHigherRankGuBacklash verifies a Rank 3 combatant casting a Rank 4 Gu suffers 15% MaxHP backlash.
+func TestHigherRankGuBacklash(t *testing.T) {
+	combatant := newTestCombatant("actor", "Player", 10000, 100)
+	combatant.Rank = 3
+	combatant.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "Rank 4 Gu", Rank: 4, Damage: 50},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{combatant},
+		Enemies: []*CombatantAuto{newTestCombatant("dummy", "Enemy", 10000, 0)},
+	}
+
+	logs := Simulate(state)
+
+	hasBacklash := false
+	for _, l := range logs {
+		if l.Action == "GU_BACKLASH" && l.ActorId == "actor" {
+			hasBacklash = true
+			if l.Damage != 1500 {
+				t.Fatalf("expected backlash damage of 1500 (15%% of 10000), got %.0f", l.Damage)
+			}
+		}
+	}
+	if !hasBacklash {
+		t.Fatal("expected backlash log for higher rank Gu usage")
+	}
+}
+
 
 
 

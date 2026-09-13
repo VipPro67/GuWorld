@@ -79,6 +79,8 @@ func PracticeCombatStart(c *gin.Context) {
 		ID:            "practice_dummy",
 		Name:          "Hình Nhân Gỗ",
 		Kind:          "Enemy",
+		Rank:          1,
+		SubRank:       1,
 		GridX:         1,
 		GridY:         2,
 		MaxHP:         dummyHP,

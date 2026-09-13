@@ -164,6 +164,9 @@ func CanEquipGu(playerRank, guRank int) bool {
 // HigherRankHPCost returns the % MaxHP backlash damage incurred when using a Gu
 // whose rank is higher than the user's rank (15% MaxHP per rank difference).
 func HigherRankHPCost(guRank, userRank int, maxHP float64) float64 {
+	if userRank < 1 {
+		userRank = 1
+	}
 	if guRank <= userRank {
 		return 0
 	}

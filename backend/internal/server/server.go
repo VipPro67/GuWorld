@@ -163,6 +163,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/dictionary/regions", middleware.RateLimitByIP(40, time.Minute), handlers.GetDictionaryRegions)
 		api.GET("/dictionary/monster-spawns", middleware.RateLimitByIP(40, time.Minute), handlers.GetMonsterSpawns)
 		api.GET("/recipes", middleware.RateLimitByIP(40, time.Minute), handlers.GetRecipes)
+		api.GET("/gus/:instance_id/history", middleware.RateLimitByIP(40, time.Minute), handlers.GetGuHistory)
 
 		api.GET("/debug/monsters", func(c *gin.Context) {
 			var totalCount, activeCount int
@@ -274,6 +275,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			admin.GET("/apertures/:id", handlers.AdminGetApertureDetail)
 			admin.PUT("/apertures/:id", handlers.AdminUpdateAperture)
 			admin.GET("/gus/search", handlers.AdminSearchGus)
+			admin.GET("/gu-history", handlers.AdminListGuHistory)
 			admin.POST("/players/:id/items", handlers.AdminAddPlayerItems)
 			admin.DELETE("/players/:id/items", handlers.AdminRemovePlayerItems)
 			admin.POST("/players/:id/gus", handlers.AdminAddPlayerGus)

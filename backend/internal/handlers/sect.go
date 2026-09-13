@@ -121,11 +121,12 @@ func canManageSect(rank string) bool {
 }
 
 type SectVaultGuItem struct {
-	ID       string  `json:"id"`
-	Rank     int     `json:"rank,omitempty"`
-	Cost     int64   `json:"cost"`
-	Quantity int64   `json:"quantity"`
-	Hunger   float64 `json:"hunger,omitempty"`
+	ID         string  `json:"id"`
+	InstanceID string  `json:"instance_id,omitempty"`
+	Rank       int     `json:"rank,omitempty"`
+	Cost       int64   `json:"cost"`
+	Quantity   int64   `json:"quantity"`
+	Hunger     float64 `json:"hunger,omitempty"`
 }
 
 // vaultGuMaxHunger returns the effective max hunger for a vault Gu group,
@@ -1037,21 +1038,28 @@ func DonateGu(c *gin.Context) {
 	// Increment quantity if Gu type already exists in vault, otherwise add new
 	// entry. Raise the group hunger to the donated Gu's hunger when fresher.
 	donatedGuFound := false
-	for i, v := range vaultGus {
-		if v.ID == guInstance.GuID && v.Rank == guInstance.Rank {
-			vaultGus[i].Quantity++
-			vaultGus[i].Hunger = mergeVaultGuHunger(guInstance.GuID, guInstance.Rank, v.Hunger, float64(guInstance.Hunger))
-			donatedGuFound = true
-			break
+	if guInstance.Rank < 6 {
+		for i, v := range vaultGus {
+			if v.ID == guInstance.GuID && v.Rank == guInstance.Rank && v.InstanceID == "" {
+				vaultGus[i].Quantity++
+				vaultGus[i].Hunger = mergeVaultGuHunger(guInstance.GuID, guInstance.Rank, v.Hunger, float64(guInstance.Hunger))
+				donatedGuFound = true
+				break
+			}
 		}
 	}
 	if !donatedGuFound {
+		itemInstID := ""
+		if guInstance.Rank >= 6 {
+			itemInstID = guInstance.InstanceID
+		}
 		vaultGus = append(vaultGus, SectVaultGuItem{
-			ID:       guInstance.GuID,
-			Rank:     guInstance.Rank,
-			Cost:     vaultItemCost,
-			Quantity: 1,
-			Hunger:   normalizeVaultGuHunger(guInstance.GuID, guInstance.Rank, float64(guInstance.Hunger)),
+			ID:         guInstance.GuID,
+			InstanceID: itemInstID,
+			Rank:       guInstance.Rank,
+			Cost:       vaultItemCost,
+			Quantity:   1,
+			Hunger:     normalizeVaultGuHunger(guInstance.GuID, guInstance.Rank, float64(guInstance.Hunger)),
 		})
 	}
 
@@ -1078,6 +1086,16 @@ func DonateGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
 		return
 	}
+
+	guName := guInstance.GuID
+	if spec, ok := models.GetGu(guInstance.GuID, guInstance.Rank); ok && spec.Name != "" {
+		guName = spec.Name
+	}
+	sectSummary := fmt.Sprintf("Cổ Sư [%s] cống hiến Cổ trùng [%s] R%d vào Kho Tông Môn.", player.Username, guName, guInstance.Rank)
+	_ = db.LogGuHistory(tx, guInstance.InstanceID, guInstance.GuID, guInstance.Rank, "SECT_VAULT_DEPOSITED", &player.ID, nil, sectSummary, map[string]interface{}{
+		"sect_id": m.SectID,
+		"gu_name": guName,
+	})
 	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
@@ -1095,7 +1113,7 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
-	guName := guInstance.GuID
+	guName = guInstance.GuID
 	if spec, ok := models.GetGu(guInstance.GuID, guInstance.Rank); ok {
 		guName = spec.Name
 	}
@@ -1764,12 +1782,27 @@ func BuyFromSectVault(c *gin.Context) {
 		if actualRank == 0 {
 			actualRank = guSpec.Rank
 		}
+		withdrawnInstID := vaultGus[targetIdx].InstanceID
 		if vaultGus[targetIdx].Quantity <= 0 {
 			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
 		}
 		for i := int64(0); i < quantity; i++ {
 			newGu := createVaultWithdrawnGu(req.ItemID, actualRank, guSpec)
+			if withdrawnInstID != "" {
+				newGu.InstanceID = withdrawnInstID
+			}
 			player.GuInventory = append(player.GuInventory, newGu)
+
+			guName := req.ItemID
+			if guSpec.Name != "" {
+				guName = guSpec.Name
+			}
+			withdrawSummary := fmt.Sprintf("Cổ Sư [%s] rút/đổi Cổ trùng [%s] R%d từ Kho Tông Môn.", player.Username, guName, actualRank)
+			_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "SECT_VAULT_WITHDRAWN", nil, &player.ID, withdrawSummary, map[string]interface{}{
+				"sect_id": s.ID,
+				"cost":    cost,
+				"gu_name": guName,
+			})
 		}
 
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {

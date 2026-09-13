@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -224,6 +225,7 @@ func batchApplyOnTickEffects(db *sql.DB) {
 // StarvedGuInfo holds information about a Gu that died of starvation.
 type StarvedGuInfo struct {
 	ID, GuID, State, GuName string
+	Rank                    int
 	IsVital, Equipped       bool
 }
 
@@ -332,9 +334,9 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 			    updated_at = NOW()
 			FROM decayed d
 			WHERE pg.id = d.gu_instance_id
-			RETURNING pg.id, pg.gu_id, pg.state, pg.is_vital, pg.equipped, d.gu_name
+			RETURNING pg.id, pg.gu_id, pg.gu_rank, pg.state, pg.is_vital, pg.equipped, d.gu_name
 		)
-		SELECT id, gu_id, state, is_vital, equipped, gu_name FROM upd`, playerID.String(), ticks)
+		SELECT id, gu_id, gu_rank, state, is_vital, equipped, gu_name FROM upd`, playerID.String(), ticks)
 	if err != nil {
 		return err
 	}
@@ -346,7 +348,7 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 
 	for rows.Next() {
 		var s StarvedGuInfo
-		if err := rows.Scan(&s.ID, &s.GuID, &s.State, &s.IsVital, &s.Equipped, &s.GuName); err != nil {
+		if err := rows.Scan(&s.ID, &s.GuID, &s.Rank, &s.State, &s.IsVital, &s.Equipped, &s.GuName); err != nil {
 			rows.Close()
 			return err
 		}
@@ -425,6 +427,10 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 			action = "gu.starve_vital_death"
 			content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.GuName)
 		}
+		_ = db.LogGuHistory(tx, s.ID, s.GuID, s.Rank, "STARVED_DEATH", &playerID, nil, content, map[string]interface{}{
+			"gu_name":  s.GuName,
+			"is_vital": s.IsVital,
+		})
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID:       &playerID,
 			Action:         action,

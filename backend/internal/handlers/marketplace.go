@@ -208,6 +208,7 @@ func CreateListing(c *gin.Context) {
 
 	var itemDataJSON []byte
 	var guIDsToSell []string
+	var gusToSell []models.GuInstance
 	if req.ItemType == "Recipe" {
 		recipeToSell, err := RecipeSvc.Get(tx, player.ID.String(), req.ItemID)
 		if err != nil {
@@ -244,7 +245,6 @@ func CreateListing(c *gin.Context) {
 		}
 
 		var newInventory []models.GuInstance
-		var gusToSell []models.GuInstance
 		var removedCount int
 		for _, gu := range player.GuInventory {
 			if guMap[gu.InstanceID] {
@@ -331,6 +331,18 @@ func CreateListing(c *gin.Context) {
 		if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), guIDsToSell); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
 			return
+		}
+		for _, g := range gusToSell {
+			guName := g.GuID
+			if spec, ok := models.GetGu(g.GuID, g.Rank); ok && spec.Name != "" {
+				guName = spec.Name
+			}
+			summary := fmt.Sprintf("Cổ Sư [%s] niêm yết Cổ trùng [%s] R%d lên Bảo Hoàng Thiên (Giá: %d %s).", player.Username, guName, g.Rank, req.Price, req.Currency)
+			_ = db.LogGuHistory(tx, g.InstanceID, g.GuID, g.Rank, "MARKET_LISTED", &player.ID, nil, summary, map[string]interface{}{
+				"listing_id": listingID,
+				"price":      req.Price,
+				"currency":   req.Currency,
+			})
 		}
 	}
 	_, err = tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
@@ -1005,16 +1017,28 @@ func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemDat
 			}
 			for i := int64(0); i < qty; i++ {
 				gu := gus[i]
-				gu.InstanceID = uuid.New().String() // Tạo ID mới để tránh trùng lặp
+				if gu.InstanceID == "" {
+					gu.InstanceID = uuid.New().String()
+				}
 				gu.Status = "SLEEPING"
 				gu.Equipped = false
 				gu.IsVital = false
 				player.GuInventory = append(player.GuInventory, gu)
+
+				guName := gu.GuID
+				if guSpec, ok := models.GetGu(gu.GuID, gu.Rank); ok && guSpec.Name != "" {
+					guName = guSpec.Name
+				}
+				summary := fmt.Sprintf("Cổ Sư [%s] nhận Cổ trùng [%s] R%d từ Bảo Hoàng Thiên.", player.Username, guName, gu.Rank)
+				_ = db.LogGuHistory(tx, gu.InstanceID, gu.GuID, gu.Rank, "MARKET_SOLD", nil, &player.ID, summary, map[string]interface{}{
+					"gu_name": guName,
+				})
 			}
 		} else {
 			// Tương thích ngược với định dạng cũ (chỉ lưu string guID)
 			for i := int64(0); i < qty; i++ {
-				player.GuInventory = append(player.GuInventory, mapGuFromRaw(itemData))
+				g := mapGuFromRaw(itemData)
+				player.GuInventory = append(player.GuInventory, g)
 			}
 		}
 		return nil

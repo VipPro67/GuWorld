@@ -119,6 +119,8 @@ func AutoCombatStart(c *gin.Context) {
 				ID:      ally.ID,
 				Name:    ally.Name,
 				Kind:    "Pet",
+				Rank:    ally.Rank,
+				SubRank: ally.SubRank,
 				GridX:   ally.GridX,
 				GridY:   ally.GridY,
 				MaxHP:   ally.MaxHP,
@@ -1045,6 +1047,8 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		ID:            enemy.ID,
 		Name:          enemy.Name,
 		Kind:          enemyKind,
+		Rank:          enemy.Rank,
+		SubRank:       enemy.SubRank,
 		GridX:         enemy.GridX,
 		GridY:         enemy.GridY,
 		MaxHP:         enemy.MaxHP,
@@ -1063,6 +1067,10 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 			return dm
 		}(),
 		PathMasteries: enemy.PathMasteries,
+	}
+
+	if simEnemy.Rank < 1 {
+		simEnemy.Rank = 1
 	}
 
 	if activeCombat != nil {

@@ -49,12 +49,14 @@ import {
   ShoppingBag,
   Swords,
   MapPin,
+  History as HistoryIcon,
 } from "lucide-react";
 import { translateGuType, translateItemType } from "@/lib/translate";
 import { TopupWalletAdminTab } from "./admin/TopupWalletAdminTab";
 import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
 import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
 import { SectMinesAdminTab } from "./admin/SectMinesAdminTab";
+import { GuHistoryAdminTab } from "./admin/GuHistoryAdminTab";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -461,7 +463,7 @@ export const AdminView: React.FC = () => {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
-  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes" | "apertures" | "topup_wallet">("players");
+  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes" | "apertures" | "topup_wallet" | "gu_history">("players");
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
   const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
 
@@ -2539,6 +2541,9 @@ export const AdminView: React.FC = () => {
         <button onClick={() => setSection("topup_wallet")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "topup_wallet" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Coins className="w-3.5 h-3.5 inline mr-1.5" />Nạp Tiền & Ví
         </button>
+        <button onClick={() => setSection("gu_history")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "gu_history" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <HistoryIcon className="w-3.5 h-3.5 inline mr-1.5" />Lịch Sử Tiên Cổ
+        </button>
       </div>
 
       {/* Players section */}
@@ -3338,6 +3343,9 @@ export const AdminView: React.FC = () => {
 
       {/* Topup & Wallet Section */}
       {section === "topup_wallet" && <TopupWalletAdminTab addToast={addToast} />}
+
+      {/* Gu History Section */}
+      {section === "gu_history" && <GuHistoryAdminTab addToast={addToast} />}
 
       {/* Audit Logs section */}
       {section === "logs" && (

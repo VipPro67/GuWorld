@@ -1335,15 +1335,24 @@ func CombatAttack(c *gin.Context) {
 								Status:     "ACTIVE",
 								Equipped:   false,
 							}
+							guName := gID
+							if guSpec.Name != "" {
+								guName = guSpec.Name
+							}
+							var winnerUname string
 							if winnerID == player.ID {
+								winnerUname = player.Username
 								player.GuInventory = append(player.GuInventory, newGu)
 								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
 							} else {
-								var uname string
-								_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+								_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&winnerUname)
 								_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
-								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
+								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", winnerUname, gID))
 							}
+							_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &winnerID, nil, fmt.Sprintf("Cổ Sư [%s] thu phục thành công Cổ trùng [%s] R%d từ %s.", winnerUname, guName, newGu.Rank, player.ActiveCombat.EnemyName), map[string]interface{}{
+								"gu_name":    guName,
+								"enemy_name": player.ActiveCombat.EnemyName,
+							})
 						}
 						// World Boss Immortal Gu drop logic
 						if strings.EqualFold(player.ActiveCombat.EnemyType, "WorldBoss") || strings.EqualFold(player.ActiveCombat.EnemyType, "WORLDBOSS") {
@@ -1354,7 +1363,11 @@ func CombatAttack(c *gin.Context) {
 									if entry != nil && entry.IsImmortal {
 										if exists, _ := db.CheckImmortalGuExists(tx, entry.GuID, entry.Rank, nil); !exists {
 											winnerID := partyMembers[rand.Intn(len(partyMembers))]
-											_, _ = models.GetGu(entry.GuID, entry.Rank)
+											immSpec, _ := models.GetGu(entry.GuID, entry.Rank)
+											immName := entry.GuID
+											if immSpec.Name != "" {
+												immName = immSpec.Name
+											}
 											newImmGu := models.GuInstance{
 												InstanceID: uuid.New().String(),
 												GuID:       entry.GuID,
@@ -1363,15 +1376,20 @@ func CombatAttack(c *gin.Context) {
 												Status:     "ACTIVE",
 												Equipped:   false,
 											}
+											var winnerUname string
 											if winnerID == player.ID {
+												winnerUname = player.Username
 												player.GuInventory = append(player.GuInventory, newImmGu)
-												ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được Cổ Trùng Vô Thánh %s!", entry.GuID))
+												ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được Cổ Trùng Vô Thánh %s!", immName))
 											} else {
-												var uname string
-												_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+												_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&winnerUname)
 												_ = db.AddPlayerGu(tx, winnerID.String(), newImmGu)
-												ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ Trùng Vô Thánh %s!", uname, entry.GuID))
+												ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ Trùng Vô Thánh %s!", winnerUname, immName))
 											}
+											_ = db.LogGuHistory(tx, newImmGu.InstanceID, newImmGu.GuID, newImmGu.Rank, "CREATED_LOOT", &winnerID, nil, fmt.Sprintf("Cổ Sư [%s] thu phục thành công Tiên Cổ [%s] R%d từ Thế Giới Boss %s!", winnerUname, immName, newImmGu.Rank, player.ActiveCombat.EnemyName), map[string]interface{}{
+												"gu_name":    immName,
+												"enemy_name": player.ActiveCombat.EnemyName,
+											})
 										}
 									}
 								}

@@ -67,6 +67,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				ID:      ally.ID,
 				Name:    ally.Name,
 				Kind:    "Pet",
+				Rank:    ally.Rank,
+				SubRank: ally.SubRank,
 				GridX:   ally.GridX,
 				GridY:   ally.GridY,
 				MaxHP:   ally.MaxHP,

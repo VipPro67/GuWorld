@@ -38,20 +38,20 @@ var deathPenaltyConfig = struct {
 	RecipesPct      float64
 	RecipesMaxCount int
 }{
-	PrimevalStonePct: 10,
-	ImmortalStonePct: 10,
+	PrimevalStonePct: 20,
+	ImmortalStonePct: 20,
 
 	ItemsEnabled:    true,
-	ItemsTypePct:    10,
-	ItemsMaxPerType: 10,
+	ItemsTypePct:    20,
+	ItemsMaxPerType: 20,
 
 	GusEnabled:  true,
-	GusPct:      10,
-	GusMaxCount: 10,
+	GusPct:      20,
+	GusMaxCount: 20,
 
 	RecipesEnabled:  true,
-	RecipesPct:      10,
-	RecipesMaxCount: 10,
+	RecipesPct:      20,
+	RecipesMaxCount: 20,
 }
 
 // AddSatKhiStatus adds or increments Sát Khí status (sat_khi) for a PvP killer.
@@ -81,10 +81,7 @@ func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID) {
 		}
 	}
 
-	newLevel := currentLevel + 1
-	if newLevel > 5 {
-		newLevel = 5
-	}
+	newLevel := currentLevel + 1 // Bỏ giới hạn cấp Sát Khí (tăng liên tục theo số mạng đồ sát)
 
 	sl.Add("sat_khi", "pvp_kill", 2*time.Hour, float64(newLevel))
 	newBytes, _ := json.Marshal(sl)
@@ -173,13 +170,21 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, death
 	remainingGus, droppedGus := selectEligibleGus(loser.GuInventory, mult, satKhiLevel)
 	loser.GuInventory = remainingGus
 
-	primevalLoss := int64(math.Floor(float64(loser.PrimevalStones) * (deathPenaltyConfig.PrimevalStonePct * mult) / 100))
-	immortalLoss := int64(math.Floor(float64(loser.ImmortalStones) * (deathPenaltyConfig.ImmortalStonePct * mult) / 100))
+	effectiveStonePct := math.Min(100.0, deathPenaltyConfig.PrimevalStonePct*mult)
+	primevalLoss := int64(math.Floor(float64(loser.PrimevalStones) * effectiveStonePct / 100))
+	effectiveImmortalPct := math.Min(100.0, deathPenaltyConfig.ImmortalStonePct*mult)
+	immortalLoss := int64(math.Floor(float64(loser.ImmortalStones) * effectiveImmortalPct / 100))
 	if primevalLoss < 0 {
 		primevalLoss = 0
 	}
 	if immortalLoss < 0 {
 		immortalLoss = 0
+	}
+	if primevalLoss > loser.PrimevalStones {
+		primevalLoss = loser.PrimevalStones
+	}
+	if immortalLoss > loser.ImmortalStones {
+		immortalLoss = loser.ImmortalStones
 	}
 	loser.PrimevalStones -= primevalLoss
 	loser.ImmortalStones -= immortalLoss
@@ -205,13 +210,21 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, deathPos ...
 
 	mult, satKhiLevel := getSatKhiMultiplier(tx, *loserID)
 
-	primevalLoss := int64(math.Floor(float64(primevalStones) * (deathPenaltyConfig.PrimevalStonePct * mult) / 100))
-	immortalLoss := int64(math.Floor(float64(immortalStones) * (deathPenaltyConfig.ImmortalStonePct * mult) / 100))
+	effectiveStonePct := math.Min(100.0, deathPenaltyConfig.PrimevalStonePct*mult)
+	primevalLoss := int64(math.Floor(float64(primevalStones) * effectiveStonePct / 100))
+	effectiveImmortalPct := math.Min(100.0, deathPenaltyConfig.ImmortalStonePct*mult)
+	immortalLoss := int64(math.Floor(float64(immortalStones) * effectiveImmortalPct / 100))
 	if primevalLoss < 0 {
 		primevalLoss = 0
 	}
 	if immortalLoss < 0 {
 		immortalLoss = 0
+	}
+	if primevalLoss > primevalStones {
+		primevalLoss = primevalStones
+	}
+	if immortalLoss > immortalStones {
+		immortalLoss = immortalStones
 	}
 
 	allGus, _ := db.LoadPlayerGus(tx, loserID.String(), false)
@@ -268,6 +281,11 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 		lost = append(lost, matLogs...)
 	}
 
+	var loserRegion sql.NullString
+	var loserX, loserY int
+	var loserName string
+	_ = tx.QueryRow(`SELECT current_region, x, y, username FROM players WHERE id = $1`, loserID).Scan(&loserRegion, &loserX, &loserY, &loserName)
+
 	// Cổ trùng
 	if deathPenaltyConfig.GusEnabled && len(droppedGus) > 0 {
 		ids := make([]string, 0, len(droppedGus))
@@ -278,6 +296,10 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 				name = guDef.Name
 			}
 			lost = append(lost, fmt.Sprintf("Cổ trùng %s", name))
+			deathSummary := fmt.Sprintf("Cổ Sư [%s] tử đạo, đánh rơi Cổ trùng [%s] R%d xuống đất.", loserName, name, g.Rank)
+			_ = db.LogGuHistory(tx, g.InstanceID, g.GuID, g.Rank, "DEATH_DROPPED", &loserID, winnerID, deathSummary, map[string]interface{}{
+				"gu_name": name,
+			})
 		}
 		_ = db.RemovePlayerGus(tx, ids)
 	}
@@ -298,11 +320,6 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 	if satKhiLevel > 0 {
 		reduceSatKhiOnDeath(tx, loserID)
 	}
-
-	var loserRegion sql.NullString
-	var loserX, loserY int
-	var loserName string
-	_ = tx.QueryRow(`SELECT current_region, x, y, username FROM players WHERE id = $1`, loserID).Scan(&loserRegion, &loserX, &loserY, &loserName)
 
 	if len(deathPos) > 0 && deathPos[0].Region != "" {
 		loserRegion.String = deathPos[0].Region
@@ -390,7 +407,7 @@ func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int) (m
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.GusPct*mult)
-	maxCount := deathPenaltyConfig.GusMaxCount + satKhiLevel*5
+	maxCount := deathPenaltyConfig.GusMaxCount + satKhiLevel*10
 
 	count := int(math.Ceil(float64(len(eligible)) * effectivePct / 100))
 	if count > maxCount {
@@ -448,7 +465,7 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.ItemsTypePct*mult)
-	maxPerType := deathPenaltyConfig.ItemsMaxPerType + satKhiLevel*5
+	maxPerType := deathPenaltyConfig.ItemsMaxPerType + satKhiLevel*10
 
 	pickCount := int(math.Ceil(float64(len(items)) * effectivePct / 100))
 	if pickCount > len(items) {
@@ -508,7 +525,7 @@ func dropRecipes(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) (
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.RecipesPct*mult)
-	maxCount := deathPenaltyConfig.RecipesMaxCount + satKhiLevel*5
+	maxCount := deathPenaltyConfig.RecipesMaxCount + satKhiLevel*10
 
 	pickCount := int(math.Ceil(float64(len(recipeIDs)) * effectivePct / 100))
 	if pickCount > maxCount {

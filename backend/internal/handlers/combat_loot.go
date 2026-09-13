@@ -166,13 +166,19 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 		player.GuInventory = append(player.GuInventory, newInstance)
 		logs = append(logs, fmt.Sprintf("Chúc mừng đạo hữu thu phục được hoang dã Cổ trùng: [%s]!", guName))
 
+		bossName := "Thái Cổ Yêu Quái"
+		if player.ActiveCombat != nil && player.ActiveCombat.EnemyName != "" {
+			bossName = player.ActiveCombat.EnemyName
+		}
+		lootSummary := fmt.Sprintf("Cổ Sư [%s] bóc tách/thu phục thành công Cổ trùng [%s] R%d từ %s.", player.Username, guName, guSpec.Rank, bossName)
+		_ = db.LogGuHistory(tx, newInstance.InstanceID, newInstance.GuID, guSpec.Rank, "CREATED_LOOT", &player.ID, nil, lootSummary, map[string]interface{}{
+			"gu_name":   guName,
+			"boss_name": bossName,
+		})
+
 		// Broadcast ONLY AFTER SUCCESSFUL ADDITION TO PLAYER INVENTORY IN DB
 		isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(guID)
 		if isImmortal {
-			bossName := "Thái Cổ Yêu Quái"
-			if player.ActiveCombat != nil && player.ActiveCombat.EnemyName != "" {
-				bossName = player.ActiveCombat.EnemyName
-			}
 			BroadcastImmortalGuLoot(player.ID, player.Username, bossName, guID, guSpec.Rank)
 		}
 	}
