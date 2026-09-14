@@ -24,6 +24,7 @@ type WorldPosEvent struct {
 	AvatarURL string `json:"avatar_url"`
 	X         int    `json:"x"`
 	Y         int    `json:"y"`
+	Region    string `json:"region_id"`
 	TS        int64  `json:"ts"`
 }
 
@@ -69,10 +70,11 @@ func broadcastWorldPos(payload WorldPosEvent) {
 		AvatarURL: payload.AvatarURL,
 		X:         payload.X,
 		Y:         payload.Y,
+		Region:    payload.Region,
 		TS:        payload.TS,
 	})
 
-	nearby := worldPosIndex.Nearby(payload.X, payload.Y, WorldPosInterestRadius, payload.ID)
+	nearby := worldPosIndex.Nearby(payload.Region, payload.X, payload.Y, WorldPosInterestRadius, payload.ID)
 
 	if WorldPosBroadcaster != nil {
 		targets := make(map[uuid.UUID]struct{}, len(nearby))

@@ -25,48 +25,99 @@ export interface NearbyCell {
   content: string;
   rank?: number;
   sub_rank?: number;
+  region_id?: string;
 }
 
 type CellCacheState = {
-  cellCache: Record<string, NearbyCell>;
+  cellChunks: Record<string, CellChunk>;
   nearbyCells: NearbyCell[];
   nearbyWindow: { x: number; y: number; r: number } | null;
+  cellRegion: string;
 };
 
-// Merge newly loaded cells into the cache, bound memory near the player window,
-// and re-derive the visible nearbyCells window. Shared by fetchCellsRect and mergeWSCells.
-function mergeCellCache(s: CellCacheState, cells: NearbyCell[]): { cellCache: Record<string, NearbyCell>; nearbyCells: NearbyCell[] } {
-  const cache = { ...s.cellCache };
-  for (const c of cells) {
-    cache[`${c.x},${c.y}`] = c;
+type CellChunk = {
+  cells: Record<string, NearbyCell>;
+  touchedAt: number;
+  version?: number;
+};
+
+const CELL_CHUNK_SIZE = 64;
+const MAX_CELL_CHUNKS = 512;
+
+const currentCellRegion = () => useGameStore.getState().player?.current_region ?? "";
+const chunkKey = (region: string, x: number, y: number) =>
+  `${region}:${Math.floor(x / CELL_CHUNK_SIZE)},${Math.floor(y / CELL_CHUNK_SIZE)}`;
+const cellKey = (x: number, y: number) => `${x},${y}`;
+
+function visibleCells(chunks: Record<string, CellChunk>, region: string, w: CellCacheState["nearbyWindow"]): NearbyCell[] {
+  if (!w) return [];
+  const visible: NearbyCell[] = [];
+  const minChunkX = Math.floor((w.x - w.r) / CELL_CHUNK_SIZE);
+  const maxChunkX = Math.floor((w.x + w.r) / CELL_CHUNK_SIZE);
+  const minChunkY = Math.floor((w.y - w.r) / CELL_CHUNK_SIZE);
+  const maxChunkY = Math.floor((w.y + w.r) / CELL_CHUNK_SIZE);
+  for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+    for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+      const chunk = chunks[`${region}:${cx},${cy}`];
+      if (!chunk) continue;
+      for (const cell of Object.values(chunk.cells)) {
+        if (cell.x >= w.x - w.r && cell.x <= w.x + w.r && cell.y >= w.y - w.r && cell.y <= w.y + w.r) visible.push(cell);
+      }
+    }
   }
-  // Bound memory: keep cells near the player window, drop the far ones.
-  const keys = Object.keys(cache);
-  if (keys.length > 150000) {
-    const w = s.nearbyWindow;
-    if (w) {
-      const keep = Math.max(w.r, 300) * 3;
-      for (const key of keys) {
-        const [cx, cy] = key.split(",").map(Number);
-        if (Math.abs(cx - w.x) > keep || Math.abs(cy - w.y) > keep) {
-          delete cache[key];
+  return visible;
+}
+
+// Copy only chunks touched by this response. A flat cache used to clone and scan
+// up to 150k entries for every websocket delta.
+function mergeCellCache(
+  s: CellCacheState,
+  cells: NearbyCell[],
+  version?: number,
+  coverage?: { minX: number; minY: number; maxX: number; maxY: number; region: string },
+): Partial<CellCacheState> {
+  const region = coverage?.region ?? currentCellRegion();
+  const chunks = s.cellRegion === region ? { ...s.cellChunks } : {};
+  const changed = new Map<string, CellChunk>();
+  const now = Date.now();
+  // A rectangle response is an authoritative snapshot of its covered area.
+  // Remove cached cells omitted by the server so missed realtime events heal on
+  // the next reconciliation poll.
+  if (coverage) {
+    const minChunkX = Math.floor(coverage.minX / CELL_CHUNK_SIZE);
+    const maxChunkX = Math.floor(coverage.maxX / CELL_CHUNK_SIZE);
+    const minChunkY = Math.floor(coverage.minY / CELL_CHUNK_SIZE);
+    const maxChunkY = Math.floor(coverage.maxY / CELL_CHUNK_SIZE);
+    for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+      for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+        const key = `${region}:${cx},${cy}`;
+        const oldChunk = chunks[key];
+        if (!oldChunk) continue;
+        const nextCells = { ...oldChunk.cells };
+        for (const [key, cell] of Object.entries(nextCells)) {
+          if (cell.x >= coverage.minX && cell.x <= coverage.maxX && cell.y >= coverage.minY && cell.y <= coverage.maxY) delete nextCells[key];
         }
+        chunks[key] = { ...oldChunk, cells: nextCells, touchedAt: now, version };
+        changed.set(key, chunks[key]);
       }
     }
   }
-  // Derive the visible window from whatever chunks have been loaded so far.
-  let nearbyCells = s.nearbyCells;
-  const w = s.nearbyWindow;
-  if (w) {
-    nearbyCells = [];
-    for (const key of Object.keys(cache)) {
-      const [cx, cy] = key.split(",").map(Number);
-      if (cx >= w.x - w.r && cx <= w.x + w.r && cy >= w.y - w.r && cy <= w.y + w.r) {
-        nearbyCells.push(cache[key]);
-      }
+  for (const c of cells) {
+    const key = chunkKey(region, c.x, c.y);
+    let chunk = changed.get(key);
+    if (!chunk) {
+      chunk = { cells: { ...(chunks[key]?.cells ?? {}) }, touchedAt: now, version };
+      changed.set(key, chunk);
+      chunks[key] = chunk;
     }
+    chunk.cells[cellKey(c.x, c.y)] = c;
   }
-  return { cellCache: cache, nearbyCells };
+  const keys = Object.keys(chunks);
+  if (keys.length > MAX_CELL_CHUNKS) {
+    keys.sort((a, b) => chunks[a].touchedAt - chunks[b].touchedAt);
+    for (let i = 0; i < keys.length - MAX_CELL_CHUNKS; i++) delete chunks[keys[i]];
+  }
+  return { cellChunks: chunks, cellRegion: region, nearbyCells: visibleCells(chunks, region, s.nearbyWindow) };
 }
 
 export interface NearbyPlayer {
@@ -120,7 +171,8 @@ import { authFetch } from "@/lib/auth";
 interface WorldStoreState {
   objects: WorldObject[];
   nearbyCells: NearbyCell[];
-  cellCache: Record<string, NearbyCell>;
+  cellChunks: Record<string, CellChunk>;
+  cellRegion: string;
   nearbyWindow: { x: number; y: number; r: number } | null;
   playerPositions: Record<string, NearbyPlayer & { ts: number }>;
   nearbyPlayers: NearbyPlayer[];
@@ -142,8 +194,8 @@ interface WorldStoreState {
   cameraX: number;
   cameraY: number;
   fetchObjects: () => Promise<void>;
-  fetchNearbyCells: (x: number, y: number, r: number) => Promise<void>;
-  fetchCellsRect: (minX: number, minY: number, maxX: number, maxY: number) => Promise<void>;
+  fetchNearbyCells: (x: number, y: number, r: number) => Promise<boolean>;
+  fetchCellsRect: (minX: number, minY: number, maxX: number, maxY: number) => Promise<boolean>;
   invalidateCell: (x: number, y: number) => void;
   mergeWSCells: (cells: NearbyCell[]) => void;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
@@ -170,7 +222,8 @@ interface WorldStoreState {
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
   objects: [],
   nearbyCells: [],
-  cellCache: {},
+  cellChunks: {},
+  cellRegion: "",
   nearbyWindow: null,
   playerPositions: {},
   nearbyPlayers: [],
@@ -425,41 +478,51 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   setCamera: (scale, x, y) => set({ cameraScale: scale, cameraX: x, cameraY: y }),
 
   fetchCellsRect: async (minX, minY, maxX, maxY) => {
+    const requestRegion = currentCellRegion();
+    const rounded = {
+      minX: Math.round(minX), minY: Math.round(minY), maxX: Math.round(maxX), maxY: Math.round(maxY),
+    };
     try {
       let data: unknown;
       if (wsManager.isConnected()) {
         data = await wsManager.request<NearbyCell[]>("world.cells_rect", {
-          min_x: Math.round(minX), min_y: Math.round(minY), max_x: Math.round(maxX), max_y: Math.round(maxY),
+          min_x: rounded.minX, min_y: rounded.minY, max_x: rounded.maxX, max_y: rounded.maxY,
         }, 30000);
       } else {
-        const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${Math.round(minX)}&min_y=${Math.round(minY)}&max_x=${Math.round(maxX)}&max_y=${Math.round(maxY)}`;
+        const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${rounded.minX}&min_y=${rounded.minY}&max_x=${rounded.maxX}&max_y=${rounded.maxY}`;
         const res = await authFetch(url);
         if (!res.ok) throw new Error("Không thể tải dữ liệu bản đồ");
         data = await res.json();
       }
+      if (currentCellRegion() !== requestRegion) return false;
       const cells: NearbyCell[] = Array.isArray(data) ? data : [];
-      set((s) => mergeCellCache(s, cells));
+      set((s) => mergeCellCache(s, cells, undefined, { ...rounded, region: requestRegion }));
+      return true;
     } catch (err) {
       console.error("fetchCellsRect error:", err instanceof Error ? err.message : err);
+      return false;
     }
   },
 
   fetchNearbyCells: async (x, y, r) => {
-    set({ nearbyWindow: { x, y, r } });
-    await useWorldStore.getState().fetchCellsRect(x - r, y - r, x + r, y + r);
+    // Keep the request within the backend's 256x256 work bound while retaining
+    // the player at the center. Larger areas are progressively loaded by the
+    // existing 150-cell viewport prefetch tiles.
+    const boundedRadius = Math.min(Math.max(Math.round(r), 1), 127);
+    set({ nearbyWindow: { x, y, r: boundedRadius } });
+    return get().fetchCellsRect(x - boundedRadius, y - boundedRadius, x + boundedRadius, y + boundedRadius);
   },
 
   invalidateCell: (x, y) => {
     set((s) => {
-      const key = `${x},${y}`;
-      const cache = { ...s.cellCache };
-      delete cache[key];
-      let nearbyCells = s.nearbyCells;
-      const w = s.nearbyWindow;
-      if (w) {
-        nearbyCells = s.nearbyCells.filter((c) => `${c.x},${c.y}` !== key);
-      }
-      return { cellCache: cache, nearbyCells };
+      const region = currentCellRegion();
+      const key = chunkKey(region, x, y);
+      const oldChunk = s.cellChunks[key];
+      if (!oldChunk?.cells[cellKey(x, y)]) return {};
+      const cells = { ...oldChunk.cells };
+      delete cells[cellKey(x, y)];
+      const cellChunks = { ...s.cellChunks, [key]: { ...oldChunk, cells, touchedAt: Date.now() } };
+      return { cellChunks, nearbyCells: s.nearbyCells.filter((c) => c.x !== x || c.y !== y) };
     });
   },
 
@@ -486,14 +549,14 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
             positions[p.id] = { ...p, ts: prev.ts };
           }
         }
-        // Keep the nearby window in sync with the fast player poll so the
-        // slower cell poll can back off without freezing the viewport filter.
+        // Player presence has its own AOI. Do not overwrite nearbyWindow: that
+        // window belongs to the bounded cell cache and may use a smaller radius.
         const w = { x, y, r };
         let nearbyPlayers = s.nearbyPlayers;
         nearbyPlayers = Object.keys(positions)
           .map((id) => positions[id])
           .filter((p2) => p2.x >= w.x - w.r && p2.x <= w.x + w.r && p2.y >= w.y - w.r && p2.y <= w.y + w.r);
-        return { playerPositions: positions, nearbyPlayers, nearbyWindow: w };
+        return { playerPositions: positions, nearbyPlayers };
       });
     } catch (err) {
       console.error("fetchNearbyPlayers error:", err instanceof Error ? err.message : err);

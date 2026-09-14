@@ -160,7 +160,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
 					return "", false, err
 				}
-				broadcastWorldCell(cellEventCleared, WorldCellEvent{X: player.X, Y: player.Y, CellType: cell.Type, ContentID: cell.Content})
+				broadcastWorldCell(cellEventCleared, WorldCellEvent{RegionID: player.CurrentRegion, X: player.X, Y: player.Y, CellType: cell.Type, ContentID: cell.Content})
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -576,10 +576,9 @@ func MovePlayer(c *gin.Context) {
 		AvatarURL: player.AvatarURL,
 		X:         player.X,
 		Y:         player.Y,
+		Region:    player.CurrentRegion,
 		TS:        time.Now().UnixMilli(),
 	})
-
-	PushCellsToPlayer(player.ID, player.X, player.Y, 300)
 
 	if combatTriggered {
 		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
@@ -869,6 +868,7 @@ func MovePlayerPath(c *gin.Context) {
 		AvatarURL: player.AvatarURL,
 		X:         player.X,
 		Y:         player.Y,
+		Region:    player.CurrentRegion,
 		TS:        time.Now().UnixMilli(),
 	})
 

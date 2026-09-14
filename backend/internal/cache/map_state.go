@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -8,16 +9,16 @@ import (
 )
 
 type MapCellState struct {
-	ClearedBy   string    `json:"cleared_by"`
-	ClearedAt   time.Time `json:"cleared_at"`
-	MonsterID   string    `json:"monster_id,omitempty"`
-	Rank        int       `json:"rank,omitempty"`
-	SubRank     int       `json:"sub_rank,omitempty"`
-	RespawnTTL  time.Duration `json:"respawn_ttl,omitempty"`
+	ClearedBy  string        `json:"cleared_by"`
+	ClearedAt  time.Time     `json:"cleared_at"`
+	MonsterID  string        `json:"monster_id,omitempty"`
+	Rank       int           `json:"rank,omitempty"`
+	SubRank    int           `json:"sub_rank,omitempty"`
+	RespawnTTL time.Duration `json:"respawn_ttl,omitempty"`
 }
 
 type MapResourceState struct {
-	ItemID  string    `json:"item_id"`
+	ItemID    string    `json:"item_id"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
@@ -63,6 +64,35 @@ func IsCellCleared(regionID string, x, y int) (bool, string, error) {
 	return true, state.ClearedBy, nil
 }
 
+// GetClearedCells checks a set of cells with one Redis round trip. The result
+// only contains coordinates that currently have a cleared-state key.
+func GetClearedCells(coords []CellCoordKey) (map[CellCoordKey]MapCellState, error) {
+	out := make(map[CellCoordKey]MapCellState)
+	if len(coords) == 0 || Client == nil {
+		return out, nil
+	}
+	keys := make([]string, len(coords))
+	for i, coord := range coords {
+		keys[i] = cellKey(coord.RegionID, coord.X, coord.Y)
+	}
+	values, err := Client.MGet(Ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+	for i, value := range values {
+		raw, ok := value.(string)
+		if !ok {
+			continue
+		}
+		var state MapCellState
+		if err := json.Unmarshal([]byte(raw), &state); err != nil {
+			return nil, fmt.Errorf("decode cleared cell %s: %w", keys[i], err)
+		}
+		out[coords[i]] = state
+	}
+	return out, nil
+}
+
 // RemoveCellCleared removes the cleared state from a cell (e.g., for forced respawn).
 func RemoveCellCleared(regionID string, x, y int) error {
 	key := cellKey(regionID, x, y)
@@ -104,11 +134,11 @@ func RemoveResourceCell(regionID string, x, y int) error {
 // GetWorldCellEventPayload creates a WorldCellEvent payload for Redis broadcast.
 func GetWorldCellEventPayload(eventType string, regionID string, x, y int, cellType, contentID string) map[string]any {
 	payload := map[string]any{
-		"type":       eventType,
-		"region_id":  regionID,
-		"x":          x,
-		"y":          y,
-		"cell_type":  cellType,
+		"type":      eventType,
+		"region_id": regionID,
+		"x":         x,
+		"y":         y,
+		"cell_type": cellType,
 	}
 	if contentID != "" {
 		payload["content_id"] = contentID
@@ -147,11 +177,11 @@ func BroadcastResourcePickedUp(x, y int, itemName string) error {
 // BroadcastMonsterKilled publishes a monster_killed event via Redis pub/sub.
 func BroadcastMonsterKilled(x, y int, monsterName, regionID string) error {
 	payload := map[string]any{
-		"type":       "monster_killed",
-		"x":          x,
-		"y":          y,
+		"type":         "monster_killed",
+		"x":            x,
+		"y":            y,
 		"monster_name": monsterName,
-		"region_id":  regionID,
+		"region_id":    regionID,
 	}
 	return PublishEventQuick("world:cell", payload)
 }
@@ -159,10 +189,10 @@ func BroadcastMonsterKilled(x, y int, monsterName, regionID string) error {
 // BroadcastWildGuCaptured publishes a wild_gu_captured event via Redis pub/sub.
 func BroadcastWildGuCaptured(x, y int, guID string) error {
 	payload := map[string]any{
-		"type":       "wild_gu_captured",
-		"x":          x,
-		"y":          y,
-		"gu_id":      guID,
+		"type":  "wild_gu_captured",
+		"x":     x,
+		"y":     y,
+		"gu_id": guID,
 	}
 	return PublishEventQuick("world:cell", payload)
 }
@@ -170,11 +200,11 @@ func BroadcastWildGuCaptured(x, y int, guID string) error {
 // BroadcastMineMonsterKilled publishes a mine monster killed event via Redis pub/sub.
 func BroadcastMineMonsterKilled(x, y int, mineType, rarity string) error {
 	payload := map[string]any{
-		"type":       "mine_monster_killed",
-		"x":          x,
-		"y":          y,
-		"mine_type":  mineType,
-		"rarity":     rarity,
+		"type":      "mine_monster_killed",
+		"x":         x,
+		"y":         y,
+		"mine_type": mineType,
+		"rarity":    rarity,
 	}
 	return PublishEventQuick("world:cell", payload)
 }
