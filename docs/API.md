@@ -129,8 +129,8 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/explore/regions` | Danh sách zone (id, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`). `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
 | GET | `/explore/objects` | Các ô persistent (map_cells): village/trạm nghỉ, boss, linh tài — cho bản đồ lớn. Trả `{region_id,x,y,cell_type,content_id,rank,respawn_seconds,cleared}`. |
-| GET | `/explore/cells` | Các ô non-empty (Monster/Boss/Resource/WildGu) quanh player (`?x=&y=&r=`, mặc định quanh player, r cap 300) để bản đồ lớn vẽ marker quái/tài nguyên. Nội dung **ổn định theo ô** (không re-randomize theo thời gian), khớp đúng nội dung khi di chuyển. Trả `[{x,y,cell_type,content,rank,sub_rank}]`. |
-| GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh ≤ 900) — dùng để prefetch đúng vùng nhìn / dải phía trước hướng đi; client gộp vào cache ổn định thay vì thay thế. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank}]`. |
+| GET | `/explore/cells` | Các ô non-empty (Monster/Boss/Resource/WildGu) quanh player (`?x=&y=&r=`, mặc định quanh player, r cap 128) để bản đồ lớn vẽ marker quái/tài nguyên. Trạng thái cleared được đọc theo batch; nội dung **ổn định theo ô** (không re-randomize theo thời gian), khớp đúng nội dung khi di chuyển. Trả `[{x,y,cell_type,content,rank,sub_rank,region_id}]`. |
+| GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / dải phía trước hướng đi. Client cache theo chunk 64×64 và namespace khu vực; trạng thái cleared được đọc theo batch. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id}]`. |
 | POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
 | POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, log, combat_triggered, reached, skip_result?}` (đã tối ưu: loại bỏ `logs` mảng và `stats` thừa, `player` là snapshot cập nhật vị trí/sinh lực/trạng thái tinh gọn, tránh query DB dư thừa); nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
 | POST | `/explore/teleport` | Dịch chuyển tức thời đến vùng an toàn của một khu vực (KHU_VUC/NGU_VUC). Body: `{"region_id": "..."}`. Chi phí dựa trên khoảng cách Chebyshev, tu vi (rank/sub_rank), và độ đầy túi đồ. Trả Primeval Stones (cấp < 6) hoặc Immortal Stones (cấp ≥ 6). Response: `{player, x, y, region, cost, currency, message}`. |
@@ -344,8 +344,8 @@ WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa p
 | `chat:general` | Hai chiều | Chat Bảo Hoàng Thiên (yêu cầu Thông Thiên Cổ & Thần Niệm Cổ) |
 | `chat:sect` | Hai chiều | Chat tông môn |
 | `trade` | S→C | Trạng thái giao dịch realtime |
-| `world:pos` | S→C | Vị trí người chơi di chuyển trên bản đồ lớn |
-| `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh |
+| `world:pos` | S→C | Vị trí người chơi di chuyển trên bản đồ lớn; payload mang `region_id` và fan-out theo AOI cùng khu vực |
+| `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh; payload mang `region_id`, client apply theo tọa độ global kể cả khi viewport cắt qua ranh giới khu vực |
 | `combat` | S→C | Biến động chiến đấu realtime |
 | `notification` | S→C | Thông báo mới (chuông thông báo) |
 
@@ -377,9 +377,9 @@ Stream hợp nhất (`StreamUnifiedEvents`) giữ lại làm fallback cho authen
 | `combat.started` / `combat.ended` | Trạng thái chiến đấu. |
 | `trade.updated` | Trạng thái giao dịch. |
 | `chat.messages.world` / `chat.messages.general` / `chat.messages.sect` | Chat channel. |
-| `world.player.pos` | **Vị trí người chơi trên bản đồ lớn**: broadcast sau mỗi commit di chuyển (`/explore/move`, `/explore/move-path`). Payload `{id, username, avatar_url, x, y, ts}`. Client lọc theo viewport và nội suy marker để hiển thị chuyển động mượt (không teleport). Broadcast qua hub `world_events.go`; frontend phát `CustomEvent("gu_world_pos")` → `useWorldStore.upsertPlayerPosition`. Fan-out được interest-manage theo vị trí (chỉ gửi cho subscriber trong bán kính `WorldPosInterestRadius`). |
-| `world.cell.cleared` | **Cell cố định (boss/resource cao cấp) bị clear**: payload `{x, y, cell_type, content_id}`. Frontend phát `CustomEvent("gu_world_cell")` → refresh `useWorldStore.fetchObjects()`. |
-| `world.cell.respawn` | **Cell cố định respawn** (hết `respawn_seconds`, reset lười khi đọc): payload `{x, y, cell_type, content_id}`. Frontend xử lý tương tự `gu_world_cell`. |
+| `world.player.pos` | **Vị trí người chơi trên bản đồ lớn**: broadcast sau mỗi commit di chuyển (`/explore/move`, `/explore/move-path`). Payload `{id, username, avatar_url, x, y, region_id, ts}`. Client lọc theo khu vực/viewport và nội suy marker. Spatial index và fan-out AOI được namespace theo `region_id`, tránh ghost player giữa các khu vực có cùng tọa độ. |
+| `world.cell.cleared` | **Cell cố định (boss/resource cao cấp) bị clear**: payload `{region_id, x, y, cell_type, content_id}`. Frontend apply delta và invalidate đúng cell thay vì refetch toàn vùng. |
+| `world.cell.respawn` | **Cell cố định respawn** (hết `respawn_seconds`, reset lười khi đọc): payload `{region_id, x, y, cell_type, content_id}`; `region_id` cung cấp namespace trong khi tọa độ world vẫn là global. |
 | `notification.new` | **Thông báo mới** cho người chơi (bell icon). Payload là object `{id, player_id, type, title, content, is_read, created_at}`. |
 
 Kèm theo: `GET /player/events` (stream player snapshot + heartbeat riêng), `GET /trade/events`, `GET /chat/bao-hoang/events`.

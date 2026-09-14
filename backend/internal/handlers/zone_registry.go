@@ -418,7 +418,7 @@ func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) error {
 		}
 	}
 	if !wasCleared {
-		broadcastWorldCell(cellEventCleared, WorldCellEvent{X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
+		broadcastWorldCell(cellEventCleared, WorldCellEvent{RegionID: pc.RegionID, X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
 	}
 	return nil
 }
@@ -452,7 +452,7 @@ func PersistentCellAt(x, y int) (pc persistentCell, found, cleared bool) {
 			pc = cur
 		}
 		zoneReg.mu.Unlock()
-		broadcastWorldCell(cellEventRespawn, WorldCellEvent{X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
+		broadcastWorldCell(cellEventRespawn, WorldCellEvent{RegionID: pc.RegionID, X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
 		return pc, true, false
 	}
 	return pc, true, pc.cleared

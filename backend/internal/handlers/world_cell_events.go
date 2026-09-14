@@ -9,6 +9,7 @@ import (
 // / safe point) changes state: cleared or respawned. These events are rare and
 // tiny, so fan-out is global (like chat) rather than interest-managed.
 type WorldCellEvent struct {
+	RegionID  string `json:"region_id"`
 	X         int    `json:"x"`
 	Y         int    `json:"y"`
 	CellType  string `json:"cell_type"`
@@ -31,6 +32,7 @@ func broadcastWorldCell(name string, data WorldCellEvent) {
 	}
 	payload := map[string]any{
 		"type":       eventType,
+		"region_id":  data.RegionID,
 		"x":          data.X,
 		"y":          data.Y,
 		"cell_type":  data.CellType,

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets } from "pixi.js";
-import { useWorldStore, type WorldObject } from "@/store/useWorldStore";
+import { useWorldStore, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
 import { useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
 
 function computeMovementSpeed(gamePlayer: Player | null, guDictionary: Record<string, GuSpec>): number {
@@ -66,7 +66,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const animIdRef = useRef<number>(0);
   const isMovingRef = useRef(false);
   const walkVersionRef = useRef(0);
-  const playerMarkersRef = useRef<Map<string, { container: Container; fromX: number; fromY: number; toX: number; toY: number; t0: number; active: boolean }>>(new Map());
+  const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; active: boolean }>>(new Map());
   const performMoveRef = useRef<(x: number, y: number) => void>(() => {});
   const loadedTilesRef = useRef<Set<string>>(new Set());
 
@@ -807,9 +807,19 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const container = playersContainerRef.current;
       const markers = playerMarkersRef.current;
       const now = performance.now();
-      const alive = new Set<string>();
-      for (const p of players) {
-        if (markers.size >= 300) break;
+      // Prefer markers already on screen, then the closest newcomers. Limiting
+      // before the loop prevents a full marker set from alternating between
+      // removal and recreation on successive position updates.
+      const px = useWorldStore.getState().liveX;
+      const py = useWorldStore.getState().liveY;
+      const selectedPlayers = players.length <= 300
+        ? players
+        : [...players]
+            .sort((a, b) => Number(markers.has(b.id)) - Number(markers.has(a.id)) ||
+              Math.hypot(a.x - px, a.y - py) - Math.hypot(b.x - px, b.y - py))
+            .slice(0, 300);
+      const alive = new Set(selectedPlayers.map((p) => p.id));
+      for (const p of selectedPlayers) {
         alive.add(p.id);
         const nx = p.x + 0.5;
         const ny = p.y + 0.5;
@@ -821,13 +831,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           charContainer.cursor = "pointer";
           charContainer.on("pointerdown", (event) => {
             event.stopPropagation();
+            const current = playerMarkersRef.current.get(p.id)?.player ?? p;
             handleObjectClick({
-              id: p.id,
+              id: current.id,
               region_id: "",
-              x: p.x,
-              y: p.y,
+              x: current.x,
+              y: current.y,
               cell_type: "Player",
-              content_id: p.username,
+              content_id: current.username,
               rank: undefined,
             });
           });
@@ -859,8 +870,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
           charContainer.position.set(nx, ny);
           container.addChild(charContainer);
-          markers.set(p.id, { container: charContainer, fromX: nx, fromY: ny, toX: nx, toY: ny, t0: now, active: false });
+          markers.set(p.id, { container: charContainer, player: p, fromX: nx, fromY: ny, toX: nx, toY: ny, t0: now, active: false });
         } else {
+          existing.player = p;
           // Known marker: if the server-reported position differs, glide from
           // the current (possibly interpolated) spot to the new spot.
           if (existing.toX !== nx || existing.toY !== ny) {
@@ -1483,11 +1495,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const px = store.liveX;
       const py = store.liveY;
       const tile = Math.max(150, investigationRange);
+      const region = useGameStore.getState().player?.current_region ?? "";
       const want = new Set<string>();
       const addTile = (wx: number, wy: number) => {
         const tx = Math.floor(wx / tile);
         const ty = Math.floor(wy / tile);
-        if (tx >= 0 && ty >= 0) want.add(`${tx},${ty}`);
+        if (tx >= 0 && ty >= 0) want.add(`${region}|${tx},${ty}`);
       };
       addTile(px, py);
       // Band ahead of the current walking direction.
@@ -1505,26 +1518,35 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const pt = Math.floor(px / tile);
       const qy = Math.floor(py / tile);
       for (const key of Array.from(loadedTilesRef.current)) {
-        const [tx, ty] = key.split(",").map(Number);
-        if (Math.abs(tx - pt) > 7 || Math.abs(ty - qy) > 7) loadedTilesRef.current.delete(key);
+        const [keyRegion, coords] = key.split("|");
+        const [tx, ty] = coords.split(",").map(Number);
+        if (keyRegion !== region || Math.abs(tx - pt) > 7 || Math.abs(ty - qy) > 7) loadedTilesRef.current.delete(key);
       }
       let scheduled = 0;
       for (const key of want) {
         if (loadedTilesRef.current.has(key)) continue;
         if (scheduled >= 2) break;
         scheduled++;
+        const [, coords] = key.split("|");
+        const [tx, ty] = coords.split(",").map(Number);
+        // Reserve while in flight, but only retain the watermark on success so
+        // transient websocket/HTTP failures can be retried by the next tick.
         loadedTilesRef.current.add(key);
-        const [tx, ty] = key.split(",").map(Number);
-        fetchCellsRect(tx * tile, ty * tile, Math.min(WORLD_W - 1, (tx + 1) * tile - 1), Math.min(WORLD_H - 1, (ty + 1) * tile - 1));
+        void fetchCellsRect(tx * tile, ty * tile, Math.min(WORLD_W - 1, (tx + 1) * tile - 1), Math.min(WORLD_H - 1, (ty + 1) * tile - 1))
+          .then((loaded) => {
+            if (!loaded) loadedTilesRef.current.delete(key);
+          });
       }
     };
     const onWorldPos = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      const currentRegion = useGameStore.getState().player?.current_region;
       if (
         detail &&
         detail.id &&
         detail.x !== undefined &&
         detail.y !== undefined &&
+        (!detail.region_id || detail.region_id === currentRegion) &&
         detail.id !== useGameStore.getState().player?.id
       ) {
         upsertPlayerPosition(detail);
@@ -1536,17 +1558,22 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     const onWorldCell = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail || detail.x === undefined || detail.y === undefined) return;
+      // Coordinates are global and a visible rectangle can cross a named-region
+      // boundary, so apply cell deltas even when their derived region differs
+      // from the player's current region.
       // When a cell is cleared, invalidate it immediately from cache so markers disappear.
       if (detail.type === "cell_cleared" || detail.type === "monster_killed") {
         invalidateCell(detail.x, detail.y);
-        fetchNearbyCells(detail.x, detail.y, useWorldStore.getState().investigationRange);
       }
-      fetchObjects();
+      // Newer servers may include the replacement cell in the delta. Applying
+      // it directly avoids a full nearby-cell and persistent-object refetch.
+      if (detail.cell) mergeWSCells([detail.cell]);
     };
 
     const onWorldCells = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (detail?.cells && Array.isArray(detail.cells)) {
+      const currentRegion = useGameStore.getState().player?.current_region;
+      if ((!detail?.region_id || detail.region_id === currentRegion) && detail?.cells && Array.isArray(detail.cells)) {
         mergeWSCells(detail.cells);
       }
     };
@@ -1585,7 +1612,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     };
     // Read current coordinates inside each tick: position changes must not tear
     // down this effect and immediately launch another group of map requests.
-  }, [appReady, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, fetchObjects, mergeWSCells, invalidateCell]);
+  }, [appReady, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, mergeWSCells, invalidateCell]);
 
   // Keep the live X/Y position in sync with the game player when idle.
   useEffect(() => {

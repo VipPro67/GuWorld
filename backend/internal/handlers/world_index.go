@@ -35,7 +35,10 @@ type WorldPosEntry struct {
 	TS        int64 // activity timestamp, unix milliseconds
 }
 
-type worldBucketKey struct{ bx, by int }
+type worldBucketKey struct {
+	region string
+	bx, by int
+}
 
 // positionIndex is the in-memory spatial index of active players. It is the
 // fast path for nearby-player queries and the interest source for SSE fan-out.
@@ -59,7 +62,7 @@ func newPositionIndex(bucket int) *positionIndex {
 	}
 }
 
-func (idx *positionIndex) bucketKey(x, y int) worldBucketKey {
+func (idx *positionIndex) bucketKey(region string, x, y int) worldBucketKey {
 	bx := x / idx.bucket
 	by := y / idx.bucket
 	if x < 0 {
@@ -68,7 +71,7 @@ func (idx *positionIndex) bucketKey(x, y int) worldBucketKey {
 	if y < 0 {
 		by--
 	}
-	return worldBucketKey{bx: bx, by: by}
+	return worldBucketKey{region: region, bx: bx, by: by}
 }
 
 // Set upserts an entry, moving it between buckets if its position changed.
@@ -78,7 +81,7 @@ func (idx *positionIndex) Set(e WorldPosEntry) {
 
 	old, ok := idx.byID[e.ID]
 	if ok && old != nil {
-		oldKey := idx.bucketKey(old.X, old.Y)
+		oldKey := idx.bucketKey(old.Region, old.X, old.Y)
 		if b := idx.grid[oldKey]; b != nil {
 			delete(b, e.ID)
 			if len(b) == 0 {
@@ -89,7 +92,7 @@ func (idx *positionIndex) Set(e WorldPosEntry) {
 
 	entry := e
 	idx.byID[e.ID] = &entry
-	key := idx.bucketKey(e.X, e.Y)
+	key := idx.bucketKey(e.Region, e.X, e.Y)
 	b := idx.grid[key]
 	if b == nil {
 		b = make(map[string]*WorldPosEntry)
@@ -111,7 +114,7 @@ func (idx *positionIndex) Get(id string) (WorldPosEntry, bool) {
 
 // Nearby returns active entries whose position is within a Chebyshev box of
 // radius r around (x, y), excluding excludeID.
-func (idx *positionIndex) Nearby(x, y, r int, excludeID string) []WorldPosEntry {
+func (idx *positionIndex) Nearby(region string, x, y, r int, excludeID string) []WorldPosEntry {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
@@ -125,13 +128,13 @@ func (idx *positionIndex) Nearby(x, y, r int, excludeID string) []WorldPosEntry 
 	minBY := y - r
 	maxBX := x + r
 	maxBY := y + r
-	kmin := idx.bucketKey(minBX, minBY)
-	kmax := idx.bucketKey(maxBX, maxBY)
+	kmin := idx.bucketKey(region, minBX, minBY)
+	kmax := idx.bucketKey(region, maxBX, maxBY)
 
 	out := make([]WorldPosEntry, 0, 16)
 	for bx := kmin.bx; bx <= kmax.bx; bx++ {
 		for by := kmin.by; by <= kmax.by; by++ {
-			for _, e := range idx.grid[worldBucketKey{bx, by}] {
+			for _, e := range idx.grid[worldBucketKey{region: region, bx: bx, by: by}] {
 				if e == nil || e.ID == excludeID {
 					continue
 				}
@@ -157,7 +160,7 @@ func (idx *positionIndex) Reconcile(entries []WorldPosEntry) {
 	for i := range entries {
 		e := entries[i]
 		byID[e.ID] = &e
-		key := idx.bucketKey(e.X, e.Y)
+		key := idx.bucketKey(e.Region, e.X, e.Y)
 		b := grid[key]
 		if b == nil {
 			b = make(map[string]*WorldPosEntry)

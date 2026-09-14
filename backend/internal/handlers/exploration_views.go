@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -79,10 +80,10 @@ func GetNearbyCells(c *gin.Context) {
 	fmt.Sscanf(c.Query("r"), "%d", &r)
 
 	if r <= 0 {
-		r = 300
+		r = 128
 	}
-	if r > 300 {
-		r = 300
+	if r > 128 {
+		r = 128
 	}
 
 	if x == 0 && y == 0 {
@@ -93,9 +94,9 @@ func GetNearbyCells(c *gin.Context) {
 	}
 
 	// Resolve the full box of cells around the center and keep the non-empty
-	// ones. Box is at most (2r+1)^2 cells; with r capped at 300 this stays a
+	// ones. Box is at most (2r+1)^2 cells; with r capped at 128 this stays a
 	// bounded, symmetric area around the player so the canvas markers align.
-	out := []NearbyCell{}
+	candidates := []NearbyCell{}
 	for dy := -r; dy <= r; dy++ {
 		for dx := -r; dx <= r; dx++ {
 			cx := x + dx
@@ -108,13 +109,14 @@ func GetNearbyCells(c *gin.Context) {
 				continue
 			}
 			regionID := DeriveRegionAt(cx, cy)
-			if isCellClearedRecently(regionID, cx, cy, clearedCellCooldown) {
-				continue
-			}
-			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
+			candidates = append(candidates, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
 		}
 	}
-
+	out, err := filterClearedCells(candidates)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Trạng thái bản đồ tạm thời không khả dụng."})
+		return
+	}
 	c.JSON(http.StatusOK, out)
 }
 
@@ -151,7 +153,7 @@ func GetCellsRect(c *gin.Context) {
 	}
 
 	// Bound the resolved area so a single request stays cheap.
-	const maxSide = 900
+	const maxSide = 256
 	if maxX-minX+1 > maxSide {
 		maxX = minX + maxSide - 1
 	}
@@ -159,7 +161,7 @@ func GetCellsRect(c *gin.Context) {
 		maxY = minY + maxSide - 1
 	}
 
-	out := []NearbyCell{}
+	candidates := []NearbyCell{}
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
 			cell := ResolveCell(x, y)
@@ -167,14 +169,34 @@ func GetCellsRect(c *gin.Context) {
 				continue
 			}
 			regionID := DeriveRegionAt(x, y)
-			if isCellClearedRecently(regionID, x, y, clearedCellCooldown) {
-				continue
-			}
-			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
+			candidates = append(candidates, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
 		}
 	}
-
+	out, err := filterClearedCells(candidates)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Trạng thái bản đồ tạm thời không khả dụng."})
+		return
+	}
 	c.JSON(http.StatusOK, out)
+}
+
+func filterClearedCells(cells []NearbyCell) ([]NearbyCell, error) {
+	coords := make([]cache.CellCoordKey, len(cells))
+	for i, cell := range cells {
+		coords[i] = cache.CellCoordKey{RegionID: cell.Region, X: cell.X, Y: cell.Y}
+	}
+	cleared, err := cache.GetClearedCells(coords)
+	if err != nil {
+		logger.S.Warnf("failed to batch load cleared world cells: %v", err)
+		return nil, err
+	}
+	out := make([]NearbyCell, 0, len(cells)-len(cleared))
+	for i, cell := range cells {
+		if _, ok := cleared[coords[i]]; !ok {
+			out = append(out, cell)
+		}
+	}
+	return out, nil
 }
 
 // GetNearbyPlayers returns a list of other active players within a given radius
@@ -197,11 +219,16 @@ func GetNearbyPlayers(c *gin.Context) {
 		r = 300
 	}
 
-	if x == 0 && y == 0 {
-		if entry, ok := worldPosIndex.Get(authID.String()); ok {
-			x, y = entry.X, entry.Y
-		} else if player, err := loadPlayerForStatus(db.DB, authID, false); err == nil {
-			x, y = player.X, player.Y
+	// AOI is always centered on the authoritative server position. Query
+	// coordinates are accepted for backward compatibility but never trusted to
+	// inspect an arbitrary part of the current region.
+	region := ""
+	if entry, ok := worldPosIndex.Get(authID.String()); ok {
+		x, y, region = entry.X, entry.Y, entry.Region
+	}
+	if region == "" {
+		if player, err := loadPlayerForStatus(db.DB, authID, false); err == nil {
+			x, y, region = player.X, player.Y, player.CurrentRegion
 		}
 	}
 
@@ -216,9 +243,9 @@ func GetNearbyPlayers(c *gin.Context) {
 	// Fast path: serve from the in-memory position index. Fall back to SQL only
 	// while the index is still cold (e.g. very early startup before the first
 	// sync worker reconcile).
-	entries := worldPosIndex.Nearby(x, y, r, authID.String())
+	entries := worldPosIndex.Nearby(region, x, y, r, authID.String())
 	if worldPosIndex.Len() == 0 {
-		entries = queryNearbyPlayersSQL(c, authID, x, y, r)
+		entries = queryNearbyPlayersSQL(c, authID, region, x, y, r)
 	}
 
 	nearbyPlayers := make([]NearbyPlayer, 0, len(entries))
@@ -237,16 +264,17 @@ func GetNearbyPlayers(c *gin.Context) {
 
 // queryNearbyPlayersSQL is the legacy SQL path for nearby players, kept as a
 // cold-start fallback for the in-memory position index.
-func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int) []WorldPosEntry {
+func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, region string, x, y, r int) []WorldPosEntry {
 	entries := []WorldPosEntry{}
 	rows, errQuery := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, username, COALESCE(avatar_url, ''), x, y
+		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, '')
 		FROM players
 		WHERE id != $1
 		  AND (last_activity >= NOW() - INTERVAL '5 minutes' OR last_mana_update >= NOW() - INTERVAL '5 minutes')
 		  AND x >= $2 AND x <= $3
 		  AND y >= $4 AND y <= $5
-	`, authID, x-r, x+r, y-r, y+r)
+		  AND current_region = $6
+	`, authID, x-r, x+r, y-r, y+r, region)
 	if errQuery != nil {
 		logger.S.Error("Failed to fetch nearby players:", errQuery)
 		return entries
@@ -254,7 +282,7 @@ func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int) []Worl
 	defer rows.Close()
 	for rows.Next() {
 		var e WorldPosEntry
-		if errScan := rows.Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y); errScan == nil {
+		if errScan := rows.Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region); errScan == nil {
 			e.TS = time.Now().UnixMilli()
 			entries = append(entries, e)
 		}
