@@ -252,10 +252,9 @@ export const ImmortalApertureView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Fetch Dao Marks whenever tab changes to ensure latest data on map, tribulation (phòng thủ), dao tabs
-    fetchDaoMarks();
-
-    if (activeTab === "map") {
+    if (activeTab === "dao") {
+      fetchDaoMarks();
+    } else if (activeTab === "map") {
       fetchApertureNodes();
     } else if (activeTab === "tribulation") {
       fetchActiveTribulation();

@@ -98,20 +98,15 @@ const NotificationItem: React.FC<{ notification: PlayerNotification }> = ({ noti
 };
 
 export const NotificationBell: React.FC = () => {
-  const { notifications, unreadNotifications, fetchNotifications, fetchUnreadNotificationsCount, markAllNotificationsRead } = useGameStore();
+  const { notifications, unreadNotifications, fetchNotifications, markAllNotificationsRead } = useGameStore();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void fetchUnreadNotificationsCount();
-  }, [fetchUnreadNotificationsCount]);
-
-  useEffect(() => {
     if (open) {
       void fetchNotifications();
-      void fetchUnreadNotificationsCount();
     }
-  }, [open, fetchNotifications, fetchUnreadNotificationsCount]);
+  }, [open, fetchNotifications]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {

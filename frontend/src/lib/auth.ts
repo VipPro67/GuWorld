@@ -24,32 +24,6 @@ export const authHeaders = (method?: string): Record<string, string> => {
   return headers;
 };
 
-// Track latest request timestamp per URL to reject stale responses.
-const pendingTimestamps = new Map<string, number>();
-
-const getAbortSignal = (key: string, timeoutMs = 30000): AbortSignal => {
-  const controller = new AbortController();
-  const id = Date.now();
-  pendingTimestamps.set(key, id);
-  setTimeout(() => controller.abort(), timeoutMs);
-  const originalAddEventListener = controller.signal.addEventListener.bind(
-    controller.signal,
-  );
-  controller.signal.addEventListener = (
-    type: string,
-    listener: EventListenerOrEventListenerObject,
-    options?: AddEventListenerOptions | boolean,
-  ) => {
-    if (type === "abort") {
-      originalAddEventListener("abort", () => {
-        if (pendingTimestamps.get(key) === id) pendingTimestamps.delete(key);
-      });
-    }
-    originalAddEventListener(type, listener, options);
-  };
-  return controller.signal;
-};
-
 /**
  * Fetch wrapper that injects Bearer token, CSRF header, abort-signal timeout,
  * and `credentials: "include"`. Drop-in replacement for `fetch()`.
@@ -57,7 +31,7 @@ const getAbortSignal = (key: string, timeoutMs = 30000): AbortSignal => {
 export const authFetch = (
   input: RequestInfo | URL,
   init: RequestInit & { timeoutMs?: number } = {},
-) => {
+): Promise<Response> => {
   const csrfToken = getCookie("gu_csrf_token");
   const headers: Record<string, string> = {};
   if (init.headers) {
@@ -80,10 +54,14 @@ export const authFetch = (
       headers["Authorization"] = `Bearer ${token}`;
     }
   }
-  const key = typeof input === "string" ? input : input.toString();
-  const signal = getAbortSignal(key, init.timeoutMs ?? 30000);
+  const { timeoutMs = 30000, signal: callerSignal, ...fetchInit } = init;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal = callerSignal
+    ? AbortSignal.any([callerSignal, timeoutSignal])
+    : timeoutSignal;
+
   return fetch(input, {
-    ...init,
+    ...fetchInit,
     headers,
     credentials: "include",
     signal,

@@ -32,7 +32,6 @@ export const createNotificationsSlice: StateCreator<any, any, any, Notifications
         set({
           notifications: list,
           notificationsLoaded: true,
-          unreadNotifications: list.filter((n: PlayerNotification) => !n.is_read).length,
         });
       } catch (err) {
         console.error("fetch notifications failed", err);

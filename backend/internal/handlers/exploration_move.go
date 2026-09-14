@@ -582,8 +582,6 @@ func MovePlayer(c *gin.Context) {
 
 	if combatTriggered {
 		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
-	} else {
-		PublishPlayerSnapshot(&player, PlayerEventUpdated)
 	}
 
 	// Calculate fresh stats

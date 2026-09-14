@@ -46,6 +46,25 @@ commit time và kích thước chunk frontend.
   đã có lệnh typecheck; lint debt hiện hữu phải được xử lý trước khi bật frontend
   gate bắt buộc. Readiness/rollback và secret history scan vẫn chưa hoàn tất.
 
+### Điều chỉnh theo production baseline trước iteration 1
+
+Snapshot 91.831 request cho thấy p50 14,48 ms, p90 69,48 ms và p99 329,55 ms;
+phần lớn request đang nhanh. Ưu tiên tiếp theo vì vậy là giảm fan-out và tail
+latency thay vì tối ưu trung bình toàn hệ thống:
+
+- `/api/auth/me`, inventory, sect và hai notification endpoint có số lượt gần
+  nhau (khoảng 5,6k–7,2k), phù hợp với fan-out sau session/action ở frontend.
+  Iteration 2 ngừng tải toàn bộ notification lúc bootstrap, bỏ request count trùng
+  khi mở bell, bỏ Dao Marks fetch trùng và status polling chồng nhau.
+- `/api/explore/move` và `/api/explore/use_gu` chỉ có 17/19 mẫu nhưng max lần lượt
+  khoảng 10,7s/9,3s, gần Redis timeout 10s. Đã bỏ một snapshot publish trùng khỏi
+  move thường; bước tiếp theo là đo Redis/DB lock phase rồi batch cleared-cell GET.
+- `error_count` của monitor gồm toàn bộ 4xx và 5xx. Vì vậy 352/556 ở gacha chưa
+  được coi là lỗi hệ thống cho tới khi tách status/reason và latency success/4xx.
+- `/api/auth/me` max khoảng 9,4s và hiện có write/row lock trong GET. Đây là ứng
+  viên backend P1, nhưng cần characterization test hunger/session trước khi đổi
+  thành read-only projection.
+
 ---
 
 ## P0 — Làm ngay

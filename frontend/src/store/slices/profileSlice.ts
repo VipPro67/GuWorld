@@ -52,7 +52,7 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
       if (response.status === 401) {
-        set({ player: null, manaSnapshot: null, token: null });
+        set({ player: null, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
         return;
       }
       if (!response.ok) {
@@ -68,8 +68,7 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
       }
       void get().fetchMySectStatus();
       void get().fetchGuInventory();
-      void get().fetchNotifications();
-      void get().fetchUnreadNotificationsCount();
+      await get().fetchUnreadNotificationsCount();
       try {
         get().subscribePlayerEvents();
         get().subscribeTradeEvents();
@@ -83,7 +82,7 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
       }
     } catch (err: any) {
       console.error("Session restore failed:", err.message);
-      set({ player: null, manaSnapshot: null, token: null });
+      set({ player: null, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
     }
   },
 

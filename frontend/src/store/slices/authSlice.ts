@@ -59,9 +59,9 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
       
       void get().fetchRecipes();
       void get().fetchGuInventory();
+      await get().fetchUnreadNotificationsCount();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
-      void get().fetchNotifications();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
       const today = new Date().toISOString().split('T')[0];
       const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
@@ -166,9 +166,9 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
 
       void get().fetchRecipes();
       void get().fetchGuInventory();
+      await get().fetchUnreadNotificationsCount();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
-      void get().fetchNotifications();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
       return true;
     } catch (err: any) {
@@ -213,7 +213,7 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
     get().unsubscribeTradeEvents();
     get().unsubscribeBaoHoangMessages();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
-    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true, quests: [], guInventoryLoaded: false });
+    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true, quests: [], guInventoryLoaded: false, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
     get().addLog("Đã rời khỏi thế giới Cổ sư.");
