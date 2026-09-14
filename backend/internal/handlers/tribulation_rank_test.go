@@ -149,3 +149,34 @@ func TestCalculateTribulationReward(t *testing.T) {
 		t.Errorf("Expected r9Grand > r8Grand, got %d vs %d", r9Grand, r8Grand)
 	}
 }
+
+func TestSanitizeTribulationTypeForRank(t *testing.T) {
+	tests := []struct {
+		rank     int
+		input    string
+		expected string
+	}{
+		{6, "EARTH_CALAMITY", "EARTH_CALAMITY"},
+		{6, "HEAVENLY_TRIBULATION", "HEAVENLY_TRIBULATION"},
+		{6, "MYRIAD_TRIBULATION", "EARTH_CALAMITY"}, // Invalid for Rank 6 -> defaults to EARTH_CALAMITY
+
+		{8, "EARTH_CALAMITY", "HEAVENLY_TRIBULATION"}, // Earth Calamity invalid for Rank 8 -> defaults to HEAVENLY_TRIBULATION
+		{8, "", "HEAVENLY_TRIBULATION"},
+
+		{9, "EARTH_CALAMITY", "GRAND_TRIBULATION"}, // Earth Calamity invalid for Rank 9 -> defaults to GRAND_TRIBULATION
+		{9, "HEAVENLY_TRIBULATION", "GRAND_TRIBULATION"}, // Heavenly Tribulation invalid for Rank 9 -> defaults to GRAND_TRIBULATION
+		{9, "MYRIAD_TRIBULATION", "MYRIAD_TRIBULATION"},
+		{9, "", "GRAND_TRIBULATION"},
+
+		{10, "EARTH_CALAMITY", "CHAOS_CALAMITY"},
+		{10, "GRAND_TRIBULATION", "CHAOS_CALAMITY"},
+	}
+
+	for _, tt := range tests {
+		got := models.SanitizeTribulationTypeForRank(tt.rank, tt.input)
+		if got != tt.expected {
+			t.Errorf("SanitizeTribulationTypeForRank(%d, %q) = %q; want %q", tt.rank, tt.input, got, tt.expected)
+		}
+	}
+}
+

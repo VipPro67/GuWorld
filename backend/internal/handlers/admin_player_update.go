@@ -362,6 +362,17 @@ func AdminUpdatePlayer(c *gin.Context) {
 		return
 	}
 
+	if req.Rank != nil && *req.Rank >= 6 {
+		var apID string
+		var internalYears float64
+		if err := tx.QueryRow(`SELECT id, internal_years_passed FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&apID, &internalYears); err == nil {
+			rankStart := math.Floor(internalYears)
+			nextYear, _ := models.GetNextTribulationInfo(*req.Rank, rankStart, internalYears)
+			guardedNext := guardNextTribulationYear(nextYear, internalYears)
+			_, _ = tx.Exec(`UPDATE immortal_apertures SET rank_start_year = $1, next_tribulation_year = $2 WHERE id = $3`, rankStart, guardedNext, apID)
+		}
+	}
+
 	tx.Commit()
 
 	var username string

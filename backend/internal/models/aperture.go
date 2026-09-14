@@ -311,6 +311,20 @@ func GetTribulationTypesForRank(rank int) []TribTypeConfig {
 	return nil
 }
 
+func SanitizeTribulationTypeForRank(rank int, tribType string) string {
+	types := GetTribulationTypesForRank(rank)
+	if len(types) == 0 {
+		return "EARTH_CALAMITY"
+	}
+	for _, t := range types {
+		if t.Type == tribType {
+			return tribType
+		}
+	}
+	return types[0].Type
+}
+
+
 func tribulationPriority(t string) int {
 	switch t {
 	case "CHAOS_CALAMITY":
