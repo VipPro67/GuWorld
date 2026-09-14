@@ -256,6 +256,14 @@ function rankColor(rank: number): string {
   return "text-zinc-400";
 }
 
+function formatAdminLogTime(timeStr: string): string {
+  if (!timeStr) return "—";
+  const d = new Date(timeStr);
+  if (isNaN(d.getTime())) return timeStr;
+  const pad = (n: number) => (n < 10 ? "0" + n : n);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 const AUDIT_ACTIONS = [
   { action: "gu.feed", label: "Cho ăn Cổ trùng", icon: "🌱" },
   { action: "gu.feed_group", label: "Cho ăn hàng loạt", icon: "🌱" },
@@ -3422,10 +3430,18 @@ export const AdminView: React.FC = () => {
                     <div key={log.id}>
                       <div onClick={() => setAuditLogExpandId(auditLogExpandId === log.id ? null : log.id)} className="flex items-center gap-3 px-3 py-2 bg-zinc-800/40 hover:bg-zinc-800/60 rounded-lg cursor-pointer transition-colors">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${log.success ? "bg-emerald-500" : "bg-red-500"}`} />
-                        <span className="text-xs font-mono text-zinc-500 w-[160px] shrink-0">{log.created_at}</span>
-                        <span className="text-xs font-semibold text-amber-400 w-[160px] shrink-0">{log.action}</span>
-                        <span className="text-xs text-zinc-400 truncate flex-1">{log.request_summary}</span>
-                        <span className="text-[10px] text-zinc-600 w-[36px] text-right">{log.player_id ? log.player_id.substring(0, 8) : "—"}</span>
+                        <span className="text-xs font-mono text-zinc-400 w-[145px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap" title={formatAdminLogTime(log.created_at)}>
+                          {formatAdminLogTime(log.created_at)}
+                        </span>
+                        <span className="text-xs font-semibold text-amber-400 min-w-[150px] max-w-[200px] shrink-0 truncate" title={log.action}>
+                          {log.action}
+                        </span>
+                        <span className="text-xs text-zinc-400 truncate flex-1" title={log.request_summary}>
+                          {log.request_summary}
+                        </span>
+                        <span className="text-[10px] text-zinc-600 w-[45px] text-right font-mono shrink-0" title={log.player_id}>
+                          {log.player_id ? log.player_id.substring(0, 8) : "—"}
+                        </span>
                       </div>
                       {auditLogExpandId === log.id && (
                         <div className="mx-3 mb-1 px-4 py-2 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] text-zinc-400 font-mono space-y-1">

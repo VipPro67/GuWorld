@@ -279,7 +279,19 @@ func RedeemGiftCode(c *gin.Context) {
 
 	rewardStr := buildGiftCodeRewardLabel(gc.Rewards)
 
-	auditlog.Logf(db.DB, &playerID, "gift_code.redeem", "code=%s rewards=%s", gc.Code, string(rewardsJSON))
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "gift_code.redeem",
+		EntityType:     "gift_code",
+		EntityID:       gc.ID.String(),
+		RequestSummary: fmt.Sprintf("Nhập mã quà %s: nhận %s", gc.Code, rewardStr),
+		Metadata: map[string]interface{}{
+			"code":    gc.Code,
+			"rewards": gc.Rewards,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message": "Nhập mã quà thành công!" + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),

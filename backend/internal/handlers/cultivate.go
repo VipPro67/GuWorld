@@ -215,6 +215,23 @@ func BreakWall(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "cultivate.breakthrough",
+		EntityType:     "player",
+		EntityID:       player.ID.String(),
+		RequestSummary: fmt.Sprintf("Trùng kích vách không khiếu (Tiêu hao Chân Nguyên: %.0f) -> %s (Tu vi: Chuyển %d, Giai đoạn %d)", req.ManaSpend, msg, player.Rank, player.SubRank),
+		Metadata: map[string]interface{}{
+			"mana_spend":    req.ManaSpend,
+			"wall_progress": player.WallProgress,
+			"rank":          player.Rank,
+			"sub_rank":      player.SubRank,
+			"success":       success,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 

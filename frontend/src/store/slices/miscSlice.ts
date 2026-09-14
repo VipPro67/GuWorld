@@ -5,7 +5,7 @@ import { BACKEND_URL } from "@/lib/config";
 export interface MiscSlice {
   auditLogs: any[];
   auditLogsLoading: boolean;
-  fetchAuditLogs: (filters?: { action?: string; entity_type?: string; success?: boolean; limit?: number; offset?: number }) => Promise<void>;
+  fetchAuditLogs: (filters?: { action?: string; entity_type?: string; success?: boolean; search?: string; limit?: number; offset?: number }) => Promise<void>;
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
   sacrificeNPC: (npcId: string) => Promise<{ success: boolean; message: string } | null>;
 }
@@ -94,6 +94,7 @@ export const createMiscSlice: StateCreator<any, any, any, MiscSlice> = (set, get
         if (filters.action) queryParams.push(`action=${encodeURIComponent(filters.action)}`);
         if (filters.entity_type) queryParams.push(`entity_type=${encodeURIComponent(filters.entity_type)}`);
         if (filters.success !== undefined) queryParams.push(`success=${filters.success}`);
+        if (filters.search) queryParams.push(`search=${encodeURIComponent(filters.search)}`);
         if (filters.limit !== undefined) queryParams.push(`limit=${filters.limit}`);
         if (filters.offset !== undefined) queryParams.push(`offset=${filters.offset}`);
       }

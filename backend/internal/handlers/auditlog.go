@@ -35,6 +35,7 @@ func GetMyAuditLogs(c *gin.Context) {
 	action := c.Query("action")
 	entityType := c.Query("entity_type")
 	successStr := c.Query("success")
+	search := c.Query("search")
 	limitStr := c.DefaultQuery("limit", "50")
 	offsetStr := c.DefaultQuery("offset", "0")
 
@@ -74,6 +75,12 @@ func GetMyAuditLogs(c *gin.Context) {
 			query += " AND success = $" + strconv.Itoa(argCount)
 			args = append(args, success)
 		}
+	}
+
+	if search != "" {
+		argCount++
+		query += " AND (action ILIKE $" + strconv.Itoa(argCount) + " OR request_summary ILIKE $" + strconv.Itoa(argCount) + " OR entity_id ILIKE $" + strconv.Itoa(argCount) + " OR error_message ILIKE $" + strconv.Itoa(argCount) + ")"
+		args = append(args, "%"+search+"%")
 	}
 
 	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)

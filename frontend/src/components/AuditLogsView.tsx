@@ -11,7 +11,8 @@ import {
   BookOpen,
   Maximize2,
   Minimize2,
-  Calendar
+  Calendar,
+  Search
 } from "lucide-react";
 
 export const AuditLogsView: React.FC = () => {
@@ -37,11 +38,21 @@ export const AuditLogsView: React.FC = () => {
 
   const [selectedAction, setSelectedAction] = useState<string>("");
   const [selectedSuccess, setSelectedSuccess] = useState<string>("");
+  const [searchDebounce, setSearchDebounce] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState<string>("");
   const [page, setPage] = useState(1);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const limit = 20;
   const offset = (page - 1) * limit;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTerm(searchDebounce);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchDebounce]);
 
   const loadLogs = () => {
     const filters: Record<string, unknown> = {
@@ -52,13 +63,16 @@ export const AuditLogsView: React.FC = () => {
     if (selectedSuccess !== "") {
       filters.success = selectedSuccess === "true";
     }
+    if (searchTerm) {
+      filters.search = searchTerm;
+    }
     fetchAuditLogs(filters);
   };
 
   useEffect(() => {
     loadLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAction, selectedSuccess, page]);
+  }, [selectedAction, selectedSuccess, searchTerm, page]);
 
   const handleRefresh = () => {
     loadLogs();
@@ -125,6 +139,12 @@ export const AuditLogsView: React.FC = () => {
             🔮 RELIC
           </span>
         );
+      case "shop.buy_item":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950/80 border border-amber-500/30 text-amber-300 font-mono">
+            🛒 MUA TIỆM ĐỒ
+          </span>
+        );
       case "shop.sell_item":
       case "shop.sell_gu":
       case "shop.sell_bulk":
@@ -133,6 +153,19 @@ export const AuditLogsView: React.FC = () => {
             🪙 BÁN ĐỒ
           </span>
         );
+      case "cultivate.breakthrough":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-violet-950/80 border border-violet-500/30 text-violet-300 font-mono">
+            ⚡ TRÙNG KÍCH
+          </span>
+        );
+      case "gift_code.redeem":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-pink-950/80 border border-pink-500/30 text-pink-300 font-mono">
+            🎁 MÃ QUÀ TẶNG
+          </span>
+        );
+      case "sect.donate_stones":
       case "sect.mission_complete":
         return (
           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-950/80 border border-blue-500/30 text-blue-400 font-mono">
@@ -208,8 +241,27 @@ export const AuditLogsView: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter Options */}
+      {/* Filter & Search Options */}
       <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800/60 flex flex-col md:flex-row gap-4 items-end">
+        {/* Search Bar */}
+        <div className="w-full md:w-1/3 space-y-1.5">
+          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-1">
+            <Search className="w-3 h-3 text-indigo-400" />
+            Tìm kiếm
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchDebounce}
+              onChange={(e) => setSearchDebounce(e.target.value)}
+              placeholder="Tìm Cổ trùng, vật phẩm, hành động..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+          </div>
+        </div>
+
+        {/* Action Filter */}
         <div className="w-full md:w-1/3 space-y-1.5">
           <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-1">
             <Filter className="w-3 h-3 text-indigo-400" />
@@ -238,10 +290,14 @@ export const AuditLogsView: React.FC = () => {
             <option value="item.use">🧪 Sử dụng vật phẩm</option>
             <option value="item.use_batch">🧪 Sử dụng hàng loạt</option>
             <option value="item.use_relic">🔮 Dùng Relic Cổ đột phá</option>
+            <option value="cultivate.breakthrough">⚡ Trùng kích vách khiếu</option>
+            <option value="shop.buy_item">🛒 Mua tiệm đồ</option>
             <option value="shop.sell_item">🪙 Bán vật phẩm</option>
             <option value="shop.sell_gu">🪙 Bán Cổ trùng</option>
             <option value="shop.sell_bulk">🪙 Bán sỉ cho Tiệm Buôn</option>
+            <option value="sect.donate_stones">📜 Quyên góp Tông môn</option>
             <option value="sect.mission_complete">📜 Nộp nhiệm vụ Tông môn</option>
+            <option value="gift_code.redeem">🎁 Nhập mã quà tặng</option>
             <option value="aperture.build_node">🏯 Xây dựng Tiên Khiếu</option>
             <option value="combat.death_penalty">⚔️ Tử đạo rơi tài sản</option>
             <option value="recipe.deduce">📖 Thôi diễn bí phương</option>
@@ -252,6 +308,7 @@ export const AuditLogsView: React.FC = () => {
           </select>
         </div>
 
+        {/* Result Filter */}
         <div className="w-full md:w-1/3 space-y-1.5">
           <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-1">
             <CheckCircle className="w-3 h-3 text-indigo-400" />
@@ -269,10 +326,6 @@ export const AuditLogsView: React.FC = () => {
             <option value="true">Thành công</option>
             <option value="false">Thất bại</option>
           </select>
-        </div>
-
-        <div className="w-full md:w-1/3 flex items-center justify-end text-xs text-slate-500 font-mono">
-          Hiển thị tối đa {limit} dòng mỗi trang
         </div>
       </div>
 
