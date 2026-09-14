@@ -30,6 +30,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/dictionary/regions` | Public wiki region dictionary only. |
 | GET | `/dictionary/monster-spawns` | Public wiki monster spawn dictionary only. |
 | GET | `/recipes` | Public refining recipes. Thêm query param ?all=true để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. |
+| GET | `/gus/:instance_id/history` | Lịch sử sở hữu/thay đổi của một cá thể Cổ. |
 | POST | `/auth/send-otp` | Send OTP via email to register. |
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |
 | POST | `/auth/login` | Rate limited. |
@@ -49,7 +50,6 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 | Method | Path |
 | --- | --- |
-| GET | `/player/events` |
 | GET | `/player/status/:id` | Projects only equipped/vital Gus. |
 | GET | `/player/inventory/gus` | Full Gu inventory (lazy-loaded). |
 | GET | `/player/stats` |
@@ -65,9 +65,17 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/combat-settings` | Đọc `combat_settings` (auto-heal/mana + **thứ tự ưu tiên loại** `category_priorities` + **bộ cổ sử dụng** `gu_priorities` + `km_priorities`). |
 | PUT | `/player/combat-settings` | Lưu `combat_settings`. `category_priorities` = thứ tự ưu tiên loại kỹ năng (`shield`, `heal`, `damage`, `other`); `gu_priorities` = **bộ cổ mang theo** (danh sách `gu_id` theo thứ tự `priority`): dùng khi tấn công (ưu tiên hơn gợi ý UI) và khi bị tấn công; rỗng = dùng tất cả Cổ đang trang bị ACTIVE. |
 | GET | `/player/referrals` |
+| POST | `/player/referrals/claim` |
+| POST | `/player/referrals/bind` |
 | POST | `/player/simulate-deposit` | Admin only. |
 | POST | `/player/avatar` |
 | POST | `/player/sacrifice` |
+| POST | `/player/redeem-gift-code` |
+| GET | `/player/audit-logs` |
+| GET | `/player/notifications` |
+| GET | `/player/notifications/unread-count` |
+| POST | `/player/notifications/read` |
+| POST | `/player/notifications/read-all` |
 | GET | `/player/beast-betting/current` | Lấy phiên cược đấu thú hiện tại của user. |
 | GET | `/player/beast-betting/history` | Lấy lịch sử 10 trận đấu thú gần nhất và log chiến đấu. |
 | POST | `/player/beast-betting/bet` | Đặt cược Nguyên Thạch vào phe Đỏ hoặc Xanh. Body: `{"team": "team_a"|"team_b", "amount": float64}`. |
@@ -80,7 +88,11 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/cultivate/use-relic-gu` |
 | POST | `/cultivate/ascension` |
 | POST | `/cultivate/tribulation` |
+| GET | `/quest` |
 | POST | `/quest/complete` |
+| GET | `/achievements` |
+| POST | `/achievements/claim` |
+| POST | `/achievements/select` |
 
 ## Inventory, refining and killer moves
 
@@ -88,12 +100,15 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | --- | --- |
 | POST | `/inventory/feed` |
 | POST | `/inventory/feed-group` |
+| POST | `/inventory/feed-all` |
 | POST | `/inventory/equip` |
+| POST | `/inventory/unequip-all` |
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
 | POST | `/inventory/set-vital` |
 | POST | `/inventory/use-gu` |
 | POST | `/inventory/use-support` |
 | POST | `/inventory/drop` |
+| POST | `/inventory/drop-batch` |
 | POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). |
 | POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/killer-moves/calculate` |
@@ -102,6 +117,10 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/killer-moves/:id` |
 | DELETE | `/killer-moves/:id` |
 | POST | `/combat/cast-killer-move` |
+| POST | `/combat/start` |
+| POST | `/combat/practice` |
+| GET | `/combat/history` |
+| GET | `/combat/history/:id` |
 
 ## Exploration and combat
 
@@ -120,6 +139,11 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
 | POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, log, combat_triggered, reached, skip_result?}` (đã tối ưu: loại bỏ `logs` mảng và `stats` thừa, `player` là snapshot cập nhật vị trí/sinh lực/trạng thái tinh gọn, tránh query DB dư thừa); nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
 | POST | `/explore/teleport` | Dịch chuyển tức thời đến vùng an toàn của một khu vực (KHU_VUC/NGU_VUC). Body: `{"region_id": "..."}`. Chi phí dựa trên khoảng cách Chebyshev, tu vi (rank/sub_rank), và độ đầy túi đồ. Trả Primeval Stones (cấp < 6) hoặc Immortal Stones (cấp ≥ 6). Response: `{player, x, y, region, cost, currency, message}`. |
+| GET | `/explore/players` | Người chơi ở gần để hiển thị/tương tác trên bản đồ. |
+| POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). |
+| POST | `/explore/use_killer_move` | Dùng sát chiêu lên mục tiêu bản đồ. |
+| GET | `/world/drops` | Danh sách chiến lợi phẩm/hài cốt tại ô hiện tại. |
+| POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
 
 ## Sủng vật (Pets)
 
@@ -139,10 +163,14 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/party/create` |
 | GET | `/party/status` |
 | POST | `/party/invite` |
+| GET | `/party/invitations` |
+| POST | `/party/invitations/:id/respond` |
 | POST | `/party/leave` |
 | GET | `/arena/leaderboard` |
 | POST | `/arena/challenge` |
-| GET | `/leaderboard/:category` | BXH tổng hợp. category: `rank`, `primeval_stones`, `gu_strongest`, `immortal_stones`. Trả về top 50, kèm rank người gọi |
+| GET | `/arena/shop` |
+| POST | `/arena/shop/buy` |
+| GET | `/leaderboard/:category` | BXH tổng hợp. category: `rank`, `primeval_stones`, `gu_strongest`, `immortal_stones`, `sat_khi`. Trả về top 50, kèm rank người gọi |
 | POST | `/leaderboard/toggle` | Bật/tắt hiển thị trên BXH |
 | GET | `/leaderboard/settings` | Trạng thái `show_on_leaderboard` hiện tại |
 | GET | `/mine/slots` |
@@ -166,7 +194,17 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/immortal-aperture/labor` |
 | POST | `/immortal-aperture/nodes/:id/repair` |
 | POST | `/immortal-aperture/nodes/repair-all` |
+| POST | `/immortal-aperture/nodes/:id/upgrade` |
 | GET | `/immortal-aperture/variant-humans` |
+| GET/POST | `/immortal-aperture/nodes/:id/workers` |
+| DELETE | `/immortal-aperture/nodes/:id/workers/:worker_id` |
+| GET/POST | `/immortal-aperture/refinement-queue` |
+| DELETE | `/immortal-aperture/refinement-queue/:job_id` |
+| GET | `/immortal-aperture/settlements` |
+| POST | `/immortal-aperture/settlements/:settlement_id/upgrade` |
+| GET | `/immortal-aperture/npcs` |
+| POST | `/immortal-aperture/npcs/:npc_id/role` |
+| DELETE | `/immortal-aperture/npcs/:npc_id` |
 | GET | `/dao-marks` |
 | GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |
 | GET | `/tribulations/active` |
@@ -183,6 +221,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/shop/exchange` | Đổi đá giữa Nguyên Thạch và Tiên Nguyên Thạch. Body: `{"currency": "PRIMEVAL_STONE" | "IMMORTAL_ESSENCE_STONE", "amount": <int64>}`. Tỷ giá: 1 Tiên Nguyên Thạch = 100 Nguyên Thạch; 100.000 Nguyên Thạch = 1 Tiên Nguyên Thạch (amount bằng `IMMORTAL_ESSENCE_STONE` trả `amount*100` Nguyên Thạch; bằng `PRIMEVAL_STONE` phải là bội số của 100.000 và trả `amount/100000` Tiên Nguyên Thạch). Trả `{"message": "...", "wallet": {...}}`. |
 | POST | `/shop/buy` |
 | POST | `/shop/sell` |
+| POST | `/shop/sell-bulk` |
 | GET | `/shop/bao-hoang/listings` |
 | POST | `/shop/bao-hoang/listings` |
 | POST | `/shop/bao-hoang/buy` |
@@ -191,7 +230,6 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/shop/bao-hoang/settle` |
 | POST | `/trade/initiate` |
 | GET | `/trade/active` |
-| GET | `/trade/events` |
 | POST | `/trade/accept/:id` |
 | POST | `/trade/decline/:id` |
 | POST | `/trade/cancel/:id` |
@@ -219,10 +257,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/chat/mail/inbox` |
 | POST | `/chat/bao-hoang/send` | Gửi tin nhắn chat. Trả về `{ message }`; thông tin player (Nguyên Thạch, Nhân Khí) đồng bộ qua WebSocket `player.updated`. |
 | GET | `/chat/bao-hoang/messages` |
-| GET | `/chat/bao-hoang/events` |
-| POST | `/soul/use-guts` |
 | POST | `/soul/refine` |
-| POST | `/soul/calm` |
 | GET | `/instance/active` |
 | GET | `/instance/list` | Danh sách phó bản + `cooldown_remaining` (giây) của player |
 | POST | `/instance/enter` |
@@ -296,7 +331,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/admin/players/online` | List người chơi online. |
 | GET | `/admin/players/:id` | Chi tiết người chơi. Response bỏ `gu_inventory`/`materials_inventory`, trả `gu_count` + `item_count`. Kèm `race`, `gender`, `constitution`, `statuses` (array). |
 | GET | `/admin/players/:id/items` | Lazy-load item của người chơi từ `player_inventory_items`. Trả thêm các cổ phương đã mở khóa (`category=recipe`) từ `player_recipe_progress`. Params: `page`, `limit`, `q` (match item_id/item_name theo registry). |
-| GET | `/admin/players/:id/gus` | Lazy-load gu trong `players.gu_inventory` (JSONB). Params: `page`, `limit`, `q` (match gu_id/instance_id theo registry). |
+| GET | `/admin/players/:id/gus` | Lazy-load từ bảng `player_gu`. Params: `page`, `limit`, `q` (match gu_id/instance_id theo registry). |
 | PUT | `/admin/players/:id` | Sửa thông tin người chơi. Body là object chứa 1+ field (chỉ gửi field thay đổi): `username`, `email`, `password`, `bio`, `avatar_url`, `rank`, `sub_rank`, `cultivation`, `realm`, `hp`, `max_hp`, `mana`, `max_mana`, `mortal_stones`, `immortal_stones`, `primeval_stones`, `soul`, `hp_regen_rate`, `mana_regen_rate`, `is_admin`, `is_banned`, `is_online`. Thêm: `race`, `gender`, `constitution` (string), `statuses` (array string hoặc array object `{id, expires_at?, source?, value?}`, ví dụ `["severely_wounded"]` — key phải tồn tại trong `status_dictionary`). Trả list field đã cập nhật. |
 | GET | `/admin/gus/search` | Tìm cổ trùng trên toàn server. Params: `gu_id` và/hoặc `instance_id` (match registry ID + tên, ILIKE), `page`, `limit`. Quét 3 nguồn: `players.gu_inventory`, `auction` (`item_type='Gu'`), `caravan_shop_items` + `arena_shop_items`. `location`: `inventory`/`auction`/`shop`. |
 | POST | `/admin/players/:id/items` | Thêm item hoặc cổ phương (Công thức) cho người chơi. Body: `{item_id, quantity}`. `item_id` là id item trong `Item.csv` hoặc id recipe trong `Recipe.csv`. Nếu là recipe → mở khóa (unlock) Cổ phương cho người chơi (`player_recipe_progress`, `completion_rate=100`). Trả `kind` = `item`/`recipe`. |
@@ -307,6 +342,22 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | DELETE | `/admin/players/:id/pets/:pet_id` | Xóa vĩnh viễn sủng vật. |
 | PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
 | GET | `/admin/audit-logs` | Audit log (bao gồm `admin.update_player`). |
+
+### Admin — nhóm quản trị còn lại
+
+Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth/admin và rate limit nhóm:
+
+| Nhóm | Routes hiện có |
+| --- | --- |
+| Tiên khiếu | `GET /apertures`, `GET/PUT /apertures/:id`; CRUD node và xem/tạo/xóa quần thể dị nhân theo aperture. |
+| Cổ/pet/history | cập nhật cá thể Cổ; tạo/cập nhật pet; `GET /gu-history`; `GET /batch-metrics`. |
+| Môn phái | list/detail/update/delete sect; thêm/xóa/đặt chưởng môn; CRUD mission; nhập/xóa hàng kho; quản lý sect mine. |
+| Dữ liệu & cache | `GET /data/tables`, import/export toàn bộ hoặc `/:table`, clear application cache và Redis cache. |
+| World/activity | CRUD region, map cell, monster spawn, dungeon; list/update/reset mine slot. |
+| Dictionary/shop | CRUD shop, arena shop, Gu, item, recipe, monster, loot table, constitution, race, status và quest. |
+| Hệ thống | gift code list/create, upload image, top-up order, wallet transaction và monitoring/traces. |
+
+Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` trong `backend/internal/server/server.go`; bảng này gom theo domain để tránh hiểu nhầm rằng Admin chỉ quản lý player/Cổ.
 
 ## Admin — Monitoring & Tracing (CPU, Memory, Request Traces)
 
@@ -351,24 +402,7 @@ di chuyển và kéo camera. Client gửi envelope
 Danh tính người chơi luôn lấy từ phiên WebSocket đã xác thực, không lấy từ
 payload. Các HTTP endpoint vẫn được giữ làm fallback khi WebSocket chưa kết nối.
 
-### SSE realtime — `GET /events` (Auth) [Deprecated Fallback]
-
-Stream hợp nhất (`StreamUnifiedEvents`) giữ lại làm fallback cho authenticated player. Các event-type:
-
-| Event | Mô tả |
-| --- | --- |
-| `mana.snapshot` | Snapshot player ban đầu khi kết nối. |
-| `player.updated` | Cập nhật player realtime (mana, hp, vị trí, …). |
-| `player.heartbeat` | Heartbeat ~60s. |
-| `combat.started` / `combat.ended` | Trạng thái chiến đấu. |
-| `trade.updated` | Trạng thái giao dịch. |
-| `chat.messages.world` / `chat.messages.general` / `chat.messages.sect` | Chat channel. |
-| `world.player.pos` | **Vị trí người chơi trên bản đồ lớn**: broadcast sau mỗi commit di chuyển (`/explore/move`, `/explore/move-path`). Payload `{id, username, avatar_url, x, y, region_id, ts}`. Client lọc theo khu vực/viewport và nội suy marker. Spatial index và fan-out AOI được namespace theo `region_id`, tránh ghost player giữa các khu vực có cùng tọa độ. |
-| `world.cell.cleared` | **Cell cố định (boss/resource cao cấp) bị clear**: payload `{region_id, x, y, cell_type, content_id}`. Frontend apply delta và invalidate đúng cell thay vì refetch toàn vùng. |
-| `world.cell.respawn` | **Cell cố định respawn** (hết `respawn_seconds`, reset lười khi đọc): payload `{region_id, x, y, cell_type, content_id}`; `region_id` cung cấp namespace trong khi tọa độ world vẫn là global. |
-| `notification.new` | **Thông báo mới** cho người chơi (bell icon). Payload là object `{id, player_id, type, title, content, is_read, created_at}`. |
-
-Kèm theo: `GET /player/events` (stream player snapshot + heartbeat riêng), `GET /trade/events`, `GET /chat/bao-hoang/events`.
+> SSE endpoint cũ không còn được đăng ký trong router hiện tại. Client phải dùng `/api/ws`; các HTTP endpoint vẫn là fallback cho thao tác/snapshot.
 
 ## Thông báo (Notification) — Auth
 
@@ -389,10 +423,11 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 | --- | --- | --- |
 | GET | `/death-arena/current` | Lấy thông tin giải đấu hiện tại, trạng thái đăng ký của bản thân và thông tin đội. |
 | POST | `/death-arena/register` | Đăng ký tham gia giải đấu (giới hạn tối đa 96 người chơi / 16 đội). |
-| POST | `/death-arena/unregister` | Hủy đăng ký tham gia giải đấu (khi còn mở đăng ký). |
+| DELETE | `/death-arena/register` | Hủy đăng ký tham gia giải đấu (khi còn mở đăng ký). |
 | GET | `/death-arena/bracket` | Lấy sơ đồ bảng đấu và các trận đấu (hỗ trợ Redis cache 3s). |
 | GET | `/death-arena/my-team` | Lấy danh sách thành viên và trạng thái HP/Mana đội của bản thân. |
+| GET | `/death-arena/matches` | Danh sách trận của người chơi. |
 | GET | `/death-arena/matches/:id/log` | Lấy lịch sử chi tiết (Combat Log Replay) của trận đấu. |
 | GET | `/death-arena/rewards` | Lấy danh sách phần thưởng giải đấu của bản thân. |
-| POST | `/death-arena/rewards/:id/claim` | Nhận phần thưởng giải đấu. |
+| POST | `/death-arena/claim-reward` | Nhận phần thưởng giải đấu. |
 | GET | `/death-arena/history` | Lịch sử các mùa giải Đấu Trường Sinh Tử trước. |

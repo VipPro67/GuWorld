@@ -481,7 +481,9 @@ export default function WikiClientView({
           <div className="grid grid-cols-4 gap-2 bg-zinc-900/40 p-2.5 rounded-2xl border border-[var(--border)] max-w-md">
             <div className="text-center px-2 py-1">
               <p className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider">H.Dẫn</p>
-              <p className="text-sm font-bold font-mono text-emerald-400">{guideSections.length + (roadmap ? 1 : 0)}</p>
+              <p className="text-sm font-bold font-mono text-emerald-400">
+                {guideSections.length + Object.values(subByParent).flat().length + (roadmap ? 1 : 0)}
+              </p>
             </div>
             <div className="text-center px-2 py-1 border-l border-zinc-800">
               <p className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider">Cổ</p>

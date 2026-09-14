@@ -4,7 +4,7 @@ GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luy�
 
 - **Backend:** Go + Gin, PostgreSQL, Redis (bắt buộc), JWT/cookie auth.
 - **Frontend:** Next.js App Router + React + Zustand.
-- **Dữ liệu seed:** CSV trong `backend/` cho Cổ, vật phẩm, công thức, quái, loot, shop, vùng và gói nạp.
+- **Dữ liệu gameplay:** CSV trong `backend/data/`, được quản trị viên import/export ở tab **Dữ liệu**; backend không tự import các dictionary khi khởi động.
 
 ## Tài liệu đang dùng
 
@@ -18,7 +18,7 @@ GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luy�
 | [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) | Cách chạy, biến môi trường, kiểm tra nhanh. |
 | [`frontend/README.md`](./frontend/README.md) | Ghi chú riêng cho frontend. |
 
-Các file phase/fix/design rời rạc cũ đã được gom lại hoặc loại bỏ để tránh lệch với code hiện tại.
+Các tài liệu thiết kế/roadmap chỉ mô tả hướng phát triển. Các tài liệu trong bảng trên là điểm bắt đầu để đối chiếu hành vi đang chạy.
 
 ## Chạy nhanh local
 
@@ -28,7 +28,7 @@ Các file phase/fix/design rời rạc cũ đã được gom lại hoặc loại
 docker-compose up --build
 ```
 
-Lệnh này sẽ tự động khởi chạy Go backend, PostgreSQL và Redis. Backend sẽ nghe tại `:8080`, tự khởi tạo schema và seed dữ liệu từ CSV.
+Lệnh này khởi chạy Go backend, PostgreSQL, Redis và reverse proxy. Backend nghe tại `:8080`, tự khởi tạo schema cùng dữ liệu hệ thống tối thiểu. Sau lần cài mới, quản trị viên phải import dữ liệu gameplay từ tab **Dữ liệu**; `Quest.csv` hiện là ngoại lệ được đồng bộ khi khởi tạo schema.
 
 Thông tin DB/JWT/OAuth phải đặt trong `backend/.env`; thông tin Grafana Alloy đặt
 trong root `.env`. Không lưu credential trong Compose hoặc Git. Khi dùng Redis
@@ -44,7 +44,7 @@ cd backend
 go run ./cmd/server
 ```
 
-Backend mặc định nghe `:8080`, tự khởi tạo schema và seed dữ liệu từ CSV khi kết nối được PostgreSQL.
+Backend mặc định nghe `:8080`, tự khởi tạo schema và các bản ghi hệ thống tối thiểu khi kết nối được PostgreSQL. Hãy import CSV trong Admin trước khi chơi và khởi động lại backend để nạp lại các registry được cache.
 
 ### Frontend
 
@@ -56,19 +56,21 @@ npm run dev
 
 Frontend mặc định gọi backend qua `NEXT_PUBLIC_BACKEND_URL` hoặc `http://localhost:8080` nếu biến môi trường chưa được đặt.
 
-Kiểm tra frontend bằng `npm run lint`, `npm run typecheck` và `npm run build`.
+Kiểm tra frontend bằng `npm run lint` và `npm run build`.
 
 ## Module gameplay hiện có
 
 - Đăng ký/đăng nhập, Google OAuth, hồ sơ, avatar, referral.
 - Tu luyện phàm nhân, phá vách, dùng Xá Lợi Cổ, thăng tiên, độ kiếp.
 - Không khiếu/tiên khiếu, đạo ngân, tài nguyên node, dị nhân và tai kiếp.
-- Khám phá bản đồ, PvE combat, đội hình 3x3, loot tạm, retreat.
+- Khám phá bản đồ realtime, PvE/PvP combat, đội hình 3x3, ground drop và retreat/flee.
 - Inventory Cổ/vật phẩm/nguyên liệu, cho ăn, trang bị, bản mệnh, tiêu hao/hỗ trợ.
 - Luyện Cổ, suy diễn công thức, sát chiêu.
 - Shop NPC, Bảo Hoàng Thiên marketplace/auction/trade listing, P2P trade.
 - Môn phái, nhiệm vụ, kho, đơn xin gia nhập/thăng chức, mỏ môn phái.
-- Party, arena, mỏ cá nhân, chat/mail, phó bản, hồn phách, ví/nạp tiền, premium shop, feedback.
+- Party, võ đài và shop võ đài, Đấu Trường Sinh Tử, mỏ cá nhân, chat/mail, phó bản, hồn phách.
+- Gacha, thành tựu/danh hiệu/khung, bảng xếp hạng, cược linh thú, thông báo, gift code, lịch sử chiến đấu và ký sự hoạt động.
+- Ví/nạp tiền, premium shop, feedback và trang quản trị dữ liệu/giám sát.
 
 ## Nguyên tắc cập nhật tài liệu
 
