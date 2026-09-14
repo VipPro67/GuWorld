@@ -67,6 +67,7 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 	}
 
 	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
+	calcNextType = models.SanitizeTribulationTypeForRank(rank, calcNextType)
 
 	triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 	storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
@@ -74,11 +75,11 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		if storedYear < triggerYear {
 			triggerYear = storedYear
 			if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
-				calcNextType = scheduledType
+				calcNextType = models.SanitizeTribulationTypeForRank(rank, scheduledType)
 			}
 		} else if math.Abs(storedYear-triggerYear) < 0.001 {
 			if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
-				calcNextType = scheduledType
+				calcNextType = models.SanitizeTribulationTypeForRank(rank, scheduledType)
 			}
 		}
 	}
@@ -450,12 +451,13 @@ func CheckAndTriggerTribulations() error {
 
 			// Tribulation scheduling
 			pd := pMap[ap.PlayerID]
-			rank := 0
-			if pd != nil {
+			rank := 6
+			if pd != nil && pd.rank > 0 {
 				rank = pd.rank
 			}
 
 			calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.InternalYearsPassed)
+			calcNextType = models.SanitizeTribulationTypeForRank(rank, calcNextType)
 
 			triggerYear := guardNextTribulationYear(calcNextYear, ap.InternalYearsPassed)
 			storedYear := guardNextTribulationYear(ap.NextTribulationYear, ap.InternalYearsPassed)
@@ -463,11 +465,11 @@ func CheckAndTriggerTribulations() error {
 				if storedYear < triggerYear {
 					triggerYear = storedYear
 					if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, storedYear); scheduledType != "" {
-						calcNextType = scheduledType
+						calcNextType = models.SanitizeTribulationTypeForRank(rank, scheduledType)
 					}
 				} else if math.Abs(storedYear-triggerYear) < 0.001 {
 					if scheduledType := models.GetTribulationTypeAtYear(rank, ap.RankStartYear, triggerYear); scheduledType != "" {
-						calcNextType = scheduledType
+						calcNextType = models.SanitizeTribulationTypeForRank(rank, scheduledType)
 					}
 				}
 			}
@@ -673,6 +675,8 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		return err
 	}
 
+	tribulationType = models.SanitizeTribulationTypeForRank(rank, tribulationType)
+
 	var daoMarksRaw []byte
 	err = tx.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoMarksRaw)
 	if err != nil {
@@ -751,6 +755,14 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		bossTemplateID = "monster_myriad_tribulation_boss"
 	case "CHAOS_CALAMITY":
 		bossTemplateID = "monster_chaos_calamity_boss"
+	default:
+		if rank >= 9 {
+			bossTemplateID = "monster_grand_calamity_boss"
+		} else if rank == 8 {
+			bossTemplateID = "monster_heaven_tribulation_boss"
+		} else {
+			bossTemplateID = "monster_earth_calamity_boss"
+		}
 	}
 
 	bossRank, bossSubRank := models.GetTribulationRankAndSubRank(rank, tribulationType)

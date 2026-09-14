@@ -57,8 +57,16 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
-	targetGu := &player.GuInventory[targetIdx]
-	specs, found := models.GetGu(targetGu.GuID, targetGu.Rank)
+	// Capture all needed values from targetGu BEFORE any slice mutation.
+	// RemoveGuFromInventory uses append(inventory[:i], inventory[i+1:]...) which
+	// shifts elements in-place, invalidating the &player.GuInventory[targetIdx]
+	// pointer. Reading targetGu.InstanceID after that would return the wrong ID.
+	instanceIDToDelete := player.GuInventory[targetIdx].InstanceID
+	guRank := player.GuInventory[targetIdx].Rank
+	guID := player.GuInventory[targetIdx].GuID
+	guHunger := player.GuInventory[targetIdx].Hunger
+
+	specs, found := models.GetGu(guID, guRank)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
 		return
@@ -69,7 +77,9 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
-	if err := ValidateGuUsable(&player, targetGu, &specs, false); err != nil {
+	// Use a value copy for validation and effect resolution to avoid stale-pointer issues.
+	targetGuCopy := player.GuInventory[targetIdx]
+	if err := ValidateGuUsable(&player, &targetGuCopy, &specs, false); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -81,7 +91,7 @@ func UseConsumableGu(c *gin.Context) {
 	if specs.Effects.Other != nil {
 		for _, mechanic := range specs.Effects.Other {
 			if mechanic.EventTrigger == "ON_CONSUME" {
-				msg, err := HandleConsumeEvent(&player, *targetGu, specs, mechanic)
+				msg, err := HandleConsumeEvent(&player, targetGuCopy, specs, mechanic)
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 					return
@@ -109,7 +119,7 @@ func UseConsumableGu(c *gin.Context) {
 	if len(specs.Path) > 0 {
 		cleanPath := strings.TrimSuffix(strings.ToLower(specs.Path[0]), " path")
 		pathGain := 1
-		if targetGu.Rank >= 6 {
+		if guRank >= 6 {
 			pathGain = 10
 		}
 		player.PathMasteries[cleanPath] += pathGain
@@ -129,21 +139,25 @@ func UseConsumableGu(c *gin.Context) {
 	}
 
 	if reduceHunger {
-		if targetGu.Hunger < hungerCost {
+		if guHunger < hungerCost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng quá đói, không đủ độ no để hiến tế!"})
 			return
 		}
-		targetGu.Hunger -= hungerCost
-		if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
+		targetGuCopy.Hunger -= hungerCost
+		if err := db.UpdatePlayerGu(tx, targetGuCopy); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu hunger"})
 			return
 		}
+		// Sync in-memory inventory so the SSE snapshot reflects the updated hunger.
+		player.GuInventory[targetIdx].Hunger = targetGuCopy.Hunger
 		logMsg += fmt.Sprintf(" Cổ trùng bị suy yếu, độ no giảm %d.", hungerCost)
 	} else {
-		// Delete from inventory
-		RemoveGuFromInventory(&player, targetGu.InstanceID)
+		// Delete from inventory — use instanceIDToDelete (captured before slice mutation).
+		// RemoveGuFromInventory shifts the backing array, so any pointer into
+		// player.GuInventory taken before this call is no longer valid.
+		RemoveGuFromInventory(&player, instanceIDToDelete)
 
-		if err := db.RemovePlayerGu(tx, targetGu.InstanceID); err != nil {
+		if err := db.RemovePlayerGuForPlayer(tx, player.ID.String(), instanceIDToDelete); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
 			fmt.Println("Failed to update player state after using Gu:", err)
 			return
@@ -250,8 +264,14 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	targetGu := &player.GuInventory[targetIdx]
-	specs, found := models.GetGu(targetGu.GuID, targetGu.Rank)
+	// Capture scalar values from the target slot before any possible slice mutation.
+	// UseSupportGu does not currently remove the Gu from the slice, but using value
+	// copies is defensive and consistent with UseConsumableGu.
+	targetGuCopy := player.GuInventory[targetIdx]
+	guID := targetGuCopy.GuID
+	guRank := targetGuCopy.Rank
+
+	specs, found := models.GetGu(guID, guRank)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
 		return
@@ -262,7 +282,7 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	if err := ValidateGuUsable(&player, targetGu, &specs, false); err != nil {
+	if err := ValidateGuUsable(&player, &targetGuCopy, &specs, false); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -274,7 +294,7 @@ func UseSupportGu(c *gin.Context) {
 	if specs.Effects.Other != nil {
 		for _, mechanic := range specs.Effects.Other {
 			if mechanic.EventTrigger == "ON_CONSUME" {
-				msg, err := HandleConsumeEvent(&player, *targetGu, specs, mechanic)
+				msg, err := HandleConsumeEvent(&player, targetGuCopy, specs, mechanic)
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 					return
@@ -291,14 +311,16 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	targetGu.Hunger -= 1
-	if targetGu.Hunger < 0 {
-		targetGu.Hunger = 0
+	targetGuCopy.Hunger -= 1
+	if targetGuCopy.Hunger < 0 {
+		targetGuCopy.Hunger = 0
 	}
-	if _, errGu := tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2`, targetGu.Hunger, targetGu.InstanceID); errGu != nil {
+	if _, errGu := tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2`, targetGuCopy.Hunger, targetGuCopy.InstanceID); errGu != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật độ no Cổ trùng"})
 		return
 	}
+	// Sync in-memory inventory so the SSE snapshot reflects the updated hunger.
+	player.GuInventory[targetIdx].Hunger = targetGuCopy.Hunger
 
 	qiGained := 0.0
 

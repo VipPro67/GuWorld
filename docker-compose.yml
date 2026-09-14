@@ -28,15 +28,6 @@ services:
       redis:
         condition: service_started
 
-  # frontend:
-  #   image: ghcr.io/vippro67/guworld-frontend:latest
-  #   container_name: guworld-frontend
-  #   restart: always
-  #   environment:
-  #     - INTERNAL_BACKEND_URL=http://backend:8080
-  #   depends_on:
-  #     - backend
-
   caddy:
     image: caddy:2-alpine
     container_name: guworld-caddy
