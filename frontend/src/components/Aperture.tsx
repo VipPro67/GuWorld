@@ -357,13 +357,12 @@ export const Aperture: React.FC<ApertureProps> = ({
     // Growth accumulates on the server every 60s; poll so the progress bars
     // visibly advance instead of looking frozen.
     const interval = setInterval(() => {
-      if (player?.id) {
-        store.fetchPlayerStatus(player.id);
+      if (document.visibilityState === "visible") {
         fetchPassiveStats();
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [activeTab, fetchPassiveStats, player?.id]);
+  }, [activeTab, fetchPassiveStats]);
 
   // Disguise/stealth settings state
   const [isDisguised, setIsDisguised] = useState(player.is_disguised || false);

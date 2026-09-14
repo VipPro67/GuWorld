@@ -189,7 +189,9 @@ export default function Home() {
     }
 
     const interval = setInterval(() => {
-      fetchPlayerStatus(playerId);
+      if (document.visibilityState === "visible") {
+        void fetchPlayerStatus(playerId);
+      }
     }, hasActiveCombat ? 10000 : 90000);
 
     return () => clearInterval(interval);
