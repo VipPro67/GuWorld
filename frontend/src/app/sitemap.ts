@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { wikiPages } from "@/lib/wiki-pages";
 
 // Bỏ qua pre-render tĩnh khi build Docker trên GitHub, tạo động khi có request
 export const dynamic = "force-dynamic";
@@ -12,25 +13,6 @@ interface GuItem {
   name: string;
   rank: number;
 }
-
-const wikiGuidePages = [
-  { slug: "roadmap", priority: 0.8 },
-  { slug: "guide", priority: 0.8 },
-  { slug: "gameplay-baothach", priority: 0.7 },
-  { slug: "gameplay-tongmon", priority: 0.7 },
-  { slug: "gameplay-character", priority: 0.7 },
-  { slug: "gameplay-character-chiso", priority: 0.6 },
-  { slug: "gameplay-character-thuoctinh", priority: 0.6 },
-  { slug: "gameplay-character-linhcan", priority: 0.6 },
-  { slug: "gameplay-character-thongthao", priority: 0.6 },
-  { slug: "gameplay-character-kynang", priority: 0.6 },
-  { slug: "equipment", priority: 0.7 },
-  { slug: "combat", priority: 0.7 },
-  { slug: "jobs", priority: 0.7 },
-  { slug: "activities", priority: 0.7 },
-  { slug: "beasts", priority: 0.7 },
-  { slug: "companions", priority: 0.7 },
-];
 
 async function fetchGuList(): Promise<GuItem[]> {
   try {
@@ -78,11 +60,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  const guidePages: MetadataRoute.Sitemap = wikiGuidePages.map((page) => ({
-    url: `${siteUrl}/wiki/${page.slug}`,
+  const guidePages: MetadataRoute.Sitemap = wikiPages.map((page) => ({
+    url: `${siteUrl}/wiki/${page.id}`,
     lastModified: new Date(),
     changeFrequency: "weekly",
-    priority: page.priority as 0.6 | 0.7 | 0.8,
+    priority: page.id === "guide" || page.id === "roadmap" ? 0.8 : page.subCategory ? 0.6 : 0.7,
   }));
 
   return [...staticPages, ...guPages, ...guidePages];

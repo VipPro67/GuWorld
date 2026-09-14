@@ -1,32 +1,31 @@
 # Game Data
 
-Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend khởi động, `db.InitSchema()` tạo bảng cần thiết và seed/upsert dữ liệu vào database.
+Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 
-## CSV seed files
+## CSV gameplay files
 
-| File | Số dòng dữ liệu | Nội dung |
-| --- | ---: | --- |
-| `backend/Gu.csv` | 596 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity (số 0–9), role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
-| `backend/Item.csv` | 229 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description, rarity (số 0–9). |
-| `backend/Recipe.csv` | 31 | Công thức luyện Cổ: target, Cổ/nguyên liệu yêu cầu, success rate, cost. |
-| `backend/Monster.csv` | 30 | Monster templates: chỉ số, Gu inventory, loot table, AI profile, bắt sủng vật. |
-| `backend/LootTable.csv` | 25 | Bảng loot cho combat/monster (thức ăn cổ rank<6 được thêm vào loot quái Normal/Elite theo dải rank). |
-| `backend/MonsterSpawn.csv` | 48 | Pool spawn monster theo zone/toạ độ/rank (Roaming/Random). |
-| `backend/Region.csv` | 31 | Zone lồng nhau (1 HUB + 6 Đại Vực 3×2 + 7 địa danh): geometry, rank range, pool_weights. `resources` của mỗi vùng bao gồm thức ăn cổ rank<6 khớp dải rank vùng. |
-| `backend/MapCell.csv` | 110 | Ô persistent dùng chung: 23 boss (17 boss landmark theo địa danh + 6 boss tribulation/Long Ngư cố định) + 87 điểm linh tài cao cấp (3/địa danh × 29). `UNIQUE(x,y)` toàn cầu; toạ độ trong bbox region, tránh rect HUB. |
-| `backend/ShopItem.csv` | 61 | Shop NPC/caravan items. Cột `rank` (0 = tự suy, >0 = bán đúng rank đó cho Cổ đa rank). |
-| `backend/ArenaShopItem.csv` | 26 | Shop đấu trường (tiền ARENA_COIN). |
-| `backend/PremiumShopPackage.csv` | 4 | Gói premium shop mua bằng ví. |
-| `backend/TopupPackage.csv` | 5 | Gói nạp tiền. |
-| `backend/data/ApertureNodeTemplate.csv` | 8 | Template node Tiên Khiếu (khu trồng/chăn nuôi/khai thác + phòng thủ WALL/WATCHTOWER/GUARDIAN_STATUE/BARRACKS/FORCE_FIELD): cost, prod, HP, defense, attack range, cost Gu, zone. Đọc trực tiếp lúc khởi động vào `ResourceNodeTemplates` (không qua Admin); sửa CSV + restart. |
-| `backend/data/disposable_email_domains.txt` | 969 | Danh sách domain email tạm thời bị chặn khi đăng ký (mỗi dòng 1 domain, `#` comment). Đọc lúc khởi động; để trống = không chặn. |
+| File | Nội dung |
+| --- | --- |
+| `backend/data/Gu.csv` | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, targeting, rarity, role/tags. |
+| `backend/data/Item.csv` | Vật phẩm, nguyên liệu, tiền tệ, consumable và effect. |
+| `backend/data/Recipe.csv` | Công thức luyện Cổ, nguyên liệu, tỉ lệ và chi phí. |
+| `backend/data/Monster.csv`, `LootTable.csv`, `MonsterSpawn.csv` | Template quái, bảng loot và quy tắc spawn. |
+| `backend/data/Region.csv`, `MapCell.csv` | Vùng/zone và ô persistent của thế giới. |
+| `backend/data/Race.csv`, `Constitution.csv`, `Status.csv` | Chủng tộc, thể chất và trạng thái data-driven. |
+| `backend/data/Quest.csv`, `DreamRealm.csv` | Nhiệm vụ và mộng cảnh/phó bản. |
+| `backend/data/Sect.csv`, `SectMission.csv` | Môn phái và mẫu nhiệm vụ môn phái. |
+| `backend/data/ShopItem.csv`, `ArenaShopItem.csv` | Shop thương đội và shop Võ Đài. |
+| `backend/data/PremiumShopPackage.csv`, `TopupPackage.csv` | Gói premium và gói nạp; được handler đọc trực tiếp, không import qua Admin. Kết quả có Redis cache 24 giờ. |
+| `backend/data/ApertureNodeTemplate.csv` | Template node Tiên Khiếu: cost, production, HP, defense, attack range, cost Cổ và zone. Đọc trực tiếp lúc khởi động; sửa CSV cần restart. |
+| `backend/data/disposable_email_domains.txt` | Danh sách domain email tạm bị chặn khi đăng ký; đọc lúc khởi động. |
 
-`PremiumShopPackage.csv` và `TopupPackage.csv` nằm ở `backend/cmd/server/data/` và được **đọc trực tiếp từ CSV mỗi lần request** (không seed qua Admin; sửa CSV là đổi gói). Loader `handlerCSVPath` tìm theo thứ tự `data/` → `cmd/server/data/` → legacy paths. `ApertureNodeTemplate.csv` và `disposable_email_domains.txt` cũng đọc trực tiếp lúc khởi động (cache trong memory), không seed qua Admin.
+Không ghi số dòng cố định trong tài liệu vì dataset thay đổi thường xuyên. Các helper tìm file ở `data/` trước rồi mới thử đường dẫn legacy. Chỉ sửa CSV chưa làm đổi dictionary trong DB: phải import dataset tương ứng và restart backend nếu registry được cache. Với hai file package đọc trực tiếp, cần chờ cache 24 giờ hoặc xóa cache/restart để thấy thay đổi ngay.
 
 ## Registry runtime
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.
 - `models.LoadItemRegistry(db.DB)` load `item_dictionary` vào `models.ItemRegistry` khi server start.
+- Các registry constitution, race, status, monster và zone cũng được load từ database khi server start.
 - API `/api/dictionary` trả dữ liệu dictionary cho frontend.
 - API `/api/recipes` trả recipe refining cho frontend.
 
@@ -254,6 +253,16 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `x`, `y` — toạ độ grid (0-19)
 - `production_type`, `production_amount`, `production_interval_hours` — sản lượng
 - `is_destroyed` — trạng thái hỏng
+
+### Kinh tế và xã hội Dị Nhân trong Tiên Khiếu
+
+- `aperture_node_workers`: gán một phần dân số `aperture_variant_humans` vào node; cặp node/chủng tộc là duy nhất.
+- `aperture_refinement_queue`: hàng đợi luyện chế theo recipe, mode, mục tiêu, tiến độ, ưu tiên và trạng thái bật/tắt.
+- `aperture_variant_settlements`: khu định cư theo chủng tộc, sức chứa, nhà ở, kho lương và an ninh.
+- `aperture_variant_events`: sự kiện xã hội (loại, mức độ, effects JSONB, thời điểm giải quyết).
+- `aperture_variant_npcs`: cá thể Cổ Sư/Cổ Tiên với rank, lưu phái, vai trò, trung thành, thiên phú và trạng thái.
+
+Các cột xã hội trên quần thể lưu kho lương, lương thực đầu người, tăng trưởng và tử vong. Worker production, society simulation và Gu Master spawning lần lượt chạy theo chu kỳ 10, 5 và 30 phút. API cho phép phân công lao động, quản lý hàng đợi, nâng khu định cư và đổi vai trò/giải tán NPC; xem route map trong `docs/API.md`.
 
 ### Bảng `tribulation_events`
 

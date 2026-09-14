@@ -282,13 +282,13 @@ Cổ sư có thể:
 
 ## 5. Vật phẩm và nguyên liệu
 
-- Dictionary vật phẩm nằm trong `backend/Item.csv`.
+- Dictionary vật phẩm được Admin import từ `backend/data/Item.csv`.
 - Vật phẩm có type, rarity, Chuyển, path, effects, tags và description.
 - Item effects hiện có gồm hồi Chân Nguyên/Sinh lực, trị liệu/hồi phục sinh lực Tiên Khiếu (`heal_aperture`), soul boost, đạo ngân, xóa trạng thái xấu và điều kiện chỉ phàm nhân/chỉ Cổ Tiên.
 
 ## 6. Luyện Cổ và suy diễn công thức
 
-- Cổ phương lấy từ `backend/Recipe.csv`.
+- Cổ phương được Admin import từ `backend/data/Recipe.csv`.
 - Luyện Cổ dùng `/api/refine` với recipe và selected Gu instances.
 - Cổ nguyên liệu trong công thức yêu cầu **bằng hoặc cao hơn bậc quy định**. Dùng Cổ nguyên liệu bậc cao hơn sẽ tăng thêm tỉ lệ thành công (Chất lượng nguyên liệu).
 - Có thể kéo-thả Cổ bất kỳ vào ô nguyên liệu (kể cả ô "Cổ Trùng Ẩn"). Nếu bộ Cổ không khớp công thức, khi Luyện sẽ **thất bại chắc chắn** — nguyên liệu, tài nguyên vẫn bị tiêu hao.
@@ -360,7 +360,10 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - Cổ sư xem lưới địa đồ xung quanh, di chuyển theo Thân pháp, chạm trán quái, thu thập tài nguyên/Cổ hoang dã; du hành giữa các Đại Vực qua màn hình bản đồ thế giới.
 - **Bản đồ lớn "Ngũ Vực"** hiển thị toàn bộ Lục Đại Vực trên một canvas phóng to/thu nhỏ được: vẽ ranh giới các vùng, các điểm dùng chung (Trạm Nghỉ 🏯, Boss ⚔️, Linh Tài 💎) từ `map_cells`, **các chấm quái vật/tài nguyên xung quanh đạo hữu** (resolve theo đúng nội dung từng ô khi di chuyển), và sương mù tối vùng tiểu vực chưa ghé thăm (dựa trên `visited_subzones`). Các ô đã tải được **cache theo chunk 64×64, tách theo khu vực và prefetch dải phía trước hướng đi**; thay đổi ô realtime được apply trực tiếp thay vì tải lại toàn vùng, nên marker hiện dần (không nhấp nháy) và xuất hiện sớm ở khu vực sắp đến. Click vào bất kỳ vị trí nào trên bản đồ để **di chuyển tự do** — player đi bộ theo đường thẳng qua từng ô, mỗi ô đi qua đều kích hoạt nội dung; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss** (bước vào ô trống thì đi bình thường, không có phục kích ngẫu nhiên). **Có thể đổi hướng/dừng giữa chừng** bằng cách click vị trí khác (hoặc click lại ô đang đứng để dừng), vị trí server cập nhật mịn từng ~150 ô nên di chuyển của người chơi khác hiển thị gần như real-time. Vị trí camera + độ zoom của bản đồ được **giữ nguyên sau khi chiến đấu**.
 - **Quái nhỏ, tài nguyên thấp, Cổ cấp thấp** được sinh procedural theo vùng (không lưu DB), **nội dung ổn định theo ô** — quái không tự đổi chỗ/re-randomize theo thời gian; sau khi đạo hữu dọn dẹp một ô, ô đó trống trong 15 phút rồi nội dung cũ quay lại (cooldown `cleared_cells`). **Boss và tài nguyên cấp cao** là điểm dùng chung toàn thế giới trong `map_cells`, có thời gian hồi sinh sau khi bị đánh bại/hái.
-- Nội dung mỗi vùng phụ thuộc `backend/Region.csv` (geometry + pool), `backend/MonsterSpawn.csv` (pool quái) và `backend/MapCell.csv` (boss/tài nguyên cao/điểm an toàn).
+- Nội dung mỗi vùng phụ thuộc dữ liệu do Admin import từ `backend/data/Region.csv`, `MonsterSpawn.csv` và `MapCell.csv`.
+- Thanh công cụ cho phép chuyển giữa **click để đi** và **kéo bản đồ**, đưa camera về nhân vật, đồng thời bật/tắt nhãn Quái & Cổ/Boss/HUB/Khu vực/Ngũ Vực. Chọn một người chơi để xem hồ sơ, mời tổ đội hoặc tiếp cận; chỉ có thể phát động PvP khi mục tiêu ở trong phạm vi 2 ô.
+- Có thể dịch chuyển tới vùng an toàn với phí hệ thống hiển thị trước, hoặc dùng Cổ cổng đang trang bị/ACTIVE. Cổ tạo cổng cho chọn tọa độ; loại cổng ngẫu nhiên tự chọn đích.
+- **Chiến lợi phẩm mặt đất/hài cốt:** tài sản rơi khi tử vong được lưu trên ô bản đồ. Trong thời gian khóa, chỉ người hạ gục được nhặt; hết khóa, người khác có thể nhặt. Panel trên bản đồ cho xem nội dung và trạng thái khóa, người liên quan nhận thông báo khi tài sản bị nhặt.
 
 ## 9. Chiến đấu
 
@@ -372,7 +375,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - Combat state hỗ trợ đội hình địch/ta, status effects, cooldown, Chân Nguyên/Sinh lực, chiến lợi phẩm.
 - Thắng trận áp dụng chiến lợi phẩm vào thẳng túi đồ thật; thua trận cập nhật trạng thái theo handler combat.
 - **Túi đồ khi khám phá là túi thật:** nguyên liệu/Cổ/tiền nhặt được trong chuyến đi vào thẳng túi đồ (không còn "túi tạm"). Khi về trấn an toàn không có bước "thu hoạch" — đồ đã nằm sẵn trong túi.
-- **Chết thì rơi đồ (hình phạt, tùy chỉnh trong `handlers/death_penalty.go`):** khi bại trận dã ngoại, Bỏ chạy ngất xỉu, hay thua PvP, đạo hữu rơi mất một phần tài nguyên đang giữ theo cấu hình: % Nguyên Thạch / Tiên Nguyên Thạch, một phần nguyên liệu, một số Cổ (luôn trừ Cổ đang trang bị & Bản Mệnh Cổ) và một số Bí phương. Chết vì quái (PvE) thì đồ rơi vào hư không; thua PvP thì kẻ thắng cướp đoạt số đồ rơi đó.
+- **Chết thì rơi đồ:** khi bại trận dã ngoại, bỏ chạy ngất xỉu hay thua PvP, đạo hữu có thể rơi một phần thạch, nguyên liệu, Cổ không trang bị/không phải Bản Mệnh và Bí phương. Tài sản tạo thành ground drop/hài cốt trên bản đồ thay vì biến mất hoặc chuyển thẳng vào túi người thắng; quyền nhặt tuân theo thời gian khóa mô tả ở mục bản đồ.
 - **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu tại HUB và chịu hình phạt rơi đồ như trên. Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
 - Khi hệ thống quá tải (tranh chấp khoá dữ liệu do nhiều thao tác cùng lúc), các thao tác chiến đấu (bỏ chạy/rút lui/bắt sủng…) trả về thông báo **bận và yêu cầu thử lại** thay vì treo vô hạn.
 
@@ -445,14 +448,14 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 ## 11. Hồn phách
 
 - Player có `soul_hp`, `max_soul`, `soul_tier`, `needs_soul_refine`.
-- API hỗ trợ dùng Guts Gu, refine soul và calm soul.
+- Giao diện hiện kết nối hành động **luyện hồn**; các thao tác hồn phách khác phụ thuộc vật phẩm/luật gameplay tương ứng, không có endpoint riêng cho “use-guts” hay “calm”.
 
 ## 12. Kinh tế
 
 ### Cửa hàng NPC
 
 - Danh sách cửa hàng public; mua/bán cần đăng nhập.
-- Dữ liệu cửa hàng seed từ `backend/ShopItem.csv`.
+- Dữ liệu cửa hàng được import từ `backend/data/ShopItem.csv`. Có lọc theo loại/rank/lưu phái, mua và bán Cổ–nguyên liệu–Bí phương, kể cả bán hàng loạt.
 
 ### Bảo Hoàng Thiên chợ trời
 
@@ -524,7 +527,7 @@ Hệ thống môn phái hiện có:
 
 - Tổ đội: tạo tổ đội, xem trạng thái, mời Cổ sư, rời tổ đội.
 - **Chiến đấu tổ đội:** Các thành viên trong tổ đội ở cùng Đại Vực sẽ cùng tham gia vào trận chiến khi Trưởng nhóm khởi xướng (cả Turn-based lẫn Auto Combat/Simulation). Đồng đội sẽ tự động chiến đấu bằng các Cổ trùng đang trang bị, Sát chiêu và Thiết lập tự động của chính họ. Phần thưởng chiến thắng (Nguyên thạch, Nguyên liệu, Cổ trùng) sẽ được chia đều cho tất cả thành viên tham chiến, và tiêu hao (Sinh lực, Chân Nguyên, Dược phẩm) cũng được cập nhật tương ứng. Đồng đội không nhận điểm Chân Ý từ trận chiến — chỉ người chơi chính (Trưởng nhóm) được ngộ đạo.
-- Đấu trường: leaderboard và khiêu chiến Cổ sư khác.
+- **Võ Đài:** tối đa 10 lượt khiêu chiến/ngày; thắng người xếp cao hơn thì đổi vị trí. Thắng nhận 50, thua nhận 10 Đồng Võ Đài; hệ thống chốt thưởng ngày lúc 22:30. Đồng dùng tại tab Bảo Các của Võ Đài.
 
 ## 16. Chat, mail và feedback
 
@@ -593,7 +596,7 @@ Cổ Nguyệt Phương Nguyên, một đại ma đầu bị ép đến đường
 
 ## 19. Hướng Dẫn Tân Thủ (Wiki Guide)
 
-Hệ thống cung cấp trang Hướng Dẫn Tân Thủ chi tiết từng bước cho các hoạt động tại [Wiki Guide](file:///wiki/guide) bao gồm:
+Hệ thống cung cấp wiki trong game tại `/wiki`; phần dưới là lộ trình tân thủ ngắn gọn:
 
 ### Thuật ngữ cốt lõi:
 - **Không Khiếu & Tiên Khiếu:** Phàm nhân sử dụng Không Khiếu tích lũy Chân Nguyên chiến đấu. Cổ Tiên (Lục Chuyển trở lên) sở hữu **Tiên Khiếu** (thế giới nhỏ độc lập bên trong cơ thể) tự sản sinh Tiên Nguyên với 4 phẩm cấp: Thấp, Trung, Cao, Cực Hạn dựa trên Nhân Khí lúc Thăng Tiên.
@@ -613,7 +616,61 @@ Hệ thống cung cấp trang Hướng Dẫn Tân Thủ chi tiết từng bướ
 6. **Thương hội & Tông môn:** Đấu giá vật phẩm tự do tại Bảo Hoàng Thiên và các hoạt động quyên góp, giao dịch bảo khố Tông Môn.
 7. **Thăng Tiên:** Đột phá lên Lục Chuyển Cổ Tiên ở Ngũ Chuyển Đỉnh Phong dựa trên Tư chất và tích lũy Nhân Khí (yêu cầu tối thiểu 100k Nhân Khí, xác suất gốc theo tư chất + bonus Nhân Khí, tối đa 90%). Thất bại phế bỏ tu vi về Nhất Chuyển.
 
-## 20. Bảng Quy Đổi Đơn Vị Số Lượng (Vạn, Ức, Kinh...)
+## 20. Điều hướng giao diện và lộ trình chơi
+
+Sau khi đăng nhập, đại sảnh chia tính năng thành các nhóm:
+
+- **Phát triển nhân vật:** Nhân vật, Túi Cổ, Luyện Cổ, Nhiệm vụ & Thành tựu, hồ sơ/referral.
+- **Tiên đạo:** Tiên Khiếu mở từ Lục Chuyển; tại đây quản lý node, dị nhân, khu định cư và kiếp nạn.
+- **Kinh tế:** Cát Bảo Các, Thương Đội/Cửa hàng, Bảo Hoàng Thiên và giao dịch trực tiếp. Tab nạp trong Cát Bảo Các có thể bị tắt; trang nạp riêng nằm tại `/topup` khi hệ thống thanh toán được vận hành.
+- **Chiến đấu/hoạt động:** Nô Thú, Phòng Tập, Võ Đài, Đấu Trường Sinh Tử, Mỏ, Bí–Mộng Cảnh, Giải Trí và Ngũ Vực.
+- **Theo dõi:** Bảng Xếp Hạng, Lịch Sử Chiến Đấu, Ký Sự Tu Hành, thông báo và Feedback.
+
+Ô **Sát Chiêu** trên đại sảnh hiện được đánh dấu đang phát triển/khóa dù backend và màn hình chiến đấu đã có dữ liệu sát chiêu. Hãy coi trạng thái hiển thị trên đại sảnh là nguồn chính xác về khả năng truy cập ở bản build đang chơi.
+
+## 21. Tiên Khiếu: kinh tế và xã hội Dị Nhân
+
+Sau khi thành Tiên, Tiên Khiếu không chỉ là lưới đặt công trình:
+
+1. Đặt node tài nguyên/phòng thủ, thu hoạch riêng hoặc tất cả, sửa tất cả node hỏng và nâng từng node. Node tối đa cấp 5; mỗi cấp tăng 500 HP tối đa. Node tài nguyên tăng 50% sản lượng/cấp, node phòng thủ tăng 25% chỉ số/cấp.
+2. Phân công dân số dị nhân còn khả dụng vào node tài nguyên. Sản lượng phụ thuộc dân số, cấp node, hiệu suất chủng tộc, mức lao động và trạng thái node; node bị phá hủy không sản xuất.
+3. Chọn cường độ **LOW / NORMAL / HIGH / EXPLOIT**. Mức cao cho sản lượng nhanh hơn nhưng làm giảm hạnh phúc, tăng áp bức/nguy cơ phản loạn; mức thấp giúp xã hội hồi phục.
+4. Tạo hàng đợi luyện chế theo bí phương, số lượng và ưu tiên để nền kinh tế Tiên Khiếu tự xử lý theo chu kỳ.
+5. Xem và nâng cấp khu định cư theo từng chủng tộc. Theo dõi dân số, sức chứa, lương thực, nhà ở, an ninh, hạnh phúc, thịnh vượng và phản loạn; thiếu lương thực hoặc hạnh phúc thấp làm tăng tử vong.
+6. Khi một chủng tộc đủ đông, xã hội có cơ hội sinh Cổ Sư dị nhân. Có thể giao vai trò hoặc giải tán từng NPC; thiên phú, trung thành, rank và lưu phái của họ khác nhau.
+
+Mô phỏng xã hội cập nhật nền sau mỗi vài phút, vì vậy số liệu có thể thay đổi dù người chơi không bấm hành động. Đừng dùng `EXPLOIT` dài hạn nếu kho lương, hạnh phúc và an ninh chưa ổn định.
+
+## 22. Nhiệm vụ, thành tựu và phần thưởng tài khoản
+
+- **Nhiệm vụ:** xem yêu cầu/tiến độ/phần thưởng rồi hoàn thành khi đủ điều kiện. Một số tiến độ được ghi tự động từ hoạt động gameplay.
+- **Thành tựu:** nhận thưởng cho thành tựu đã mở khóa. Danh hiệu/khung đã mở có thể được chọn để hiển thị trên hồ sơ.
+- **Referral:** xem mã và thống kê, liên kết mã giới thiệu hợp lệ, sau đó nhận thưởng khi đạt điều kiện.
+- **Gift code:** nhập trong giao diện tài khoản/tiện ích; mỗi code tuân theo thời hạn, giới hạn và phần thưởng do Admin cấu hình.
+- **Thông báo:** chuông hiển thị số chưa đọc, mở chi tiết từng mục, đánh dấu một nhóm hoặc tất cả là đã đọc.
+
+## 23. Phong Ấn Cổ
+
+Trong **Tiện Ích → Phong Ấn Cổ**, có thể tìm kiếm/lọc túi Cổ rồi:
+
+- phong ấn một Cổ bằng số **Đá Phong Ấn** tương ứng Chuyển của nó (tối thiểu 1);
+- giải phong miễn phí;
+- Cổ `SEALED` vẫn đói và vẫn có thể chết, nhưng tốc độ giảm độ no chậm hơn trạng thái hoạt động;
+- Cổ phong ấn không được dùng như Cổ ACTIVE trong chiến đấu.
+
+Phong ấn thích hợp cho Cổ ít dùng nhưng quý; vẫn phải kiểm tra và cho ăn định kỳ.
+
+## 24. Lịch sử, replay và Ký Sự
+
+- **Lịch Sử Chiến Đấu** liệt kê trận gần đây, kết quả/đối thủ và cho mở báo cáo hoặc replay log chi tiết.
+- **Ký Sự Tu Hành** ghi các hành động quan trọng như tu luyện, luyện Cổ, giao dịch, chăm Cổ và thay đổi tài sản. Có tìm kiếm tự do, lọc loại hành động/trạng thái và phân trang.
+- Đây là hai nơi đầu tiên nên kiểm tra khi cần hiểu vì sao tài nguyên, Cổ hoặc kết quả trận đấu thay đổi.
+
+## 25. Bảng Xếp Hạng
+
+Các hạng mục hiện có gồm **Tu vi**, **Nguyên Thạch**, **Cổ mạnh nhất**, **Tiên Nguyên Thạch** và **Sát Khí**. Người chơi có thể ẩn/hiện mình trên các bảng thông thường; bảng Sát Khí bắt buộc công khai với người đang có Sát Khí. Dữ liệu xếp hạng được cập nhật theo chu kỳ ngày, nên không nhất thiết đổi ngay sau một hành động.
+
+## 26. Bảng Quy Đổi Đơn Vị Số Lượng (Vạn, Ức, Kinh...)
 
 Hệ thống rút gọn hiển thị số lượng lớn (sát thương, khiên, HP, tài nguyên) sử dụng thang đơn vị truyền thống Á Đông (mỗi cấp bậc tăng $10^4 = 10.000$ lần):
 

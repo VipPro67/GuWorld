@@ -4,72 +4,77 @@
 
 ```text
 Browser / Next.js UI
-  -> Zustand store (`frontend/src/store/useGameStore.ts`)
-  -> Backend API (`/api/...`) with cookie credentials
-  -> Gin handlers
-  -> PostgreSQL tables + CSV-seeded dictionaries
-  -> Redis cache/pub-sub + background workers
+  -> Zustand domain slices (state + API client)
+  -> HTTP `/api/*` or authenticated `/api/ws`
+  -> Gin handlers -> shared service (where present) -> PostgreSQL
+  -> Redis cache/pub-sub, WebSocket hub and polling/batch workers
 ```
+
+Gameplay rules remain primarily in handlers, but reusable player, inventory, map, combat-session, recipe, quest, achievement and dao operations now live in `internal/services`. This is an incremental split, not a universal service/repository layer.
 
 ## Backend startup
 
-`backend/cmd/server/main.go` thực hiện theo thứ tự:
+`backend/cmd/server/main.go` performs these steps:
 
-1. Load `.env` từ `.env`, `backend/.env nếu có.
-2. Kết nối PostgreSQL qua `db.Connect()`.
-3. Gọi `db.InitSchema()` để tạo/migrate bảng và seed dữ liệu.
-4. Kết nối Redis qua `cache.Connect()`; lỗi Redis sẽ ngăn server khởi động.
-5. Load Gu registry và Item registry từ database vào memory cache.
-6. Start worker đói Cổ, worker tai kiếp và worker quái mỏ.
-7. Khởi tạo Gin router và listen `PORT` hoặc `8080`.
+1. Loads the first available env file in `.env` → `backend/.env` → `../.env` → `../../.env`.
+2. Connects to PostgreSQL and runs the idempotent schema functions in `internal/db/schema_*.go`.
+3. Seeds only runtime prerequisites (sentinel dictionaries, starting hub, system players, mines and backfills). Gameplay dictionaries are imported from Admin; quest is currently the one CSV exception refreshed during schema initialization.
+4. Connects to required Redis, configures the rate limiter and clears dictionary cache keys.
+5. Loads Gu, item, constitution, race, status, monster, zone, quest and instance registries from PostgreSQL.
+6. Wires shared services, starts background workers, the sharded WebSocket hub and Redis subscribers.
+7. Starts Gin on `PORT` (default `8080`) and shuts down through `context.Context` on SIGINT/SIGTERM.
 
 ## Backend folders
 
-| Đường dẫn | Vai trò |
+| Path | Responsibility |
 | --- | --- |
-| `backend/cmd/server` | Binary entrypoint. |
-| `backend/internal/server` | CORS và route table. |
-| `backend/internal/db` | PostgreSQL connection, schema, migrations, seed CSV. |
-| `backend/internal/models` | Domain structs, JSON scanners và registry cache. |
-| `backend/internal/handlers` | HTTP handlers và gameplay services. |
-| `backend/internal/middleware` | Auth và rate limiting. |
-| `backend/internal/auth` | JWT helpers. |
-| `backend/internal/cache` | Redis connector + pub/sub (bắt buộc). |
-| `backend/internal/worker` | Background jobs. |
-| `backend/*.csv` | Seed data. |
+| `backend/cmd/server` | Process entrypoint and lifecycle. |
+| `backend/internal/server` | Middleware setup and canonical route table. |
+| `backend/internal/db` | Connection, domain schema, static seeds and Admin CSV import/export helpers. |
+| `backend/internal/models` | Domain structs, JSON scanners and runtime registries. |
+| `backend/internal/handlers` | HTTP orchestration and domain gameplay rules. |
+| `backend/internal/services` | Shared player/inventory/map/combat/recipe/quest/achievement/dao operations. |
+| `backend/internal/middleware` | Authentication, rate limits and request context. |
+| `backend/internal/cache`, `backend/internal/ws` | Redis and realtime WebSocket infrastructure. |
+| `backend/internal/worker` | Polling, simulation and batch persistence loops. |
+| `backend/data/*.csv` | Canonical import/export files for gameplay data. |
 
 ## Frontend folders
 
-| Đường dẫn | Vai trò |
+| Path | Responsibility |
 | --- | --- |
-| `frontend/src/app` | Next.js pages/layout: main app, topup, topup success. |
-| `frontend/src/components` | UI gameplay views/components. |
-| `frontend/src/components/killer-moves` | UI xây dựng/quản lý sát chiêu. |
-| `frontend/src/store/useGameStore.ts` | Zustand state, API calls, optimistic/derived mana HP estimation, SSE subscriptions. |
-| `frontend/public` | Static assets mặc định. |
+| `frontend/src/app` | App Router pages for game, top-up and dynamic wiki pages. |
+| `frontend/src/components` | Gameplay views and dialogs. |
+| `frontend/src/store/useGameStore.ts` | Root Zustand composition and shared realtime wiring. |
+| `frontend/src/store/slices` | Domain state/actions; slices call APIs and coordinate optimistic updates. |
+| `frontend/src/lib` | Shared auth, config and fetch helpers. |
 
 ## State and networking
 
-- Frontend dùng cookie session (`credentials: "include"`) cho API protected.
-- `NEXT_PUBLIC_BACKEND_URL` quyết định backend URL; mặc định là `http://localhost:8080`.
-- Store gom state player, dictionary, recipes, marketplace, trade, party, arena, chat, mines, aperture, sect, feedback.
-- SSE đang có cho player events, trade events và Bảo Hoàng chat.
+- Protected HTTP calls use cookie credentials. `NEXT_PUBLIC_BACKEND_URL` defaults to `http://localhost:8080`.
+- `/api/ws` is the primary realtime transport. The hub supports player events, world position/cell deltas, trade and chat channels via Redis pub/sub when available.
+- World-map queries remain HTTP for snapshots, rectangular cell fetches and actions; WebSocket events keep nearby state fresh between snapshots.
+- The Zustand root composes domain slices for inventory, combat, exploration, aperture, marketplace, sect, party, notifications, achievements, pets, gacha, betting and other systems.
 
 ## Background workers
 
-- Hunger / Tick worker: xử lý ON_TICK effects (sinh đá từ Cổ đặc biệt). Độ no Cổ trùng (người chơi và tông môn) được tính toán theo cơ chế Lazy Evaluation (on-demand khi truy cập).
-- Tribulation worker: kiểm tra/tạo tai kiếp và xử lý enemy grid.
-- Mine monster worker: gán quái vào mỏ bỏ hoang.
+Workers are cancellable polling/simulation loops, not an external job queue:
+
+- Gu/pet hunger, growth and status expiry/lazy updates.
+- Tribulation, world-index synchronization, mine monsters and midnight mine processing.
+- Arena, auction, beast-betting and Death Arena settlement/round processing.
+- Sect mission, territory and maintenance processing.
+- Batch player persistence, pool watchdog and optional orphaned Redis-key cleanup.
+- Variant-human production (10 minutes), society simulation (5 minutes) and Gu Master spawning (30 minutes).
 
 ## Persistence model
 
-Schema được tạo bằng SQL trong `backend/internal/db/db.go`. Các bảng quan trọng gồm:
+Schema is split by domain under `backend/internal/db/schema_*.go`. Important groups include:
 
-- `players`, `referrals`, `wallets`, `topup_orders`, `wallet_transactions`.
-- `gu_dictionary`, `item_dictionary`, `refining_recipes`.
-- `regions`, `map_cells`, `monster_templates`, `monster_spawns`, `loot_tables`.
-- `immortal_apertures`, `aperture_resource_nodes`, `tribulation_events`, `tribulation_enemies`, `aperture_variant_humans`.
-- Đạo Ngân không có bảng riêng — lưu trong cột JSONB `players.dao_marks`.
-- `auction`, `trades`, `messages`, `parties`, `arena_rankings`, `leaderboard_settings`.
-- `sects`, `sect_members`, `sect_missions`, `player_sect_missions`, `sect_join_requests`, `sect_promotion_requests`, `sect_mines`.
-- `mine_slots`, `instance_templates`, `player_instance_sessions`, `killer_moves`, `feedback`, `feedback_votes`.
+- identity/economy: players, referrals, wallets, top-up orders, transactions, achievements, quest progress, notifications and audit logs;
+- dictionaries/world: Gu, item, recipe, race, constitution, status, regions, cells, monsters, spawns, loot and map ground drops;
+- combat/social: combat sessions/history, parties/invitations, pets, killer moves, arena/shop, Death Arena, beast betting, trade, marketplace, chat and feedback/comments;
+- aperture: apertures, resource nodes, tribulations, variant-human populations, node workers, refinement queue, settlements, events and NPCs;
+- sect/activities: sect membership, requests, missions, vault/mines, personal mines and instances.
+
+Dao marks and several extensible effect/state structures use JSONB. See `docs/GAME_DATA.md` for field and CSV details; the router in `backend/internal/server/server.go` remains the source of truth for endpoints.

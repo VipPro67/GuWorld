@@ -527,6 +527,83 @@ export const wikiPages: WikiPage[] = [
     )
   },
   {
+    id: "gameplay-ui-navigation",
+    title: "Bắt Đầu & Điều Hướng Game",
+    category: "gameplay",
+    keywords: ["cách chơi", "giao diện", "đại sảnh", "bắt đầu", "tân thủ"],
+    content: (
+      <div className="space-y-5 text-xs text-[var(--text-secondary)] leading-relaxed">
+        <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20">
+          <h3 className="text-sm font-bold text-emerald-300 mb-2">Bắt đầu trong 5 bước</h3>
+          <ol className="list-decimal list-inside space-y-2">
+            <li>Hoàn tất tạo nhân vật, chọn Đại Vực và bộ Cổ ban đầu.</li>
+            <li>Mở <strong>Nhân Vật</strong> để xem HP, Chân Nguyên, tư chất và áp lực vách khiếu.</li>
+            <li>Vào <strong>Túi Cổ</strong>, trang bị Cổ, chọn Bản Mệnh và kiểm tra Độ No.</li>
+            <li>Làm Nhiệm Vụ, khai thác Mỏ và khám phá Ngũ Vực để tích tài nguyên.</li>
+            <li>Luyện Cổ, thử đội hình trong Phòng Tập rồi mới tham gia Võ Đài/PvP.</li>
+          </ol>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+            <h3 className="font-bold text-indigo-300 mb-2">Quản lý</h3>
+            <ul className="list-disc list-inside space-y-1"><li>Nhân Vật: tu luyện, hồ sơ, bộ Cổ, phúc lợi và thành tựu.</li><li>Túi Cổ: cho ăn, trang bị, ngủ, phong ấn, dùng hoặc loại bỏ.</li><li>Nô Thú: cho ăn, xếp đội, ngủ, thả và gộp linh thú.</li><li>Tiên Khiếu mở từ Lục Chuyển.</li></ul>
+          </div>
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+            <h3 className="font-bold text-amber-300 mb-2">Hoạt động</h3>
+            <ul className="list-disc list-inside space-y-1"><li>Ngũ Vực: săn quái/Cổ hoang, nhặt tài nguyên và gặp người chơi.</li><li>Thương Đội/Bảo Hoàng Thiên: shop NPC, chợ và đấu giá.</li><li>Tông Môn: nhiệm vụ, bảo khố, cống hiến và lãnh địa.</li><li>Lịch sử/Ký Sự: kiểm tra trận đấu và biến động tài sản.</li></ul>
+          </div>
+        </div>
+        <p className="p-3 rounded-xl bg-amber-950/10 border border-amber-500/20 text-amber-200"><strong>Lưu ý:</strong> ô Sát Chiêu hiện có thể bị khóa theo bản build. Hãy dựa vào trạng thái trên đại sảnh.</p>
+      </div>
+    ),
+    cards: [
+      { title: "Sinh tồn ngoài Ngũ Vực", targetId: "gameplay-world-survival", description: "Di chuyển, chiến đấu và nhặt hài cốt" },
+      { title: "Chu kỳ hằng ngày", targetId: "gameplay-daily-loop", description: "Checklist phát triển nhân vật" },
+      { title: "Tiên Khiếu & Dị Nhân", targetId: "gameplay-aperture-society", description: "Kinh tế dành cho Cổ Tiên" },
+    ],
+  },
+  {
+    id: "gameplay-world-survival",
+    title: "Ngũ Vực: Di Chuyển & Sinh Tồn",
+    category: "activities",
+    subCategory: "gameplay-ui-navigation",
+    keywords: ["ngũ vực", "bản đồ", "pvp", "hài cốt", "dịch chuyển"],
+    content: (
+      <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-sky-300 mb-2">Điều khiển bản đồ</h3><ul className="list-disc list-inside space-y-1"><li>Chuyển giữa click để đi và kéo bản đồ; nút định vị đưa camera về nhân vật.</li><li>Bật/tắt nhãn Quái & Cổ, Boss, HUB, Khu Vực và Ngũ Vực.</li><li>Click đích mới để đổi hướng; click ô đang đứng để dừng.</li><li>Dịch chuyển vùng với phí xem trước, hoặc dùng Cổ cổng đang trang bị và ACTIVE.</li></ul></section>
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-rose-300 mb-2">Gặp mục tiêu</h3><p>Chỉ bước đúng ô quái/Boss mới mở chiến đấu. Chọn người chơi để xem hồ sơ, mời tổ đội hoặc tiếp cận. Phạm vi PvP cơ bản là 2 ô và có thể tăng bằng chỉ số tầm đánh/tầm chiến đấu; không thể tấn công trong vùng an toàn.</p></section>
+        <section className="p-4 rounded-xl bg-rose-950/15 border border-rose-500/20"><h3 className="font-bold text-rose-300 mb-2">Tử vong & hài cốt</h3><p>Thua trận có thể làm rơi thạch, nguyên liệu, Bí phương và Cổ không trang bị/không phải Bản Mệnh. Đồ nằm trên ô bản đồ. Nếu có người hạ gục, thời gian bảo hộ ưu tiên người đó; chiến lợi phẩm PvE không có người hạ gục không được khóa riêng. Luôn xem trạng thái hiển thị trước khi nhặt.</p></section>
+      </div>
+    ),
+  },
+  {
+    id: "gameplay-daily-loop",
+    title: "Chu Kỳ Chơi Hằng Ngày",
+    category: "activities",
+    subCategory: "gameplay-ui-navigation",
+    keywords: ["hằng ngày", "nhiệm vụ", "võ đài", "mỏ", "thành tựu"],
+    content: (
+      <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-emerald-300 mb-2">Mỗi lần đăng nhập</h3><ol className="list-decimal list-inside space-y-1"><li>Đọc thông báo; kiểm tra HP, Chân Nguyên và Hồn Phách.</li><li>Kiểm tra Độ No của Cổ/linh thú và cho ăn trước khi về 0.</li><li>Nhận thưởng nhiệm vụ, thành tựu, mỏ và node Tiên Khiếu.</li><li>Luyện Cổ, cập nhật bộ chiến đấu và thử trong Phòng Tập.</li></ol></section>
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-amber-300 mb-2">Theo dõi tiến độ</h3><ul className="list-disc list-inside space-y-1"><li>Lịch Sử Chiến Đấu có kết quả và replay log.</li><li>Ký Sự Tu Hành cho tìm/lọc hành động và biến động tài sản.</li><li>Thành tựu cho nhận thưởng và trang bị danh hiệu/khung.</li><li>BXH gồm Tu Vi, Nguyên Thạch, Cổ mạnh nhất, Tiên Nguyên và Sát Khí.</li></ul></section>
+      </div>
+    ),
+  },
+  {
+    id: "gameplay-aperture-society",
+    title: "Tiên Khiếu & Xã Hội Dị Nhân",
+    category: "companions",
+    subCategory: "gameplay-ui-navigation",
+    keywords: ["tiên khiếu", "dị nhân", "node", "lao động", "khu định cư"],
+    content: (
+      <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
+        <p className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/20"><strong>Vòng lặp:</strong> đặt node → phân công dân số → thu sản lượng → sửa/nâng cấp → phát triển khu định cư. Node bị phá hủy không sản xuất.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-emerald-300 mb-2">Node & sản xuất</h3><ul className="list-disc list-inside space-y-1"><li>Node tối đa cấp 5; nâng cấp tăng HP và hiệu quả.</li><li>Gán dân số còn rảnh vào node tài nguyên còn sống.</li><li>Hàng đợi luyện chế dùng bí phương, số lượng và ưu tiên.</li></ul></section><section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-amber-300 mb-2">Xã hội</h3><ul className="list-disc list-inside space-y-1"><li>LOW/NORMAL/HIGH/EXPLOIT đổi sản lượng lấy ổn định.</li><li>Thiếu lương, hạnh phúc thấp và áp bức cao tăng tử vong/phản loạn.</li><li>Khu định cư quản lý sức chứa, nhà ở, kho lương và an ninh.</li></ul></section></div>
+        <p className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">Quần thể đủ lớn có thể sinh Cổ Sư dị nhân với rank, thiên phú, trung thành và lưu phái riêng. Có thể giao vai trò hoặc giải tán NPC. Mô phỏng chạy nền nên số liệu tiếp tục thay đổi khi đóng giao diện.</p>
+      </div>
+    ),
+  },
+  {
     id: "gameplay-death-arena",
     title: "Đấu Trường Sinh Tử",
     category: "gameplay",
