@@ -2,19 +2,15 @@ package server
 
 import (
 	"net/http"
-	"net/http/pprof"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/aurowora/compress"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/internal/ws"
@@ -126,9 +122,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 	// Serve uploaded images
 	r.Static("/images", "./storage/images")
 
-	// Debug endpoints: goroutine/pprof dumps and DB pool stats
-	registerDebugEndpoints(r)
-
 	// API routes
 	api := r.Group("/api")
 	{
@@ -164,72 +157,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/dictionary/monster-spawns", middleware.RateLimitByIP(40, time.Minute), handlers.GetMonsterSpawns)
 		api.GET("/recipes", middleware.RateLimitByIP(40, time.Minute), handlers.GetRecipes)
 		api.GET("/gus/:instance_id/history", middleware.RateLimitByIP(40, time.Minute), handlers.GetGuHistory)
-
-		api.GET("/debug/monsters", func(c *gin.Context) {
-			var totalCount, activeCount int
-			err1 := db.DB.QueryRow("SELECT COUNT(*) FROM monster_templates").Scan(&totalCount)
-			err2 := db.DB.QueryRow("SELECT COUNT(*) FROM monster_templates WHERE is_active = true OR is_active IS NULL").Scan(&activeCount)
-
-			// Test the exact query that LoadMonsterRegistry runs
-			rows, err3 := db.DB.Query(`
-				SELECT id, name, type, COALESCE(max_hp, 100), COALESCE(base_attack, 10), COALESCE(base_defense, 10), COALESCE(gu_inventory, '[]'::jsonb), COALESCE(gu_pool, '[]'::jsonb), COALESCE(item_inventory, '{}'::jsonb), COALESCE(dao_marks, '{}'::jsonb), COALESCE(path_masteries, '{}'::jsonb), COALESCE(ai_profile, 'beast_basic'), COALESCE(loot_table_id, ''), COALESCE(description, ''),
-					   COALESCE(is_capturable, false),
-					   COALESCE(capture_chance, 0.20),
-					   COALESCE(pet_hunger_per_hour, 2.0)
-				FROM monster_templates
-				WHERE is_active = true OR is_active IS NULL
-			`)
-
-			var queryErr string
-			var scanErrs []string
-			var parsedCount int
-			if err3 != nil {
-				queryErr = err3.Error()
-			} else {
-				defer rows.Close()
-				for rows.Next() {
-					var mon models.MonsterTemplate
-					var guInvRaw, guPoolRaw, itemInvRaw, daoMarksRaw, masteriesRaw []byte
-					err := rows.Scan(
-						&mon.ID, &mon.Name, &mon.Type,
-						&mon.MaxHP, &mon.BaseAttack, &mon.BaseDefense,
-						&guInvRaw, &guPoolRaw, &itemInvRaw, &daoMarksRaw, &masteriesRaw, &mon.AIProfile, &mon.LootTableID, &mon.Description,
-						&mon.IsCapturable, &mon.CaptureChance, &mon.PetHungerPerHour,
-					)
-					if err != nil {
-						scanErrs = append(scanErrs, err.Error())
-						if len(scanErrs) > 10 {
-							break
-						}
-					} else {
-						parsedCount++
-					}
-				}
-				if err := rows.Err(); err != nil {
-					queryErr = "rows.Err: " + err.Error()
-				}
-			}
-
-			c.JSON(200, gin.H{
-				"total_count":  totalCount,
-				"active_count": activeCount,
-				"parsed_count": parsedCount,
-				"query_err":    queryErr,
-				"scan_errs":    scanErrs,
-				"err1": func() string {
-					if err1 != nil {
-						return err1.Error()
-					}
-					return ""
-				}(),
-				"err2": func() string {
-					if err2 != nil {
-						return err2.Error()
-					}
-					return ""
-				}(),
-			})
-		})
 
 		// Auth Endpoints
 		authGroup := api.Group("/auth")
@@ -807,59 +734,4 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 	}
 
 	return r
-}
-
-// registerDebugEndpoints exposes diagnostics used to investigate hung requests:
-// goroutine dumps (net/http/pprof) and live database connection pool stats.
-func registerDebugEndpoints(r *gin.Engine) {
-	debug := r.Group("/debug")
-	{
-		// Standard net/http/pprof endpoints for go tool pprof & browser inspection
-		debug.GET("/pprof", func(c *gin.Context) {
-			c.Redirect(http.StatusMovedPermanently, "/debug/pprof/")
-		})
-		debug.GET("/pprof/", gin.WrapF(pprof.Index))
-		debug.GET("/pprof/cmdline", gin.WrapF(pprof.Cmdline))
-		debug.GET("/pprof/profile", gin.WrapF(pprof.Profile))
-		debug.GET("/pprof/symbol", gin.WrapF(pprof.Symbol))
-		debug.POST("/pprof/symbol", gin.WrapF(pprof.Symbol))
-		debug.GET("/pprof/trace", gin.WrapF(pprof.Trace))
-
-		// Individual profile handlers
-		debug.GET("/pprof/goroutine", gin.WrapH(pprof.Handler("goroutine")))
-		debug.GET("/pprof/heap", gin.WrapH(pprof.Handler("heap")))
-		debug.GET("/pprof/allocs", gin.WrapH(pprof.Handler("allocs")))
-		debug.GET("/pprof/block", gin.WrapH(pprof.Handler("block")))
-		debug.GET("/pprof/mutex", gin.WrapH(pprof.Handler("mutex")))
-		debug.GET("/pprof/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
-		debug.GET("/pprof/goroutine/stack", func(c *gin.Context) {
-			buf := make([]byte, 8<<20)
-			n := runtime.Stack(buf, true)
-			c.Data(http.StatusOK, "text/plain", buf[:n])
-		})
-
-		// DB connection pool stats
-		debug.GET("/db-pool", func(c *gin.Context) {
-			if db.DB == nil {
-				c.JSON(http.StatusOK, gin.H{"error": "database not connected"})
-				return
-			}
-			stats := db.DB.Stats()
-			c.JSON(http.StatusOK, gin.H{
-				"max_open_connections": stats.MaxOpenConnections,
-				"open_connections":     stats.OpenConnections,
-				"in_use":               stats.InUse,
-				"idle":                 stats.Idle,
-				"wait_count":           stats.WaitCount,
-				"wait_duration":        stats.WaitDuration.String(),
-				"max_idle_closed":      stats.MaxIdleClosed,
-				"max_idle_time_closed": stats.MaxIdleTimeClosed,
-				"max_lifetime_closed":  stats.MaxLifetimeClosed,
-			})
-		})
-
-		// Public diagnostic endpoints
-		debug.GET("/system", handlers.DebugSystemSummary)
-		debug.GET("/requests/summary", handlers.DebugRequestSummary)
-	}
 }

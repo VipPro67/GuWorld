@@ -70,17 +70,14 @@ func flushEntityType(ctx context.Context, entityType string, handler BatchHandle
 		return err
 	}
 
-	var validPayloads []string
-	var validIDs []string
-	for i, payload := range payloads {
-		if payload != "" {
-			validPayloads = append(validPayloads, payload)
-			validIDs = append(validIDs, ids[i])
+	validPayloads, missingIDs := partitionPendingPayloads(ids, payloads)
+	for _, id := range missingIDs {
+		if _, err := cache.AcknowledgeMissingPendingJSON(entityType, id); err != nil {
+			logger.S.Warnf("Failed to clean missing pending %s %s: %v", entityType, id, err)
 		}
 	}
 
 	if len(validPayloads) == 0 {
-		_ = cache.RemovePendingIDs(entityType, ids...)
 		Metrics.RecordFlush(entityType, 0, true)
 		return nil
 	}
@@ -93,4 +90,15 @@ func flushEntityType(ctx context.Context, entityType string, handler BatchHandle
 
 	Metrics.RecordFlush(entityType, len(validPayloads), true)
 	return nil
+}
+
+func partitionPendingPayloads(ids, payloads []string) (validPayloads, missingIDs []string) {
+	for i, id := range ids {
+		if i >= len(payloads) || payloads[i] == "" {
+			missingIDs = append(missingIDs, id)
+			continue
+		}
+		validPayloads = append(validPayloads, payloads[i])
+	}
+	return validPayloads, missingIDs
 }

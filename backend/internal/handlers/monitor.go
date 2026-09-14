@@ -229,13 +229,3 @@ func AdminResetRequestMetrics(c *gin.Context) {
 	monitor.GlobalTracker.Reset()
 	c.JSON(http.StatusOK, gin.H{"message": "Request metrics and traces reset successfully"})
 }
-
-// DebugSystemSummary handles GET /debug/system (public diagnostic overview).
-func DebugSystemSummary(c *gin.Context) {
-	c.JSON(http.StatusOK, collectSystemStats())
-}
-
-// DebugRequestSummary handles GET /debug/requests/summary (public diagnostics).
-func DebugRequestSummary(c *gin.Context) {
-	c.JSON(http.StatusOK, monitor.GlobalTracker.GetSummary())
-}

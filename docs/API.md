@@ -4,25 +4,11 @@ Base path: `/api`.
 
 Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequired()` trừ khi ghi public.
 
-## Debug endpoints (ngoài `/api`)
+## Diagnostics
 
-| Method | Path | Ghi chú |
-| --- | --- | --- |
-| GET | `/debug/pprof/` | Pprof index / dashboard trình duyệt hoặc `go tool pprof`. |
-| GET | `/debug/pprof/profile` | CPU profiling (`?seconds=30`), phân tích CPU tiêu thụ bằng `go tool pprof`. |
-| GET | `/debug/pprof/trace` | Execution tracer profile (`?seconds=5`), xem timeline goroutines bằng `go tool trace`. |
-| GET | `/debug/pprof/cmdline` | Command line arguments của tiến trình Go. |
-| GET/POST | `/debug/pprof/symbol` | Symbol resolution cho trình pprof. |
-| GET | `/debug/pprof/goroutine` | Goroutine dump (chẩn đoán request treo hoặc goroutine leak). |
-| GET | `/debug/pprof/goroutine/stack` | Toàn bộ goroutine stack dạng text thô. |
-| GET | `/debug/pprof/heap` | Heap memory profile (phát hiện memory leak). |
-| GET | `/debug/pprof/allocs` | Past memory allocation profile. |
-| GET | `/debug/pprof/block` | Block profile (bật `runtime.SetBlockProfileRate` để có data). |
-| GET | `/debug/pprof/mutex` | Mutex contention profile. |
-| GET | `/debug/pprof/threadcreate` | OS thread creation profile. |
-| GET | `/debug/db-pool` | DB connection pool stats (open/inUse/idle/wait). |
-| GET | `/debug/system` | Public diagnostic: tổng quan CPU %, Goroutines, RAM, DB Pool, Redis, WebSockets, Uptime. |
-| GET | `/debug/requests/summary` | Public diagnostic: tổng quan RPS, in-flight, status codes, latency percentiles. |
+Các route public `/debug/*` và `/api/debug/monsters` đã bị loại bỏ vì làm lộ
+thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm protected
+`/api/admin/monitor/*` dành cho admin.
 
 > **Log request:** mọi request (trừ OPTIONS) được log `REQ START` khi bắt đầu và `REQ END` khi kết thúc kèm duration. Request > 5s được đánh dấu `REQ SLOW` — dùng để phát hiện handler đang treo mà log cũ không thấy (Gin chỉ log khi request hoàn thành).
 

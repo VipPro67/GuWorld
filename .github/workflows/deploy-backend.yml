@@ -20,7 +20,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  backend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Test
+        working-directory: backend
+        run: go test ./...
+      - name: Vet
+        working-directory: backend
+        run: go vet ./...
+
   build-backend:
+    needs: backend-checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -71,10 +87,11 @@ jobs:
             git reset --hard origin/master
 
             echo "${{ secrets.GITHUB_TOKEN }}" |
-              docker login ghcr.io \
+            docker login ghcr.io \
               -u "${{ github.actor }}" \
               --password-stdin
 
+            export BACKEND_IMAGE="ghcr.io/vippro67/guworld-backend:${{ github.sha }}"
             docker compose pull backend
 
             docker compose up -d --no-deps backend

@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -54,7 +55,11 @@ func Connect() error {
 	}
 
 	if redisSSL {
-		options.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+		tlsConfig, err := newRedisTLSConfig(redisHost, os.Getenv("REDIS_TLS_SERVER_NAME"), os.Getenv("REDIS_TLS_CA_FILE"))
+		if err != nil {
+			return err
+		}
+		options.TLSConfig = tlsConfig
 	}
 
 	Client = redis.NewClient(options)
@@ -66,6 +71,33 @@ func Connect() error {
 		return err
 	}
 	return nil
+}
+
+func newRedisTLSConfig(host, serverName, caFile string) (*tls.Config, error) {
+	if serverName == "" {
+		serverName = host
+	}
+	config := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: serverName,
+	}
+	if caFile == "" {
+		return config, nil
+	}
+
+	pem, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("read Redis TLS CA file: %w", err)
+	}
+	pool, err := x509.SystemCertPool()
+	if err != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("Redis TLS CA file %q contains no valid certificates", caFile)
+	}
+	config.RootCAs = pool
+	return config, nil
 }
 
 // SetJSON marshals a value to JSON and stores it in Redis with the specified expiration
@@ -141,6 +173,22 @@ func AcknowledgePendingJSON(entityType, entityID, expectedPayload string) (bool,
 		redis.call('DEL', KEYS[1])
 		return 1
 	`, []string{entityType + ":" + entityID, "pending_db_writes:" + entityType}, expectedPayload, entityID).Int()
+	return result == 1, err
+}
+
+// AcknowledgeMissingPendingJSON removes a stale pending marker only if its
+// payload key is still absent. This avoids deleting a marker recreated by a
+// concurrent SetAndQueueJSON call after an MGET observed a missing key.
+func AcknowledgeMissingPendingJSON(entityType, entityID string) (bool, error) {
+	if Client == nil {
+		return false, nil
+	}
+	result, err := Client.Eval(Ctx, `
+		if redis.call('EXISTS', KEYS[1]) == 1 then
+			return 0
+		end
+		return redis.call('SREM', KEYS[2], ARGV[1])
+	`, []string{entityType + ":" + entityID, "pending_db_writes:" + entityType}, entityID).Int()
 	return result == 1, err
 }
 
@@ -229,15 +277,21 @@ func GetManyJSON(keys []string) ([]string, error) {
 		return nil, err
 	}
 
-	var jsonStrs []string
-	for _, res := range results {
+	return mapMGetResults(results), nil
+}
+
+func mapMGetResults(results []interface{}) []string {
+	// Preserve positional correspondence with keys. A missing key is represented
+	// by an empty string; queued values are always non-empty JSON documents.
+	jsonStrs := make([]string, len(results))
+	for i, res := range results {
 		if res != nil {
 			if str, ok := res.(string); ok {
-				jsonStrs = append(jsonStrs, str)
+				jsonStrs[i] = str
 			}
 		}
 	}
-	return jsonStrs, nil
+	return jsonStrs
 }
 
 // SetCombatState stores active combat state in Redis with 15 minutes TTL.

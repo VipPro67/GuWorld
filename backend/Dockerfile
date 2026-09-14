@@ -35,7 +35,6 @@ ENV TZ=Asia/Ho_Chi_Minh
 # Copy binary và các file tài nguyên tĩnh
 COPY --from=builder /app/guworld_server .
 COPY --from=builder /app/data ./data
-COPY --from=builder /app/google.json* ./
 
 USER app
 

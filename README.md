@@ -30,6 +30,11 @@ docker-compose up --build
 
 Lệnh này sẽ tự động khởi chạy Go backend, PostgreSQL và Redis. Backend sẽ nghe tại `:8080`, tự khởi tạo schema và seed dữ liệu từ CSV.
 
+Thông tin DB/JWT/OAuth phải đặt trong `backend/.env`; thông tin Grafana Alloy đặt
+trong root `.env`. Không lưu credential trong Compose hoặc Git. Khi dùng Redis
+TLS, backend xác minh certificate và hỗ trợ `REDIS_TLS_SERVER_NAME` cùng
+`REDIS_TLS_CA_FILE` cho CA riêng.
+
 ### Thủ công (Manual)
 
 #### Backend
@@ -50,6 +55,8 @@ npm run dev
 ```
 
 Frontend mặc định gọi backend qua `NEXT_PUBLIC_BACKEND_URL` hoặc `http://localhost:8080` nếu biến môi trường chưa được đặt.
+
+Kiểm tra frontend bằng `npm run lint`, `npm run typecheck` và `npm run build`.
 
 ## Module gameplay hiện có
 

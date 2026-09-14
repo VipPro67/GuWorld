@@ -22,39 +22,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
-func getClientIDFromGoogleJSON() string {
-	candidates := []string{
-		"google.json",
-		"backend/google.json",
-		"../google.json",
-		"../../google.json",
-	}
-	var data []byte
-	var err error
-	for _, p := range candidates {
-		data, err = os.ReadFile(p)
-		if err == nil {
-			break
-		}
-	}
-	if len(data) == 0 {
-		return ""
-	}
-	var config struct {
-		ClientID string `json:"client_id"`
-	}
-	if err := json.Unmarshal(data, &config); err != nil {
-		return ""
-	}
-	return config.ClientID
-}
-
 // GoogleLogin redirects user to Google OAuth2 consent page
 func GoogleLogin(c *gin.Context) {
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
-	if clientID == "" {
-		clientID = getClientIDFromGoogleJSON()
-	}
 	if clientID == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Google Client ID is not configured"})
 		return
@@ -123,9 +93,6 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
-	if clientID == "" {
-		clientID = getClientIDFromGoogleJSON()
-	}
 	if clientID == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Google Client ID is not configured"})
 		return

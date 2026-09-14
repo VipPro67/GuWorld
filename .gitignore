@@ -1,1 +1,4 @@
 /script
+/.env
+/.env.local
+**/google.json

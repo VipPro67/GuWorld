@@ -20,8 +20,9 @@ Các biến thường dùng:
 | `CORS_ALLOWED_ORIGINS` | Danh sách origin frontend, mặc định `http://localhost:3000`. |
 | `JWT_SECRET` | Ký token/cookie auth. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Cấu hình SMTP (ví dụ: Brevo) để gửi mã OTP đăng ký. |
-| `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_SSL` | Redis connection config (bắt buộc). |
-| Google OAuth vars | Dùng cho `/auth/google/*` nếu bật Google login. |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_SSL` | Redis connection config (bắt buộc). Redis TLS luôn xác minh certificate. |
+| `REDIS_TLS_SERVER_NAME`, `REDIS_TLS_CA_FILE` | Tùy chọn hostname xác minh và CA PEM riêng khi `REDIS_SSL=true`. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Dùng cho `/auth/google/*`; chỉ cấu hình bằng environment/secret store. |
 | PayOS vars | Dùng cho topup/webhook nếu bật payment thật. |
 | Cloudinary vars | Dùng cho upload avatar nếu bật upload cloud. |
 | `GRAFANA_URL`, `GRAFANA_API_KEY`, `GRAFANA_USER`, `GRAFANA_SERVICE_NAME` | Cấu hình log shipping tới Grafana Cloud qua OpenTelemetry OTLP HTTP (`/otlp/v1/logs`). |
@@ -39,6 +40,10 @@ Bạn có thể khởi chạy nhanh toàn bộ môi trường backend (bao gồm
 ```bash
 docker-compose up --build
 ```
+
+Production Compose lấy DB/JWT/OAuth từ `backend/.env` và thông tin Grafana từ
+root `.env`; không commit hai file này. Redis production chỉ ở trong Compose
+network. `docker-compose.local.yml` bind Redis vào loopback để tiện phát triển.
 
 Lệnh này sẽ tự động:
 1. Tải và cấu hình PostgreSQL (`gu_db`) và Redis.
@@ -89,6 +94,7 @@ Frontend:
 ```bash
 cd frontend
 npm run lint
+npm run typecheck
 npm run build
 ```
 
