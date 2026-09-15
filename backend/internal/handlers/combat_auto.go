@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -554,6 +555,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	actor := models.CombatantFromPlayer(player, playerStats)
 
 	var allActions []simulator.SimAction
+	var combatantMechanics []simulator.CombatMechanic
 
 	// Build owned equipped+ACTIVE Gu sets for validation
 	ownedGuTypeSet := make(map[string]bool)                  // gu_id → true
@@ -644,6 +646,26 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			healThreshold = player.CombatSettings.HealThreshold
 			autoRestoreMana = player.CombatSettings.AutoRestoreMana
 			manaThreshold = player.CombatSettings.ManaThreshold
+		}
+	}
+
+	// Passive mechanics come from every equipped, active, fed Gu, independent
+	// of whether that Gu is selected as an action.
+	equippedIDs := make([]string, 0, len(equippedInstByGuID))
+	for guID := range equippedInstByGuID {
+		equippedIDs = append(equippedIDs, guID)
+	}
+	sort.Strings(equippedIDs)
+	for _, guID := range equippedIDs {
+		instance := equippedInstByGuID[guID]
+		spec, ok := models.GetGu(instance.GuID, instance.Rank)
+		if !ok {
+			continue
+		}
+		for _, mechanic := range spec.Effects.Other {
+			if mechanic.EventTrigger != "ON_CAST" && mechanic.EventTrigger != "ON_HIT" {
+				combatantMechanics = append(combatantMechanics, simulator.CombatMechanic{Trigger: mechanic.EventTrigger, ActionCode: mechanic.ActionCode, Params: append([]byte(nil), mechanic.Params...)})
+			}
 		}
 	}
 
@@ -848,6 +870,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			return gh
 		}(),
 		GuUsedCounts: make(map[string]int),
+		Mechanics:    combatantMechanics,
 	}
 
 	if isInitiator && reqLoadout != nil {

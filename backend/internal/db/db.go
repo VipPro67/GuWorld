@@ -15,6 +15,7 @@ import (
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -452,33 +453,12 @@ func safeJSONArray(raw string, fallback string, rowLabel string) string {
 	return value
 }
 
-func normalizedGuEffectsJSON(raw string, rowLabel string) string {
-	value := safeJSONObject(raw, `{}`, rowLabel)
-	var parsed map[string]interface{}
-	_ = json.Unmarshal([]byte(value), &parsed)
-	sections := map[string]interface{}{
-		"active":     map[string]interface{}{},
-		"support":    map[string]interface{}{},
-		"passive":    map[string]interface{}{},
-		"house":      map[string]interface{}{},
-		"explore":    map[string]interface{}{},
-		"refinement": map[string]interface{}{},
-		"growth":     map[string]interface{}{},
-		"other":      []interface{}{},
+func normalizedGuEffectsJSON(raw string, rowLabel string) (string, effectcatalog.Report, error) {
+	normalized, report, err := effectcatalog.NormalizeAndValidate([]byte(raw))
+	if err != nil {
+		return "", report, fmt.Errorf("%s: %w", rowLabel, err)
 	}
-	knownSections := []string{"active", "support", "passive", "house", "explore", "refinement", "growth", "other"}
-	sectionFound := false
-	for _, section := range knownSections {
-		if rawSection, ok := parsed[section]; ok {
-			sectionFound = true
-			sections[section] = rawSection
-		}
-	}
-	if !sectionFound {
-		sections["active"] = parsed
-	}
-	bytes, _ := json.Marshal(sections)
-	return string(bytes)
+	return string(normalized), report, nil
 }
 
 // parseRarity parses the rarity column (1-9 tier, empty/unset = 0). Non-numeric
@@ -631,18 +611,24 @@ func seedGusFromCSV(filename string) error {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
 	}
 
-	type guRow struct{ fields []string }
+	type guRow struct {
+		fields            []string
+		normalizedEffects string
+		line              int
+	}
 	type guKey struct{ id, rank string }
 	seen := make(map[guKey]guRow)
 	order := []guKey{}
 
+	line := 1
 	for {
+		line++
 		row, err := r.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			continue
+			return fmt.Errorf("Gu.csv line %d: %w", line, err)
 		}
 		if len(row) == 0 {
 			continue
@@ -656,14 +642,32 @@ func seedGusFromCSV(filename string) error {
 		if _, exists := seen[key]; !exists {
 			order = append(order, key)
 		}
-		seen[key] = guRow{fields: row}
+		seen[key] = guRow{fields: row, line: line}
 	}
-
 	get := func(row []string, idx int) string {
 		if idx < 0 || idx >= len(row) {
 			return ""
 		}
 		return strings.TrimSpace(row[idx])
+	}
+
+	// Validate the complete effect catalog before the first database write. A
+	// malformed row must not turn a bulk import into a partially-updated
+	// dictionary. Warnings retain legacy/unwired fields for later migration.
+	warningCount := 0
+	for _, key := range order {
+		entry := seen[key]
+		effectsRaw := get(entry.fields, effectsIdx)
+		normalized, report, err := normalizedGuEffectsJSON(effectsRaw, fmt.Sprintf("Gu.csv line %d, %s rank %s effects", entry.line, key.id, key.rank))
+		if err != nil {
+			return err
+		}
+		entry.normalizedEffects = normalized
+		seen[key] = entry
+		warningCount += len(report.Warnings())
+	}
+	if warningCount > 0 {
+		logger.S.Warnf("Gu effect catalog contains %d legacy/unwired fields; values were preserved", warningCount)
 	}
 
 	for _, key := range order {
@@ -678,7 +682,7 @@ func seedGusFromCSV(filename string) error {
 		desc := get(row, descIdx)
 		path := get(row, pathIdx)
 		manaCostStr := get(row, manaCostIdx)
-		effectsRaw := get(row, effectsIdx)
+		effectsRaw := seen[key].normalizedEffects
 		rarity := parseRarity(get(row, rarityIdx))
 		isImmortalRaw := strings.ToLower(get(row, isImmortalIdx))
 		primaryRole := get(row, primaryRoleIdx)
@@ -710,7 +714,6 @@ func seedGusFromCSV(filename string) error {
 		} else {
 			pathJSON = `["Star Path"]`
 		}
-		effectsRaw = normalizedGuEffectsJSON(effectsRaw, fmt.Sprintf("%s effects", id))
 		foodTypesJSON := "[]"
 		if foodType != "" && foodType != "none" && foodType != "unknown" {
 			if strings.HasPrefix(foodType, "[") && strings.HasSuffix(foodType, "]") {

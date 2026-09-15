@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -118,6 +119,34 @@ func marshalArray(arr []string) json.RawMessage {
 	return b
 }
 
+func validateAndNormalizeAdminGuEffects(c *gin.Context, raw *json.RawMessage) bool {
+	normalized, report, err := effectcatalog.NormalizeAndValidate(*raw)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":  "Effect Cổ trùng không hợp lệ: " + report.Error(),
+			"issues": report.Issues,
+		})
+		return false
+	}
+	// Preserve the canonical envelope at every write boundary. Warnings remain
+	// visible to Admin without blocking legacy fields during the migration.
+	*raw = append((*raw)[:0], normalized...)
+	c.Set("gu_effect_warnings", report.Warnings())
+	return true
+}
+
+func guEffectWarnings(c *gin.Context) []effectcatalog.Issue {
+	value, ok := c.Get("gu_effect_warnings")
+	if !ok {
+		return []effectcatalog.Issue{}
+	}
+	warnings, ok := value.([]effectcatalog.Issue)
+	if !ok {
+		return []effectcatalog.Issue{}
+	}
+	return warnings
+}
+
 func AdminCreateGuItem(c *gin.Context) {
 	adminID, ok := requireAdmin(c)
 	if !ok {
@@ -141,6 +170,9 @@ func AdminCreateGuItem(c *gin.Context) {
 	if len(req.Effects) == 0 {
 		req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`)
 	}
+	if !validateAndNormalizeAdminGuEffects(c, &req.Effects) {
+		return
+	}
 
 	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,is_immortal,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
 		req.ID, req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
@@ -150,9 +182,12 @@ func AdminCreateGuItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
 		return
 	}
-	models.LoadGuRegistry(db.DB)
+	if err := models.LoadGuRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã ghi dữ liệu nhưng không thể tải lại catalog Cổ: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_gu", "id=%s name=%s", req.ID, req.Name)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ trùng"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ trùng", "issues": guEffectWarnings(c)})
 }
 
 func AdminUpdateGuItem(c *gin.Context) {
@@ -175,6 +210,9 @@ func AdminUpdateGuItem(c *gin.Context) {
 	// Use existing ID from URL if not in body
 	if req.ID == "" {
 		req.ID = guID
+	}
+	if len(req.Effects) > 0 && !validateAndNormalizeAdminGuEffects(c, &req.Effects) {
+		return
 	}
 
 	if req.Name == "" {
@@ -304,9 +342,12 @@ func AdminUpdateGuItem(c *gin.Context) {
 			return
 		}
 	}
-	models.LoadGuRegistry(db.DB)
+	if err := models.LoadGuRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã ghi dữ liệu nhưng không thể tải lại catalog Cổ: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_gu", "id=%s", guID)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ trùng"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ trùng", "issues": guEffectWarnings(c)})
 }
 
 func AdminDeleteGuItem(c *gin.Context) {
@@ -331,7 +372,10 @@ func AdminDeleteGuItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return
 	}
-	models.LoadGuRegistry(db.DB)
+	if err := models.LoadGuRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa dữ liệu nhưng không thể tải lại catalog Cổ: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_gu", "id=%s", guID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ trùng"})
 }

@@ -15,27 +15,10 @@ func IntegratePassiveGus(player *models.Player, logs *[]string) []string {
 			if ok && spec.Type == "Passive" {
 				gu.IntegrationTime += 1.0
 				if gu.IntegrationTime >= 5.0 {
-					var modName string
-					var bonusText string
-					switch gu.GuID {
-					case "GU_JADE_SKIN":
-						modName = "Jade Skin Mod"
-						bonusText = "+40 Phòng thủ"
-					case "GU_WHITE_BOAR":
-						modName = "White Boar Strength"
-						bonusText = "+15 Tấn công"
-					case "GU_BLACK_BOAR":
-						modName = "Black Boar Strength"
-						bonusText = "+15 Tấn công"
-					case "GU_COPPER_SKIN":
-						modName = "Copper Skin Mod"
-						bonusText = "+20 Phòng thủ"
-					case "GU_IRON_BONE":
-						modName = "Iron Bone"
-						bonusText = "+100 Phòng thủ"
-					default:
-						modName = gu.GuID + " Integrated"
-						bonusText = "các chỉ số bổ trợ"
+					modName := spec.Name + " Integrated"
+					bonusText := "các chỉ số bổ trợ"
+					if growth := spec.Effects.Growth; growth != nil {
+						bonusText = fmt.Sprintf("+%.0f Tấn công, +%.0f Phòng thủ, +%.0f HP, +%.0f Tốc độ", growth.MaxAttack, growth.MaxDefense, growth.MaxHP, growth.MaxSpeed)
 					}
 
 					alreadyExists := false

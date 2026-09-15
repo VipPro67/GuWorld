@@ -9,6 +9,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -50,23 +51,9 @@ func UpdateProfileSettings(c *gin.Context) {
 	}
 
 	// Validate Disguise requirements if player wants to activate or configure disguise
-	hasConcealment := false
-	hasAttitude := false
-	hasFormChange := false
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			switch gu.GuID {
-			case "GU_SHADOW", "GU_SHADOW_STEPS", "GU_STEALTH_SCALES":
-				hasConcealment = true
-			case "GU_CHANGE_FORM":
-				hasConcealment = true
-				hasFormChange = true
-			case "GU_ATTITUDE":
-				hasConcealment = true
-				hasAttitude = true
-			}
-		}
-	}
+	hasConcealment := models.InventoryHasGuMechanic(player.GuInventory, "DISGUISE", true)
+	hasAttitude := models.InventoryHasGuMechanic(player.GuInventory, "PERFECT_DISGUISE", true)
+	hasFormChange := models.InventoryHasGuMechanic(player.GuInventory, "CHANGE_FORM_DISGUISE", true)
 
 	if req.IsDisguised {
 		if !hasConcealment {

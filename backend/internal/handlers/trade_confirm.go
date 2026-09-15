@@ -347,10 +347,10 @@ func ConfirmTrade(c *gin.Context) {
 		if !isCloseEnough {
 			// Double-check Connecting Heaven Gu on both sides
 			_, _, senderConnecting := models.FindFirstMatchingGu(sender.GuInventory, func(gu models.GuInstance) bool {
-				return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+				return models.InventoryHasGuMechanic(models.GuInventory{gu}, "REMOTE_TRADE", false)
 			})
 			_, _, receiverConnecting := models.FindFirstMatchingGu(receiver.GuInventory, func(gu models.GuInstance) bool {
-				return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+				return models.InventoryHasGuMechanic(models.GuInventory{gu}, "REMOTE_TRADE", false)
 			})
 			if !senderConnecting || !receiverConnecting {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch thất bại! Cần phải có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) hoặc ở gần đối phương để duy trì kết nối."})

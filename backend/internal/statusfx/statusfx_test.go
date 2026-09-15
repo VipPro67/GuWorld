@@ -1,6 +1,9 @@
 package statusfx
 
-import "testing"
+import (
+	"math/rand"
+	"testing"
+)
 
 func TestResolveStatusKnown(t *testing.T) {
 	op, err := ResolveStatus("BURN", 100, 5)
@@ -47,6 +50,19 @@ func TestSpecKnownBehaviours(t *testing.T) {
 	} {
 		if _, ok := Spec(id); !ok {
 			t.Fatalf("status %s missing from registry", id)
+		}
+	}
+}
+
+func TestCanApplyStatusUsesInjectedRNG(t *testing.T) {
+	spec := StatusSpec{BaseChance: 0.5}
+	first := rand.New(rand.NewSource(42))
+	second := rand.New(rand.NewSource(42))
+	for i := 0; i < 20; i++ {
+		got := CanApplyStatus(first, 1, 1, nil, nil, spec, 0)
+		want := CanApplyStatus(second, 1, 1, nil, nil, spec, 0)
+		if got != want {
+			t.Fatalf("roll %d differs for identical seeds: got %v want %v", i, got, want)
 		}
 	}
 }

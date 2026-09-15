@@ -59,7 +59,11 @@ func TestValidateCSVFiles(t *testing.T) {
 		}
 
 		// Verify effects is valid JSON
-		effectsRawNormalized := normalizedGuEffectsJSON(effectsRaw, fmt.Sprintf("%s effects", id))
+		effectsRawNormalized, _, err := normalizedGuEffectsJSON(effectsRaw, fmt.Sprintf("%s effects", id))
+		if err != nil {
+			t.Errorf("Gu %s (rank %s) has invalid effects: %v", id, rank, err)
+			continue
+		}
 		var effEnvelope map[string]interface{}
 		if err := json.Unmarshal([]byte(effectsRawNormalized), &effEnvelope); err != nil {
 			t.Errorf("Gu %s (rank %s) has invalid effects JSON: %v", id, rank, err)

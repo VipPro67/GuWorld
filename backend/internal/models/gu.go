@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -85,6 +86,7 @@ type PassiveEffect struct {
 	SuccessRateBonus      float64 `json:"success_rate_bonus,omitempty"`
 	TimeSpeedMultiplier   float64 `json:"time_speed_multiplier,omitempty"`
 	Accuracy              float64 `json:"accuracy,omitempty"` // accuracy bonus (reduces enemy dodge)
+	DisguiseLevel         float64 `json:"disguise_level,omitempty"`
 }
 
 type SpecialMechanic struct {
@@ -132,6 +134,49 @@ type GuDictionaryItem struct {
 
 type Gu = GuDictionaryItem
 
+// GuMechanic resolves a gameplay capability from the catalog effect column.
+// Callers may still use GuID to locate the definition, but must not infer
+// behavior from that identifier.
+func GuMechanic(instance GuInstance, actionCode string) (SpecialMechanic, bool) {
+	spec, ok := GetGu(instance.GuID, instance.Rank)
+	if !ok {
+		spec, ok = GetGuAny(instance.GuID)
+	}
+	if !ok {
+		return SpecialMechanic{}, false
+	}
+	for _, mechanic := range spec.Effects.Other {
+		if mechanic.ActionCode == actionCode {
+			return mechanic, true
+		}
+	}
+	return SpecialMechanic{}, false
+}
+
+func InventoryHasGuMechanic(inventory GuInventory, actionCode string, requireEquipped bool) bool {
+	for _, instance := range inventory {
+		if instance.Status == "DEAD" || (requireEquipped && (!instance.Equipped || instance.Status != "ACTIVE")) {
+			continue
+		}
+		if _, ok := GuMechanic(instance, actionCode); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func GuMechanicFloat(instance GuInstance, actionCode, key string) float64 {
+	mechanic, ok := GuMechanic(instance, actionCode)
+	if !ok {
+		return 0
+	}
+	var params map[string]float64
+	if json.Unmarshal(mechanic.Params, &params) != nil {
+		return 0
+	}
+	return params[key]
+}
+
 type PlayerGu struct {
 	ID        string    `json:"id" gorm:"primaryKey"`
 	PlayerID  string    `json:"player_id" gorm:"index;not null"`
@@ -156,7 +201,11 @@ func (g *GuEffects) Scan(value interface{}) error {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
 
-	if err := json.Unmarshal(b, g); err != nil {
+	normalized, _, err := effectcatalog.NormalizeAndValidate(b)
+	if err != nil {
+		return fmt.Errorf("invalid Gu effects: %w", err)
+	}
+	if err := json.Unmarshal(normalized, g); err != nil {
 		return err
 	}
 	if g.Active != nil {
@@ -327,6 +376,9 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		if gu.Effects.Active.SpeedBoostFlat > 0 {
 			res["speed_boost_flat"] = gu.Effects.Active.SpeedBoostFlat
 		}
+		if gu.Effects.Active.CaptureBonus > 0 {
+			res["capture_bonus"] = gu.Effects.Active.CaptureBonus
+		}
 		res["channel_time"] = 0 // default
 	}
 	if gu.Effects.Passive != nil {
@@ -338,9 +390,6 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		if gu.Effects.Passive.Investigation > 0 {
 			res["success_rate_bonus"] = gu.Effects.Passive.Investigation
-		}
-		if gu.Effects.Active.CaptureBonus > 0 {
-			res["capture_bonus"] = gu.Effects.Active.CaptureBonus
 		}
 		if gu.Effects.Passive.PathConflictReduction > 0 {
 			res["path_conflict_reduction"] = gu.Effects.Passive.PathConflictReduction
@@ -460,8 +509,7 @@ func LoadGuRegistry(db *sql.DB) error {
 			&item.ImageURL,
 		)
 		if err != nil {
-			logger.S.Warnf("failed to scan Gu spec row: %v", err)
-			continue
+			return fmt.Errorf("failed to scan Gu spec row: %w", err)
 		}
 
 		if err := json.Unmarshal(pathRaw, &item.Path); err != nil {
@@ -479,6 +527,9 @@ func LoadGuRegistry(db *sql.DB) error {
 		}
 		newRegistry[item.ID][item.Rank] = item
 		count++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate Gu registry rows: %w", err)
 	}
 
 	GuRegistry = newRegistry

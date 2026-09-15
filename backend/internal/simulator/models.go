@@ -161,6 +161,20 @@ type SimAction struct {
 	// Conditional-use fields. Empty condition = always use.
 	UseCondition   string // "always","hp_below","mana_above","enemy_hp_below"
 	ConditionValue float64
+
+	// Mechanics is the immutable, catalog-compiled behavior attached to this
+	// action. SourceID remains metadata for logs/tactics; the engine must never
+	// infer gameplay behavior from it.
+	Mechanics []CombatMechanic
+}
+
+// CombatMechanic is the simulator-facing form of effects.other. Params stay
+// immutable JSON so combat snapshots are deterministic and definitions can be
+// extended without coupling the engine to Gu identifiers.
+type CombatMechanic struct {
+	Trigger    string
+	ActionCode string
+	Params     []byte
 }
 
 // Effect represents an active buff or debuff on a combatant.
@@ -244,16 +258,16 @@ type CombatantAuto struct {
 	TaunterID         string  // ID of the taunter (for target redirection)
 
 	// ── New status-derived flags (driven by statusfx registry) ──
-	IsSleeping           bool    // loses turn, breaks on damage (SLEEP)
-	IsFeared             bool    // only basic attack, like silence (FEAR)
-	IsCharmed            bool    // forced to attack the charmer's enemies (CHARM)
-	IsStealthed          bool    // untargetable by single-target actions (STEALTH)
-	IsConfused           bool    // chance to mis-target an ally (CONFUSE)
-	IsBlinded            bool    // chance to miss (BLIND)
-	IsBound              bool    // immobilize, loses turn (BIND)
-	IsReviveLocked       bool    // cannot be revived (REVIVE_LOCK)
+	IsSleeping     bool // loses turn, breaks on damage (SLEEP)
+	IsFeared       bool // only basic attack, like silence (FEAR)
+	IsCharmed      bool // forced to attack the charmer's enemies (CHARM)
+	IsStealthed    bool // untargetable by single-target actions (STEALTH)
+	IsConfused     bool // chance to mis-target an ally (CONFUSE)
+	IsBlinded      bool // chance to miss (BLIND)
+	IsBound        bool // immobilize, loses turn (BIND)
+	IsReviveLocked bool // cannot be revived (REVIVE_LOCK)
 	// New GuWorld specific flags
-	IsEssenceLeaking    bool    // ESSENCE_LEAK drains Chân Nguyên each turn
+	IsEssenceLeaking     bool    // ESSENCE_LEAK drains Chân Nguyên each turn
 	HasGuSeal            bool    // GU_SEAL disables one equipped Gu's active effects
 	HasSoulWound         bool    // SOUL_WOUND true damage and CN cost increase
 	HasThoughtChaos      bool    // THOUGHT_CHAOS can cause KillerMove failure
@@ -287,6 +301,9 @@ type CombatantAuto struct {
 
 	// Custom state for special Gu effects (e.g. GU_POEM_IMMORTAL stacks)
 	CustomState map[string]int
+
+	// Mechanics contains equipped/passive mechanics compiled at combat start.
+	Mechanics []CombatMechanic
 
 	// Internal action index for round-robin
 	nextActionIdx int
