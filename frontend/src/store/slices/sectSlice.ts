@@ -12,7 +12,6 @@ export interface SectSlice {
   sectMembers: SectMemberInfo[];
   sectJoinRequests: SectJoinRequest[];
   sectPromotionRequests: SectPromotionRequest[];
-  sectMines: SectMine[];
   fetchSects: () => Promise<void>;
   joinSect: (sectId: string) => Promise<boolean>;
   cancelSectJoinRequest: () => Promise<boolean>;
