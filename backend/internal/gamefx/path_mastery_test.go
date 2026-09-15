@@ -136,28 +136,29 @@ func TestCalculatePathMasteryGain(t *testing.T) {
 		{guRank: 6, pathLevel: 0, baseGain: 10, want: 10},
 
 		// Level 1 (Master) -> factor 0.8
-		{guRank: 1, pathLevel: 1, baseGain: 1, want: 1}, // 1 * 0.8 = 0.8 -> 1
+		{guRank: 1, pathLevel: 1, baseGain: 1, want: 1},  // 1 * 0.8 = 0.8 -> 1
 		{guRank: 1, pathLevel: 1, baseGain: 10, want: 8}, // 10 * 0.8 = 8
 		{guRank: 6, pathLevel: 1, baseGain: 10, want: 8},
 
 		// Level 2 (Grandmaster) -> factor 0.6; Rank 1 capped at level 2
 		{guRank: 1, pathLevel: 2, baseGain: 1, want: 0},
 		{guRank: 1, pathLevel: 2, baseGain: 10, want: 0},
-		{guRank: 2, pathLevel: 2, baseGain: 1, want: 1}, // 1 * 0.6 = 0.6 -> 1
+		{guRank: 2, pathLevel: 2, baseGain: 1, want: 1},  // 1 * 0.6 = 0.6 -> 1
 		{guRank: 2, pathLevel: 2, baseGain: 10, want: 6}, // 10 * 0.6 = 6
 		{guRank: 6, pathLevel: 2, baseGain: 10, want: 6},
 
-		// Level 3 (Great Grandmaster) -> factor 0.4; Rank 1-3 capped at level 3
+		// Level 3 (Great Grandmaster) -> factor 0.4; Rank 1-4 capped at level 3
 		{guRank: 1, pathLevel: 3, baseGain: 1, want: 0},
 		{guRank: 2, pathLevel: 3, baseGain: 10, want: 0},
 		{guRank: 3, pathLevel: 3, baseGain: 10, want: 0},
-		{guRank: 4, pathLevel: 3, baseGain: 10, want: 4}, // 10 * 0.4 = 4
-		{guRank: 6, pathLevel: 3, baseGain: 10, want: 4},
+		{guRank: 4, pathLevel: 3, baseGain: 10, want: 0},
+		{guRank: 5, pathLevel: 3, baseGain: 10, want: 4}, // 10 * 0.4 = 4
 
-		// Level 4 (Supreme Grandmaster) -> Capped for all ranks
+		// Level 4 (Supreme Grandmaster) -> Rank 5 is capped; Rank 6+ may advance beyond it.
 		{guRank: 1, pathLevel: 4, baseGain: 10, want: 0},
 		{guRank: 5, pathLevel: 4, baseGain: 10, want: 0},
-		{guRank: 9, pathLevel: 4, baseGain: 50000, want: 0},
+		{guRank: 6, pathLevel: 4, baseGain: 10, want: 2}, // 10 * 0.2 = 2
+		{guRank: 6, pathLevel: 5, baseGain: 10, want: 1}, // No Rank 6+ cap above level 4 yet.
 	}
 
 	for _, tt := range tests {

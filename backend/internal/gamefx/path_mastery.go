@@ -17,16 +17,16 @@ func CalculatePathMasteryGain(guRank int, pathLevel int, baseGain int) int {
 	if guRank < 1 {
 		guRank = 1
 	}
-	// Rank 1: only gives gain when level < 2 (Ordinary / Master)
+	// Rank 1: only gives gain up to the Master milestone.
 	if guRank == 1 && pathLevel >= 2 {
 		return 0
 	}
-	// Rank 2 & 3: only gives gain when level < 3 (Ordinary / Master / Grandmaster)
-	if (guRank == 2 || guRank == 3) && pathLevel >= 3 {
+	// Rank 2-4 cannot cross the level 3 -> 4 milestone.
+	if guRank <= 4 && pathLevel >= 3 {
 		return 0
 	}
-	// Rank 4+: only gives gain when level < 4 (Supreme Grandmaster is capped)
-	if guRank >= 4 && pathLevel >= 4 {
+	// Rank 5 cannot advance beyond level 4; Rank 6+ is required above level 4.
+	if guRank == 5 && pathLevel >= 4 {
 		return 0
 	}
 
@@ -195,5 +195,5 @@ func PathMasteryBattleGainLimit(rank int) int {
 	if rank < 1 {
 		rank = 1
 	}
-	return rank * 10
+	return rank ^ rank*10
 }

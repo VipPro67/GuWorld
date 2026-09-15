@@ -11,7 +11,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-
 type MonsterTemplate struct {
 	ID               string             `json:"id"`
 	Name             string             `json:"name"`
@@ -23,7 +22,7 @@ type MonsterTemplate struct {
 	GuPool           []GuPoolEntry      `json:"gu_pool"`
 	ItemInventory    MaterialsInventory `json:"item_inventory"`
 	DaoMarks         DaoMarksMap        `json:"dao_marks"`
-	PathMasteries    map[string]int    `json:"path_masteries"`
+	PathMasteries    map[string]int     `json:"path_masteries"`
 	AIProfile        string             `json:"ai_profile"`
 	LootTableID      string             `json:"loot_table_id"`
 	Description      string             `json:"description"`
@@ -33,13 +32,13 @@ type MonsterTemplate struct {
 }
 
 type GuPoolEntry struct {
-	GuID         string  `json:"gu_id"`
-	Rank         int     `json:"rank"`
-	Weight       float64 `json:"weight"`
-	MinCount     int     `json:"min_count"`
-	MaxCount     int     `json:"max_count"`
-	IsWorldBoss  bool    `json:"is_world_boss"`
-	IsImmortal   bool    `json:"is_immortal"`
+	GuID        string  `json:"gu_id"`
+	Rank        int     `json:"rank"`
+	Weight      float64 `json:"weight"`
+	MinCount    int     `json:"min_count"`
+	MaxCount    int     `json:"max_count"`
+	IsWorldBoss bool    `json:"is_world_boss"`
+	IsImmortal  bool    `json:"is_immortal"`
 }
 
 type LootEntry struct {
@@ -72,33 +71,33 @@ type MonsterSpawn struct {
 }
 
 type Combatant struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Kind          string            `json:"kind"` // "Player", "Normal", "Boss", etc.
-	Rank          int               `json:"rank"`
-	SubRank       int               `json:"sub_rank"`
-	HP            float64           `json:"hp"`
-	MaxHP         float64           `json:"max_hp"`
-	CurrentMana   float64           `json:"current_mana"`
-	MaxMana       float64           `json:"max_mana"`
-	BaseAttack    float64           `json:"base_attack"`
-	BaseDefense   float64           `json:"base_defense"`
-	GuInventory   GuInventory       `json:"gu_inventory"`
-	DaoMarks      DaoMarksMap       `json:"dao_marks"`
-	PathMasteries map[string]int    `json:"path_masteries"`
-	AIProfile     string            `json:"ai_profile"`
-	LootTableID   string            `json:"loot_table_id"`
-	StatusEffects []StatusEffect    `json:"status_effects"`
-	GridX         int               `json:"grid_x"` // 1 (Front), 2 (Mid), 3 (Back)
-	GridY         int               `json:"grid_y"` // 1 (Top), 2 (Mid), 3 (Bottom)
-	Speed         float64           `json:"speed"`
-	VirtualShield float64           `json:"virtual_shield"`
-	SoulHP        float64           `json:"soul_hp"`
-	MaxSoulHP     float64           `json:"max_soul_hp"`
-	DaoMarkDamage float64           `json:"dao_mark_damage"`
-	ApertureDmg   float64           `json:"aperture_dmg"`
-	AvatarURL     string            `json:"avatar_url,omitempty"`
-	FullyGrown    []FullyGrownInfo  `json:"fully_grown,omitempty"`
+	ID             string            `json:"id"`
+	Name           string            `json:"name"`
+	Kind           string            `json:"kind"` // "Player", "Normal", "Boss", etc.
+	Rank           int               `json:"rank"`
+	SubRank        int               `json:"sub_rank"`
+	HP             float64           `json:"hp"`
+	MaxHP          float64           `json:"max_hp"`
+	CurrentMana    float64           `json:"current_mana"`
+	MaxMana        float64           `json:"max_mana"`
+	BaseAttack     float64           `json:"base_attack"`
+	BaseDefense    float64           `json:"base_defense"`
+	GuInventory    GuInventory       `json:"gu_inventory"`
+	DaoMarks       DaoMarksMap       `json:"dao_marks"`
+	PathMasteries  map[string]int    `json:"path_masteries"`
+	AIProfile      string            `json:"ai_profile"`
+	LootTableID    string            `json:"loot_table_id"`
+	StatusEffects  []StatusEffect    `json:"status_effects"`
+	GridX          int               `json:"grid_x"` // 1 (Front), 2 (Mid), 3 (Back)
+	GridY          int               `json:"grid_y"` // 1 (Top), 2 (Mid), 3 (Bottom)
+	Speed          float64           `json:"speed"`
+	VirtualShield  float64           `json:"virtual_shield"`
+	SoulHP         float64           `json:"soul_hp"`
+	MaxSoulHP      float64           `json:"max_soul_hp"`
+	DaoMarkDamage  float64           `json:"dao_mark_damage"`
+	ApertureDmg    float64           `json:"aperture_dmg"`
+	AvatarURL      string            `json:"avatar_url,omitempty"`
+	FullyGrown     []FullyGrownInfo  `json:"fully_grown,omitempty"`
 	CombatSettings *AutoCombatConfig `json:"combat_settings,omitempty"`
 }
 
@@ -125,7 +124,7 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 		rankMultiplier = 10000000000.0
 	default:
 		if rank > 9 {
-			rankMultiplier = 10000000000.0
+			rankMultiplier = 10000000000000.0
 		}
 	}
 
@@ -545,53 +544,53 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 	hpBonus := stats["hp"]
 	effectiveBaseHP := player.BaseHP + hpBonus
 	return Combatant{
-		ID:            player.ID.String(),
-		Name:          player.Username,
-		Kind:          "Player",
-		Rank:          player.Rank,
-		SubRank:       player.SubRank,
-		HP:            player.HP,
-		MaxHP:         effectiveBaseHP,
-		CurrentMana:   player.CurrentMana,
-		MaxMana:       player.MaxMana,
-		BaseAttack:    stats["attack"],
-		BaseDefense:   stats["defense"],
-		Speed:         stats["speed"],
-		GuInventory:   player.GuInventory,
-		DaoMarks:      player.DaoMarks,
-		PathMasteries: player.PathMasteries,
-		StatusEffects: []StatusEffect{}, // Will be populated in combat loop
-		SoulHP:        float64(player.SoulHP),
-		MaxSoulHP:     float64(player.MaxSoul),
-		DaoMarkDamage: player.DaoMarkDamage,
-		ApertureDmg:   player.ApertureDamage,
-		AvatarURL:     player.AvatarURL,
-		FullyGrown:    player.GrowthData.FullyGrown,
+		ID:             player.ID.String(),
+		Name:           player.Username,
+		Kind:           "Player",
+		Rank:           player.Rank,
+		SubRank:        player.SubRank,
+		HP:             player.HP,
+		MaxHP:          effectiveBaseHP,
+		CurrentMana:    player.CurrentMana,
+		MaxMana:        player.MaxMana,
+		BaseAttack:     stats["attack"],
+		BaseDefense:    stats["defense"],
+		Speed:          stats["speed"],
+		GuInventory:    player.GuInventory,
+		DaoMarks:       player.DaoMarks,
+		PathMasteries:  player.PathMasteries,
+		StatusEffects:  []StatusEffect{}, // Will be populated in combat loop
+		SoulHP:         float64(player.SoulHP),
+		MaxSoulHP:      float64(player.MaxSoul),
+		DaoMarkDamage:  player.DaoMarkDamage,
+		ApertureDmg:    player.ApertureDamage,
+		AvatarURL:      player.AvatarURL,
+		FullyGrown:     player.GrowthData.FullyGrown,
 		CombatSettings: &player.CombatSettings,
 	}
 }
 
 func CombatantFromActiveCombat(cs *CombatState) Combatant {
 	return Combatant{
-		ID:            cs.EnemyTemplateID,
-		Name:          cs.EnemyName,
-		Kind:          cs.EnemyType,
-		Rank:          cs.EnemyRank,
-		SubRank:       cs.EnemySubRank,
-		HP:            cs.EnemyHP,
-		MaxHP:         cs.EnemyMaxHP,
-		CurrentMana:   cs.EnemyMana,
-		MaxMana:       cs.EnemyMaxMana,
-		BaseAttack:    cs.EnemyDamage,
-		BaseDefense:   cs.EnemyDefense,
-		Speed:         cs.EnemySpeed,
-		GuInventory:   cs.EnemyGuInventory,
-		DaoMarks:      cs.EnemyDaoMarks,
-		PathMasteries: cs.EnemyPathMasteries,
-		AIProfile:     cs.AIProfile,
-		LootTableID:   cs.LootTableID,
-		StatusEffects: cs.EnemyStatusEffects,
-		AvatarURL:     cs.EnemyAvatarURL,
+		ID:             cs.EnemyTemplateID,
+		Name:           cs.EnemyName,
+		Kind:           cs.EnemyType,
+		Rank:           cs.EnemyRank,
+		SubRank:        cs.EnemySubRank,
+		HP:             cs.EnemyHP,
+		MaxHP:          cs.EnemyMaxHP,
+		CurrentMana:    cs.EnemyMana,
+		MaxMana:        cs.EnemyMaxMana,
+		BaseAttack:     cs.EnemyDamage,
+		BaseDefense:    cs.EnemyDefense,
+		Speed:          cs.EnemySpeed,
+		GuInventory:    cs.EnemyGuInventory,
+		DaoMarks:       cs.EnemyDaoMarks,
+		PathMasteries:  cs.EnemyPathMasteries,
+		AIProfile:      cs.AIProfile,
+		LootTableID:    cs.LootTableID,
+		StatusEffects:  cs.EnemyStatusEffects,
+		AvatarURL:      cs.EnemyAvatarURL,
 		CombatSettings: cs.EnemyCombatSettings,
 	}
 }
@@ -650,4 +649,3 @@ func LoadMonsterRegistry(db *sql.DB) error {
 	}
 	return nil
 }
-
