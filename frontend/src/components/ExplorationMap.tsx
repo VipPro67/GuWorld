@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useGameStore, Player } from "@/store/useGameStore";
+import { guSpecFor, useGameStore, Player } from "@/store/useGameStore";
 import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home, Gift, Skull, Package, Shield, X } from "lucide-react";
 
 import { LogConsole } from "./LogConsole";
@@ -696,7 +696,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             ))}
                             {data.gus && data.gus.map((g: any, idx: number) => (
                               <div key={idx} className="text-cyan-300">
-                                🐛 Cổ trùng: {guDictionary[g.gu_id]?.name || g.gu_id} (Rank {g.rank})
+                                🐛 Cổ trùng: {guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Rank {g.rank})
                               </div>
                             ))}
                             {data.recipes && data.recipes.map((r: string, idx: number) => (

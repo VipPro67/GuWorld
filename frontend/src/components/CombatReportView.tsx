@@ -5,7 +5,7 @@ import { Swords, Trophy, Shield, Heart, ScrollText, Users, Play, ArrowLeft } fro
 import { CombatReplayView, type CombatLogEntry } from "./CombatReplayView";
 import { FormattedText } from "./FormattedText";
 import { Num } from "./Num";
-import { useGameStore } from "@/store/useGameStore";
+import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 export interface CombatantInfo {
   id: string;
@@ -520,7 +520,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                             {mGus.map((gu: Record<string, unknown>, gIdx: number) => {
                               const guId = String(gu.gu_id || gu.guId || gu.id || "");
                               const rank = Number(gu.rank || gu.gu_rank || 1);
-                              const spec = guDictionary[guId];
+                              const spec = guSpecFor(guId, rank);
                               const name = spec?.name || guId || "Cổ trùng";
                               const isVital = Boolean(gu.is_vital || gu.isVital);
                               return (
@@ -612,7 +612,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                             {mGus.map((gu: Record<string, unknown>, gIdx: number) => {
                               const guId = String(gu.gu_id || gu.guId || gu.id || "");
                               const rank = Number(gu.rank || gu.gu_rank || 1);
-                              const spec = guDictionary[guId];
+                              const spec = guSpecFor(guId, rank);
                               const name = spec?.name || guId || "Cổ trùng";
                               const isVital = Boolean(gu.is_vital || gu.isVital);
                               return (

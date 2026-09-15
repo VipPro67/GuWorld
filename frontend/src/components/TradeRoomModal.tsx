@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useGameStore, GuInstance, formatRecipeName } from "@/store/useGameStore";
+import { useGameStore, GuInstance, formatRecipeName, guSpecFor } from "@/store/useGameStore";
 import { 
   X, Coins, Sparkles, Lock, Unlock, CheckCircle2, 
   Trash2, Plus, Minus, RefreshCw, User, ShieldAlert 
@@ -233,7 +233,7 @@ export const TradeRoomModal: React.FC = () => {
     // If it is an instance ID from local inventory
     const localGu = (player.gu_inventory || []).find((g) => g.instance_id === identifier);
     if (localGu) {
-      return guDictionary[localGu.gu_id]?.name || localGu.gu_id.replace(/^GU_/, "").replace(/_/g, " ");
+      return guSpecFor(localGu.gu_id, localGu.rank)?.name || localGu.gu_id.replace(/^GU_/, "").replace(/_/g, " ");
     }
     // Fallback
     return identifier.replace(/^GU_/, "").replace(/_/g, " ");
@@ -295,7 +295,7 @@ export const TradeRoomModal: React.FC = () => {
   const searchLower = searchTerm.trim().toLowerCase();
   const filteredGus = searchLower
     ? tradeableGus.filter(g => {
-        const name = guDictionary[g.gu_id]?.name || g.gu_id;
+        const name = guSpecFor(g.gu_id, g.rank)?.name || g.gu_id;
         return name.toLowerCase().includes(searchLower);
       })
     : tradeableGus;
@@ -653,8 +653,8 @@ export const TradeRoomModal: React.FC = () => {
 
                             return entries.map(([groupKey, list]) => {
                               const guId = list[0].gu_id;
-                              const name = guDictionary[guId]?.name || guId;
                               const rank = list[0].rank || guDictionary[guId]?.rank || 1;
+                              const name = guSpecFor(guId, rank)?.name || guId;
                               const isExpanded = !!expandedGus[groupKey];
                               
                               // Count how many instances in this group are already selected in myOffer

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useEffect } from "react";
-import { useGameStore, type GuInstance, type GuSpec } from "@/store/useGameStore";
+import { guSpecFor, useGameStore, type GuInstance, type GuSpec } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair } from "lucide-react";
 
@@ -29,7 +29,7 @@ export function GuQuickBar() {
     for (const gu of player.gu_inventory) {
       if (!gu.equipped || gu.status !== "ACTIVE") continue;
 
-      const spec = guDictionary[gu.gu_id];
+      const spec = guSpecFor(gu.gu_id, gu.rank);
       if (!spec) continue;
 
       const active = spec.effects?.active;

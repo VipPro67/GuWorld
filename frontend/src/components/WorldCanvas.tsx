@@ -3,14 +3,14 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
 import { useWorldStore, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
-import { useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
+import { guSpecFor, useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
 
 function computeMovementSpeed(gamePlayer: Player | null, guDictionary: Record<string, GuSpec>): number {
   if (!gamePlayer) return 1;
   let movement = 1.0;
   for (const gu of gamePlayer.gu_inventory) {
     if (!gu.equipped || gu.status !== "ACTIVE") continue;
-    const passive = guDictionary[gu.gu_id]?.effects?.passive;
+    const passive = guSpecFor(gu.gu_id, gu.rank)?.effects?.passive;
     if (passive?.movement) movement += passive.movement;
   }
   return Math.max(1, movement);
@@ -483,7 +483,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const rank = nearby?.rank || persistent?.rank || 1;
 
         if (cellType === "Monster" || cellType === "Boss" || cellType === "WildGu") {
-          const name = monsterDictionary[contentId]?.name || guDictionary[contentId]?.name || contentId;
+          const name = monsterDictionary[contentId]?.name || guSpecFor(contentId, rank)?.name || contentId;
           const baseHp = monsterDictionary[contentId]?.max_hp || rank * 500;
           s.selectTarget({
             x: tx,
@@ -726,7 +726,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         } else if (isResource) {
           text = itemDictionary[o.content_id]?.name || text;
         } else if (o.cell_type === "WildGu") {
-          text = guDictionary[o.content_id]?.name || text;
+          text = guSpecFor(o.content_id, o.rank)?.name || text;
         }
 
         const showBossLabel = isBoss && !!labelSettingsRef.current.bossNearby && !!gamePlayer && Math.hypot(o.x - gamePlayer.x, o.y - gamePlayer.y) <= useWorldStore.getState().investigationRange;
@@ -1107,7 +1107,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             text = `${name}${r}`;
             fill = 0xfecaca;
           } else if (c.cell_type === "WildGu") {
-            const name = guDictionary[c.content]?.name || c.content;
+            const name = guSpecFor(c.content, c.rank)?.name || c.content;
             const r = c.rank ? ` R${c.rank}` : "";
             text = `${name}${r}`;
             fill = 0xf5d0fe;

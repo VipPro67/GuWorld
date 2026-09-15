@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { translateStat } from "@/lib/translate";
-import { GuInstance, GuSpec, KillerMove, Player, useGameStore } from "@/store/useGameStore";
+import { guSpecFor, GuInstance, GuSpec, KillerMove, Player, useGameStore } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -236,7 +236,7 @@ function GuSlot({ slot, guDictionary, onDropGu, onClear }: { slot: BuilderSlot; 
     >
       <span className="text-xs uppercase tracking-widest opacity-70">{slot.type === "CORE" ? "Core Gu" : `Support ${slot.index + 1}`}</span>
       <strong className="text-sm">{slot.gu ? guName(slot.gu, guDictionary) : "Trống"}</strong>
-      {slot.gu && <EffectChips effects={(slot.type === "CORE" ? guDictionary[slot.gu.gu_id]?.effects?.active : guDictionary[slot.gu.gu_id]?.effects?.support) || {}} />}
+      {slot.gu && <EffectChips effects={(slot.type === "CORE" ? guSpecFor(slot.gu.gu_id, slot.gu.rank)?.effects?.active : guSpecFor(slot.gu.gu_id, slot.gu.rank)?.effects?.support) || {}} />}
     </button>
   );
 }
@@ -255,7 +255,7 @@ function GuInventoryPanel({ gus, guDictionary }: { gus: GuInstance[]; guDictiona
             className="cursor-grab rounded-xl border border-slate-700 bg-slate-950 p-3 active:cursor-grabbing"
           >
             <div className="font-medium text-amber-100">{guName(gu, guDictionary)}</div>
-            <div className="text-xs text-slate-400">{guDictionary[gu.gu_id]?.path || "Unknown Path"} · Hunger {gu.hunger}</div>
+            <div className="text-xs text-slate-400">{guSpecFor(gu.gu_id, gu.rank)?.path || "Unknown Path"} · Hunger {gu.hunger}</div>
           </div>
         ))}
       </div>
@@ -446,5 +446,5 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function guName(gu: GuInstance, guDictionary: Record<string, GuSpec>) {
-  return guDictionary[gu.gu_id]?.name || gu.gu_id;
+  return guSpecFor(gu.gu_id, gu.rank)?.name || guDictionary[gu.gu_id]?.name || gu.gu_id;
 }

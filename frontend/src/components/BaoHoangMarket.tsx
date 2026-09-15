@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Num } from "./Num";
-import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName } from "@/store/useGameStore";
+import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, guSpecFor } from "@/store/useGameStore";
 import {
   AlertCircle,
   ShoppingCart,
@@ -157,13 +157,15 @@ export function BaoHoangMarket({
     }
     
     let guId = "";
+    let guRank: number | undefined;
     if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
       guId = (listing.item_data[0] as any)?.gu_id || "";
+      guRank = Number((listing.item_data[0] as any)?.rank) || undefined;
     } else if (typeof listing.item_data === "string") {
       guId = listing.item_data;
     }
     if (listing.item_type === "Gu") {
-      const spec = guDictionary[guId];
+      const spec = guSpecFor(guId, guRank);
       return spec?.name || guId.replace(/^GU_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
     
@@ -736,21 +738,22 @@ export function BaoHoangMarket({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                       {(() => {
                         const tradeable = guInventory.filter((g) => !g.is_vital && g.status !== "DEAD");
-                        const typesMap: Record<string, { count: number; name: string; rank: number }> = {};
+                        const typesMap: Record<string, { guId: string; count: number; name: string; rank: number }> = {};
                         tradeable.forEach((g) => {
-                          if (!typesMap[g.gu_id]) {
-                            const name = guDictionary[g.gu_id]?.name || g.gu_id;
-                            const rank = guDictionary[g.gu_id]?.rank || g.rank || 1;
-                            typesMap[g.gu_id] = { count: 0, name, rank };
+                          const rank = g.rank || 1;
+                          const groupKey = `${g.gu_id}::${rank}`;
+                          if (!typesMap[groupKey]) {
+                            const name = guSpecFor(g.gu_id, rank)?.name || g.gu_id;
+                            typesMap[groupKey] = { guId: g.gu_id, count: 0, name, rank };
                           }
-                          typesMap[g.gu_id].count++;
+                          typesMap[groupKey].count++;
                         });
 
-                        const filteredTypes = Object.entries(typesMap).filter(([guId, info]) => {
+                        const filteredTypes = Object.entries(typesMap).filter(([, info]) => {
                           if (sellFilterRank !== "all" && info.rank !== sellFilterRank) return false;
                           if (!guTypeSearch) return true;
                           const normName = removeAccents(info.name.toLowerCase());
-                          const normId = removeAccents(guId.toLowerCase());
+                          const normId = removeAccents(info.guId.toLowerCase());
                           const normSearch = removeAccents(guTypeSearch.toLowerCase());
                           return normName.includes(normSearch) || normId.includes(normSearch);
                         });
@@ -763,14 +766,14 @@ export function BaoHoangMarket({
                           );
                         }
 
-                        return filteredTypes.map(([guId, info]) => {
-                          const isSelected = selectedGuType === guId;
+                        return filteredTypes.map(([groupKey, info]) => {
+                          const isSelected = selectedGuType === groupKey;
                           return (
                             <button
-                              key={guId}
+                              key={groupKey}
                               type="button"
                               onClick={() => {
-                                setSelectedGuType(guId);
+                                setSelectedGuType(groupKey);
                                 setSelectedGus([]);
                               }}
                               className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer select-none ${
@@ -803,7 +806,7 @@ export function BaoHoangMarket({
                             type="button"
                             onClick={() => {
                               const insts = guInventory
-                                .filter((g) => g.gu_id === selectedGuType && !g.is_vital && g.status !== "DEAD")
+                                .filter((g) => `${g.gu_id}::${g.rank || 1}` === selectedGuType && !g.is_vital && g.status !== "DEAD")
                                 .map((g) => g.instance_id);
                               setSelectedGus(insts);
                             }}
@@ -824,7 +827,7 @@ export function BaoHoangMarket({
 
                       <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
                         {guInventory
-                          .filter((g) => g.gu_id === selectedGuType && !g.is_vital && g.status !== "DEAD")
+                          .filter((g) => `${g.gu_id}::${g.rank || 1}` === selectedGuType && !g.is_vital && g.status !== "DEAD")
                           .map((g) => {
                             const selected = selectedGus.includes(g.instance_id);
                             const hungerText = `Độ no: ${g.hunger}/100`;
@@ -1197,7 +1200,10 @@ export function BaoHoangMarket({
                 <div className="text-zinc-300 font-serif">
                   {itemType === "Material" ? `${quantity}x ` : itemType === "Gu" ? `${selectedGus.length}x ` : "1x "} 
                   <span className="font-bold text-zinc-100">
-                    {itemType === "Gu" && selectedGuType ? guDictionary[selectedGuType]?.name || selectedGuType : ""}
+                    {itemType === "Gu" && selectedGuType ? (() => {
+                      const [guId, rank] = selectedGuType.split("::");
+                      return guSpecFor(guId, Number(rank))?.name || guId;
+                    })() : ""}
                     {itemType === "Material" && selectedMaterial ? itemDictionary[selectedMaterial]?.name || selectedMaterial : ""}
                     {itemType === "Recipe" && selectedRecipe ? getRecipeDisplayName(selectedRecipe) : ""}
                   </span>

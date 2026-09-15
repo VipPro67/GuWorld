@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useWorldStore } from "@/store/useWorldStore";
-import { useGameStore } from "@/store/useGameStore";
+import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import TeleportModal from "./TeleportModal";
 import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users } from "lucide-react";
 
@@ -477,7 +477,7 @@ export function WorldPage() {
                     : selectedObject.cell_type === "Resource"
                     ? itemDictionary[selectedObject.content_id]?.name || selectedObject.content_id
                     : selectedObject.cell_type === "WildGu"
-                    ? guDictionary[selectedObject.content_id]?.name || selectedObject.content_id
+                    ? guSpecFor(selectedObject.content_id, selectedObject.rank)?.name || selectedObject.content_id
                     : selectedObject.cell_type === "GroundDrop"
                     ? `Hài cốt: ${(selectedObject.dropData || groundDrops.find(d => d.id === selectedObject.id))?.loser_name || "Vô danh"}`
                     : selectedObject.cell_type === "Sect"

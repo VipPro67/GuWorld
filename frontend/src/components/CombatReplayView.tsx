@@ -10,7 +10,7 @@ import { formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
 import { FormattedText } from "./FormattedText";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
-import { useGameStore } from "@/store/useGameStore";
+import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 export interface CombatLogEntry {
   turn: number;
@@ -847,8 +847,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                   {c.guInventory.map((g, idx: number) => {
                     const item = g as Record<string, unknown>;
                     const rawId = String(item.gu_id || item.guId || item.GuID || item.id || "");
-                    const specName = (guDictionary && guDictionary[rawId]?.name) || String(item.gu_name || item.name || item.GuName || rawId || "Cổ trùng");
                     const rankVal = Number(item.rank || g.rank || 1);
+                    const specName = guSpecFor(rawId, rankVal)?.name || String(item.gu_name || item.name || item.GuName || rawId || "Cổ trùng");
                     const isImmortal = rankVal >= 6;
                     return (
                       <span key={idx} className={`text-[10px] px-2 py-0.5 rounded-md font-medium border ${
