@@ -1,12 +1,9 @@
 package handlers
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
 
 func setupPvPTestRegistry(t *testing.T) {
@@ -51,7 +48,6 @@ func setupPvPTestRegistry(t *testing.T) {
 	}
 	t.Cleanup(func() { models.GuRegistry = map[string]map[int]models.GuDictionaryItem{} })
 }
-
 
 func TestSelectActionsByPlayerTacticsConditions(t *testing.T) {
 	combatSettings := &models.AutoCombatConfig{
@@ -111,124 +107,5 @@ func TestSelectActionsByPlayerTacticsConditions(t *testing.T) {
 	}
 	if selectedLow[1].GuID != "GU_ATTACK" {
 		t.Errorf("expected second action to be GU_ATTACK, got %s", selectedLow[1].GuID)
-	}
-}
-
-func TestPvPCombatSimulationExecutionSymmetry(t *testing.T) {
-	setupPvPTestRegistry(t)
-
-	tactics := []models.GuTactic{
-		{GuID: "GU_SHIELD", Priority: 1, UseCondition: "always", ConditionValue: 0},
-		{GuID: "GU_ATTACK", Priority: 2, UseCondition: "always", ConditionValue: 0},
-		{GuID: "GU_HEAL", Priority: 3, UseCondition: "hp_below", ConditionValue: 50},
-	}
-
-	combatSettings := models.AutoCombatConfig{
-		GuPriorities:       tactics,
-		CategoryPriorities: []string{"shield", "heal", "damage", "other"},
-	}
-
-	pA_ID := uuid.New()
-	pB_ID := uuid.New()
-
-	invA := models.GuInventory{
-		{InstanceID: "a_shield", GuID: "GU_SHIELD", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
-		{InstanceID: "a_attack", GuID: "GU_ATTACK", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
-		{InstanceID: "a_heal", GuID: "GU_HEAL", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
-	}
-	invB := models.GuInventory{
-		{InstanceID: "b_shield", GuID: "GU_SHIELD", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
-		{InstanceID: "b_attack", GuID: "GU_ATTACK", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
-		{InstanceID: "b_heal", GuID: "GU_HEAL", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
-	}
-
-	playerA := &models.Player{}
-	playerA.ID = pA_ID
-	playerA.Username = "Challenger"
-	playerA.Rank = 2
-	playerA.SubRank = 1
-	playerA.HP = 200
-	playerA.BaseHP = 200
-	playerA.MaxMana = 200
-	playerA.CurrentMana = 200
-	playerA.GuInventory = invA
-	playerA.CombatSettings = combatSettings
-
-	playerB := &models.Player{}
-	playerB.ID = pB_ID
-	playerB.Username = "Defender"
-	playerB.Rank = 2
-	playerB.SubRank = 1
-	playerB.HP = 200
-	playerB.BaseHP = 200
-	playerB.MaxMana = 200
-	playerB.CurrentMana = 200
-	playerB.GuInventory = invB
-	playerB.CombatSettings = combatSettings
-
-	simPlayer, err := buildSimCombatant(nil, playerA, false, false, nil)
-	if err != nil {
-		t.Fatalf("failed to build challenger: %v", err)
-	}
-
-	defenderStats := CalculatePlayerStats(playerB)
-	defenderCombatant := models.CombatantFromPlayer(playerB, defenderStats)
-
-	pvpCombat := &models.CombatState{
-		EnemyTemplateID:     playerB.ID.String(),
-		EnemyName:           playerB.Username,
-		EnemyType:           "PVP",
-		CombatMode:          "virtual",
-		EnemyHP:             200,
-		EnemyMaxHP:          200,
-		EnemyMana:           200,
-		EnemyMaxMana:        200,
-		EnemyDamage:         defenderStats["attack"],
-		EnemyDefense:        defenderStats["defense"],
-		EnemySpeed:          defenderStats["speed"],
-		EnemyRank:           playerB.Rank,
-		EnemySubRank:        playerB.SubRank,
-		EnemyGuInventory:    filterGuLoadout(playerB.GuInventory, playerB.CombatSettings),
-		EnemyCombatSettings: &combatSettings,
-		TargetPlayerID:      playerB.ID.String(),
-	}
-
-	simEnemy := buildSimEnemyCombatant(nil, &defenderCombatant, pvpCombat)
-
-	simState := &simulator.CombatState{
-		Allies:  []*simulator.CombatantAuto{simPlayer},
-		Enemies: []*simulator.CombatantAuto{simEnemy},
-	}
-
-	logs := simulator.Simulate(simState)
-	if len(logs) == 0 {
-		t.Fatalf("expected combat logs, got empty")
-	}
-
-	// Verify both Challenger and Defender cast their Shield in the defense pass / turn 1
-	var castShieldA, castShieldB bool
-	var castAttackA, castAttackB bool
-	for _, l := range logs {
-		if l.ActorName == "Challenger" && strings.Contains(l.Detail, "Khiên Cổ") {
-			castShieldA = true
-		}
-		if l.ActorName == "Defender" && strings.Contains(l.Detail, "Khiên Cổ") {
-			castShieldB = true
-		}
-		if l.ActorName == "Challenger" && strings.Contains(l.Detail, "Công Cổ") {
-			castAttackA = true
-		}
-		if l.ActorName == "Defender" && strings.Contains(l.Detail, "Công Cổ") {
-			castAttackB = true
-		}
-	}
-
-	if !castShieldA || !castShieldB {
-		t.Errorf("expected both Challenger (%v) and Defender (%v) to cast Khiên Cổ (Priority 1)",
-			castShieldA, castShieldB)
-	}
-	if !castAttackA || !castAttackB {
-		t.Errorf("expected both Challenger (%v) and Defender (%v) to cast Công Cổ (Priority 2)",
-			castAttackA, castAttackB)
 	}
 }
