@@ -197,16 +197,8 @@ func SendBaoHoangChat(c *gin.Context) {
 		fee = 10
 	case "general":
 		fee = 0
-		hasConnectingHeaven := false
-		hasDivineSense := false
-		for _, gu := range player.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" {
-				hasConnectingHeaven = true
-			}
-			if gu.GuID == "GU_DIVINE_SENSE" {
-				hasDivineSense = true
-			}
-		}
+		hasConnectingHeaven := models.InventoryHasGuMechanic(player.GuInventory, "CHAT_CONNECT", false)
+		hasDivineSense := models.InventoryHasGuMechanic(player.GuInventory, "CHAT_PERCEIVE", false)
 		if !hasConnectingHeaven || !hasDivineSense {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Chat kênh Bảo Hoàng Thiên yêu cầu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) và Thần Niệm Cổ (GU_DIVINE_SENSE) trong túi đồ!"})
 			return

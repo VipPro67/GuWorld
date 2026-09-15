@@ -361,6 +361,13 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		Defense:    def,
 		ManaCost:   cost,
 	}
+	for _, mechanic := range spec.Effects.Other {
+		if mechanic.EventTrigger == "ON_CAST" || mechanic.EventTrigger == "ON_HIT" {
+			act.Mechanics = append(act.Mechanics, simulator.CombatMechanic{
+				Trigger: mechanic.EventTrigger, ActionCode: mechanic.ActionCode, Params: append([]byte(nil), mechanic.Params...),
+			})
+		}
+	}
 
 	if actor.Rank < spec.Rank {
 		act.BacklashDamage = gamefx.HigherRankHPCost(spec.Rank, actor.Rank, actor.MaxHP)
@@ -463,6 +470,11 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 
 // hasCombatActiveEffects returns true if the Gu's active effects produce a meaningful combat action.
 func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
+	for _, mechanic := range spec.Effects.Other {
+		if mechanic.EventTrigger == "ON_CAST" || mechanic.EventTrigger == "ON_HIT" {
+			return true
+		}
+	}
 	if spec.Effects.Active == nil {
 		return false
 	}

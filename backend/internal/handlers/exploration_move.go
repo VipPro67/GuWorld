@@ -233,7 +233,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			player.ActiveCombat = &combatState
 			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
 
-			_, _, hasHeavenSecret := models.FindEquippedGuByID(player.GuInventory, "GU_HEAVEN_SECRET")
+			hasHeavenSecret := models.InventoryHasGuMechanic(player.GuInventory, "LOOT_PREVIEW", true)
 			if hasHeavenSecret && mon.LootTableID != "" {
 				lt, errLt := db.LoadLootTable(tx, mon.LootTableID)
 				if errLt == nil {
@@ -481,13 +481,7 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	hasFixedImmortalTravel := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_FIXED_IMMORTAL_TRAVEL" && gu.Equipped && gu.Status == "ACTIVE" {
-			hasFixedImmortalTravel = true
-			break
-		}
-	}
+	hasFixedImmortalTravel := models.InventoryHasGuMechanic(player.GuInventory, "IGNORE_MOVEMENT_RANGE", true)
 
 	if dist > movementRange && !hasFixedImmortalTravel {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vị trí quá xa! Thân pháp hiện tại chỉ di chuyển tối đa %d ô.", movementRange)})

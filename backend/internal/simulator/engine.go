@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -11,19 +12,28 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
-func hasGuEquipped(c *CombatantAuto, guID string) bool {
-	if c == nil || c.Loadout == nil {
-		return false
-	}
-	for _, id := range c.Loadout.GuIds {
-		if id == guID {
+func hasMechanic(mechanics []CombatMechanic, trigger, actionCode string) bool {
+	for _, mechanic := range mechanics {
+		if mechanic.Trigger == trigger && mechanic.ActionCode == actionCode {
 			return true
 		}
 	}
-	if c.Loadout.ImmortalGuId != nil && *c.Loadout.ImmortalGuId == guID {
-		return true
-	}
 	return false
+}
+
+func mechanicFloat(mechanics []CombatMechanic, trigger, actionCode, key string, fallback float64) float64 {
+	for _, mechanic := range mechanics {
+		if mechanic.Trigger != trigger || mechanic.ActionCode != actionCode {
+			continue
+		}
+		var params map[string]float64
+		if json.Unmarshal(mechanic.Params, &params) == nil {
+			if value, ok := params[key]; ok {
+				return value
+			}
+		}
+	}
+	return fallback
 }
 
 // DaoMultiplier returns the dao mark damage multiplier for a combatant's paths,
@@ -123,7 +133,11 @@ func cloneCombatant(c *CombatantAuto) *CombatantAuto {
 	if c.Actions != nil {
 		clone.Actions = make([]SimAction, len(c.Actions))
 		copy(clone.Actions, c.Actions)
+		for i := range clone.Actions {
+			clone.Actions[i].Mechanics = cloneMechanics(c.Actions[i].Mechanics)
+		}
 	}
+	clone.Mechanics = cloneMechanics(c.Mechanics)
 	if c.ActiveEffects != nil {
 		clone.ActiveEffects = make([]Effect, len(c.ActiveEffects))
 		copy(clone.ActiveEffects, c.ActiveEffects)
@@ -147,6 +161,18 @@ func cloneCombatant(c *CombatantAuto) *CombatantAuto {
 		clone.CustomState = make(map[string]int)
 	}
 	return &clone
+}
+
+func cloneMechanics(source []CombatMechanic) []CombatMechanic {
+	if source == nil {
+		return nil
+	}
+	result := make([]CombatMechanic, len(source))
+	copy(result, source)
+	for i := range result {
+		result[i].Params = append([]byte(nil), source[i].Params...)
+	}
+	return result
 }
 
 func getFirstAliveDeterministic(alive []*CombatantAuto) *CombatantAuto {
@@ -345,7 +371,7 @@ func Simulate(state *CombatState) []CombatLog {
 	rng := rand.New(rand.NewSource(state.Seed))
 
 	var logs []CombatLog
-	cicadaUsed := false
+	rebornUsed := make(map[string]bool)
 	initialState := cloneCombatState(state)
 
 	startSnap := buildSnapshot(state)
@@ -440,8 +466,8 @@ func Simulate(state *CombatState) []CombatLog {
 				turnLogs = append(turnLogs, tickStatusEffects(c, turn)...)
 				ComputeEffectMultipliers(c)
 
-				// Thơ Cổ (GU_POEM_IMMORTAL) - Start of turn logic
-				if hasGuEquipped(c, "GU_POEM_IMMORTAL") {
+				// Catalog-driven Poem Intent mechanic - start-of-turn logic.
+				if hasMechanic(c.Mechanics, "ON_TURN_START", "POEM_INTENT") {
 					c.CustomState["thi_y"] += 1
 					c.ActiveEffects = append(c.ActiveEffects, Effect{
 						ID:       "thi_ho",
@@ -741,7 +767,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 
 				// ── Special Actions preprocessing ──
-				if a.SourceID == "GU_WOLF_ENSLAVEMENT_CORE" {
+				if hasMechanic(a.Mechanics, "ON_CAST", "SUMMON_WOLF_FRONTLINE") {
 					minionHP := actor.MaxHP * 0.50
 					minion := &CombatantAuto{
 						ID:      actor.ID + "_dialang",
@@ -769,7 +795,7 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
-				if a.SourceID == "GU_GUTS" {
+				if hasMechanic(a.Mechanics, "ON_CAST", "FULL_SOUL_HEAL") {
 					actor.HP = actor.MaxHP
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
@@ -782,7 +808,7 @@ func Simulate(state *CombatState) []CombatLog {
 					return res
 				}
 
-				if a.SourceID == "GU_SWORD_DRAGON_TRANSFORM" {
+				if hasMechanic(a.Mechanics, "ON_CAST", "SWORD_DRAGON_TRANSFORM") {
 					shieldGain := actor.HP - 1.0
 					if shieldGain > 0 {
 						actor.HP = 1.0
@@ -803,7 +829,7 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 				}
 
-				if a.SourceID == "GU_PRESENT_DAYS_PAST" {
+				if hasMechanic(a.Mechanics, "ON_CAST", "BORROW_PAST_POWER") {
 					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
 						ID:       "borrow_past_power",
 						Type:     "buff",
@@ -819,7 +845,7 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
-				if a.SourceID == "GU_UNRAVEL_RIDDLE" {
+				if hasMechanic(a.Mechanics, "ON_CAST", "UNRAVEL_RIDDLE") {
 					dispelledCount := 0
 					var keptEffects []Effect
 					for _, eff := range firstTarget.ActiveEffects {
@@ -849,7 +875,7 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
-				if a.SourceID == "GU_LOVE_GU" {
+				if hasMechanic(a.Mechanics, "ON_CAST", "CHAOS_GAMBLE") {
 					effectsChoices := []string{"crit_500", "invulnerable_1_turn", "reduce_enemy_hp_90"}
 					costChoices := []string{"aptitude_10", "lifespan_5", "luck_50"}
 
@@ -917,11 +943,11 @@ func Simulate(state *CombatState) []CombatLog {
 					// Apply weak debuff (reduces damage dealt) and atk_up buff
 					dmgMultiplier *= actor.DamageMultiplier
 
-					if hasGuEquipped(actor, "GU_SOVEREIGN_FETUS") {
+					if hasMechanic(actor.Mechanics, "PASSIVE", "DOUBLE_DAMAGE_DEALT") {
 						dmgMultiplier *= 2.0
 					}
 
-					shieldBypass := (a.SourceID == "GU_BREAK_SPACE")
+					shieldBypass := hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD")
 					hitCount := a.MultiHit
 					if hitCount < 1 {
 						hitCount = 1
@@ -946,7 +972,7 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 
 						targetDef := target.BaseDef * target.DefenseMultiplier
-						if a.SourceID == "GU_BREAK_SPACE" {
+						if hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD") {
 							targetDef = math.Max(0, targetDef-30.0)
 						}
 						// Apply ignore_defense from attacker
@@ -1753,16 +1779,16 @@ func Simulate(state *CombatState) []CombatLog {
 		// ── Death triggers check (e.g. Xuân Thu Thiền) ──
 		rewound := false
 		for _, a := range state.Allies {
-			if a.HP <= 0 && hasGuEquipped(a, "GU_SPRING_AUTUMN_CICADA") && !cicadaUsed && !a.IsReviveLocked {
-				if rng.Float64() < 0.15 {
-					cicadaUsed = true
+			if a.HP <= 0 && hasMechanic(a.Mechanics, "ON_DEATH", "REBORN") && !rebornUsed[a.ID] && !a.IsReviveLocked {
+				if rng.Float64() < mechanicFloat(a.Mechanics, "ON_DEATH", "REBORN", "chance", 0) {
+					rebornUsed[a.ID] = true
 					rewound = true
 					logs = append(logs, CombatLog{
 						Turn:      turn,
 						ActorId:   a.ID,
 						ActorName: a.Name,
 						Action:    "TRIGGERED",
-						Trigger:   "GU_SPRING_AUTUMN_CICADA",
+						Trigger:   "REBORN",
 						Detail:    "Xuân Thu Thiền kích hoạt! Nghịch chuyển thời không, quay về Lượt 1!",
 					})
 					break
@@ -1861,7 +1887,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	}
 
 	// Định Tiên Du first turn evade
-	if turn == 1 && hasGuEquipped(target, "GU_FIXED_IMMORTAL_TRAVEL") {
+	if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") {
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   target.ID,
@@ -1996,7 +2022,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 
 	if target.VirtualShield > 0 {
 		// Thơ Cổ: Ghi nhận khiên và xuyên khiên
-		if hasGuEquipped(actor, "GU_POEM_IMMORTAL") {
+		if hasMechanic(actor.Mechanics, "ON_TURN_START", "POEM_INTENT") {
 			stacks := actor.CustomState["thi_y"]
 
 			// Xuyên khiên (chỉ 1 lần mỗi lượt)

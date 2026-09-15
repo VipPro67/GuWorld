@@ -226,13 +226,7 @@ func ChallengeArena(c *gin.Context) {
 	enemyRank := targetPlayer.Rank
 	enemySubRank := targetPlayer.SubRank
 
-	hasAttitudeGu := false
-	for _, gu := range targetPlayer.GuInventory {
-		if gu.GuID == "GU_ATTITUDE_GU" && gu.Equipped && gu.Status == "ACTIVE" {
-			hasAttitudeGu = true
-			break
-		}
-	}
+	hasAttitudeGu := models.InventoryHasGuMechanic(targetPlayer.GuInventory, "ARENA_IDENTITY_MASK", true)
 	if hasAttitudeGu {
 		enemyRank = 1
 		enemySubRank = 1

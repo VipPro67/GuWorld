@@ -9,6 +9,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -77,14 +78,8 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 			return "", false
 		}
 
-		for _, gu := range player.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" {
-				hasConnectingHeaven = true
-			}
-			if gu.GuID == "GU_DIVINE_SENSE" {
-				hasDivineSense = true
-			}
-		}
+		hasConnectingHeaven = models.InventoryHasGuMechanic(player.GuInventory, "CHAT_CONNECT", false)
+		hasDivineSense = models.InventoryHasGuMechanic(player.GuInventory, "CHAT_PERCEIVE", false)
 		if !hasConnectingHeaven || !hasDivineSense {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần sở hữu Thông Thiên Cổ (GU_CONNECTING_HEAVEN) và Thần Niệm Cổ (GU_DIVINE_SENSE) để xem tin nhắn kênh Bảo Hoàng Thiên!"})
 			return "", false

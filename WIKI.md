@@ -255,6 +255,8 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 
 ## 4. Cổ trùng và bọc đồ
 
+Hiệu ứng chiến đấu đặc thù của Cổ trùng được lấy từ cột `effects` trong danh mục Cổ. ID của Cổ chỉ dùng để nhận diện, hiển thị, cấu hình thứ tự ra chiêu và tính tiêu hao; nó không tự kích hoạt một hiệu ứng ẩn. Vì vậy một Cổ mới có thể tái sử dụng mechanic hiện có chỉ bằng dữ liệu, còn mechanic mới phải được đăng ký và kiểm tra hợp lệ trước khi import.
+
 Mỗi Cổ instance có:
 
 - `instance_id`, `gu_id`.

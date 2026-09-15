@@ -21,8 +21,8 @@ type StatusOp struct {
 // entry plus (optionally) one behaviour hook.
 type StatusSpec struct {
 	ID            string
-	Behaviour     string  // see Behaviour* constants
-	Label         string  // Vietnamese display name
+	Behaviour     string // see Behaviour* constants
+	Label         string // Vietnamese display name
 	Category      StatusCategory
 	Path          string  // Dao path this status belongs to (e.g., "blood", "fire", "ice", "dream", etc.)
 	BaseChance    float64 // Base proc chance 0..1 (T1: 0.3, T2: 0.45, T3: 0.6, T4: 0.75, T5: 0.9)
@@ -182,7 +182,7 @@ func (e *UnknownStatusError) Error() string {
 
 // CanApplyStatus tính toán xác suất thành công dựa trên Cảnh Giới (Rank) và Đạo Ngân.
 // Trả về true nếu hiệu ứng được áp dụng thành công.
-func CanApplyStatus(casterRank, targetRank int, casterDaoMarks, targetDaoMarks map[string]int64, spec StatusSpec, targetStatusResist float64) bool {
+func CanApplyStatus(rng *rand.Rand, casterRank, targetRank int, casterDaoMarks, targetDaoMarks map[string]int64, spec StatusSpec, targetStatusResist float64) bool {
 	// 1. Hệ số chênh lệch Chuyển (Rank)
 	rankDiff := casterRank - targetRank
 	rankFactor := 1.0
@@ -224,5 +224,5 @@ func CanApplyStatus(casterRank, targetRank int, casterDaoMarks, targetDaoMarks m
 		finalProcChance = 0.0
 	}
 
-	return rand.Float64() < finalProcChance
+	return rng.Float64() < finalProcChance
 }

@@ -330,9 +330,14 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	// 2. Conflict multiplier
 	conflictMultiplier := 1.0
 	if CheckNodeConflict(n, allNodes) {
-		var hasSovereignFetus bool
-		_ = tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM player_gu WHERE player_id = $1 AND gu_id = 'GU_SOVEREIGN_FETUS' AND equipped = true)`, playerID).Scan(&hasSovereignFetus)
-		if !hasSovereignFetus {
+		var ignoresPathConflict bool
+		_ = tx.QueryRow(`SELECT EXISTS (
+			SELECT 1 FROM player_gu pg
+			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.rank
+			WHERE pg.player_id = $1 AND pg.equipped = true AND pg.state = 'ACTIVE'
+			AND COALESCE((gd.effects->'passive'->>'path_conflict_reduction')::numeric, 0) >= 100
+		)`, playerID).Scan(&ignoresPathConflict)
+		if !ignoresPathConflict {
 			conflictMultiplier = 0.5
 		}
 	}

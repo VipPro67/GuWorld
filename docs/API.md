@@ -359,6 +359,15 @@ Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth/admin và
 
 Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` trong `backend/internal/server/server.go`; bảng này gom theo domain để tránh hiểu nhầm rằng Admin chỉ quản lý player/Cổ.
 
+### Admin — validation effect Cổ
+
+`POST /api/admin/gu-dictionary` và `PUT /api/admin/gu-dictionary/:id` chuẩn hóa `effects` về envelope tám namespace trước khi ghi. Dữ liệu sai trả `400` với `{ "error": string, "issues": [{ "severity", "code", "path", "message" }] }`. Thành công vẫn trả `issues`; mảng này chứa warning cho field legacy/chưa được runtime xử lý và có thể rỗng. Warning không chặn ghi và không bảo đảm effect đã có gameplay implementation.
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| POST | `/admin/gu-effects/validate` | Preview read-only một payload `{effects: object}`. Trả `{valid, report, normalized_effects?}`; validation errors nằm trong `report.issues`, còn `normalized_effects` chỉ có khi hợp lệ. Payload tối đa 256 KiB. |
+| GET | `/admin/gu-effects/audit` | Audit read-only toàn bộ `gu_dictionary` bằng một query. Trả coverage theo namespace/key, `owner`, `disposition`, số lần xuất hiện và issues gắn với `{id,rank}`. Giới hạn an toàn 100.000 definition/32 MiB effect JSON, 256 KiB/definition và tối đa 10.000 issue chi tiết; xem `issues_truncated` nếu summary còn issue chưa trả chi tiết. |
+
 ## Admin — Monitoring & Tracing (CPU, Memory, Request Traces)
 
 | Method | Path | Ghi chú |

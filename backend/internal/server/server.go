@@ -250,6 +250,8 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			admin.PUT("/mine-slots/:id", handlers.AdminUpdateMineSlot)
 			admin.POST("/mine-slots/:id/reset", handlers.AdminResetMineSlot)
 			admin.GET("/gu-dictionary", handlers.AdminListGuItems)
+			admin.POST("/gu-effects/validate", handlers.AdminValidateGuEffects)
+			admin.GET("/gu-effects/audit", handlers.AdminAuditGuEffects)
 			admin.POST("/gu-dictionary", handlers.AdminCreateGuItem)
 			admin.PUT("/gu-dictionary/:id", handlers.AdminUpdateGuItem)
 			admin.DELETE("/gu-dictionary/:id", handlers.AdminDeleteGuItem)

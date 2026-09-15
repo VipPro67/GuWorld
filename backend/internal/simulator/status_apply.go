@@ -38,7 +38,7 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 
 func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, turn int, rng *rand.Rand, logs *[]CombatLog) {
 	// Resist gate (control effects subject to MentalResistance) using advanced proc formula.
-	if spec.ResistGate && !statusfx.CanApplyStatus(actor.Rank, target.Rank, actor.DaoMarks, target.DaoMarks, spec, target.MentalResistance) {
+	if spec.ResistGate && !statusfx.CanApplyStatus(rng, actor.Rank, target.Rank, actor.DaoMarks, target.DaoMarks, spec, target.MentalResistance) {
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   target.ID,

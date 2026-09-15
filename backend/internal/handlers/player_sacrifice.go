@@ -46,9 +46,16 @@ func SacrificeNPC(c *gin.Context) {
 		return
 	}
 
-	// 1. Check if Huyết Sọ Cổ (GU_BLOOD_SKULL) is equipped and active
-	hasBloodSkull := models.HasEquippedGu(player.GuInventory, "GU_BLOOD_SKULL")
-	if !hasBloodSkull {
+	// 1. Resolve the sacrifice ability and its tuning from the equipped Gu effects.
+	aptitudeGain, aptitudeCap := 0, 0
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		if gain := models.GuMechanicFloat(gu, "SACRIFICE_NPC", "aptitude_gain"); gain > 0 {
+			aptitudeGain = int(gain)
+			aptitudeCap = int(models.GuMechanicFloat(gu, "SACRIFICE_NPC", "aptitude_cap"))
+			break
+		}
+	}
+	if aptitudeGain <= 0 || aptitudeCap <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần phải trang bị Huyết Sọ Cổ (GU_BLOOD_SKULL) ở trạng thái ACTIVE để thực hiện hiến tế!"})
 		return
 	}
@@ -73,11 +80,11 @@ func SacrificeNPC(c *gin.Context) {
 		return
 	}
 
-	// 4. Boost Player Aptitude (by 5%, max 99%)
+	// 4. Boost Player Aptitude using the catalog mechanic.
 	oldAptitude := player.AptitudePercent
-	player.AptitudePercent += 5
-	if player.AptitudePercent > 99 {
-		player.AptitudePercent = 99
+	player.AptitudePercent += aptitudeGain
+	if player.AptitudePercent > aptitudeCap {
+		player.AptitudePercent = aptitudeCap
 	}
 
 	// Dynamically update Aptitude Type

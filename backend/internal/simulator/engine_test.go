@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -116,6 +117,31 @@ func TestDeterminism(t *testing.T) {
 	b := run()
 	if a != b {
 		t.Fatalf("simulation not deterministic with same seed")
+	}
+}
+
+func TestSpecialBehaviorComesFromEffectMechanicNotSourceID(t *testing.T) {
+	run := func(sourceID string, mechanics []CombatMechanic) (hp, shield float64) {
+		attacker := newTestCombatant("ally", "Player", 100, 100)
+		action := SimAction{
+			ActionType: "GU_SKILL", SourceID: sourceID, Name: "Phá khiên", Damage: 100,
+			Mechanics: mechanics,
+		}
+		target := newTestCombatant("enemy", "Enemy", 100, 0)
+		target.VirtualShield = 100
+		state := &CombatState{Seed: 1, Allies: []*CombatantAuto{attacker}, Enemies: []*CombatantAuto{target}}
+		var logs []CombatLog
+		applyDamageToTarget(state, attacker, target, action.Damage, &logs, 2, hasMechanic(action.Mechanics, "ON_HIT", "BYPASS_SHIELD"), false, rand.New(rand.NewSource(1)))
+		return target.HP, target.VirtualShield
+	}
+
+	oldHP, oldShield := run("GU_BREAK_SPACE", nil)
+	dataHP, dataShield := run("GU_ARBITRARY_NEW", []CombatMechanic{{Trigger: "ON_HIT", ActionCode: "BYPASS_SHIELD"}})
+	if oldShield >= 100 || oldHP <= 0 {
+		t.Fatalf("legacy ID unexpectedly changed damage routing: hp=%v shield=%v", oldHP, oldShield)
+	}
+	if dataHP > 0 || dataShield != 100 {
+		t.Fatalf("catalog mechanic did not bypass shield: hp=%v shield=%v", dataHP, dataShield)
 	}
 }
 
@@ -349,7 +375,7 @@ func TestPerGuSequentialActionExecution(t *testing.T) {
 	attacker.Mana = 100
 	attacker.MaxMana = 100
 	attacker.Actions = []SimAction{
-		{ActionType: "GU_SKILL", Name: "GuFirst_Heal", Healing: 500, ManaCost: 40}, // High priority emergency heal (always condition)
+		{ActionType: "GU_SKILL", Name: "GuFirst_Heal", Healing: 500, ManaCost: 40},   // High priority emergency heal (always condition)
 		{ActionType: "GU_SKILL", Name: "GuSecond_Damage", Damage: 300, ManaCost: 40}, // Secondary damage
 	}
 
@@ -500,8 +526,3 @@ func TestHigherRankGuBacklash(t *testing.T) {
 		t.Fatal("expected backlash log for higher rank Gu usage")
 	}
 }
-
-
-
-
-

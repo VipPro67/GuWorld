@@ -96,7 +96,7 @@ func InitiateTrade(c *gin.Context) {
 	if !isCloseEnough {
 		// Verify sender has Connecting Heaven Gu
 		_, _, senderHasConnecting := models.FindFirstMatchingGu(sender.GuInventory, func(gu models.GuInstance) bool {
-			return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+			return models.InventoryHasGuMechanic(models.GuInventory{gu}, "REMOTE_TRADE", false)
 		})
 		if !senderHasConnecting {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) hoặc ở gần đối phương để mở kết nối giao dịch!"})
@@ -105,7 +105,7 @@ func InitiateTrade(c *gin.Context) {
 
 		// Verify receiver has Connecting Heaven Gu
 		_, _, receiverHasConnecting := models.FindFirstMatchingGu(receiver.GuInventory, func(gu models.GuInstance) bool {
-			return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+			return models.InventoryHasGuMechanic(models.GuInventory{gu}, "REMOTE_TRADE", false)
 		})
 		if !receiverHasConnecting {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương không sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối giao dịch từ xa!"})
