@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"time"
 
@@ -14,7 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-type SectMineDefender struct {
+type SectDefender struct {
 	ID             string    `json:"id"`
 	DefenderType   string    `json:"defender_type"` // member | beast
 	PlayerID       *string   `json:"player_id"`
@@ -26,72 +26,34 @@ type SectMineDefender struct {
 	AssignedAt     time.Time `json:"assigned_at"`
 }
 
-type SectorOutput struct {
-	FundsPerHour        int `json:"funds_per_hour"`
-	ContributionPerHour int `json:"contribution_per_hour"`
-}
-
-type SectMineResponse struct {
-	ID                int                `json:"id"`
+type SectWarfareResponse struct {
+	ID                string             `json:"id"`
 	Name              string             `json:"name"`
-	Rarity            string             `json:"rarity"`
-	OccupierSectID    *string            `json:"occupier_sect_id"`
-	OccupierName      *string            `json:"occupier_name"`
-	OccupiedAt        *time.Time         `json:"occupied_at"`
+	Level             int                `json:"level"`
+	Region            string             `json:"region"`
+	MapX              int                `json:"map_x"`
+	MapY              int                `json:"map_y"`
 	ShieldUntil       *time.Time         `json:"shield_until"`
-	LastClaimedAt     *time.Time         `json:"last_claimed_at"`
-	Defenders         []SectMineDefender `json:"defenders"`
+	Defenders         []SectDefender     `json:"defenders"`
 	TotalDefensePower float64            `json:"total_defense_power"`
-	OutputPerHour     *SectorOutput      `json:"output_per_hour"`
+	Buildings         map[string]int     `json:"buildings"`
+	DefenderCount     int                `json:"defender_count"`
 }
 
-// sectMineBaseRate returns base Quỹ per minute by mine rarity.
-func sectMineBaseRate(rarity string) float64 {
-	switch rarity {
-	case "Siêu Cấp":
-		return 200.0
-	case "Truyền Thuyết":
-		return 100.0
-	case "Sử Thi":
-		return 50.0
-	case "Hiếm":
-		return 25.0
-	default:
-		return 10.0
+func getBuildingLvl(buildingsJSON []byte, buildingName string) int {
+	var buildings map[string]int
+	if err := json.Unmarshal(buildingsJSON, &buildings); err == nil {
+		if lvl, ok := buildings[buildingName]; ok {
+			return lvl
+		}
 	}
+	return 1
 }
 
-// sectMineDefenderSlots returns the max number of defenders a mine allows.
-func sectMineDefenderSlots(rarity string) int {
-	switch rarity {
-	case "Siêu Cấp":
-		return 4
-	case "Truyền Thuyết", "Sử Thi":
-		return 3
-	case "Hiếm":
-		return 2
-	default:
-		return 1
-	}
+func sectBaseDefense(defensiveArrayLevel int) float64 {
+	return float64(defensiveArrayLevel) * 500.0
 }
 
-// sectMineBaseDefense is the inherent defense power of an occupied-but-undefended mine.
-func sectMineBaseDefense(rarity string) float64 {
-	switch rarity {
-	case "Siêu Cấp":
-		return 700
-	case "Truyền Thuyết":
-		return 400
-	case "Sử Thi":
-		return 250
-	case "Hiếm":
-		return 120
-	default:
-		return 50
-	}
-}
-
-// computeMemberPower estimates a member's combat power for territory defense.
 func computeMemberPower(player *models.Player) float64 {
 	if player == nil {
 		return 0
@@ -103,30 +65,66 @@ func computeMemberPower(player *models.Player) float64 {
 	return power
 }
 
-// computeBeastPower estimates a guardian beast's combat power.
 func computeBeastPower(mon models.MonsterTemplate, rank, subRank int) float64 {
 	maxHP, atk, def := models.ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, rank, subRank, mon.Type)
 	return atk + def + maxHP/20.0
 }
 
-// loadMineDefenders loads all defenders of a mine plus their total power.
-func loadMineDefenders(mineID int) ([]SectMineDefender, float64, error) {
+// sectGuardianCombatant generates the Hộ Sơn Thần Thú (Guardian Beast) Combatant
+// whose stats scale with sect level and defensive_array building level.
+func sectGuardianCombatant(sectName string, sectLevel int, defensiveArrayLvl int) models.Combatant {
+	rank := sectLevel
+	if rank < 1 {
+		rank = 1
+	}
+	if rank > 9 {
+		rank = 9
+	}
+	arrLvl := defensiveArrayLvl
+	if arrLvl < 1 {
+		arrLvl = 1
+	}
+	baseHP := 500.0 * float64(arrLvl) * (1.0 + 0.5*float64(rank))
+	baseAtk := 80.0 * float64(arrLvl) * (1.0 + 0.3*float64(rank))
+	baseDef := 60.0 * float64(arrLvl) * (1.0 + 0.3*float64(rank))
+	baseMana := 200.0 * float64(arrLvl)
+	baseSpeed := 8.0 + float64(rank)*2.0
+
+	return models.Combatant{
+		ID:          fmt.Sprintf("sect_guardian_%s", uuid.New().String()[:8]),
+		Name:        fmt.Sprintf("Hộ Sơn Thần Thú (%s)", sectName),
+		Kind:        "Boss",
+		Rank:        rank,
+		SubRank:     arrLvl,
+		HP:          baseHP,
+		MaxHP:       baseHP,
+		CurrentMana: baseMana,
+		MaxMana:     baseMana,
+		BaseAttack:  baseAtk,
+		BaseDefense: baseDef,
+		Speed:       baseSpeed,
+		AIProfile:   "aggressive",
+		StatusEffects: []models.StatusEffect{},
+	}
+}
+
+func loadSectDefenders(sectID string) ([]SectDefender, float64, error) {
 	rows, err := db.DB.Query(`
 		SELECT id, defender_type, COALESCE(player_id::text, ''), name, COALESCE(monster_id, ''),
 		       monster_rank, monster_sub_rank, power, assigned_at
-		FROM sect_mine_defenders
-		WHERE mine_id = $1
+		FROM sect_defenders
+		WHERE sect_id = $1
 		ORDER BY assigned_at ASC
-	`, mineID)
+	`, sectID)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
 
-	var defenders []SectMineDefender
+	var defenders []SectDefender
 	total := 0.0
 	for rows.Next() {
-		var d SectMineDefender
+		var d SectDefender
 		var playerID, monsterID string
 		if err := rows.Scan(&d.ID, &d.DefenderType, &playerID, &d.Name, &monsterID, &d.MonsterRank, &d.MonsterSubRank, &d.Power, &d.AssignedAt); err != nil {
 			continue
@@ -143,68 +141,92 @@ func loadMineDefenders(mineID int) ([]SectMineDefender, float64, error) {
 	return defenders, total, rows.Err()
 }
 
-func GetSectMines(c *gin.Context) {
+func loadSectDefendersTx(tx *sql.Tx, sectID string) ([]SectDefender, float64, error) {
+	rows, err := tx.Query(`
+		SELECT id, defender_type, COALESCE(player_id::text, ''), name, COALESCE(monster_id, ''),
+		       monster_rank, monster_sub_rank, power, assigned_at
+		FROM sect_defenders
+		WHERE sect_id = $1
+		ORDER BY assigned_at ASC
+	`, sectID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var defenders []SectDefender
+	total := 0.0
+	for rows.Next() {
+		var d SectDefender
+		var playerID, monsterID string
+		if err := rows.Scan(&d.ID, &d.DefenderType, &playerID, &d.Name, &monsterID, &d.MonsterRank, &d.MonsterSubRank, &d.Power, &d.AssignedAt); err != nil {
+			continue
+		}
+		if playerID != "" {
+			d.PlayerID = &playerID
+		}
+		if monsterID != "" {
+			d.MonsterID = &monsterID
+		}
+		defenders = append(defenders, d)
+		total += d.Power
+	}
+	return defenders, total, rows.Err()
+}
+
+func GetSectsMap(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT sm.id, sm.name, sm.rarity, sm.occupier_sect_id, s.name, sm.occupied_at, sm.shield_until, sm.last_claimed_at
-		FROM sect_mines sm
-		LEFT JOIN sects s ON sm.occupier_sect_id = s.id
-		ORDER BY sm.id
+		SELECT s.id, s.name, s.level, s.region, s.map_x, s.map_y, s.shield_until, s.buildings,
+		       (SELECT COUNT(*) FROM sect_members sm
+		        JOIN players p ON sm.player_id = p.id
+		        WHERE sm.sect_id = s.id AND sm.is_defending = true
+		          AND p.current_region = s.region AND p.x = s.map_x AND p.y = s.map_y AND p.hp > 0)
+		FROM sects s
+		ORDER BY s.level DESC, s.funds DESC
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect mines"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sects map"})
 		return
 	}
 	defer rows.Close()
 
-	var mines []SectMineResponse
+	var sects []SectWarfareResponse
 	for rows.Next() {
-		var m SectMineResponse
-		var oName sql.NullString
-		err = rows.Scan(&m.ID, &m.Name, &m.Rarity, &m.OccupierSectID, &oName, &m.OccupiedAt, &m.ShieldUntil, &m.LastClaimedAt)
+		var s SectWarfareResponse
+		var b []byte
+		err = rows.Scan(&s.ID, &s.Name, &s.Level, &s.Region, &s.MapX, &s.MapY, &s.ShieldUntil, &b, &s.DefenderCount)
 		if err == nil {
-			if oName.Valid {
-				m.OccupierName = &oName.String
-			}
-			defenders, total, derr := loadMineDefenders(m.ID)
+			_ = json.Unmarshal(b, &s.Buildings)
+			defenders, total, derr := loadSectDefenders(s.ID)
 			if derr == nil {
-				m.Defenders = defenders
-				m.TotalDefensePower = total
-			}
-			if m.OccupierSectID != nil {
-				var sectLevel, memberCount int
-				_ = db.DB.QueryRow(`SELECT level FROM sects WHERE id = $1`, *m.OccupierSectID).Scan(&sectLevel)
-				_ = db.DB.QueryRow(`SELECT COUNT(*) FROM sect_members WHERE sect_id = $1`, *m.OccupierSectID).Scan(&memberCount)
-				defCount := len(m.Defenders)
-				fundsPerHour := int(sectMineBaseRate(m.Rarity) * float64(sectLevel) * (1 + 0.2*float64(defCount)) * 60)
-				contribPerHour := defCount*20 + (memberCount-defCount)*2
-				if contribPerHour < 0 {
-					contribPerHour = 0
+				s.Defenders = defenders
+				arrLvl := s.Buildings["defensive_array"]
+				if arrLvl == 0 {
+					arrLvl = 1
 				}
-				m.OutputPerHour = &SectorOutput{FundsPerHour: fundsPerHour, ContributionPerHour: contribPerHour}
+				s.TotalDefensePower = total + sectBaseDefense(arrLvl)
 			}
-			mines = append(mines, m)
+			sects = append(sects, s)
 		}
 	}
-	c.JSON(http.StatusOK, mines)
+	c.JSON(http.StatusOK, sects)
 }
 
-type DefendSectMineRequest struct {
-	MineID       int    `json:"mine_id"`
+type DefendSectRequest struct {
 	DefenderType string `json:"defender_type"` // member | beast
 	PlayerID     string `json:"player_id"`
 	MonsterID    string `json:"monster_id"`
 	MonsterRank  int    `json:"monster_rank"`
 }
 
-// DefendSectMine assigns a member or hires a guardian beast to defend an owned mine.
-func DefendSectMine(c *gin.Context) {
+func DefendSect(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	var req DefendSectMineRequest
+	var req DefendSectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -229,22 +251,20 @@ func DefendSectMine(c *gin.Context) {
 		return
 	}
 
-	var occupierSectID sql.NullString
-	var rarity string
-	err = tx.QueryRow(`SELECT occupier_sect_id, rarity FROM sect_mines WHERE id = $1 FOR UPDATE`, req.MineID).Scan(&occupierSectID, &rarity)
+	var buildings []byte
+	var sectLevel int
+	err = tx.QueryRow(`SELECT level, buildings FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&sectLevel, &buildings)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mỏ khoáng!"})
-		return
-	}
-	if !occupierSectID.Valid || occupierSectID.String != sectID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Tông môn của bạn không chiếm đóng mỏ khoáng này!"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn!"})
 		return
 	}
 
+	maxDefenders := sectLevel + 1 // Basic rule
+
 	var defCount int
-	_ = tx.QueryRow(`SELECT COUNT(*) FROM sect_mine_defenders WHERE mine_id = $1`, req.MineID).Scan(&defCount)
-	if defCount >= sectMineDefenderSlots(rarity) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ đã đầy chỗ phòng thủ!"})
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM sect_defenders WHERE sect_id = $1`, sectID).Scan(&defCount)
+	if defCount >= maxDefenders {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn đã đầy chỗ phòng thủ!"})
 		return
 	}
 
@@ -260,8 +280,7 @@ func DefendSectMine(c *gin.Context) {
 			return
 		}
 
-		var targetSect string
-		var targetName string
+		var targetSect, targetName string
 		err = tx.QueryRow(`SELECT sm.sect_id, p.username FROM sect_members sm JOIN players p ON p.id = sm.player_id WHERE sm.player_id = $1`, pid).Scan(&targetSect, &targetName)
 		if err != nil || targetSect != sectID {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử này không thuộc tông môn của bạn!"})
@@ -269,9 +288,9 @@ func DefendSectMine(c *gin.Context) {
 		}
 
 		var existingID string
-		err = tx.QueryRow(`SELECT id FROM sect_mine_defenders WHERE player_id = $1 AND defender_type = 'member'`, pid).Scan(&existingID)
+		err = tx.QueryRow(`SELECT id FROM sect_defenders WHERE player_id = $1 AND defender_type = 'member'`, pid).Scan(&existingID)
 		if err == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử này đang phòng thủ một mỏ khác!"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử này đã đang phòng thủ!"})
 			return
 		}
 
@@ -283,14 +302,14 @@ func DefendSectMine(c *gin.Context) {
 		power := computeMemberPower(&player)
 
 		_, err = tx.Exec(`
-			INSERT INTO sect_mine_defenders (mine_id, sect_id, defender_type, player_id, name, power, assigned_at)
-			VALUES ($1, $2, 'member', $3, $4, $5, now())
-		`, req.MineID, sectID, pid, targetName, power)
+			INSERT INTO sect_defenders (sect_id, defender_type, player_id, name, power, assigned_at)
+			VALUES ($1, 'member', $2, $3, $4, now())
+		`, sectID, pid, targetName, power)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign defender: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign defender"})
 			return
 		}
-		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s đã được phong làm phòng thủ cho %s.", targetName, mineNameByID(req.MineID)))
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s đã được phong làm thủ hộ tông môn.", targetName))
 	case "beast":
 		if req.MonsterID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu thần thú cần thuê!"})
@@ -306,29 +325,25 @@ func DefendSectMine(c *gin.Context) {
 		cost := int64(rank) * 500
 		var funds int64
 		err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1`, sectID).Scan(&funds)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect funds"})
-			return
-		}
-		if funds < cost {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Quỹ tông môn không đủ để thuê thần thú hạng %d (cần %d Quỹ)!", rank, cost)})
+		if err != nil || funds < cost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Quỹ tông môn không đủ (cần %d Quỹ)!", cost)})
 			return
 		}
 
 		mon, merr := db.LoadMonsterTemplate(tx, req.MonsterID)
 		if merr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy thần thú này!"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy thần thú!"})
 			return
 		}
 		power := computeBeastPower(mon, rank, 1)
 		name := fmt.Sprintf("%s (Hạng %d)", mon.Name, rank)
 
 		_, err = tx.Exec(`
-			INSERT INTO sect_mine_defenders (mine_id, sect_id, defender_type, name, monster_id, monster_rank, monster_sub_rank, power, assigned_at)
-			VALUES ($1, $2, 'beast', $3, $4, $5, 1, $6, now())
-		`, req.MineID, sectID, name, req.MonsterID, rank, power)
+			INSERT INTO sect_defenders (sect_id, defender_type, name, monster_id, monster_rank, monster_sub_rank, power, assigned_at)
+			VALUES ($1, 'beast', $2, $3, $4, 1, $5, now())
+		`, sectID, name, req.MonsterID, rank, power)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hire guardian beast: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hire beast"})
 			return
 		}
 		_, err = tx.Exec(`UPDATE sects SET funds = funds - $1 WHERE id = $2`, cost, sectID)
@@ -336,9 +351,9 @@ func DefendSectMine(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct funds"})
 			return
 		}
-		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Tông môn đã thuê %s canh giữ %s.", name, mineNameByID(req.MineID)))
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Tông môn đã thuê %s làm thần thú hộ sơn.", name))
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại phòng thủ không hợp lệ (member hoặc beast)!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại phòng thủ không hợp lệ!"})
 		return
 	}
 
@@ -350,16 +365,7 @@ func DefendSectMine(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã bố trí phòng thủ thành công!"})
 }
 
-func mineNameByID(mineID int) string {
-	var name string
-	if err := db.DB.QueryRow(`SELECT name FROM sect_mines WHERE id = $1`, mineID).Scan(&name); err != nil {
-		return "Lãnh địa"
-	}
-	return name
-}
-
-// UndefendSectMine removes a defender from a mine.
-func UndefendSectMine(c *gin.Context) {
+func UndefendSect(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -392,17 +398,13 @@ func UndefendSectMine(c *gin.Context) {
 	}
 
 	var dSectID string
-	err = db.DB.QueryRow(`SELECT sect_id FROM sect_mine_defenders WHERE id = $1`, did).Scan(&dSectID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phòng thủ này!"})
-		return
-	}
-	if dSectID != sectID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Phòng thủ này thuộc tông môn khác!"})
+	err = db.DB.QueryRow(`SELECT sect_id FROM sect_defenders WHERE id = $1`, did).Scan(&dSectID)
+	if err != nil || dSectID != sectID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Phòng thủ này thuộc tông môn khác hoặc không tồn tại!"})
 		return
 	}
 
-	_, err = db.DB.Exec(`DELETE FROM sect_mine_defenders WHERE id = $1`, did)
+	_, err = db.DB.Exec(`DELETE FROM sect_defenders WHERE id = $1`, did)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể rút phòng thủ"})
 		return
@@ -411,7 +413,65 @@ func UndefendSectMine(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã rút phòng thủ!"})
 }
 
-func AttackSectMine(c *gin.Context) {
+// ToggleDefendSect lets a member toggle their is_defending flag.
+// Requires the player to be standing at their sect's location.
+func ToggleDefendSect(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var sectID string
+	var isDefending bool
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id, is_defending FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &isDefending)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	// If turning ON, check player location == sect location
+	if !isDefending {
+		var sectRegion string
+		var sectX, sectY int
+		err = db.DB.QueryRowContext(c.Request.Context(), `SELECT region, map_x, map_y FROM sects WHERE id = $1`, sectID).Scan(&sectRegion, &sectX, &sectY)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy tông môn!"})
+			return
+		}
+
+		var pRegion string
+		var pX, pY int
+		err = db.DB.QueryRowContext(c.Request.Context(), `SELECT current_region, x, y FROM players WHERE id = $1`, playerID).Scan(&pRegion, &pX, &pY)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin đạo hữu!"})
+			return
+		}
+
+		if pRegion != sectRegion || pX != sectX || pY != sectY {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu phải đứng tại tọa độ Tông Môn mới có thể trấn thủ!"})
+			return
+		}
+	}
+
+	_, err = db.DB.ExecContext(c.Request.Context(), `UPDATE sect_members SET is_defending = NOT is_defending WHERE player_id = $1`, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cập nhật trạng thái thất bại"})
+		return
+	}
+
+	newState := !isDefending
+	msg := "Đã tắt trạng thái Trấn Thủ Tông Môn."
+	if newState {
+		msg = "Đã bật Trấn Thủ Tông Môn! Đạo hữu sẽ tham chiến khi Tông Môn bị tấn công."
+	}
+	c.JSON(http.StatusOK, gin.H{"message": msg, "is_defending": newState})
+}
+
+// AttackSect initiates real turn-based combat against a target sect.
+// Enemies = Guardian Beast + sect members with is_defending=true at sect location.
+// Allies = attacker + party members + pets (loaded by StartCombat).
+func AttackSect(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -419,8 +479,7 @@ func AttackSectMine(c *gin.Context) {
 	}
 
 	var req struct {
-		MineID     int    `json:"mine_id"`
-		AttackerID string `json:"attacker_id"`
+		TargetSectID string `json:"target_sect_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -434,191 +493,298 @@ func AttackSectMine(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	// Check attacker belongs to a sect
+	var mySectID string
+	err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&mySectID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn phải gia nhập Tông môn mới có thể phát động chiến tranh!"})
 		return
 	}
 
-	// Only leadership can launch territory attacks.
-	if !canManageSect(callerRank) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão/Hộ Pháp/Chưởng Môn mới được phát động công kích lãnh địa!"})
+	if mySectID == req.TargetSectID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đánh tông môn của chính mình!"})
 		return
 	}
 
-	// Resolve who actually fights: default = the leader launching, else the chosen member.
-	attackerID := playerID
-	if req.AttackerID != "" {
-		aid, perr := uuid.Parse(req.AttackerID)
-		if perr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "attacker_id không hợp lệ"})
-			return
-		}
-		var aSectID, aRank string
-		err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, aid).Scan(&aSectID, &aRank)
-		if err != nil || aSectID != sectID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử được chọn không thuộc tông môn của bạn!"})
-			return
-		}
-		if aRank == "NGOAI_MON" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Ngoại môn đệ tử không thể tham gia tranh đoạt mỏ khoáng!"})
-			return
-		}
-		attackerID = aid
-	}
-
-	var occupierSectID sql.NullString
-	var shieldUntil sql.NullTime
-	var rarity string
-	err = tx.QueryRow(`SELECT occupier_sect_id, shield_until, rarity FROM sect_mines WHERE id = $1 FOR UPDATE`, req.MineID).Scan(&occupierSectID, &shieldUntil, &rarity)
+	// Load target sect
+	var targetShield sql.NullTime
+	var targetBuildings []byte
+	var targetFunds int64
+	var targetName, targetRegion string
+	var targetMapX, targetMapY, targetLevel int
+	err = tx.QueryRow(`SELECT name, region, map_x, map_y, level, shield_until, buildings, funds FROM sects WHERE id = $1 FOR UPDATE`, req.TargetSectID).Scan(
+		&targetName, &targetRegion, &targetMapX, &targetMapY, &targetLevel, &targetShield, &targetBuildings, &targetFunds)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mỏ khoáng!"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tông môn mục tiêu không tồn tại!"})
 		return
 	}
 
-	if occupierSectID.Valid && occupierSectID.String == sectID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn của bạn đã chiếm đóng mỏ khoáng này rồi!"})
+	if targetShield.Valid && time.Now().Before(targetShield.Time) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn mục tiêu đang trong thời gian Hộ Sơn Đại Trận bảo hộ!"})
 		return
 	}
 
-	if shieldUntil.Valid && time.Now().Before(shieldUntil.Time) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ khoáng này đang trong thời gian bảo hộ!"})
-		return
-	}
-
-	now := time.Now()
-
-	// Unoccupied mine → capture directly (preserves legacy behavior).
-	if !occupierSectID.Valid {
-		newShieldUntil := now.Add(30 * time.Minute)
-		_, err = tx.Exec(`UPDATE sect_mines SET occupier_sect_id = $1, occupied_at = $2, shield_until = $3, last_claimed_at = $2 WHERE id = $4`, sectID, now, newShieldUntil, req.MineID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update mine occupier"})
-			return
-		}
-		_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, attackerID)
-		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "Đã chiếm đóng mỏ khoáng thành công! Nhân Khí +5."})
-		return
-	}
-
-	// Occupied mine → power showdown against the defenders.
-	defenders, totalDefense, derr := loadMineDefendersTx(tx, req.MineID)
-	if derr != nil {
-		totalDefense = 0
-	}
-	if totalDefense < 1 {
-		totalDefense = sectMineBaseDefense(rarity)
-	}
-
-	attacker, aerr := evaluateManaTxEquipped(tx, attackerID)
+	// Load attacker and check position
+	attacker, aerr := evaluateManaTxEquipped(tx, playerID)
 	if aerr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
-	attackerPower := computeMemberPower(&attacker)
 
-	variance := 0.9 + rand.Float64()*0.2 // ±10%
-	attackerEffective := attackerPower * variance
-
-	if attackerEffective >= totalDefense {
-		// Victory → capture
-		newShieldUntil := now.Add(30 * time.Minute)
-		_, err = tx.Exec(`UPDATE sect_mines SET occupier_sect_id = $1, occupied_at = $2, shield_until = $3, last_claimed_at = $2 WHERE id = $4`, sectID, now, newShieldUntil, req.MineID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update mine occupier"})
-			return
-		}
-
-		// Clear old defenders
-		_, _ = tx.Exec(`DELETE FROM sect_mine_defenders WHERE mine_id = $1`, req.MineID)
-
-		_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, attackerID)
-		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"message":        fmt.Sprintf("Đã phá vỡ phòng thủ (%.0f vs %.0f) và chiếm đóng mỏ khoáng! Nhân Khí +10.", attackerEffective, totalDefense),
-			"won":            true,
-			"attacker_power": attackerEffective,
-			"defense_power":  totalDefense,
-		})
+	if attacker.CurrentRegion != targetRegion || attacker.X != targetMapX || attacker.Y != targetMapY {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu phải di chuyển đến Tông Môn mục tiêu mới có thể khiêu chiến!"})
 		return
 	}
 
-	// Defeat → 15 min cooldown + reward defenders.
-	cooldownUntil := now.Add(15 * time.Minute)
-	_, err = tx.Exec(`UPDATE sect_mines SET shield_until = $1 WHERE id = $2`, cooldownUntil, req.MineID)
+	if attacker.ActiveCombat != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trận chiến khác!"})
+		return
+	}
+
+	// Build Guardian Beast as main enemy
+	arrLvl := getBuildingLvl(targetBuildings, "defensive_array")
+	guardian := sectGuardianCombatant(targetName, targetLevel, arrLvl)
+
+	// Build combat state with guardian as main enemy
+	sectWarCombat := models.CombatState{
+		EnemyTemplateID: guardian.ID,
+		EnemyName:       guardian.Name,
+		EnemyType:       "SECT_WAR",
+		CombatMode:      "real",
+		EnemyHP:         guardian.HP,
+		EnemyMaxHP:      guardian.MaxHP,
+		EnemyMana:       guardian.CurrentMana,
+		EnemyMaxMana:    guardian.MaxMana,
+		EnemyDamage:     guardian.BaseAttack,
+		EnemyDefense:    guardian.BaseDefense,
+		EnemySpeed:      guardian.Speed,
+		EnemyRank:       guardian.Rank,
+		EnemySubRank:    guardian.SubRank,
+		AIProfile:       "aggressive",
+		TargetSectID:    req.TargetSectID,
+	}
+
+	// Initialize combat (this populates Allies from party + pets)
+	attacker.ActiveCombat = StartCombat(tx, &sectWarCombat, &attacker)
+
+	// Load defending members at sect location as additional enemies
+	defRows, derr := tx.Query(`
+		SELECT sm.player_id FROM sect_members sm
+		JOIN players p ON sm.player_id = p.id
+		WHERE sm.sect_id = $1 AND sm.is_defending = true
+		  AND p.current_region = $2 AND p.x = $3 AND p.y = $4 AND p.hp > 0
+		LIMIT 8
+	`, req.TargetSectID, targetRegion, targetMapX, targetMapY)
+	if derr == nil {
+		defer defRows.Close()
+		for defRows.Next() {
+			var defID uuid.UUID
+			if defRows.Scan(&defID) != nil {
+				continue
+			}
+			var defPlayer models.Player
+			errDef := tx.QueryRow(`
+				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.path_masteries,
+				       `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.base_hp, p.combat_settings, p.avatar_url
+				FROM players p
+				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+				WHERE p.id = $1`, defID).Scan(
+				&defPlayer.ID, &defPlayer.Username, &defPlayer.Rank, &defPlayer.SubRank,
+				&defPlayer.HP, &defPlayer.MaxMana, &defPlayer.CurrentMana, &defPlayer.PathMasteries,
+				&defPlayer.GuInventory, &defPlayer.DaoMarks, &defPlayer.BaseHP, &defPlayer.CombatSettings, &defPlayer.AvatarURL,
+			)
+			if errDef != nil || defPlayer.HP <= 0 {
+				continue
+			}
+			defStats := CalculatePlayerStats(&defPlayer)
+			defCombatant := models.CombatantFromPlayer(&defPlayer, defStats)
+			defCombatant.Kind = "Normal" // treated as enemy combatant
+			defCombatant.CombatSettings = &defPlayer.CombatSettings
+			defCombatant.GuInventory = filterGuLoadout(defPlayer.GuInventory, defPlayer.CombatSettings)
+			attacker.ActiveCombat.Enemies = append(attacker.ActiveCombat.Enemies, defCombatant)
+		}
+	}
+
+	// Re-assign grid positions for enemies
+	enemySlots := [][2]int{
+		{2, 3}, {2, 1}, {1, 1}, {3, 1}, {2, 2}, {1, 2}, {3, 2}, {1, 3}, {3, 3},
+	}
+	for idx := range attacker.ActiveCombat.Enemies {
+		if idx < len(enemySlots) {
+			attacker.ActiveCombat.Enemies[idx].GridX = enemySlots[idx][0]
+			attacker.ActiveCombat.Enemies[idx].GridY = enemySlots[idx][1]
+		}
+		if attacker.ActiveCombat.Enemies[idx].Speed == 0 {
+			attacker.ActiveCombat.Enemies[idx].Speed = 8.0 + float64(attacker.ActiveCombat.Enemies[idx].Rank)*2.0
+		}
+	}
+
+	combatBytes, _ := json.Marshal(attacker.ActiveCombat)
+	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 5, $2) WHERE id = $3", string(combatBytes), MaxHumanQi, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update mine cooldown"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
 		return
 	}
 
-	// Bonus contribution for member defenders who repelled the attack.
-	if len(defenders) > 0 {
-		ids := make([]uuid.UUID, 0, len(defenders))
-		for _, d := range defenders {
-			if d.PlayerID != nil {
-				if pid, perr := uuid.Parse(*d.PlayerID); perr == nil {
-					ids = append(ids, pid)
-				}
-			}
-		}
-		if len(ids) > 0 {
-			for _, pid := range ids {
-				_, _ = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + 20 WHERE player_id = $1`, pid)
-			}
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
+	err = tx.Commit()
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":        fmt.Sprintf("Công kích thất bại! Phòng thủ quá mạnh (%.0f vs %.0f). Trận pháp hộ sơn khởi động 15 phút.", attackerEffective, totalDefense),
-		"won":            false,
-		"attacker_power": attackerEffective,
-		"defense_power":  totalDefense,
-	})
+	defCount := len(attacker.ActiveCombat.Enemies) - 1 // minus guardian
+	msg := fmt.Sprintf("Khiêu chiến Tông Môn %s! Đối mặt Hộ Sơn Thần Thú", targetName)
+	if defCount > 0 {
+		msg += fmt.Sprintf(" cùng %d đệ tử trấn thủ", defCount)
+	}
+	msg += ". Nhân Khí +5."
+
+	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": msg})
 }
 
-// loadMineDefendersTx is like loadMineDefenders but runs within the given tx.
-func loadMineDefendersTx(tx *sql.Tx, mineID int) ([]SectMineDefender, float64, error) {
-	rows, err := tx.Query(`
-		SELECT id, defender_type, COALESCE(player_id::text, ''), name, COALESCE(monster_id, ''),
-		       monster_rank, monster_sub_rank, power, assigned_at
-		FROM sect_mine_defenders
-		WHERE mine_id = $1
-		ORDER BY assigned_at ASC
-	`, mineID)
-	if err != nil {
-		return nil, 0, err
+// ApplySectWarVictory is called by auto-combat resolution when attacker wins a SECT_WAR combat.
+// It plunders funds and vault_materials from the target sect.
+func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.CombatState) []string {
+	var logs []string
+	if combat == nil || combat.TargetSectID == "" {
+		return logs
 	}
-	defer rows.Close()
 
-	var defenders []SectMineDefender
-	total := 0.0
-	for rows.Next() {
-		var d SectMineDefender
-		var playerID, monsterID string
-		if err := rows.Scan(&d.ID, &d.DefenderType, &playerID, &d.Name, &monsterID, &d.MonsterRank, &d.MonsterSubRank, &d.Power, &d.AssignedAt); err != nil {
-			continue
-		}
-		if playerID != "" {
-			d.PlayerID = &playerID
-		}
-		if monsterID != "" {
-			d.MonsterID = &monsterID
-		}
-		defenders = append(defenders, d)
-		total += d.Power
+	var mySectID string
+	err := tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, player.ID).Scan(&mySectID)
+	if err != nil {
+		return logs
 	}
-	return defenders, total, rows.Err()
+
+	var targetFunds int64
+	var targetBuildings []byte
+	var targetMaterials []byte
+	var targetName string
+	err = tx.QueryRow(`SELECT name, funds, buildings, vault_materials FROM sects WHERE id = $1 FOR UPDATE`, combat.TargetSectID).Scan(&targetName, &targetFunds, &targetBuildings, &targetMaterials)
+	if err != nil {
+		return logs
+	}
+
+	arrLvl := getBuildingLvl(targetBuildings, "defensive_array")
+	treasuryLvl := getBuildingLvl(targetBuildings, "treasury")
+
+	// Calculate plunder percentage (higher treasury = less plunder)
+	plunderPercent := 0.20 - (float64(treasuryLvl) * 0.02)
+	if plunderPercent < 0.05 {
+		plunderPercent = 0.05
+	}
+
+	// Plunder funds
+	stolenFunds := int64(float64(targetFunds) * plunderPercent)
+
+	// Plunder vault_materials
+	var targetMats map[string]interface{}
+	_ = json.Unmarshal(targetMaterials, &targetMats)
+	stolenMats := make(map[string]int64)
+	for key, val := range targetMats {
+		var amount int64
+		switch v := val.(type) {
+		case float64:
+			amount = int64(v)
+		case int64:
+			amount = v
+		}
+		stolen := int64(float64(amount) * plunderPercent)
+		if stolen > 0 {
+			stolenMats[key] = stolen
+			targetMats[key] = amount - stolen
+		}
+	}
+
+	now := time.Now()
+	shieldHours := time.Duration(12 + arrLvl*2)
+	newShield := now.Add(shieldHours * time.Hour)
+
+	// Update target sect: deduct funds, update materials, set shield, reset defenders
+	updatedMats, _ := json.Marshal(targetMats)
+	_, _ = tx.Exec(`UPDATE sects SET funds = funds - $1, vault_materials = $2, shield_until = $3 WHERE id = $4`,
+		stolenFunds, string(updatedMats), newShield, combat.TargetSectID)
+
+	// Credit attacker's sect
+	_, _ = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, stolenFunds, mySectID)
+
+	// Transfer stolen materials to attacker's sect vault
+	if len(stolenMats) > 0 {
+		var mySectMats []byte
+		err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1 FOR UPDATE`, mySectID).Scan(&mySectMats)
+		if err == nil {
+			var myMats map[string]interface{}
+			_ = json.Unmarshal(mySectMats, &myMats)
+			if myMats == nil {
+				myMats = make(map[string]interface{})
+			}
+			for key, stolen := range stolenMats {
+				existing := int64(0)
+				if v, ok := myMats[key]; ok {
+					switch ev := v.(type) {
+					case float64:
+						existing = int64(ev)
+					case int64:
+						existing = ev
+					}
+				}
+				myMats[key] = existing + stolen
+			}
+			updatedMyMats, _ := json.Marshal(myMats)
+			_, _ = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, string(updatedMyMats), mySectID)
+		}
+	}
+
+	// Reset defending status for all target sect members
+	_, _ = tx.Exec(`UPDATE sect_members SET is_defending = false WHERE sect_id = $1`, combat.TargetSectID)
+
+	// Award attacker
+	_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, player.ID)
+	_, _ = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + 200 WHERE player_id = $1`, player.ID)
+
+	logs = append(logs, fmt.Sprintf("Công phá Tông Môn %s thành công!", targetName))
+	logs = append(logs, fmt.Sprintf("Cướp được %d Quỹ Tông Môn.", stolenFunds))
+	if len(stolenMats) > 0 {
+		matMsg := "Cướp tài nguyên kho tông:"
+		for key, val := range stolenMats {
+			matMsg += fmt.Sprintf(" %s x%d,", key, val)
+		}
+		logs = append(logs, matMsg)
+	}
+
+	// Notifications
+	_ = SendSystemMessage("sect", sql.NullString{String: mySectID, Valid: true},
+		fmt.Sprintf("Tông môn ta đã đánh chiếm %s! Cướp được %d Quỹ.", targetName, stolenFunds))
+	_ = SendSystemMessage("sect", sql.NullString{String: combat.TargetSectID, Valid: true},
+		fmt.Sprintf("Tông môn bị đạo hữu %s tấn công và thất thủ! Mất %d Quỹ. Hộ Sơn Đại Trận bảo hộ trong %d giờ.", player.Username, stolenFunds, shieldHours))
+
+	return logs
+}
+
+// ApplySectWarDefeat is called when attacker loses a SECT_WAR combat.
+// Awards defending members contribution points and grants a short shield.
+func ApplySectWarDefeat(tx *sql.Tx, player *models.Player, combat *models.CombatState) []string {
+	var logs []string
+	if combat == nil || combat.TargetSectID == "" {
+		return logs
+	}
+
+	now := time.Now()
+	cooldownUntil := now.Add(4 * time.Hour)
+	_, _ = tx.Exec(`UPDATE sects SET shield_until = $1 WHERE id = $2`, cooldownUntil, combat.TargetSectID)
+
+	// Reward defending members
+	_, _ = tx.Exec(`
+		UPDATE sect_members SET contribution_points = contribution_points + 100
+		WHERE sect_id = $1 AND is_defending = true
+	`, combat.TargetSectID)
+
+	var targetName string
+	_ = tx.QueryRow(`SELECT name FROM sects WHERE id = $1`, combat.TargetSectID).Scan(&targetName)
+
+	_ = SendSystemMessage("sect", sql.NullString{String: combat.TargetSectID, Valid: true},
+		fmt.Sprintf("Tông môn đã chống lại cuộc tấn công của đạo hữu %s! Tất cả đệ tử trấn thủ nhận thưởng 100 Điểm Cống Hiến.", player.Username))
+
+	logs = append(logs, fmt.Sprintf("Khiêu chiến Tông Môn %s thất bại! Hộ Sơn Đại Trận quá vững chãi.", targetName))
+	return logs
 }

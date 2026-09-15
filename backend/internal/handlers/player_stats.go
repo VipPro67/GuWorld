@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -175,6 +176,33 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		}
 		if st.ID == "buff_speed" {
 			addSrc("speed", "status:"+st.ID, st.Source, st.Value, 1, 1)
+		}
+	}
+
+	// Sect Territory AoE Buff
+	// For a real production game, this might be cached in memory to avoid DB lookups,
+	// but here we just do a quick query.
+	if player.ID.String() != "" {
+		var sx, sy, mainHallLvl int
+		var sRegion string
+		err := db.DB.QueryRow(`
+			SELECT s.map_x, s.map_y, s.region, (s.buildings->>'main_hall')::int
+			FROM sect_members sm
+			JOIN sects s ON sm.sect_id = s.id
+			WHERE sm.player_id = $1
+		`, player.ID).Scan(&sx, &sy, &sRegion, &mainHallLvl)
+		if err == nil && sRegion == player.CurrentRegion {
+			// e.g. Radius = 5 + main_hall level
+			radius := 5 + mainHallLvl
+			dx := player.X - sx
+			dy := player.Y - sy
+			if float64(dx*dx+dy*dy) <= float64(radius*radius) {
+				// Player is inside their sect's territory!
+				// Give +10% base attack/defense buff, plus 2% per main hall level
+				buffMult := 0.10 + float64(mainHallLvl)*0.02
+				addSrc("attack", "sect_territory", "Hộ Sơn", baseAttack*buffMult, 1, 1)
+				addSrc("defense", "sect_territory", "Hộ Sơn", baseDefense*buffMult, 1, 1)
+			}
 		}
 	}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets } from "pixi.js";
+import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
 import { useWorldStore, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
 import { useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
 
@@ -43,6 +43,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const stageRef = useRef<Container>(new Container());
   const regionsContainerRef = useRef<Container>(new Container());
   const objectsContainerRef = useRef<Container>(new Container());
+  const sectsContainerRef = useRef<Container>(new Container());
   const dropsContainerRef = useRef<Container>(new Container());
   const monstersContainerRef = useRef<Container>(new Container());
   const playersContainerRef = useRef<Container>(new Container());
@@ -100,6 +101,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const guDictionary = useGameStore((s) => s.guDictionary);
   const itemDictionary = useGameStore((s) => s.itemDictionary);
   const groundDrops = useGameStore((s) => s.groundDrops);
+  const sectMap = useGameStore((s) => s.sectMap);
+  const fetchSectsMap = useGameStore((s) => s.fetchSectsMap);
   const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
   const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
   const selectedTarget = useWorldStore((s) => s.selectedTarget);
@@ -414,6 +417,26 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     performMoveRef.current = performMove;
   }, [performMove]);
 
+  const handleObjectClick = useCallback(
+    (obj: WorldObject) => {
+      const s = useWorldStore.getState();
+      if (s.selectedObject && s.selectedObject.x === obj.x && s.selectedObject.y === obj.y) {
+        if (obj.x === (gamePlayer?.x ?? 0) && obj.y === (gamePlayer?.y ?? 0)) {
+          if (obj.cell_type === "GroundDrop") {
+            const dropId = obj.dropData?.id || obj.id;
+            if (dropId) useGameStore.getState().lootGroundDrop(dropId);
+          }
+          return;
+        }
+        moveTargetRef.current = { x: obj.x, y: obj.y };
+        performMove(obj.x, obj.y);
+      } else {
+        selectObject(obj);
+      }
+    },
+    [performMove, selectObject, gamePlayer],
+  );
+
   const handleBackgroundClick = useCallback(
     (app: Application, event: FederatedPointerEvent) => {
       const pos = event.global;
@@ -436,8 +459,25 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const persistent = s.objects.find((c) => c.x === tx && c.y === ty);
       const nearbyPl = s.nearbyPlayers.find((p) => p.x === tx && p.y === ty);
       const dropOnTile = useGameStore.getState().groundDrops.find((d) => d.x === tx && d.y === ty);
+      const currentRegion = gamePlayer?.current_region || "";
+      const sectOnTile = useGameStore.getState().sectMap.find(
+        (sm) => sm.region === currentRegion && sm.map_x === tx && sm.map_y === ty
+      );
 
-      if (nearby || persistent || nearbyPl || dropOnTile) {
+      if (nearby || persistent || nearbyPl || dropOnTile || sectOnTile) {
+        if (sectOnTile) {
+          handleObjectClick({
+            id: sectOnTile.id,
+            region_id: sectOnTile.region,
+            x: sectOnTile.map_x,
+            y: sectOnTile.map_y,
+            cell_type: "Sect",
+            content_id: sectOnTile.name,
+            rank: sectOnTile.level,
+          });
+          return;
+        }
+
         const cellType = nearby ? nearby.cell_type : persistent ? persistent.cell_type : dropOnTile ? "GroundDrop" : "Player";
         const contentId = nearby ? nearby.content : persistent ? persistent.content_id : dropOnTile ? dropOnTile.id : nearbyPl?.username || "";
         const rank = nearby?.rank || persistent?.rank || 1;
@@ -507,7 +547,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       moveTargetRef.current = { x: tx, y: ty };
       performMove(tx, ty);
     },
-    [performMove, gamePlayer],
+    [performMove, gamePlayer, handleObjectClick, monsterDictionary, guDictionary],
   );
 
   useEffect(() => {
@@ -562,26 +602,6 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [performMove]);
-
-  const handleObjectClick = useCallback(
-    (obj: WorldObject) => {
-      const s = useWorldStore.getState();
-      if (s.selectedObject && s.selectedObject.x === obj.x && s.selectedObject.y === obj.y) {
-        if (obj.x === (gamePlayer?.x ?? 0) && obj.y === (gamePlayer?.y ?? 0)) {
-          if (obj.cell_type === "GroundDrop") {
-            const dropId = obj.dropData?.id || obj.id;
-            if (dropId) useGameStore.getState().lootGroundDrop(dropId);
-          }
-          return;
-        }
-        moveTargetRef.current = { x: obj.x, y: obj.y };
-        performMove(obj.x, obj.y);
-      } else {
-        selectObject(obj);
-      }
-    },
-    [performMove, selectObject, gamePlayer],
-  );
 
   const drawRegions = useCallback((regs: typeof regions) => {
     const container = regionsContainerRef.current;
@@ -723,6 +743,100 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       }
     },
     [handleObjectClick, monsterDictionary, itemDictionary, guDictionary],
+  );
+
+  const drawSects = useCallback(
+    (sects: typeof sectMap) => {
+      const container = sectsContainerRef.current;
+      container.removeChildren();
+      const currentRegion = gamePlayer?.current_region;
+      if (!sects || !currentRegion) return;
+
+      const mySectId = useGameStore.getState().mySectStatus?.sect?.id;
+      for (const s of sects) {
+        if (s.region !== currentRegion) continue;
+
+        const sectGroup = new Container();
+
+        // 1. Territory AoE Radius circle - NON-INTERACTIVE
+        const territoryG = new Graphics();
+        const isMySect = s.id === mySectId;
+        const mainHallLvl = s.buildings?.main_hall || s.level || 1;
+        const territoryRadius = 5 + mainHallLvl;
+
+        territoryG.circle(0, 0, territoryRadius);
+        territoryG.fill({ color: isMySect ? 0x3b82f6 : 0xf59e0b, alpha: 0.08 });
+        territoryG.stroke({ color: isMySect ? 0x60a5fa : 0xfbbf24, width: 0.15, alpha: 0.4 });
+        territoryG.eventMode = "none";
+        sectGroup.addChild(territoryG);
+
+        // 2. Pagoda / Sect fortress building graphic - INTERACTIVE
+        const g = new Graphics();
+        const size = 1.2;
+        // Outer glowing aura
+        g.circle(0, 0, size + 0.3);
+        g.fill({ color: isMySect ? 0x2563eb : 0xd97706, alpha: 0.25 });
+
+        // Fortress Base
+        g.rect(-size / 2, -size / 4, size, size * 0.75);
+        g.fill({ color: 0x27272a });
+        g.stroke({ color: isMySect ? 0x3b82f6 : 0xf59e0b, width: 0.1 });
+
+        // Multi-tiered Pagoda Roofs
+        g.poly([0, -size * 0.6, size * 0.8, -size / 4, -size * 0.8, -size / 4]);
+        g.fill({ color: isMySect ? 0x1d4ed8 : 0xb45309 });
+        g.stroke({ color: isMySect ? 0x93c5fd : 0xfde047, width: 0.08 });
+
+        g.poly([0, -size * 1.1, size * 0.5, -size * 0.6, -size * 0.5, -size * 0.6]);
+        g.fill({ color: isMySect ? 0x2563eb : 0xd97706 });
+        g.stroke({ color: isMySect ? 0xbfdbfe : 0xfef08a, width: 0.08 });
+
+        // Top spire
+        g.circle(0, -size * 1.15, 0.15);
+        g.fill({ color: 0xfef08a });
+
+        g.hitArea = new Circle(0, 0, 1.2);
+        g.eventMode = "static";
+        g.cursor = "pointer";
+
+        const sectWorldObj: WorldObject = {
+          id: s.id,
+          region_id: s.region,
+          x: s.map_x,
+          y: s.map_y,
+          cell_type: "Sect",
+          content_id: s.name,
+          rank: s.level,
+        };
+
+        g.on("pointerdown", (event) => {
+          event.stopPropagation();
+          handleObjectClick(sectWorldObj);
+        });
+        sectGroup.addChild(g);
+
+        const labelText = `🏯 ${s.name} (Cấp ${s.level || 1})`;
+        const label = new Text({
+          text: labelText,
+          style: {
+            fontSize: 13,
+            fontWeight: "bold",
+            fill: isMySect ? 0x93c5fd : 0xfde047,
+            fontFamily: "sans-serif",
+            stroke: { color: 0x000000, width: 3.5 },
+          },
+        });
+        label.anchor.set(0.5, 1);
+        label.y = -size * 1.3;
+        label.name = "sect-label-text";
+        label.eventMode = "none";
+        sectGroup.addChild(label);
+
+        sectGroup.position.set(s.map_x + 0.5, s.map_y + 0.5);
+        container.addChild(sectGroup);
+      }
+    },
+    [gamePlayer?.current_region, handleObjectClick],
   );
 
   const drawGroundDrops = useCallback(
@@ -1240,9 +1354,17 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       });
       stageRef.current.addChild(bgSprite);
 
+      regionsContainerRef.current.eventMode = "none";
+      fogRef.current.eventMode = "none";
+      rangeRef.current.eventMode = "none";
+      playerRef.current.eventMode = "none";
+      targetRingRef.current.eventMode = "none";
+      skillFxContainerRef.current.eventMode = "none";
+
       stageRef.current.addChild(regionsContainerRef.current);
       stageRef.current.addChild(fogRef.current);
       stageRef.current.addChild(objectsContainerRef.current);
+      stageRef.current.addChild(sectsContainerRef.current);
       stageRef.current.addChild(dropsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
       stageRef.current.addChild(playersContainerRef.current);
@@ -1314,6 +1436,18 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
               for (const sub of child.children) {
                 if (sub instanceof Text) {
                   sub.scale.set(targetScale);
+                }
+              }
+            }
+          }
+
+          // Sect labels
+          for (const child of sectsContainerRef.current.children) {
+            if (child instanceof Container) {
+              for (const sub of child.children) {
+                if (sub.name === "sect-label-text" && sub instanceof Text) {
+                  sub.scale.set(targetScale);
+                  sub.y = -1.8 - (6 * targetScale);
                 }
               }
             }
@@ -1468,6 +1602,15 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     if (!appReady || !appRef.current) return;
     drawPlayers(nearbyPlayers);
   }, [appReady, nearbyPlayers, drawPlayers]);
+
+  useEffect(() => {
+    fetchSectsMap();
+  }, [fetchSectsMap]);
+
+  useEffect(() => {
+    if (!appReady || !appRef.current) return;
+    drawSects(sectMap);
+  }, [appReady, sectMap, drawSects]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;

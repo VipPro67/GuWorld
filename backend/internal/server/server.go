@@ -714,10 +714,13 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			sect.POST("/join-requests/:requestId/action", handlers.ActionJoinRequest)
 			sect.GET("/promotion-requests", handlers.GetPromotionRequests)
 			sect.POST("/promotion-requests/:requestId/action", handlers.ActionPromotionRequest)
-			sect.GET("/mines", handlers.GetSectMines)
-			sect.POST("/mines/defend", handlers.DefendSectMine)
-			sect.POST("/mines/undefend", handlers.UndefendSectMine)
-			sect.POST("/mines/attack", handlers.AttackSectMine)
+			// Sect Warfare & Territories
+			sect.GET("/map", handlers.GetSectsMap)
+			sect.POST("/defend", handlers.DefendSect)
+			sect.POST("/undefend", handlers.UndefendSect)
+			sect.POST("/toggle-defend", handlers.ToggleDefendSect)
+			sect.POST("/attack", handlers.AttackSect)
+			sect.POST("/building/upgrade", handlers.UpgradeSectBuilding)
 		}
 
 		// Feedback — group: 30/min, per player: 20/min

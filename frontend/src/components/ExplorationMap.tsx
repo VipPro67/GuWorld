@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
-import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home, Gift, Skull, Package } from "lucide-react";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home, Gift, Skull, Package, Shield, X } from "lucide-react";
 
 import { LogConsole } from "./LogConsole";
 import { GamePanel, GameButton } from "@/components/ui";
@@ -59,10 +59,12 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     world_height?: number;
   } | null>(null);
 
-  const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm, addToast, groundDrops, fetchGroundDrops, lootGroundDrop } = useGameStore();
+  const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm, addToast, groundDrops, fetchGroundDrops, lootGroundDrop, sectMap, fetchSectsMap, attackSect, sectMembers, fetchSectMembers, mySectStatus } = useGameStore();
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
+  const [attackTargetSect, setAttackTargetSect] = useState<any | null>(null);
+  const [attackPlayerId, setAttackPlayerId] = useState("");
   const logs = useGameStore((state) => state.logs);
   const guDictionary = useGameStore((state) => state.guDictionary);
   const itemDictionary = useGameStore((state) => state.itemDictionary);
@@ -103,6 +105,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
       setGridData(data);
     }
     fetchGroundDrops();
+    fetchSectsMap();
   };
 
   useEffect(() => {
@@ -494,6 +497,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                       ) || [];
 
                   const cellDrops = isOutOfBounds ? [] : groundDrops.filter((d) => d.x === x && d.y === y);
+                  const sectOnCell = isOutOfBounds ? null : sectMap.find((s: any) => s.region === player.current_region && s.map_x === x && s.map_y === y);
 
                   return (
                     <div
@@ -513,6 +517,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           ? "Hư vô (Ngoại biên bản đồ)"
                           : `Tọa độ: (${x}, ${y}) ${
                               isPlayerCell ? "[Vị trí của bạn]" : ""
+                            }${
+                              sectOnCell ? ` | Tông Môn: ${sectOnCell.name} (Cấp ${sectOnCell.level})` : ""
                             }${
                               cellData.cell_type !== "Empty"
                                 ? ` | ${
@@ -552,6 +558,20 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             ) : (
                               "Ta"
                             )}
+                          </div>
+                        )}
+                        {sectOnCell && (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAttackTargetSect(sectOnCell);
+                              setAttackPlayerId(player.id);
+                              fetchSectMembers();
+                            }}
+                            className="w-7 h-7 rounded-xl bg-amber-950/90 flex items-center justify-center text-[12px] font-bold border border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.5)] cursor-pointer hover:scale-110 transition-transform overflow-hidden"
+                            title={`Tông Môn: ${sectOnCell.name} (Cấp ${sectOnCell.level}) - Tọa độ (${sectOnCell.map_x}, ${sectOnCell.map_y})\nBấm để Khiêu Chiến Tông Môn!`}
+                          >
+                            🏯
                           </div>
                         )}
                         {otherPlayersOnCell.length > 0 && (
@@ -849,6 +869,64 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           <LogConsole logs={logs} />
         </div>
       </div>
+
+      {/* Challenge Sect Modal */}
+      {attackTargetSect && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4 text-left">
+            <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
+                  <span>🏯</span> Khiêu Chiến Tông Môn — {attackTargetSect.name}
+                </h3>
+                <span className="text-[10px] font-mono text-zinc-500 block mt-0.5">Tọa độ: ({attackTargetSect.map_x}, {attackTargetSect.map_y}) · Cấp {attackTargetSect.level}</span>
+              </div>
+              <button onClick={() => setAttackTargetSect(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+            </div>
+
+            <div className="flex flex-col gap-1 text-xs font-mono bg-zinc-900/40 p-3 rounded-xl border border-zinc-900">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Sức Phòng Thủ Hộ Sơn:</span>
+                <span className="text-rose-400 font-bold">🛡 {Math.round(attackTargetSect.total_defense_power || 0).toLocaleString()}</span>
+              </div>
+              {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() && (
+                <div className="flex justify-between text-rose-400 font-bold mt-1">
+                  <span>Đại Trận Bảo Hộ:</span>
+                  <span>{new Date(attackTargetSect.shield_until).toLocaleTimeString()}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn đệ tử ra trận công kích</label>
+              <select
+                value={attackPlayerId}
+                onChange={(e) => setAttackPlayerId(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-rose-500/50"
+              >
+                {sectMembers
+                  .filter((m) => m.member_rank !== "NGOAI_MON")
+                  .map((m) => (
+                    <option key={m.player_id} value={m.player_id}>
+                      {m.username} ({m.member_rank}) — ⚔ {Math.round(m.power || 0).toLocaleString()}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <button
+              disabled={actionLoading || !attackPlayerId || (attackTargetSect.shield_until ? new Date(attackTargetSect.shield_until).getTime() > Date.now() : false)}
+              onClick={async () => {
+                const ok = await attackSect(attackTargetSect.id, attackPlayerId);
+                if (ok) setAttackTargetSect(null);
+              }}
+              className="w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
+            >
+              {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() ? "Đang Bảo Hộ" : "Phát Động Công Kích Tông Môn"}
+            </button>
+          </div>
+        </div>
+      )}
     </GamePanel>
   );
 };

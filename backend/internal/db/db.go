@@ -141,9 +141,9 @@ func InitSchema() error {
 	if err := seedMineSlots(); err != nil {
 		return fmt.Errorf("seed mine slots: %w", err)
 	}
-	if err := seedSectMines(); err != nil {
-		return fmt.Errorf("seed sect mines: %w", err)
-	}
+	// if err := seedSectMines(); err != nil {
+	// 	return fmt.Errorf("seed sect mines: %w", err)
+	// }
 	if err := backfillWallets(); err != nil {
 		return fmt.Errorf("backfill wallets: %w", err)
 	}
@@ -242,19 +242,19 @@ func seedMineSlots() error {
 }
 
 // seedSectMines seeds the 5 fixed sect mines.
-func seedSectMines() error {
-	if _, err := DB.Exec(`
-	INSERT INTO sect_mines (name, rarity) VALUES
-	('Thái Cổ Tinh Mạch', 'Truyền Thuyết'),
-	('Cửu U Huyết Mạch', 'Sử Thi'),
-	('Thiên Cương Linh Khí Mạch', 'Hiếm'),
-	('Huyền Vũ Thạch Động', 'Hiếm'),
-	('Bách Thảo Tiên Vực', 'Thường')
-	ON CONFLICT (name) DO NOTHING;`); err != nil {
-		return err
-	}
-	return nil
-}
+// func seedSectMines() error {
+// 	if _, err := DB.Exec(`
+// 	INSERT INTO sect_mines (name, rarity) VALUES
+// 	('Thái Cổ Tinh Mạch', 'Truyền Thuyết'),
+// 	('Cửu U Huyết Mạch', 'Sử Thi'),
+// 	('Thiên Cương Linh Khí Mạch', 'Hiếm'),
+// 	('Huyền Vũ Thạch Động', 'Hiếm'),
+// 	('Bách Thảo Tiên Vực', 'Thường')
+// 	ON CONFLICT (name) DO NOTHING;`); err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
 // backfillWallets mirrors each player's stone balances into the wallet table.
 func backfillWallets() error {

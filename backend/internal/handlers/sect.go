@@ -27,6 +27,10 @@ type Sect struct {
 	RequireApproval          bool            `json:"require_approval"`
 	RequirePromotionApproval bool            `json:"require_promotion_approval"`
 	LastVaultDecayAt         *time.Time      `json:"last_vault_decay_at,omitempty"`
+	MapX                     int             `json:"map_x"`
+	MapY                     int             `json:"map_y"`
+	ShieldUntil              *time.Time      `json:"shield_until,omitempty"`
+	Buildings                json.RawMessage `json:"buildings,omitempty"`
 }
 
 type SectJoinRequest struct {
@@ -61,6 +65,7 @@ type SectMember struct {
 	ContributionPoints int64     `json:"contribution_points"`
 	MasterID           *string   `json:"master_id"`
 	JoinedAt           time.Time `json:"joined_at"`
+	IsDefending        bool      `json:"is_defending"`
 }
 
 type SectMission struct {
@@ -214,7 +219,7 @@ type VaultBuyRequest = ExchangeVaultItemRequest
 
 // GetSects lists all available sects
 func GetSects(c *gin.Context) {
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval FROM sects`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings FROM sects`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sects: " + err.Error()})
 		return
@@ -224,7 +229,7 @@ func GetSects(c *gin.Context) {
 	var sects []Sect
 	for rows.Next() {
 		var s Sect
-		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval); err == nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil, &s.Buildings); err == nil {
 			sects = append(sects, s)
 		}
 	}
@@ -396,10 +401,10 @@ func GetMySectStatus(c *gin.Context) {
 
 	var m SectMember
 	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, sect_id, player_id, member_rank, contribution_points, master_id, joined_at
+		SELECT id, sect_id, player_id, member_rank, contribution_points, master_id, joined_at, is_defending
 		FROM sect_members
 		WHERE player_id = $1
-	`, playerID).Scan(&m.ID, &m.SectID, &m.PlayerID, &m.MemberRank, &m.ContributionPoints, &m.MasterID, &m.JoinedAt)
+	`, playerID).Scan(&m.ID, &m.SectID, &m.PlayerID, &m.MemberRank, &m.ContributionPoints, &m.MasterID, &m.JoinedAt, &m.IsDefending)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Check if they have a pending join request
@@ -429,10 +434,10 @@ func GetMySectStatus(c *gin.Context) {
 
 	var s Sect
 	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval
+		SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings
 		FROM sects
 		WHERE id = $1
-	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval)
+	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil, &s.Buildings)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return

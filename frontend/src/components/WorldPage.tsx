@@ -39,6 +39,7 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
   Empty:      { icon: "🏯",  label: "Địa Điểm",        color: "text-amber-300",   borderColor: "border-amber-500/30",   bgColor: "bg-amber-950/60" },
   Player:     { icon: "🥷",  label: "Cổ Sư",           color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
   GroundDrop: { icon: "🎁",  label: "Chiến Lợi Phẩm", color: "text-amber-300",   borderColor: "border-amber-500/40",   bgColor: "bg-amber-950/70" },
+  Sect:       { icon: "🏯",  label: "Tông Môn",        color: "text-yellow-300",  borderColor: "border-yellow-500/50",  bgColor: "bg-yellow-950/70" },
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
@@ -77,6 +78,13 @@ export function WorldPage() {
   const useGus = useGameStore((s) => s.useGus);
   const dropGu = useGameStore((s) => s.dropGu);
   const dropGus = useGameStore((s) => s.dropGus);
+  const sectMap = useGameStore((s) => s.sectMap);
+  const fetchSectsMap = useGameStore((s) => s.fetchSectsMap);
+  const attackSect = useGameStore((s) => s.attackSect);
+  const sectMembers = useGameStore((s) => s.sectMembers);
+  const fetchSectMembers = useGameStore((s) => s.fetchSectMembers);
+  const mySectStatus = useGameStore((s) => s.mySectStatus);
+  const [attackTargetSect, setAttackTargetSect] = useState<any | null>(null);
 
   // RefiningFurnace
   const refineGu = useGameStore((s) => s.refineGu);
@@ -161,7 +169,8 @@ export function WorldPage() {
     fetchPartyStatus();
     fetchPartyInvitations();
     fetchGroundDrops();
-  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops]);
+    fetchSectsMap();
+  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap]);
 
   const setInvestigationRange = useWorldStore((s) => s.setInvestigationRange);
 
@@ -471,6 +480,8 @@ export function WorldPage() {
                     ? guDictionary[selectedObject.content_id]?.name || selectedObject.content_id
                     : selectedObject.cell_type === "GroundDrop"
                     ? `Hài cốt: ${(selectedObject.dropData || groundDrops.find(d => d.id === selectedObject.id))?.loser_name || "Vô danh"}`
+                    : selectedObject.cell_type === "Sect"
+                    ? `Tông Môn: ${selectedObject.content_id}`
                     : selectedObject.content_id}
                 </div>
                 <div className="text-[10px] text-zinc-500 font-serif">
@@ -483,6 +494,33 @@ export function WorldPage() {
               <span>X: {selectedObject.x}</span>
               <span>Y: {selectedObject.y}</span>
             </div>
+
+            {selectedObject.cell_type === "Sect" && (() => {
+              const sect = sectMap.find((s: any) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));
+              if (!sect) return null;
+              const isMySect = sect.id === mySectStatus?.sect?.id;
+              const isShielded = !!sect.shield_until && new Date(sect.shield_until).getTime() > Date.now();
+
+              return (
+                <div className="mb-3 space-y-1.5 text-xs font-serif bg-amber-950/20 border border-amber-500/30 rounded-xl p-2.5">
+                  <div className="flex justify-between items-center text-[11px] font-mono text-zinc-300">
+                    <span>🛡️ Phòng Thủ: <strong className="text-rose-400">{Math.round(sect.total_defense_power || 0).toLocaleString()}</strong></span>
+                    {isMySect ? (
+                      <span className="text-[10px] text-blue-400 font-bold bg-blue-950/40 border border-blue-500/30 px-1.5 py-0.5 rounded">Tông Môn Ta</span>
+                    ) : isShielded ? (
+                      <span className="text-[10px] text-rose-400 font-bold bg-rose-950/40 border border-rose-500/30 px-1.5 py-0.5 rounded">Đại Trận Bảo Hộ</span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-1.5 py-0.5 rounded">Có Thể Khiêu Chiến</span>
+                    )}
+                  </div>
+                  {isShielded && (
+                    <div className="text-[10px] text-rose-400 font-mono">
+                      Bảo hộ đến: {new Date(sect.shield_until).toLocaleTimeString()}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {selectedObject.cell_type === "Boss" && selectedObject.cleared && (
               <div className="px-2 py-1.5 rounded-lg bg-zinc-800/60 text-[10px] text-zinc-400 font-serif mb-3">
@@ -613,6 +651,50 @@ export function WorldPage() {
                     <span>Tiếp Cận</span>
                   </button>
                 )
+              ) : selectedObject.cell_type === "Sect" ? (
+                (() => {
+                  const sect = sectMap.find((s: any) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));
+                  const isMySect = sect?.id === mySectStatus?.sect?.id;
+                  const isShielded = !!sect?.shield_until && new Date(sect.shield_until).getTime() > Date.now();
+                  const canManage = mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP";
+
+                  return (
+                    <>
+                      {isMySect ? (
+                        <button
+                          onClick={() => setActiveModal("sect")}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
+                        >
+                          <span>🏛️</span>
+                          <span>Trụ Sở Tông Môn</span>
+                        </button>
+                      ) : (
+                        <button
+                          disabled={actionLoading || isShielded || !canManage}
+                          title={isShielded ? "Tông môn đang trong thời gian bảo hộ" : !canManage ? "Chỉ Trưởng Lão / Hộ Pháp / Chưởng Môn mới có quyền khiêu chiến" : "Phát động công kích Tông môn"}
+onClick={() => {
+                              setAttackTargetSect(sect || selectedObject);
+                              fetchSectMembers();
+                            }}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
+                        >
+                          <span>⚔️</span>
+                        </button>
+                      )}
+
+                      <button
+                        disabled={isMoving}
+                        title="Tiếp Cận Tông Môn"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
+                      >
+                        <span>🏃</span>
+                      </button>
+                    </>
+                  );
+                })()
               ) : (
                 <button
                   disabled={isMoving || !!selectedObject.cleared}
@@ -637,6 +719,55 @@ export function WorldPage() {
                 ✕
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Challenge Sect Modal */}
+      {attackTargetSect && (
+        <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm pointer-events-auto">
+          <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4 text-left shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
+                  <span>🏯</span> Khiêu Chiến Tông Môn — {attackTargetSect.name || attackTargetSect.content_id}
+                </h3>
+                <span className="text-[10px] font-mono text-zinc-500 block mt-0.5">
+                  Tọa độ: ({attackTargetSect.map_x ?? attackTargetSect.x}, {attackTargetSect.map_y ?? attackTargetSect.y}) · Cấp {attackTargetSect.level || attackTargetSect.rank || 1}
+                </span>
+              </div>
+              <button onClick={() => setAttackTargetSect(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+            </div>
+
+            <div className="flex flex-col gap-1 text-xs font-mono bg-zinc-900/40 p-3 rounded-xl border border-zinc-900">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Sức Phòng Thủ Hộ Sơn:</span>
+                <span className="text-rose-400 font-bold">🛡 {Math.round(attackTargetSect.total_defense_power || 0).toLocaleString()}</span>
+              </div>
+              {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() && (
+                <div className="flex justify-between text-rose-400 font-bold mt-1">
+                  <span>Đại Trận Bảo Hộ:</span>
+                  <span>{new Date(attackTargetSect.shield_until).toLocaleTimeString()}</span>
+                </div>
+              )}
+            </div>
+
+<div className="flex flex-col gap-1.5">
+              <p className="text-xs text-zinc-500 font-mono">
+                Đấu sẽ sử dụng Hộ Sơn Thần Thú + Đọc allied: Độc Lí + Minh Quân hội üy hội + Thú Nuôi
+              </p>
+            </div>
+
+            <button
+              disabled={actionLoading || (attackTargetSect.shield_until ? new Date(attackTargetSect.shield_until).getTime() > Date.now() : false)}
+              onClick={async () => {
+                const ok = await attackSect(attackTargetSect.id);
+                if (ok) setAttackTargetSect(null);
+              }}
+              className="w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-600 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
+            >
+              {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() ? "Đang Bảo Hộ" : "Phát Động Công Kích Tông Môn"}
+            </button>
           </div>
         </div>
       )}

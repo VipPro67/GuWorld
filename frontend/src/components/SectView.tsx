@@ -52,6 +52,7 @@ export const SectView: React.FC = () => {
   const {
     player,
     sects,
+    regions,
     mySectStatus,
     sectMissions,
     guDictionary,
@@ -93,11 +94,13 @@ export const SectView: React.FC = () => {
   fetchPromotionRequests,
   actionPromotionRequest,
   fetchPlayerProfile,
-  sectMines,
-  fetchSectMines,
-  attackSectMine,
-  assignSectMineDefender,
-  removeSectMineDefender,
+  sectMap,
+  fetchSectsMap,
+  attackSect,
+  defendSect,
+  undefendSect,
+  toggleDefendSect,
+  upgradeSectBuilding,
   addToast,
   showConfirm,
   recipes,
@@ -223,14 +226,14 @@ export const SectView: React.FC = () => {
   }, []);
 
   // Territory defend modal state
-  const [defendMine, setDefendMine] = useState<SectMine | null>(null);
+  const [showDefendModal, setShowDefendModal] = useState(false);
   const [defendType, setDefendType] = useState<"member" | "beast">("member");
   const [defendPlayerId, setDefendPlayerId] = useState("");
   const [defendMonsterId, setDefendMonsterId] = useState("");
   const [defendMonsterRank, setDefendMonsterRank] = useState(1);
 
   // Territory attack modal state
-  const [attackMine, setAttackMine] = useState<SectMine | null>(null);
+  const [attackTargetSect, setAttackTargetSect] = useState<any | null>(null);
   const [attackPlayerId, setAttackPlayerId] = useState("");
 
   // Vault stocking form state (donation-style multi-select)
@@ -253,9 +256,9 @@ export const SectView: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === "territory") {
-      fetchSectMines();
+      fetchSectsMap();
     }
-  }, [activeTab, fetchSectMines]);
+  }, [activeTab, fetchSectsMap]);
 
   useEffect(() => {
     if (activeTab === "manage") {
@@ -563,7 +566,7 @@ export const SectView: React.FC = () => {
                 <div>
                   <div className="flex justify-between items-start mb-4">
                     <div className="px-3 py-1 text-[10px] font-mono font-semibold uppercase tracking-wider rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800">
-                      {getRegionName(sect.region)}
+                      {getRegionName(sect.region)} ({sect.map_x ?? 0}, {sect.map_y ?? 0})
                     </div>
                     {sect.require_approval ? (
                       <span className="text-[9px] font-mono bg-amber-950/40 text-amber-400 border border-amber-500/20 rounded-md px-1.5 py-0.5">
@@ -656,7 +659,7 @@ export const SectView: React.FC = () => {
                       {sect.name}
                     </h3>
                     <p className="text-xs text-zinc-500 font-mono mt-1">
-                      Vực giới quản hạt: {getRegionName(sect.region)} | Trụ sở thế lực
+                      Vực giới quản hạt: {getRegionName(sect.region)} · Tọa độ: ({sect.map_x ?? 0}, {sect.map_y ?? 0})
                     </p>
                   </div>
                   <button
@@ -770,82 +773,99 @@ export const SectView: React.FC = () => {
           <p className="text-xs text-zinc-400 leading-relaxed">
             Trở thành thủy tổ của một phái, tự định quy chế, thu nhận đệ tử, tự thiết lập bảng nhiệm vụ và thống trị giang sơn!
             <br />
-            <strong className="text-yellow-500 font-mono">Yêu cầu: Tu vi Tam Chuyển trở lên & Chi phí lập phái: 50,000 Nguyên Thạch.</strong>
+            <strong className="text-yellow-500 font-mono">Yêu cầu: Tu vi Tam Chuyển trở lên & Chi phí lập phái: 30,000 Nguyên Thạch.</strong>
           </p>
 
-          {player.rank < 3 ? (
-            <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">
-              ⚠️ Đạo hữu chưa đủ tu vi! Cần đạt Tam Chuyển để khai sơn lập tổ (Tu vi hiện tại: Cấp {player.rank}).
-            </div>
-          ) : player.primeval_stones < 50000 ? (
-            <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">
-              ⚠️ Đạo hữu chưa đủ tài lực! Cần 50,000 Nguyên Thạch (Hiện có: {player.primeval_stones} Đá).
-            </div>
-          ) : !showCreateForm ? (
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="py-2.5 px-6 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all self-start cursor-pointer"
-            >
-              Khai Sáng Thế Lực Mới
-            </button>
-          ) : (
-            <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 flex flex-col gap-4 animate-slide-up">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-zinc-400 font-semibold font-serif">Tên Tông Môn / Thế Lực</label>
-                  <input
-                    type="text"
-                    placeholder="Ví dụ: Cổ Nguyệt Phái, Vạn Thú Môn..."
-                    value={createSectName}
-                    onChange={(e) => setCreateSectName(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50"
-                  />
+          {(() => {
+            const isPlayerInHub = player.current_region === "hub_nam_cuong" || player.current_region === "hub_trung_chau" || player.current_region === "Lobby" || regions.find((r) => r.id === player.current_region)?.zone_type === "HUB" || regions.find((r) => r.id === player.current_region)?.zone_type === "SAFE_ZONE";
+
+            if (player.rank < 3) {
+              return (
+                <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">
+                  ⚠️ Đạo hữu chưa đủ tu vi! Cần đạt Tam Chuyển để khai sơn lập tổ (Tu vi hiện tại: Cấp {player.rank}).
+                </div>
+              );
+            }
+            if (player.primeval_stones < 30000) {
+              return (
+                <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">
+                  ⚠️ Đạo hữu chưa đủ tài lực! Cần 30,000 Nguyên Thạch (Hiện có: {player.primeval_stones.toLocaleString()} Đá).
+                </div>
+              );
+            }
+            if (!showCreateForm) {
+              return (
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="py-2.5 px-6 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all self-start cursor-pointer"
+                >
+                  Khai Sáng Thế Lực Mới
+                </button>
+              );
+            }
+
+            return (
+              <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 flex flex-col gap-4 animate-slide-up">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-zinc-400 font-semibold font-serif">Tên Tông Môn / Thế Lực</label>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: Cổ Nguyệt Phái, Vạn Thú Môn..."
+                      value={createSectName}
+                      onChange={(e) => setCreateSectName(e.target.value)}
+                      className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-zinc-400 font-semibold font-serif">Vị Trí Khởi Tạo Lãnh Địa</label>
+                    <div className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 flex items-center justify-between">
+                      <span>📍 {getRegionName(player.current_region)} ({player.x}, {player.y})</span>
+                      {isPlayerInHub ? (
+                        <span className="text-[10px] text-rose-400 font-bold bg-rose-950/40 border border-rose-500/30 px-2 py-0.5 rounded">Trấn (An Toàn Khu)</span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded">Dã Ngoại</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {isPlayerInHub && (
+                    <div className="sm:col-span-2 p-3 bg-red-950/20 border border-red-500/30 rounded-xl text-xs text-red-400 font-mono">
+                      ⚠️ Không thể khai tông lập phái tại Trấn / An Toàn Khu! Đạo hữu hãy di chuyển ra bản đồ dã ngoại trước khi lập phái.
+                    </div>
+                  )}
+
+                  <div className="sm:col-span-2 flex flex-col gap-1.5">
+                    <label className="text-xs text-zinc-400 font-semibold font-serif">Mô Tả Truyền Thuyết</label>
+                    <textarea
+                      placeholder="Mô tả tôn chỉ thế lực, lịch sử sáng lập hoặc đặc sắc luyện cổ..."
+                      value={createSectDesc}
+                      onChange={(e) => setCreateSectDesc(e.target.value)}
+                      rows={3}
+                      className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50 resize-none"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-zinc-400 font-semibold font-serif">Vực Giới Trụ Sở</label>
-                  <select
-                    value={createSectRegion}
-                    onChange={(e) => setCreateSectRegion(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50"
+                <div className="flex gap-3 mt-2">
+                  <button
+                    onClick={handleCreateSect}
+                    disabled={actionLoading || isPlayerInHub || !createSectName.trim() || !createSectDesc.trim()}
+                    className="py-2 px-4 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-md transition-all cursor-pointer"
                   >
-                    <option value="hub_trung_chau">Trung Châu</option>
-                    <option value="hub_nam_cuong">Nam Cương</option>
-                    <option value="hub_bac_nguyen">Bắc Nguyên</option>
-                    <option value="hub_tay_mac">Tây Mạc</option>
-                    <option value="hub_dong_hai">Đông Hải</option>
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2 flex flex-col gap-1.5">
-                  <label className="text-xs text-zinc-400 font-semibold font-serif">Mô Tả Truyền Thuyết</label>
-                  <textarea
-                    placeholder="Mô tả tôn chỉ thế lực, lịch sử sáng lập hoặc đặc sắc luyện cổ..."
-                    value={createSectDesc}
-                    onChange={(e) => setCreateSectDesc(e.target.value)}
-                    rows={3}
-                    className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50 resize-none"
-                  />
+                    Xác Nhận Lập Phái (-30,000 Đá)
+                  </button>
+                  <button
+                    onClick={() => setShowCreateForm(false)}
+                    className="py-2 px-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Hủy
+                  </button>
                 </div>
               </div>
-
-              <div className="flex gap-3 mt-2">
-                <button
-                  onClick={handleCreateSect}
-                  disabled={actionLoading || !createSectName.trim() || !createSectDesc.trim()}
-                  className="py-2 px-4 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-md transition-all cursor-pointer"
-                >
-                  Xác Nhận Lập Phái (-50,000 Đá)
-                </button>
-                <button
-                  onClick={() => setShowCreateForm(false)}
-                  className="py-2 px-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
-                >
-                  Hủy
-                </button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     );
@@ -877,7 +897,7 @@ export const SectView: React.FC = () => {
               )}
             </div>
             <p className="text-xs text-zinc-500 font-mono mt-0.5">
-              Địa Khu: {getRegionName(sect?.region || "")} | {getRankName(member?.member_rank || "")}
+              Địa Khu: {getRegionName(sect?.region || "")} ({sect?.map_x ?? 0}, {sect?.map_y ?? 0}) | {getRankName(member?.member_rank || "")}
             </p>
           </div>
         </div>
@@ -1087,149 +1107,161 @@ export const SectView: React.FC = () => {
 
       {activeTab === "territory" && (
         <div className="flex flex-col gap-6 animate-slide-up">
+          {/* Section 0: Trấn Thủ Tông Môn Toggle */}
+          <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-4 backdrop-blur-md">
+            <div className="flex justify-between items-center border-b border-zinc-900/60 pb-2">
+              <h3 className="text-sm font-serif font-bold text-zinc-200">
+                <Shield className="w-4 h-4 text-amber-400" />
+                Trấn Thủ Tông Môn
+              </h3>
+              <span className="text-xs font-mono text-amber-400 bg-amber-950/30 border border-amber-500/30 px-2 py-1 rounded-full">
+                {mySectStatus?.member?.is_defending ? "BẬT" : "TẮT"}
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Đạo hữu sẽ tham chiến khi Tông Môn bị tấn công. Bạn phải đứng tại tọa độ Tông Môn mới có thể bật chế độ.
+            </p>
+            <div className="flex gap-2 pt-3">
+              <button
+                onClick={async () => {
+                  const ok = await toggleDefendSect();
+                  if (ok) {
+                    // Refresh the UI state
+                    fetchMySectStatus();
+                    fetchSectsMap();
+                  }
+                }}
+                disabled={!mySectStatus?.member || actionLoading}
+                className={`w-full py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer ${mySectStatus?.member?.is_defending ? "animate-pulse" : ""}`}
+              >
+                {mySectStatus?.member?.is_defending ? "Tắt Trấn Thủ" : "Bật Trấn Thủ"}
+              </button>
+            </div>
+          </div>
+
+          {/* Section 1: Sect Buildings & Upgrades */}
           <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 backdrop-blur-md flex flex-col gap-4">
-            <h3 className="text-base font-serif font-bold text-zinc-200 flex items-center gap-2 border-b border-zinc-900/60 pb-3">
-              <Shield className="w-5 h-5 text-rose-400" />
-              Lãnh Địa Tông Môn (Tranh Đoạt)
-            </h3>
-            <p className="text-xs text-zinc-400 leading-relaxed mb-2">
-              Lãnh địa Tông môn là các mỏ tài nguyên quý giá sinh ra Quỹ tông môn và Linh tài mỗi giờ.
-              Các đệ tử từ <strong>Nội Môn</strong> trở lên có thể khiêu chiến Hộ Phái Thần Thú để cướp đoạt mỏ cho Tông môn của mình.
+            <div className="flex justify-between items-center border-b border-zinc-900/60 pb-3">
+              <h3 className="text-base font-serif font-bold text-zinc-200 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                Kiến Trúc Tông Môn
+              </h3>
+              <span className="text-xs font-mono text-amber-400 bg-amber-950/30 border border-amber-500/30 px-3 py-1 rounded-full">
+                Cấp Tông Môn: {mySectStatus?.sect?.buildings?.main_hall || mySectStatus?.sect?.level || 1}
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Nâng cấp kiến trúc giúp gia tăng sản lượng tài nguyên tự động, mở rộng bán kính Buff Hộ Sơn và gia cố Hộ Sơn Đại Trận bảo vệ Tông môn.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sectMines.length === 0 ? (
-                <div className="sm:col-span-2 lg:col-span-3 text-center py-6 text-zinc-600 text-xs font-mono">Chưa có Lãnh địa nào xuất hiện.</div>
-              ) : (
-                sectMines.map((mine) => {
-                  const isMine = mine.occupier_sect_id === mySectStatus.sect?.id;
-                  const isShielded = !!mine.shield_until && new Date(mine.shield_until).getTime() > nowTs;
-                  const canManage = (mySectStatus.member?.member_rank === "CHUONG_MON" || mySectStatus.member?.member_rank === "TRUONG_LAO" || mySectStatus.member?.member_rank === "HO_PHAP");
-                  const defenderSlots = mine.rarity === "Siêu Cấp" ? 4 : (mine.rarity === "Truyền Thuyết" || mine.rarity === "Sử Thi") ? 3 : mine.rarity === "Hiếm" ? 2 : 1;
-                  const defendCount = mine.defenders?.length || 0;
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+              {(() => {
+                const bMap = mySectStatus?.sect?.buildings || {};
+                const currentFunds = mySectStatus?.sect?.funds || 0;
+                const canManage = mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP";
+                const mainHallLvl = bMap.main_hall || 1;
+
+                const buildingDefs = [
+                  {
+                    key: "main_hall",
+                    name: "Chính Điện",
+                    desc: "Trọng địa Tông môn. Cấp Chính Điện quyết định Cấp Tông Môn & Bán kính Buff Hộ Sơn.",
+                    baseFunds: 5000,
+                    icon: "🏛️",
+                  },
+                  {
+                    key: "spirit_vein",
+                    name: "Linh Mạch",
+                    desc: "Tự động sản sinh Quỹ tông môn và Linh tài mỗi phút cho Tông môn.",
+                    baseFunds: 3000,
+                    icon: "💎",
+                  },
+                  {
+                    key: "defensive_array",
+                    name: "Hộ Sơn Đại Trận",
+                    desc: "Tăng 500 Giáp phòng thủ cơ bản & tăng thời gian bảo vệ Tông môn sau khi bị đánh phá.",
+                    baseFunds: 2000,
+                    icon: "🛡️",
+                  },
+                  {
+                    key: "treasury",
+                    name: "Bảo Khố",
+                    desc: "Giảm tỷ lệ Quỹ bị cướp đoạt khi bị Tông môn khác tấn công.",
+                    baseFunds: 1500,
+                    icon: "🏛️",
+                  },
+                  {
+                    key: "training_ground",
+                    name: "Diễn Võ Trường",
+                    desc: "Tăng tỷ lệ tích lũy Điểm Cống Hiến tự động cho tất cả đệ tử Tông môn.",
+                    baseFunds: 1500,
+                    icon: "⚔️",
+                  },
+                ];
+
+                return buildingDefs.map((b) => {
+                  const lvl = bMap[b.key] || 1;
+                  const targetLvl = lvl + 1;
+                  const fundCost = b.baseFunds * targetLvl * targetLvl;
+                  const canAfford = currentFunds >= fundCost;
+                  const isMainHall = b.key === "main_hall";
+                  const levelCapped = !isMainHall && lvl >= mainHallLvl;
 
                   return (
-                    <div key={mine.id} className={`bg-zinc-900/20 border ${isMine ? "border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]" : "border-zinc-900"} rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden`}>
-                      {isMine && <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-bl-full -z-10" />}
-
-                      <div className="flex justify-between items-start">
-                        <h4 className="text-sm font-bold font-serif text-zinc-200">{mine.name}</h4>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${mine.rarity === "Siêu Cấp" ? "bg-amber-950/30 text-amber-300 border-amber-400/40" :
-                            mine.rarity === "Truyền Thuyết" ? "bg-amber-950/30 text-amber-400 border-amber-500/30" :
-                            mine.rarity === "Sử Thi" ? "bg-purple-950/30 text-purple-400 border-purple-500/30" :
-                              mine.rarity === "Hiếm" ? "bg-blue-950/30 text-blue-400 border-blue-500/30" :
-                                "bg-zinc-900/50 text-zinc-400 border-zinc-700"
-                          }`}>{mine.rarity}</span>
-                      </div>
-
-                      <div className="flex flex-col gap-1 text-xs font-mono">
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Chiếm giữ bởi:</span>
-                          <span className={isMine ? "text-blue-400 font-bold" : "text-zinc-300"}>
-                            {mine.occupier_name || "Vô Chủ"}
+                    <div key={b.key} className="bg-zinc-900/20 border border-zinc-900 rounded-2xl p-4 flex flex-col justify-between gap-3 relative overflow-hidden">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{b.icon}</span>
+                            <h4 className="text-sm font-bold font-serif text-zinc-200">{b.name}</h4>
+                          </div>
+                          <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-zinc-900 text-amber-400 border border-amber-500/20">
+                            Cấp {lvl}
                           </span>
                         </div>
-                        {mine.occupied_at && (
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">Từ lúc:</span>
-                            <span className="text-zinc-400">{new Date(mine.occupied_at).toLocaleTimeString()}</span>
-                          </div>
-                        )}
-                        {isShielded && (
-                          <div className="flex justify-between text-rose-400">
-                            <span>Đại Trận Bảo Hộ:</span>
-                            <span>{new Date(mine.shield_until!).toLocaleTimeString()}</span>
-                          </div>
-                        )}
-                        {mine.total_defense_power > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">Sức Phòng Thủ:</span>
-                            <span className="text-rose-400 font-bold">{Math.round(mine.total_defense_power).toLocaleString()}</span>
-                          </div>
-                        )}
-                        {isMine && mine.output_per_hour && (
-                          <div className="flex justify-between text-emerald-500/90">
-                            <span>Sản lượng/giờ:</span>
-                            <span>{mine.output_per_hour.funds_per_hour.toLocaleString()} Quỹ · +{mine.output_per_hour.contribution_per_hour} Cống hiến</span>
-                          </div>
-                        )}
+                        <p className="text-[11px] text-zinc-400 leading-snug">{b.desc}</p>
                       </div>
 
-                      {/* Defenders */}
-                      {(mine.defenders?.length || 0) > 0 && (
-                        <div className="flex flex-col gap-1.5 pt-1">
-                          <div className="text-[9px] text-zinc-500 font-mono uppercase tracking-wider">
-                            Phòng thủ ({defendCount}/{defenderSlots}):
-                          </div>
-                          {mine.defenders!.map((d) => (
-                            <div key={d.id} className="flex items-center justify-between gap-2 bg-zinc-950/40 border border-zinc-900 rounded-lg px-2.5 py-1.5">
-                              <span className={`text-[10px] font-mono truncate ${d.defender_type === "beast" ? "text-orange-400" : "text-zinc-300"}`}>
-                                {d.defender_type === "beast" ? "🦖 " : "🧑‍🎓 "}{d.name}
-                              </span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-[9px] font-mono text-rose-400/80">⚔ {Math.round(d.power).toLocaleString()}</span>
-                                {isMine && canManage && (
-                                  <button
-                                    onClick={async () => {
-                                      if (!(await showConfirm(`Rút phòng thủ "${d.name}" khỏi mỏ?`))) return;
-                                      await removeSectMineDefender(d.id);
-                                    }}
-                                    disabled={actionLoading}
-                                    className="text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
-                                    title="Rút phòng thủ"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
+                      <div className="flex flex-col gap-2 pt-2 border-t border-zinc-900/60 mt-2">
+                        <div className="flex justify-between items-center text-[11px] font-mono">
+                          <span className="text-zinc-500">Phí nâng cấp:</span>
+                          <span className={canAfford ? "text-amber-400 font-bold" : "text-rose-400"}>
+                            {fundCost.toLocaleString()} Quỹ
+                          </span>
                         </div>
-                      )}
 
-                      <div className="pt-3 mt-auto border-t border-zinc-900 flex gap-2">
-                        {isMine ? (
-                          canManage ? (
-                            <button
-                              onClick={() => { setDefendMine(mine); setDefendType("member"); setDefendPlayerId(""); setDefendMonsterId(""); setDefendMonsterRank(1); fetchSectMembers(); }}
-                              disabled={actionLoading || defendCount >= defenderSlots}
-                              className="w-full py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 disabled:opacity-50 disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                            >
-                              {defendCount >= defenderSlots ? `Đầy Phòng Thủ (${defendCount}/${defenderSlots})` : "Bố Trí Phòng Thủ"}
-                            </button>
-                          ) : (
-                            <div className="w-full py-2 text-center text-emerald-500/70 text-xs font-mono border border-emerald-500/10 rounded-xl bg-emerald-950/10">
-                              Đang Khai Thác
-                            </div>
-                          )
-                        ) : canManage ? (
+                        {canManage ? (
                           <button
-                            onClick={() => { setAttackMine(mine); setAttackPlayerId(player.id); fetchSectMembers(); }}
-                            disabled={actionLoading || isShielded}
-                            className="w-full py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 disabled:opacity-50 disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                            onClick={async () => {
+                              if (levelCapped) {
+                                addToast("Cấp kiến trúc không được vượt quá cấp Chính Điện!", "error");
+                                return;
+                              }
+                              await upgradeSectBuilding(b.key);
+                            }}
+                            disabled={actionLoading || !canAfford || levelCapped}
+                            className="w-full py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 disabled:opacity-40 disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                           >
-                            {isShielded ? "Đang Được Bảo Hộ" : `Công Kích Lãnh Địa${mine.total_defense_power > 0 ? ` (vs ${Math.round(mine.total_defense_power).toLocaleString()})` : ""}`}
+                            {levelCapped ? "Cần Nâng Chính Điện" : !canAfford ? "Không Đủ Quỹ" : `Nâng Lên Cấp ${targetLvl}`}
                           </button>
                         ) : (
-                          <div className="w-full py-2 text-center text-zinc-500/70 text-xs font-mono border border-zinc-800/40 rounded-xl bg-zinc-900/30">
-                            Chỉ Trưởng Lão/Hộ Pháp/Chưởng Môn mới công kích
-                          </div>
+                          <div className="text-[10px] text-center text-zinc-600 font-mono py-1">Chỉ cấp quản lý mới được nâng cấp</div>
                         )}
                       </div>
                     </div>
                   );
-                })
-              )}
+                });
+              })()}
             </div>
           </div>
 
-          {/* Defend modal */}
-          {defendMine && (
+          {/* Defend Modal */}
+          {showDefendModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
               <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-zinc-100 font-serif">Bố Trí Phòng Thủ — {defendMine.name}</h3>
-                  <button onClick={() => setDefendMine(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+                  <h3 className="text-sm font-bold text-zinc-100 font-serif">Bố Trí Phòng Thủ Tông Môn</h3>
+                  <button onClick={() => setShowDefendModal(false)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
                 </div>
 
                 <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 w-fit">
@@ -1264,7 +1296,6 @@ export const SectView: React.FC = () => {
                           </option>
                         ))}
                     </select>
-                    <p className="text-[10px] text-zinc-600 font-mono">Mỗi đệ tử chỉ phòng thủ được một mỏ. Sức phòng thủ = sức mạnh bộ Cổ + tu vi.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
@@ -1296,7 +1327,7 @@ export const SectView: React.FC = () => {
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-cyan-500/50 font-mono"
                       />
                       <span className="text-[10px] text-amber-500/80 font-mono">
-                        Phí thuê: {(defendMonsterRank || 1) * 500} Quỹ tông môn · Sức phòng thủ cao hơn khi chọn hạng lớn.
+                        Phí thuê: {(defendMonsterRank || 1) * 500} Quỹ tông môn.
                       </span>
                     </div>
                   </div>
@@ -1305,71 +1336,17 @@ export const SectView: React.FC = () => {
                 <button
                   disabled={actionLoading || (defendType === "member" ? !defendPlayerId : !defendMonsterId)}
                   onClick={async () => {
-                    const ok = await assignSectMineDefender(
-                      defendMine.id,
+                    const ok = await defendSect(
                       defendType,
                       defendType === "member" ? defendPlayerId : undefined,
                       defendType === "beast" ? defendMonsterId : undefined,
                       defendType === "beast" ? defendMonsterRank : undefined
                     );
-                    if (ok) setDefendMine(null);
+                    if (ok) setShowDefendModal(false);
                   }}
                   className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
                 >
                   Xác Nhận Bố Trí
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Attack modal */}
-          {attackMine && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
-              <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-zinc-100 font-serif">Phát Động Công Kích — {attackMine.name}</h3>
-                  <button onClick={() => setAttackMine(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn đệ tử ra trận</label>
-                  <select
-                    value={attackPlayerId}
-                    onChange={(e) => setAttackPlayerId(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-rose-500/50"
-                  >
-                    {sectMembers
-                      .filter((m) => m.member_rank !== "NGOAI_MON")
-                      .map((m) => (
-                        <option key={m.player_id} value={m.player_id}>
-                          {m.username} ({getRankName(m.member_rank)}) — ⚔ {Math.round(m.power || 0).toLocaleString()}
-                        </option>
-                      ))}
-                  </select>
-                  <p className="text-[10px] text-zinc-600 font-mono">Đệ tử Ngoại Môn không thể tham gia tranh đoạt. Nhân Khí khi thắng thuộc về người ra trận.</p>
-                </div>
-
-                {attackPlayerId && (
-                  <div className="flex items-center justify-center gap-3 bg-zinc-900/40 border border-zinc-900 rounded-xl px-4 py-3 font-mono text-xs">
-                    <span className="text-zinc-300">
-                      ⚔ <span className="text-rose-400 font-bold">{Math.round(sectMembers.find((m) => m.player_id === attackPlayerId)?.power || 0).toLocaleString()}</span>
-                    </span>
-                    <span className="text-zinc-600">vs</span>
-                    <span className="text-zinc-300">
-                      🛡 <span className="text-blue-400 font-bold">{Math.round(attackMine.total_defense_power || 0).toLocaleString()}</span>
-                    </span>
-                  </div>
-                )}
-
-                <button
-                  disabled={actionLoading || !attackPlayerId || (attackMine.shield_until ? new Date(attackMine.shield_until).getTime() > nowTs : false)}
-                  onClick={async () => {
-                    const ok = await attackSectMine(attackMine.id, attackPlayerId);
-                    if (ok) setAttackMine(null);
-                  }}
-                  className="w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
-                >
-                  Xác Nhận Công Kích
                 </button>
               </div>
             </div>
@@ -3750,7 +3727,7 @@ const rank = spec.rank || 1;
                         type="button"
                         onClick={async () => {
                           if (!canAfford) return;
-                          await upgradeSect();
+                          await upgradeSectBuilding("main_hall");
                         }}
                         disabled={!canAfford || actionLoading}
                         className="w-full py-2.5 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"

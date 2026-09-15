@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -176,18 +177,79 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				summary["mine_occupied"] = player.ActiveCombat.MineSlotID
 			}
 
-			if player.ClearedCells == nil {
-				player.ClearedCells = make(models.ClearedCellsMap)
+			// Sect War Victory/Defeat
+			if player.ActiveCombat.TargetSectID != "" {
+				// Determine winner: check combat logs for "Trận kết thúc. Phe X thắng!"
+				var winner string
+				for i := len(logs) - 1; i >= 0; i-- {
+					logDetail := logs[i].Detail
+					if strings.Contains(logDetail, "Trận chiến kết thúc") {
+						if strings.Contains(logDetail, "Phe Ta") {
+							winner = "attacker"
+						} else if strings.Contains(logDetail, "Phe Địch") {
+							winner = "defender"
+						}
+						break
+					}
+				}
+
+				if winner == "attacker" {
+					// Attacker won - apply victory: plunder, shield, rewards
+					sectWarLogs := ApplySectWarVictory(tx, player, player.ActiveCombat)
+					for _, swMsg := range sectWarLogs {
+						logs = append(logs, simulator.CombatLog{
+							Turn:   simState.Turn,
+							Action: "SECT_WAR",
+							Detail: swMsg,
+						})
+					}
+					summary["sect_war_won"] = true
+				} else {
+					// Defender won (attacker lost) - apply defeat: contribution points, shield, teleport
+					sectDefeatLogs := ApplySectWarDefeat(tx, player, player.ActiveCombat)
+					for _, sdMsg := range sectDefeatLogs {
+						logs = append(logs, simulator.CombatLog{
+							Turn:   simState.Turn,
+							Action: "SECT_WAR_DEFEAST",
+							Detail: sdMsg,
+						})
+					}
+					// Apply death-like penalty: teleport to hub, death drop
+					player.HP = 1.0
+					deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
+					player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
+					
+					// Apply death drop (may drop items)
+					dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+					if dropSummary != "" {
+						playerMsg := fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
+						logs = append(logs, simulator.CombatLog{
+							Turn:   simState.Turn,
+							Action: "BATTLE_END",
+							Detail: playerMsg,
+						})
+					}
+					
+					// Update player position in DB
+					_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3 WHERE id = $4`,
+						player.CurrentRegion, player.X, player.Y, player.ID)
+				}
 			}
-			coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-			player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-			if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
-				logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+
+			if player.ActiveCombat.TargetSectID == "" {
+				if player.ClearedCells == nil {
+					player.ClearedCells = make(models.ClearedCellsMap)
+				}
+				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
+				}
+				if player.ActiveCombat != nil {
+					_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
+				}
+				_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
 			}
-			if player.ActiveCombat != nil {
-				_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
-			}
-			_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
 			clearedCellsJSON, _ := json.Marshal(player.ClearedCells)
 
 			player.HP = float64(finalPlayerHP)

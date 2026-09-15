@@ -101,6 +101,7 @@ export interface CombatState {
   combat_mode?: string;
   mine_slot_id?: number;
   tribulation_event_id?: string;
+  target_sect_id?: string;
   aperture_hp?: number;
   aperture_max_hp?: number;
 }
@@ -893,6 +894,10 @@ export interface Sect {
   vault_recipes: SectVaultRecipe[];
   funds: number;
   level: number;
+  buildings?: Record<string, number>;
+  map_x?: number;
+  map_y?: number;
+  shield_until?: string;
   require_approval?: boolean;
   require_promotion_approval?: boolean;
 }
@@ -929,6 +934,7 @@ export interface SectMember {
   contribution_points: number;
   master_id: string | null;
   joined_at: string;
+  is_defending: boolean;
 }
 
 export interface SectMission {

@@ -16,7 +16,7 @@ import (
 type CreateSectRequest struct {
 	Name        string `json:"name" binding:"required,min=3,max=50"`
 	Description string `json:"description" binding:"required,max=500"`
-	Region      string `json:"region" binding:"required"`
+	Region      string `json:"region"`
 }
 
 type SetMemberRankRequest struct {
@@ -120,11 +120,25 @@ func CreateSect(c *gin.Context) {
 		return
 	}
 
-	// Insert new sect
+	// Check location: player cannot create sect in HUB or SAFE_ZONE
+	currentRegion := player.CurrentRegion
+	if currentRegion == "" {
+		currentRegion = req.Region
+	}
+	var zoneType string
+	err = tx.QueryRow(`SELECT COALESCE(zone_type, 'KHU_VUC') FROM regions WHERE id = $1`, currentRegion).Scan(&zoneType)
+	if err == nil {
+		if zoneType == "HUB" || zoneType == "SAFE_ZONE" || currentRegion == "hub_nam_cuong" || currentRegion == "Lobby" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể khai tông lập phái trong An Toàn Khu / Trấn (HUB/SAFE_ZONE)! Đạo hữu hãy di chuyển ra dã ngoại."})
+			return
+		}
+	}
+
+	// Insert new sect at player's current location (region, map_x, map_y)
 	_, err = tx.Exec(`
-		INSERT INTO sects (id, name, description, region, vault_gu, vault_materials, vault_recipes)
-		VALUES ($1, $2, $3, $4, '[]'::jsonb, '{}'::jsonb, '[]'::jsonb)
-	`, sectID, req.Name, req.Description, req.Region)
+		INSERT INTO sects (id, name, description, region, map_x, map_y, vault_gu, vault_materials, vault_recipes)
+		VALUES ($1, $2, $3, $4, $5, $6, '[]'::jsonb, '{}'::jsonb, '[]'::jsonb)
+	`, sectID, req.Name, req.Description, currentRegion, player.X, player.Y)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create sect record: " + err.Error()})
 		return

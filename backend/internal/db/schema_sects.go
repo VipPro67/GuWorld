@@ -11,6 +11,10 @@ func schemaSects() error {
 		name VARCHAR(100) NOT NULL,
 		description TEXT NOT NULL,
 		region VARCHAR(50) NOT NULL,
+		map_x INT NOT NULL DEFAULT 50,
+		map_y INT NOT NULL DEFAULT 50,
+		shield_until TIMESTAMP WITH TIME ZONE,
+		buildings JSONB NOT NULL DEFAULT '{"main_hall": 1, "defensive_array": 1, "spirit_vein": 1, "treasury": 1, "training_ground": 1}',
 		vault_gu JSONB NOT NULL DEFAULT '[]',
 		vault_materials JSONB NOT NULL DEFAULT '{}',
 		vault_recipes JSONB NOT NULL DEFAULT '[]',
@@ -20,8 +24,27 @@ func schemaSects() error {
 		require_promotion_approval BOOLEAN NOT NULL DEFAULT FALSE,
 		last_maintenance_at TIMESTAMP WITH TIME ZONE,
 		last_salary_paid_at TIMESTAMP WITH TIME ZONE,
-		last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		last_territory_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("sects_territory_columns", `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='map_x') THEN
+			ALTER TABLE sects ADD COLUMN map_x INT NOT NULL DEFAULT 50;
+			ALTER TABLE sects ADD COLUMN map_y INT NOT NULL DEFAULT 50;
+			ALTER TABLE sects ADD COLUMN shield_until TIMESTAMP WITH TIME ZONE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='buildings') THEN
+			ALTER TABLE sects ADD COLUMN buildings JSONB NOT NULL DEFAULT '{"main_hall": 1, "defensive_array": 1, "spirit_vein": 1, "treasury": 1, "training_ground": 1}';
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='last_territory_tick_at') THEN
+			ALTER TABLE sects ADD COLUMN last_territory_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 
@@ -87,8 +110,18 @@ func schemaSects() error {
 		joined_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
 		territory_pending DOUBLE PRECISION NOT NULL DEFAULT 0,
 		territory_credited_at DATE,
-		territory_credited_today INTEGER NOT NULL DEFAULT 0
+		territory_credited_today INTEGER NOT NULL DEFAULT 0,
+		is_defending BOOLEAN NOT NULL DEFAULT FALSE
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("sect_members_defending_column", `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sect_members' AND column_name='is_defending') THEN
+			ALTER TABLE sect_members ADD COLUMN is_defending BOOLEAN NOT NULL DEFAULT FALSE;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 	if err := execSchema("sect_members_sect_idx", `
@@ -157,25 +190,17 @@ func schemaSects() error {
 		return err
 	}
 
-	if err := execSchema("sect_mines", `
-	CREATE TABLE IF NOT EXISTS sect_mines (
-		id SERIAL PRIMARY KEY,
-		name VARCHAR(100) NOT NULL UNIQUE,
-		rarity VARCHAR(50) NOT NULL,
-		occupier_sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE SET NULL,
-		occupied_at TIMESTAMP WITH TIME ZONE,
-		shield_until TIMESTAMP WITH TIME ZONE,
-		last_claimed_at TIMESTAMP WITH TIME ZONE,
-		pending_funds DOUBLE PRECISION NOT NULL DEFAULT 0,
-		pending_materials DOUBLE PRECISION NOT NULL DEFAULT 0
-	);`); err != nil {
+	// Drop old mine tables if they exist
+	if err := execSchema("drop_sect_mines", `
+	DROP TABLE IF EXISTS sect_mine_defenders;
+	DROP TABLE IF EXISTS sect_mines;
+	`); err != nil {
 		return err
 	}
 
-	if err := execSchema("sect_mine_defenders", `
-	CREATE TABLE IF NOT EXISTS sect_mine_defenders (
+	if err := execSchema("sect_defenders", `
+	CREATE TABLE IF NOT EXISTS sect_defenders (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		mine_id INTEGER NOT NULL REFERENCES sect_mines(id) ON DELETE CASCADE,
 		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
 		defender_type VARCHAR(20) NOT NULL DEFAULT 'member',
 		player_id UUID REFERENCES players(id) ON DELETE CASCADE,
@@ -188,12 +213,12 @@ func schemaSects() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("uq_sect_mine_defender_player", `
-	CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_mine_defender_player ON sect_mine_defenders (player_id) WHERE defender_type = 'member' AND player_id IS NOT NULL;`); err != nil {
+	if err := execSchema("uq_sect_defender_player", `
+	CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_defender_player ON sect_defenders (player_id) WHERE defender_type = 'member' AND player_id IS NOT NULL;`); err != nil {
 		return err
 	}
-	if err := execSchema("idx_sect_mine_defenders_mine", `
-	CREATE INDEX IF NOT EXISTS idx_sect_mine_defenders_mine ON sect_mine_defenders (mine_id);`); err != nil {
+	if err := execSchema("idx_sect_defenders_sect", `
+	CREATE INDEX IF NOT EXISTS idx_sect_defenders_sect ON sect_defenders (sect_id);`); err != nil {
 		return err
 	}
 

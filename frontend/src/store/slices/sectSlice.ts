@@ -58,10 +58,13 @@ export interface SectSlice {
   actionJoinRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
   fetchPromotionRequests: () => Promise<void>;
   actionPromotionRequest: (requestId: string, action: "approve" | "reject") => Promise<boolean>;
-  fetchSectMines: () => Promise<void>;
-  attackSectMine: (slotId: number, attackerId?: string) => Promise<boolean>;
-  assignSectMineDefender: (mineId: number, defenderType: 'member' | 'beast', playerId?: string, monsterId?: string, monsterRank?: number) => Promise<boolean>;
-  removeSectMineDefender: (defenderId: string) => Promise<boolean>;
+  sectMap: any[];
+  fetchSectsMap: () => Promise<void>;
+  attackSect: (targetSectId: string, attackerId?: string) => Promise<boolean>;
+  defendSect: (defenderType: 'member' | 'beast', playerId?: string, monsterId?: string, monsterRank?: number) => Promise<boolean>;
+  undefendSect: (defenderId: string) => Promise<boolean>;
+  toggleDefendSect: () => Promise<boolean>;
+  upgradeSectBuilding: (buildingName: string) => Promise<boolean>;
 }
 
 export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get) => ({
@@ -71,7 +74,7 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
   sectMembers: [],
   sectJoinRequests: [],
   sectPromotionRequests: [],
-  sectMines: [],
+  sectMap: [],
 
   fetchSects: async () => {
     const { token, logout } = get();
@@ -810,56 +813,79 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
     } finally { set({ actionLoading: false }); }
   },
 
-  fetchSectMines: async () => {
+  fetchSectsMap: async () => {
     const { token } = get();
     if (!token) return;
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/sects/mines`, { method: "GET" });
-      if (!response.ok) throw new Error("Failed to fetch sect mines");
+      const response = await authFetch(`${BACKEND_URL}/api/sects/map`, { method: "GET" });
+      if (!response.ok) throw new Error("Failed to fetch sects map");
       const data = await response.json();
-      set({ sectMines: data || [] });
+      set({ sectMap: data || [] });
     } catch (err) {
-      console.error("Failed to fetch sect mines", err);
+      console.error("Failed to fetch sect map", err);
     }
   },
 
-  attackSectMine: async (slotId: number, attackerId?: string) => {
+  attackSect: async (targetSectId: string, attackerId?: string) => {
     const { token, actionLoading, logout, addToast, addLog } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/attack`, {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/attack`, {
         method: "POST",
-        body: JSON.stringify({ mine_id: slotId, attacker_id: attackerId || "" }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_sect_id: targetSectId, attacker_id: attackerId || "" }),
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Lỗi khi tấn công Lãnh địa");
-      addToast(data.message || "Đã tấn công Lãnh địa Tông môn!", data.won ? "success" : "info");
-      addLog(data.message || "Tấn công Lãnh địa Tông môn.");
-      get().fetchPlayerProfile(
-        get().player?.username || ""
-      ); // To refresh combat state
-      get().fetchSectMines();
+      if (!response.ok) throw new Error(data.error || "Lỗi khi tấn công Tông môn");
+      addToast(data.message || "Đã tấn công Tông môn!", data.won ? "success" : "info");
+      addLog(data.message || "Tấn công Tông môn.");
+      get().fetchPlayerProfile(get().player?.username || "");
+      get().fetchSectsMap();
       return true;
     } catch (err: any) {
-      addToast(err.message || "Lỗi khi tấn công Lãnh địa", "error");
+      addToast(err.message || "Lỗi khi tấn công", "error");
       return false;
     } finally {
       set({ actionLoading: false });
     }
   },
 
-  assignSectMineDefender: async (mineId, defenderType, playerId, monsterId, monsterRank) => {
+  toggleDefendSect: async () => {
+    const { token, actionLoading, logout, addToast, addLog, mySectStatus } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/toggle-defend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại");
+      addToast(data.message || "Đã cập nhật trạng thái Trấn Thủ!", "success");
+      addLog(data.message || "Cập nhật Trấn Thủ Tông Môn.");
+      get().fetchMySectStatus();
+      get().fetchSectsMap();
+      return true;
+    } catch (err: any) {
+      addToast(err.message || "Lỗi cập nhật Trấn Thủ", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  defendSect: async (defenderType: 'member' | 'beast', playerId?: string, monsterId?: string, monsterRank?: number) => {
     const { token, actionLoading, logout, addToast, addLog } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/defend`, {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/defend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mine_id: mineId,
           defender_type: defenderType,
           player_id: playerId || "",
           monster_id: monsterId || "",
@@ -870,8 +896,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bố trí phòng thủ thất bại.");
       addToast(data.message || "Đã bố trí phòng thủ!", "success");
-      addLog(data.message || "Bố trí phòng thủ lãnh địa.");
-      get().fetchSectMines();
+      addLog(data.message || "Bố trí phòng thủ tông môn.");
+      get().fetchSectsMap();
       get().fetchMySectStatus();
       return true;
     } catch (err: any) {
@@ -882,12 +908,12 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
     }
   },
 
-  removeSectMineDefender: async (defenderId: string) => {
+  undefendSect: async (defenderId: string) => {
     const { token, actionLoading, logout, addToast, addLog } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/undefend`, {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/undefend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ defender_id: defenderId }),
@@ -896,12 +922,37 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rút phòng thủ thất bại.");
       addToast(data.message || "Đã rút phòng thủ!", "success");
-      addLog(data.message || "Rút phòng thủ lãnh địa.");
-      get().fetchSectMines();
+      addLog(data.message || "Rút phòng thủ tông môn.");
+      get().fetchSectsMap();
       get().fetchMySectStatus();
       return true;
     } catch (err: any) {
       addToast(err.message || "Lỗi rút phòng thủ", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+  
+  upgradeSectBuilding: async (buildingName: string) => {
+    const { token, actionLoading, logout, addToast, addLog } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/building/upgrade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ building_name: buildingName }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nâng cấp kiến trúc thất bại.");
+      addToast(data.message || "Đã nâng cấp kiến trúc!", "success");
+      addLog(data.message || "Nâng cấp kiến trúc tông môn.");
+      get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      addToast(err.message || "Lỗi nâng cấp", "error");
       return false;
     } finally {
       set({ actionLoading: false });

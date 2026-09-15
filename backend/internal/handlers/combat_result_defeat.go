@@ -50,6 +50,17 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
 	} else if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 		defeatMsg = "Thất bại trong trận tranh đoạt Mỏ! May mắn không tổn hại đến bản thể và tài sản."
+	} else if player.ActiveCombat != nil && player.ActiveCombat.TargetSectID != "" {
+		defeatMsg = "Công kích Tông Môn thất bại! Đạo hữu trọng thương lui về thành trấn an dưỡng."
+		sectDefeatLogs := ApplySectWarDefeat(tx, player, player.ActiveCombat)
+		for _, sLog := range sectDefeatLogs {
+			defLogs = append(defLogs, simulator.CombatLog{
+				Turn:   simState.Turn,
+				Action: "SECT_WAR",
+				Detail: sLog,
+			})
+		}
+		player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
 	} else {
 		deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 		var winnerID *uuid.UUID

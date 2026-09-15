@@ -243,10 +243,22 @@ func AutoCombatStart(c *gin.Context) {
 			mineLogs, _ := applyAutoCombatMineOccupation(tx, &player, player.ActiveCombat, simState.Turn)
 			logs = append(logs, mineLogs...)
 
+			// Sect War Victory
+			if player.ActiveCombat.TargetSectID != "" {
+				sectWarLogs := ApplySectWarVictory(tx, &player, player.ActiveCombat)
+				for _, swMsg := range sectWarLogs {
+					logs = append(logs, simulator.CombatLog{
+						Turn:   simState.Turn,
+						Action: "SECT_WAR",
+						Detail: swMsg,
+					})
+				}
+			}
+
 			if player.ClearedCells == nil {
 				player.ClearedCells = make(models.ClearedCellsMap)
 			}
-			if !isTribulation {
+			if !isTribulation && player.ActiveCombat.TargetSectID == "" {
 				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
