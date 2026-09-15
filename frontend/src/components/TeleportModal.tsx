@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useGameStore } from "@/store/useGameStore";
+import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 
 export interface RegionInfo {
@@ -47,11 +47,12 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
   // Filter Portal Gu
   const portalGus = player?.gu_inventory?.filter((gu) => {
-    const spec = guDictionary[gu.gu_id];
+    const spec = guSpecFor(gu.gu_id, gu.rank);
     return gu.equipped && gu.status === "ACTIVE" && (spec?.effects?.active?.portal_create === true || spec?.effects?.active?.random_portal === true);
   }) ?? [];
   const [selectedGu, setSelectedGu] = useState<string>("");
-  const activeSpec = selectedGu ? guDictionary[player?.gu_inventory?.find(g => g.instance_id === selectedGu)?.gu_id || ""] : null;
+  const activeGu = player?.gu_inventory?.find(g => g.instance_id === selectedGu);
+  const activeSpec = activeGu ? guSpecFor(activeGu.gu_id, activeGu.rank) : null;
   const isRandomPortal = activeSpec?.effects?.active?.random_portal === true;
 
   useEffect(() => {
@@ -257,7 +258,7 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
                   >
                     {portalGus.map(g => (
                       <option key={g.instance_id} value={g.instance_id}>
-                        {guDictionary[g.gu_id]?.name || g.gu_id} (Rank {g.rank})
+                        {guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Rank {g.rank})
                       </option>
                     ))}
                   </select>

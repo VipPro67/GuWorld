@@ -406,7 +406,7 @@ const manaRegenTickPerHour = (player: Player, guDictionary: Record<string, GuSpe
   let total = 0;
   for (const gu of player.gu_inventory) {
     if (!gu.equipped || gu.status !== "ACTIVE") continue;
-    const spec = guDictionary[gu.gu_id];
+    const spec = guSpecFor(gu.gu_id, gu.rank);
     if (!spec || !spec.effects?.other) continue;
     for (const mech of spec.effects.other) {
       if (mech.event_trigger !== "ON_TICK" || mech.action_code !== "MANA_REGEN_TICK") continue;
@@ -1238,19 +1238,18 @@ export function guSpecFor(guId?: string, rank?: number): GuSpec | undefined {
   const state = useGameStore.getState();
   const byRank = state.guByRank[guId];
   if (byRank) {
-    if (rank != null && byRank[rank]) return byRank[rank];
+    if (rank != null) return byRank[rank];
     const ranks = Object.keys(byRank).map(Number);
     const maxRank = ranks.length ? Math.max(...ranks) : 0;
     if (maxRank && byRank[maxRank]) return byRank[maxRank];
   }
-  return state.guDictionary[guId];
+  return rank == null ? state.guDictionary[guId] : undefined;
 }
 
 export function formatRecipeName(recipeId: string): string {
   const targetGuID = recipeId.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
   const match = recipeId.match(/_(\d+)_(\d+)$/);
-  const state = useGameStore.getState();
-  const name = state.guDictionary[targetGuID]?.name || recipeId;
+  const name = guSpecFor(targetGuID, match ? Number(match[1]) : undefined)?.name || recipeId;
   
   if (match) {
     const rank = match[1];

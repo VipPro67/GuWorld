@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName } from "@/store/useGameStore";
+import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName, guSpecFor } from "@/store/useGameStore";
 import { translatePath, parsePaths } from "@/lib/translate";
 import {
   Shield,
@@ -2483,7 +2483,7 @@ export const SectView: React.FC = () => {
             }> = {};
 
             playerDonatableGus.forEach((g) => {
-              const spec = guDictionary[g.gu_id];
+              const spec = guSpecFor(g.gu_id, g.rank);
               const rank = g.rank || spec?.rank || 1;
               const name = spec?.name || g.gu_id;
               const val = getGuValue(g.gu_id);
@@ -2508,14 +2508,14 @@ export const SectView: React.FC = () => {
             ).sort((a, b) => a - b);
 
             const availableDonateGuPaths = Array.from(
-              new Set(groupedGusList.flatMap((g) => parsePaths(guDictionary[g.gu_id]?.path)))
+              new Set(groupedGusList.flatMap((g) => parsePaths(guSpecFor(g.gu_id, g.rank)?.path)))
             ).filter(Boolean).sort((a, b) => translatePath(a).localeCompare(translatePath(b), "vi"));
 
             const filteredGus = groupedGusList.filter((g) => {
               const matchesSearch = !donateSearch || g.name.toLowerCase().includes(donateSearch.toLowerCase()) || g.gu_id.toLowerCase().includes(donateSearch.toLowerCase());
               const matchesRank = donateRankFilter === "All" || g.rank.toString() === donateRankFilter;
               
-              const spec = guDictionary[g.gu_id];
+              const spec = guSpecFor(g.gu_id, g.rank);
               const paths = parsePaths(spec?.path);
               const matchesPath = donatePathFilter === "All" || paths.includes(donatePathFilter);
 
@@ -2654,7 +2654,7 @@ export const SectView: React.FC = () => {
                       <div className="col-span-full text-center py-12 text-xs text-zinc-600 font-mono">Không tìm thấy cổ trùng phù hợp</div>
                     ) : (
                       filteredGus.map((g) => {
-                        const spec = guDictionary[g.gu_id];
+                        const spec = guSpecFor(g.gu_id, g.rank);
                         const key = `${g.gu_id}_rank_${g.rank}`;
                         const isSelected = !!selectedDonateGus[key];
                         const selectedItem = selectedDonateGus[key];

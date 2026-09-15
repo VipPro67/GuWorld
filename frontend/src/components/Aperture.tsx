@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, ImmortalAperture, PlayerStatusInstance, useGameStore } from "@/store/useGameStore";
+import { estimateManaFromSnapshot, estimateHPFromSnapshot, guSpecFor, GuInstance, GuSpec, Player, ImmortalAperture, PlayerStatusInstance, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
   ShieldAlert,
@@ -146,7 +146,7 @@ const ORBIT_R = 114;
 function collectOwnedGrowthTypes(player: Player, guDictionary: Record<string, GuSpec>): { gu_id: string; rank: number; growth_hours: number }[] {
   const map = new Map<string, { gu_id: string; rank: number; growth_hours: number }>();
   (player.gu_inventory || []).forEach((gu) => {
-    const spec = guDictionary[gu.gu_id];
+    const spec = guSpecFor(gu.gu_id, gu.rank);
     if (!spec?.effects?.growth?.hours_to_max) return;
     const key = `${gu.gu_id}@${gu.rank}`;
     const gh = gu.growth_hours || 0;
@@ -460,7 +460,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   // Vital Gu
   const vitalGu = guInventory.find((g) => g.is_vital);
-  const vitalSpec = vitalGu ? guDictionary[vitalGu.gu_id] : null;
+  const vitalSpec = vitalGu ? guSpecFor(vitalGu.gu_id, vitalGu.rank) : null;
 
   // Equipped Gu (max 6)
   let equippedGus = guInventory.filter((g) => g.equipped && g.status !== "DEAD" && g.is_vital !== true);
@@ -488,7 +488,7 @@ export const Aperture: React.FC<ApertureProps> = ({
     const angle = (i / Math.max(equippedGus.length, 1)) * 2 * Math.PI - Math.PI / 2;
     return {
       g,
-      spec: guDictionary[g.gu_id],
+      spec: guSpecFor(g.gu_id, g.rank),
       x: CX + ORBIT_R * Math.cos(angle),
       y: CY + ORBIT_R * Math.sin(angle),
     };
@@ -900,7 +900,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                             if (s.id.startsWith("cd_gu_")) {
                               const instanceId = s.id.substring(6);
                               const gu = player.gu_inventory?.find((g: any) => g.instance_id === instanceId);
-                              const specName = gu ? guDictionary[gu.gu_id]?.name || "Cổ Trùng" : "Cổ Trùng";
+                              const specName = gu ? guSpecFor(gu.gu_id, gu.rank)?.name || "Cổ Trùng" : "Cổ Trùng";
                               displayName = `Hồi chiêu: ${specName}`;
                             } else if (s.id.startsWith("cd_km_")) {
                               displayName = "Hồi chiêu Sát Chiêu";
@@ -1025,7 +1025,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                 return (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {growing.map(t => {
-                      const spec = guDictionary[t.gu_id];
+                      const spec = guSpecFor(t.gu_id, t.rank);
                       const g = spec?.effects?.growth;
                       const maxH = g?.hours_to_max || 168;
                       const curH = t.growth_hours || 0;
@@ -1068,10 +1068,10 @@ export const Aperture: React.FC<ApertureProps> = ({
                       return (
                         <div key={`fg-${fg.gu_id}-${fg.rank}-${i}`} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                           <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
-                            {(guDictionary[fg.gu_id]?.name || fg.gu_id).slice(0, 2)}
+                            {(guSpecFor(fg.gu_id, fg.rank)?.name || fg.gu_id).slice(0, 2)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold text-zinc-200 font-mono truncate">{guDictionary[fg.gu_id]?.name || fg.gu_id}</div>
+                            <div className="text-xs font-bold text-zinc-200 font-mono truncate">{guSpecFor(fg.gu_id, fg.rank)?.name || fg.gu_id}</div>
                             <div className="text-[10px] text-emerald-400">{parts.join(" | ")}</div>
                           </div>
                         </div>
@@ -1716,7 +1716,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         {eligibleGusForCombat
                           .filter((gu) => {
                             if (combatCategoryTab === "all") return true;
-                            const spec = guDictionary[gu.gu_id];
+                            const spec = guSpecFor(gu.gu_id, gu.rank);
                             if (!spec || !spec.effects || !spec.effects.active) return combatCategoryTab === "other";
                             const act = spec.effects.active;
                             if ((act.shield_flat && act.shield_flat > 0) || act.apply_status === "DEF_UP" || act.wood_transformation) {
@@ -1731,7 +1731,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                             return combatCategoryTab === "other";
                           })
                           .map((gu) => {
-                          const spec = guDictionary[gu.gu_id];
+                          const spec = guSpecFor(gu.gu_id, gu.rank);
                           const idx = csGuPriorities.findIndex(t => t.gu_id === gu.gu_id);
                           const inLoadout = idx !== -1;
                           const tactic = inLoadout ? csGuPriorities[idx] : null;
