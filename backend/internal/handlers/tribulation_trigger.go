@@ -811,7 +811,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		return fmt.Errorf("load tribulation minion template monster_tribulation_beast from database: %w", err)
 	}
 
-	minionCount := 1 + rand.Intn(3)
+	minionCount := 1 + rand.Intn(rank-3)
 	minionSubRank := 1
 	for i := 0; i < minionCount; i++ {
 		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, minionSubRank, minion.Type)

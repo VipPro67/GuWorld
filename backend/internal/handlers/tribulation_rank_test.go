@@ -14,24 +14,21 @@ func TestGetTribulationRankAndSubRank(t *testing.T) {
 		wantRank    int
 		wantSubRank int
 	}{
-		// Rank 6: Địa Tai (10y - subRank 1), Thiên Kiếp (100y - subRank 4)
+		// Monster rank is determined by the tribulation type.
 		{"Rank 6 Earth Calamity", 6, "EARTH_CALAMITY", 6, 1},
-		{"Rank 6 Heavenly Tribulation", 6, "HEAVENLY_TRIBULATION", 6, 4},
+		{"Rank 6 Heavenly Tribulation", 6, "HEAVENLY_TRIBULATION", 7, 2},
 
-		// Rank 7: Địa Tai (10y - subRank 1), Thiên Kiếp (50y - subRank 2), Hạo Kiếp (100y - subRank 4)
-		{"Rank 7 Earth Calamity", 7, "EARTH_CALAMITY", 7, 1},
+		{"Rank 7 Earth Calamity", 7, "EARTH_CALAMITY", 6, 1},
 		{"Rank 7 Heavenly Tribulation", 7, "HEAVENLY_TRIBULATION", 7, 2},
-		{"Rank 7 Grand Tribulation", 7, "GRAND_TRIBULATION", 7, 4},
+		{"Rank 7 Grand Tribulation", 7, "GRAND_TRIBULATION", 8, 3},
 
-		// Rank 8: Thiên Kiếp (10y - subRank 1), Hạo Kiếp (50y - subRank 2), Vạn Kiếp (100y - subRank 4)
-		{"Rank 8 Heavenly Tribulation", 8, "HEAVENLY_TRIBULATION", 8, 1},
-		{"Rank 8 Grand Tribulation", 8, "GRAND_TRIBULATION", 8, 2},
-		{"Rank 8 Myriad Tribulation", 8, "MYRIAD_TRIBULATION", 8, 4},
+		{"Rank 8 Heavenly Tribulation", 8, "HEAVENLY_TRIBULATION", 7, 2},
+		{"Rank 8 Grand Tribulation", 8, "GRAND_TRIBULATION", 8, 3},
+		{"Rank 8 Myriad Tribulation", 8, "MYRIAD_TRIBULATION", 9, 4},
 
-		// Rank 9: Hạo Kiếp (10y - subRank 1), Vạn Kiếp (50y - subRank 2), Hỗn Độn (100y - subRank 4)
-		{"Rank 9 Grand Tribulation", 9, "GRAND_TRIBULATION", 9, 1},
-		{"Rank 9 Myriad Tribulation", 9, "MYRIAD_TRIBULATION", 9, 2},
-		{"Rank 9 Chaos Calamity", 9, "CHAOS_CALAMITY", 9, 4},
+		{"Rank 9 Grand Tribulation", 9, "GRAND_TRIBULATION", 8, 3},
+		{"Rank 9 Myriad Tribulation", 9, "MYRIAD_TRIBULATION", 9, 4},
+		{"Rank 9 Chaos Calamity", 9, "CHAOS_CALAMITY", 10, 4},
 	}
 
 	for _, tt := range tests {
@@ -163,7 +160,7 @@ func TestSanitizeTribulationTypeForRank(t *testing.T) {
 		{8, "EARTH_CALAMITY", "HEAVENLY_TRIBULATION"}, // Earth Calamity invalid for Rank 8 -> defaults to HEAVENLY_TRIBULATION
 		{8, "", "HEAVENLY_TRIBULATION"},
 
-		{9, "EARTH_CALAMITY", "GRAND_TRIBULATION"}, // Earth Calamity invalid for Rank 9 -> defaults to GRAND_TRIBULATION
+		{9, "EARTH_CALAMITY", "GRAND_TRIBULATION"},       // Earth Calamity invalid for Rank 9 -> defaults to GRAND_TRIBULATION
 		{9, "HEAVENLY_TRIBULATION", "GRAND_TRIBULATION"}, // Heavenly Tribulation invalid for Rank 9 -> defaults to GRAND_TRIBULATION
 		{9, "MYRIAD_TRIBULATION", "MYRIAD_TRIBULATION"},
 		{9, "", "GRAND_TRIBULATION"},
@@ -179,4 +176,3 @@ func TestSanitizeTribulationTypeForRank(t *testing.T) {
 		}
 	}
 }
-

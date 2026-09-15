@@ -117,37 +117,37 @@ type TribulationEnemy struct {
 }
 
 type ApertureVariantHuman struct {
-	ID             string    `json:"id"`
-	ApertureID     string    `json:"aperture_id"`
-	Race           string    `json:"race"` // 'HAIRY_MAN', 'ROCKMAN', 'FEATHERMAN'
-	Population     int       `json:"population"`
-	Happiness      float64   `json:"happiness"`
-	Oppression     float64   `json:"oppression"`
-	RebellionRate  float64   `json:"rebellion_rate"`
-	LaborIntensity string    `json:"labor_intensity"` // 'LOW', 'NORMAL', 'HIGH', 'EXPLOIT'
-	Prosperity     float64   `json:"prosperity"`
-	GuMasterCount  int       `json:"gu_master_count"`
-	GuImmortalCount int      `json:"gu_immortal_count"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	ApertureID      string    `json:"aperture_id"`
+	Race            string    `json:"race"` // 'HAIRY_MAN', 'ROCKMAN', 'FEATHERMAN'
+	Population      int       `json:"population"`
+	Happiness       float64   `json:"happiness"`
+	Oppression      float64   `json:"oppression"`
+	RebellionRate   float64   `json:"rebellion_rate"`
+	LaborIntensity  string    `json:"labor_intensity"` // 'LOW', 'NORMAL', 'HIGH', 'EXPLOIT'
+	Prosperity      float64   `json:"prosperity"`
+	GuMasterCount   int       `json:"gu_master_count"`
+	GuImmortalCount int       `json:"gu_immortal_count"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // ApertureNodeWorker represents variant human workers assigned to a resource node.
 type ApertureNodeWorker struct {
-	ID                string    `json:"id"`
-	NodeID            string    `json:"node_id"`
-	VariantHumanID    string    `json:"variant_human_id"`
-	AssignedPopulation int      `json:"assigned_population"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                 string    `json:"id"`
+	NodeID             string    `json:"node_id"`
+	VariantHumanID     string    `json:"variant_human_id"`
+	AssignedPopulation int       `json:"assigned_population"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // RefinementMode constants for aperture_refinement_queue.
 const (
-	RefineModeFixedCount       = "FIXED_COUNT"
-	RefineModeUntilSuccess     = "UNTIL_SUCCESS"
-	RefineModeUntilMaterial    = "UNTIL_MATERIAL_EMPTY"
-	RefineModeMaintainStock    = "MAINTAIN_STOCK"
+	RefineModeFixedCount    = "FIXED_COUNT"
+	RefineModeUntilSuccess  = "UNTIL_SUCCESS"
+	RefineModeUntilMaterial = "UNTIL_MATERIAL_EMPTY"
+	RefineModeMaintainStock = "MAINTAIN_STOCK"
 )
 
 // ApertureRefinementQueue represents an auto-refinement job for variant humans.
@@ -155,7 +155,7 @@ type ApertureRefinementQueue struct {
 	ID              string    `json:"id"`
 	ApertureID      string    `json:"aperture_id"`
 	RecipeID        string    `json:"recipe_id"`
-	Mode            string    `json:"mode"`     // FIXED_COUNT, UNTIL_SUCCESS, UNTIL_MATERIAL_EMPTY, MAINTAIN_STOCK
+	Mode            string    `json:"mode"` // FIXED_COUNT, UNTIL_SUCCESS, UNTIL_MATERIAL_EMPTY, MAINTAIN_STOCK
 	TargetQuantity  int       `json:"target_quantity"`
 	CurrentQuantity int       `json:"current_quantity"`
 	Priority        int       `json:"priority"`
@@ -183,11 +183,11 @@ type ApertureVariantSettlement struct {
 type ApertureVariantEvent struct {
 	ID          string     `json:"id"`
 	ApertureID  string     `json:"aperture_id"`
-	EventType   string     `json:"event_type"`   // REBELLION, GENIUS_BIRTH, IMMORTAL_ASCENSION, MIGRATION, DISASTER
+	EventType   string     `json:"event_type"` // REBELLION, GENIUS_BIRTH, IMMORTAL_ASCENSION, MIGRATION, DISASTER
 	Race        string     `json:"race"`
-	Severity    string     `json:"severity"`      // LOW, MEDIUM, HIGH, CRITICAL
+	Severity    string     `json:"severity"` // LOW, MEDIUM, HIGH, CRITICAL
 	Description string     `json:"description"`
-	Effects     string     `json:"effects"`       // JSONB
+	Effects     string     `json:"effects"` // JSONB
 	Resolved    bool       `json:"resolved"`
 	CreatedAt   time.Time  `json:"created_at"`
 	ResolvedAt  *time.Time `json:"resolved_at,omitempty"`
@@ -216,19 +216,19 @@ const (
 
 // ApertureVariantNPC represents a named Gu Master / Gu Immortal NPC within an aperture.
 type ApertureVariantNPC struct {
-	ID          string    `json:"id"`
-	ApertureID  string    `json:"aperture_id"`
-	Race        string    `json:"race"`
-	Name        string    `json:"name"`
-	Rank        int       `json:"rank"`
-	SubRank     int       `json:"sub_rank"`
-	Path        string    `json:"path"`
-	Role        string    `json:"role"`
-	Loyalty     float64   `json:"loyalty"`
-	Talent      float64   `json:"talent"`
-	Status      string    `json:"status"` // IDLE, REFINING, MINING, TRAINING, DEAD
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	ApertureID string    `json:"aperture_id"`
+	Race       string    `json:"race"`
+	Name       string    `json:"name"`
+	Rank       int       `json:"rank"`
+	SubRank    int       `json:"sub_rank"`
+	Path       string    `json:"path"`
+	Role       string    `json:"role"`
+	Loyalty    float64   `json:"loyalty"`
+	Talent     float64   `json:"talent"`
+	Status     string    `json:"status"` // IDLE, REFINING, MINING, TRAINING, DEAD
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type TribTypeConfig struct {
@@ -323,7 +323,6 @@ func SanitizeTribulationTypeForRank(rank int, tribType string) string {
 	}
 	return types[0].Type
 }
-
 
 func tribulationPriority(t string) int {
 	switch t {
@@ -440,62 +439,24 @@ func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCn
 	return false, 0
 }
 
-// GetTribulationRankAndSubRank returns the monster rank and subRank for a tribulation event
-// matching the player's realm rank and the calamity type according to lore:
-// - Rank 6: Địa Tai (10y - Sơ Giai), Thiên Kiếp (100y - Đỉnh Phong)
-// - Rank 7: Địa Tai (10y - Sơ Giai), Thiên Kiếp (50y - Trung Giai), Hạo Kiếp (100y - Đỉnh Phong)
-// - Rank 8: Thiên Kiếp (10y - Sơ Giai), Hạo Kiếp (50y - Trung Giai), Vạn Kiếp (100y - Đỉnh Phong)
-// - Rank 9: Hạo Kiếp (10y - Sơ Giai), Vạn Kiếp (50y - Trung Giai), Hỗn Độn Đại Nạn (100y - Đỉnh Phong)
-func GetTribulationRankAndSubRank(playerRank int, tribType string) (rank int, subRank int) {
-	rank = playerRank
-	if rank < 6 {
-		rank = 6
-	} else if rank > 10 {
-		rank = 10
+// GetTribulationRankAndSubRank returns the monster rank and subRank based on
+// the tribulation type. The player rank controls which types can be scheduled,
+// but it does not change the rank of the monster spawned for that type.
+func GetTribulationRankAndSubRank(_ int, tribType string) (rank int, subRank int) {
+	switch tribType {
+	case "EARTH_CALAMITY":
+		return 6, 1
+	case "HEAVENLY_TRIBULATION":
+		return 7, 2
+	case "GRAND_TRIBULATION":
+		return 8, 3
+	case "MYRIAD_TRIBULATION":
+		return 9, 4
+	case "CHAOS_CALAMITY":
+		return 10, 4
+	default:
+		return 6, 1
 	}
-
-	subRank = 1
-	switch rank {
-	case 6:
-		switch tribType {
-		case "EARTH_CALAMITY":
-			subRank = 1
-		case "HEAVENLY_TRIBULATION":
-			subRank = 4
-		}
-	case 7:
-		switch tribType {
-		case "EARTH_CALAMITY":
-			subRank = 1
-		case "HEAVENLY_TRIBULATION":
-			subRank = 2
-		case "GRAND_TRIBULATION":
-			subRank = 4
-		}
-	case 8:
-		switch tribType {
-		case "HEAVENLY_TRIBULATION":
-			subRank = 1
-		case "GRAND_TRIBULATION":
-			subRank = 2
-		case "MYRIAD_TRIBULATION":
-			subRank = 4
-		}
-	case 9:
-		switch tribType {
-		case "GRAND_TRIBULATION":
-			subRank = 1
-		case "MYRIAD_TRIBULATION":
-			subRank = 2
-		case "CHAOS_CALAMITY":
-			subRank = 4
-		}
-	case 10:
-		if tribType == "CHAOS_CALAMITY" {
-			subRank = 4
-		}
-	}
-	return rank, subRank
 }
 
 // CalculateTribulationReward calculates the Dao Marks reward based on player rank, tribulation type, and difficulty.
