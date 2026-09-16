@@ -546,6 +546,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 
 			// Phase 2: Society — settlements
 			aperture.GET("/settlements", handlers.GetSettlements)
+			aperture.POST("/settlements", handlers.BuildSettlement)
 			aperture.POST("/settlements/:settlement_id/upgrade", handlers.UpgradeSettlement)
 
 			// Phase 3: Variant NPCs

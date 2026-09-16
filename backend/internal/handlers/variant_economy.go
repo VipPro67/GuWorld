@@ -2,13 +2,17 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // ---------- Request types ----------
@@ -163,6 +167,12 @@ func AssignWorkerToNode(c *gin.Context) {
 	}
 
 	_ = tx.Commit()
+
+	notify.Send(db.DB, playerID, "worker_assigned", "⛏️ Phân Công Lao Động Dị Nhân", fmt.Sprintf(
+		"Đã phân công thành công %d %s vào khai thác/sản xuất tại Node [%s]!\n\n📈 Tác động:\n• Lao động phân công: %d người\n• Chủng tộc: %s",
+		req.AssignedPopulation, vhRace, nodeID, req.AssignedPopulation, vhRace,
+	))
+
 	c.JSON(http.StatusOK, gin.H{"message": "Phân công lao động thành công"})
 }
 
@@ -283,10 +293,60 @@ func CreateRefinementJob(c *gin.Context) {
 		return
 	}
 
-	// Validate recipe exists in registry.
-	if _, ok := models.ItemRegistry[req.RecipeID]; !ok {
-		// Recipe may also be a Gu ID — skip validation if registry doesn't have it.
-		// Workers will skip invalid recipes at tick time.
+	// 1. Kiểm tra bí phương hoàn thiện của người chơi (player_recipe_progress)
+	var isUnlocked bool
+	var completionRate float64
+	err = db.DB.QueryRow(`
+		SELECT is_unlocked, completion_rate
+		FROM player_recipe_progress
+		WHERE player_id = $1 AND (
+			recipe_id = $2 OR
+			recipe_id = 'recipe_' || $2 OR
+			('recipe_' || REPLACE($2, 'recipe_', '')) = recipe_id
+		)
+	`, playerID, req.RecipeID).Scan(&isUnlocked, &completionRate)
+	if err == sql.ErrNoRows || (!isUnlocked && completionRate < 100.0) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa sở hữu bí phương hoàn thiện (100%) cho Cổ trùng này!"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// 2. Kiểm tra nguyên liệu tương ứng trong kho/hành trang người chơi
+	var reqMatsJSON sql.NullString
+	_ = db.DB.QueryRow(`
+		SELECT required_materials::text
+		FROM refining_recipes
+		WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1
+		   OR target_gu_id = $1
+		LIMIT 1
+	`, req.RecipeID).Scan(&reqMatsJSON)
+
+	var matSummary string
+	if reqMatsJSON.Valid && reqMatsJSON.String != "" && reqMatsJSON.String != "{}" {
+		var reqMats map[string]int
+		if err := json.Unmarshal([]byte(reqMatsJSON.String), &reqMats); err == nil && len(reqMats) > 0 {
+			var parts []string
+			for matID, reqQty := range reqMats {
+				var currentQty int
+				_ = db.DB.QueryRow(`
+					SELECT quantity FROM player_inventory_items
+					WHERE player_id = $1 AND item_id = $2
+				`, playerID, matID).Scan(&currentQty)
+
+				if currentQty < reqQty {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s trong hành trang (cần %d, hiện có %d)!", matID, reqQty, currentQty)})
+					return
+				}
+				parts = append(parts, fmt.Sprintf("%s x%d", matID, reqQty*req.TargetQuantity))
+			}
+			matSummary = strings.Join(parts, ", ")
+		}
+	}
+	if matSummary == "" {
+		matSummary = "Nguyên liệu theo công thức bí phương"
 	}
 
 	id := uuid.New().String()
@@ -298,6 +358,18 @@ func CreateRefinementJob(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
+
+	modeLabels := map[string]string{
+		"FIXED_COUNT":          "Số lượng cố định",
+		"MAINTAIN_STOCK":       "Duy trì trong kho",
+		"UNTIL_SUCCESS":        "Luyện đến khi thành công",
+		"UNTIL_MATERIAL_EMPTY": "Luyện hết nguyên liệu trong kho",
+	}
+
+	notify.Send(db.DB, playerID, "refine_job_created", "🔨 Tiếp Nhận Lệnh Luyện Cổ Tự Động", fmt.Sprintf(
+		"Tộc Mao Dân đã tiếp nhận lệnh luyện Cổ [%s]!\n\n📋 Chi tiết công việc:\n• Chế độ luyện: %s\n• Mục tiêu: %d con\n• Khấu trừ dự kiến: %s\n• Nơi lưu trữ: Kho Tiên Khiếu",
+		req.RecipeID, modeLabels[req.Mode], req.TargetQuantity, matSummary,
+	))
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Đã tạo lệnh luyện cổ tự động", "id": id})
 }
@@ -369,14 +441,149 @@ func GetSettlements(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"settlements": list})
 }
 
+// BuildSettlement creates a new settlement for a variant race in the player's aperture.
+type CreateSettlementRequest struct {
+	Race           string `json:"race" binding:"required"`
+	Name           string `json:"name"`
+	SettlementType string `json:"settlement_type"` // VILLAGE, TOWN, CITY, FORTRESS
+}
+
+func BuildSettlement(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req CreateSettlementRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu yêu cầu không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Get player's aperture ID
+	var apertureID string
+	err = tx.QueryRow(`SELECT id FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&apertureID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy Tiên Khiếu"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Check if a settlement already exists for this race
+	var existingID string
+	err = tx.QueryRow(`SELECT id FROM aperture_variant_settlements WHERE aperture_id = $1 AND race = $2`, apertureID, req.Race).Scan(&existingID)
+	if err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bộ tộc này đã có cơ sở định cư/thành trì trong Tiên Khiếu!"})
+		return
+	}
+
+	settlementType := req.SettlementType
+	if settlementType == "" {
+		settlementType = "VILLAGE"
+	}
+
+	name := req.Name
+	if name == "" {
+		raceNames := map[string]string{
+			"HAIRY_MAN":   "Bản Làng Mao Dân",
+			"ROCKMAN":     "Thạch Sấm Động",
+			"FEATHERMAN":  "Lông Vũ Trại",
+			"SNOWMAN":     "Tuyết Nhân Thôn",
+			"INKMAN":      "Mặc Thư Viện",
+			"MINIMAN":     "Tiểu Nhân Điền",
+			"MERMAN":      "Giao Nhân Thủy Trái",
+			"MUSHROOMMAN": "Nấm Nhân Động",
+			"DRAGONMAN":   "Long Nhân Thành",
+		}
+		if defaultName, ok := raceNames[req.Race]; ok {
+			name = defaultName
+		} else {
+			name = "Bản Làng Dị Nhân"
+		}
+	}
+
+	capacity := 10000
+	housing := 2000
+	foodStorage := 5000
+	security := 50.0
+
+	switch settlementType {
+	case "TOWN":
+		capacity = 50000
+		housing = 10000
+		foodStorage = 25000
+		security = 70.0
+	case "CITY":
+		capacity = 250000
+		housing = 50000
+		foodStorage = 100000
+		security = 85.0
+	case "FORTRESS":
+		capacity = 1000000
+		housing = 200000
+		foodStorage = 500000
+		security = 95.0
+	}
+
+	var newID string
+	err = tx.QueryRow(`
+		INSERT INTO aperture_variant_settlements (aperture_id, race, name, settlement_type, population_capacity, housing, food_storage, security)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
+	`, apertureID, req.Race, name, settlementType, capacity, housing, foodStorage, security).Scan(&newID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo thành trì"})
+		return
+	}
+
+	// Ensure variant human record exists for this race
+	_, err = tx.Exec(`
+		INSERT INTO aperture_variant_humans (aperture_id, race, population, happiness, oppression, labor_intensity, prosperity)
+		VALUES ($1, $2, 500, 70.0, 0.0, 'NORMAL', 50.0)
+		ON CONFLICT (aperture_id, race) DO NOTHING
+	`, apertureID, req.Race)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	notify.Send(db.DB, playerID, "settlement_built", "🏰 Xây Dựng Thành Trì Mới Thành Công", fmt.Sprintf(
+		"Đã xây dựng thành công pháo đài/định cư [%s] cho bộ tộc [%s]!\n\n📈 Thông số gia tăng:\n• Sức chứa dân số: +%d người\n• Mức độ nhà ở (Housing): +%d điểm\n• Dung lượng kho lương: +%d\n• Chỉ số an ninh: %.0f%%",
+		name, req.Race, capacity, housing, foodStorage, security,
+	))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Xây dựng cơ sở định cư thành công!",
+		"id":      newID,
+	})
+}
+
 type UpgradeSettlementRequest struct {
 	Name               string `json:"name"`
+	SettlementType     string `json:"settlement_type"` // VILLAGE, TOWN, CITY, FORTRESS
 	PopulationCapacity int    `json:"population_capacity" binding:"omitempty,min=0"`
 	Housing            int    `json:"housing" binding:"omitempty,min=0"`
 	FoodStorage        int    `json:"food_storage" binding:"omitempty,min=0"`
+	Security           float64 `json:"security" binding:"omitempty,min=0"`
 }
 
-// UpgradeSettlement upgrades a settlement's capacity.
+// UpgradeSettlement upgrades a settlement's capacity and type.
 func UpgradeSettlement(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -399,13 +606,15 @@ func UpgradeSettlement(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Verify settlement belongs to player's aperture.
+	var currentType, currentName string
 	var currentCap, currentHousing, currentFoodStorage int
+	var currentSecurity float64
 	err = tx.QueryRow(`
-		SELECT s.population_capacity, s.housing, s.food_storage
+		SELECT s.settlement_type, COALESCE(s.name, ''), s.population_capacity, s.housing, s.food_storage, s.security
 		FROM aperture_variant_settlements s
 		JOIN immortal_apertures a ON a.id = s.aperture_id
 		WHERE s.id = $1 AND a.player_id = $2
-	`, settlementID, playerID).Scan(&currentCap, &currentHousing, &currentFoodStorage)
+	`, settlementID, playerID).Scan(&currentType, &currentName, &currentCap, &currentHousing, &currentFoodStorage, &currentSecurity)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy settlement"})
 		return
@@ -415,45 +624,84 @@ func UpgradeSettlement(c *gin.Context) {
 		return
 	}
 
-	// Apply upgrades (only increase, never decrease).
+	newType := currentType
+	if req.SettlementType != "" {
+		newType = req.SettlementType
+	} else {
+		// Default level upgrade if not provided
+		switch currentType {
+		case "VILLAGE":
+			newType = "TOWN"
+		case "TOWN":
+			newType = "CITY"
+		case "CITY":
+			newType = "FORTRESS"
+		}
+	}
+
 	newCap := currentCap
-	if req.PopulationCapacity > currentCap {
+	newHousing := currentHousing
+	newFoodStorage := currentFoodStorage
+	newSecurity := currentSecurity
+
+	switch newType {
+	case "TOWN":
+		newCap = 50000
+		newHousing = 10000
+		newFoodStorage = 25000
+		newSecurity = 70.0
+	case "CITY":
+		newCap = 250000
+		newHousing = 50000
+		newFoodStorage = 100000
+		newSecurity = 85.0
+	case "FORTRESS":
+		newCap = 1000000
+		newHousing = 200000
+		newFoodStorage = 500000
+		newSecurity = 95.0
+	}
+
+	if req.PopulationCapacity > newCap {
 		newCap = req.PopulationCapacity
 	}
-	newHousing := currentHousing
-	if req.Housing > currentHousing {
+	if req.Housing > newHousing {
 		newHousing = req.Housing
 	}
-	newFoodStorage := currentFoodStorage
-	if req.FoodStorage > currentFoodStorage {
+	if req.FoodStorage > newFoodStorage {
 		newFoodStorage = req.FoodStorage
 	}
+	if req.Security > newSecurity {
+		newSecurity = req.Security
+	}
 
-	nameUpdate := ""
+	newName := currentName
 	if req.Name != "" {
-		nameUpdate = req.Name
+		newName = req.Name
 	}
 
-	if nameUpdate != "" {
-		_, err = tx.Exec(`
-			UPDATE aperture_variant_settlements
-			SET name = $3, population_capacity = $4, housing = $5, food_storage = $6, updated_at = NOW()
-			WHERE id = $1
-		`, settlementID, playerID, nameUpdate, newCap, newHousing, newFoodStorage)
-	} else {
-		_, err = tx.Exec(`
-			UPDATE aperture_variant_settlements
-			SET population_capacity = $3, housing = $4, food_storage = $5, updated_at = NOW()
-			WHERE id = $1
-		`, settlementID, newCap, newHousing, newFoodStorage)
-	}
+	_, err = tx.Exec(`
+		UPDATE aperture_variant_settlements
+		SET settlement_type = $2, name = $3, population_capacity = $4, housing = $5, food_storage = $6, security = $7, updated_at = NOW()
+		WHERE id = $1
+	`, settlementID, newType, newName, newCap, newHousing, newFoodStorage, newSecurity)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
 	_ = tx.Commit()
-	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật settlement thành công"})
+
+	notify.Send(db.DB, playerID, "settlement_upgraded", "🏰 Hoàn Thành Nâng Cấp Thành Trì", fmt.Sprintf(
+		"Cơ sở định cư [%s] của bộ tộc đã được nâng cấp từ [%s] lên [%s]!\n\n📈 Chỉ số cập nhật:\n• Tổng sức chứa dân số: %d người (+%d)\n• Tổng nhà ở: %d điểm (+%d)\n• Tổng kho lương thực: %d (+%d)\n• Độ an ninh: %.0f%%",
+		newName, currentType, newType,
+		newCap, newCap-currentCap,
+		newHousing, newHousing-currentHousing,
+		newFoodStorage, newFoodStorage-currentFoodStorage,
+		newSecurity,
+	))
+
+	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật và nâng cấp thành trì thành công"})
 }
 
 // ---------- Variant NPC ----------

@@ -100,6 +100,12 @@ func processSocietyTick(ctx context.Context, db *sql.DB) {
 		return
 	}
 
+	capacityMap, err := loadSettlementCapacities(ctx, db, apertureIDs)
+	if err != nil {
+		logger.S.Error("SocietySim: load capacities: ", err)
+		return
+	}
+
 	// Process each aperture's society.
 	var updates []societyUpdate
 
@@ -107,7 +113,13 @@ func processSocietyTick(ctx context.Context, db *sql.DB) {
 		essence := essenceMap[apID]
 
 		for _, v := range apVariants {
-			u := simulateRace(v, essence)
+			cap := 1000
+			if apCaps, ok := capacityMap[apID]; ok {
+				if raceCap, ok := apCaps[v.race]; ok && raceCap > 0 {
+					cap = raceCap
+				}
+			}
+			u := simulateRace(v, essence, cap)
 			u.id = v.id
 			updates = append(updates, u)
 		}
@@ -143,9 +155,39 @@ func loadApertureEssence(ctx context.Context, db *sql.DB, apertureIDs []string) 
 	return result, rows.Err()
 }
 
+func loadSettlementCapacities(ctx context.Context, db *sql.DB, apertureIDs []string) (map[string]map[string]int, error) {
+	if len(apertureIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT aperture_id, race, SUM(population_capacity)
+		FROM aperture_variant_settlements
+		WHERE aperture_id = ANY($1::uuid[])
+		GROUP BY aperture_id, race
+	`, pq.Array(apertureIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]map[string]int)
+	for rows.Next() {
+		var apID, race string
+		var cap int
+		if err := rows.Scan(&apID, &race, &cap); err != nil {
+			continue
+		}
+		if result[apID] == nil {
+			result[apID] = make(map[string]int)
+		}
+		result[apID][race] = cap
+	}
+	return result, rows.Err()
+}
+
 // simulateRace runs one society tick for a single race in one aperture.
 // Returns the new state to update.
-func simulateRace(v societyVariant, apertureEssence int64) societyUpdate {
+func simulateRace(v societyVariant, apertureEssence int64, capacity int) societyUpdate {
 	pop := float64(v.population)
 	if pop <= 0 {
 		return societyUpdate{}
@@ -246,6 +288,9 @@ func simulateRace(v societyVariant, apertureEssence int64) societyUpdate {
 	births := int(math.Round(pop * growthRate))
 	deaths := int(math.Round(pop * mortality))
 	newPop := v.population + births - deaths
+	if capacity > 0 && newPop > capacity {
+		newPop = capacity
+	}
 	if newPop < 0 {
 		newPop = 0
 	}

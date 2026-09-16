@@ -53,7 +53,8 @@ export interface ApertureSlice {
   createRefinementJob: (recipeId: string, mode: string, targetQuantity: number) => Promise<boolean>;
   deleteRefinementJob: (jobId: string) => Promise<boolean>;
   fetchSettlements: () => Promise<void>;
-  upgradeSettlement: (settlementId: string, data: { name?: string; population_capacity?: number; housing?: number; food_storage?: number }) => Promise<boolean>;
+  buildSettlement: (race: string, name?: string, settlementType?: string) => Promise<boolean>;
+  upgradeSettlement: (settlementId: string, data: { name?: string; settlement_type?: string; population_capacity?: number; housing?: number; food_storage?: number }) => Promise<boolean>;
   fetchNPCs: () => Promise<void>;
   assignNPCRole: (npcId: string, role: string) => Promise<boolean>;
   dismissNPC: (npcId: string) => Promise<boolean>;
@@ -481,6 +482,34 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
     } catch (err) {
       console.error("Failed to fetch settlements:", err);
+    }
+  },
+
+  buildSettlement: async (race: string, name?: string, settlementType?: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race, name, settlement_type: settlementType }),
+      });
+      if (response.status === 401) { logout(); return false; }
+      const res = await response.json();
+      if (response.ok) {
+        get().addToast(res.message || "Xây dựng cơ sở định cư thành công!", "success");
+        get().fetchSettlements();
+        get().fetchVariantHumans();
+        return true;
+      }
+      get().addToast(res.error || "Lỗi tạo thành trì", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
     }
   },
 

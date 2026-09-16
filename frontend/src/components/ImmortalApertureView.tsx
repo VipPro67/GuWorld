@@ -179,8 +179,14 @@ export const ImmortalApertureView: React.FC = () => {
     fetchApertureNodes,
     fetchVariantHumans,
     fetchSettlements,
+    buildSettlement,
+    upgradeSettlement,
     fetchNPCs,
     fetchRefinementQueue,
+    createRefinementJob,
+    deleteRefinementJob,
+    recipes,
+    fetchRecipes,
     placeApertureNode,
     collectResourceNode,
     collectAllResourceNodes,
@@ -197,8 +203,10 @@ export const ImmortalApertureView: React.FC = () => {
     useItems: consumeItems,
     setView,
     showConfirm,
+    addToast,
     fetchDictionary,
     dictionaryLoaded,
+    guDictionary,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "variant_humans">("overview");
@@ -208,6 +216,21 @@ export const ImmortalApertureView: React.FC = () => {
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
   const [variantSubTab, setVariantSubTab] = useState<"overview" | "settlements" | "npcs" | "refine" | "ecosystem">("overview");
+
+  useEffect(() => {
+    if (variantSubTab === "refine") {
+      fetchRecipes();
+    }
+  }, [variantSubTab, fetchRecipes]);
+  const [showBuildSettlementModal, setShowBuildSettlementModal] = useState<boolean>(false);
+  const [buildRace, setBuildRace] = useState<string>("HAIRY_MAN");
+  const [buildType, setBuildType] = useState<string>("VILLAGE");
+  const [buildName, setBuildName] = useState<string>("");
+
+  const [showBuildRefineModal, setShowBuildRefineModal] = useState<boolean>(false);
+  const [refineRecipeId, setRefineRecipeId] = useState<string>("GU_LIQUOR_WORM");
+  const [refineMode, setRefineMode] = useState<string>("FIXED_COUNT");
+  const [refineTargetQty, setRefineTargetQty] = useState<number>(10);
   const [buildCategory, setBuildCategory] = useState<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense">("khu_trong");
   const [pendingBuildZone, setPendingBuildZone] = useState<string | null>(null);
   const [buildPath, setBuildPath] = useState<string>("Wisdom Path");
@@ -2366,36 +2389,243 @@ return (
 
             {/* SUB-TAB: SETTLEMENTS */}
             {variantSubTab === "settlements" && (
-              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-4">
-                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                  <MapIcon className="w-5 h-5 text-cyan-400" />
-                  Thành Trì Dị Nhân
-                </h2>
-                <p className="text-xs text-slate-400">Xây dựng và nâng cấp thành trì để tăng sức chứa dân số và kho lương thực.</p>
+              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                      <MapIcon className="w-5 h-5 text-cyan-400" />
+                      Quản Lý Thành Trì & Định Cư Dị Nhân
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Xây dựng và nâng cấp các cơ sở định cư cho từng chủng tộc để mở rộng sức chứa dân số, nhà ở và kho lương thực.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowBuildSettlementModal(true)}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 shrink-0 self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Xây Thành Trì Mới
+                  </button>
+                </div>
+
+                {/* Summary Header */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                    <div className="text-slate-400">Tổng Thành Trì</div>
+                    <div className="text-base font-bold text-cyan-400 mt-0.5">{settlements.length} Cơ sở</div>
+                  </div>
+                  <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                    <div className="text-slate-400">Tổng Sức Chứa Dân Số</div>
+                    <div className="text-base font-bold text-emerald-400 mt-0.5">
+                      {settlements.reduce((acc, s) => acc + s.population_capacity, 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                    <div className="text-slate-400">Tổng Mức Nhà Ở</div>
+                    <div className="text-base font-bold text-amber-400 mt-0.5">
+                      {settlements.reduce((acc, s) => acc + s.housing, 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                    <div className="text-slate-400">Kho Lương Thực</div>
+                    <div className="text-base font-bold text-purple-400 mt-0.5">
+                      {settlements.reduce((acc, s) => acc + s.food_storage, 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Settlements Grid */}
                 {settlements.length === 0 ? (
-                  <div className="text-center text-xs text-slate-500 py-8">Chưa có thành trì nào. Hãy xây dựng cơ sở định cư trên bản đồ.</div>
+                  <div className="text-center text-xs text-slate-500 py-12 bg-slate-950/40 rounded-xl border border-dashed border-slate-800">
+                    Chưa có thành trì nào được xây dựng. Nhấn "Xây Thành Trì Mới" để tạo nơi định cư cho bộ tộc dị nhân.
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {settlements.map((s) => {
-                      const raceIcons: Record<string, string> = { HAIRY_MAN: "🧔", ROCKMAN: "🗿", FEATHERMAN: "🦅" };
+                      const raceIcons: Record<string, string> = {
+                        HAIRY_MAN: "🧔",
+                        ROCKMAN: "🗿",
+                        FEATHERMAN: "🦅",
+                        SNOWMAN: "❄️",
+                        INKMAN: "📜",
+                        MINIMAN: "🌱",
+                        MERMAN: "🧜",
+                        MUSHROOMMAN: "🍄",
+                        DRAGONMAN: "🐉",
+                      };
+                      const raceNames: Record<string, string> = {
+                        HAIRY_MAN: "Tộc Người Lông",
+                        ROCKMAN: "Tộc Người Đá",
+                        FEATHERMAN: "Tộc Người Lông Vũ",
+                        SNOWMAN: "Tộc Người Tuyết",
+                        INKMAN: "Tộc Mặc Nhân",
+                        MINIMAN: "Tộc Tiểu Nhân",
+                        MERMAN: "Tộc Giao Nhân",
+                        MUSHROOMMAN: "Tộc Cô Nhân",
+                        DRAGONMAN: "Tộc Long Nhân",
+                      };
+                      const typeLabels: Record<string, { label: string; color: string; nextType?: string; nextLabel?: string }> = {
+                        VILLAGE: { label: "Bản Làng (Cấp 1)", color: "text-slate-300 bg-slate-800", nextType: "TOWN", nextLabel: "Thị Trấn (50k)" },
+                        TOWN: { label: "Thị Trấn (Cấp 2)", color: "text-cyan-300 bg-cyan-950/80 border-cyan-800", nextType: "CITY", nextLabel: "Thành Thị (250k)" },
+                        CITY: { label: "Thành Thị (Cấp 3)", color: "text-amber-300 bg-amber-950/80 border-amber-800", nextType: "FORTRESS", nextLabel: "Pháo Đài (1M)" },
+                        FORTRESS: { label: "Đại Pháo Đài (Tối Đa)", color: "text-rose-300 bg-rose-950/80 border-rose-800" },
+                      };
+
+                      const typeInfo = typeLabels[s.settlement_type] || { label: s.settlement_type, color: "text-slate-300 bg-slate-800" };
+
+                      const handleUpgrade = async () => {
+                        if (!typeInfo.nextType) {
+                          addToast("Thành trì đã đạt cấp tối đa!", "info");
+                          return;
+                        }
+                        const confirmed = await showConfirm(`Xác nhận nâng cấp ${s.name || raceNames[s.race]} lên ${typeInfo.nextLabel}?`);
+                        if (confirmed) {
+                          await upgradeSettlement(s.id, { settlement_type: typeInfo.nextType });
+                        }
+                      };
+
                       return (
-                        <div key={s.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-4 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-2xl">{raceIcons[s.race] || "🏘️"}</span>
-                            <div>
-                              <div className="font-bold text-sm text-slate-100">{s.name || s.settlement_type}</div>
-                              <div className="text-[10px] text-slate-500">{s.race}</div>
+                        <div key={s.id} className="bg-slate-950/80 border border-slate-800 hover:border-cyan-800/60 rounded-xl p-4 space-y-4 transition-all flex flex-col justify-between">
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <span className="text-3xl">{raceIcons[s.race] || "🏘️"}</span>
+                                <div>
+                                  <h3 className="font-bold text-sm text-slate-100">{s.name || raceNames[s.race]}</h3>
+                                  <span className="text-[10px] text-slate-400">{raceNames[s.race] || s.race}</span>
+                                </div>
+                              </div>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${typeInfo.color}`}>
+                                {typeInfo.label}
+                              </span>
+                            </div>
+
+                            <div className="space-y-2 text-xs bg-slate-900/60 p-3 rounded-lg border border-slate-850">
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Sức chứa dân số:</span>
+                                <span className="text-cyan-400 font-bold">{s.population_capacity.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Nhà ở (Housing):</span>
+                                <span className="text-amber-400 font-bold">{s.housing.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Kho lương thực:</span>
+                                <span className="text-purple-400 font-bold">{s.food_storage.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Chỉ số an ninh:</span>
+                                <span className="text-emerald-400 font-bold">{s.security.toFixed(0)}%</span>
+                              </div>
                             </div>
                           </div>
-                          <div className="space-y-1.5 text-[10px]">
-                            <div className="flex justify-between"><span className="text-slate-400">Sức chứa:</span><span className="text-cyan-400 font-bold">{s.population_capacity}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Nhà ở:</span><span className="text-amber-400 font-bold">{s.housing}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Kho lương:</span><span className="text-emerald-400 font-bold">{s.food_storage}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">An ninh:</span><span className="text-rose-400 font-bold">{s.security.toFixed(0)}%</span></div>
+
+                          <div className="pt-2 border-t border-slate-850">
+                            {typeInfo.nextType ? (
+                              <button
+                                onClick={handleUpgrade}
+                                disabled={actionLoading}
+                                className="w-full py-2 bg-slate-900 hover:bg-cyan-950/60 border border-slate-700 hover:border-cyan-600 text-cyan-300 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                                Nâng cấp lên {typeInfo.nextLabel}
+                              </button>
+                            ) : (
+                              <div className="w-full py-2 text-center text-[10px] font-bold text-amber-400 bg-amber-950/30 border border-amber-900/40 rounded-lg">
+                                ⭐ Cấp độ thành trì tối đa
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Build Settlement Modal */}
+                {showBuildSettlementModal && (
+                  <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                        <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                          <MapIcon className="w-5 h-5 text-cyan-400" />
+                          Xây Dựng Cơ Sở Định Cư Mới
+                        </h3>
+                        <button onClick={() => setShowBuildSettlementModal(false)} className="text-slate-400 hover:text-slate-200">
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="space-y-4 text-xs">
+                        <div className="space-y-1.5">
+                          <label className="text-slate-300 font-bold">Chọn Bộ Tộc Dị Nhân</label>
+                          <select
+                            value={buildRace}
+                            onChange={(e) => setBuildRace(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                          >
+                            <option value="HAIRY_MAN">🧔 Tộc Người Lông (Luyện Cổ)</option>
+                            <option value="ROCKMAN">🗿 Tộc Người Đá (Khai Khoáng)</option>
+                            <option value="FEATHERMAN">🦅 Tộc Người Lông Vũ (Vận Chuyển & Kiếp Nạn)</option>
+                            <option value="SNOWMAN">❄️ Tộc Người Tuyết (Băng Tuyết)</option>
+                            <option value="INKMAN">📜 Tộc Mặc Nhân (Nghiên Cứu)</option>
+                            <option value="MINIMAN">🌱 Tộc Tiểu Nhân (Trồng Trọt)</option>
+                            <option value="MERMAN">🧜 Tộc Giao Nhân (Thủy Vực)</option>
+                            <option value="MUSHROOMMAN">🍄 Tộc Cô Nhân (Độc Thảo)</option>
+                            <option value="DRAGONMAN">🐉 Tộc Long Nhân (Quân Sự)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-slate-300 font-bold">Loại Định Cư Ban Đầu</label>
+                          <select
+                            value={buildType}
+                            onChange={(e) => setBuildType(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                          >
+                            <option value="VILLAGE">🏠 Bản Làng (Sức chứa: 10,000 người)</option>
+                            <option value="TOWN">🏘️ Thị Trấn (Sức chứa: 50,000 người)</option>
+                            <option value="CITY">🏰 Thành Thị (Sức chứa: 250,000 người)</option>
+                            <option value="FORTRESS">🛡️ Pháo Đài (Sức chứa: 1,000,000 người)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-slate-300 font-bold">Tên Thành Trì (Tùy chọn)</label>
+                          <input
+                            type="text"
+                            placeholder="VD: Mao Gia Thôn, Thạch Sấm Động..."
+                            value={buildName}
+                            onChange={(e) => setBuildName(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          onClick={() => setShowBuildSettlementModal(false)}
+                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all"
+                        >
+                          Hủy Bỏ
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const success = await buildSettlement(buildRace, buildName, buildType);
+                            if (success) {
+                              setShowBuildSettlementModal(false);
+                              setBuildName("");
+                            }
+                          }}
+                          disabled={actionLoading}
+                          className="flex-1 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-xs transition-all"
+                        >
+                          Xác Nhận Xây Dựng
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2437,34 +2667,218 @@ return (
 
             {/* SUB-TAB: REFINEMENT QUEUE */}
             {variantSubTab === "refine" && (
-              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-4">
-                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-orange-400" />
-                  Luyện Cổ Tự Động
-                </h2>
-                <p className="text-xs text-slate-400">Mao Dân sẽ tự động luyện cổ theo lệnh trong hàng đợi. Đặt nguyên liệu vào kho Tiên Khiếu để bắt đầu.</p>
+              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                      <Flame className="w-5 h-5 text-orange-400" />
+                      Luyện Cổ Tự Động (Mao Dân)
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Mao Dân sẽ tự động luyện Cổ theo hàng chờ. Hãy chuẩn bị nguyên liệu vào kho Tiên Khiếu để bắt đầu.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowBuildRefineModal(true)}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 shrink-0 self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Tạo Lệnh Mới
+                  </button>
+                </div>
+
                 {refinementQueue.length === 0 ? (
-                  <div className="text-center text-xs text-slate-500 py-8">Chưa có lệnh luyện cổ nào. Hãy tạo lệnh mới từ kho物品.</div>
+                  <div className="text-center text-xs text-slate-500 py-12 bg-slate-950/40 rounded-xl border border-dashed border-slate-800 space-y-3">
+                    <Flame className="w-10 h-10 mx-auto text-orange-500/30" />
+                    <div>Chưa có lệnh luyện Cổ nào trong hàng đợi.</div>
+                    <button
+                      onClick={() => setShowBuildRefineModal(true)}
+                      className="px-4 py-1.5 bg-orange-600/20 border border-orange-500/40 text-orange-300 font-bold rounded-lg text-xs hover:bg-orange-600/40 transition-all"
+                    >
+                      Tạo Lệnh Luyện Cổ Mới
+                    </button>
+                  </div>
                 ) : (
-                  <div className="space-y-2">
-                    {refinementQueue.map((job) => (
-                      <div key={job.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Flame className="w-4 h-4 text-orange-400" />
-                          <div>
-                            <div className="text-xs font-bold text-slate-100">{job.recipe_id}</div>
-                            <div className="text-[9px] text-slate-500">
-                              {job.mode} · Mục tiêu: {job.target_quantity} · Đã luyện: {job.current_quantity}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {refinementQueue.map((job) => {
+                      const guInfo = guDictionary?.[job.recipe_id];
+                      const guName = guInfo?.name || job.recipe_id;
+
+                      const modeLabels: Record<string, { label: string; color: string }> = {
+                        FIXED_COUNT: { label: "Số lượng cố định", color: "text-slate-300 bg-slate-800 border-slate-700" },
+                        MAINTAIN_STOCK: { label: "Duy trì số lượng", color: "text-cyan-300 bg-cyan-950/80 border-cyan-800" },
+                        UNTIL_SUCCESS: { label: "Luyện đến khi thành công", color: "text-emerald-300 bg-emerald-950/80 border-emerald-800" },
+                        UNTIL_MATERIAL_EMPTY: { label: "Luyện hết nguyên liệu", color: "text-amber-300 bg-amber-950/80 border-amber-800" },
+                      };
+
+                      const modeInfo = modeLabels[job.mode] || { label: job.mode, color: "text-slate-300 bg-slate-800 border-slate-700" };
+                      const progressPct = job.target_quantity > 0 ? Math.min(100, (job.current_quantity / job.target_quantity) * 100) : 0;
+
+                      return (
+                        <div key={job.id} className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-orange-950/50 border border-orange-800/60 rounded-lg text-orange-400">
+                                  <Flame className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <div className="text-sm font-bold text-slate-100">{guName}</div>
+                                  <div className="text-[10px] text-slate-400">Recipe: {job.recipe_id}</div>
+                                </div>
+                              </div>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${modeInfo.color}`}>
+                                {modeInfo.label}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 pt-1">
+                              <div className="flex justify-between text-xs text-slate-400">
+                                <span>Tiến độ luyện:</span>
+                                <span className="font-bold text-amber-300">{job.current_quantity} / {job.target_quantity}</span>
+                              </div>
+                              <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                                <div className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                              </div>
                             </div>
                           </div>
+
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-850">
+                            <span className={`text-[10px] font-bold flex items-center gap-1 ${job.enabled ? "text-emerald-400" : "text-slate-500"}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${job.enabled ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
+                              {job.enabled ? "Đang luyện..." : "Tạm dừng"}
+                            </span>
+                            <button
+                              onClick={async () => {
+                                const confirmed = await showConfirm(`Xóa lệnh luyện Cổ ${guName}?`);
+                                if (confirmed) {
+                                  await deleteRefinementJob(job.id);
+                                }
+                              }}
+                              disabled={actionLoading}
+                              className="px-2.5 py-1 text-[10px] font-bold text-rose-400 hover:text-rose-300 bg-rose-950/40 border border-rose-900/60 hover:bg-rose-900/60 rounded-lg transition-all"
+                            >
+                              Xóa Lệnh
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${job.enabled ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-500"}`}>
-                            {job.enabled ? "Đang chạy" : "Tạm dừng"}
-                          </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Create Refinement Job Modal */}
+                {showBuildRefineModal && (
+                  <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                        <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                          <Flame className="w-5 h-5 text-orange-400" />
+                          Tạo Lệnh Luyện Cổ Tự Động
+                        </h3>
+                        <button onClick={() => setShowBuildRefineModal(false)} className="text-slate-400 hover:text-slate-200">
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="space-y-4 text-xs">
+                        {(() => {
+                          const completedRecipes = (recipes || []).filter(
+                            (r) => (r.completion_rate ?? 0) >= 100 || (r as any).is_unlocked
+                          );
+
+                          if (completedRecipes.length === 0) {
+                            return (
+                              <div className="p-3 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-300 text-xs leading-relaxed space-y-1">
+                                <div className="font-bold flex items-center gap-1.5 text-amber-200">
+                                  <span>⚠️</span> Chưa có Bí Phương Hoàn Thiện
+                                </div>
+                                <div>
+                                  Mao Dân chỉ có thể nhận luyện tự động các Cổ trùng mà đạo hữu đã <strong>hoàn thiện bí phương (đạt 100% tiến độ suy diễn)</strong>. Hãy vào mục Luyện Cổ để khai mở và hoàn thiện bí phương trước.
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="space-y-1.5">
+                              <label className="text-slate-300 font-bold">Chọn Bí Phương Hoàn Thiện</label>
+                              <select
+                                value={refineRecipeId}
+                                onChange={(e) => setRefineRecipeId(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-orange-500"
+                              >
+                                {completedRecipes.map((r) => {
+                                  const guName = guDictionary?.[r.target_gu_id]?.name || r.target_gu_id || r.id;
+                                  const rank = r.target_rank || guDictionary?.[r.target_gu_id]?.rank || 1;
+                                  return (
+                                    <option key={r.id} value={r.id}>
+                                      [{rank} Chuyển] Bí phương {guName} (Hoàn thiện 100%)
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                          );
+                        })()}
+
+                        <div className="space-y-1.5">
+                          <label className="text-slate-300 font-bold">Chế Độ Luyện</label>
+                          <select
+                            value={refineMode}
+                            onChange={(e) => setRefineMode(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-orange-500"
+                          >
+                            <option value="FIXED_COUNT">🔢 Số Lượng Cố Định (Luyện N lần)</option>
+                            <option value="MAINTAIN_STOCK">📦 Duy Trì Số Lượng Trong Kho (Tự bổ sung khi thiếu)</option>
+                            <option value="UNTIL_SUCCESS">🎯 Luyện Đến Khi Thành Công N Con</option>
+                            <option value="UNTIL_MATERIAL_EMPTY">⚡ Luyện Hết Nguyên Liệu Trong Kho</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-slate-300 font-bold">Số Lượng Mục Tiêu</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={10000}
+                            value={refineTargetQty}
+                            onChange={(e) => setRefineTargetQty(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-orange-500"
+                          />
                         </div>
                       </div>
-                    ))}
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          onClick={() => setShowBuildRefineModal(false)}
+                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all"
+                        >
+                          Hủy Bỏ
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const completedRecipes = (recipes || []).filter(
+                              (r) => (r.completion_rate ?? 0) >= 100 || (r as any).is_unlocked
+                            );
+                            const selectedId = refineRecipeId || completedRecipes[0]?.id;
+                            if (!selectedId) {
+                              addToast("Cần có bí phương hoàn thiện để tạo lệnh!", "error");
+                              return;
+                            }
+                            const success = await createRefinementJob(selectedId, refineMode, refineTargetQty);
+                            if (success) {
+                              setShowBuildRefineModal(false);
+                            }
+                          }}
+                          disabled={actionLoading}
+                          className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs transition-all"
+                        >
+                          Xác Nhận Tạo Lệnh
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
