@@ -1,8 +1,12 @@
 package monitor
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -17,6 +21,7 @@ const (
 	maxLatencySamples = 2000
 	maxEndpoints      = 300
 	rpsWindowSeconds  = 60
+	maxRequestBody    = 8 * 1024
 )
 
 var traceSeq uint64
@@ -29,19 +34,104 @@ func generateTraceID() string {
 
 // RequestTrace stores individual request execution details for diagnosis.
 type RequestTrace struct {
-	ID         string    `json:"id"`
-	Timestamp  time.Time `json:"timestamp"`
-	Method     string    `json:"method"`
-	Path       string    `json:"path"`
-	Route      string    `json:"route,omitempty"`
-	Query      string    `json:"query,omitempty"`
-	Status     int       `json:"status"`
-	DurationMs float64   `json:"duration_ms"`
-	ClientIP   string    `json:"client_ip"`
-	PlayerID   string    `json:"player_id,omitempty"`
-	Username   string    `json:"username,omitempty"`
-	UserAgent  string    `json:"user_agent,omitempty"`
-	Error      string    `json:"error,omitempty"`
+	ID            string      `json:"id"`
+	Timestamp     time.Time   `json:"timestamp"`
+	Method        string      `json:"method"`
+	Path          string      `json:"path"`
+	Route         string      `json:"route,omitempty"`
+	Query         string      `json:"query,omitempty"`
+	RequestBody   interface{} `json:"request_body,omitempty"`
+	BodyTruncated bool        `json:"body_truncated,omitempty"`
+	ContentLength int64       `json:"content_length,omitempty"`
+	Status        int         `json:"status"`
+	DurationMs    float64     `json:"duration_ms"`
+	ClientIP      string      `json:"client_ip"`
+	PlayerID      string      `json:"player_id,omitempty"`
+	Username      string      `json:"username,omitempty"`
+	UserAgent     string      `json:"user_agent,omitempty"`
+	Error         string      `json:"error,omitempty"`
+}
+
+var sensitiveKeys = map[string]struct{}{
+	"authorization": {}, "cookie": {}, "password": {}, "pass": {}, "secret": {},
+	"token": {}, "access_token": {}, "refresh_token": {}, "otp": {}, "api_key": {},
+	"credit_card": {}, "card_number": {}, "cvv": {},
+}
+
+func isSensitiveKey(key string) bool {
+	key = strings.ToLower(strings.TrimSpace(key))
+	if _, ok := sensitiveKeys[key]; ok {
+		return true
+	}
+	return strings.Contains(key, "password") || strings.HasSuffix(key, "_token") || strings.HasSuffix(key, "_secret")
+}
+
+func redactJSON(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, item := range typed {
+			if isSensitiveKey(key) {
+				typed[key] = "[REDACTED]"
+			} else {
+				typed[key] = redactJSON(item)
+			}
+		}
+	case []interface{}:
+		for index, item := range typed {
+			typed[index] = redactJSON(item)
+		}
+	}
+	return value
+}
+
+func sanitizeQuery(raw string) string {
+	values, err := url.ParseQuery(raw)
+	if err != nil {
+		return "[INVALID QUERY]"
+	}
+	for key := range values {
+		if isSensitiveKey(key) {
+			values.Set(key, "[REDACTED]")
+		}
+	}
+	return values.Encode()
+}
+
+type replayBody struct {
+	io.Reader
+	closer io.Closer
+}
+
+func (body *replayBody) Close() error { return body.closer.Close() }
+
+func captureRequestBody(request *http.Request) (interface{}, bool) {
+	sensitivePrefixes := []string{"/api/auth", "/api/webhooks", "/api/topup", "/api/chat"}
+	for _, prefix := range sensitivePrefixes {
+		if strings.HasPrefix(request.URL.Path, prefix) {
+			return nil, false
+		}
+	}
+	if request.Body == nil || !strings.Contains(strings.ToLower(request.Header.Get("Content-Type")), "application/json") {
+		return nil, false
+	}
+	prefix, err := io.ReadAll(io.LimitReader(request.Body, maxRequestBody+1))
+	request.Body = &replayBody{Reader: io.MultiReader(bytes.NewReader(prefix), request.Body), closer: request.Body}
+	if err != nil {
+		return nil, false
+	}
+	truncated := len(prefix) > maxRequestBody
+	captured := prefix
+	if truncated {
+		captured = prefix[:maxRequestBody]
+	}
+	if truncated {
+		return "[TRUNCATED JSON OMITTED]", true
+	}
+	var parsed interface{}
+	if json.Unmarshal(captured, &parsed) != nil {
+		return "[INVALID JSON OMITTED]", false
+	}
+	return redactJSON(parsed), false
 }
 
 // EndpointSummary gives aggregated performance metrics for a specific endpoint.
@@ -471,15 +561,18 @@ func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		atomic.AddInt64(&GlobalTracker.activeRequests, 1)
+		defer atomic.AddInt64(&GlobalTracker.activeRequests, -1)
 
 		// Fast, non-blocking trace ID generation
 		traceID := generateTraceID()
 		c.Set("trace_id", traceID)
 		c.Header("X-Trace-ID", traceID)
+		requestBody, bodyTruncated := captureRequestBody(c.Request)
+		c.Set("request_body", requestBody)
+		c.Set("request_body_truncated", bodyTruncated)
 
 		c.Next()
 
-		atomic.AddInt64(&GlobalTracker.activeRequests, -1)
 		duration := time.Since(start)
 
 		method := c.Request.Method
@@ -489,7 +582,7 @@ func Middleware() gin.HandlerFunc {
 
 		path := c.Request.URL.Path
 		route := c.FullPath()
-		query := c.Request.URL.RawQuery
+		query := sanitizeQuery(c.Request.URL.RawQuery)
 		status := c.Writer.Status()
 		clientIP := c.ClientIP()
 		userAgent := c.Request.UserAgent()
@@ -511,19 +604,22 @@ func Middleware() gin.HandlerFunc {
 		durMs := float64(duration.Nanoseconds()) / 1e6
 
 		GlobalTracker.RecordCompleted(RequestTrace{
-			ID:         traceID,
-			Timestamp:  start,
-			Method:     method,
-			Path:       path,
-			Route:      route,
-			Query:      query,
-			Status:     status,
-			DurationMs: round2(durMs),
-			ClientIP:   clientIP,
-			PlayerID:   playerIDStr,
-			Username:   usernameStr,
-			UserAgent:  userAgent,
-			Error:      errMsg,
+			ID:            traceID,
+			Timestamp:     start,
+			Method:        method,
+			Path:          path,
+			Route:         route,
+			Query:         query,
+			RequestBody:   requestBody,
+			BodyTruncated: bodyTruncated,
+			ContentLength: c.Request.ContentLength,
+			Status:        status,
+			DurationMs:    round2(durMs),
+			ClientIP:      clientIP,
+			PlayerID:      playerIDStr,
+			Username:      usernameStr,
+			UserAgent:     userAgent,
+			Error:         errMsg,
 		})
 	}
 }

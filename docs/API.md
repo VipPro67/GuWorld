@@ -10,7 +10,7 @@ Các route public `/debug/*` và `/api/debug/monsters` đã bị loại bỏ vì
 thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm protected
 `/api/admin/monitor/*` dành cho admin.
 
-> **Log request:** mọi request (trừ OPTIONS) được log `REQ START` khi bắt đầu và `REQ END` khi kết thúc kèm duration. Request > 5s được đánh dấu `REQ SLOW` — dùng để phát hiện handler đang treo mà log cũ không thấy (Gin chỉ log khi request hoàn thành).
+> **Log request:** mọi request (trừ OPTIONS) phát event structured `http_request_started` và `http_request_completed`, liên kết bằng `trace_id`. Event hoàn tất có method, route/path, status, duration, IP, player ID/username, user-agent và JSON body đã lọc. Body chỉ được ghi với `Content-Type: application/json`, tối đa 8 KiB; password/token/OTP/secret và các key nhạy cảm được thay bằng `[REDACTED]`, body lỗi/quá dài chỉ lưu marker, còn multipart/binary và các nhóm auth/webhook/top-up/chat không được ghi. Query string cũng được redact. Request ≥ 5 giây được log mức warning.
 
 > **DB hardening:** connection string mặc định kèm `statement_timeout=15000ms`, `lock_timeout=10000ms` (override qua `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`). Query bị lock/treo sẽ tự abort thay vì treo vô hạn.
 
@@ -375,7 +375,7 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 | GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, WebSocket clients/channels, Process Uptime. |
 | GET | `/admin/monitor/requests/summary` | Thống kê request toàn diện: Tổng số request, in-flight requests, RPS (cửa sổ trượt 60s), phân bố mã trạng thái (2xx/3xx/4xx/5xx), độ trễ (min/max/avg/p50/p90/p99), top endpoint được gọi nhiều nhất và top endpoint chậm nhất. |
 | GET | `/admin/monitor/requests/traces` | Tra cứu chi tiết danh sách các request gần nhất (Ring Buffer 500 requests). Hỗ trợ query params: `limit` (default 50, max 200), `offset`, `method` (GET/POST/...), `status` (`200`, `500`, hoặc `errors` để lọc lỗi ≥ 400), `path` (chuỗi con URL), `min_duration_ms` (lọc slow request), `search` (tìm theo player_id, username, client_ip). |
-| GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một request cụ thể qua `trace_id` (Method, Path, Query, Status, Latency ms, Client IP, Player ID, Username, User Agent, Error message). |
+| GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một request cụ thể qua `trace_id` (method, path/query đã lọc, status, latency, client IP, player ID/username, user-agent, error, `content_length`, JSON `request_body` đã redact và `body_truncated`). Các trace chỉ lưu trong memory và hiển thị tại tab **Giám sát** của Admin. |
 | POST | `/admin/monitor/requests/reset` | Đặt lại (reset) toàn bộ chỉ số đếm và xóa danh sách request trace gần nhất. |
 
 ## Realtime Communication — WebSocket `GET /api/ws` (Auth)

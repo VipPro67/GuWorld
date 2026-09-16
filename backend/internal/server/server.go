@@ -15,6 +15,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/internal/ws"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const slowRequestThreshold = 5 * time.Second
@@ -28,9 +30,10 @@ func requestLogging() gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.Request.URL.Path
 		clientIP := c.ClientIP()
+		traceID, _ := c.Get("trace_id")
 
 		if method != http.MethodOptions {
-			logger.S.Debugf("REQ START %s %s from %s", method, path, clientIP)
+			logger.L.Debug("http_request_started", zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path), zap.String("client_ip", clientIP))
 		}
 
 		c.Next()
@@ -41,13 +44,28 @@ func requestLogging() gin.HandlerFunc {
 		}
 
 		status := c.Writer.Status()
+		level := zapcore.DebugLevel
 		switch {
+		case status >= 500:
+			level = zapcore.ErrorLevel
 		case duration >= slowRequestThreshold:
-			logger.S.Warnf("REQ SLOW %s %s status=%d duration=%s from %s", method, path, status, duration, clientIP)
+			level = zapcore.WarnLevel
 		case duration >= 500*time.Millisecond:
-			logger.S.Infof("REQ END %s %s status=%d duration=%s from %s", method, path, status, duration, clientIP)
-		default:
-			logger.S.Debugf("REQ END %s %s status=%d duration=%s from %s", method, path, status, duration, clientIP)
+			level = zapcore.InfoLevel
+		case status >= 400:
+			level = zapcore.InfoLevel
+		}
+		if checked := logger.L.Check(level, "http_request_completed"); checked != nil {
+			playerID, _ := c.Get("player_id")
+			username, _ := c.Get("username")
+			requestBody, _ := c.Get("request_body")
+			bodyTruncated, _ := c.Get("request_body_truncated")
+			checked.Write(
+				zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path),
+				zap.String("route", c.FullPath()), zap.Int("status", status), zap.Float64("duration_ms", float64(duration.Microseconds())/1000),
+				zap.String("client_ip", clientIP), zap.Any("player_id", playerID), zap.Any("username", username),
+				zap.Any("request_body", requestBody), zap.Any("body_truncated", bodyTruncated), zap.String("user_agent", c.Request.UserAgent()),
+			)
 		}
 	}
 }
@@ -66,10 +84,11 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 	}
 	worker.PlayerEventPublisher = handlers.PublishPlayerRealtimeEvent
 	gin.DefaultWriter = logger.GinWriter()
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
 
-	r.Use(requestLogging())
 	r.Use(monitor.Middleware())
+	r.Use(requestLogging())
 
 	// CORS Middleware
 	r.Use(func(c *gin.Context) {
