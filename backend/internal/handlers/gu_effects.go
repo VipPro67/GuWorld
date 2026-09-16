@@ -516,6 +516,13 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		}
 		player.MaxSoul += int(val)
 		return fmt.Sprintf("Linh Hồn tối đa tăng thêm %.0f điểm.", val), nil
+	case "ADD_THOUGHT_MAX":
+		val, _ := params["value"].(float64)
+		if player.MaxThought == 0 {
+			player.MaxThought = 10
+		}
+		player.MaxThought += val
+		return fmt.Sprintf("Niệm Lực tối đa tăng thêm %.0f điểm.", val), nil
 	case "RESTORE_SOUL_HP":
 		val, _ := params["value"].(float64)
 		if val <= 0 {
@@ -627,6 +634,16 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		}
 		player.TimeSpeedMultiplier += val
 		return fmt.Sprintf("%s hòa tan vào không khiếu, dòng thời gian vĩnh viễn tăng +%.2f!", spec.Name, val), nil
+	case "DECREASE_TIME_SPEED":
+		val, _ := params["value"].(float64)
+		if val <= 0 {
+			val = 0.1
+		}
+		player.TimeSpeedMultiplier -= val
+		if player.TimeSpeedMultiplier < 0.1 {
+			player.TimeSpeedMultiplier = 0.1
+		}
+		return fmt.Sprintf("%s hòa tan vào không khiếu, dòng thời gian vĩnh viễn giảm -%.2f!", spec.Name, val), nil
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}
