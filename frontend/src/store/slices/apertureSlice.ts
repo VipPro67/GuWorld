@@ -61,7 +61,7 @@ export interface ApertureSlice {
   refineSoul: () => Promise<boolean>;
 }
 
-export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (set, get) => ({
+export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ApertureSlice> = (set, get) => ({
   aperture: null,
   daoMarks: [],
   apertureNodes: [],
@@ -174,7 +174,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().fetchApertureNodes();
       await get().fetchVariantHumans();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -204,7 +205,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().initializeSession();
       await get().fetchApertureNodes();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -234,7 +236,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().initializeSession();
       await get().fetchApertureNodes();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -265,7 +268,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().fetchApertureNodes();
       await get().fetchVariantHumans();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -296,7 +300,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().fetchApertureNodes();
       await get().fetchVariantHumans();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -592,7 +597,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       get().addLog(data.message || "Đã điều chỉnh dòng thời gian Tiên Khiếu.");
       await get().fetchAperture();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -623,7 +629,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       get().addLog(data.message || "Đã điều chỉnh cường độ lao động của dị nhân.");
       await get().fetchVariantHumans();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -654,7 +661,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().fetchApertureNodes();
       await get().fetchVariantHumans();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -685,7 +693,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().fetchApertureNodes();
       await get().fetchVariantHumans();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -715,7 +724,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().initializeSession();
       await get().fetchApertureNodes();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -763,7 +773,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       get().addLog(data.message || "Xuất trận nghênh chiến quái tai kiếp.");
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -795,7 +806,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       await get().fetchDaoMarks();
       set({ activeTribulation: null });
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -817,7 +829,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       get().addToast(data.message || "Tráng hồn thành công!", "success");
       get().addLog(data.message || "Đã sử dụng 1x Can Đảm Cổ để tráng đại linh hồn.");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -837,7 +850,8 @@ export const createApertureSlice: StateCreator<any, any, any, ApertureSlice> = (
       get().addToast(data.message || "Luyện hồn thành công!", "success");
       get().addLog(data.message || "Đã luyện hồn tại Lạc Phách Cốc, nén ép linh hồn ngưng thực.");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;

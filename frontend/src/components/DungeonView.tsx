@@ -59,7 +59,7 @@ export const DungeonView: React.FC = () => {
   const isDailyLimitReached = (instanceDailyEntriesUsed ?? 0) >= (instanceDailyEntriesMax ?? 2);
 
   // Helper to parse requirements for UI rendering
-  const renderReqs = (requirements: Record<string, any>) => {
+  const renderReqs = (requirements: Record<string, ApiResponseData>) => {
     const items: string[] = [];
     if (requirements.min_soul_hp !== undefined) {
       items.push(`Yêu cầu Soul HP >= ${requirements.min_soul_hp}`);
@@ -75,7 +75,7 @@ export const DungeonView: React.FC = () => {
 
   const currentStageIndex = activeInstanceSession?.current_stage ?? 0;
   const currentStage = activeInstanceTemplate?.map_data
-    ? (activeInstanceTemplate.map_data as any[]).find((s: any) => s.stage_index === currentStageIndex)
+    ? (activeInstanceTemplate.map_data as ApiResponseData[]).find((s: ApiResponseData) => s.stage_index === currentStageIndex)
     : null;
 
   const isDreamRealm = activeInstanceTemplate?.type === "DREAM_REALM";
@@ -161,7 +161,7 @@ export const DungeonView: React.FC = () => {
           {/* Options grid */}
           <div className="flex flex-col gap-3">
             <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">Chọn Quyết Định:</span>
-            {currentStage.options.map((opt: any, idx: number) => {
+            {currentStage.options.map((opt: ApiResponseData, idx: number) => {
               const reqText = renderReqs(opt.requirements || {});
               return (
                 <button

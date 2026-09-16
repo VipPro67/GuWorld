@@ -11,7 +11,7 @@ import { GamePanel, GameButton } from "@/components/ui";
 interface ExplorationMapProps {
   player: Player;
   actionLoading: boolean;
-  onExplore: (nodeId: string) => Promise<{ player: any; log: string; combat_triggered: boolean; skip_result?: any } | null>;
+  onExplore: (nodeId: string) => Promise<{ player: ApiResponseData; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
   onBack?: () => void;
 }
 
@@ -52,9 +52,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     x: number;
     y: number;
     vision_radius: number;
-    cells: any[];
-    stats: any;
-    players_on_map?: any[];
+    cells: ApiResponseData[];
+    stats: ApiResponseData;
+    players_on_map?: ApiResponseData[];
     world_width?: number;
     world_height?: number;
   } | null>(null);
@@ -63,7 +63,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
-  const [attackTargetSect, setAttackTargetSect] = useState<any | null>(null);
+  const [attackTargetSect, setAttackTargetSect] = useState<ApiResponseData | null>(null);
   const [attackPlayerId, setAttackPlayerId] = useState("");
   const logs = useGameStore((state) => state.logs);
   const guDictionary = useGameStore((state) => state.guDictionary);
@@ -115,14 +115,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
   useEffect(() => {
     loadGrid();
-    
+
     let intervalId: NodeJS.Timeout;
     if (isExploringActiveRegion) {
       intervalId = setInterval(() => {
         loadGrid();
       }, 5000);
     }
-    
+
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
@@ -404,7 +404,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
         const cx = player.x + dx;
         const cy = player.y + dy;
         const outOfBounds = cx < 0 || cx >= worldW || cy < 0 || cy >= worldH;
-        
+
         const existingCell = gridData.cells.find((c: { x: number; y: number; cell_type: string; content: string }) => c.x === cx && c.y === cy);
         gridCells.push({
           x: cx,
@@ -462,7 +462,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
         {/* Left Column: Map Grid & Logs */}
         <div className="lg:col-span-8 space-y-6">
           <div className="text-[10px] text-zinc-500 font-mono max-w-xl">
-            * Nhấp vào một ô trong phạm vi thân pháp (<span className="text-emerald-400 font-bold">{movementRange} ô</span>) để di chuyển. 
+            * Nhấp vào một ô trong phạm vi thân pháp (<span className="text-emerald-400 font-bold">{movementRange} ô</span>) để di chuyển.
           </div>
           {isPartyMemberNotLeader && (
             <div className="text-[10px] text-amber-500 font-mono max-w-xl">
@@ -497,7 +497,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                       ) || [];
 
                   const cellDrops = isOutOfBounds ? [] : groundDrops.filter((d) => d.x === x && d.y === y);
-                  const sectOnCell = isOutOfBounds ? null : sectMap.find((s: any) => s.region === player.current_region && s.map_x === x && s.map_y === y);
+                  const sectOnCell = isOutOfBounds ? null : sectMap.find((s: ApiResponseData) => s.region === player.current_region && s.map_x === x && s.map_y === y);
 
                   return (
                     <div
@@ -618,7 +618,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           </div>
 
           {/* Exploration Log Overlay */}
-          
+
 
           {player.active_combat && (
             <div className="bg-rose-950/20 border border-rose-900/40 rounded-2xl p-4 flex items-center justify-between animate-pulse">
@@ -689,12 +689,12 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             {immortalStones > 0 && (
                               <div className="text-purple-400 font-semibold">❖ +{immortalStones.toLocaleString()} Tiên Nguyên Thạch</div>
                             )}
-                            {data.items && data.items.map((it: any, idx: number) => (
+                            {data.items && data.items.map((it: ApiResponseData, idx: number) => (
                               <div key={idx} className="text-amber-300">
                                 📦 {it.quantity}x {itemDictionary[it.item_id]?.name || it.item_id}
                               </div>
                             ))}
-                            {data.gus && data.gus.map((g: any, idx: number) => (
+                            {data.gus && data.gus.map((g: ApiResponseData, idx: number) => (
                               <div key={idx} className="text-cyan-300">
                                 🐛 Cổ trùng: {guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Rank {g.rank})
                               </div>

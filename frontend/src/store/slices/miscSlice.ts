@@ -3,14 +3,14 @@ import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
 export interface MiscSlice {
-  auditLogs: any[];
+  auditLogs: ApiResponseData[];
   auditLogsLoading: boolean;
   fetchAuditLogs: (filters?: { action?: string; entity_type?: string; success?: boolean; search?: string; limit?: number; offset?: number }) => Promise<void>;
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
   sacrificeNPC: (npcId: string) => Promise<{ success: boolean; message: string } | null>;
 }
 
-export const createMiscSlice: StateCreator<any, any, any, MiscSlice> = (set, get) => ({
+export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, MiscSlice> = (set, get) => ({
   auditLogs: [],
   auditLogsLoading: false,
 
@@ -34,7 +34,8 @@ export const createMiscSlice: StateCreator<any, any, any, MiscSlice> = (set, get
 
       get().addLog(data.message || "Tịnh hóa Không khiếu hoàn tất.");
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Tịnh hóa lỗi: ${err.message}`);
@@ -67,12 +68,13 @@ export const createMiscSlice: StateCreator<any, any, any, MiscSlice> = (set, get
         updatedPlayer.aptitude_percent = data.new_aptitude;
         updatedPlayer.aptitude_type = data.aptitude_type;
         updatedPlayer.aperture_stress = data.aperture_stress;
-        set({ player: updatedPlayer as any });
+        set({ player: updatedPlayer as ApiResponseData });
       }
 
       get().addLog(data.message || "Hiến tế hoàn tất.");
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Hiến tế lỗi: ${err.message}`);

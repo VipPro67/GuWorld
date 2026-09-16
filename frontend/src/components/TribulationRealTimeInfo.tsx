@@ -64,7 +64,7 @@ export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = (
       const day = String(arrivalDate.getDate()).padStart(2, '0');
       const month = String(arrivalDate.getMonth() + 1).padStart(2, '0');
       const year = arrivalDate.getFullYear();
-      
+
       setArrivalTimeText(`${hours}:${minutes}:${seconds} ${day}/${month}/${year}`);
 
       const diffHours = Math.floor(diff / (60 * 60 * 1000));

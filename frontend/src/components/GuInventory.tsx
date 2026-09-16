@@ -930,11 +930,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               }: typeof guGroups[number]) => {
                     const isExpanded = !!expandedGroups[groupKey];
                     const totalCount = instances.length;
-                    
+
                     // Food info
                     const preferredFoodId = spec.food_types[0] || "unknown";
                     const preferredFoodName = itemDictionary[preferredFoodId]?.name || preferredFoodId;
-                    
+
                     const availableFoodId = spec.food_types.find(
                       foodId => (materials[foodId] || 0) > 0
                     );

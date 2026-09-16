@@ -5,7 +5,7 @@ import { BACKEND_URL } from "@/lib/config";
 export interface ReferralsSlice {
   referralsData: {
     ref_code: string;
-    referees: any[];
+    referees: ApiResponseData[];
     total_ref: number;
     has_referrer?: boolean;
     can_bind_ref?: boolean;
@@ -17,7 +17,7 @@ export interface ReferralsSlice {
   fetchPassiveStats: () => Promise<void>;
 }
 
-export const createReferralsSlice: StateCreator<any, any, any, ReferralsSlice> = (set, get) => ({
+export const createReferralsSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ReferralsSlice> = (set, get) => ({
   referralsData: null,
   passiveStats: null,
 
@@ -52,7 +52,8 @@ export const createReferralsSlice: StateCreator<any, any, any, ReferralsSlice> =
         return { success: true, message: data.message };
       }
       return { success: false, message: data.error };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Failed to claim referral reward", err);
       set({ actionLoading: false });
       return { success: false, message: "Lỗi kết nối máy chủ." };
@@ -75,7 +76,8 @@ export const createReferralsSlice: StateCreator<any, any, any, ReferralsSlice> =
         return { success: true, message: data.message };
       }
       return { success: false, message: data.error };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Failed to bind referral code", err);
       set({ actionLoading: false });
       return { success: false, message: "Lỗi kết nối máy chủ." };

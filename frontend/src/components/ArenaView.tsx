@@ -36,7 +36,7 @@ export const ArenaView: React.FC = () => {
   if (!player) return null;
 
   const playerRank = player.arena_rank || 999;
-  
+
   return (
     <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
       {/* Decorative background grid pattern */}
@@ -124,7 +124,7 @@ Tải lại
           arenaLeaderboard.map((row) => {
             const isMe = row.player_id === player.id;
             const canChallenge = !isMe && arenaDailyChallenges < 10;
-            
+
             return (
 <GameCard
                  key={row.player_id}
@@ -145,7 +145,7 @@ Tải lại
                   }`}>
                     {row.rank}
                   </div>
-                  
+
                   <div>
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-500">

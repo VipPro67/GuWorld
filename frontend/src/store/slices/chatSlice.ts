@@ -4,11 +4,11 @@ import { BACKEND_URL } from "@/lib/config";
 import { wsManager } from "@/lib/websocket";
 
 export interface ChatSlice {
-  inbox: any[];
-  baoHoangMessages: any[];
+  inbox: ApiResponseData[];
+  baoHoangMessages: ApiResponseData[];
   activeChannel: "world" | "general" | "sect";
   chatOpen: boolean;
-  chatMessages: { world: any[]; general: any[]; sect: any[] };
+  chatMessages: { world: ApiResponseData[]; general: ApiResponseData[]; sect: ApiResponseData[] };
   unreadChannels: { world: boolean; general: boolean; sect: boolean };
   setActiveChannel: (channel: "world" | "general" | "sect") => void;
   setChatOpen: (open: boolean) => void;
@@ -22,7 +22,7 @@ export interface ChatSlice {
   fetchBaoHoangMessages: (channel: string) => Promise<void>;
 }
 
-export const createChatSlice: StateCreator<any, any, any, ChatSlice> = (set, get) => ({
+export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ChatSlice> = (set, get) => ({
   inbox: [],
   baoHoangMessages: [],
   activeChannel: "world",
@@ -31,7 +31,7 @@ export const createChatSlice: StateCreator<any, any, any, ChatSlice> = (set, get
   unreadChannels: { world: false, general: false, sect: false },
 
   setActiveChannel: (channel) => {
-    set((state: any) => {
+    set((state: ApiResponseData) => {
       const newUnread = { ...state.unreadChannels };
       newUnread[channel] = false;
       return {
@@ -43,7 +43,7 @@ export const createChatSlice: StateCreator<any, any, any, ChatSlice> = (set, get
   },
 
   setChatOpen: (open) => {
-    set((state: any) => {
+    set((state: ApiResponseData) => {
       const active = state.activeChannel || "world";
       const newUnread = { ...state.unreadChannels };
       if (open) newUnread[active] = false;
@@ -53,7 +53,7 @@ export const createChatSlice: StateCreator<any, any, any, ChatSlice> = (set, get
 
   subscribeBaoHoangMessages: (channel) => {
     get().subscribeEvents();
-    get().setActiveChannel(channel as any);
+    get().setActiveChannel(channel as ApiResponseData);
   },
 
   unsubscribeBaoHoangMessages: () => {},
@@ -80,7 +80,8 @@ export const createChatSlice: StateCreator<any, any, any, ChatSlice> = (set, get
       get().addLog(data.message || "Đã gửi thư truyền tin!");
       if (data.player) get().setPlayerFromServer(data.player);
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -109,7 +110,8 @@ export const createChatSlice: StateCreator<any, any, any, ChatSlice> = (set, get
       const data = await wsManager.request<{ message?: string }>("chat.send", { content, channel });
       get().addLog(data.message || "Đã phát truyền tin nhắn!");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;

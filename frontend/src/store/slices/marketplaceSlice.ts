@@ -3,7 +3,7 @@ import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
 export interface MarketplaceSlice {
-  marketplaceListings: any[];
+  marketplaceListings: ApiResponseData[];
   fetchMarketplaceListings: () => Promise<void>;
   createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; guInstanceIds?: string[]; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
   placeMarketplaceBid: (listingId: string, amount: number) => Promise<boolean>;
@@ -11,7 +11,7 @@ export interface MarketplaceSlice {
   buyMarketplaceListing: (listingId: string, quantity?: number) => Promise<boolean>;
 }
 
-export const createMarketplaceSlice: StateCreator<any, any, any, MarketplaceSlice> = (set, get) => ({
+export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, MarketplaceSlice> = (set, get) => ({
   marketplaceListings: [],
 
   fetchMarketplaceListings: async () => {
@@ -55,7 +55,8 @@ export const createMarketplaceSlice: StateCreator<any, any, any, MarketplaceSlic
       get().addLog(data.message || "Đăng bán thành công");
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đăng bán thất bại: ${err.message}`);
@@ -76,7 +77,8 @@ export const createMarketplaceSlice: StateCreator<any, any, any, MarketplaceSlic
       await get().initializeSession();
       await get().fetchMarketplaceListings();
       return true;
-    } catch (err: any) { set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); get().addToast(err.message || "Đặt giá thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught)); set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); get().addToast(err.message || "Đặt giá thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
   },
 
   cancelMarketplaceListing: async (listingId) => {
@@ -92,7 +94,8 @@ export const createMarketplaceSlice: StateCreator<any, any, any, MarketplaceSlic
       await get().initializeSession();
       await get().fetchMarketplaceListings();
       return true;
-    } catch (err: any) { set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); get().addToast(err.message || "Hủy listing thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught)); set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); get().addToast(err.message || "Hủy listing thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
   },
 
   buyMarketplaceListing: async (listingId, quantity) => {
@@ -112,7 +115,8 @@ export const createMarketplaceSlice: StateCreator<any, any, any, MarketplaceSlic
       await get().initializeSession();
       await get().fetchMarketplaceListings();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mua hàng thất bại: ${err.message}`);

@@ -18,7 +18,7 @@ export interface CultivationSlice {
   fetchRecipes: () => Promise<void>;
   fetchRegions: () => Promise<void>;
   fetchWorld: () => Promise<WorldConfig | null>;
-  quests: any[];
+  quests: ApiResponseData[];
   fetchQuests: () => Promise<void>;
   refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance; rate_breakdown?: RefineRateBreakdown } | null>;
   deduceRecipe: (recipeId: string) => Promise<{ success: boolean; message: string; completion_rate: number } | null>;
@@ -31,7 +31,7 @@ export interface CultivationSlice {
   redeemGiftCode: (code: string) => Promise<{ success: boolean; message: string } | null>;
 }
 
-export const createCultivationSlice: StateCreator<any, any, any, CultivationSlice> = (set, get) => ({
+export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CultivationSlice> = (set, get) => ({
   recipes: [],
   recipesLoaded: false,
   quests: [],
@@ -52,7 +52,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       }
       const data = await response.json();
       set({ recipes: data || [], recipesLoaded: true });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Recipes sync error:", err.message);
       set({ recipesLoaded: true });
     }
@@ -70,7 +71,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       }
       const data = await response.json();
       set({ quests: data.quests || [] });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Quests sync error:", err.message);
     }
   },
@@ -87,7 +89,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       }
       const data = await response.json();
       set({ regions: data || [], regionsLoaded: true });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Regions sync error:", err.message);
       set({ regionsLoaded: true });
     }
@@ -102,7 +105,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       const data = await response.json();
       set({ world: data || null });
       return data || null;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("World config sync error:", err.message);
       return null;
     }
@@ -139,7 +143,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       get().addLog(data.message);
       get().addToast(data.message, data.status === "success" ? "success" : "error");
       return data;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Hợp luyện thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -177,8 +182,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
 
       get().applyInventoryFromResponse(data);
       // update completion rate in local recipes state
-      set((state: any) => ({
-        recipes: state.recipes.map((r: any) =>
+      set((state: ApiResponseData) => ({
+        recipes: state.recipes.map((r: ApiResponseData) =>
           r.id === recipeId ? { ...r, completion_rate: data.completion_rate } : r
         ),
       }));
@@ -186,7 +191,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       get().addLog(data.message);
       get().addToast(data.message, "success");
       return { success: true, message: data.message, completion_rate: data.completion_rate };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Thôi diễn thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -220,7 +226,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Trùng kích hoàn tất.");
       return { success: data.success, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Trùng kích lỗi: ${err.message}`);
@@ -245,7 +252,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
 
       get().addLog(data.message || "Nạp nguyên thạch thành công.");
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Nạp nguyên thạch lỗi: ${err.message}`);
@@ -271,7 +279,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Đã sử dụng Cổ Xá Lợi.");
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Dùng Cổ Xá Lợi lỗi: ${err.message}`);
@@ -293,7 +302,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Thăng tiên hoàn tất.");
       return { success: data.success, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Thăng tiên lỗi: ${err.message}`);
@@ -317,7 +327,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       get().applyInventoryFromResponse(data);
       get().addToast(data.message || "Hoàn thành nhiệm vụ.", "success");
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(`Nhận thưởng nhiệm vụ lỗi: ${err.message}`, "error");
       return { success: false, message: err.message };
@@ -340,7 +351,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Đổi mã quà thành công!");
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đổi mã quà lỗi: ${err.message}`);
@@ -362,7 +374,8 @@ export const createCultivationSlice: StateCreator<any, any, any, CultivationSlic
       if (!response.ok) { throw new Error(data.error || "Không thể kích hoạt thiên kiếp."); }
       get().addLog(data.message || "Thiên kiếp giáng lâm.");
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi độ kiếp: ${err.message}`);

@@ -36,9 +36,9 @@ function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
 export const SectMinesAdminTab: React.FC<{
   addToast: (msg: string, type: "success" | "error" | "info") => void;
 }> = ({ addToast }) => {
-  const [mines, setMines] = useState<any[]>([]);
+  const [mines, setMines] = useState<ApiResponseData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editMine, setEditMine] = useState<any | null>(null);
+  const [editMine, setEditMine] = useState<ApiResponseData | null>(null);
 
   const fetchSectMines = useCallback(async () => {
     setLoading(true);

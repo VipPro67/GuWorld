@@ -125,7 +125,7 @@ export const Registration: React.FC<RegistrationProps> = ({
   const handleGoogleLogin = async () => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
     const fingerprint = await useGameStore.getState().getBrowserFingerprint();
-    const queryParams = referralCode 
+    const queryParams = referralCode
       ? `?ref=${encodeURIComponent(referralCode)}&fingerprint=${encodeURIComponent(fingerprint)}`
       : `?fingerprint=${encodeURIComponent(fingerprint)}`;
     window.location.href = `${backendUrl}/api/auth/google/login${queryParams}`;

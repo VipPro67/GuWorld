@@ -3,16 +3,16 @@ import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
 export interface BettingSlice {
-  currentBettingRound: any | null;
+  currentBettingRound: ApiResponseData | null;
   myBetTeam: string | null;
   myBetAmount: number | null;
-  bettingHistory: any[];
+  bettingHistory: ApiResponseData[];
   fetchCurrentBettingRound: () => Promise<void>;
   fetchBettingHistory: () => Promise<void>;
   placeBeastBet: (team: string, amount: number) => Promise<{ success: boolean; message: string } | null>;
 }
 
-export const createBettingSlice: StateCreator<any, any, any, BettingSlice> = (set, get) => ({
+export const createBettingSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, BettingSlice> = (set, get) => ({
   currentBettingRound: null,
   myBetTeam: null,
   myBetAmount: null,
@@ -32,7 +32,8 @@ export const createBettingSlice: StateCreator<any, any, any, BettingSlice> = (se
           myBetAmount: data.my_bet_amount || null,
         });
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Fetch betting round error:", err.message);
     }
   },
@@ -47,7 +48,8 @@ export const createBettingSlice: StateCreator<any, any, any, BettingSlice> = (se
         const data = await response.json();
         set({ bettingHistory: data.history || [] });
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Fetch betting history error:", err.message);
     }
   },
@@ -83,7 +85,8 @@ export const createBettingSlice: StateCreator<any, any, any, BettingSlice> = (se
       await get().fetchCurrentBettingRound();
 
       return { success: true, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đặt cược lỗi: ${err.message}`);

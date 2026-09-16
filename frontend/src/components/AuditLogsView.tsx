@@ -71,7 +71,7 @@ export const AuditLogsView: React.FC = () => {
 
   useEffect(() => {
     loadLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [selectedAction, selectedSuccess, searchTerm, page]);
 
   const handleRefresh = () => {

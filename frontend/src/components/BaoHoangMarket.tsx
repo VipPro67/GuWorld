@@ -31,7 +31,7 @@ interface Listing {
   id: string;
   seller_id: string;
   item_type: "Gu" | "Material" | "Recipe";
-  item_data: string | RecipeData | any[];
+  item_data: string | RecipeData | ApiResponseData[];
   quantity: number;
   currency: "primeval" | "immortal";
   start_price: number;
@@ -88,7 +88,7 @@ export function BaoHoangMarket({
   const [listingType, setListingType] = useState<"MARKET" | "AUCTION">("MARKET");
   const [targetBuyerUsername, setTargetBuyerUsername] = useState("");
   const [itemType, setItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
-  
+
   // Sell form inputs
   const [price, setPrice] = useState(10);
   const [durationHours, setDurationHours] = useState(72);
@@ -98,7 +98,7 @@ export function BaoHoangMarket({
   const [selectedRecipe, setSelectedRecipe] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [currency, setCurrency] = useState<"primeval" | "immortal">("primeval");
-  
+
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "Gu" | "Material" | "Recipe">("all");
@@ -127,7 +127,7 @@ export function BaoHoangMarket({
       .replace(/đ/g, "d")
       .replace(/Đ/g, "D");
   };
-  
+
   const [bidAmounts, setBidAmounts] = useState<Record<string, number>>({});
   const [activePurchaseListing, setActivePurchaseListing] = useState<Listing | null>(null);
   const [purchaseQuantity, setPurchaseQuantity] = useState<number>(1);
@@ -155,12 +155,12 @@ export function BaoHoangMarket({
       }
       return `Bí phương: ${String(listing.item_data)}`;
     }
-    
+
     let guId = "";
     let guRank: number | undefined;
     if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
-      guId = (listing.item_data[0] as any)?.gu_id || "";
-      guRank = Number((listing.item_data[0] as any)?.rank) || undefined;
+      guId = (listing.item_data[0] as ApiResponseData)?.gu_id || "";
+      guRank = Number((listing.item_data[0] as ApiResponseData)?.rank) || undefined;
     } else if (typeof listing.item_data === "string") {
       guId = listing.item_data;
     }
@@ -168,7 +168,7 @@ export function BaoHoangMarket({
       const spec = guSpecFor(guId, guRank);
       return spec?.name || guId.replace(/^GU_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
-    
+
     const spec = itemDictionary[guId];
     return spec?.name || guId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   };
@@ -257,7 +257,7 @@ export function BaoHoangMarket({
         currency: player.rank >= 6 ? currency : "primeval",
         listingType,
         targetBuyerUsername: undefined,
-      } as any);
+      } as ApiResponseData);
 
       if (ok) {
         await onRefresh();
@@ -279,7 +279,7 @@ export function BaoHoangMarket({
         currency: player.rank >= 6 ? currency : "primeval",
         listingType,
         targetBuyerUsername: undefined,
-      } as any);
+      } as ApiResponseData);
 
       if (ok) {
         await onRefresh();
@@ -399,9 +399,9 @@ export function BaoHoangMarket({
     .filter((l) => {
       if (tab === "market" && l.listing_type !== "MARKET") return false;
       if (tab === "auction" && l.listing_type !== "AUCTION") return false;
-      
+
       if (filterType !== "all" && l.item_type !== filterType) return false;
-      
+
       // Filter by "Only Mine"
       if (showOnlyMine && l.seller_id !== player.id) return false;
 
@@ -431,7 +431,7 @@ export function BaoHoangMarket({
         }
         if (rank !== filterRank) return false;
       }
-      
+
       // Filter by searchQuery (without diacritics)
       if (searchQuery) {
         const nameNormalized = removeAccents(getDisplayName(l).toLowerCase());
@@ -463,7 +463,7 @@ export function BaoHoangMarket({
           <AlertCircle className="w-16 h-16 text-zinc-700 mb-6" />
           <h3 className="text-lg font-serif font-bold text-zinc-500 mb-2">Chưa thể kết nối Bảo Hoàng Thiên</h3>
           <p className="text-sm text-zinc-600 font-serif max-w-md">
-            Đạo hữu chưa đủ điều kiện để tham gia giao dịch tại Bảo Hoàng Thiên. 
+            Đạo hữu chưa đủ điều kiện để tham gia giao dịch tại Bảo Hoàng Thiên.
             Hãy tu luyện và quay lại sau.
           </p>
         </div>
@@ -534,7 +534,7 @@ export function BaoHoangMarket({
             { id: "sell", label: "Đăng Bán", icon: <PlusCircle className="w-4 h-4" />, disabled: false },
           ]}
           activeId={tab}
-          onChange={(id) => setTab(id as any)}
+          onChange={(id) => setTab(id as ApiResponseData)}
           variant="pills"
           size="sm"
           scrollable={true}
@@ -554,7 +554,7 @@ export function BaoHoangMarket({
               >
                 <RefreshCw className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`} />
               </button>
-              
+
               {/* Search Input */}
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -571,7 +571,7 @@ export function BaoHoangMarket({
               <select
                 value={filterType}
                 onChange={(e) => {
-                  setFilterType(e.target.value as any);
+                  setFilterType(e.target.value as ApiResponseData);
                   if (e.target.value !== "Gu") setFilterRank("all");
                 }}
                 className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0 cursor-pointer"
@@ -585,7 +585,7 @@ export function BaoHoangMarket({
               {/* Sort By Filter */}
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setSortBy(e.target.value as ApiResponseData)}
                 className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0 cursor-pointer"
               >
                 <option value="newest">Mới đăng</option>
@@ -687,7 +687,7 @@ export function BaoHoangMarket({
                 <select
                   value={itemType}
                   onChange={(e) => {
-                    setItemType(e.target.value as any);
+                    setItemType(e.target.value as ApiResponseData);
                     setSelectedGuType("");
                     setSelectedGus([]);
                     setSelectedMaterial("");
@@ -719,7 +719,7 @@ export function BaoHoangMarket({
               {itemType === "Gu" && (
                 <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-amber-300/90">Chọn Cổ trùng đăng bán</span>
-                  
+
                   {/* Ô tìm kiếm loài Cổ trùng */}
                   <div className="relative">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -832,7 +832,7 @@ export function BaoHoangMarket({
                             const selected = selectedGus.includes(g.instance_id);
                             const hungerText = `Độ no: ${g.hunger}/100`;
                             const statusText = g.equipped ? "Xuất Trận" : g.status === "SLEEPING" ? "Ngủ Đông" : g.status === "SEALED" ? "Phong Ấn" : "Chờ Lệnh";
-                            
+
                             return (
                               <label
                                 key={g.instance_id}
@@ -876,7 +876,7 @@ export function BaoHoangMarket({
               {itemType === "Recipe" && (
                 <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-violet-300/90">Chọn Bí Phương cần bán</span>
-                  
+
                   {/* Ô tìm kiếm bí phương */}
                   <div className="relative">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -901,7 +901,7 @@ export function BaoHoangMarket({
 
                           const name = getRecipeDisplayName(ur.recipe_id);
                           if (!recipeSearch) return true;
-                          
+
                           const normName = removeAccents(name.toLowerCase());
                           const normId = removeAccents(ur.recipe_id.toLowerCase());
                           const normSearch = removeAccents(recipeSearch.toLowerCase());
@@ -945,7 +945,7 @@ export function BaoHoangMarket({
               {itemType === "Material" && (
                 <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-emerald-300/90">Chọn Vật phẩm cần bán</span>
-                  
+
                   {/* Ô tìm kiếm vật phẩm */}
                   <div className="relative">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -965,13 +965,13 @@ export function BaoHoangMarket({
                         const filteredMaterials = materialKeys.filter((k) => {
                           const qty = materials[k] || 0;
                           if (qty <= 0) return false;
-                          
+
                           const rank = itemDictionary[k]?.rank || 0;
                           if (sellFilterRank !== "all" && rank !== sellFilterRank) return false;
 
                           const name = itemDictionary[k]?.name || k;
                           if (!materialSearch) return true;
-                          
+
                           const normName = removeAccents(name.toLowerCase());
                           const normKey = removeAccents(k.toLowerCase());
                           const normSearch = removeAccents(materialSearch.toLowerCase());
@@ -1058,11 +1058,11 @@ export function BaoHoangMarket({
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
                         const formatted = tomorrow.toISOString().substring(0, 16);
-                        
+
                         // Khởi tạo minCustomTime là 1 giờ sau thời điểm hiện tại
                         const minTime = new Date(Date.now() + 3600000);
                         const formattedMin = minTime.toISOString().substring(0, 16);
-                        
+
                         setMinCustomTime(formattedMin);
                         setCustomEndTime(formatted);
                         setDurationHours(24);
@@ -1183,7 +1183,7 @@ export function BaoHoangMarket({
                 <div className="flex justify-between items-center text-zinc-500 text-[10px] leading-tight pl-2">
                   <span>* Thanh toán tức thì bằng {listingType === "MARKET" && currency === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch"} (4% giá đặt đối với Cửa hàng) và không được hoàn lại.</span>
                 </div>
-                
+
                 <div className="h-px bg-zinc-900 my-2" />
 
                 <div className="flex justify-between items-center text-zinc-400">
@@ -1198,7 +1198,7 @@ export function BaoHoangMarket({
               <div className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-900 space-y-1.5">
                 <div className="text-[10px] text-zinc-500 uppercase tracking-wider block">Giao Dịch Dự Kiến</div>
                 <div className="text-zinc-300 font-serif">
-                  {itemType === "Material" ? `${quantity}x ` : itemType === "Gu" ? `${selectedGus.length}x ` : "1x "} 
+                  {itemType === "Material" ? `${quantity}x ` : itemType === "Gu" ? `${selectedGus.length}x ` : "1x "}
                   <span className="font-bold text-zinc-100">
                     {itemType === "Gu" && selectedGuType ? (() => {
                       const [guId, rank] = selectedGuType.split("::");
@@ -1237,10 +1237,10 @@ export function BaoHoangMarket({
               const unitPrice = listing.current_price;
               const totalPrice = listing.quantity * unitPrice;
               const currencyName = listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên Thạch";
-              const currencyBadge = listing.currency === "primeval" 
-                ? "text-amber-400 border-amber-500/20 bg-amber-950/10" 
+              const currencyBadge = listing.currency === "primeval"
+                ? "text-amber-400 border-amber-500/20 bg-amber-950/10"
                 : "text-purple-400 border-purple-500/20 bg-purple-950/10";
-              
+
               let typeBadge = "text-amber-400 border-amber-500/10 bg-amber-950/5";
               if (listing.item_type === "Material") typeBadge = "text-emerald-400 border-emerald-500/10 bg-emerald-950/5";
               if (listing.item_type === "Recipe") typeBadge = "text-violet-400 border-violet-500/10 bg-violet-950/5";
@@ -1311,7 +1311,7 @@ export function BaoHoangMarket({
                       {listing.item_type === "Gu" && (() => {
                         let guId = "";
                         if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
-                          guId = (listing.item_data[0] as any)?.gu_id || "";
+                          guId = (listing.item_data[0] as ApiResponseData)?.gu_id || "";
                         } else if (typeof listing.item_data === "string") {
                           guId = listing.item_data;
                         }

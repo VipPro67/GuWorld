@@ -26,7 +26,7 @@ const getRankName = (rank: number, sub: number): string => {
   return rank >= 6 ? `${rName} • ${sub} Kiếp` : `${rName} • ${sName}`;
 };
 
-const getRegionDisplayName = (region: string, regions: any[]): string => {
+const getRegionDisplayName = (region: string, regions: ApiResponseData[]): string => {
   if (!region) return "";
   const found = regions?.find((r) => r.id === region || r.name === region);
   if (found && found.name) return found.name;
@@ -77,7 +77,7 @@ export const LeaderboardView: React.FC = () => {
     if (!regionsLoaded) {
       fetchRegions();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   const handleCategoryChange = (catId: string) => {

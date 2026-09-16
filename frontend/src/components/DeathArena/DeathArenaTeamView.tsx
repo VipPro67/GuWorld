@@ -29,7 +29,7 @@ export default function DeathArenaTeamView() {
       <div className="mb-4">
         <h3 className="text-lg font-bold">{deathArenaMyTeam.team_name}</h3>
         <div className="text-sm text-gray-400">
-          Hạt giống: #{deathArenaMyTeam.seed_number} | 
+          Hạt giống: #{deathArenaMyTeam.seed_number} |
           {deathArenaMyTeam.eliminated ? (
             <span className="text-red-400"> Đã bị loại ở vòng {deathArenaMyTeam.eliminated_at_round}</span>
           ) : (
@@ -38,9 +38,9 @@ export default function DeathArenaTeamView() {
         </div>
         {deathArenaMyTeam.final_placement && (
           <div className="text-sm text-yellow-400">
-            Thứ hạng: {deathArenaMyTeam.final_placement === 1 ? "🥇 Quán Quân" : 
-                       deathArenaMyTeam.final_placement === 2 ? "🥈 Á Quân" : 
-                       deathArenaMyTeam.final_placement === 3 ? "🥉 Quý Quân" : 
+            Thứ hạng: {deathArenaMyTeam.final_placement === 1 ? "🥇 Quán Quân" :
+                       deathArenaMyTeam.final_placement === 2 ? "🥈 Á Quân" :
+                       deathArenaMyTeam.final_placement === 3 ? "🥉 Quý Quân" :
                        `#${deathArenaMyTeam.final_placement}`}
           </div>
         )}
@@ -60,7 +60,7 @@ export default function DeathArenaTeamView() {
                   <span className="px-2 py-1 text-xs bg-red-600 rounded">Đã hy sinh</span>
                 )}
               </div>
-              
+
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400 w-8">HP:</span>
@@ -73,7 +73,7 @@ export default function DeathArenaTeamView() {
                   </div>
                   <span className="text-xs text-gray-300 w-20 text-right">{hp.display}</span>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400 w-8">MP:</span>
                   <div className="flex-1">

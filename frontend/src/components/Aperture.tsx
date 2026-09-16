@@ -34,8 +34,8 @@ import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, 
 // UI migrated to shared components
 
 function formatStat(val: number): string {
-  return Math.abs(val) >= 10000 
-    ? formatNumber(val) 
+  return Math.abs(val) >= 10000
+    ? formatNumber(val)
     : (val % 1 === 0 ? val.toString() : val.toFixed(2));
 }
 
@@ -236,7 +236,7 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
       const day = String(arrivalDate.getDate()).padStart(2, '0');
       const month = String(arrivalDate.getMonth() + 1).padStart(2, '0');
       const year = arrivalDate.getFullYear();
-      
+
       setArrivalTimeText(`${hours}:${minutes}:${seconds} ${day}/${month}/${year}`);
 
       const diffHours = Math.floor(diff / (60 * 60 * 1000));
@@ -424,7 +424,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [isReloading, setIsReloading] = useState(false);
   const handleReloadAll = async () => {
     setIsReloading(true);
-    const promises: Promise<any>[] = [store.fetchReferrals()];
+    const promises: Promise<ApiResponseData>[] = [store.fetchReferrals()];
     if (isImmortal) {
       promises.push(store.fetchAperture(), store.fetchDaoMarks(), store.fetchActiveTribulation());
     }
@@ -575,7 +575,7 @@ export const Aperture: React.FC<ApertureProps> = ({
               { id: "settings", label: "Cài Đặt", disabled: false },
             ]}
             activeId={activeTab}
-            onChange={(id) => setActiveTab(id as any)}
+            onChange={(id) => setActiveTab(id as ApiResponseData)}
             variant="pills"
             size="sm"
             scrollable={true}
@@ -899,7 +899,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                             let displayName = statusLabels[s.id] || s.id;
                             if (s.id.startsWith("cd_gu_")) {
                               const instanceId = s.id.substring(6);
-                              const gu = player.gu_inventory?.find((g: any) => g.instance_id === instanceId);
+                              const gu = player.gu_inventory?.find((g: ApiResponseData) => g.instance_id === instanceId);
                               const specName = gu ? guSpecFor(gu.gu_id, gu.rank)?.name || "Cổ Trùng" : "Cổ Trùng";
                               displayName = `Hồi chiêu: ${specName}`;
                             } else if (s.id.startsWith("cd_km_")) {
@@ -1697,7 +1697,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         <button
                           key={tab.key}
                           type="button"
-                          onClick={() => setCombatCategoryTab(tab.key as any)}
+                          onClick={() => setCombatCategoryTab(tab.key as ApiResponseData)}
                           className={`text-[10px] px-2 py-0.5 rounded transition-all ${
                             combatCategoryTab === tab.key
                               ? "bg-amber-600/30 border border-amber-500/40 text-amber-200 font-bold"
@@ -2280,7 +2280,7 @@ function BlessedLandControls() {
         <div className="border-t border-zinc-900 pt-3">
           <div className="text-[9px] text-zinc-550 text-center mb-2 uppercase tracking-widest font-bold font-mono">Đạo Ngân Tích Lũy</div>
           <div className="flex flex-wrap gap-2 justify-center">
-            {displayMarks.map((mark: any, idx: number) => (
+            {displayMarks.map((mark: ApiResponseData, idx: number) => (
               <div key={idx} className="px-2.5 py-1 bg-zinc-950/80 border border-zinc-900 rounded-xl text-[10px] font-mono">
                 <span className="text-amber-500 font-bold uppercase">{translatePath(mark.path)}</span>: <span className="text-zinc-200 font-bold">{mark.amount}</span>
               </div>

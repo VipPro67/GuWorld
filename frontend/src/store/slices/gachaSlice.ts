@@ -3,12 +3,12 @@ import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
 export interface GachaSlice {
-  gachaPools: any[];
+  gachaPools: ApiResponseData[];
   fetchGachaPools: () => Promise<void>;
-  openGacha: (poolId: string, quantity?: number) => Promise<{ success: boolean; message: string; reward?: any; rewards?: any[] } | null>;
+  openGacha: (poolId: string, quantity?: number) => Promise<{ success: boolean; message: string; reward?: ApiResponseData; rewards?: ApiResponseData[] } | null>;
 }
 
-export const createGachaSlice: StateCreator<any, any, any, GachaSlice> = (set, get) => ({
+export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, GachaSlice> = (set, get) => ({
   gachaPools: [],
 
   fetchGachaPools: async () => {
@@ -21,7 +21,8 @@ export const createGachaSlice: StateCreator<any, any, any, GachaSlice> = (set, g
         const data = await response.json();
         set({ gachaPools: data.pools || [] });
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Gacha pools error:", err.message);
       get().addToast("Lỗi tải bách khoa.", "error");
     }
@@ -44,7 +45,8 @@ export const createGachaSlice: StateCreator<any, any, any, GachaSlice> = (set, g
       await get().initializeSession();
       get().addLog(data.message || "Mở Đá  thành công!");
       return { success: true, message: data.message, reward: data.reward, rewards: data.rewards };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mở Đá  lỗi: ${err.message}`);

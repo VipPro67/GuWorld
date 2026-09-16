@@ -37,9 +37,9 @@ export const DictionariesAdminTab: React.FC<{
   type: "constitution" | "race" | "status";
   addToast: (msg: string, type: "success" | "error" | "info") => void;
 }> = ({ type, addToast }) => {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<ApiResponseData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editItem, setEditItem] = useState<any | null>(null);
+  const [editItem, setEditItem] = useState<ApiResponseData | null>(null);
   const [isNew, setIsNew] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -102,7 +102,8 @@ export const DictionariesAdminTab: React.FC<{
         const errData = await res.json().catch(() => ({}));
         addToast(`Lưu thất bại: ${errData.error || "Lỗi server"}`, "error");
       }
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught instanceof Error ? caught : new Error(String(caught));
       addToast(`Lỗi: ${e.message}`, "error");
     }
   };

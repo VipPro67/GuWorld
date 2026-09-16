@@ -33,7 +33,7 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
     }
   }, []);
 
-  const handleConfigChange = (newConfig: any) => {
+  const handleConfigChange = (newConfig: ApiResponseData) => {
     setDummyConfig(newConfig);
     localStorage.setItem('guworld_training_dummy', JSON.stringify(newConfig));
   };
@@ -94,7 +94,7 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div className="relative w-full py-10 px-4">
         {/* We reuse CombatScreen with isPracticeMode enabled */}
-        <CombatScreen 
+        <CombatScreen
           player={store.player}
           enemy={mockDummyState}
           guDictionary={store.guDictionary}

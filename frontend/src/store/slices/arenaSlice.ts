@@ -5,9 +5,9 @@ import { useUIStore } from "@/store/useUIStore";
 import type { DeathArenaTournament, DeathArenaMatch, DeathArenaTeam, DeathArenaTeamMember, DeathArenaReward } from "@/store/useGameStore";
 
 export interface ArenaSlice {
-  arenaLeaderboard: any[];
+  arenaLeaderboard: ApiResponseData[];
   arenaDailyChallenges: number;
-  arenaShopItems: any[];
+  arenaShopItems: ApiResponseData[];
   fetchArenaLeaderboard: () => Promise<void>;
   fetchArenaShop: () => Promise<void>;
   challengeArena: (targetPlayerId: string) => Promise<boolean>;
@@ -29,8 +29,8 @@ export interface ArenaSlice {
   fetchDeathArenaRewards: () => Promise<void>;
   fetchDeathArenaHistory: () => Promise<void>;
   claimDeathArenaReward: (rewardId: string) => Promise<boolean>;
-  fetchDeathArenaMatchLog: (matchId: string) => Promise<any>;
-  leaderboardEntries: any[];
+  fetchDeathArenaMatchLog: (matchId: string) => Promise<ApiResponseData>;
+  leaderboardEntries: ApiResponseData[];
   leaderboardCategory: string;
   myLeaderboardRank: { rank: number; value: number } | null;
   leaderboardTotalPlayers: number;
@@ -40,10 +40,10 @@ export interface ArenaSlice {
   fetchLeaderboard: (category: string) => Promise<void>;
   toggleLeaderboardVisibility: () => Promise<void>;
   fetchLeaderboardSettings: () => Promise<void>;
-  _onDeathArenaEvent: (payload: any) => void;
+  _onDeathArenaEvent: (payload: ApiResponseData) => void;
 }
 
-export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, get) => ({
+export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ArenaSlice> = (set, get) => ({
   arenaLeaderboard: [],
   arenaDailyChallenges: 0,
   arenaShopItems: [],
@@ -114,7 +114,8 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
         get().addToast(data.error || "Lỗi giao dịch", "error");
         return false;
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast("Lỗi kết nối", "error");
       return false;
@@ -137,7 +138,8 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       useUIStore.getState().setView("arena");
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -152,7 +154,7 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/current`);
       if (response.status === 401) { logout(); return; }
       const data = await response.json();
-      set((state: any) => {
+      set((state: ApiResponseData) => {
         const nextT = data.tournament || null;
         const curT = state.deathArenaTournament;
         const sameT = curT && nextT && curT.id === nextT.id && curT.status === nextT.status && curT.current_round === nextT.current_round;
@@ -184,7 +186,8 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       get().addLog(data.message || "Đã đăng ký Đấu Trường Sinh Tử!");
       await get().fetchDeathArenaCurrent();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Đăng ký thất bại.", "error");
       return false;
@@ -204,7 +207,8 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       get().addLog(data.message || "Đã hủy đăng ký Đấu Trường Sinh Tử!");
       await get().fetchDeathArenaCurrent();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Hủy đăng ký thất bại.", "error");
       return false;
@@ -218,7 +222,7 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/bracket`);
       if (response.status === 401) { logout(); return; }
       const data = await response.json();
-      set((state: any) => {
+      set((state: ApiResponseData) => {
         const nextT = data.tournament || null;
         const curT = state.deathArenaTournament;
         const sameT = curT && nextT && curT.id === nextT.id && curT.status === nextT.status && curT.current_round === nextT.current_round;
@@ -237,7 +241,7 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/my-team`);
       if (response.status === 401) { logout(); return; }
       const data = await response.json();
-      set((state: any) => {
+      set((state: ApiResponseData) => {
         const nextTeam = data.team || null;
         const curTeam = state.deathArenaMyTeam;
         const sameTeam = curTeam && nextTeam && curTeam.id === nextTeam.id && curTeam.eliminated === nextTeam.eliminated;
@@ -309,7 +313,8 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       await get().fetchDeathArenaRewards();
       await get().fetchPlayerStatus(get().player!.id);
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Nhận thưởng thất bại.", "error");
       return false;
@@ -379,12 +384,12 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
     }
   },
 
-  _onDeathArenaEvent: (payload: any) => {
+  _onDeathArenaEvent: (payload: ApiResponseData) => {
     const eventType = payload?.type;
     const eventData = payload?.data;
     if (eventType === "match_updated" && eventData?.match_id) {
-      set((state: any) => {
-        const updated = (state.deathArenaBracket || []).map((m: any) =>
+      set((state: ApiResponseData) => {
+        const updated = (state.deathArenaBracket || []).map((m: ApiResponseData) =>
           m.id === eventData.match_id ? { ...m, winner_team_id: eventData.winner_team_id, status: eventData.status } : m
         );
         return { deathArenaBracket: updated };
@@ -393,7 +398,7 @@ export const createArenaSlice: StateCreator<any, any, any, ArenaSlice> = (set, g
       get().fetchDeathArenaBracket();
       get().fetchDeathArenaCurrent();
     } else if (eventType === "tournament_finished") {
-      set((state: any) => {
+      set((state: ApiResponseData) => {
         if (!state.deathArenaTournament) return {};
         return { deathArenaTournament: { ...state.deathArenaTournament, status: "FINISHED", champion_team_id: eventData?.champion_team_id || state.deathArenaTournament.champion_team_id } };
       });

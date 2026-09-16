@@ -25,7 +25,7 @@ export interface MineSlice {
   attackMineSlot: (slotId: number) => Promise<boolean>;
 }
 
-export const createMineSlice: StateCreator<any, any, any, MineSlice> = (set, get) => ({
+export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, MineSlice> = (set, get) => ({
   mineSlots: [],
 
   fetchMineSlots: async () => {
@@ -61,7 +61,8 @@ export const createMineSlice: StateCreator<any, any, any, MineSlice> = (set, get
       await get().initializeSession();
       await get().fetchMineSlots();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Chiếm mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
@@ -86,7 +87,8 @@ export const createMineSlice: StateCreator<any, any, any, MineSlice> = (set, get
       await get().initializeSession();
       await get().fetchMineSlots();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Nhận thưởng mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
@@ -111,7 +113,8 @@ export const createMineSlice: StateCreator<any, any, any, MineSlice> = (set, get
       await get().initializeSession();
       await get().fetchMineSlots();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Rời mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
@@ -135,7 +138,8 @@ export const createMineSlice: StateCreator<any, any, any, MineSlice> = (set, get
       get().addLog(data.message || "Bắt đầu thách đấu chiếm mỏ!");
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Tấn công mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");

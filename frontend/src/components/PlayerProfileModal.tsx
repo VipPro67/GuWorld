@@ -13,12 +13,12 @@ const translatePath = (path: string): string => {
   if (!path) return "";
   let key = path.endsWith(" Path") ? path : path.charAt(0).toUpperCase() + path.slice(1).toLowerCase() + " Path";
   if (pathLabels[key]) return pathLabels[key];
-  
+
   const lowerKey = key.toLowerCase();
   for (const [k, v] of Object.entries(pathLabels)) {
     if (k.toLowerCase() === lowerKey) return v;
   }
-  
+
   const base = path.endsWith(" Path") ? path.slice(0, -5) : path;
   return base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() + " Đạo";
 };

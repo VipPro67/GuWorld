@@ -92,7 +92,7 @@ function renderSingleValue(key: string, value: number): string {
   return `${label}: ${value}`;
 }
 
-function formatEffectsSection(section: any): string[] {
+function formatEffectsSection(section: ApiResponseData): string[] {
   if (!section || Object.keys(section).length === 0) return [];
   return Object.entries(section).map(([k, v]) => renderSingleValue(k, v as number));
 }

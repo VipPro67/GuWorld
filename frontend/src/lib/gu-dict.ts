@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export interface ActiveEffect {
   damage_flat?: number;
   damage_mult?: number;
@@ -21,7 +21,7 @@ export interface ActiveEffect {
   summon_growth_phantoms?: boolean;
   summon_count_per_tick?: number;
   phantom_damage_scale?: number;
-  [key: string]: any;
+  [key: string]: ApiResponseData;
 }
 
 export interface PassiveEffect {
@@ -37,13 +37,13 @@ export interface PassiveEffect {
   cleansing_power?: number;
   damage_multiplier_on_hit?: number;
   path_conflict_reduction?: number;
-  [key: string]: any;
+  [key: string]: ApiResponseData;
 }
 
 export interface SpecialMechanic {
   event_trigger: string;
   action_code: string;
-  params: Record<string, any>;
+  params: Record<string, ApiResponseData>;
   chance: number;
 }
 
@@ -60,7 +60,7 @@ export interface GuEffects {
   passive?: PassiveEffect | null;
   growth?: GrowthEffect | null;
   other?: SpecialMechanic[] | null;
-  [key: string]: any;
+  [key: string]: ApiResponseData;
 }
 
 export interface GuDictionaryItem {
@@ -246,7 +246,7 @@ export async function fetchDictionaryUnified(): Promise<{
     const lootTables: LootTable[] = await lootRes.json();
     const regions: WikiRegion[] = await regionRes.json();
     const monsterSpawns: WikiMonsterSpawn[] = await spawnRes.json();
-    
+
     return { gus, items, monsters, lootTables, regions, monsterSpawns };
   } catch {
     return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };

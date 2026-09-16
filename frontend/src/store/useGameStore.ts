@@ -132,7 +132,7 @@ export interface CombatHistoryEntry {
   id: string;
   player_id: string;
   winner: string;
-  logs: any[];
+  logs: ApiResponseData[];
   summary: {
     total_damage_dealt: number;
     total_damage_taken: number;
@@ -142,7 +142,7 @@ export interface CombatHistoryEntry {
     stones_used: number;
     loot_count: number;
   };
-  combatants: any[];
+  combatants: ApiResponseData[];
   enemy_name: string;
   enemy_type: string;
   region: string;
@@ -224,7 +224,7 @@ export interface DeathArenaReward {
   reward_immortal_stones: number;
   reward_gu_id?: string;
   reward_gu_rank?: number;
-  reward_items: any[];
+  reward_items: ApiResponseData[];
   claimed: boolean;
   created_at: string;
 }
@@ -710,7 +710,7 @@ export interface GroundDrop {
     primeval_stones?: number;
     immortal_stones?: number;
     items?: Array<{ item_id: string; category: string; quantity: number }>;
-    gus?: any[];
+    gus?: ApiResponseData[];
     recipes?: string[];
   };
   is_protected: boolean;
@@ -723,14 +723,14 @@ export interface GroundDrop {
 export interface SpecialMechanic {
   event_trigger: string;
   action_code: string;
-  params: Record<string, any>;
+  params: Record<string, ApiResponseData>;
 }
 
 export interface GuEffects {
-  active?: Record<string, any>;
-  support?: Record<string, any>;
-  passive?: Record<string, any>;
-  house?: Record<string, any>;
+  active?: Record<string, ApiResponseData>;
+  support?: Record<string, ApiResponseData>;
+  passive?: Record<string, ApiResponseData>;
+  house?: Record<string, ApiResponseData>;
   growth?: {
     max_attack?: number;
     max_defense?: number;
@@ -802,7 +802,7 @@ export interface MonsterSpec {
 export interface InstanceOption {
   text: string;
   next_stage: number;
-  requirements: Record<string, any>;
+  requirements: Record<string, ApiResponseData>;
 }
 
 export interface InstanceStage {
@@ -818,7 +818,7 @@ export interface InstanceTemplate {
   required_rank: number;
   entry_item: string;
   description: string;
-  rewards: Record<string, any>;
+  rewards: Record<string, ApiResponseData>;
   map_data: InstanceStage[];
   cooldown_hours?: number;
   cooldown_remaining?: number;
@@ -831,7 +831,7 @@ export interface InstanceListItem {
   required_rank: number;
   entry_item: string;
   description: string;
-  rewards: Record<string, any>;
+  rewards: Record<string, ApiResponseData>;
   cooldown_hours: number;
   cooldown_remaining: number;
 }
@@ -842,7 +842,7 @@ export interface PlayerInstanceSession {
   instance_id: string;
   current_stage: number;
   status: "ACTIVE" | "COMPLETED" | "FAILED";
-  temp_inventory: any[];
+  temp_inventory: ApiResponseData[];
 }
 
 export interface SectMineDefender {
@@ -1115,7 +1115,7 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
   fetchRaceDictionary: () => Promise<void>;
   updateManaSnapshot: (player: Player | null) => void;
   setPlayerFromServer: (player: Player | Partial<Player> | null, extraState?: Partial<GameState>) => void;
-  applyInventoryFromResponse: (data: any) => void;
+  applyInventoryFromResponse: (data: ApiResponseData) => void;
   getEstimatedMana: () => number | null;
   subscribeEvents: () => void;
   unsubscribeEvents: () => void;
@@ -1208,7 +1208,8 @@ const apiFetch = async (input: RequestInfo | URL, init: ApiFetchInit = {}): Prom
     }
 
     return response;
-  } catch (err: any) {
+  } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
     if (!silent) {
       const msg = err?.name === "AbortError" ? "Yêu cầu đã hết thời gian" : (err.message || "Lỗi kết nối");
       useGameStore.getState().addToast(msg, "error");
@@ -1250,7 +1251,7 @@ export function formatRecipeName(recipeId: string): string {
   const targetGuID = recipeId.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
   const match = recipeId.match(/_(\d+)_(\d+)$/);
   const name = guSpecFor(targetGuID, match ? Number(match[1]) : undefined)?.name || recipeId;
-  
+
   if (match) {
     const rank = match[1];
     const variant = match[2];
@@ -1326,7 +1327,7 @@ export const useGameStore = create<GameState>((set, get) => {
   // (gu_inventory, materials_inventory) from a slim action API response.
   // All other player state changes (hp, mana, stones, combat, position, rank, etc.)
   // are handled by the WebSocket player.updated / delta events.
-  const applyInventoryFromResponse = (data: any) => {
+  const applyInventoryFromResponse = (data: ApiResponseData) => {
     const currentPlayer = get().player;
     if (!currentPlayer) return;
     const updates: Partial<Player> = {};
@@ -1452,35 +1453,36 @@ export const useGameStore = create<GameState>((set, get) => {
         }
 
         markDictionaryPartLoaded(part);
-      } catch (err: any) {
+      } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
         console.error(`${part} dictionary fetch failed:`, err.message);
       }
     });
   };
 
   return ({
-  ...createNotificationsSlice(set as any, get as any, {} as any),
-  ...createMineSlice(set as any, get as any, {} as any),
-  ...createPartySlice(set as any, get as any, {} as any),
-  ...createChatSlice(set as any, get as any, {} as any),
-  ...createArenaSlice(set as any, get as any, {} as any),
-  ...createFeedbackSlice(set as any, get as any, {} as any),
-  ...createBettingSlice(set as any, get as any, {} as any),
-  ...createGachaSlice(set as any, get as any, {} as any),
-  ...createAchievementsSlice(set as any, get as any, {} as any),
-  ...createPetsSlice(set as any, get as any, {} as any),
-  ...createInstanceSlice(set as any, get as any, {} as any),
-  ...createMarketplaceSlice(set as any, get as any, {} as any),
-  ...createSectSlice(set as any, get as any, {} as any),
-  ...createApertureSlice(set as any, get as any, {} as any),
-  ...createTradeSlice(set as any, get as any, {} as any),
-  ...createInventorySlice(set as any, get as any, {} as any),
-  ...createCultivationSlice(set as any, get as any, {} as any),
-  ...createProfileSlice(set as any, get as any, {} as any),
-  ...createAuthSlice(set as any, get as any, {} as any),
-  ...createReferralsSlice(set as any, get as any, {} as any),
-  ...createMiscSlice(set as any, get as any, {} as any),
-  ...createCombatSlice(set as any, get as any, {} as any),
+  ...createNotificationsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createMineSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createPartySlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createChatSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createArenaSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createFeedbackSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createBettingSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createGachaSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createAchievementsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createPetsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createInstanceSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createMarketplaceSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createSectSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createApertureSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createTradeSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createInventorySlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createCultivationSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createProfileSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createAuthSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createReferralsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createMiscSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createCombatSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   applyInventoryFromResponse,
   player: null,
   manaSnapshot: null,
@@ -1559,7 +1561,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for player updates
-      const unsubscribePlayer = wsManager.subscribe("player", (payload: any) => {
+      const unsubscribePlayer = wsManager.subscribe("player", (payload: ApiResponseData) => {
         try {
           const eventData = payload?.data || payload;
           const eventType = payload?.type;
@@ -1684,7 +1686,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for trade updates
-      const unsubscribeTrade = wsManager.subscribe("trade", (payload: any) => {
+      const unsubscribeTrade = wsManager.subscribe("trade", (payload: ApiResponseData) => {
         try {
           set({ activeTrade: payload?.trade ?? null });
         } catch (err) {
@@ -1693,7 +1695,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for world position
-      wsManager.subscribe("world:pos", (payload: any) => {
+      wsManager.subscribe("world:pos", (payload: ApiResponseData) => {
         try {
           if (payload && payload.id) {
             window.dispatchEvent(new CustomEvent("gu_world_pos", { detail: payload }));
@@ -1704,7 +1706,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for world cell
-      wsManager.subscribe("world:cell", (payload: any) => {
+      wsManager.subscribe("world:cell", (payload: ApiResponseData) => {
         try {
           if (payload) {
             window.dispatchEvent(new CustomEvent("gu_world_cell", { detail: payload }));
@@ -1715,7 +1717,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for world:cells — per-player cell snapshots pushed after movement
-      wsManager.subscribe("world:cells", (payload: any) => {
+      wsManager.subscribe("world:cells", (payload: ApiResponseData) => {
         try {
           if (payload?.cells) {
             window.dispatchEvent(new CustomEvent("gu_world_cells", { detail: payload }));
@@ -1726,7 +1728,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for chat:world
-      wsManager.subscribe("chat:world", (payload: any) => {
+      wsManager.subscribe("chat:world", (payload: ApiResponseData) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
@@ -1734,7 +1736,7 @@ export const useGameStore = create<GameState>((set, get) => {
               const existing = state.chatMessages.world || [];
               const newMsg = payload.message;
               // Avoid duplicates
-              if (existing.find((m: any) => m.id === newMsg.id)) {
+              if (existing.find((m: ApiResponseData) => m.id === newMsg.id)) {
                 return {};
               }
               const merged = [...existing, newMsg];
@@ -1785,14 +1787,14 @@ export const useGameStore = create<GameState>((set, get) => {
 
       // Bảo Hoàng Thiên is restricted to players owning both required Gu.
       const unsubscribeGeneralChat = hasConnectingHeaven && hasDivineSense
-        ? wsManager.subscribe("chat:general", (payload: any) => {
+        ? wsManager.subscribe("chat:general", (payload: ApiResponseData) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
             set((state) => {
               const existing = state.chatMessages.general || [];
               const newMsg = payload.message;
-              if (existing.find((m: any) => m.id === newMsg.id)) {
+              if (existing.find((m: ApiResponseData) => m.id === newMsg.id)) {
                 return {};
               }
               const merged = [...existing, newMsg];
@@ -1839,14 +1841,14 @@ export const useGameStore = create<GameState>((set, get) => {
       const sectStatus = get().mySectStatus;
       const sectId = sectStatus?.member?.sect_id ?? sectStatus?.sect?.id;
       const sectChannel = sectId ? `chat:sect:${sectId}` : null;
-      const unsubscribeSectChat = sectChannel ? wsManager.subscribe(sectChannel, (payload: any) => {
+      const unsubscribeSectChat = sectChannel ? wsManager.subscribe(sectChannel, (payload: ApiResponseData) => {
         try {
           // Handle append-only updates (single new message)
           if (payload?.message && !Array.isArray(payload?.messages)) {
             set((state) => {
               const existing = state.chatMessages.sect || [];
               const newMsg = payload.message;
-              if (existing.find((m: any) => m.id === newMsg.id)) {
+              if (existing.find((m: ApiResponseData) => m.id === newMsg.id)) {
                 return {};
               }
               const merged = [...existing, newMsg];
@@ -1888,7 +1890,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }) : () => {};
 
       // Listen for notification
-      wsManager.subscribe("notification", (payload: any) => {
+      wsManager.subscribe("notification", (payload: ApiResponseData) => {
         try {
           get()._onNotificationEvent(payload);
         } catch (err) {
@@ -1897,7 +1899,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for death_arena events
-      const unsubscribeDeathArena = wsManager.subscribe("death_arena", (payload: any) => {
+      const unsubscribeDeathArena = wsManager.subscribe("death_arena", (payload: ApiResponseData) => {
         try {
           const eventType = payload?.type;
           const eventData = payload?.data;
@@ -1933,7 +1935,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Store cleanup functions in a global variable
-      (window as any).__gu_ws_cleanup = () => {
+      (window as ApiResponseData).__gu_ws_cleanup = () => {
         unsubscribePlayer();
         unsubscribeTrade();
         unsubscribeGeneralChat();
@@ -1950,10 +1952,10 @@ export const useGameStore = create<GameState>((set, get) => {
 
   unsubscribeEvents: () => {
     try {
-      const cleanup = (window as any).__gu_ws_cleanup;
+      const cleanup = (window as ApiResponseData).__gu_ws_cleanup;
       if (cleanup) {
         cleanup();
-        (window as any).__gu_ws_cleanup = null;
+        (window as ApiResponseData).__gu_ws_cleanup = null;
       } else {
         wsManager.disconnect();
       }
@@ -1981,7 +1983,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
   subscribeBaoHoangMessages: (channel) => {
     get().subscribeEvents();
-    get().setActiveChannel(channel as any);
+    get().setActiveChannel(channel as ApiResponseData);
   },
 
   unsubscribeBaoHoangMessages: () => {
@@ -2006,7 +2008,8 @@ export const useGameStore = create<GameState>((set, get) => {
       void get().fetchReferrals();
       get().addLog(`[Giả Lập Nạp] Đã nạp thành công $10 (tặng ${stones} Nguyên Thạch)!`);
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Giao dịch giả lập thất bại.", "error");
       return false;

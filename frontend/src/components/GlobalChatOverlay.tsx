@@ -52,7 +52,7 @@ export const GlobalChatOverlay: React.FC = () => {
       [id]: !prev[id],
     }));
   };
-  
+
   const [chatWidth, setChatWidth] = useState<"sm" | "md" | "lg">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("guworld_chat_width");
@@ -193,7 +193,7 @@ export const GlobalChatOverlay: React.FC = () => {
                           return;
                         }
                       }
-                      setActiveChannel(ch.id as any);
+                      setActiveChannel(ch.id as ApiResponseData);
                       subscribeAllBaoHoangMessages();
                       fetchBaoHoangMessages(ch.id);
                     }}
@@ -280,7 +280,7 @@ export const GlobalChatOverlay: React.FC = () => {
                         msg.sender_username.slice(0, 2).toUpperCase()
                       )}
                     </div>
-                    <div 
+                    <div
                       className="min-w-0 flex-1 leading-relaxed break-all cursor-pointer"
                       onClick={() => toggleTimeVisibility(msg.id || index.toString())}
                     >
@@ -293,8 +293,8 @@ export const GlobalChatOverlay: React.FC = () => {
                         title={!isSystem && !isMe ? "Bấm để trinh thám cổ sư" : undefined}
                       >
                         {msg.sender_title && (
-                          <span className="mr-1" title={(achievements.find((a: any) => a.id === msg.sender_title) as any)?.name || msg.sender_title}>
-                            {(achievements.find((a: any) => a.id === msg.sender_title) as any)?.icon || "🏆"}
+                          <span className="mr-1" title={(achievements.find((a: ApiResponseData) => a.id === msg.sender_title) as ApiResponseData)?.name || msg.sender_title}>
+                            {(achievements.find((a: ApiResponseData) => a.id === msg.sender_title) as ApiResponseData)?.icon || "🏆"}
                           </span>
                         )}
                         {msg.sender_username}

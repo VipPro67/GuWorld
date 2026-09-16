@@ -6,7 +6,7 @@ import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { Player } from "@/store/useGameStore";
 
 export interface ProfileSlice {
-  inspectedProfile: any | null;
+  inspectedProfile: ApiResponseData | null;
   inspectedUsernameQuery: string | null;
   profileLoading: boolean;
   fetchPlayerProfile: (username: string) => Promise<void>;
@@ -26,7 +26,7 @@ export interface ProfileSlice {
   initializeSession: () => Promise<void>;
 }
 
-export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (set, get) => ({
+export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ProfileSlice> = (set, get) => ({
   inspectedProfile: null,
   inspectedUsernameQuery: null,
   profileLoading: false,
@@ -80,7 +80,8 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
       if (hiddenUntil !== today) {
         useUIStore.getState().setShowChangelog(true);
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Session restore failed:", err.message);
       set({ player: null, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
     }
@@ -114,7 +115,8 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
           equipped_gus: currentPlayer.gu_inventory?.length ? currentPlayer.equipped_gus : player.equipped_gus,
         });
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Status fetch failed:", err.message);
     }
   },
@@ -140,7 +142,8 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
 
       const data = await response.json();
       set({ inspectedProfile: data, inspectedUsernameQuery: username });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Profile fetch failed:", err.message);
       get().addToast("Lỗi tải hồ sơ.", "error");
       get().addToast(`Không thể trinh thám hồ sơ: ${err.message}`, "error");
@@ -173,7 +176,8 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
       get().setPlayerFromServer(data.player);
       addToast(data.message || "Cập nhật hồ sơ thành công!", "success");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Profile settings update failed:", err.message);
       get().addToast("Lỗi cập nhật hồ sơ.", "error");
       set({ error: err.message });
@@ -210,7 +214,8 @@ export const createProfileSlice: StateCreator<any, any, any, ProfileSlice> = (se
       }
       addToast(data.message || "Cập nhật ảnh đại diện thành công!", "success");
       return data.avatar_url as string;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Avatar upload failed:", err.message);
       get().addToast("Lỗi tải ảnh đại diện.", "error");
       set({ error: err.message });

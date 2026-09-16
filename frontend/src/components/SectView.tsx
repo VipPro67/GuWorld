@@ -233,7 +233,7 @@ export const SectView: React.FC = () => {
   const [defendMonsterRank, setDefendMonsterRank] = useState(1);
 
   // Territory attack modal state
-  const [attackTargetSect, setAttackTargetSect] = useState<any | null>(null);
+  const [attackTargetSect, setAttackTargetSect] = useState<ApiResponseData | null>(null);
   const [attackPlayerId, setAttackPlayerId] = useState("");
 
   // Vault stocking form state (donation-style multi-select)
@@ -682,7 +682,7 @@ export const SectView: React.FC = () => {
                     <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4">
                       <h5 className="text-xs font-semibold text-zinc-400 mb-2 font-serif">Đặc trưng bảo khố</h5>
                       <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                        {sect.vault_gu && (sect.vault_gu as any[]).filter((g: any) => g.quantity === undefined || g.quantity > 0).map((g: any) => {
+                        {sect.vault_gu && (sect.vault_gu as ApiResponseData[]).filter((g: ApiResponseData) => g.quantity === undefined || g.quantity > 0).map((g: ApiResponseData) => {
                           const spec = guDictionary[g.id];
                           return (
                             <span key={g.id} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
@@ -690,7 +690,7 @@ export const SectView: React.FC = () => {
                             </span>
                           );
                         })}
-                        {sect.vault_materials && Object.entries(sect.vault_materials).filter(([_, qty]: any) => qty > 0).map(([matId]) => {
+                        {sect.vault_materials && Object.entries(sect.vault_materials).filter(([_, qty]: ApiResponseData) => qty > 0).map(([matId]) => {
                           const spec = itemDictionary[matId];
                           return (
                             <span key={matId} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
@@ -698,7 +698,7 @@ export const SectView: React.FC = () => {
                             </span>
                           );
                         })}
-                        {(!sect.vault_gu || (sect.vault_gu as any[]).length === 0) && (!sect.vault_materials || Object.keys(sect.vault_materials).length === 0) && (
+                        {(!sect.vault_gu || (sect.vault_gu as ApiResponseData[]).length === 0) && (!sect.vault_materials || Object.keys(sect.vault_materials).length === 0) && (
                           <span className="text-xs text-zinc-500 font-mono">Bảo khố trống</span>
                         )}
                       </div>
@@ -939,7 +939,7 @@ export const SectView: React.FC = () => {
         ...(isLeaderOrElder ? [{ id: "manage", label: "Quản Lý", disabled: false }] : []),
       ]}
       activeId={activeTab}
-      onChange={(id) => setActiveTab(id as any)}
+      onChange={(id) => setActiveTab(id as ApiResponseData)}
       variant="pills"
       size="md"
       className=""
@@ -1616,11 +1616,11 @@ export const SectView: React.FC = () => {
           <div>
             {vaultTab === "gu" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sect?.vault_gu && (sect.vault_gu as any[]).length > 0 ? (
+                {sect?.vault_gu && (sect.vault_gu as ApiResponseData[]).length > 0 ? (
                   (() => {
                     // Deduplicate by id + rank (merge quantities), then sort by rank ascending
-                    const merged: Record<string, any> = {};
-                    for (const vg of sect.vault_gu as any[]) {
+                    const merged: Record<string, ApiResponseData> = {};
+                    for (const vg of sect.vault_gu as ApiResponseData[]) {
                       const key = `${vg.id}_${vg.rank || 0}`;
                       if (!merged[key]) {
                         merged[key] = { ...vg };
@@ -1628,18 +1628,18 @@ export const SectView: React.FC = () => {
                         merged[key].quantity = (merged[key].quantity || 0) + (vg.quantity || 0);
                       }
                     }
-                    const sorted = Object.values(merged).sort((a: any, b: any) => {
+                    const sorted = Object.values(merged).sort((a: ApiResponseData, b: ApiResponseData) => {
                       const rankA = a.rank || guDictionary[a.id]?.rank || 1;
                       const rankB = b.rank || guDictionary[b.id]?.rank || 1;
                       return rankA - rankB;
-                    }).filter((vg: any) => {
+                    }).filter((vg: ApiResponseData) => {
                       if (vg.quantity !== undefined && vg.quantity <= 0) return false;
                       if (!vaultSearch) return true;
                       const spec = guDictionary[vg.id];
                       const name = spec?.name || vg.id;
                       return name.toLowerCase().includes(vaultSearch.toLowerCase());
                     });
-                    return sorted.map((vg: any) => {
+                    return sorted.map((vg: ApiResponseData) => {
                       const spec = guDictionary[vg.id];
                       const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
                       const uKey = `${vg.id}_${vg.rank || 0}`;
@@ -1649,7 +1649,7 @@ export const SectView: React.FC = () => {
                       const totalCost = vg.cost * qty;
                       const unaffordable = (member?.contribution_points || 0) < totalCost;
                       const displayRank = vg.rank || spec?.rank || 1;
-                      const ownedCount = player?.gu_inventory?.filter((g: any) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
+                      const ownedCount = player?.gu_inventory?.filter((g: ApiResponseData) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
                       const vgMaxHunger = spec?.max_hunger || 100;
                       return (
                         <div
@@ -1718,7 +1718,7 @@ export const SectView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sect?.vault_materials && Object.entries(sect.vault_materials).length > 0 ? (
                   Object.entries(sect.vault_materials)
-                  .filter(([matId, qty]: any) => {
+                  .filter(([matId, qty]: ApiResponseData) => {
                     if (qty <= 0) return false;
                     if (!vaultSearch) return true;
                     const spec = itemDictionary[matId];
@@ -1910,7 +1910,7 @@ export const SectView: React.FC = () => {
           {donateType === "stones" && (
             <div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-6 flex flex-col gap-6 max-w-xl mx-auto w-full shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 rounded-full blur-xl -z-10" />
-              
+
               <div className="flex justify-between items-center bg-zinc-900/40 px-4 py-3 rounded-xl border border-zinc-800/80">
                 <span className="text-zinc-400 font-serif font-bold text-xs">Tài sản hiện có:</span>
                 <span className="font-mono font-bold text-amber-500 flex items-center gap-1 text-sm">
@@ -1950,7 +1950,7 @@ export const SectView: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                
+
                 <span className="text-[10px] text-zinc-500 font-mono mt-1 flex items-center gap-1">
                   ℹ️ Tỷ giá quyên góp: 1 Nguyên Thạch = 1 Điểm cống hiến.
                 </span>
@@ -2449,13 +2449,13 @@ export const SectView: React.FC = () => {
                               recipe_id: r.recipe_id,
                             }));
                             if (recipePayload.length === 0) return;
-                            
+
                             const ok = await donateSectBulk({
                               materials: [],
                               gus: [],
                               recipes: recipePayload,
                             });
-                            
+
                             if (ok) setSelectedDonateRecipes({});
                           }}
                           disabled={actionLoading}
@@ -2514,7 +2514,7 @@ export const SectView: React.FC = () => {
             const filteredGus = groupedGusList.filter((g) => {
               const matchesSearch = !donateSearch || g.name.toLowerCase().includes(donateSearch.toLowerCase()) || g.gu_id.toLowerCase().includes(donateSearch.toLowerCase());
               const matchesRank = donateRankFilter === "All" || g.rank.toString() === donateRankFilter;
-              
+
               const spec = guSpecFor(g.gu_id, g.rank);
               const paths = parsePaths(spec?.path);
               const matchesPath = donatePathFilter === "All" || paths.includes(donatePathFilter);
@@ -3328,9 +3328,9 @@ export const SectView: React.FC = () => {
                       <option value="">-- Chọn --</option>
                       {(mMissionType === "DONATE" ? Object.entries(guDictionary) : Object.entries(itemDictionary))
                         .filter(([id]) => !mTargetSearch || id.toLowerCase().includes(mTargetSearch.toLowerCase()))
-                        .sort(([, a], [, b]) => ((a as any)?.rank || 99) - ((b as any)?.rank || 99))
+                        .sort(([, a], [, b]) => ((a as ApiResponseData)?.rank || 99) - ((b as ApiResponseData)?.rank || 99))
                         .map(([id, spec]) => (
-                          <option key={id} value={id}>{(spec as any)?.name || id} ({id})</option>
+                          <option key={id} value={id}>{(spec as ApiResponseData)?.name || id} ({id})</option>
                         ))}
                     </select>
                   </div>
@@ -3405,7 +3405,7 @@ export const SectView: React.FC = () => {
           {mgmtTab === "stock" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
               {/* Stock Vault Card */}
-              
+
               {<div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-5 md:col-span-2">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-900 pb-4">
                   <div>

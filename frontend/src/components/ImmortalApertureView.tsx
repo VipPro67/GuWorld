@@ -114,11 +114,11 @@ export function getItemZoneCategory(item: { id: string; name: string; item_type?
 
   // 1. Check Trồng Trọt (Farming / Plants / Flowers / Grass / Trees / Herbs / Wine / Seeds / Dew / Wood)
   const farmingKeywords = [
-    "trúc", "bamboo", "rượu", "wine", "cỏ", "grass", "thảo", "herb", "hoa", "flower", 
-    "cây", "tree", "diệp", "leaf", "lá", "dịch", "fluid", "sâm", "ginseng", 
-    "quả", "fruit", "hạt", "seed", "lộ", "dew", "chi", "nấm", "mushroom", 
-    "mầm", "sprout", "tảo", "algae", "mạc", "nha", "trà", "tea", "hương", "incense", 
-    "họa", "painting", "trục", "scroll", "mực", "ink", "bột màu", "gỗ", "wood", 
+    "trúc", "bamboo", "rượu", "wine", "cỏ", "grass", "thảo", "herb", "hoa", "flower",
+    "cây", "tree", "diệp", "leaf", "lá", "dịch", "fluid", "sâm", "ginseng",
+    "quả", "fruit", "hạt", "seed", "lộ", "dew", "chi", "nấm", "mushroom",
+    "mầm", "sprout", "tảo", "algae", "mạc", "nha", "trà", "tea", "hương", "incense",
+    "họa", "painting", "trục", "scroll", "mực", "ink", "bột màu", "gỗ", "wood",
     "bạch quả", "liên", "bọt mây", "vân ti", "tơ mây"
   ];
   if (farmingKeywords.some(kw => text.includes(kw))) {
@@ -127,14 +127,14 @@ export function getItemZoneCategory(item: { id: string; name: string; item_type?
 
   // 2. Check Chăn Nuôi (Breeding / Animals / Beast / Meat / Food / Organisms / Insects / Blood / Bone)
   const breedingKeywords = [
-    "thịt", "meat", "thú", "beast", "hươu", "deer", "sói", "wolf", "dơi", "bat", 
+    "thịt", "meat", "thú", "beast", "hươu", "deer", "sói", "wolf", "dơi", "bat",
     "ngư", "fish", "long ngư", "máu", "blood", "huyết", "xương", "bone", "tủy", "marrow",
     "noãn", "egg", "cánh", "wing", "gấu", "bear", "lợn", "boar", "trư", "mãng", "python",
-    "lông", "fur", "scale", "vảy", "mật", "gall", "tạng", "gan", "tâm", "tằm", "silkworm", 
-    "côn trùng", "insect", "sâu", "worm", "bọ", "hạc", "crane", "cọp", "tiger", 
-    "báo", "leopard", "ngưu", "ox", "bull", "xà", "snake", "hạt", "scorpion", 
-    "nhện", "spider", "tổ", "nest", "gân", "sinew", "nanh", "tusk", "rùa", "turtle", 
-    "long", "dragon", "phượng", "phoenix", "mao nhân", "hairy_man", "vũ nhân", "featherman", 
+    "lông", "fur", "scale", "vảy", "mật", "gall", "tạng", "gan", "tâm", "tằm", "silkworm",
+    "côn trùng", "insect", "sâu", "worm", "bọ", "hạc", "crane", "cọp", "tiger",
+    "báo", "leopard", "ngưu", "ox", "bull", "xà", "snake", "hạt", "scorpion",
+    "nhện", "spider", "tổ", "nest", "gân", "sinew", "nanh", "tusk", "rùa", "turtle",
+    "long", "dragon", "phượng", "phoenix", "mao nhân", "hairy_man", "vũ nhân", "featherman",
     "thạch nhân", "rockman", "dị nhân", "tộc", "dạ minh sa", "bức", "nọc độc"
   ];
   if (breedingKeywords.some(kw => text.includes(kw))) {
@@ -143,8 +143,8 @@ export function getItemZoneCategory(item: { id: string; name: string; item_type?
 
   // 3. Check Khai Thác (Mining / Minerals / Ores / Metals / Cores / Gem / Oil / Dust / Sand / Ice)
   const miningKeywords = [
-    "đá", "stone", "khoáng", "ore", "thạch", "jade", "tinh thiết", "thiết", "iron", 
-    "đồng", "copper", "ngọc", "kim", "metal", "hạch", "core", "cát", "sand", 
+    "đá", "stone", "khoáng", "ore", "thạch", "jade", "tinh thiết", "thiết", "iron",
+    "đồng", "copper", "ngọc", "kim", "metal", "hạch", "core", "cát", "sand",
     "dầu", "oil", "bùn", "mud", "phấn", "dust", "tinh thể", "crystal", "băng", "ice",
     "ma ngọc", "nham", "hỏa dung", "thiết sa", "thiết bì", "bán thạch", "lưu ly", "glass",
     "hóa thạch", "fossil", "kim cương", "diamond", "ngô đồng thiết", "giới thạch", "chân không thạch",
@@ -342,7 +342,7 @@ export const ImmortalApertureView: React.FC = () => {
           Chưa Khai Mở Tiên Khiếu
         </h2>
         <p className="text-slate-300 mb-6 leading-relaxed">
-          Đạo hữu hiện tại tu vi mới là **Rank {player.rank}**. 
+          Đạo hữu hiện tại tu vi mới là **Rank {player.rank}**.
           Chỉ sau khi đột phá **Rank 5 Đỉnh Phong**, tụ khí tam hoa thăng thiên thành công lên **Rank 6 (Hồn Tiên/Yêu Tiên)**, đạo hữu mới có thể phá vỡ phàm khiếu, khai mở **Tiên Khiếu** (Phúc Địa) của riêng mình.
         </p>
         <button
@@ -505,7 +505,7 @@ export const ImmortalApertureView: React.FC = () => {
     return null;
   };
 
-  const plantCount = apertureNodes.filter(n => !n.is_destroyed && 
+  const plantCount = apertureNodes.filter(n => !n.is_destroyed &&
     ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS",
      "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
      "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
@@ -514,7 +514,7 @@ export const ImmortalApertureView: React.FC = () => {
      "NO_FARM", "NO_FARM_ADV"].includes(n.node_type)
   ).length;
   const herbCount = apertureNodes.filter(n => !n.is_destroyed && n.node_type === "SPIRIT_DEER_PASTURE").length;
-  const carnCount = apertureNodes.filter(n => !n.is_destroyed && 
+  const carnCount = apertureNodes.filter(n => !n.is_destroyed &&
     ["SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
   ).length;
 
@@ -535,7 +535,7 @@ export const ImmortalApertureView: React.FC = () => {
 
   // Total Food Production
   const totalFoodProd = apertureNodes.reduce((sum, n) => {
-    if (!n.is_destroyed && 
+    if (!n.is_destroyed &&
         ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "SPIRIT_DEER_PASTURE",
          "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
          "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
@@ -600,7 +600,7 @@ return (
           { id: "variant_humans", label: "Dị Nhân", icon: <Users className="w-4 h-4 shrink-0" />, disabled: false },
         ]}
         activeId={activeTab}
-        onChange={(id) => setActiveTab(id as any)}
+        onChange={(id) => setActiveTab(id as ApiResponseData)}
         variant="pills"
         size="sm"
         scrollable={true}
@@ -707,7 +707,7 @@ return (
                     </p>
                   </div>
                   <span className="text-xl font-bold text-cyan-400">x{sliderRate.toFixed(1)}</span>
-                </div> 
+                </div>
 
                 <div className="flex items-center gap-4">
                   <input
@@ -1067,7 +1067,7 @@ return (
                   const activePaths = Array.from(
                     new Set(apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && n.path).map(n => n.path))
                   );
-                  
+
                   const defaultLegendPaths = [
                     "Wood Path", "Fire Path", "Earth Path", "Metal Path", "Water Path",
                     "Wind Path", "Wisdom Path", "Sword Path", "Blood Path", "Poison Path"
@@ -1181,7 +1181,7 @@ return (
                       Kết Toán Vượt Kiếp
                     </h3>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Để kết thúc tai kiếp hoàn toàn, hãy tiêu diệt toàn bộ kẻ địch trên bản đồ lưới trước khi nhấn kết toán để nhận **Đạo Ngân tối đa**. 
+                      Để kết thúc tai kiếp hoàn toàn, hãy tiêu diệt toàn bộ kẻ địch trên bản đồ lưới trước khi nhấn kết toán để nhận **Đạo Ngân tối đa**.
                     </p>
                     <p className="text-[11px] text-amber-500 font-semibold leading-relaxed">
                       ⚠️ Cảnh báo: Kết toán khi còn quái vật sống chỉ có 25-50% cơ hội thắng lợi chật vật (nhận 1/2 quà), và có nguy cơ cao bị phá hủy 1 mỏ tài nguyên!
@@ -1282,7 +1282,7 @@ return (
                             const starvingHerb = isHerb && pCount === 0;
                             const starvingCarn = isCarn && hCount === 0;
 
-                             const parseItemPaths = (pathVal: any): string[] => {
+                             const parseItemPaths = (pathVal: ApiResponseData): string[] => {
                               if (!pathVal) return [];
                               if (Array.isArray(pathVal)) return pathVal.map(p => String(p).trim());
                               if (typeof pathVal === "string") {
@@ -1349,7 +1349,7 @@ return (
                             };
 
                             const hasSovereignFetus = (player?.gu_inventory || []).some(
-                              (g: any) => (g.gu_id || g.id) === "GU_SOVEREIGN_FETUS" && g.equipped
+                              (g: ApiResponseData) => (g.gu_id || g.id) === "GU_SOVEREIGN_FETUS" && g.equipped
                             );
 
                             const levelMultiplier = 1.0 + (Math.max(1, selectedNode.level) - 1) * 0.20;
@@ -1454,8 +1454,8 @@ return (
                                     Phân Tích Hiệu Suất Sản Lượng
                                   </div>
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    combinedMultiplier >= 1.0 
-                                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
+                                    combinedMultiplier >= 1.0
+                                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                                       : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
                                   }`}>
                                     Hiệu suất thực tế: {efficiencyPercent.toLocaleString("vi-VN")}% ({combinedMultiplier >= 1.0 ? `+${Math.round((combinedMultiplier - 1) * 100).toLocaleString("vi-VN")}%` : `-${Math.round((1 - combinedMultiplier) * 100).toLocaleString("vi-VN")}%`})
@@ -1781,7 +1781,7 @@ return (
                               <button
                                 key={cat}
                                 onClick={() => {
-                                  setBuildCategory(cat as any);
+                                  setBuildCategory(cat as ApiResponseData);
                                   setPendingBuildZone(null); // Tắt bảng chọn tùy chỉnh khi chuyển tab!
                                 }}
                                 className={`flex-1 py-1 font-bold rounded capitalize transition-all ${
@@ -1802,10 +1802,10 @@ return (
                                   </div>
                                   <span className="text-[10px] text-slate-400 font-medium">Chi phí: 10 Tiên Nguyên Thạch</span>
                                 </div>
-                                
+
                                 {(() => {
                                   // Parse path helper
-                                  const parseItemPaths = (pathVal: any): string[] => {
+                                  const parseItemPaths = (pathVal: ApiResponseData): string[] => {
                                     if (!pathVal) return [];
                                     if (Array.isArray(pathVal)) return pathVal.map(p => String(p).trim());
                                     if (typeof pathVal === "string") {
@@ -1886,7 +1886,7 @@ return (
                                     const enName = p.toLowerCase();
                                     return viName.includes(searchP) || enName.includes(searchP);
                                   });
-                                  
+
                                   // Compute available items for the currently selected path & target zone
                                   const selectedRawPath = buildPath.replace(/ Path$/i, '').trim().toLowerCase();
                                   const availableItems = Object.values(itemDictionary || {}).filter(item => {
@@ -1916,7 +1916,7 @@ return (
                                         </div>
 
                                         {/* Search Input for Path */}
-                                        <input 
+                                        <input
                                           type="text"
                                           placeholder="🔍 Tìm Đại Đạo (vd: Huyết Đạo, Trí Đạo...)"
                                           className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 mb-1.5 focus:border-amber-500 outline-none transition"
@@ -1924,9 +1924,9 @@ return (
                                           onChange={(e) => setPathSearch(e.target.value)}
                                         />
 
-                                        <select 
+                                        <select
                                           className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:border-amber-500 outline-none cursor-pointer"
-                                          value={buildPath} 
+                                          value={buildPath}
                                           onChange={(e) => {
                                             setBuildPath(e.target.value);
                                             setBuildProdKey(""); // reset item when path changes
@@ -1945,7 +1945,7 @@ return (
                                           })}
                                         </select>
                                       </div>
-                                      
+
                                       <div>
                                         <div className="flex justify-between items-center mb-1">
                                           <label className="text-[11px] font-semibold text-slate-300">
@@ -1955,7 +1955,7 @@ return (
                                         </div>
 
                                         {/* Search Input for Item */}
-                                        <input 
+                                        <input
                                           type="text"
                                           placeholder="🔍 Tìm theo tên vật phẩm..."
                                           className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 mb-1.5 focus:border-amber-500 outline-none transition"
@@ -1963,9 +1963,9 @@ return (
                                           onChange={(e) => setItemSearch(e.target.value)}
                                         />
 
-                                        <select 
+                                        <select
                                           className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:border-amber-500 outline-none cursor-pointer"
-                                          value={buildProdKey} 
+                                          value={buildProdKey}
                                           onChange={(e) => setBuildProdKey(e.target.value)}
                                         >
                                           <option value="" disabled>-- Chọn vật phẩm ({filteredItems.length} vật phẩm) --</option>
@@ -1984,9 +1984,9 @@ return (
                                         {filteredItems.length === 0 && (
                                           <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] text-amber-300 text-center space-y-1">
                                             <div>Chưa tìm thấy vật phẩm thuộc nhóm <strong>{targetZoneTitle}</strong> trong <strong>{translatePath(buildPath)}</strong>.</div>
-                                            <button 
+                                            <button
                                               type="button"
-                                              onClick={() => setShowAllZoneItems(true)} 
+                                              onClick={() => setShowAllZoneItems(true)}
                                               className="text-cyan-400 underline font-semibold cursor-pointer"
                                             >
                                               Bấm vào đây để xem tất cả vật phẩm của {translatePath(buildPath)}
@@ -2158,7 +2158,7 @@ return (
                 { id: "ecosystem", label: "Sinh Thái", icon: <Leaf className="w-4 h-4 shrink-0" /> },
               ]}
               activeId={variantSubTab}
-              onChange={(id) => setVariantSubTab(id as any)}
+              onChange={(id) => setVariantSubTab(id as ApiResponseData)}
               variant="pills"
               size="sm"
               scrollable={true}
@@ -2257,7 +2257,7 @@ return (
                           } else if (intensity === "EXPLOIT") {
                             confirmText = `💥 CẢNH BÁO CỰC KỲ NGUY HIỂM: Thiết lập cường độ 'Bóc Lột' (x2.0 sản lượng) sẽ khiến tộc nhân bị kiệt quệ, giảm 25 Hạnh phúc và tăng 25 Áp bức mỗi năm!`;
                           }
-                          
+
                           if (await showConfirm(confirmText)) {
                             await handleSetLabor(raceInfo.race, intensity);
                           }

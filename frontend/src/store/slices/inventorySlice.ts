@@ -24,14 +24,14 @@ export interface InventorySlice {
   useGus: (instanceIds: string[]) => Promise<boolean>;
   useItem: (itemId: string) => Promise<void>;
   useItems: (itemIds: string[]) => Promise<boolean>;
-  movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: any } | null>;
-  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; stats: any; players_on_map?: any[]; world_width?: number; world_height?: number } | null>;
+  movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
+  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: ApiResponseData[]; stats: ApiResponseData; players_on_map?: ApiResponseData[]; world_width?: number; world_height?: number } | null>;
   groundDrops: GroundDrop[];
   fetchGroundDrops: () => Promise<void>;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
 }
 
-export const createInventorySlice: StateCreator<any, any, any, InventorySlice> = (set, get) => ({
+export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, InventorySlice> = (set, get) => ({
   guInventoryLoaded: false,
   groundDrops: [],
 
@@ -63,7 +63,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
           equipped_gus: data.equipped_gus,
         });
         set({ guInventoryLoaded: true });
-      } catch (err: any) {
+      } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
         console.error("Gu inventory fetch failed:", err.message);
       } finally {
         fetchGuInventoryPromise = null;
@@ -101,7 +102,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message);
       get().addToast(data.message, "success");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Cho Cổ ăn thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -138,7 +140,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message);
       get().addToast(data.message, "success");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Cho ăn hàng loạt thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -174,7 +177,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message);
       get().addToast(data.message, "success");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Cho tất cả Cổ trùng ăn thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -215,7 +219,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Mua hàng thành công!");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mua hàng thất bại: ${err.message}`);
@@ -242,7 +247,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Bán hàng thành công!");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bán hàng thất bại: ${err.message}`);
@@ -266,7 +272,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Bán hàng thành công!");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bán hàng thất bại: ${err.message}`);
@@ -290,7 +297,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Đã vứt Cổ trùng.");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Vứt Cổ thất bại: ${err.message}`);
@@ -313,7 +321,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Đã vứt Cổ trùng hàng loạt.");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Vứt Cổ hàng loạt thất bại: ${err.message}`);
@@ -351,7 +360,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       const successMsg = data.message || (equip ? "Trang bị Cổ trùng thành công!" : "Tháo Cổ trùng thành công!");
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Thao tác trang bị thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -388,7 +398,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
         get().addLog(data.message);
         get().addToast(data.message, "success");
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Tháo cổ trùng thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -426,7 +437,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
 
       get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Cập nhật trạng thái Cổ trùng thành công!");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi cập nhật trạng thái: ${err.message}`);
@@ -465,7 +477,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       const successMsg = data.message || "Thiết lập Bản Mệnh Cổ thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Lỗi thiết lập Bản Mệnh Cổ: ${err.message}`);
       get().addToast(err.message, "error");
@@ -504,7 +517,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       const successMsg = data.message || "Sử dụng Cổ trùng thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Lỗi sử dụng Cổ trùng: ${err.message}`);
       get().addToast(err.message, "error");
@@ -543,7 +557,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       const successMsg = data.message || "Sử dụng vật phẩm thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Sử dụng vật phẩm thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -585,7 +600,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Sử dụng vật phẩm thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -630,7 +646,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
         get().addLog(successMsg);
         get().addToast(successMsg, "success");
         successCount += 1;
-      } catch (err: any) {
+      } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
         failedCount += 1;
         set({ error: err.message });
         get().addLog(`Sử dụng Cổ trùng thất bại: ${err.message}`);
@@ -672,7 +689,7 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
 
       get().applyInventoryFromResponse(data);
       get().addLog(data.log || "Di chuyển thành công.");
-      
+
       // Handle skip battle result
       if (data.skip_result) {
         const skipResult = data.skip_result;
@@ -685,9 +702,10 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
           get().addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
         }
       }
-      
+
       return data;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Di chuyển thất bại: ${err.message}`);
@@ -721,7 +739,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
         set({ groundDrops: data.ground_drops });
       }
       return data;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Grid fetch failed:", err.message);
       get().addToast("Lỗi tải bản đồ.", "error");
       return null;
@@ -755,7 +774,7 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
       get().addToast(msg, "success");
 
       // Immediately remove the looted drop from state so map UI updates instantly
-      set({ groundDrops: get().groundDrops.filter((d: any) => d.id !== dropId) });
+      set({ groundDrops: get().groundDrops.filter((d: ApiResponseData) => d.id !== dropId) });
 
       try {
         const { useWorldStore } = await import("@/store/useWorldStore");
@@ -773,7 +792,8 @@ export const createInventorySlice: StateCreator<any, any, any, InventorySlice> =
         await get().fetchPlayerStatus(get().player!.id);
       }
       return { success: true, message: data.message, looted: data.looted };
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught instanceof Error ? caught : new Error(String(caught));
       get().addToast(e.message || "Lỗi kết nối", "error");
       return null;
     }

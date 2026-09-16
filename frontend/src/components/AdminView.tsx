@@ -443,7 +443,7 @@ export const AdminView: React.FC = () => {
   const [playerGusLoading, setPlayerGusLoading] = useState(false);
   const [playerGusSearch, setPlayerGusSearch] = useState("");
 
-  const [playerPets, setPlayerPets] = useState<any[]>([]);
+  const [playerPets, setPlayerPets] = useState<ApiResponseData[]>([]);
   const [playerPetsTotal, setPlayerPetsTotal] = useState(0);
   const [playerPetsPage, setPlayerPetsPage] = useState(1);
   const [playerPetsLimit] = useState(20);
@@ -477,20 +477,20 @@ export const AdminView: React.FC = () => {
   const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
 
   // ----- Aperture state -----
-  const [apertures, setApertures] = useState<any[]>([]);
+  const [apertures, setApertures] = useState<ApiResponseData[]>([]);
   const [aperturesTotal, setAperturesTotal] = useState(0);
   const [aperturesLoading, setAperturesLoading] = useState(false);
   const [aperturesPage, setAperturesPage] = useState(1);
   const [aperturesLimit] = useState(50);
   const [aperturesSearch, setAperturesSearch] = useState("");
   const [selectedApertureId, setSelectedApertureId] = useState<string | null>(null);
-  const [apertureDetail, setApertureDetail] = useState<any | null>(null);
+  const [apertureDetail, setApertureDetail] = useState<ApiResponseData | null>(null);
   const [apertureDetailLoading, setApertureDetailLoading] = useState(false);
-  const [apertureForm, setApertureForm] = useState<any>({});
+  const [apertureForm, setApertureForm] = useState<ApiResponseData>({});
   const [apertureSaving, setApertureSaving] = useState(false);
 
   // ----- Audit log state -----
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<ApiResponseData[]>([]);
   const [auditLogTotal, setAuditLogTotal] = useState(0);
   const [auditLogLoading, setAuditLogLoading] = useState(false);
   const [auditLogPage, setAuditLogPage] = useState(0);
@@ -504,34 +504,34 @@ export const AdminView: React.FC = () => {
   const [auditLogActionSearch, setAuditLogActionSearch] = useState("");
 
   // ----- Shop state -----
-  const [shopItems, setShopItems] = useState<any[]>([]);
+  const [shopItems, setShopItems] = useState<ApiResponseData[]>([]);
   const [shopLoading, setShopLoading] = useState(false);
   const [showShopAdd, setShowShopAdd] = useState(false);
   const [showShopEdit, setShowShopEdit] = useState<string | null>(null);
   const [shopForm, setShopForm] = useState({ id: "", rank: 0, price: 100, stock: -1, is_default: true, sort_order: 0 });
 
   // ----- Arena Shop state -----
-  const [arenaShopItems, setArenaShopItems] = useState<any[]>([]);
+  const [arenaShopItems, setArenaShopItems] = useState<ApiResponseData[]>([]);
   const [arenaShopLoading, setArenaShopLoading] = useState(false);
   const [showArenaShopAdd, setShowArenaShopAdd] = useState(false);
   const [showArenaShopEdit, setShowArenaShopEdit] = useState<string | null>(null);
   const [arenaShopForm, setArenaShopForm] = useState({ id: "", price: 50, qty: 1, stock: -1, is_default: true, sort_order: 0 });
   const [shopTab, setShopTab] = useState<"caravan" | "arena">("caravan");
-  const [shopSearchGus, setShopSearchGus] = useState<any[]>([]);
-  const [shopSearchItems, setShopSearchItems] = useState<any[]>([]);
-  const [shopSearchRecipes, setShopSearchRecipes] = useState<any[]>([]);
+  const [shopSearchGus, setShopSearchGus] = useState<ApiResponseData[]>([]);
+  const [shopSearchItems, setShopSearchItems] = useState<ApiResponseData[]>([]);
+  const [shopSearchRecipes, setShopSearchRecipes] = useState<ApiResponseData[]>([]);
   const [shopSearchLoaded, setShopSearchLoaded] = useState(false);
   const [itemPicker, setItemPicker] = useState<{source: string; tab: "gu" | "item" | "recipe"; query: string} | null>(null);
   const [giftPickerIdx, setGiftPickerIdx] = useState<number | null>(null);
 
   // ----- Mine state -----
-  const [mineSlots, setMineSlots] = useState<any[]>([]);
+  const [mineSlots, setMineSlots] = useState<ApiResponseData[]>([]);
   const [mineLoading, setMineLoading] = useState(false);
   const [showMineEdit, setShowMineEdit] = useState<number | null>(null);
   const [mineEditRarity, setMineEditRarity] = useState("");
 
   // ----- Gift codes state -----
-  const [giftCodes, setGiftCodes] = useState<any[]>([]);
+  const [giftCodes, setGiftCodes] = useState<ApiResponseData[]>([]);
   const [giftLoading, setGiftLoading] = useState(false);
   const [newGiftCode, setNewGiftCode] = useState("");
   const [newGiftMaxUses, setNewGiftMaxUses] = useState(100);
@@ -542,48 +542,48 @@ export const AdminView: React.FC = () => {
   ]);
 
   // ----- Online players state -----
-  const [onlinePlayers, setOnlinePlayers] = useState<any[]>([]);
+  const [onlinePlayers, setOnlinePlayers] = useState<ApiResponseData[]>([]);
   const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
   const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons">("import");
-  const [regions, setRegions] = useState<any[]>([]);
+  const [regions, setRegions] = useState<ApiResponseData[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(false);
-  const [regionEdit, setRegionEdit] = useState<any | null>(null);
+  const [regionEdit, setRegionEdit] = useState<ApiResponseData | null>(null);
   const [regionSearch, setRegionSearch] = useState("");
   const [regionsPage, setRegionsPage] = useState(1);
   const [regionsTotal, setRegionsTotal] = useState(0);
   const [regionsTotalPages, setRegionsTotalPages] = useState(1);
 
-  const [mapCells, setMapCells] = useState<any[]>([]);
+  const [mapCells, setMapCells] = useState<ApiResponseData[]>([]);
   const [mapCellsLoading, setMapCellsLoading] = useState(false);
-  const [mapCellEdit, setMapCellEdit] = useState<any | null>(null);
+  const [mapCellEdit, setMapCellEdit] = useState<ApiResponseData | null>(null);
   const [mapCellSearch, setMapCellSearch] = useState("");
   const [mapCellRegionFilter, setMapCellRegionFilter] = useState("");
   const [mapCellTypeFilter, setMapCellTypeFilter] = useState("");
   const [mapCellsPage, setMapCellsPage] = useState(1);
   const [mapCellsTotal, setMapCellsTotal] = useState(0);
   const [mapCellsTotalPages, setMapCellsTotalPages] = useState(1);
-  const [gus, setGus] = useState<any[]>([]);
+  const [gus, setGus] = useState<ApiResponseData[]>([]);
   const [gusLoading, setGusLoading] = useState(false);
-  const [guEdit, setGuEdit] = useState<any | null>(null);
-  const [items, setItems] = useState<any[]>([]);
+  const [guEdit, setGuEdit] = useState<ApiResponseData | null>(null);
+  const [items, setItems] = useState<ApiResponseData[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
-  const [itemEdit, setItemEdit] = useState<any | null>(null);
+  const [itemEdit, setItemEdit] = useState<ApiResponseData | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [recipes, setRecipes] = useState<any[]>([]);
+  const [recipes, setRecipes] = useState<ApiResponseData[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
-  const [recipeEdit, setRecipeEdit] = useState<any | null>(null);
+  const [recipeEdit, setRecipeEdit] = useState<ApiResponseData | null>(null);
   const [recipeSearch, setRecipeSearch] = useState("");
-  const [monsters, setMonsters] = useState<any[]>([]);
+  const [monsters, setMonsters] = useState<ApiResponseData[]>([]);
   const [monstersLoading, setMonstersLoading] = useState(false);
-  const [monsterEdit, setMonsterEdit] = useState<any | null>(null);
+  const [monsterEdit, setMonsterEdit] = useState<ApiResponseData | null>(null);
   const [monsterSearch, setMonsterSearch] = useState("");
   const [monsterSortField, setMonsterSortField] = useState<string>("id");
   const [monsterSortDir, setMonsterSortDir] = useState<"asc" | "desc">("asc");
-  const [lootTables, setLootTables] = useState<any[]>([]);
+  const [lootTables, setLootTables] = useState<ApiResponseData[]>([]);
   const [lootTablesLoading, setLootTablesLoading] = useState(false);
-  const [lootTableEdit, setLootTableEdit] = useState<any | null>(null);
+  const [lootTableEdit, setLootTableEdit] = useState<ApiResponseData | null>(null);
   const [lootTableSearch, setLootTableSearch] = useState("");
   const [lootTableSortField, setLootTableSortField] = useState<string>("id");
   const [lootTableSortDir, setLootTableSortDir] = useState<"asc" | "desc">("asc");
@@ -595,10 +595,10 @@ export const AdminView: React.FC = () => {
   const [itemSortDir, setItemSortDir] = useState<"asc" | "desc">("asc");
 
   // ----- Sect state -----
-  const [sects, setSects] = useState<any[]>([]);
+  const [sects, setSects] = useState<ApiResponseData[]>([]);
   const [sectsLoading, setSectsLoading] = useState(false);
-  const [selectedSect, setSelectedSect] = useState<any | null>(null);
-  const [selectedSectMembers, setSelectedSectMembers] = useState<any[]>([]);
+  const [selectedSect, setSelectedSect] = useState<ApiResponseData | null>(null);
+  const [selectedSectMembers, setSelectedSectMembers] = useState<ApiResponseData[]>([]);
   const [selectedSectId, setSelectedSectId] = useState<string | null>(null);
   const [showSectEdit, setShowSectEdit] = useState(false);
   const [showSectAddMember, setShowSectAddMember] = useState(false);
@@ -610,7 +610,7 @@ export const AdminView: React.FC = () => {
   const [sectEditFunds, setSectEditFunds] = useState("");
   const [sectDetailTab, setSectDetailTab] = useState<"members" | "vault" | "missions">("members");
 
-  const [sectMissions, setSectMissions] = useState<any[]>([]);
+  const [sectMissions, setSectMissions] = useState<ApiResponseData[]>([]);
   const [sectMissionsLoading, setSectMissionsLoading] = useState(false);
   const [showCreateMission, setShowCreateMission] = useState(false);
   const [newMission, setNewMission] = useState({ title: "", description: "", mission_type: "GATHER", target_id: "", target_amount: 1, reward_contribution: 10, required_member_rank: "NGOAI_MON", duration_hours: 24 });
@@ -681,8 +681,8 @@ export const AdminView: React.FC = () => {
         }
       }
 
-      const payload: any = {};
-      const addIfChanged = (key: string, originalVal: any, newVal: any) => {
+      const payload: ApiResponseData = {};
+      const addIfChanged = (key: string, originalVal: ApiResponseData, newVal: ApiResponseData) => {
         if (originalVal !== newVal) {
           payload[key] = newVal;
         }
@@ -705,7 +705,7 @@ export const AdminView: React.FC = () => {
         addIfChanged("myriad_tribulation_count", Number(apertureDetail.myriad_tribulation_count), Number(apertureForm.myriad_tribulation_count));
         addIfChanged("chaos_calamity_count", Number(apertureDetail.chaos_calamity_count), Number(apertureForm.chaos_calamity_count));
         addIfChanged("state", apertureDetail.state, apertureForm.state);
-        
+
         const originalDao = JSON.stringify(apertureDetail.dao_marks || {});
         const newDao = JSON.stringify(dao_marks);
         if (originalDao !== newDao) {
@@ -754,7 +754,8 @@ export const AdminView: React.FC = () => {
         const err = await res.json();
         alert("Lỗi: " + (err.error || "Không thể lưu tiên khiếu"));
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       alert("Lỗi kết nối: " + err.message);
     } finally {
       setApertureSaving(false);
@@ -820,7 +821,8 @@ export const AdminView: React.FC = () => {
       if (!res.ok) throw new Error("Không thể tải mã quà");
       const data = await res.json();
       setGiftCodes(data.codes || []);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error(err);
     } finally { setGiftLoading(false); }
   }, []);
@@ -847,7 +849,8 @@ export const AdminView: React.FC = () => {
       setNewGiftCode("");
       setNewGiftRewards([{ type: "primeval_stones", id: "", amount: 1000, label: "1.000 Nguyên Thạch" }]);
       fetchGiftCodes();
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       if (addToast) addToast(err.message, "error");
     } finally { setGiftLoading(false); }
   };
@@ -1056,7 +1059,8 @@ export const AdminView: React.FC = () => {
       const data = await res.json();
       setPlayers(data.data);
       setTotal(data.total);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       setError(err.message);
     } finally { setLoading(false); }
   }, [page, limit, search, searchBy]);
@@ -1132,7 +1136,7 @@ export const AdminView: React.FC = () => {
     if (selectedId && activeTab === "pets") fetchPlayerPets(selectedId);
   }, [selectedId, activeTab, playerPetsPage, playerPetsSearch, fetchPlayerPets]);
 
-  const exec = async (url: string, method: string, body?: any) => {
+  const exec = async (url: string, method: string, body?: ApiResponseData) => {
     setActionLoading(true);
     try {
       const res = await authFetch(url, {
@@ -1149,7 +1153,8 @@ export const AdminView: React.FC = () => {
       }
       if (addToast) addToast(data.message || "Thành công", "success");
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       if (addToast) addToast(err.message, "error");
       return false;
     } finally { setActionLoading(false); }
@@ -1183,19 +1188,19 @@ export const AdminView: React.FC = () => {
         </div>
         <div className="overflow-y-auto flex-1 space-y-0.5">
           {(() => {
-            let list: any[] = [];
+            let list: ApiResponseData[] = [];
             if (itemPicker.tab === "gu") list = shopSearchGus;
             else if (itemPicker.tab === "item") list = shopSearchItems;
             else list = shopSearchRecipes;
             const q = itemPicker.query.toLowerCase();
-            if (q) list = list.filter((x: any) => (x.id || "").toLowerCase().includes(q) || (x.name || "").toLowerCase().includes(q));
+            if (q) list = list.filter((x: ApiResponseData) => (x.id || "").toLowerCase().includes(q) || (x.name || "").toLowerCase().includes(q));
             if (itemPicker.tab === "recipe") {
-              list = list.filter((x: any) => x.target_gu_id);
+              list = list.filter((x: ApiResponseData) => x.target_gu_id);
             }
             return list.length === 0 ? (
               <div className="text-center py-8 text-zinc-500 text-xs italic">Không tìm thấy</div>
             ) : (
-              list.slice(0, 100).map((x: any) => (
+              list.slice(0, 100).map((x: ApiResponseData) => (
                 <button key={itemPicker.tab === "gu" ? `${x.id}:${x.rank ?? 0}` : x.id} onClick={() => {
                   const s = itemPicker.source;
                   if (s === "shop") setShopForm(f => ({ ...f, id: x.id }));
@@ -1561,7 +1566,7 @@ export const AdminView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/40">
-                        {playerPets.map((pet: any) => (
+                        {playerPets.map((pet: ApiResponseData) => (
                           <tr key={pet.id} className="hover:bg-zinc-900/30 transition-colors">
                             <td className="px-3 py-2 font-mono text-zinc-400">{pet.id.substring(0, 8)}...</td>
                             <td className="px-3 py-2 font-bold text-zinc-200">{pet.monster_name || pet.monster_template_id}</td>
@@ -1637,7 +1642,7 @@ export const AdminView: React.FC = () => {
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowStones(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading} onClick={async () => {
-                  const body: any = {};
+                  const body: ApiResponseData = {};
                   if (stonesPrimeval) body.primeval_stones = parseInt(stonesPrimeval);
                   if (stonesImmortal) body.immortal_stones = parseFloat(stonesImmortal);
                   if (Object.keys(body).length === 0) return;
@@ -1713,8 +1718,8 @@ export const AdminView: React.FC = () => {
         {/* Add Gu Modal */}
         {showAddGu && (() => {
           const guRanks = addGuId ? shopSearchGus
-            .filter((x: any) => x.id === addGuId)
-            .map((x: any) => x.rank)
+            .filter((x: ApiResponseData) => x.id === addGuId)
+            .map((x: ApiResponseData) => x.rank)
             .filter((r: number) => r > 0)
             .sort((a: number, b: number) => a - b) : [];
           const selectedRank = addGuRank ? Number(addGuRank) : 0;
@@ -1866,7 +1871,7 @@ export const AdminView: React.FC = () => {
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Thể chất</label>
                   <input type="text" value={editPlayerForm.constitution || ""} onChange={e => setEditPlayerForm(f => ({ ...f, constitution: e.target.value }))} list="constitution-list" placeholder="solar_sun_moon_body, great_strength_true_martial_body..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                   <datalist id="constitution-list">
-                    {Object.values(constitutionDictionary || {}).map((c: any) => (
+                    {Object.values(constitutionDictionary || {}).map((c: ApiResponseData) => (
                       <option key={c.key} value={c.key}>{c.name}</option>
                     ))}
                   </datalist>
@@ -1945,9 +1950,9 @@ export const AdminView: React.FC = () => {
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowEditPlayer(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading} onClick={async () => {
-                  const body: any = {};
+                  const body: ApiResponseData = {};
                   const num = (v: string) => (v === undefined || v === null || v.trim() === "" ? undefined : Number(v));
-                  const set = (field: string, cur: any, next: any) => {
+                  const set = (field: string, cur: ApiResponseData, next: ApiResponseData) => {
                     if (next === undefined || next === "") return;
                     if (String(cur) !== String(next)) body[field] = next;
                   };
@@ -2102,7 +2107,7 @@ export const AdminView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedSectMembers?.map((m: any) => (
+                      {selectedSectMembers?.map((m: ApiResponseData) => (
                         <tr key={m.player_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate" title={m.player_id}>{m.player_id.slice(0, 8)}...</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-1.5">
@@ -2160,7 +2165,7 @@ export const AdminView: React.FC = () => {
                       <table className="w-full text-left text-xs">
                         <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono text-[10px]"><th className="px-3 py-2 font-semibold">ID</th><th className="px-3 py-2 font-semibold">Tên</th><th className="px-3 py-2 font-semibold text-right">Giá</th><th className="px-3 py-2 font-semibold text-right">SL</th><th className="px-3 py-2 font-semibold text-right"></th></tr></thead>
                         <tbody>
-                          {selectedSect.vault_gu.map((item: any, i: number) => {
+                          {selectedSect.vault_gu.map((item: ApiResponseData, i: number) => {
                             const spec = guDictionary[item.id];
                             return (
                               <tr key={i} className="border-t border-zinc-800/40">
@@ -2188,7 +2193,7 @@ export const AdminView: React.FC = () => {
                       <table className="w-full text-left text-xs">
                         <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono text-[10px]"><th className="px-3 py-2 font-semibold">ID</th><th className="px-3 py-2 font-semibold">Tên</th><th className="px-3 py-2 font-semibold text-right">SL</th><th className="px-3 py-2 font-semibold text-right"></th></tr></thead>
                         <tbody>
-                          {Object.entries(selectedSect.vault_materials).map(([id, qty]: [string, any]) => {
+                          {Object.entries(selectedSect.vault_materials).map(([id, qty]: [string, ApiResponseData]) => {
                             const spec = itemDictionary[id];
                             return (
                               <tr key={id} className="border-t border-zinc-800/40">
@@ -2212,7 +2217,7 @@ export const AdminView: React.FC = () => {
                   <h4 className="text-xs font-bold text-zinc-400 font-mono uppercase tracking-wider mb-2">Công thức trong bảo khố</h4>
                   {selectedSect.vault_recipes && Array.isArray(selectedSect.vault_recipes) && selectedSect.vault_recipes.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {selectedSect.vault_recipes.map((vr: any, i: number) => (
+                      {selectedSect.vault_recipes.map((vr: ApiResponseData, i: number) => (
                         <span key={i} className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono">
                           {vr.recipe_id} ({Number(vr.completion_rate || 0).toFixed(0)}%)
                         </span>
@@ -2237,7 +2242,7 @@ export const AdminView: React.FC = () => {
                   <p className="text-xs text-zinc-600 italic py-8 text-center">Chưa có nhiệm vụ nào</p>
                 ) : (
                   <div className="space-y-2">
-                    {sectMissions?.map((m: any) => (
+                    {sectMissions?.map((m: ApiResponseData) => (
                       <div key={m.id} className="bg-zinc-900/30 border border-zinc-800/60 rounded-xl p-3 flex items-start justify-between gap-3">
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -2303,7 +2308,7 @@ export const AdminView: React.FC = () => {
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowSectEdit(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading} onClick={async () => {
-                  const body: any = {};
+                  const body: ApiResponseData = {};
                   if (sectEditName !== selectedSect.name) body.name = sectEditName;
                   if (sectEditDesc !== (selectedSect.description || "")) body.description = sectEditDesc;
                   if (Number(sectEditLevel) !== selectedSect.level) body.level = Number(sectEditLevel);
@@ -2366,7 +2371,7 @@ export const AdminView: React.FC = () => {
               </div>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Loại</label>
-                <select value={stockVaultType} onChange={e => setStockVaultType(e.target.value as any)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50">
+                <select value={stockVaultType} onChange={e => setStockVaultType(e.target.value as ApiResponseData)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50">
                   <option value="material">Vật liệu</option>
                   <option value="gu">Cổ trùng</option>
                   <option value="recipe">Công thức</option>
@@ -2578,7 +2583,7 @@ export const AdminView: React.FC = () => {
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Filter className="w-3 h-3" /> Loại tìm kiếm
                 </label>
-                <select value={searchBy} onChange={e => { setSearchBy(e.target.value as any); setPage(1); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
+                <select value={searchBy} onChange={e => { setSearchBy(e.target.value as ApiResponseData); setPage(1); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
                   <option value="all">Tất cả (tự nhận diện ID)</option>
                   <option value="id">ID</option>
                   <option value="username">Tên đăng nhập</option>
@@ -2707,7 +2712,7 @@ export const AdminView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {onlinePlayers.map((p: any) => (
+                        {onlinePlayers.map((p: ApiResponseData) => (
                           <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-colors">
                             <td className="py-2.5 px-3 text-zinc-200 font-medium">{p.username}</td>
                             <td className="py-2.5 px-3">
@@ -2913,8 +2918,8 @@ export const AdminView: React.FC = () => {
                     </tr></thead>
                     <tbody>{(() => {
                       const q = dictGuSearch.toLowerCase();
-                      const filtered = q ? gus.filter((g: any) => (g.id?.toLowerCase() || "").includes(q) || (g.name?.toLowerCase() || "").includes(q)) : [...gus];
-                      filtered.sort((a: any, b: any) => {
+                      const filtered = q ? gus.filter((g: ApiResponseData) => (g.id?.toLowerCase() || "").includes(q) || (g.name?.toLowerCase() || "").includes(q)) : [...gus];
+                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
                         let va = a[guSortField], vb = b[guSortField];
                         if (typeof va === "string") va = va.toLowerCase();
                         if (typeof vb === "string") vb = vb.toLowerCase();
@@ -2922,7 +2927,7 @@ export const AdminView: React.FC = () => {
                         if (va > vb) return guSortDir === "asc" ? 1 : -1;
                         return 0;
                       });
-                      return filtered.map((g: any) => (
+                      return filtered.map((g: ApiResponseData) => (
                         <tr key={g.id + g.rank} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{g.id}</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-2">
@@ -2972,8 +2977,8 @@ export const AdminView: React.FC = () => {
                     </tr></thead>
                     <tbody>{(() => {
                       const q = dictItemSearch.toLowerCase();
-                      const filtered = q ? items.filter((it: any) => (it.id?.toLowerCase() || "").includes(q) || (it.name?.toLowerCase() || "").includes(q)) : [...items];
-                      filtered.sort((a: any, b: any) => {
+                      const filtered = q ? items.filter((it: ApiResponseData) => (it.id?.toLowerCase() || "").includes(q) || (it.name?.toLowerCase() || "").includes(q)) : [...items];
+                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
                         let va = a[itemSortField], vb = b[itemSortField];
                         if (typeof va === "string") va = va.toLowerCase();
                         if (typeof vb === "string") vb = vb.toLowerCase();
@@ -2981,7 +2986,7 @@ export const AdminView: React.FC = () => {
                         if (va > vb) return itemSortDir === "asc" ? 1 : -1;
                         return 0;
                       });
-                      return filtered.map((it: any) => (
+                      return filtered.map((it: ApiResponseData) => (
                         <tr key={it.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{it.id}</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-2">
@@ -3022,7 +3027,7 @@ export const AdminView: React.FC = () => {
                 <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
                     <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0"><th className="px-3 py-2.5 font-semibold">ID</th><th className="px-3 py-2.5 font-semibold">Cổ trùng đích</th><th className="px-3 py-2.5 font-semibold text-right">Tỉ lệ</th><th className="px-3 py-2.5 font-semibold text-right">Nguyên Thạch</th><th className="px-3 py-2.5"></th></tr></thead>
-                    <tbody>{recipes.filter(r => r.id.toLowerCase().includes(recipeSearch.toLowerCase()) || (r.target_gu_name || r.target_gu_id || "").toLowerCase().includes(recipeSearch.toLowerCase())).map((r: any) => (
+                    <tbody>{recipes.filter(r => r.id.toLowerCase().includes(recipeSearch.toLowerCase()) || (r.target_gu_name || r.target_gu_id || "").toLowerCase().includes(recipeSearch.toLowerCase())).map((r: ApiResponseData) => (
                       <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 text-zinc-500 font-mono">{r.id}</td>
                         <td className="px-3 py-2.5 font-semibold text-zinc-200">{r.target_gu_name || r.target_gu_id}</td>
@@ -3063,8 +3068,8 @@ export const AdminView: React.FC = () => {
                     </tr></thead>
                     <tbody>{(() => {
                       const q = monsterSearch.toLowerCase();
-                      const filtered = q ? monsters.filter((m: any) => (m.id?.toLowerCase() || "").includes(q) || (m.name?.toLowerCase() || "").includes(q)) : [...monsters];
-                      filtered.sort((a: any, b: any) => {
+                      const filtered = q ? monsters.filter((m: ApiResponseData) => (m.id?.toLowerCase() || "").includes(q) || (m.name?.toLowerCase() || "").includes(q)) : [...monsters];
+                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
                         let va = a[monsterSortField], vb = b[monsterSortField];
                         if (typeof va === "string") va = va.toLowerCase();
                         if (typeof vb === "string") vb = vb.toLowerCase();
@@ -3072,7 +3077,7 @@ export const AdminView: React.FC = () => {
                         if (va > vb) return monsterSortDir === "asc" ? 1 : -1;
                         return 0;
                       });
-                      return filtered.map((m: any) => (
+                      return filtered.map((m: ApiResponseData) => (
                         <tr key={m.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{m.id}</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200">{m.name}</td>
@@ -3117,8 +3122,8 @@ export const AdminView: React.FC = () => {
                     </tr></thead>
                     <tbody>{(() => {
                       const q = lootTableSearch.toLowerCase();
-                      const filtered = q ? lootTables.filter((t: any) => (t.id?.toLowerCase() || "").includes(q) || (t.name?.toLowerCase() || "").includes(q)) : [...lootTables];
-                      filtered.sort((a: any, b: any) => {
+                      const filtered = q ? lootTables.filter((t: ApiResponseData) => (t.id?.toLowerCase() || "").includes(q) || (t.name?.toLowerCase() || "").includes(q)) : [...lootTables];
+                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
                         let va = a[lootTableSortField], vb = b[lootTableSortField];
                         if (typeof va === "string") va = va.toLowerCase();
                         if (typeof vb === "string") vb = vb.toLowerCase();
@@ -3126,7 +3131,7 @@ export const AdminView: React.FC = () => {
                         if (va > vb) return lootTableSortDir === "asc" ? 1 : -1;
                         return 0;
                       });
-                      return filtered.map((t: any) => {
+                      return filtered.map((t: ApiResponseData) => {
                         const entries = typeof t.entries === "string" ? JSON.parse(t.entries) : (t.entries || []);
                         return (
                           <tr key={t.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
@@ -3153,23 +3158,23 @@ export const AdminView: React.FC = () => {
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
                   <Globe className="w-4 h-4 text-amber-400" />Quản Lý Khu Vực
                 </h3>
-                <button 
-                  onClick={() => setRegionEdit({ id: "", name: "", description: "", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })} 
+                <button
+                  onClick={() => setRegionEdit({ id: "", name: "", description: "", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />Thêm Khu Vực
                 </button>
               </div>
-              
+
               <div className="flex gap-2 mb-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                  <input 
-                    value={regionSearch} 
-                    onChange={e => setRegionSearch(e.target.value)} 
+                  <input
+                    value={regionSearch}
+                    onChange={e => setRegionSearch(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") fetchRegions(1, regionSearch); }}
-                    placeholder="Tìm kiếm khu vực theo ID hoặc Tên..." 
-                    className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" 
+                    placeholder="Tìm kiếm khu vực theo ID hoặc Tên..."
+                    className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500"
                   />
                 </div>
                 <button onClick={() => fetchRegions(1, regionSearch)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-bold text-zinc-200 cursor-pointer">Tìm</button>
@@ -3196,7 +3201,7 @@ export const AdminView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {regions.map((r: any) => (
+                        {regions.map((r: ApiResponseData) => (
                           <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                             <td className="px-3 py-2 font-mono text-zinc-400">{r.id}</td>
                             <td className="px-3 py-2 font-semibold text-zinc-200">{r.name}</td>
@@ -3233,8 +3238,8 @@ export const AdminView: React.FC = () => {
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-amber-400" />Quản Lý Ô Bản Đồ
                 </h3>
-                <button 
-                  onClick={() => setMapCellEdit({ id: "", region_id: "", x: 0, y: 0, cell_type: "Resource", content_id: "", metadata: {}, respawn_seconds: 300, is_active: true, _isNew: true })} 
+                <button
+                  onClick={() => setMapCellEdit({ id: "", region_id: "", x: 0, y: 0, cell_type: "Resource", content_id: "", metadata: {}, respawn_seconds: 300, is_active: true, _isNew: true })}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />Thêm Ô Bản Đồ
@@ -3244,28 +3249,28 @@ export const AdminView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3">
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tìm kiếm</label>
-                  <input 
-                    value={mapCellSearch} 
-                    onChange={e => setMapCellSearch(e.target.value)} 
+                  <input
+                    value={mapCellSearch}
+                    onChange={e => setMapCellSearch(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); }}
-                    placeholder="Tọa độ x, y hoặc Content ID..." 
-                    className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" 
+                    placeholder="Tọa độ x, y hoặc Content ID..."
+                    className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"
                   />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Khu vực</label>
-                  <input 
-                    value={mapCellRegionFilter} 
-                    onChange={e => setMapCellRegionFilter(e.target.value)} 
-                    placeholder="ID khu vực..." 
-                    className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" 
+                  <input
+                    value={mapCellRegionFilter}
+                    onChange={e => setMapCellRegionFilter(e.target.value)}
+                    placeholder="ID khu vực..."
+                    className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"
                   />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại ô</label>
-                  <select 
-                    value={mapCellTypeFilter} 
-                    onChange={e => setMapCellTypeFilter(e.target.value)} 
+                  <select
+                    value={mapCellTypeFilter}
+                    onChange={e => setMapCellTypeFilter(e.target.value)}
                     className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"
                   >
                     <option value="">Tất cả</option>
@@ -3276,8 +3281,8 @@ export const AdminView: React.FC = () => {
                   </select>
                 </div>
                 <div className="flex items-end">
-                  <button 
-                    onClick={() => fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter)} 
+                  <button
+                    onClick={() => fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter)}
                     className="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-bold text-zinc-200 cursor-pointer"
                   >
                     Tìm Kiếm
@@ -3306,7 +3311,7 @@ export const AdminView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {mapCells.map((c: any) => (
+                        {mapCells.map((c: ApiResponseData) => (
                           <tr key={c.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                             <td className="px-3 py-2 text-zinc-300 font-mono text-[10px]">{c.region_id}</td>
                             <td className="px-3 py-2 font-mono text-amber-400">({c.x}, {c.y})</td>
@@ -3433,7 +3438,7 @@ export const AdminView: React.FC = () => {
             ) : (
               <>
                 <div className="space-y-1 max-h-[500px] overflow-y-auto">
-                  {auditLogs.map((log: any) => (
+                  {auditLogs.map((log: ApiResponseData) => (
                     <div key={log.id}>
                       <div onClick={() => setAuditLogExpandId(auditLogExpandId === log.id ? null : log.id)} className="flex items-center gap-3 px-3 py-2 bg-zinc-800/40 hover:bg-zinc-800/60 rounded-lg cursor-pointer transition-colors">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${log.success ? "bg-emerald-500" : "bg-red-500"}`} />
@@ -3526,7 +3531,7 @@ export const AdminView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {shopItems.map((item: any) => (
+                      {shopItems.map((item: ApiResponseData) => (
                         <tr key={`${item.id}-${item.rank ?? 0}`} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
                           <td className="px-3 py-2.5 text-violet-400 font-mono">{item.rank ?? 0}</td>
@@ -3583,7 +3588,7 @@ export const AdminView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {arenaShopItems.map((item: any) => (
+                      {arenaShopItems.map((item: ApiResponseData) => (
                         <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
@@ -3836,7 +3841,7 @@ export const AdminView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {mineSlots.map((slot: any) => (
+                    {mineSlots.map((slot: ApiResponseData) => (
                       <tr key={slot.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 text-zinc-500 font-mono">{slot.id}</td>
                         <td className="px-3 py-2.5 font-semibold">{slot.rarity}</td>
@@ -3976,10 +3981,10 @@ export const AdminView: React.FC = () => {
                   {giftCodes.length === 0 ? (
                     <tr><td colSpan={5} className="text-center py-10 text-zinc-600 italic">Chưa có mã quà nào.</td></tr>
                   ) : (
-                    giftCodes.map((gc: any) => (
+                    giftCodes.map((gc: ApiResponseData) => (
                       <tr key={gc.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 font-mono font-bold text-amber-400">{gc.code}</td>
-                        <td className="px-3 py-2.5 text-zinc-300 max-w-[200px] truncate">{gc.rewards?.map((r: any) => r.label).join(", ")}</td>
+                        <td className="px-3 py-2.5 text-zinc-300 max-w-[200px] truncate">{gc.rewards?.map((r: ApiResponseData) => r.label).join(", ")}</td>
                         <td className="px-3 py-2.5 text-zinc-400">{gc.used_count}/{gc.max_uses}</td>
                         <td className="px-3 py-2.5 text-[10px] text-zinc-500">{gc.expires_at ? new Date(gc.expires_at).toLocaleDateString("vi-VN") : "—"}</td>
                         <td className="px-3 py-2.5">
@@ -4033,7 +4038,7 @@ export const AdminView: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sects.map((s: any) => (
+                  {sects.map((s: ApiResponseData) => (
                     <tr key={s.id} onClick={() => { setSelectedSectId(s.id); }} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
                       <td className="px-3 py-2.5 text-zinc-500 font-mono">{s.id}</td>
                       <td className="px-3 py-2.5 font-semibold text-zinc-200">{s.name}</td>
@@ -4100,7 +4105,7 @@ export const AdminView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {apertures.map((ap: any) => (
+                    {apertures.map((ap: ApiResponseData) => (
                       <tr key={ap.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5">
                           <span className="font-semibold text-zinc-200 block">{ap.username}</span>
@@ -4111,9 +4116,9 @@ export const AdminView: React.FC = () => {
                         </td>
                         <td className="px-3 py-2.5 font-semibold">
                           <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono ${
-                            ap.state === "STABLE" ? "bg-emerald-950/55 text-emerald-400 border border-emerald-800/30" : 
-                            ap.state === "TRIBULATION_PENDING" ? "bg-amber-950/55 text-amber-400 border border-amber-800/30" : 
-                            ap.state === "TRIBULATION_ACTIVE" ? "bg-red-950/55 text-red-400 border border-red-800/30 animate-pulse" : 
+                            ap.state === "STABLE" ? "bg-emerald-950/55 text-emerald-400 border border-emerald-800/30" :
+                            ap.state === "TRIBULATION_PENDING" ? "bg-amber-950/55 text-amber-400 border border-amber-800/30" :
+                            ap.state === "TRIBULATION_ACTIVE" ? "bg-red-950/55 text-red-400 border border-red-800/30 animate-pulse" :
                             "bg-zinc-800 text-zinc-400"
                           }`}>
                             {ap.state === "STABLE" ? "Ổn định" : ap.state === "TRIBULATION_PENDING" ? "Đợi Kiếp" : ap.state === "TRIBULATION_ACTIVE" ? "Đang Kiếp" : ap.state}
@@ -4283,7 +4288,7 @@ export const AdminView: React.FC = () => {
                     {!apertureForm.dao_marks_array || apertureForm.dao_marks_array.length === 0 ? (
                       <p className="text-xs text-zinc-500 italic">Chưa có đạo ngân nào trong tiên khiếu.</p>
                     ) : (
-                      apertureForm.dao_marks_array.map((entry: any, index: number) => (
+                      apertureForm.dao_marks_array.map((entry: ApiResponseData, index: number) => (
                         <div key={index} className="flex items-center gap-2">
                           <input
                             value={entry.path}
@@ -4308,7 +4313,7 @@ export const AdminView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              const arr = apertureForm.dao_marks_array.filter((_: any, idx: number) => idx !== index);
+                              const arr = apertureForm.dao_marks_array.filter((_: ApiResponseData, idx: number) => idx !== index);
                               setApertureForm({ ...apertureForm, dao_marks_array: arr });
                             }}
                             className="p-1.5 text-red-500 hover:text-red-400 hover:bg-red-950/20 border border-transparent hover:border-red-900/30 rounded-lg transition-colors cursor-pointer"
@@ -4384,7 +4389,8 @@ export const AdminView: React.FC = () => {
                         if (!res.ok) throw new Error(data.error || "Upload thất bại");
                         setGuEdit({...guEdit, image_url: data.image_url});
                         if (addToast) addToast(data.message || "Tải ảnh lên thành công!", "success");
-                      } catch (err: any) {
+                      } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
                         if (addToast) addToast(err.message, "error");
                       } finally { setUploading(false); e.target.value = ""; }
                     }} />
@@ -4415,7 +4421,7 @@ export const AdminView: React.FC = () => {
                     <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">{cat} ({Object.keys(eff).length} fields)</summary>
                     <div className="px-3 pb-3">
                       {Object.entries(eff).map(([k, val], idx) => {
-                        const v = val as any;
+                        const v = val as ApiResponseData;
                         const fieldType = typeof v === "boolean" ? "boolean" : typeof v === "number" ? "number" : "string";
                         return (
                           <div key={idx} className="flex gap-2 items-center mb-1.5">
@@ -4428,7 +4434,7 @@ export const AdminView: React.FC = () => {
                                   const newEff = { ...guEdit.effects };
                                   const catEff = { ...newEff[cat] };
                                   let currentVal = catEff[k];
-                                  
+
                                   const suggestedType = getEffectFieldType(cat, newKey);
                                   if (suggestedType === "boolean" && typeof currentVal !== "boolean") {
                                     currentVal = false;
@@ -4569,7 +4575,7 @@ export const AdminView: React.FC = () => {
               <details className="mb-2 bg-zinc-800/30 rounded-lg">
                 <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">other ({(guEdit.effects?.other || []).length} mechanics)</summary>
                 <div className="px-3 pb-3">
-                  {(guEdit.effects?.other || []).map((m: any, i: number) => (
+                  {(guEdit.effects?.other || []).map((m: ApiResponseData, i: number) => (
                     <div key={i} className="grid grid-cols-3 gap-2 mb-2 p-2 bg-zinc-800/50 rounded">
                       <div>
                         <label className="text-[10px] text-zinc-500 block">Sự kiện kích hoạt</label>
@@ -4584,7 +4590,7 @@ export const AdminView: React.FC = () => {
                         <textarea value={JSON.stringify(m.params || {})} onChange={e => { let p; try { p = JSON.parse(e.target.value) } catch { p = m.params } const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], params: p}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200 font-mono" rows={2} />
                       </div>
                       <div className="col-span-3 flex justify-end">
-                        <button onClick={() => { const newEff = {...guEdit.effects}; newEff.other = (newEff.other || []).filter((_: any, j: number) => j !== i); setGuEdit({...guEdit, effects: newEff}) }} className="text-[10px] text-red-400 hover:text-red-300">Xóa</button>
+                        <button onClick={() => { const newEff = {...guEdit.effects}; newEff.other = (newEff.other || []).filter((_: ApiResponseData, j: number) => j !== i); setGuEdit({...guEdit, effects: newEff}) }} className="text-[10px] text-red-400 hover:text-red-300">Xóa</button>
                       </div>
                     </div>
                   ))}
@@ -4658,7 +4664,8 @@ export const AdminView: React.FC = () => {
                           if (!res.ok) throw new Error(data.error || "Upload thất bại");
                           setItemEdit({...itemEdit, image_url: data.image_url});
                           if (addToast) addToast(data.message || "Tải ảnh lên thành công!", "success");
-                        } catch (err: any) {
+                        } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
                           if (addToast) addToast(err.message, "error");
                         } finally { setUploading(false); e.target.value = ""; }
                       }} />
@@ -4705,7 +4712,7 @@ export const AdminView: React.FC = () => {
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Cổ trùng đích</label>
                   <select value={recipeEdit.target_gu_id} onChange={e => setRecipeEdit({...recipeEdit, target_gu_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
                     <option value="">Chọn...</option>
-                    {gus.map((g: any) => <option key={g.id} value={g.id}>{g.name} ({g.id})</option>)}
+                    {gus.map((g: ApiResponseData) => <option key={g.id} value={g.id}>{g.name} ({g.id})</option>)}
                   </select>
                 </div>
               </div>
@@ -4754,8 +4761,8 @@ export const AdminView: React.FC = () => {
                 const ok = await exec(recipeUrl, isNew ? "POST" : "PUT", clean);
                 if (ok) { setRecipeEdit(null); fetchRecipes(); }
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
-              <datalist id="gu-list">{gus.map((g: any) => <option key={g.id} value={g.id} />)}</datalist>
-              <datalist id="item-list">{items.map((it: any) => <option key={it.id} value={it.id} />)}</datalist>
+              <datalist id="gu-list">{gus.map((g: ApiResponseData) => <option key={g.id} value={g.id} />)}</datalist>
+              <datalist id="item-list">{items.map((it: ApiResponseData) => <option key={it.id} value={it.id} />)}</datalist>
             </div>
           </div>
         </div>
@@ -4821,7 +4828,7 @@ export const AdminView: React.FC = () => {
                 const ok = await exec(url, isNew ? "POST" : "PUT", clean);
                 if (ok) { setMonsterEdit(null); fetchMonsters(); }
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
-              <datalist id="loot-table-list">{lootTables.map((lt: any) => <option key={lt.id} value={lt.id} />)}</datalist>
+              <datalist id="loot-table-list">{lootTables.map((lt: ApiResponseData) => <option key={lt.id} value={lt.id} />)}</datalist>
             </div>
           </div>
         </div>
@@ -4839,14 +4846,14 @@ export const AdminView: React.FC = () => {
               </div>
               <div className="border-t border-zinc-800 pt-3">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Danh sách loot</label>
-                {(Array.isArray(lootTableEdit.entries) ? lootTableEdit.entries : []).map((entry: any, idx: number) => (
+                {(Array.isArray(lootTableEdit.entries) ? lootTableEdit.entries : []).map((entry: ApiResponseData, idx: number) => (
                   <div key={idx} className="flex gap-2 mb-2 items-center">
                     <input value={entry.item_id || ""} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], item_id: e.target.value}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="item_id" className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="item-list-lt" />
                     <input value={entry.gu_id || ""} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], gu_id: e.target.value}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="gu_id" className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="gu-list-lt" />
                     <input type="number" min={1} value={entry.min_qty || 1} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], min_qty: parseInt(e.target.value) || 1}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="min" className="w-14 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
                     <input type="number" min={1} value={entry.max_qty || 1} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], max_qty: parseInt(e.target.value) || 1}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="max" className="w-14 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
                     <input type="number" step="0.01" min={0} max={1} value={entry.chance || 0.5} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], chance: parseFloat(e.target.value) || 0.5}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="%" className="w-16 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
-                    <button onClick={() => { const newEntries = lootTableEdit.entries.filter((_: any, i: number) => i !== idx); setLootTableEdit({...lootTableEdit, entries: newEntries}); }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { const newEntries = lootTableEdit.entries.filter((_: ApiResponseData, i: number) => i !== idx); setLootTableEdit({...lootTableEdit, entries: newEntries}); }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 ))}
                 <button onClick={() => setLootTableEdit({...lootTableEdit, entries: [...(lootTableEdit.entries || []), { item_id: "", gu_id: "", min_qty: 1, max_qty: 1, chance: 0.5 }]})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm loot entry</button>
@@ -4861,8 +4868,8 @@ export const AdminView: React.FC = () => {
                 const ok = await exec(url, isNew ? "POST" : "PUT", clean);
                 if (ok) { setLootTableEdit(null); fetchLootTables(); }
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
-              <datalist id="item-list-lt">{items.map((it: any) => <option key={it.id} value={it.id} />)}</datalist>
-              <datalist id="gu-list-lt">{gus.map((g: any) => <option key={g.id} value={g.id} />)}</datalist>
+              <datalist id="item-list-lt">{items.map((it: ApiResponseData) => <option key={it.id} value={it.id} />)}</datalist>
+              <datalist id="gu-list-lt">{gus.map((g: ApiResponseData) => <option key={g.id} value={g.id} />)}</datalist>
             </div>
           </div>
         </div>
@@ -5018,8 +5025,8 @@ export const AdminView: React.FC = () => {
               </div>
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Metadata (JSON string)</label>
-                <textarea 
-                  value={typeof mapCellEdit.metadata === 'object' ? JSON.stringify(mapCellEdit.metadata) : mapCellEdit.metadata || ""} 
+                <textarea
+                  value={typeof mapCellEdit.metadata === 'object' ? JSON.stringify(mapCellEdit.metadata) : mapCellEdit.metadata || ""}
                   onChange={e => {
                     try {
                       const parsed = JSON.parse(e.target.value);
@@ -5027,10 +5034,10 @@ export const AdminView: React.FC = () => {
                     } catch {
                       setMapCellEdit({...mapCellEdit, metadata: e.target.value});
                     }
-                  }} 
-                  rows={3} 
+                  }}
+                  rows={3}
                   placeholder='{"rank": 5}'
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200" 
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200"
                 />
               </div>
               <div className="flex items-center gap-2 mt-3">

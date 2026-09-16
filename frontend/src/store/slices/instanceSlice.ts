@@ -15,7 +15,7 @@ export interface InstanceSlice {
   actionInstance: (optionIndex: number) => Promise<boolean>;
 }
 
-export const createInstanceSlice: StateCreator<any, any, any, InstanceSlice> = (set, get) => ({
+export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, InstanceSlice> = (set, get) => ({
   activeInstanceSession: null,
   activeInstanceTemplate: null,
   availableInstances: [],
@@ -89,7 +89,8 @@ export const createInstanceSlice: StateCreator<any, any, any, InstanceSlice> = (
       await get().initializeSession();
       await get().fetchInstances();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -126,7 +127,8 @@ export const createInstanceSlice: StateCreator<any, any, any, InstanceSlice> = (
         await get().fetchInstances();
       }
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;

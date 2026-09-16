@@ -365,7 +365,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
               setPlayerFromServer(np);
               setExploredSubZones(np.visited_subzones || []);
               if (res.log) addWorldLog(res.log);
-              
+
               // Handle skip battle result
               if (res.skip_result) {
                 const skipResult = res.skip_result as { winner?: string; enemy_name?: string; mine_occupied?: string };
@@ -379,7 +379,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
                   addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
                 }
               }
-              
+
               if (!res.reached && !res.combat_triggered) {
                 const skipRes = res.skip_result as { winner?: string } | undefined;
                 if (skipRes && skipRes.winner !== "Phe Ta") {
@@ -630,7 +630,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         style: { fontSize, fill: color, fontFamily: "serif", stroke: { color: 0x000000, width: 4 }, fontWeight: "bold" },
       });
       label.anchor.set(0.5, 0.5);
-      
+
       const labelContainer = new Container();
       labelContainer.name = `region-label-${type}`;
       labelContainer.position.set(rx + rw / 2, ry + rh / 2);
@@ -1063,11 +1063,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       }
       batchMonster.fill({ color: 0xf87171, alpha: 0.9 });
       batchMonster.stroke({ color: 0x991b1b, width: 0.05 });
-      
+
       // We will re-fill the resource specifically with green
       batchResource.fill({ color: 0x10b981, alpha: 0.9 });
       batchResource.stroke({ color: 0x065f46, width: 0.05 });
-      
+
       batchWild.fill({ color: 0xfbbf24, alpha: 0.9 });
       batchWild.stroke({ color: 0xb45309, width: 0.05 });
       container.addChild(batchMonster);
@@ -1104,7 +1104,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       if (labelSettings.monster && gamePlayer) {
         const px = gamePlayer.x;
         const py = gamePlayer.y;
-        
+
         const sortedCells = [...cells].sort((a, b) => {
           const distA = Math.hypot(a.x - px, a.y - py);
           const distB = Math.hypot(b.x - px, b.y - py);
@@ -1137,16 +1137,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           if (text) {
             const label = new Text({
               text,
-              style: { 
-                fontSize: 11, 
-                fill, 
-                fontFamily: "sans-serif", 
-                stroke: { color: 0x000000, width: 2 } 
+              style: {
+                fontSize: 11,
+                fill,
+                fontFamily: "sans-serif",
+                stroke: { color: 0x000000, width: 2 }
               },
             });
             label.anchor.set(0.5, 1);
             label.y = -0.6;
-            
+
             const labelContainer = new Container();
             labelContainer.name = "monster-label";
             labelContainer.position.set(c.x + 0.5, c.y + 0.5);
@@ -1183,7 +1183,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         sprite.anchor.set(0.5);
         sprite.width = 0.8;
         sprite.height = 0.8;
-        
+
         Assets.load(playerAvatarUrl).then((texture) => {
           if (playerAvatarRef.current) playerAvatarRef.current.texture = texture;
         }).catch(console.error);
@@ -1369,7 +1369,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       bgGraphics.rect(0, 0, tileSize, tileSize);
       bgGraphics.fill({ color: 0x1a4226 });
       bgGraphics.stroke({ color: 0x14361e, width: 0.02, alignment: 0 }); // alignment 0 draws stroke completely inside
-      
+
       const bgTexture = app.renderer.generateTexture(bgGraphics);
       const bgSprite = new TilingSprite({
         texture: bgTexture,
@@ -1609,7 +1609,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         appRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   useEffect(() => {
