@@ -72,7 +72,7 @@ export const GachaPanel: React.FC = () => {
 
   const costLabel = (pool: GachaPoolShape): string => {
     const v = totalCost(pool);
-    return pool.cost_type === "primeval_stones" ? `${v.toLocaleString()} Nguyên Thạch` : `${v} năm Thọ Nguyên`;
+    return pool.cost_type === "primeval_stones" ? `${v.toLocaleString()} Nguyên Thạch` : `${v} Tiên Nguyên Thạch`;
   };
 
   const canAfford = (pool: GachaPoolShape): boolean => {
@@ -208,7 +208,7 @@ export const GachaPanel: React.FC = () => {
                   <div>
                     <div className="text-xs font-bold text-zinc-100">{pool.name}</div>
                     <div className="text-[9px] text-zinc-500 font-mono">
-                      {pool.cost_type === "primeval_stones" ? `${pool.cost_amount.toLocaleString()} Nguyên Thạch / lần` : `${pool.cost_amount} năm Thọ Nguyên / lần`}
+                      {pool.cost_type === "primeval_stones" ? `${pool.cost_amount.toLocaleString()} Nguyên Thạch / lần` : `${pool.cost_amount} Tiên Nguyên Thạch / lần`}
                     </div>
                   </div>
                 </div>
