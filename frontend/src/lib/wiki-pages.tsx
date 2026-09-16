@@ -270,7 +270,7 @@ export const wikiPages: WikiPage[] = [
         {/* Terminology Glossary */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Thuật Ngữ Cốt Lõi Cho Cổ Sư</h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2 text-xs">
               <h4 className="font-bold text-indigo-300">Không Khiếu & Tiên Khiếu (Aperture)</h4>
@@ -1057,7 +1057,7 @@ export const wikiPages: WikiPage[] = [
             <Clock className="w-4 h-4 text-amber-400" />
             <span>Hệ Thống Tuổi Thọ, Trạng Thái Tử Vong & Tiên Cương</span>
           </h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
               <h4 className="font-bold text-red-400 font-serif">1. Tuổi Thọ & Trạng Thái Tử Vong (is_dead)</h4>

@@ -1,18 +1,18 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { 
-  Search, 
-  BookOpen, 
-  ShieldAlert, 
-  Layers, 
-  Cpu, 
-  Sparkles, 
-  Coins, 
-  ChevronRight, 
+import {
+  Search,
+  BookOpen,
+  ShieldAlert,
+  Layers,
+  Cpu,
+  Sparkles,
+  Coins,
+  ChevronRight,
   SlidersHorizontal,
   ArrowLeft,
   MapPin,
@@ -36,9 +36,9 @@ interface Props {
   initialLootTables: LootTable[];
   initialRegions: WikiRegion[];
   initialMonsterSpawns: WikiMonsterSpawn[];
-  guideSections: any[];
-  roadmap: any;
-  subByParent: Record<string, any[]>;
+  guideSections: ApiResponseData[];
+  roadmap: ApiResponseData;
+  subByParent: Record<string, ApiResponseData[]>;
   sectionIcon: Record<string, string>;
 }
 
@@ -451,7 +451,7 @@ export default function WikiClientView({
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <div className="w-full mx-auto px-2 sm:px-4 py-8">
-        
+
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex flex-wrap items-center gap-4">
@@ -476,7 +476,7 @@ export default function WikiClientView({
               </div>
             </div>
           </div>
-          
+
           {/* Quick Stats Grid */}
           <div className="grid grid-cols-4 gap-2 bg-zinc-900/40 p-2.5 rounded-2xl border border-[var(--border)] max-w-md">
             <div className="text-center px-2 py-1">
@@ -1052,7 +1052,7 @@ export default function WikiClientView({
                       ) : (
                         <span className="text-zinc-600 italic text-[9px]">Vật phẩm phổ thông</span>
                       )}
-                      
+
                       {item.base_price ? (
                         <div className="flex items-center gap-1 text-amber-500 font-bold text-[10px]">
                           <Coins className="w-3.5 h-3.5" />
@@ -1083,7 +1083,7 @@ export default function WikiClientView({
                 {filteredRecipes.map((recipe) => {
                   const targetGu = guMap.get(recipe.target_gu_id);
                   const targetName = targetGu ? targetGu.name : recipe.target_gu_id;
-                  
+
                   return (
                     <div
                       key={recipe.id}
@@ -1105,7 +1105,7 @@ export default function WikiClientView({
                               </p>
                             </div>
                           </div>
-                          
+
                           {targetGu && (
                             <div className="flex flex-wrap gap-1 mt-3">
                               <span className="px-1.5 py-0.5 rounded bg-zinc-950/40 border border-zinc-800 text-[8px] text-[var(--text-secondary)] font-mono">
@@ -1319,12 +1319,12 @@ export default function WikiClientView({
                           ) : (
                             <div className="space-y-1.5">
                               {(expandedMonsters[monster.id] ? lootTable.entries : lootTable.entries.slice(0, 5)).map((e, idx) => {
-                                const targetName = e.item_id 
+                                const targetName = e.item_id
                                   ? (itemMap.get(e.item_id)?.name || e.item_id)
-                                  : e.gu_id 
+                                  : e.gu_id
                                     ? (guMap.get(e.gu_id)?.name || e.gu_id)
                                     : "Unknown";
-                                
+
                                 return (
                                   <div key={idx} className="flex items-center justify-between text-[10px] font-mono p-1.5 rounded-lg bg-zinc-950/30 border border-zinc-900/40">
                                     <span className="text-[var(--text-primary)] truncate max-w-[120px]">
@@ -1434,7 +1434,7 @@ export default function WikiClientView({
                                 );
                               })}
                               {monstersInRegion.length > 5 && (
-                                <button 
+                                <button
                                   onClick={() => toggleRegionExpand(region.id)}
                                   className="text-[9px] text-emerald-500 hover:text-emerald-400 italic text-center mt-1 cursor-pointer w-full hover:bg-emerald-500/10 rounded py-0.5 transition-colors"
                                 >
@@ -1472,7 +1472,7 @@ export default function WikiClientView({
                                 );
                               })}
                               {(wildGus.length + resources.length > 8) && !expandedRegions[region.id] && (
-                                <button 
+                                <button
                                   onClick={() => toggleRegionExpand(region.id)}
                                   className="px-1.5 py-0.5 rounded bg-emerald-950/30 text-emerald-400 border border-emerald-500/20 text-[9px] font-mono hover:bg-emerald-900/50 transition-colors cursor-pointer"
                                 >

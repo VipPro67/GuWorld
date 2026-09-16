@@ -21,10 +21,10 @@ export function formatRewards(rewards: QuestReward[]): string {
 
 export function checkQuest(
   questId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  player: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  guDictionary: any
+
+  player: ApiResponseData,
+
+  guDictionary: ApiResponseData
 ): boolean {
   if (!player) return false;
   const rank = (player.rank as number) || 0;
@@ -85,8 +85,8 @@ export function checkQuest(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isClaimableAchievement(achId: string, player: any): boolean {
+
+export function isClaimableAchievement(achId: string, player: ApiResponseData): boolean {
   if (!player) return false;
   const rank = (player.rank as number) || 0;
   const guInventory = (player.gu_inventory as Array<{ gu_id?: string }>) || [];

@@ -205,7 +205,7 @@ export default function Home() {
     subscribeTradeEvents();
     return () => unsubscribeTradeEvents();
     // Only subscribe once when player becomes available, not on every player state change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [isPlayerReady]);
 
   const handleLogout = () => {
@@ -217,7 +217,7 @@ export default function Home() {
   const hasReplayLogs = Boolean(activeCombatReplay && activeCombatReplay.enemy && (activeCombatReplay.logs?.length ?? 0) > 0);
   const inCombat = (player && player.active_combat && !isPartyMemberNotLeader) || hasReplayLogs;
 
-  
+
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
   if (IS_MAINTENANCE) {
@@ -268,7 +268,7 @@ export default function Home() {
       {/* Top Header Navigation */}
       <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
         <div className="flex items-center gap-4">
-          <div 
+          <div
             onClick={() => {
               if (player && !inCombat && currentView !== "dashboard") {
                 setView("dashboard");
@@ -402,7 +402,7 @@ export default function Home() {
           </div>
         ) : currentView === "kill-moves" ? (
           <KillerMoveBuilder/>
-        ) 
+        )
         : currentView === "topup" ? (
           <div className="w-full">
             <PremiumStoreView defaultTab="topup" />
@@ -427,7 +427,7 @@ export default function Home() {
             guInventory={player.gu_inventory || []}
             materials={player.materials_inventory || {}}
             actionLoading={actionLoading}
-            listings={marketplaceListings as any[]}
+            listings={marketplaceListings as ApiResponseData[]}
             onRefresh={fetchMarketplaceListings}
             onCreate={createMarketplaceListing}
             onBid={placeMarketplaceBid}
@@ -683,7 +683,7 @@ export default function Home() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] animate-fade-in">
           <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center flex flex-col gap-5 animate-scale-up">
             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
-            
+
             <div className="w-12 h-12 rounded-full bg-emerald-950/50 border border-emerald-500/20 flex items-center justify-center mx-auto">
               <Handshake className="w-6 h-6 text-emerald-400 animate-pulse" />
             </div>

@@ -34,7 +34,7 @@ export interface AuthSlice {
   }) => Promise<boolean>;
 }
 
-export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get) => ({
+export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, AuthSlice> = (set, get) => ({
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
@@ -56,7 +56,7 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
         localStorage.setItem("gu_auth_token", data.token);
       }
       localStorage.setItem("gu_player_id", data.player.id);
-      
+
       void get().fetchRecipes();
       void get().fetchGuInventory();
       await get().fetchUnreadNotificationsCount();
@@ -69,7 +69,8 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
         useUIStore.getState().setShowChangelog(true);
       }
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -93,7 +94,8 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
       }
 
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -101,7 +103,7 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
       set({ isLoading: false });
     }
   },
-  
+
   getBrowserFingerprint: async (): Promise<string> => {
     if (typeof window === "undefined") {
       return "server-ssr-fallback";
@@ -171,7 +173,8 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
       get().subscribeTradeEvents();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -199,7 +202,8 @@ export const createAuthSlice: StateCreator<any, any, any, AuthSlice> = (set, get
       get().setPlayerFromServer(player);
       get().addLog(`Thiết lập ban đầu hoàn tất! Khu vực: ${player.current_region}`);
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;

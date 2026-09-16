@@ -195,7 +195,7 @@ export class WebSocketManager {
     return () => {
       const newRef = currentRef - 1;
       this.subscriptionRefCounts.set(channel, newRef);
-      
+
       const subs = this.subscriptions.get(channel);
       if (subs) {
         subs.delete(callback as (data: unknown) => void);

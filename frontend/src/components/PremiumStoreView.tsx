@@ -270,7 +270,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
         ]}
         activeId={activeTab}
         onChange={(id) => {
-          setActiveTab(id as any);
+          setActiveTab(id as ApiResponseData);
           if (id === "packages") setShopMessage(null);
           else if (id === "topup") setTopupMessage(null);
           else if (id === "exchange") setExchangeMessage(null);

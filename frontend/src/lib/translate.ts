@@ -141,7 +141,7 @@ export const pathLabels: Record<string, string> = {
   "Formation Path": "Trận Đạo",
   "Qi Path": "Khí Đạo",
   "Death Path": "Tử Đạo",
-  
+
   // Cơ thể, Tinh thần & Xã hội
   "Strength Path": "Lực Đạo",
   "Soul Path": "Hồn Đạo",
@@ -196,7 +196,7 @@ export function parsePaths(path: unknown): string[] {
 
 export function translatePath(path: string | undefined): string {
   if (!path) return "?";
-  
+
   if (typeof path === "string" && path.trim().startsWith("[") && path.trim().endsWith("]")) {
     const parsed = parsePaths(path);
     if (parsed.length > 0) {
@@ -206,14 +206,14 @@ export function translatePath(path: string | undefined): string {
 
   // Normalize by stripping " Path" suffix if it exists
   const base = path.endsWith(" Path") ? path.slice(0, -5) : path;
-  
+
   // Capitalize first letter to match keys in PATH_MAP
   const capitalizedBase = base.charAt(0).toUpperCase() + base.slice(1).toLowerCase();
-  
+
   if (PATH_MAP[capitalizedBase]) {
     return PATH_MAP[capitalizedBase] + " Đạo";
   }
-  
+
   return PATH_MAP[path] || path;
 }
 

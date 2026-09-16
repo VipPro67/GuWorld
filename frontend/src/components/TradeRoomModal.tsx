@@ -2,22 +2,22 @@
 
 import React, { useEffect, useState } from "react";
 import { useGameStore, GuInstance, formatRecipeName, guSpecFor } from "@/store/useGameStore";
-import { 
-  X, Coins, Sparkles, Lock, Unlock, CheckCircle2, 
-  Trash2, Plus, Minus, RefreshCw, User, ShieldAlert 
+import {
+  X, Coins, Sparkles, Lock, Unlock, CheckCircle2,
+  Trash2, Plus, Minus, RefreshCw, User, ShieldAlert
 } from "lucide-react";
 import { GameModal, GameTabs, GameButton, GameCard, GameBadge, GameInput } from "@/components/ui";
 // UI migrated to shared components
 
 export const TradeRoomModal: React.FC = () => {
-  const { 
-    player, 
-    activeTrade, 
-    cancelTrade, 
-    updateTradeOffer, 
-    lockTrade, 
-    confirmTrade, 
-    guDictionary, 
+  const {
+    player,
+    activeTrade,
+    cancelTrade,
+    updateTradeOffer,
+    lockTrade,
+    confirmTrade,
+    guDictionary,
     itemDictionary,
     recipes,
     fetchRecipes,
@@ -47,7 +47,7 @@ export const TradeRoomModal: React.FC = () => {
   // Initialize stone inputs from database offer
   useEffect(() => {
     if (myOffer) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setPrimevalInput(myOffer.primeval_stones || 0);
       setImmortalInput(myOffer.immortal_stones || 0);
     }
@@ -68,11 +68,11 @@ export const TradeRoomModal: React.FC = () => {
   // Sync Stone offers to backend
   const syncStones = () => {
     if (myLocked) return;
-    
+
     // Clamp values
     const clampedPrimeval = Math.max(0, Math.min(player.primeval_stones, primevalInput));
     const clampedImmortal = Math.max(0, Math.min(player.immortal_stones, immortalInput));
-    
+
     setPrimevalInput(clampedPrimeval);
     setImmortalInput(clampedImmortal);
 
@@ -325,7 +325,7 @@ export const TradeRoomModal: React.FC = () => {
 
         {/* Main Workspace split */}
         <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-zinc-900">
-          
+
           {/* LEFT SIDE: Player (You) */}
           <div className="p-6 flex flex-col gap-5 bg-zinc-950/40">
             <div className="flex items-center justify-between">
@@ -354,7 +354,7 @@ export const TradeRoomModal: React.FC = () => {
             {/* Current Offer Display Box */}
             <div className="bg-zinc-950 border border-zinc-900/80 rounded-2xl p-4 space-y-3 min-h-[120px] shadow-inner">
               <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono block">Ưu đãi hiện tại của bạn:</span>
-              
+
               {/* Stones offered */}
               <div className="flex flex-wrap gap-2 text-xs font-mono">
                 {((myOffer?.primeval_stones || 0) > 0) && (
@@ -656,7 +656,7 @@ export const TradeRoomModal: React.FC = () => {
                               const rank = list[0].rank || guDictionary[guId]?.rank || 1;
                               const name = guSpecFor(guId, rank)?.name || guId;
                               const isExpanded = !!expandedGus[groupKey];
-                              
+
                               // Count how many instances in this group are already selected in myOffer
                               const selectedCountInGroup = list.filter(g => (myOffer?.gus || []).includes(g.instance_id)).length;
 
@@ -693,7 +693,7 @@ export const TradeRoomModal: React.FC = () => {
                                         const selected = (myOffer?.gus || []).includes(gu.instance_id);
                                         const isSleeping = gu.status === "SLEEPING";
                                         const isSealed = gu.status === "SEALED";
-                                        
+
                                         return (
                                           <button
                                             type="button"

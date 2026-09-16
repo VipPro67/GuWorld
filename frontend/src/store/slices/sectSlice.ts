@@ -57,7 +57,7 @@ export interface SectSlice {
   actionJoinRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
   fetchPromotionRequests: () => Promise<void>;
   actionPromotionRequest: (requestId: string, action: "approve" | "reject") => Promise<boolean>;
-  sectMap: any[];
+  sectMap: ApiResponseData[];
   fetchSectsMap: () => Promise<void>;
   attackSect: (targetSectId: string, attackerId?: string) => Promise<boolean>;
   defendSect: (defenderType: 'member' | 'beast', playerId?: string, monsterId?: string, monsterRank?: number) => Promise<boolean>;
@@ -66,7 +66,7 @@ export interface SectSlice {
   upgradeSectBuilding: (buildingName: string) => Promise<boolean>;
 }
 
-export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get) => ({
+export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, SectSlice> = (set, get) => ({
   sects: [],
   mySectStatus: null,
   sectMissions: [],
@@ -107,7 +107,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -130,7 +131,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       set({ mySectStatus: null });
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -152,7 +154,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addLog(data.message || "Hủy đơn xin gia nhập tông môn.");
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -198,7 +201,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -223,7 +227,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -248,7 +253,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -273,7 +279,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -298,7 +305,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -327,7 +335,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -352,7 +361,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -391,7 +401,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -414,7 +425,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -437,7 +449,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchSectMissions();
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -460,7 +473,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().fetchSectMissions();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -485,7 +499,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -525,7 +540,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addLog(data.message || `Điều chỉnh chức vụ thành viên: ${memberId} sang ${rank}`);
       await get().fetchSectMembers();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -547,7 +563,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addLog(data.message || `Trục xuất đệ tử: ${memberId}`);
       await get().fetchSectMembers();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -581,7 +598,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchSectMissions();
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -609,7 +627,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addLog(`Nhập bảo khố: ${quantity}x ${itemId}`);
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -633,7 +652,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addLog(`Nhập bảo khố hàng loạt: ${items.length} mặt hàng`);
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -655,7 +675,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addLog(`Nâng cấp tông môn: Cấp ${data.new_level}`);
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -678,7 +699,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt thành viên!", "success");
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -701,7 +723,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt lên cấp!", "success");
       await get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -725,7 +748,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchMySectStatus();
       await get().fetchSectMembers();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -765,7 +789,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchJoinRequests();
       await get().fetchSectMembers();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -805,7 +830,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       await get().fetchPromotionRequests();
       await get().fetchSectMembers();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -843,7 +869,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().fetchPlayerProfile(get().player?.username || "");
       get().fetchSectsMap();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       addToast(err.message || "Lỗi khi tấn công", "error");
       return false;
     } finally {
@@ -868,7 +895,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().fetchMySectStatus();
       get().fetchSectsMap();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       addToast(err.message || "Lỗi cập nhật Trấn Thủ", "error");
       return false;
     } finally {
@@ -899,7 +927,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().fetchSectsMap();
       get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       addToast(err.message || "Lỗi bố trí phòng thủ", "error");
       return false;
     } finally {
@@ -925,14 +954,15 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       get().fetchSectsMap();
       get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       addToast(err.message || "Lỗi rút phòng thủ", "error");
       return false;
     } finally {
       set({ actionLoading: false });
     }
   },
-  
+
   upgradeSectBuilding: async (buildingName: string) => {
     const { token, actionLoading, logout, addToast, addLog } = get();
     if (!token || actionLoading) return false;
@@ -950,7 +980,8 @@ export const createSectSlice: StateCreator<any, any, any, SectSlice> = (set, get
       addLog(data.message || "Nâng cấp kiến trúc tông môn.");
       get().fetchMySectStatus();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       addToast(err.message || "Lỗi nâng cấp", "error");
       return false;
     } finally {

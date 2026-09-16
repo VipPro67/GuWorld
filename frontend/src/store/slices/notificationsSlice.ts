@@ -15,7 +15,7 @@ export interface NotificationsSlice {
   _onNotificationEvent: (payload: PlayerNotification) => void;
 }
 
-export const createNotificationsSlice: StateCreator<any, any, any, NotificationsSlice> = (set, get) => ({
+export const createNotificationsSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, NotificationsSlice> = (set, get) => ({
   notifications: [],
   notificationsLoaded: false,
   unreadNotifications: 0,
@@ -57,7 +57,7 @@ export const createNotificationsSlice: StateCreator<any, any, any, Notifications
   markNotificationRead: async (id) => {
     const { token } = get();
     if (!token) return;
-    set((state: any) => ({
+    set((state: ApiResponseData) => ({
       notifications: state.notifications.map((n: PlayerNotification) => (n.id === id ? { ...n, is_read: true } : n)),
       unreadNotifications: Math.max(0, state.unreadNotifications - 1),
     }));
@@ -75,7 +75,7 @@ export const createNotificationsSlice: StateCreator<any, any, any, Notifications
   markAllNotificationsRead: async () => {
     const { token } = get();
     if (!token) return;
-    set((state: any) => ({
+    set((state: ApiResponseData) => ({
       notifications: state.notifications.map((n: PlayerNotification) => ({ ...n, is_read: true })),
       unreadNotifications: 0,
     }));
@@ -92,7 +92,7 @@ export const createNotificationsSlice: StateCreator<any, any, any, Notifications
 
   _onNotificationEvent: (payload: PlayerNotification) => {
     if (!payload?.id) return;
-    set((state: any) => {
+    set((state: ApiResponseData) => {
       const exists = state.notifications.some((n: PlayerNotification) => n.id === payload.id);
       if (exists) return {};
       return {

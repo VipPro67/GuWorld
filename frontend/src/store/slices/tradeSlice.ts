@@ -3,7 +3,7 @@ import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
 export interface TradeSlice {
-  activeTrade: any | null;
+  activeTrade: ApiResponseData | null;
   fetchActiveTrade: () => Promise<void>;
   initiateTrade: (receiverUsername: string) => Promise<boolean>;
   acceptTrade: (tradeId: string) => Promise<boolean>;
@@ -14,7 +14,7 @@ export interface TradeSlice {
   confirmTrade: (tradeId: string) => Promise<boolean>;
 }
 
-export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, get) => ({
+export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, TradeSlice> = (set, get) => ({
   activeTrade: null,
 
   fetchActiveTrade: async () => {
@@ -49,7 +49,8 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
       get().addToast(data.message || "Yêu cầu giao dịch đã được gửi!", "success");
       await get().fetchActiveTrade();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       get().addLog(`Giao dịch thất bại: ${err.message}`);
@@ -71,7 +72,8 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
       get().addToast("Đã thiết lập kết nối Thông Thiên Cổ!", "success");
       await get().fetchActiveTrade();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       get().addToast(err.message, "error");
       return false;
     }
@@ -88,7 +90,8 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
       get().addLog(data.message || "Đã từ chối giao dịch!");
       set({ activeTrade: null });
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       get().addToast(err.message, "error");
       return false;
     }
@@ -106,7 +109,8 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
       get().addToast("Đã hủy kết nối giao dịch.", "info");
       set({ activeTrade: null });
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       get().addToast(err.message, "error");
       return false;
     }
@@ -126,7 +130,8 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
       if (!response.ok) throw new Error(data.error || "Cập nhật ưu đãi thất bại");
       await get().fetchActiveTrade();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       get().addToast(err.message, "error");
       return false;
     }
@@ -144,7 +149,8 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
       get().addToast("Đã khóa ưu đãi giao dịch!", "success");
       await get().fetchActiveTrade();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       await get().fetchActiveTrade();
       get().addToast(err.message, "error");
       return false;
@@ -159,7 +165,7 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xác nhận giao dịch thất bại");
-      
+
       const bothConfirmed = data.sender_confirmed && data.receiver_confirmed;
       if (bothConfirmed) {
         get().addLog("Giao dịch thành công!");
@@ -172,7 +178,8 @@ export const createTradeSlice: StateCreator<any, any, any, TradeSlice> = (set, g
         await get().fetchActiveTrade();
       }
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       get().addToast(err.message, "error");
       return false;
     }

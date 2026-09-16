@@ -109,7 +109,7 @@ export function GuQuickBar() {
   const getCooldownRemains = (instanceId: string): number => {
     if (!player?.statuses || !Array.isArray(player.statuses)) return 0;
     const cdId = `cd_gu_${instanceId}`;
-    const found = player.statuses.find((st: any) => st.id === cdId);
+    const found = player.statuses.find((st: ApiResponseData) => st.id === cdId);
     if (!found || !found.expires_at) return 0;
     const exp = new Date(found.expires_at).getTime();
     const now = Date.now();

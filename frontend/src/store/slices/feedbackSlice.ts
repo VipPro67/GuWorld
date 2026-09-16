@@ -15,7 +15,7 @@ export interface FeedbackSlice {
   deleteFeedbackComment: (feedbackId: string, commentId: string) => Promise<boolean>;
 }
 
-export const createFeedbackSlice: StateCreator<any, any, any, FeedbackSlice> = (set, get) => ({
+export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, FeedbackSlice> = (set, get) => ({
   feedbacks: [],
   feedbackComments: {},
 
@@ -58,7 +58,8 @@ export const createFeedbackSlice: StateCreator<any, any, any, FeedbackSlice> = (
       get().addToast(data.message || "Gửi góp ý thành công!", "success");
       await get().fetchFeedbacks();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -104,13 +105,14 @@ export const createFeedbackSlice: StateCreator<any, any, any, FeedbackSlice> = (
       if (!response.ok) throw new Error(data.error || "Bình chọn thất bại.");
       get().addToast(data.message || "Bình chọn thành công!", "success");
       // Update with exact values from server
-      set((state: any) => ({
-        feedbacks: state.feedbacks.map((f: any) =>
+      set((state: ApiResponseData) => ({
+        feedbacks: state.feedbacks.map((f: ApiResponseData) =>
           f.id === feedbackId ? { ...f, total_votes: data.total_votes, user_vote: data.user_vote } : f
         ),
       }));
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       // Revert on error
       set({ feedbacks: prevFeedbacks, error: err.message });
       get().addToast(err.message, "error");
@@ -138,7 +140,8 @@ export const createFeedbackSlice: StateCreator<any, any, any, FeedbackSlice> = (
         await get().fetchPlayerStatus(get().player!.id);
       }
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -153,9 +156,10 @@ export const createFeedbackSlice: StateCreator<any, any, any, FeedbackSlice> = (
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tải góp ý thất bại.");
-      set((state: any) => ({ feedbackComments: { ...state.feedbackComments, [feedbackId]: data || [] } }));
+      set((state: ApiResponseData) => ({ feedbackComments: { ...state.feedbackComments, [feedbackId]: data || [] } }));
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -177,13 +181,14 @@ export const createFeedbackSlice: StateCreator<any, any, any, FeedbackSlice> = (
       if (!response.ok) throw new Error(data.error || "Góp ý thất bại.");
       get().addToast(data.message || "Đã góp ý!", "success");
       await get().fetchFeedbackComments(feedbackId);
-      set((state: any) => ({
-        feedbacks: state.feedbacks.map((f: any) =>
+      set((state: ApiResponseData) => ({
+        feedbacks: state.feedbacks.map((f: ApiResponseData) =>
           f.id === feedbackId ? { ...f, comment_count: f.comment_count + 1 } : f
         ),
       }));
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -203,13 +208,14 @@ export const createFeedbackSlice: StateCreator<any, any, any, FeedbackSlice> = (
       if (!response.ok) throw new Error(data.error || "Xóa góp ý thất bại.");
       get().addToast(data.message || "Đã xóa góp ý!", "success");
       await get().fetchFeedbackComments(feedbackId);
-      set((state: any) => ({
-        feedbacks: state.feedbacks.map((f: any) =>
+      set((state: ApiResponseData) => ({
+        feedbacks: state.feedbacks.map((f: ApiResponseData) =>
           f.id === feedbackId ? { ...f, comment_count: Math.max(0, f.comment_count - 1) } : f
         ),
       }));
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;

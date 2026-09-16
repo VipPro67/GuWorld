@@ -66,7 +66,7 @@ export const WikiView: React.FC = () => {
 
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Các Phase cập nhật</h3>
-            
+
             <div className="relative border-l border-zinc-800 pl-5 ml-2.5 space-y-6 text-xs">
               <div className="relative">
                 <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
@@ -122,7 +122,7 @@ export const WikiView: React.FC = () => {
           {/* Terminology Glossary */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Thuật Ngữ Cốt Lõi Cho Cổ Sư</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 space-y-2 text-xs">
                 <h4 className="font-bold text-indigo-300">Không Khiếu & Tiên Khiếu (Aperture)</h4>
@@ -633,7 +633,7 @@ export const WikiView: React.FC = () => {
               <Clock className="w-4 h-4 text-amber-400" />
               <span>Hệ Thống Tuổi Thọ, Trạng Thái Tử Vong & Tiên Cương</span>
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 space-y-2">
                 <h4 className="font-bold text-red-400 font-serif">1. Tuổi Thọ & Trạng Thái Tử Vong (is_dead)</h4>
@@ -736,7 +736,7 @@ export const WikiView: React.FC = () => {
 
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Các mốc cảnh giới lưu phái</h3>
-            
+
             <div className="space-y-3">
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 text-xs">
                 <h4 className="font-bold text-zinc-200 flex items-center gap-2">
@@ -869,7 +869,7 @@ export const WikiView: React.FC = () => {
             <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/10 text-xs text-rose-300 leading-relaxed">
               ⚠️ <strong>Lưu ý cực kỳ quan trọng:</strong> Mỗi con Cổ trang bị đều có thanh độ no. Độ no giảm dần sau mỗi lượt chiến đấu hoặc theo thời gian thực tế. Nếu độ no về 0, Cổ sẽ rơi vào trạng thái <strong>Hấp Hối</strong> và sẽ <strong>chết vĩnh viễn</strong> nếu không được cho ăn kịp thời!
             </div>
-            
+
             <p className="text-xs text-zinc-500 leading-relaxed mt-2">
               Bạn cần thu thập thức ăn tương ứng của từng hệ để nuôi dưỡng chúng:
             </p>
@@ -1132,7 +1132,7 @@ export const WikiView: React.FC = () => {
 
         {/* Sidebar Nav Items */}
         <nav className="flex-grow overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-zinc-850">
-          
+
           {/* Section: Lộ trình cập nhật */}
           <button
             onClick={() => setSelectedPageId("roadmap")}
@@ -1329,7 +1329,7 @@ export const WikiView: React.FC = () => {
 
       {/* 2. MAIN CONTENT AREA */}
       <main className="flex-grow flex flex-col min-w-0 bg-zinc-950/20 overflow-y-auto p-6 md:p-8">
-        
+
         {/* Navigation Breadcrumb */}
         <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-600 uppercase tracking-widest mb-2">
           <span>Tài Liệu Hướng Dẫn</span>

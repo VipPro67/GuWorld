@@ -18,10 +18,10 @@ interface CombatScreenProps {
   guDictionary: Record<string, GuSpec>;
   actionLoading: boolean;
   isPracticeMode?: boolean;
-  practiceDummyConfig?: any;
-  onPracticeDummyConfigChange?: (config: any) => void;
+  practiceDummyConfig?: ApiResponseData;
+  onPracticeDummyConfigChange?: (config: ApiResponseData) => void;
   onAttack?: () => Promise<unknown>;
-  onRetreat?: () => Promise<any>;
+  onRetreat?: () => Promise<ApiResponseData>;
 }
 
 export const CombatScreen: React.FC<CombatScreenProps> = ({
@@ -272,12 +272,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     if (!path) return "";
     let key = path.endsWith(" Path") ? path : path.charAt(0).toUpperCase() + path.slice(1).toLowerCase() + " Path";
     if (pathLabels[key]) return pathLabels[key];
-    
+
     const lowerKey = key.toLowerCase();
     for (const [k, v] of Object.entries(pathLabels)) {
       if (k.toLowerCase() === lowerKey) return v;
     }
-    
+
     const base = path.endsWith(" Path") ? path.slice(0, -5) : path;
     return base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() + " Đạo";
   };
@@ -369,7 +369,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       "utility_boost",
     ]);
 
-    const parseArray = (value: any): string[] => {
+    const parseArray = (value: ApiResponseData): string[] => {
       if (!value) return [];
 
       if (Array.isArray(value)) {
@@ -389,7 +389,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       }
     };
 
-    const normalize = (value: any) =>
+    const normalize = (value: ApiResponseData) =>
       String(value || "")
         .trim()
         .toLowerCase()

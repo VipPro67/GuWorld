@@ -488,7 +488,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
   // Re-initialize when combatants change
   useEffect(() => {
     dispatch({ type: "INIT", combatants: parsedCombatants, apertureHp: initialApertureHp, apertureMaxHp: initialApertureMaxHp });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [parsedCombatants]);
 
   const intervalMs = useMemo(() => {
@@ -575,7 +575,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     } else {
       dispatch({ type: "TOGGLE_PLAY" });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [state.currentIndex, logs.length, parsedCombatants]);
 
   const handleSkip = useCallback(() => {
@@ -852,8 +852,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                     const isImmortal = rankVal >= 6;
                     return (
                       <span key={idx} className={`text-[10px] px-2 py-0.5 rounded-md font-medium border ${
-                        isImmortal 
-                          ? 'bg-amber-950/40 text-amber-300 border-amber-700/60 shadow-[0_0_8px_rgba(245,158,11,0.2)]' 
+                        isImmortal
+                          ? 'bg-amber-950/40 text-amber-300 border-amber-700/60 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
                           : 'bg-purple-950/40 text-purple-300 border-purple-800/60'
                       }`}>
                         {isImmortal ? '✦ ' : ''}{specName} <span className="text-[9px] opacity-75 font-mono">(R{rankVal})</span>
@@ -1237,7 +1237,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 <span className={`mt-0.5 shrink-0 ${baseColor}`}>
                   {actionIcon(log.action)}
                 </span>
-                
+
                 {log.trigger && (
                   <span className="text-[8px] text-cyan-500 bg-cyan-950/40 px-1 rounded shrink-0">Kích hoạt</span>
                 )}

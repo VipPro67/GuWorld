@@ -6,12 +6,12 @@ import { ShoppingCart, AlertCircle, Coins, Sparkles } from "lucide-react";
 export const ArenaShopView: React.FC = () => {
   const { arenaShopItems, fetchArenaShop, buyArenaItem, actionLoading, player } = useGameStore();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedBuyItem, setSelectedBuyItem] = useState<any | null>(null);
+  const [selectedBuyItem, setSelectedBuyItem] = useState<ApiResponseData | null>(null);
   const [buyQuantity, setBuyQuantity] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const filteredItems = arenaShopItems.filter((item: any) =>
+  const filteredItems = arenaShopItems.filter((item: ApiResponseData) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -19,7 +19,7 @@ export const ArenaShopView: React.FC = () => {
     fetchArenaShop();
   }, []);
 
-  const handleOpenBuyModal = (item: any) => {
+  const handleOpenBuyModal = (item: ApiResponseData) => {
     setSelectedBuyItem(item);
     setBuyQuantity(1);
     setErrorMessage(null);
@@ -64,7 +64,7 @@ export const ArenaShopView: React.FC = () => {
         className="w-full p-2.5 border border-zinc-800 rounded-xl bg-zinc-900 text-zinc-300 placeholder-zinc-650 focus:outline-none focus:border-amber-500/40 font-mono text-xs transition-colors"
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {filteredItems.map((item: any) => (
+        {filteredItems.map((item: ApiResponseData) => (
           <div
             key={item.id}
             className="bg-zinc-950/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between items-start hover:border-amber-900/50 transition-all group"

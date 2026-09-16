@@ -18,24 +18,24 @@ export interface CombatSlice {
   deleteKillerMove: (id: string) => Promise<boolean>;
   castKillerMove: (id: string, targetId?: string, usedExtraGuThisTurn?: boolean) => Promise<{ player: Player; logs: string[]; victory?: boolean; defeat?: boolean } | null>;
   explore: () => Promise<void>;
-  exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: any } | null>;
-  executeAutoCombat: (loadout: any) => Promise<{ logs: any[]; winner: string; combatants?: any[] } | null>;
-  executePracticeCombat: (loadout: any, dummyConfig: any) => Promise<{ logs: any[]; winner: string; combatants?: any[], player_won?: boolean } | null>;
+  exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
+  executeAutoCombat: (loadout: ApiResponseData) => Promise<{ logs: ApiResponseData[]; winner: string; combatants?: ApiResponseData[] } | null>;
+  executePracticeCombat: (loadout: ApiResponseData, dummyConfig: ApiResponseData) => Promise<{ logs: ApiResponseData[]; winner: string; combatants?: ApiResponseData[], player_won?: boolean } | null>;
   combatHistory: CombatHistoryEntry[];
   combatHistoryLoading: boolean;
   fetchCombatHistory: () => Promise<void>;
   fetchCombatHistoryEntry: (id: string) => Promise<CombatHistoryEntry | null>;
-  activeCombatReplay: { logs: any[]; winner: string; combatants: any[]; enemy: CombatState } | null;
-  setActiveCombatReplay: (replay: { logs: any[]; winner: string; combatants: any[]; enemy: CombatState } | null) => void;
+  activeCombatReplay: { logs: ApiResponseData[]; winner: string; combatants: ApiResponseData[]; enemy: CombatState } | null;
+  setActiveCombatReplay: (replay: { logs: ApiResponseData[]; winner: string; combatants: ApiResponseData[]; enemy: CombatState } | null) => void;
   combatSettings: AutoCombatConfig | null;
   combatSettingsLoading: boolean;
   fetchCombatSettings: () => Promise<void>;
   saveCombatSettings: (settings: AutoCombatConfig) => Promise<boolean>;
   retreat: () => Promise<void>;
-  fleeCombat: () => Promise<any>;
+  fleeCombat: () => Promise<ApiResponseData>;
 }
 
-export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set, get) => ({
+export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CombatSlice> = (set, get) => ({
   killerMoves: [],
   killerMovesLoaded: false,
   combatSettings: null,
@@ -66,7 +66,8 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
       const data: ExploreResponse = await response.json();
       get().applyInventoryFromResponse(data);
       get().addLog(data.log);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Khám phá thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -104,7 +105,7 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
 
       get().applyInventoryFromResponse(data);
       get().addLog(data.log);
-      
+
       // Handle skip battle result from explore
       if (data.skip_result) {
         const skipResult = data.skip_result;
@@ -117,9 +118,10 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
           get().addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
         }
       }
-      
+
       return data;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Khám phá thất bại: ${err.message}`);
       get().addToast(err.message, "error");
@@ -205,7 +207,7 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
       }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể xóa sát chiêu.");
-      set((state: any) => ({ killerMoves: state.killerMoves.filter((move: any) => move.id !== id) }));
+      set((state: ApiResponseData) => ({ killerMoves: state.killerMoves.filter((move: ApiResponseData) => move.id !== id) }));
       get().addLog(data.message || "Đã xóa sát chiêu.");
       return true;
     } catch (err: unknown) {
@@ -256,7 +258,7 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
     }
   },
 
-  executeAutoCombat: async (loadout: any) => {
+  executeAutoCombat: async (loadout: ApiResponseData) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
 
@@ -295,7 +297,8 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
       // We just return the logs and winner, we don't need to update player immediately
       // The frontend handles the replay animation
       return data;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       const message = err?.name === "AbortError"
         ? "Mô phỏng chiến đấu quá thời gian. Trạng thái nhân vật sẽ được đồng bộ lại."
         : (err?.message || "Thao tác thất bại.");
@@ -311,7 +314,7 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
     }
   },
 
-  executePracticeCombat: async (loadout: any, dummyConfig: any) => {
+  executePracticeCombat: async (loadout: ApiResponseData, dummyConfig: ApiResponseData) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
 
@@ -324,11 +327,11 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
         },
         body: JSON.stringify({
           loadout,
-          dummy_hp: parseInt(dummyConfig.dummyHP as any) || 100,
-          dummy_shield: parseInt(dummyConfig.dummyShield as any) || 0,
-          dummy_atk: parseInt(dummyConfig.dummyAtk as any) || 10,
-          dummy_def: parseInt(dummyConfig.dummyDef as any) || 5,
-          dummy_speed: parseFloat(dummyConfig.dummySpeed as any) || 1.0
+          dummy_hp: parseInt(dummyConfig.dummyHP as ApiResponseData) || 100,
+          dummy_shield: parseInt(dummyConfig.dummyShield as ApiResponseData) || 0,
+          dummy_atk: parseInt(dummyConfig.dummyAtk as ApiResponseData) || 10,
+          dummy_def: parseInt(dummyConfig.dummyDef as ApiResponseData) || 5,
+          dummy_speed: parseFloat(dummyConfig.dummySpeed as ApiResponseData) || 1.0
         }),
       });
 
@@ -343,7 +346,8 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
       }
 
       return data;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mô phỏng thất bại: ${err.message}`);
@@ -380,7 +384,8 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
       set({ activeCombatReplay: null });
       useUIStore.getState().setView("dashboard");
       get().addLog(data.log || "Đạo hữu đã rút lui an toàn.");
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Rút lui thất bại: ${err.message}`);
@@ -468,7 +473,8 @@ export const createCombatSlice: StateCreator<any, any, any, CombatSlice> = (set,
       useUIStore.getState().setView(returnView);
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
       return data;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bỏ chạy thất bại: ${err.message}`);

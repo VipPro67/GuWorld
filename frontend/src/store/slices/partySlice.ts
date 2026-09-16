@@ -13,7 +13,7 @@ export interface PartySlice {
   leaveParty: () => Promise<boolean>;
 }
 
-export const createPartySlice: StateCreator<any, any, any, PartySlice> = (set, get) => ({
+export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, PartySlice> = (set, get) => ({
   party: null,
   partyInvitations: [],
 
@@ -30,7 +30,8 @@ export const createPartySlice: StateCreator<any, any, any, PartySlice> = (set, g
       get().addLog(data.message || "Đã lập tổ đội thành công!");
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -67,7 +68,8 @@ export const createPartySlice: StateCreator<any, any, any, PartySlice> = (set, g
       set({ party: data.party });
       get().addLog(data.message || `Đã mời người chơi ${username} vào tổ đội.`);
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -87,7 +89,8 @@ export const createPartySlice: StateCreator<any, any, any, PartySlice> = (set, g
       get().addLog(data.message || "Bạn đã rời khỏi tổ đội.");
       await get().initializeSession();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
@@ -124,12 +127,13 @@ export const createPartySlice: StateCreator<any, any, any, PartySlice> = (set, g
         set({ party: data.party });
         await get().initializeSession();
       }
-      set((state: any) => ({
-        partyInvitations: state.partyInvitations.filter((inv: any) => inv.id !== id),
+      set((state: ApiResponseData) => ({
+        partyInvitations: state.partyInvitations.filter((inv: ApiResponseData) => inv.id !== id),
       }));
       get().addLog(data.message || `Đã ${action === "accept" ? "chấp nhận" : "từ chối"} lời mời.`);
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;

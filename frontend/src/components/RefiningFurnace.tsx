@@ -103,7 +103,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     const targetName = guSpecFor(r.target_gu_id, r.target_rank)?.name || r.target_gu_id;
     const matchesSearch = targetName.toLowerCase().includes(searchKeyword.toLowerCase()) || r.id.toLowerCase().includes(searchKeyword.toLowerCase());
     const isComplete = r.completion_rate === undefined || r.completion_rate >= 100.0;
-    
+
     if (statusTab === "complete") {
       return matchesSearch && isComplete;
     }
@@ -175,7 +175,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const getBestCandidateForRefine = (guId: string, rank: number): GuInstance | undefined => {
     const candidates = availableInventoryGus.filter(g => g.gu_id === guId && g.rank === rank);
     if (candidates.length === 0) return undefined;
-    
+
     // Sort: non-vital & non-equipped first, then lowest hunger, then sleeping
     candidates.sort((a, b) => {
       if (a.is_vital !== b.is_vital) return a.is_vital ? 1 : -1;
@@ -308,7 +308,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     setTimeout(async () => {
       clearInterval(stageInterval);
       const selectedIds = requiredSlots.map((slot) => slottedGus[slot.index]);
-      
+
       try {
         const response = await onRefine(selectedRecipe.id, selectedIds);
         if (response) {
@@ -336,7 +336,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
             message: "Hợp luyện thất bại bí ẩn. Lò hỏa đã tắt ngúm.",
           });
         }
-      } catch (err: any) {
+      } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
         setRefineResult({
           status: "failed",
           message: err.message || "Lỗi giao dịch hợp luyện.",
@@ -357,7 +358,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     setIsDeducing(true);
     try {
       await deduceRecipe(selectedRecipe.id);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Lỗi khi thôi diễn: ", err);
     } finally {
       setIsDeducing(false);
@@ -386,7 +388,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     const spec = itemDictionary[matId];
     const name = spec ? spec.name : matId;
     const desc = spec ? spec.description : "";
-    
+
     // Assign specific icons/colors based on ID
     let icon = <HelpCircle className="w-4 h-4" />;
     let colorClass = "text-zinc-400";
@@ -744,7 +746,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
             {/* Recipe Selection Combobox */}
             <div className="relative" ref={dropdownRef}>
-              <div 
+              <div
                 className={`flex items-center justify-between w-full p-3.5 rounded-xl border transition-all cursor-pointer ${
                   isRefining ? "bg-zinc-950/20 border-zinc-800 opacity-50 cursor-not-allowed" : "bg-zinc-950/60 border-zinc-800 hover:border-amber-500/50 hover:shadow-[0_0_10px_rgba(245,158,11,0.1)]"
                 }`}

@@ -20,7 +20,7 @@ export interface RegionInfo {
 }
 
 export interface TeleportResponse {
-  player: any;
+  player: ApiResponseData;
   x: number;
   y: number;
   region: string;
@@ -251,7 +251,7 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Chọn Cổ Trùng</label>
-                  <select 
+                  <select
                     className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
                     value={selectedGu}
                     onChange={(e) => setSelectedGu(e.target.value)}
@@ -271,27 +271,27 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
                   <div className="flex gap-4">
                     <div className="flex-1">
                       <label className="block text-sm text-gray-400 mb-1">Tọa độ X</label>
-                      <input 
-                        type="number" 
-                        value={targetX} 
+                      <input
+                        type="number"
+                        value={targetX}
                         onChange={e => setTargetX(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white" 
-                        placeholder="Ví dụ: 100" 
+                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
+                        placeholder="Ví dụ: 100"
                       />
                     </div>
                     <div className="flex-1">
                       <label className="block text-sm text-gray-400 mb-1">Tọa độ Y</label>
-                      <input 
-                        type="number" 
-                        value={targetY} 
+                      <input
+                        type="number"
+                        value={targetY}
                         onChange={e => setTargetY(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white" 
-                        placeholder="Ví dụ: 100" 
+                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
+                        placeholder="Ví dụ: 100"
                       />
                     </div>
                   </div>
                 )}
-                <button 
+                <button
                   onClick={handleGuTeleport}
                   disabled={teleporting || (!isRandomPortal && (!targetX || !targetY)) || !selectedGu}
                   className="w-full mt-4 bg-purple-900/50 border border-purple-500/50 hover:bg-purple-800/50 text-purple-200 p-3 rounded font-bold disabled:opacity-50"

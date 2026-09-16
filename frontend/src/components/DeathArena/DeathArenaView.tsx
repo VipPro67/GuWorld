@@ -49,7 +49,7 @@ export default function DeathArenaView() {
   return (
     <GamePanel className="p-4">
       <h2 className="text-xl font-bold mb-4 text-center">Đấu Trường Sinh Tử</h2>
-      
+
       {/* Tournament Status Banner */}
       {deathArenaTournament ? (
         <div className="mb-4 p-3 bg-black/30 rounded-lg">
@@ -111,7 +111,7 @@ export default function DeathArenaView() {
           { id: "history", label: "Lịch Sử" },
         ]}
         activeId={activeTab}
-        onChange={(tab) => setActiveTab(tab as any)}
+        onChange={(tab) => setActiveTab(tab as ApiResponseData)}
       />
 
       {/* Tab Content */}

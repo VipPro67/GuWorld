@@ -31,7 +31,7 @@ import { Num } from "./Num";
 interface HubItem {
   id: string;
   label: string;
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<ApiResponseData>;
   gradient: string;
   glow: string;
   borderColor: string;

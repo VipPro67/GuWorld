@@ -232,7 +232,7 @@ export const UtilitiesView: React.FC = () => {
               {activeTab === "seal" ? (
                 <p>
                   <strong>Phong Ấn Cổ:</strong> Phong ấn Cổ trùng của đạo hữu vào một trạng thái ngủ sâu, <span className="text-gray-300">
-                    nhưng chúng 
+                    nhưng chúng
                     <span className="font-bold text-red-500"> VẪN BỊ ĐÓI và CHẾT</span>,
                     chỉ là
                     <span className="font-semibold text-yellow-400"> giảm độ no chậm hơn</span>.

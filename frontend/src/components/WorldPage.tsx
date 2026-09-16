@@ -57,7 +57,7 @@ export function WorldPage() {
   const liveX = useWorldStore((s) => s.liveX);
   const liveY = useWorldStore((s) => s.liveY);
   const fetchGrid = useGameStore((s) => s.fetchGrid);
-  
+
   const monsterDictionary = useGameStore((s) => s.monsterDictionary);
   const itemDictionary = useGameStore((s) => s.itemDictionary);
   const guDictionary = useGameStore((s) => s.guDictionary);
@@ -84,7 +84,7 @@ export function WorldPage() {
   const sectMembers = useGameStore((s) => s.sectMembers);
   const fetchSectMembers = useGameStore((s) => s.fetchSectMembers);
   const mySectStatus = useGameStore((s) => s.mySectStatus);
-  const [attackTargetSect, setAttackTargetSect] = useState<any | null>(null);
+  const [attackTargetSect, setAttackTargetSect] = useState<ApiResponseData | null>(null);
 
   // RefiningFurnace
   const refineGu = useGameStore((s) => s.refineGu);
@@ -227,8 +227,8 @@ export function WorldPage() {
                   setActiveModal(item.id);
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-all cursor-pointer ${
-                  item.locked 
-                    ? "opacity-50 cursor-not-allowed bg-zinc-800/30 text-zinc-500" 
+                  item.locked
+                    ? "opacity-50 cursor-not-allowed bg-zinc-800/30 text-zinc-500"
                     : "hover:bg-zinc-800/80 text-zinc-300 hover:text-white"
                 }`}
                 disabled={item.locked}
@@ -496,7 +496,7 @@ export function WorldPage() {
             </div>
 
             {selectedObject.cell_type === "Sect" && (() => {
-              const sect = sectMap.find((s: any) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));
+              const sect = sectMap.find((s: ApiResponseData) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));
               if (!sect) return null;
               const isMySect = sect.id === mySectStatus?.sect?.id;
               const isShielded = !!sect.shield_until && new Date(sect.shield_until).getTime() > Date.now();
@@ -653,7 +653,7 @@ export function WorldPage() {
                 )
               ) : selectedObject.cell_type === "Sect" ? (
                 (() => {
-                  const sect = sectMap.find((s: any) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));
+                  const sect = sectMap.find((s: ApiResponseData) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));
                   const isMySect = sect?.id === mySectStatus?.sect?.id;
                   const isShielded = !!sect?.shield_until && new Date(sect.shield_until).getTime() > Date.now();
                   const canManage = mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP";

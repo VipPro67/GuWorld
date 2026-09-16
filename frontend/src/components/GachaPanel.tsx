@@ -34,10 +34,10 @@ interface GachaPoolShape {
 
 export const GachaPanel: React.FC = () => {
   const { gachaPools, fetchGachaPools, openGacha, actionLoading, player } = useGameStore();
-  const [results, setResults] = useState<{ poolId: string; rewards: any[] } | null>(null);
+  const [results, setResults] = useState<{ poolId: string; rewards: ApiResponseData[] } | null>(null);
   const [showAnim, setShowAnim] = useState(false);
   const [animIndex, setAnimIndex] = useState(0);
-  const [animRewards, setAnimRewards] = useState<any[]>([]);
+  const [animRewards, setAnimRewards] = useState<ApiResponseData[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export const GachaPanel: React.FC = () => {
       : (player?.lifespan || 0) >= v;
   };
 
-  const renderRewardIcon = (r: any) => {
+  const renderRewardIcon = (r: ApiResponseData) => {
     switch (r?.type) {
       case "primeval_stones": return <Coins className="w-8 h-8 text-yellow-400" />;
       case "lifespan": return <Heart className="w-8 h-8 text-emerald-400" />;
@@ -97,7 +97,7 @@ export const GachaPanel: React.FC = () => {
     }
   };
 
-  const rarityClass = (r: any) => {
+  const rarityClass = (r: ApiResponseData) => {
     if (r?.is_rare) return "bg-gradient-to-br from-purple-900/80 to-rose-900/80 border-purple-500/60 shadow-[0_0_20px_rgba(168,85,247,0.3)]";
     return "bg-zinc-900/80 border-zinc-700/60";
   };

@@ -472,7 +472,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           ]}
           activeId={mode}
           onChange={(id) => {
-            setMode(id as any);
+            setMode(id as ApiResponseData);
             setErrorMessage(null);
             setSuccessMessage(null);
           }}

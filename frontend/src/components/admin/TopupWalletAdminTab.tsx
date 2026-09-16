@@ -35,10 +35,10 @@ function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
 
 export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "success" | "error" | "info") => void }> = ({ addToast }) => {
   const [subTab, setSubTab] = useState<"orders" | "transactions">("orders");
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<ApiResponseData[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<ApiResponseData[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [userFilter, setUserFilter] = useState("");
 
@@ -51,7 +51,8 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
       } else {
         addToast("Không thể tải đơn nạp tiền", "error");
       }
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught instanceof Error ? caught : new Error(String(caught));
       addToast("Lỗi kết nối đơn nạp tiền", "error");
     } finally {
       setOrdersLoading(false);
@@ -68,7 +69,8 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
       } else {
         addToast("Không thể tải lịch sử ví", "error");
       }
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught instanceof Error ? caught : new Error(String(caught));
       addToast("Lỗi kết nối lịch sử ví", "error");
     } finally {
       setTxLoading(false);

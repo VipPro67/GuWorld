@@ -15,7 +15,7 @@ export interface PetsSlice {
   captureMonster: () => Promise<{ captured: boolean; message: string } | null>;
 }
 
-export const createPetsSlice: StateCreator<any, any, any, PetsSlice> = (set, get) => ({
+export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, PetsSlice> = (set, get) => ({
   playerPets: [],
   playerPetsLoaded: false,
 
@@ -48,7 +48,8 @@ export const createPetsSlice: StateCreator<any, any, any, PetsSlice> = (set, get
       get().addToast(data.message || `Đã cho ăn +${data.restored} hunger`, "success");
       await get().fetchPlayerPets();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -71,7 +72,8 @@ export const createPetsSlice: StateCreator<any, any, any, PetsSlice> = (set, get
       get().addToast("Đội hình đã cập nhật", "success");
       await get().fetchPlayerPets();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -93,7 +95,8 @@ export const createPetsSlice: StateCreator<any, any, any, PetsSlice> = (set, get
       if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại");
       await get().fetchPlayerPets();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -116,7 +119,8 @@ export const createPetsSlice: StateCreator<any, any, any, PetsSlice> = (set, get
       get().addToast("Đã thả pet", "success");
       await get().fetchPlayerPets();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -139,7 +143,8 @@ export const createPetsSlice: StateCreator<any, any, any, PetsSlice> = (set, get
       get().addToast(data.message || `Đã gộp thành ${data.count} cá thể!`, "success");
       await get().fetchPlayerPets();
       return true;
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
@@ -168,7 +173,8 @@ export const createPetsSlice: StateCreator<any, any, any, PetsSlice> = (set, get
         get().addToast(data.message || "Bắt thất bại!", "error");
       }
       return { captured: data.captured, message: data.message };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return null;
