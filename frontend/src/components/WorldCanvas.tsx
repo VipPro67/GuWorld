@@ -35,6 +35,12 @@ const WORLD_W = 30000;
 const WORLD_H = 20000;
 const SUBZONE_SIZE = 1000;
 
+function clearContainer(container: Container) {
+  for (const child of container.removeChildren()) {
+    child.destroy({ children: true });
+  }
+}
+
 export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -59,6 +65,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const scaleRef = useRef<number>(0.05);
   const modeRef = useRef(mode);
   const labelSettingsRef = useRef(labelSettings);
+  const labelRenderStateRef = useRef("");
 
   useEffect(() => {
     labelSettingsRef.current = labelSettings;
@@ -75,6 +82,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const regionsLoaded = useGameStore((s) => s.regionsLoaded);
   const fetchRegions = useGameStore((s) => s.fetchRegions);
   const gamePlayer = useGameStore((s) => s.player);
+  const playerAvatarUrl = gamePlayer?.avatar_url;
   const setPlayerFromServer = useGameStore((s) => s.setPlayerFromServer);
   const setExploredSubZones = useWorldStore((s) => s.setExploredSubZones);
   const movementRange = useWorldStore((s) => s.movementRange);
@@ -605,7 +613,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   const drawRegions = useCallback((regs: typeof regions) => {
     const container = regionsContainerRef.current;
-    container.removeChildren();
+    clearContainer(container);
+    labelRenderStateRef.current = "";
 
     const largeZones = regs.filter((r) => r.zone_type === "NGU_VUC");
     const namedZones = regs.filter((r) => r.zone_type === "KHU_VUC");
@@ -678,7 +687,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const drawObjects = useCallback(
     (obs: WorldObject[]) => {
       const container = objectsContainerRef.current;
-      container.removeChildren();
+      clearContainer(container);
+      labelRenderStateRef.current = "";
       for (const o of obs) {
         const isBoss = o.cell_type === "Boss";
         const isResource = o.cell_type === "Resource";
@@ -748,7 +758,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const drawSects = useCallback(
     (sects: typeof sectMap) => {
       const container = sectsContainerRef.current;
-      container.removeChildren();
+      clearContainer(container);
+      labelRenderStateRef.current = "";
       const currentRegion = gamePlayer?.current_region;
       if (!sects || !currentRegion) return;
 
@@ -842,7 +853,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const drawGroundDrops = useCallback(
     (drops: typeof groundDrops) => {
       const container = dropsContainerRef.current;
-      container.removeChildren();
+      clearContainer(container);
+      labelRenderStateRef.current = "";
 
       for (const drop of drops) {
         const g = new Graphics();
@@ -964,9 +976,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             sprite.height = 0.8;
             Assets.load(p.avatar_url)
               .then((texture) => {
-                sprite.texture = texture;
+                if (!sprite.destroyed) sprite.texture = texture;
               })
               .catch(() => {
+                if (charContainer.destroyed) return;
                 const fallbackG = new Graphics();
                 fallbackG.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
                 fallbackG.fill({ color: 0x9333ea });
@@ -1005,7 +1018,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       for (const id of Array.from(markers.keys())) {
         if (!alive.has(id)) {
           const leaving = markers.get(id);
-          if (leaving) container.removeChild(leaving.container);
+          if (leaving) {
+            container.removeChild(leaving.container);
+            leaving.container.destroy({ children: true });
+          }
           markers.delete(id);
         }
       }
@@ -1016,7 +1032,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const drawMonsters = useCallback(
     (cells: typeof nearbyCells) => {
       const container = monstersContainerRef.current;
-      container.removeChildren();
+      clearContainer(container);
+      labelRenderStateRef.current = "";
 
       // Batch small markers into per-color Graphics so thousands of cells stay
       // cheap for the renderer.
@@ -1160,14 +1177,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     g.circle(0, 0, 0.5);
     g.fill({ color: 0x60a5fa, alpha: 0.3 });
 
-    if (gamePlayer?.avatar_url) {
+    if (playerAvatarUrl) {
       if (!playerAvatarRef.current) {
         const sprite = new Sprite();
         sprite.anchor.set(0.5);
         sprite.width = 0.8;
         sprite.height = 0.8;
         
-        Assets.load(gamePlayer.avatar_url).then((texture) => {
+        Assets.load(playerAvatarUrl).then((texture) => {
           if (playerAvatarRef.current) playerAvatarRef.current.texture = texture;
         }).catch(console.error);
 
@@ -1192,7 +1209,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       g.circle(0, 0, 0.1);
       g.fill({ color: 0xffffff });
     }
-  }, [gamePlayer?.avatar_url]);
+  }, [playerAvatarUrl]);
 
   const drawRange = useCallback(() => {
     const g = rangeRef.current;
@@ -1320,12 +1337,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     canvasElement.addEventListener("touchend", handleTouchEnd);
 
     const initApp = async () => {
+      const isMobile = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768;
       const app = new Application();
       await app.init({
         resizeTo: canvasElement,
         background: BG_COLOR,
-        antialias: true,
-        resolution: window.devicePixelRatio || 1,
+        // A 3x DPR phone otherwise shades nine times as many pixels as a 1x
+        // display. Map geometry is already simple enough not to need MSAA on
+        // small/coarse-pointer screens.
+        antialias: !isMobile,
+        resolution: Math.min(window.devicePixelRatio || 1, isMobile ? 1 : 2),
         autoDensity: true,
       });
 
@@ -1336,6 +1357,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       canvasElement.appendChild(app.canvas);
       appRef.current = app;
+      // Keep animations smooth without forcing mobile GPUs to redraw this
+      // very large scene at 60/120Hz.
+      app.ticker.maxFPS = isMobile ? 30 : 60;
 
       stageRef.current = new Container();
       app.stage.addChild(stageRef.current);
@@ -1402,10 +1426,15 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           }
         }
 
-        // Dynamically adjust label scales to remain constant screen size and perfectly crisp
+        // Labels only need recalculating when zoom or label preferences change.
+        // Previously every animation frame walked every map child, which was
+        // especially expensive on mobile even while the camera was idle.
         const currentScale = scaleRef.current;
         if (currentScale > 0) {
           const settings = labelSettingsRef.current;
+          const labelRenderState = `${currentScale}|${Number(settings.monster)}${Number(settings.bossNearby)}${Number(settings.hub)}${Number(settings.khu_vuc)}${Number(settings.ngu_vuc)}`;
+          if (labelRenderState === labelRenderStateRef.current) return;
+          labelRenderStateRef.current = labelRenderState;
           const showMonsters = settings.monster && currentScale >= 12;
           const targetScale = 1.0 / currentScale; // 1:1 crisp scale
 
