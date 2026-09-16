@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 type CreateListingRequest struct {
@@ -25,7 +26,7 @@ type CreateListingRequest struct {
 	GuInstanceIDs       []string `json:"gu_instance_ids"`
 	ItemID              string   `json:"item_id"`
 	Quantity            int64    `json:"quantity"`
-	Price               int64    `json:"price" binding:"required"`
+	Price               float64  `json:"price" binding:"required"`
 	Currency            string   `json:"currency" binding:"required"` // primeval|immortal
 	DurationHours       int      `json:"duration_hours" binding:"required"`
 	ListingType         string   `json:"listing_type" binding:"required"` // MARKET|AUCTION|TRADE
@@ -33,8 +34,8 @@ type CreateListingRequest struct {
 }
 
 type PlaceBidRequest struct {
-	ListingID string `json:"listing_id" binding:"required"`
-	Amount    int64  `json:"amount" binding:"required"`
+	ListingID string  `json:"listing_id" binding:"required"`
+	Amount    float64 `json:"amount" binding:"required"`
 }
 
 type BuyListingRequest struct {
@@ -49,7 +50,7 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Price <= 0 || req.DurationHours < 1 {
+	if req.Price < 0.001 || !pricing.IsValidAmount(req.Price) || req.DurationHours < 1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Giá và thời gian phải hợp lệ"})
 		return
 	}
@@ -145,7 +146,7 @@ func CreateListing(c *gin.Context) {
 		effectiveQty = 1
 	}
 
-	totalListedPrice := req.Price * effectiveQty
+	totalListedPrice := req.Price * float64(effectiveQty)
 	upfrontFee := getUpfrontFee(req.ListingType, req.DurationHours, totalListedPrice)
 	if req.ListingType == "TRADE" {
 		upfrontFee = 0
@@ -442,6 +443,10 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.Amount < 0.001 || !pricing.IsValidAmount(req.Amount) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Giá đấu phải là bội số của 0.001"})
+		return
+	}
 	authID, ok := middleware.GetPlayerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -476,7 +481,7 @@ func PlaceBid(c *gin.Context) {
 	var sellerName, itemType string
 	var rawItemData []byte
 	var currency, status, listingType string
-	var current int64
+	var current float64
 	var bidder sql.NullString
 	var end time.Time
 	err = tx.QueryRow(`
@@ -505,7 +510,7 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Giá phải cao hơn %d", current)})
 		return
 	}
-	var neededAmount int64 = req.Amount
+	neededAmount := req.Amount
 	if bidder.Valid && bidder.String == player.ID.String() {
 		neededAmount = req.Amount - current
 	}
@@ -639,7 +644,8 @@ func BuyListing(c *gin.Context) {
 
 	var sellerID uuid.UUID
 	var itemType, currency, status, listingType string
-	var currentPrice, qty int64
+	var currentPrice float64
+	var qty int64
 	var durationHours int
 	var rawItemData []byte
 	var targetBuyerID sql.NullString
@@ -682,7 +688,7 @@ func BuyListing(c *gin.Context) {
 		return
 	}
 
-	totalPrice := int64(purchaseQty) * currentPrice
+	totalPrice := float64(purchaseQty) * currentPrice
 	if currency == "primeval" {
 		if buyer.PrimevalStones < totalPrice {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
@@ -719,7 +725,7 @@ func BuyListing(c *gin.Context) {
 	if listingType == "TRADE" {
 		commPct = 0.0
 	}
-	commission := int64(math.Round(float64(totalPrice) * commPct))
+	commission := math.Round(totalPrice*commPct*1000) / 1000
 	payout := totalPrice - commission
 
 	if currency == "primeval" {

@@ -15,15 +15,15 @@ import (
 )
 
 type ShopItem struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Type        string `json:"type"` // "Gu", "Material", "Recipe" or "Consumable"
-	Price       int64  `json:"price"`
-	Rank        int    `json:"rank"`
-	Currency    string `json:"currency"` // "primeval" (rank < 6) | "immortal" (rank >= 6)
-	Stock       int    `json:"stock"`    // -1 for unlimited
-	IsAuto      bool   `json:"-"`        // true when sourced from the virtual random pool (daily stock enforced)
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Type        string  `json:"type"` // "Gu", "Material", "Recipe" or "Consumable"
+	Price       float64 `json:"price"`
+	Rank        int     `json:"rank"`
+	Currency    string  `json:"currency"` // "primeval" (rank < 6) | "immortal" (rank >= 6)
+	Stock       int     `json:"stock"`    // -1 for unlimited
+	IsAuto      bool    `json:"-"`        // true when sourced from the virtual random pool (daily stock enforced)
 }
 
 // shopCatalogRankExpr resolves a single rank for a polymorphic shop item:
@@ -81,10 +81,10 @@ func randomPoolStock(rank int) int {
 }
 
 // markedUpPrice applies the random-pool markup to a base price (minimum 1).
-func markedUpPrice(basePrice int64) int64 {
-	p := int64(float64(basePrice) * randomPoolMarkup)
-	if p < 1 {
-		return 1
+func markedUpPrice(basePrice float64) float64 {
+	p := pricing.Quantize(basePrice * randomPoolMarkup)
+	if p < 0.001 {
+		return 0.001
 	}
 	return p
 }
@@ -156,7 +156,7 @@ func autoShopPool() ([]ShopItem, error) {
 	for guRows.Next() {
 		var id, name, desc string
 		var rank int
-		var basePrice int64
+		var basePrice float64
 		var remaining sql.NullInt64
 		if err := guRows.Scan(&id, &rank, &name, &desc, &basePrice, &remaining); err != nil {
 			guRows.Close()
@@ -198,7 +198,7 @@ func autoShopPool() ([]ShopItem, error) {
 	for foodRows.Next() {
 		var id, name, desc, itemType string
 		var rank int
-		var basePrice int64
+		var basePrice float64
 		var remaining sql.NullInt64
 		if err := foodRows.Scan(&id, &name, &desc, &itemType, &rank, &basePrice, &remaining); err != nil {
 			foodRows.Close()

@@ -140,7 +140,7 @@ func TeleportToRegion(c *gin.Context) {
 		// Only primeval stones available
 		currency = "primeval_stones"
 		costAmount = totalCost
-		enoughPrimeval = player.PrimevalStones >= costAmount
+		enoughPrimeval = player.PrimevalStones >= float64(costAmount)
 		if !enoughPrimeval {
 			c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough Primeval Stones. Need %d, have %d", costAmount, player.PrimevalStones)})
 			return
@@ -153,14 +153,14 @@ func TeleportToRegion(c *gin.Context) {
 			// Try immortal first
 			currency = "immortal_stones"
 			costAmount = totalCost
-			enoughImmortal = player.ImmortalStones >= costAmount
+			enoughImmortal = player.ImmortalStones >= float64(costAmount)
 			if enoughImmortal {
 				// use immortal
 			} else {
 				// fall back to primeval if enough
 				currency = "primeval_stones"
 				costAmount = totalCost
-				enoughPrimeval = player.PrimevalStones >= costAmount
+				enoughPrimeval = player.PrimevalStones >= float64(costAmount)
 				if !enoughPrimeval {
 					c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough stones. Need %d Immortal or Primeval, have Immortal: %d, Primeval: %d", costAmount, player.ImmortalStones, player.PrimevalStones)})
 					return
@@ -170,14 +170,14 @@ func TeleportToRegion(c *gin.Context) {
 			// Prefer primeval for short distances
 			currency = "primeval_stones"
 			costAmount = totalCost
-			enoughPrimeval = player.PrimevalStones >= costAmount
+			enoughPrimeval = player.PrimevalStones >= float64(costAmount)
 			if enoughPrimeval {
 				// use primeval
 			} else {
 				// fall back to immortal
 				currency = "immortal_stones"
 				costAmount = totalCost
-				enoughImmortal = player.ImmortalStones >= costAmount
+				enoughImmortal = player.ImmortalStones >= float64(costAmount)
 				if !enoughImmortal {
 					c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough stones. Need %d Primeval or Immortal, have Primeval: %d, Immortal: %d", costAmount, player.PrimevalStones, player.ImmortalStones)})
 					return
@@ -189,7 +189,7 @@ func TeleportToRegion(c *gin.Context) {
 	// Update player position and region atomically with relative currency deduction
 	var updateErr error
 	if currency == "primeval_stones" {
-		player.PrimevalStones -= costAmount
+		player.PrimevalStones -= float64(costAmount)
 		_, updateErr = tx.ExecContext(c.Request.Context(), `
 			UPDATE players
 			SET x = $1, y = $2, current_region = $3,
@@ -197,7 +197,7 @@ func TeleportToRegion(c *gin.Context) {
 			WHERE id = $5
 		`, safeX, safeY, req.RegionID, costAmount, player.ID)
 	} else {
-		player.ImmortalStones -= costAmount
+		player.ImmortalStones -= float64(costAmount)
 		_, updateErr = tx.ExecContext(c.Request.Context(), `
 			UPDATE players
 			SET x = $1, y = $2, current_region = $3,

@@ -1643,7 +1643,7 @@ export const AdminView: React.FC = () => {
                 <button onClick={() => setShowStones(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading} onClick={async () => {
                   const body: ApiResponseData = {};
-                  if (stonesPrimeval) body.primeval_stones = parseInt(stonesPrimeval);
+                  if (stonesPrimeval) body.primeval_stones = parseFloat(stonesPrimeval);
                   if (stonesImmortal) body.immortal_stones = parseFloat(stonesImmortal);
                   if (Object.keys(body).length === 0) return;
                   const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/stones`, "PUT", body);
@@ -4718,7 +4718,7 @@ export const AdminView: React.FC = () => {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ thành công</label><input type="number" step="0.01" min={0} max={1} value={recipeEdit.success_rate} onChange={e => setRecipeEdit({...recipeEdit, success_rate: parseFloat(e.target.value) || 0.5})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Nguyên Thạch</label><input type="number" value={recipeEdit.primeval_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, primeval_stones_cost: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Nguyên Thạch</label><input type="number" min={0} step={0.001} value={recipeEdit.primeval_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, primeval_stones_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiên nguyên thạch</label><input type="number" step="any" value={recipeEdit.immortal_essence_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, immortal_essence_stones_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
               {/* Required Gus as key-value */}

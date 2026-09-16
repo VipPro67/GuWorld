@@ -37,9 +37,9 @@ const (
 )
 
 type WalletDTO struct {
-	PrimevalStone        int64 `json:"primevalStone"`
-	ImmortalEssenceStone int64 `json:"immortalEssenceStone"`
-	ImmortalJade         int64 `json:"immortalJade"`
+	PrimevalStone        float64 `json:"primevalStone"`
+	ImmortalEssenceStone float64 `json:"immortalEssenceStone"`
+	ImmortalJade         int64   `json:"immortalJade"`
 }
 
 type TopupPackage struct {
@@ -465,7 +465,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		switch reward.Currency {
 		case CurrencyPrimevalStone:
 			before := player.PrimevalStones
-			player.PrimevalStones += reward.Amount
+			player.PrimevalStones += float64(reward.Amount)
 			wallet.PrimevalStone = player.PrimevalStones
 			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyPrimevalStone, reward.Amount, before, player.PrimevalStones, nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Nguyên Thạch"})
@@ -473,7 +473,7 @@ func BuyPremiumPackage(c *gin.Context) {
 			}
 		case CurrencyImmortalEssenceStone:
 			before := player.ImmortalStones
-			player.ImmortalStones += reward.Amount
+			player.ImmortalStones += float64(reward.Amount)
 			wallet.ImmortalEssenceStone = player.ImmortalStones
 			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyImmortalEssenceStone, reward.Amount, before, player.ImmortalStones, nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Tiên Nguyên Thạch"})
@@ -591,19 +591,19 @@ func ExchangeStones(c *gin.Context) {
 	immortalBefore := player.ImmortalStones
 	switch req.Currency {
 	case CurrencyImmortalEssenceStone:
-		if player.ImmortalStones < req.Amount {
+		if player.ImmortalStones < float64(req.Amount) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch"})
 			return
 		}
-		player.ImmortalStones -= req.Amount
-		player.PrimevalStones += primevalGain
+		player.ImmortalStones -= float64(req.Amount)
+		player.PrimevalStones += float64(primevalGain)
 	default:
-		if player.PrimevalStones < req.Amount {
+		if player.PrimevalStones < float64(req.Amount) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
 			return
 		}
-		player.PrimevalStones -= req.Amount
-		player.ImmortalStones += immortalGain
+		player.PrimevalStones -= float64(req.Amount)
+		player.ImmortalStones += float64(immortalGain)
 	}
 	wallet.PrimevalStone = player.PrimevalStones
 	wallet.ImmortalEssenceStone = player.ImmortalStones
@@ -614,16 +614,16 @@ func ExchangeStones(c *gin.Context) {
 	}
 	// Stones are authoritative in the players table, no need to update wallets
 
-	if err = insertWalletTx(tx, playerID, "EXCHANGE", req.Currency, -req.Amount, func() int64 {
+	if err = insertWalletTx(tx, playerID, "EXCHANGE", req.Currency, -req.Amount, func() float64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
 			return immortalBefore
 		}
 		return primevalBefore
-	}(), func() int64 {
+	}(), func() float64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
-			return int64(wallet.ImmortalEssenceStone)
+			return wallet.ImmortalEssenceStone
 		}
-		return int64(wallet.PrimevalStone)
+		return wallet.PrimevalStone
 	}(), nil, nil, "Đổi sang loại đá khác"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch trừ đá"})
 		return
@@ -633,21 +633,21 @@ func ExchangeStones(c *gin.Context) {
 			return CurrencyPrimevalStone
 		}
 		return CurrencyImmortalEssenceStone
-	}(), func() int64 {
+	}(), func() float64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
-			return primevalGain
+			return float64(primevalGain)
 		}
-		return immortalGain
-	}(), func() int64 {
+		return float64(immortalGain)
+	}(), func() float64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
 			return primevalBefore
 		}
 		return immortalBefore
-	}(), func() int64 {
+	}(), func() float64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
-			return int64(wallet.PrimevalStone)
+			return wallet.PrimevalStone
 		}
-		return int64(wallet.ImmortalEssenceStone)
+		return wallet.ImmortalEssenceStone
 	}(), nil, nil, "Nhận từ đổi đá"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch nhận đá"})
 		return
@@ -890,7 +890,7 @@ func applyPaidTopup(orderCode, amount int64) error {
 	return tx.Commit()
 }
 
-func insertWalletTx(tx *sql.Tx, userID uuid.UUID, txType, currency string, amount, before, after int64, refOrder *int64, refPackage *string, note string) error {
+func insertWalletTx(tx *sql.Tx, userID uuid.UUID, txType, currency string, amount, before, after interface{}, refOrder *int64, refPackage *string, note string) error {
 	_, err := tx.Exec(`INSERT INTO wallet_transactions (user_id, type, currency, amount, balance_before, balance_after, ref_order_code, ref_package_id, note) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, userID, txType, currency, amount, before, after, refOrder, refPackage, note)
 	return err
 }
@@ -992,7 +992,7 @@ func AdminListWalletTransactions(c *gin.Context) {
 	for rows.Next() {
 		var id, uid uuid.UUID
 		var txType, currency string
-		var amount, before, after int64
+		var amount, before, after interface{}
 		var refOrder sql.NullInt64
 		var refPackage, note sql.NullString
 		var createdAt time.Time

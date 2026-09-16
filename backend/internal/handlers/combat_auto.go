@@ -314,7 +314,7 @@ func AutoCombatStart(c *gin.Context) {
 		targetPlayerID = player.ActiveCombat.TargetPlayerID
 	}
 	go func() {
-		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, stonesSpent)
+		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
 		combatantInfosIface := make([]interface{}, len(combatantInfos))
 		for i, ci := range combatantInfos {
 			combatantInfosIface[i] = ci

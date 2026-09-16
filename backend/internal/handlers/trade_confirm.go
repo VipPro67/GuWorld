@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 func UpdateTradeOffer(c *gin.Context) {
@@ -85,7 +86,8 @@ func UpdateTradeOffer(c *gin.Context) {
 	}
 
 	// Validate Stones
-	if offer.PrimevalStones < 0 || offer.ImmortalStones < 0 {
+	if offer.PrimevalStones < 0 || offer.ImmortalStones < 0 ||
+		!pricing.IsValidAmount(offer.PrimevalStones) || !pricing.IsValidAmount(offer.ImmortalStones) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng đá giao dịch không hợp lệ"})
 		return
 	}

@@ -45,7 +45,7 @@ func RechargeWithStones(c *gin.Context) {
 
 	// Cổ Tiên (Rank 6+) sử dụng Tiên Nguyên Thạch, không nạp bằng Nguyên Thạch phàm tục
 	if player.Rank >= 6 {
-		if player.ImmortalStones < int64(req.Stones) {
+		if player.ImmortalStones < float64(req.Stones) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Tiên Nguyên Thạch."})
 			return
 		}
@@ -53,7 +53,7 @@ func RechargeWithStones(c *gin.Context) {
 		stonesToUse := int64(req.Stones)
 		manaGain := float64(stonesToUse) / math.Pow(100, float64(player.Rank-6))
 		player.CurrentMana += manaGain
-		player.ImmortalStones -= stonesToUse
+		player.ImmortalStones -= float64(stonesToUse)
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana
 		}
@@ -121,7 +121,7 @@ func RechargeWithStones(c *gin.Context) {
 		stonesToUse = int64(maxUsableStones)
 	}
 
-	if stonesToUse > player.PrimevalStones {
+	if float64(stonesToUse) > player.PrimevalStones {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch trong túi."})
 		return
 	}
@@ -137,7 +137,7 @@ func RechargeWithStones(c *gin.Context) {
 		player.CurrentMana += addedMana
 	}
 
-	player.PrimevalStones -= stonesToUse
+	player.PrimevalStones -= float64(stonesToUse)
 	player.LastManaUpdate = time.Now()
 
 	updateQuery := `

@@ -21,7 +21,7 @@ type PlayerMovementPayload struct {
 	CurrentRegion   string          `json:"current_region"`
 	ClearedCells    json.RawMessage `json:"cleared_cells,omitempty"`
 	ActiveCombat    json.RawMessage `json:"active_combat,omitempty"`
-	PrimevalStones  int64           `json:"primeval_stones"`
+	PrimevalStones  float64         `json:"primeval_stones"`
 	HumanQi         float64         `json:"human_qi"`
 	VisitedSubzones json.RawMessage `json:"visited_subzones,omitempty"`
 	UpdatedAt       time.Time       `json:"updated_at"`

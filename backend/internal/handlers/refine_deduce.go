@@ -81,14 +81,14 @@ func DeduceRecipe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Niệm Lực (cần %.1f)", thoughtCost)})
 		return
 	}
-	if player.PrimevalStones < stoneCost {
+	if player.PrimevalStones < float64(stoneCost) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch (cần %d)", stoneCost)})
 		return
 	}
 
 	// Deduct cost
 	player.CurrentThought -= thoughtCost
-	player.PrimevalStones -= stoneCost
+	player.PrimevalStones -= float64(stoneCost)
 
 	// 3. Deduction Calculation (Wisdom + Refinement + Target Path)
 	getPathPoints := func(p string) int {

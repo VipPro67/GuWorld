@@ -324,7 +324,7 @@ func UseGuOnMap(c *gin.Context) {
 					if stonesGain <= 0 {
 						stonesGain = 20
 					}
-					player.PrimevalStones += stonesGain
+					player.PrimevalStones += float64(stonesGain)
 
 					logs = append(logs, fmt.Sprintf("💥 Sát chiêu %s giáng xuống %s (Rank %d), gây %.0f sát thương diệt sát mục tiêu! Nhận +%d Nguyên Thạch.", specs.Name, mon.Name, cell.Rank, damageDealt, stonesGain))
 				} else {

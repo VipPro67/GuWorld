@@ -34,14 +34,21 @@ func schemaPayment() error {
 		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		type VARCHAR(30) NOT NULL CHECK (type IN ('TOPUP','SPEND','REFUND','ADMIN_ADJUST','PACKAGE_REWARD','EXCHANGE')),
 		currency VARCHAR(40) NOT NULL CHECK (currency IN ('PRIMEVAL_STONE','IMMORTAL_ESSENCE_STONE','IMMORTAL_JADE')),
-		amount BIGINT NOT NULL,
-		balance_before BIGINT NOT NULL,
-		balance_after BIGINT NOT NULL,
+		amount NUMERIC(30,3) NOT NULL,
+		balance_before NUMERIC(30,3) NOT NULL,
+		balance_after NUMERIC(30,3) NOT NULL,
 		ref_order_code BIGINT NULL REFERENCES topup_orders(order_code) ON DELETE SET NULL,
 		ref_package_id VARCHAR(80) NULL,
 		note TEXT,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("wallet_transactions_decimal_upgrade", `
+	ALTER TABLE wallet_transactions ALTER COLUMN amount TYPE NUMERIC(30,3) USING ROUND(amount::NUMERIC, 3);
+	ALTER TABLE wallet_transactions ALTER COLUMN balance_before TYPE NUMERIC(30,3) USING ROUND(balance_before::NUMERIC, 3);
+	ALTER TABLE wallet_transactions ALTER COLUMN balance_after TYPE NUMERIC(30,3) USING ROUND(balance_after::NUMERIC, 3);
+	`); err != nil {
 		return err
 	}
 	if err := execSchema("wallet_transactions_user_idx", `

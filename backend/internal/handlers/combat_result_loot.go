@@ -85,7 +85,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 					}
 					for _, memberID := range partyMembers {
 						if memberID == player.ID {
-							player.PrimevalStones += int64(splitStones)
+							player.PrimevalStones += float64(splitStones)
 							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
 						} else {
 							_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
@@ -149,7 +149,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 				}
 			} else {
 				stoneQty := loot.Items["primeval_stone"]
-				player.PrimevalStones += int64(stoneQty)
+				player.PrimevalStones += float64(stoneQty)
 				for matID, qty := range loot.Items {
 					if matID == "primeval_stone" {
 						continue

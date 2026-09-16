@@ -125,8 +125,8 @@ func (s CultivationState) Apply(p *Player) {
 type ResourceState struct {
 	CurrentMana      float64   `json:"current_mana"`
 	MaxMana          float64   `json:"max_mana"`
-	PrimevalStones   int64     `json:"primeval_stones"`
-	ImmortalStones   int64     `json:"immortal_stones"`
+	PrimevalStones   float64   `json:"primeval_stones"`
+	ImmortalStones   float64   `json:"immortal_stones"`
 	LastManaUpdate   time.Time `json:"last_mana_update"`
 	LastHungerTickAt time.Time `json:"last_hunger_tick_at"`
 }
@@ -281,13 +281,13 @@ func (s DaoState) Apply(p *Player) {
 
 // WorldState groups world position and exploration fields.
 type WorldState struct {
-	X                int                  `json:"x"`
-	Y                int                  `json:"y"`
-	CurrentRegion    string               `json:"current_region"`
-	ClearedCells     ClearedCellsMap      `json:"cleared_cells"`
-	VisitedSubZones  VisitedSubZonesList  `json:"visited_subzones"`
-	ExploreCount     int                  `json:"explore_count"`
-	LastExploreReset time.Time            `json:"last_explore_reset"`
+	X                int                 `json:"x"`
+	Y                int                 `json:"y"`
+	CurrentRegion    string              `json:"current_region"`
+	ClearedCells     ClearedCellsMap     `json:"cleared_cells"`
+	VisitedSubZones  VisitedSubZonesList `json:"visited_subzones"`
+	ExploreCount     int                 `json:"explore_count"`
+	LastExploreReset time.Time           `json:"last_explore_reset"`
 }
 
 // NewWorldState extracts world data from a Player.
@@ -336,7 +336,7 @@ func (s SocialState) Apply(p *Player) {
 
 // CombatConfig groups combat equipment and auto-combat settings.
 type CombatConfig struct {
-	EquippedGus    EquippedGusList `json:"equipped_gus"`
+	EquippedGus    EquippedGusList  `json:"equipped_gus"`
 	CombatSettings AutoCombatConfig `json:"combat_settings"`
 }
 

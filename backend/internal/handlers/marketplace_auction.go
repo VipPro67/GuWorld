@@ -53,7 +53,7 @@ func settleExpiredAuctions() error {
 		var rawItemData []byte
 		var qty int64
 		var durationHours int
-		var currentPrice int64
+		var currentPrice float64
 		var currency, listingType string
 		if err := rows.Scan(&id, &sellerID, &highestBidderID, &itemType, &rawItemData, &qty, &currentPrice, &currency, &listingType, &durationHours); err != nil {
 			logger.S.Errorf("Failed to scan expired auction row: %v", err)
@@ -74,7 +74,7 @@ func settleExpiredAuctions() error {
 	return rows.Err()
 }
 
-func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int64, currentPrice int64, currency string, listingType string, durationHours int) error {
+func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int64, currentPrice float64, currency string, listingType string, durationHours int) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		buyerBefore := append(models.GuInventory(nil), buyer.GuInventory...)
 
 		// Time-based commission fee
-		commission := int64(math.Round(float64(currentPrice) * getCommissionPct(listingType, durationHours)))
+		commission := math.Round(currentPrice*getCommissionPct(listingType, durationHours)*1000) / 1000
 		payout := currentPrice - commission
 
 		if currency == "primeval" {

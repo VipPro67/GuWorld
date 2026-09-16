@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 type AdminItemRequest struct {
@@ -459,6 +460,11 @@ func AdminChangePlayerStones(c *gin.Context) {
 	}
 	if req.PrimevalStones == nil && req.ImmortalStones == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Phải nhập ít nhất một giá trị"})
+		return
+	}
+	if (req.PrimevalStones != nil && (*req.PrimevalStones < 0 || !pricing.IsValidAmount(*req.PrimevalStones))) ||
+		(req.ImmortalStones != nil && (*req.ImmortalStones < 0 || !pricing.IsValidAmount(*req.ImmortalStones))) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Số dư phải không âm và là bội số của 0.001"})
 		return
 	}
 

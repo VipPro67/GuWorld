@@ -14,7 +14,7 @@ func schemaDictionaries() error {
 		rank INTEGER DEFAULT 1,
 		effects JSONB NOT NULL DEFAULT '{}',
 		description TEXT,
-		base_price BIGINT NOT NULL DEFAULT 0,
+		base_price NUMERIC(30,3) NOT NULL DEFAULT 0,
 		image_url TEXT NOT NULL DEFAULT '',
 		rarity INTEGER NOT NULL DEFAULT 0,
 		path VARCHAR(50) NOT NULL DEFAULT ''
@@ -24,6 +24,11 @@ func schemaDictionaries() error {
 
 	if err := execSchema("item_dictionary_path_upgrade", `
 	ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT '';
+	`); err != nil {
+		return err
+	}
+	if err := execSchema("dictionary_price_decimal_upgrade", `
+	ALTER TABLE item_dictionary ALTER COLUMN base_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(base_price, 0)::NUMERIC, 3);
 	`); err != nil {
 		return err
 	}
@@ -47,10 +52,15 @@ func schemaDictionaries() error {
 		combat_roles JSONB DEFAULT '[]',
 		combat_tags JSONB DEFAULT '[]',
 		support_tags JSONB DEFAULT '[]',
-		base_price BIGINT NOT NULL DEFAULT 0,
+		base_price NUMERIC(30,3) NOT NULL DEFAULT 0,
 		image_url TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (id, rank)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("gu_dictionary_price_decimal_upgrade", `
+	ALTER TABLE gu_dictionary ALTER COLUMN base_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(base_price, 0)::NUMERIC, 3);
+	`); err != nil {
 		return err
 	}
 
@@ -107,8 +117,8 @@ func schemaDictionaries() error {
 		required_gus JSONB NOT NULL,
 		required_materials JSONB NOT NULL,
 		success_rate DOUBLE PRECISION NOT NULL,
-		primeval_stones_cost BIGINT DEFAULT 0,
-		immortal_essence_stones_cost BIGINT DEFAULT 0,
+		primeval_stones_cost NUMERIC(30,3) DEFAULT 0,
+		immortal_essence_stones_cost NUMERIC(30,3) DEFAULT 0,
 		PRIMARY KEY (target_gu_id, target_rank, variant),
 		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT
 	);`); err != nil {
@@ -118,12 +128,8 @@ func schemaDictionaries() error {
 	if err := execSchema("refining_recipes_stones_type_upgrade", `
 	DO $$
 	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refining_recipes' AND column_name='primeval_stones_cost' AND data_type='double precision') THEN
-			ALTER TABLE refining_recipes ALTER COLUMN primeval_stones_cost TYPE BIGINT USING COALESCE(primeval_stones_cost, 0)::BIGINT;
-		END IF;
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refining_recipes' AND column_name='immortal_essence_stones_cost' AND data_type='double precision') THEN
-			ALTER TABLE refining_recipes ALTER COLUMN immortal_essence_stones_cost TYPE BIGINT USING COALESCE(immortal_essence_stones_cost, 0)::BIGINT;
-		END IF;
+		ALTER TABLE refining_recipes ALTER COLUMN primeval_stones_cost TYPE NUMERIC(30,3) USING ROUND(COALESCE(primeval_stones_cost, 0)::NUMERIC, 3);
+		ALTER TABLE refining_recipes ALTER COLUMN immortal_essence_stones_cost TYPE NUMERIC(30,3) USING ROUND(COALESCE(immortal_essence_stones_cost, 0)::NUMERIC, 3);
 	END $$;`); err != nil {
 		return err
 	}
@@ -137,7 +143,7 @@ func schemaDictionaries() error {
 	CREATE TABLE IF NOT EXISTS caravan_shop_items (
 		id VARCHAR(50),
 		rank INTEGER NOT NULL DEFAULT 0,
-		price BIGINT NOT NULL,
+		price NUMERIC(30,3) NOT NULL,
 		stock INTEGER NOT NULL DEFAULT -1,
 		is_default BOOLEAN NOT NULL DEFAULT TRUE,
 		sort_order INTEGER NOT NULL DEFAULT 0,
@@ -157,9 +163,7 @@ func schemaDictionaries() error {
 	if err := execSchema("caravan_shop_items_price_upgrade", `
 	DO $$
 	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='caravan_shop_items' AND column_name='price' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE caravan_shop_items ALTER COLUMN price TYPE BIGINT USING COALESCE(price, 0)::BIGINT;
-		END IF;
+		ALTER TABLE caravan_shop_items ALTER COLUMN price TYPE NUMERIC(30,3) USING ROUND(COALESCE(price, 0)::NUMERIC, 3);
 	END $$;`); err != nil {
 		return err
 	}

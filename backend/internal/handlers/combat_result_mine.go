@@ -42,9 +42,9 @@ func applyAutoCombatMineOccupation(tx *sql.Tx, player *models.Player, activeComb
 					logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 				} else {
 					if mineType == "immortal" {
-						player.ImmortalStones += int64(stonesHalf)
+						player.ImmortalStones += float64(stonesHalf)
 					} else {
-						player.PrimevalStones += int64(stonesHalf)
+						player.PrimevalStones += float64(stonesHalf)
 					}
 					var stoneName = "Nguyên Thạch"
 					if mineType == "immortal" {

@@ -122,8 +122,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     return itemRankBasePrice[spec.rank || 1] || 5;
   };
 
-  // SellPrice = basePrice * 0.10, minimum 1 (matches backend pricing.SellPrice)
-  const getSellPrice = (basePrice: number): number => Math.max(1, Math.floor(basePrice * sellBackRatio));
+  // SellPrice = basePrice * 0.10, rounded to the 0.001 currency unit.
+  const getSellPrice = (basePrice: number): number => Math.max(0.001, Math.round(basePrice * sellBackRatio * 1000) / 1000);
 
   // Helper to calculate exact sell price matching pricing.go
   const getItemSellPrice = (itemId: string, type: "Gu" | "Material", rank?: number): number => {
@@ -194,7 +194,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       description: `Bí phương luyện chế Cổ trùng. Độ hoàn thiện: ${recipe.completion_rate}%`,
       type: "Recipe" as const,
       owned: 1,
-      price: Math.max(1, Math.floor(getGuBasePrice(targetGuID, targetGuRank) * sellBackRatio)),
+      price: getSellPrice(getGuBasePrice(targetGuID, targetGuRank)),
       rank: targetGuRank,
       currency: stoneTier(targetGuRank),
       paths: [] as string[],

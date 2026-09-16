@@ -106,14 +106,14 @@ func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodO
 	for _, food := range foodOptions {
 		if food == "primeval_stone" {
 			cost := int64(math.Pow(2, float64(targetGu.Rank)))
-			if player.PrimevalStones >= cost {
+			if player.PrimevalStones >= float64(cost) {
 				return food, -1
 			}
 			continue
 		}
 		if food == "immortal_stone" {
 			cost := int64(targetGu.Rank)
-			if player.ImmortalStones >= cost {
+			if player.ImmortalStones >= float64(cost) {
 				return food, -1
 			}
 			continue
@@ -259,18 +259,18 @@ func FeedGu(c *gin.Context) {
 		switch foodID {
 		case "immortal_stone":
 			cost := int64(targetGu.Rank)
-			if player.ImmortalStones < cost {
+			if player.ImmortalStones < float64(cost) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
 				return
 			}
-			player.ImmortalStones -= cost
+			player.ImmortalStones -= float64(cost)
 		case "primeval_stone":
 			cost := int64(math.Pow(2, float64(targetGu.Rank)))
-			if player.PrimevalStones < cost {
+			if player.PrimevalStones < float64(cost) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
 				return
 			}
-			player.PrimevalStones -= cost
+			player.PrimevalStones -= float64(cost)
 		}
 
 		foodConsumed[foodID]++
@@ -415,12 +415,12 @@ func FeedGroup(c *gin.Context) {
 		for _, food := range foodOptions {
 			if food == "primeval_stone" {
 				cost := int64(math.Pow(2, float64(targetRank)))
-				if player.PrimevalStones >= cost {
+				if player.PrimevalStones >= float64(cost) {
 					return food
 				}
 			} else if food == "immortal_stone" {
 				cost := int64(targetRank)
-				if player.ImmortalStones >= cost {
+				if player.ImmortalStones >= float64(cost) {
 					return food
 				}
 			} else if !strings.HasPrefix(food, "GU_") {
@@ -471,9 +471,9 @@ func FeedGroup(c *gin.Context) {
 				if chosenFood != "" {
 					switch chosenFood {
 					case "primeval_stone":
-						player.PrimevalStones -= int64(math.Pow(2, float64(gu.Rank)))
+						player.PrimevalStones -= float64(math.Pow(2, float64(gu.Rank)))
 					case "immortal_stone":
-						player.ImmortalStones -= int64(gu.Rank)
+						player.ImmortalStones -= float64(gu.Rank)
 					default:
 						InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1)
 					}
@@ -602,12 +602,12 @@ func FeedAll(c *gin.Context) {
 		for _, food := range specs.FoodTypes {
 			if food == "primeval_stone" {
 				cost := int64(math.Pow(2, float64(targetRank)))
-				if player.PrimevalStones >= cost {
+				if player.PrimevalStones >= float64(cost) {
 					return food
 				}
 			} else if food == "immortal_stone" {
 				cost := int64(targetRank)
-				if player.ImmortalStones >= cost {
+				if player.ImmortalStones >= float64(cost) {
 					return food
 				}
 			} else if !strings.HasPrefix(food, "GU_") {
@@ -675,9 +675,9 @@ func FeedAll(c *gin.Context) {
 			if chosenFood != "" {
 				switch chosenFood {
 				case "primeval_stone":
-					player.PrimevalStones -= int64(math.Pow(2, float64(gu.Rank)))
+					player.PrimevalStones -= float64(math.Pow(2, float64(gu.Rank)))
 				case "immortal_stone":
-					player.ImmortalStones -= int64(gu.Rank)
+					player.ImmortalStones -= float64(gu.Rank)
 				default:
 					if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1); err == nil {
 						materialQty[chosenFood]--

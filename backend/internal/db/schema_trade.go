@@ -27,8 +27,8 @@ func schemaTrade() error {
 		item_data JSONB NOT NULL,
 		quantity BIGINT NOT NULL,
 		currency VARCHAR(20) NOT NULL,
-		start_price BIGINT NOT NULL,
-		current_price BIGINT NOT NULL,
+		start_price NUMERIC(30,3) NOT NULL,
+		current_price NUMERIC(30,3) NOT NULL,
 		highest_bidder_id UUID REFERENCES players(id) ON DELETE SET NULL,
 		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
 		status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -59,12 +59,8 @@ func schemaTrade() error {
 	if err := execSchema("auction_price_type_upgrade", `
 	DO $$
 	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='start_price' AND data_type='double precision') THEN
-			ALTER TABLE auction ALTER COLUMN start_price TYPE BIGINT USING COALESCE(start_price, 0)::BIGINT;
-		END IF;
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='current_price' AND data_type='double precision') THEN
-			ALTER TABLE auction ALTER COLUMN current_price TYPE BIGINT USING COALESCE(current_price, 0)::BIGINT;
-		END IF;
+		ALTER TABLE auction ALTER COLUMN start_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(start_price, 0)::NUMERIC, 3);
+		ALTER TABLE auction ALTER COLUMN current_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(current_price, 0)::NUMERIC, 3);
 		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='quantity' AND data_type IN ('integer', 'int')) THEN
 			ALTER TABLE auction ALTER COLUMN quantity TYPE BIGINT USING COALESCE(quantity, 0)::BIGINT;
 		END IF;

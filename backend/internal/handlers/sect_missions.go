@@ -286,7 +286,7 @@ func CompleteSectMission(c *gin.Context) {
 				if !missionGuFound {
 					vaultGus = append(vaultGus, SectVaultGuItem{
 						ID:       donatedGuID,
-						Cost:     int64(pricing.VaultCost(pricing.GuBasePrice(donatedGuBase, donatedGuRank))),
+						Cost:     int64(pricing.VaultCost(pricing.GuBasePrice(float64(donatedGuBase), donatedGuRank))),
 						Quantity: 1,
 						Hunger:   normalizeVaultGuHunger(donatedGuID, donatedGuInstRank, donatedGuHunger),
 					})

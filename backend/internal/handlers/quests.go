@@ -303,9 +303,9 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 				player.HumanQi = 100000.0
 			}
 		case "primeval_stones":
-			player.PrimevalStones += int64(r.Amount)
+			player.PrimevalStones += float64(r.Amount)
 		case "immortal_stones":
-			player.ImmortalStones += int64(r.Amount)
+			player.ImmortalStones += float64(r.Amount)
 		case "dao_mark":
 			if player.DaoMarks == nil {
 				player.DaoMarks = make(models.DaoMarksMap)

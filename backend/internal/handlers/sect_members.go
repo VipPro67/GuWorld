@@ -82,7 +82,7 @@ func CreateSect(c *gin.Context) {
 	}
 
 	cost := int64(30000)
-	if player.PrimevalStones < cost {
+	if player.PrimevalStones < float64(cost) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ 30,000 Nguyên Thạch làm chi phí lập phái!"})
 		return
 	}

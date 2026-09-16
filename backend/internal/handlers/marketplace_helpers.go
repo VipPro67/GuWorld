@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 func getFeeTier(durationHours int) int {
@@ -26,9 +26,9 @@ func getFeeTier(durationHours int) int {
 	}
 }
 
-func getUpfrontFee(listingType string, durationHours int, totalListedPrice int64) int64 {
+func getUpfrontFee(listingType string, durationHours int, totalListedPrice float64) float64 {
 	if listingType == "MARKET" {
-		return int64(math.Round(float64(totalListedPrice) * 0.04))
+		return pricing.Quantize(totalListedPrice * 0.04)
 	}
 	tier := getFeeTier(durationHours)
 	if listingType == "AUCTION" {

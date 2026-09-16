@@ -495,6 +495,8 @@ Khu vực thư giãn cho các đạo hữu đọ vận may và tranh đoạt Ngu
   - Kết quả trận đấu được phân định vào đầu giờ tiếp theo bằng cách mô phỏng trận chiến ngẫu nhiên của các linh thú.
   - Tổng số tiền thắng cược (phần thưởng thêm chia từ bên thua) sẽ được khấu trừ 10% làm phí duy trì hệ thống (bảo đảm hệ thống không lỗ). Số Nguyên Thạch còn lại chia đều tỷ lệ thuận theo lượng cược cho bên thắng (cân kèo chia thưởng).
 
+> **Đơn vị tiền tệ:** Nguyên Thạch, Tiên Nguyên Thạch và giá vật phẩm hỗ trợ tối đa 3 chữ số thập phân; `0.001` là đơn vị nhỏ nhất.
+
 ## 13. Môn phái
 
 Hệ thống môn phái hiện có:

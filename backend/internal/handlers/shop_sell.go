@@ -52,7 +52,7 @@ func SellShopItem(c *gin.Context) {
 		return
 	}
 
-	totalGain := int64(0)
+	totalGain := float64(0)
 	sellRank := 1
 	var removedIDs []string
 	if req.ItemType == "Material" || req.ItemType == "Consumable" {
@@ -127,18 +127,18 @@ func SellShopItem(c *gin.Context) {
 		}
 
 		// Resolve sell price: prefer shop catalog price, fallback to item_dictionary rank
-		var unitSellPrice int64
+		var unitSellPrice float64
 		if shopItem, err := findCaravanShopItem(req.ItemID, req.Rank); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
 			sellRank = shopItem.Rank
 		} else {
 			var rank int
-			var dbBasePrice int64
+			var dbBasePrice float64
 			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
 			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 		}
-		totalGain = unitSellPrice * req.Quantity
+		totalGain = pricing.Quantize(unitSellPrice * float64(req.Quantity))
 	} else if req.ItemType == "Gu" {
 		var removed int64 = 0
 		newInv := models.GuInventory{}
@@ -156,13 +156,13 @@ func SellShopItem(c *gin.Context) {
 		}
 		player.GuInventory = newInv
 		// Resolve sell price: prefer shop catalog price, fallback to gu_dictionary rank
-		var unitSellPrice int64
+		var unitSellPrice float64
 		if shopItem, err := findCaravanShopItem(req.ItemID, req.Rank); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
 			sellRank = shopItem.Rank
 		} else {
 			var rank int
-			var dbBasePrice int64
+			var dbBasePrice float64
 			if req.Rank > 0 {
 				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 AND rank=$2`, req.ItemID, req.Rank).Scan(&dbBasePrice, &rank)
 			}
@@ -172,7 +172,7 @@ func SellShopItem(c *gin.Context) {
 			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 		}
-		totalGain = unitSellPrice * req.Quantity
+		totalGain = pricing.Quantize(unitSellPrice * float64(req.Quantity))
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
 		return
@@ -230,7 +230,7 @@ func SellShopItem(c *gin.Context) {
 		Action:         action,
 		EntityType:     entityType,
 		EntityID:       req.ItemID,
-		RequestSummary: fmt.Sprintf("Bán %dx %s (%s) cho Tiệm Buôn | Nhận %d %s", req.Quantity, itemName, req.ItemID, totalGain, sellCurrencyName),
+		RequestSummary: fmt.Sprintf("Bán %dx %s (%s) cho Tiệm Buôn | Nhận %.3f %s", req.Quantity, itemName, req.ItemID, totalGain, sellCurrencyName),
 		Metadata: map[string]interface{}{
 			"item_id":       req.ItemID,
 			"item_name":     itemName,
@@ -296,13 +296,13 @@ func SellShopItemsBulk(c *gin.Context) {
 		return
 	}
 
-	totalGainPrimeval := int64(0)
-	totalGainImmortal := int64(0)
+	totalGainPrimeval := float64(0)
+	totalGainImmortal := float64(0)
 	guSold := false
 	var removedIDs []string
 	var auditSummaries []string
 
-	addGain := func(sellRank int, gain int64) {
+	addGain := func(sellRank int, gain float64) {
 		if pricing.StoneTierByRank(sellRank) == "immortal" {
 			totalGainImmortal += gain
 		} else {
@@ -382,19 +382,19 @@ func SellShopItemsBulk(c *gin.Context) {
 				}
 			}
 
-			var unitSellPrice int64
+			var unitSellPrice float64
 			sellRank := 1
 			if shopItem, err := findCaravanShopItem(item.ItemID, item.Rank); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
 				sellRank = shopItem.Rank
 			} else {
 				var rank int
-				var dbBasePrice int64
+				var dbBasePrice float64
 				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
 				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 			}
-			gain := unitSellPrice * item.Quantity
+			gain := pricing.Quantize(unitSellPrice * float64(item.Quantity))
 			addGain(sellRank, gain)
 
 			var name string
@@ -402,7 +402,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.3f %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
 
 		} else if item.ItemType == "Gu" {
 			var removed int64 = 0
@@ -422,14 +422,14 @@ func SellShopItemsBulk(c *gin.Context) {
 			player.GuInventory = newInv
 			guSold = true
 
-			var unitSellPrice int64
+			var unitSellPrice float64
 			sellRank := 1
 			if shopItem, err := findCaravanShopItem(item.ItemID, item.Rank); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
 				sellRank = shopItem.Rank
 			} else {
 				var rank int
-				var dbBasePrice int64
+				var dbBasePrice float64
 				if item.Rank > 0 {
 					_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 AND rank=$2`, item.ItemID, item.Rank).Scan(&dbBasePrice, &rank)
 				}
@@ -439,7 +439,7 @@ func SellShopItemsBulk(c *gin.Context) {
 				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 			}
-			gain := unitSellPrice * item.Quantity
+			gain := pricing.Quantize(unitSellPrice * float64(item.Quantity))
 			addGain(sellRank, gain)
 
 			var name string
@@ -449,7 +449,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.3f %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
 		} else if item.ItemType == "Recipe" {
 			recipeToSell, err := RecipeSvc.Get(tx, player.ID.String(), item.ItemID)
 			if err != nil || recipeToSell == nil {
@@ -467,11 +467,11 @@ func SellShopItemsBulk(c *gin.Context) {
 			}
 
 			unitSellPrice := pricing.RecipeSellPrice(targetRank)
-			gain := unitSellPrice * item.Quantity
+			gain := pricing.Quantize(unitSellPrice * float64(item.Quantity))
 			addGain(targetRank, gain)
 
 			name := fmt.Sprintf("Bí phương (%s)", item.ItemID)
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d %s)", name, item.Quantity, gain, currencyLabel(targetRank)))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.3f %s)", name, item.Quantity, gain, currencyLabel(targetRank)))
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item_type không hợp lệ (phải là Gu, Material, hoặc Recipe)"})
 			return
@@ -511,12 +511,12 @@ func SellShopItemsBulk(c *gin.Context) {
 		summaryStr = summaryStr[:247] + "..."
 	}
 
-	gainSummary := fmt.Sprintf("+%d Nguyên Thạch", totalGainPrimeval)
+	gainSummary := fmt.Sprintf("+%.3f Nguyên Thạch", totalGainPrimeval)
 	if totalGainImmortal > 0 {
 		if totalGainPrimeval > 0 {
-			gainSummary = fmt.Sprintf("+%d Nguyên Thạch và +%d Tiên Nguyên Thạch", totalGainPrimeval, totalGainImmortal)
+			gainSummary = fmt.Sprintf("+%.3f Nguyên Thạch và +%.3f Tiên Nguyên Thạch", totalGainPrimeval, totalGainImmortal)
 		} else {
-			gainSummary = fmt.Sprintf("+%d Tiên Nguyên Thạch", totalGainImmortal)
+			gainSummary = fmt.Sprintf("+%.3f Tiên Nguyên Thạch", totalGainImmortal)
 		}
 	}
 

@@ -127,7 +127,7 @@ func BuyShopItem(c *gin.Context) {
 	if currency != "immortal" {
 		currency = "primeval"
 	}
-	totalCost := selectedItem.Price * req.Quantity
+	totalCost := selectedItem.Price * float64(req.Quantity)
 	currencyName := "Nguyên Thạch"
 	if currency == "immortal" {
 		currencyName = "Tiên Nguyên Thạch"
