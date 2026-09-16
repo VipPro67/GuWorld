@@ -549,6 +549,25 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 		active.AllStatsBuffPct > 0 || active.SpeedBoostFlat > 0 || active.SummonGrowthPhantoms
 }
 
+// hasCombatEffects returns true if the Gu has any active action, passive mechanic, or combat-relevant passive stat.
+func hasCombatEffects(spec *models.GuDictionaryItem) bool {
+	if hasCombatActiveEffects(spec) {
+		return true
+	}
+	for _, mechanic := range spec.Effects.Other {
+		if mechanic.EventTrigger != "ON_CAST" && mechanic.EventTrigger != "ON_HIT" {
+			return true
+		}
+	}
+	if spec.Effects.Passive != nil {
+		p := spec.Effects.Passive
+		if p.StatBaseAttack > 0 || p.StatBaseDefense > 0 || p.StatBaseHP > 0 || p.StatBaseSpeed > 0 || p.DamageMultiplierOnHit > 0 || p.Evasion > 0 || p.PathConflictReduction > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func computeGlobalGuDamageMultiplier(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
 	multiplier := 1.0
 	seen := make(map[string]struct{}, len(selectedGuIDs))

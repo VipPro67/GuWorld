@@ -6,3 +6,4 @@ blessed,Phúc Trạch,"{""luck"": 5, ""cultivation_efficiency"": 0.10}",60,[],Nh
 death_penalty,Hình Phạt Tử Vong,"{""stat_mods"": {""attack"": -0.50, ""defense"": -0.50, ""speed"": -0.50}}",30,[],Sát khí chưa tan sau khi chết, toàn bộ chỉ số suy giảm.
 refine_fatigue,Tâm Thần Mệt Mỏi,"{""refine"": -0.5}",10,[],Luyện cổ khiến tâm thần mệt mỏi, giảm 5% tỉ lệ luyện cổ thành công.
 refine_backfire,Luyện Cổ Phản Phệ,"{""refine"": -0.95}",20,[],Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 95% tỉ lệ luyện cổ thành công.
+regional_wall_suppression,Áp Chế Giới Vực,"{""stat_mods"": {""attack"": -0.20, ""defense"": -0.20, ""speed"": -0.20}}",15,[],Chịu áp chế của Giới Vực Bích khi di chuyển giữa các Đại Vực. Tu vi rank càng cao bị áp chế càng nặng.

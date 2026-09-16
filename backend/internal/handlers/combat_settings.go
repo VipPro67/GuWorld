@@ -28,7 +28,7 @@ func filterGuLoadout(inv models.GuInventory, cs models.AutoCombatConfig) models.
 		if !ok {
 			spec, ok = models.GetGuAny(g.GuID)
 		}
-		if !ok || !hasCombatActiveEffects(&spec) {
+		if !ok || !hasCombatEffects(&spec) {
 			continue
 		}
 		combatGu = append(combatGu, g)

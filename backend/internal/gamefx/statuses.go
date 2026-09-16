@@ -110,6 +110,19 @@ func defaultStatuses() []StatusDef {
 			DefaultDurationMinutes: 20,
 			Description:            "Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 50% tỉ lệ luyện cổ thành công.",
 		},
+		{
+			Key:  "regional_wall_suppression",
+			Name: "Áp Chế Giới Vực",
+			Effects: Effects{
+				StatMods: map[string]float64{
+					"attack":  -0.20,
+					"defense": -0.20,
+					"speed":   -0.20,
+				},
+			},
+			DefaultDurationMinutes: 15,
+			Description:            "Chịu áp chế khi xuyên qua Giới Vực Bích giữa các Đại Vực. Công thủ tốc đều suy giảm (tu vi rank càng cao bị áp chế càng nặng).",
+		},
 	}
 }
 

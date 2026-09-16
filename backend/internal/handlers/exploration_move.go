@@ -20,9 +20,95 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// GetRegionalWallDebuff calculates the debuff percentage (negative float64) and duration
+// based on player rank and sub-rank when crossing between different NGU_VUC regions.
+// Higher rank and sub-rank result in harsher stat suppression ("rank càng cao giảm càng nhiều").
+func GetRegionalWallDebuff(rank int, subRank int) (float64, time.Duration) {
+	if rank < 1 {
+		rank = 1
+	}
+	if subRank < 1 {
+		subRank = 1
+	}
+
+	var basePct float64
+	var baseDuration time.Duration
+
+	switch rank {
+	case 1:
+		basePct = 0.10
+		baseDuration = 5 * time.Minute
+	case 2:
+		basePct = 0.15
+		baseDuration = 8 * time.Minute
+	case 3:
+		basePct = 0.20
+		baseDuration = 10 * time.Minute
+	case 4:
+		basePct = 0.25
+		baseDuration = 12 * time.Minute
+	case 5:
+		basePct = 0.30
+		baseDuration = 15 * time.Minute
+	case 6:
+		basePct = 0.45
+		baseDuration = 20 * time.Minute
+	case 7:
+		basePct = 0.55
+		baseDuration = 25 * time.Minute
+	case 8:
+		basePct = 0.65
+		baseDuration = 30 * time.Minute
+	default: // Rank 9+
+		basePct = 0.75
+		baseDuration = 40 * time.Minute
+	}
+
+	subRankBonus := float64(subRank-1) * 0.01
+	if rank >= 6 {
+		subRankBonus = float64(subRank-1) * 0.02
+	}
+
+	totalDebuffPct := -(basePct + subRankBonus)
+	if totalDebuffPct < -0.90 {
+		totalDebuffPct = -0.90
+	}
+
+	return totalDebuffPct, baseDuration
+}
+
+// CheckAndApplyRegionalWallDebuff checks if a player moved from one NGU_VUC to a different NGU_VUC.
+// If so, it applies the "regional_wall_suppression" debuff status to the player's Statuses list.
+func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, toY int) string {
+	if player == nil || (fromX == 0 && fromY == 0) {
+		return ""
+	}
+	oldZone := FindLargeZoneAt(fromX, fromY)
+	newZone := FindLargeZoneAt(toX, toY)
+	if oldZone == nil || newZone == nil {
+		return ""
+	}
+	if oldZone.ID == newZone.ID {
+		return ""
+	}
+	if oldZone.ZoneType != ZoneTypeLarge || newZone.ZoneType != ZoneTypeLarge {
+		return ""
+	}
+
+	debuffPct, duration := GetRegionalWallDebuff(player.Rank, player.SubRank)
+	player.Statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
+
+	debuffInt := int(math.Abs(debuffPct * 100))
+	return fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d phút).",
+		oldZone.Name, newZone.Name, debuffInt, int(duration.Minutes()))
+}
+
 // returns the log message plus whether a fight was started. attackTargetID is
 // only used to explicitly attack another player standing on the destination.
 func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (string, bool, error) {
+	oldX := player.X
+	oldY := player.Y
+
 	player.X = x
 	player.Y = y
 	player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
@@ -32,6 +118,9 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	isCleared := isCellClearedRecently(player.CurrentRegion, player.X, player.Y, clearedCellCooldown)
 	cell := ResolveCell(player.X, player.Y)
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
+	if debuffMsg := CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
+		logMsg += " " + debuffMsg
+	}
 	combatTriggered := false
 	pvpTriggered := false
 

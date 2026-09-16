@@ -170,3 +170,61 @@ func TestFilterCombatGuInventory_FallbackToSettings(t *testing.T) {
 		t.Fatalf("expected [GU_C, GU_A] from settings, got %+v", got)
 	}
 }
+
+func TestFilterGuLoadoutRetainsPassiveMechanicGus(t *testing.T) {
+	setupGuRegistry(t)
+	models.GuRegistry["GU_PASSIVE_REBORN"] = map[int]models.GuDictionaryItem{
+		1: {
+			ID:   "GU_PASSIVE_REBORN",
+			Name: "Thâm Trận Cổ",
+			Rank: 1,
+			Effects: models.GuEffects{
+				Other: []models.SpecialMechanic{
+					{EventTrigger: "ON_DEATH", ActionCode: "REBORN"},
+				},
+			},
+		},
+	}
+
+	inv := models.GuInventory{
+		{InstanceID: "pass1", GuID: "GU_PASSIVE_REBORN", Rank: 1, Status: "ACTIVE", Equipped: true},
+	}
+	got := filterGuLoadout(inv, models.AutoCombatConfig{})
+	if len(got) != 1 || got[0].GuID != "GU_PASSIVE_REBORN" {
+		t.Fatalf("expected passive mechanic Gu GU_PASSIVE_REBORN to be retained in filterGuLoadout, got %+v", got)
+	}
+}
+
+func TestBuildSimEnemyCombatant_PopulatesPassiveMechanics(t *testing.T) {
+	setupGuRegistry(t)
+	models.GuRegistry["GU_PASSIVE_REBORN"] = map[int]models.GuDictionaryItem{
+		1: {
+			ID:   "GU_PASSIVE_REBORN",
+			Name: "Thâm Trận Cổ",
+			Rank: 1,
+			Effects: models.GuEffects{
+				Other: []models.SpecialMechanic{
+					{EventTrigger: "ON_DEATH", ActionCode: "REBORN"},
+				},
+			},
+		},
+	}
+
+	enemy := &models.Combatant{
+		ID:         "enemy1",
+		Name:       "Opponent",
+		Rank:       3,
+		BaseAttack: 100,
+		GuInventory: models.GuInventory{
+			{InstanceID: "pass1", GuID: "GU_PASSIVE_REBORN", Rank: 1, Status: "ACTIVE", Equipped: true},
+		},
+	}
+
+	simEnemy := buildSimEnemyCombatant(nil, enemy, nil)
+	if len(simEnemy.Mechanics) != 1 {
+		t.Fatalf("expected 1 passive mechanic on simEnemy, got %d", len(simEnemy.Mechanics))
+	}
+	if simEnemy.Mechanics[0].Trigger != "ON_DEATH" || simEnemy.Mechanics[0].ActionCode != "REBORN" {
+		t.Fatalf("unexpected mechanic on simEnemy: %+v", simEnemy.Mechanics[0])
+	}
+}

@@ -117,7 +117,15 @@ func Get(p *models.Player) Effects {
 
 	for _, status := range p.Statuses.Active() {
 		if def, ok := effectiveStatuses()[status.ID]; ok {
-			addEffects(&fx, def.Effects)
+			eff := def.Effects
+			if status.Value < 0 && len(eff.StatMods) > 0 {
+				mods := make(map[string]float64, len(eff.StatMods))
+				for k := range eff.StatMods {
+					mods[k] = status.Value
+				}
+				eff.StatMods = mods
+			}
+			addEffects(&fx, eff)
 			if fx.BlockedActions == nil {
 				fx.BlockedActions = map[string]bool{}
 			}

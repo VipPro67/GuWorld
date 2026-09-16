@@ -345,7 +345,14 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	for _, st := range player.Statuses.Active() {
 		for _, def := range gamefx.AllStatuses() {
 			if def.Key == st.ID {
-				applyCharEffect("status:"+def.Key, "Trạng thái: "+def.Name, def.Effects.StatMods)
+				statMods := def.Effects.StatMods
+				if st.Value < 0 && len(statMods) > 0 {
+					statMods = map[string]float64{}
+					for k := range def.Effects.StatMods {
+						statMods[k] = st.Value
+					}
+				}
+				applyCharEffect("status:"+def.Key, "Trạng thái: "+def.Name, statMods)
 				break
 			}
 		}

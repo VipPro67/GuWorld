@@ -332,6 +332,14 @@ func seedDefaultStatusRows() error {
 			`[]`,
 			"Tích tụ oán khí đồ sát. Khi bị đánh bại sẽ rơi thêm từ 50% đến 250% số lượng tài sản (tùy tầng Sát Khí).",
 		},
+		{
+			"regional_wall_suppression",
+			"Áp Chế Giới Vực",
+			`{"stat_mods":{"attack":-0.20,"defense":-0.20,"speed":-0.20}}`,
+			15,
+			`[]`,
+			"Chịu áp chế của Giới Vực Bích khi di chuyển giữa các Đại Vực. Tu vi rank càng cao bị áp chế càng nặng.",
+		},
 	}
 
 	for _, s := range statuses {

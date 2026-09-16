@@ -1,430 +1,235 @@
-# GuWorld - Status Effects Reference
+# GuWorld - Hệ Thống Effect & Status Effects (Reference & Developer Guide)
 
-Comprehensive documentation of all effects, statuses, and their mechanics in GuWorld.
+Tài liệu chi tiết về kiến trúc, luồng hoạt động, danh mục status effect, và hướng dẫn lập trình viên **thêm Cổ trùng / Effect mới** vào hệ thống GuWorld.
 
 ---
 
-## 1. Core Effect Structures
+## 1. Tổng Quan Kiến Trúc (Architecture Overview)
 
-### `gamefx.Effects` (Character Aggregated Effects)
-Central struct aggregating modifiers from Race, Constitution, and Active Statuses.
+Hệ thống Effect trong GuWorld được thiết kế theo mô hình **Data-Driven**, phân tầng từ khai báo dữ liệu JSON đến tính toán chỉ số và mô phỏng chiến đấu:
 
-```go
-type Effects struct {
-    StatMods              map[string]float64  // "attack", "defense", "speed" → % modifier
-    RefineBonus           float64             // Additive success-rate bonus for refining (0..1)
-    DaoNganBonus          map[string]float64  // Per-dao-path additive multiplier
-    PathDamageBonus       map[string]float64  // Per-path % damage bonus
-    PathResistanceBonus   map[string]float64  // Per-path % damage reduction taken
-    LuckBonus             float64             // Flat luck increase
-    MaxManaBonus          float64             // % max mana increase
-    ManaRegenBonus        float64             // % mana regen increase
-    CultivationEfficiencyBonus float64        // % cultivation gains increase
-    DaoMarkGainBonus      float64             // % Đạo Ngân earned increase
-    HealingReceivedBonus  float64             // % healing received increase
-    HPRegenBonus          float64             // Flat HP/hour bonus (out-of-combat)
-    MentalResistanceBonus float64             // % resistance to control/mental effects
-    SoulDefenseBonus      float64             // % soul damage reduction
-    SoulRegenBonus        float64             // % passive soul_hp regen increase
-    ApertureStressBonus   float64             // Additive multiplier on aperture stress
-    BlockedActions        map[string]bool     // "explore", "cultivate", "combat", "refine", "trade"
-}
+```
+[CSV Data (backend/data/*.csv)]
+       │
+       ▼ (Admin Import / DB Seed)
+[Database (gu_dictionary, constitution_dictionary, race_dictionary)]
+       │
+       ▼ (Server Startup / Memory Registry)
+[In-Memory Registries (models.GuRegistry, gamefx.*)]
+       │
+       ├───────────────────────────────┼───────────────────────────────┐
+       ▼                               ▼                               ▼
+[Stat Aggregation]            [Combat Engine]               [World Capabilities]
+ (gamefx.Get(player))      (simulator/engine.go)      (models.InventoryHasGuMechanic)
 ```
 
-### `models.GuEffects` (Gu-Specific Effects)
-```go
-type GuEffects struct {
-    Active  *ActiveEffect     // Combat-active effects
-    Passive *PassiveEffect    // Permanent stat bonuses
-    Growth  *GrowthEffect     // Growth over time
-    Other   []SpecialMechanic // Event-driven mechanics (ON_TICK, ON_CONSUME, ON_DEATH, ON_USE)
-}
-```
+### Các Struct Cốt Lõi
 
-### `simulator.Effect` (Combat Runtime)
-```go
-type Effect struct {
-    ID       string // Effect constant
-    Type     string // "buff" or "debuff"
-    Tier     int    // 1-5 for scaling
-    Value    int    // Computed percent/duration
-    Duration int    // Remaining turns
-}
-```
+1. **`models.GuEffects`** ([backend/internal/models/gu.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/models/gu.go#L106)):
+   ```go
+   type GuEffects struct {
+       Active  *ActiveEffect     `json:"active"`            // Effect kích hoạt trong combat
+       Passive *PassiveEffect    `json:"passive"`           // Chỉ số bị động cộng thẳng
+       Growth  *GrowthEffect     `json:"growth,omitempty"`  // Tốc độ nuôi dưỡng/tăng trưởng
+       Other   []SpecialMechanic `json:"other"`             // Cơ chế đặc thù/capability ngoài combat
+   }
+   ```
 
----
+2. **`gamefx.Effects`** ([backend/internal/gamefx/fx.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/gamefx/fx.go#L14)):
+   Cấu trúc tổng hợp tất cả modifier của nhân vật từ Chủng tộc (Race), Thể chất (Constitution), Cổ bị động (Passive Gu), và Trạng thái (Statuses).
 
-## 2. Gu Active Effects (44 keys in data)
+3. **`effectcatalog`** ([backend/internal/effectcatalog/manifest.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/effectcatalog/manifest.go)):
+   Bộ kiểm soát và xác thực (Validator & Manifest) đảm bảo mọi key JSON trong `Gu.csv` đều hợp lệ, có owner và disposition rõ ràng.
 
-### Damage & Healing
-| Key | Type | Description | Count |
-|-----|------|-------------|-------|
-| `damage_flat` | number | Fixed damage | 207 |
-| `heal_flat` | number | Direct heal | 33 |
-| `shield_flat` | number | Shield/barrier | 96 |
-| `damage_mult` | number | Damage multiplier (×1.075–1.35) | 18 |
-
-### Status Application
-| Key | Type | Description |
-|-----|------|-------------|
-| `apply_status` | enum | Status: BLEED, POISON, STUN, SLOW, FREEZE, SILENCE, THORNS, REGEN, ATK_UP, DEF_UP, TAUNT, WEAK, SLOW1, SLOW_DAMAGE, BURN, FEAR, CONFUSE, STEALTH, SLEEP, BLIND, CHARM, BIND |
-| `status_tick_damage` | number | DoT damage per tick / status intensity |
-| `status_duration_ticks` | int | Duration in turns |
-
-### Targeting & Special
-| Key | Type | Description | Count |
-|-----|------|-------------|-------|
-| `target_selector` | enum | Targeting: COL, ALL, ROW, SINGLE | 55 |
-| `target_count` | int | Number of targets | |
-| `blood_drain` | bool | +50% lifesteal | |
-| `summon_phantom` | bool | Summon phantom (dmg = BaseAttack) | |
-| `range` | number | Attack range | |
-| `curve_attack` | bool | Bypass frontline | |
-| `mana_regen` | number | Instant mana restore | |
-| `refine_mana_tier` | number | Refine mana tier | |
-| `cleansing_power` | number | Cleansing level | |
-| `capture_bonus` | number | Monster catch rate bonus | |
-| `replicate` | bool | Replicate effect | |
-| `wood_transformation` | bool | Wood transformation | |
-| `portal_create` | bool | Create portal | |
-| `random_portal` | bool | Random portal | |
+4. **`simulator.Effect`** ([backend/internal/simulator/engine.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/simulator/engine.go)):
+   Cấu trúc đại diện cho trạng thái/buff/debuff đang duy trì theo lượt trong combat deterministic engine.
 
 ---
 
-## 3. Gu Passive Effects (32 keys in data)
+## 2. Luồng Hoạt Động Liên Quan (Runtime & Processing Flow)
 
-### Base Stats
-| Key | Type | Description | Count |
-|-----|------|-------------|-------|
-| `stat_base_attack` | number | Permanent attack | 151 |
-| `stat_base_defense` | number | Permanent defense | 151 |
-| `stat_base_hp` | number | Permanent HP (via EffectiveMaxHP) | 15 |
-| `stat_base_speed` | number | Permanent speed | 7 |
+### A. Đọc Dữ Liệu & Registry Cache
+- Khi khởi động server, backend nạp dữ liệu từ DB vào bộ nhớ (`models.GuRegistry`, `gamefx.ConstitutionRegistry`, `gamefx.RaceRegistry`).
+- Khi sửa `backend/data/Gu.csv`, admin thực hiện **Import Cổ trùng** qua Admin Panel và **restart server** để registry cập nhật.
 
-### Utility
-| Key | Type | Description | Count |
-|-----|------|-------------|-------|
-| `mana_regen_mult` | number | Mana regen multiplier | |
-| `path_conflict_reduction` | number | Dao path conflict reduction | 40 |
-| `damage_multiplier_on_hit` | number | Damage mult on hit | |
-| `soul_refinement` | number | Soul refinement | |
-| `refine_mana_tier` | number | Refine mana tier | 9 |
-| `luck` | number | Luck | |
-| `time_speed_multiplier` | number | Time speed bonus | 1 |
-| `evasion` | number | Evasion | |
-| `control_power` | number | Control power | |
-| `storage_capacity` | number | Storage capacity | |
-| `success_rate_bonus` | number | Success rate bonus | 13 |
-| `movement` | number | Movement | 27 |
+### B. Cộng Gộp Chỉ Số Bị Động (Stat Aggregation)
+Hàm `gamefx.Get(p *models.Player)` thực hiện tính toán cộng gộp:
+1. Cộng chỉ số từ Chủng tộc (`p.Race`).
+2. Cộng chỉ số từ các Trạng thái active (`p.Statuses`).
+3. Cộng chỉ số từ Thể chất (`p.Constitution`).
+4. Các thuộc tính Cổ bị động (`stat_base_attack`, `stat_base_hp`, `stat_base_speed`...) được tính cộng gộp trong `EffectiveMaxHP()`, `EffectiveBaseAttack()`, v.v.
+
+### C. Xử Lý Chiêu Thức & Combat Engine
+1. Khi dùng Cổ active trong combat, [handlers/combat_effects.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/combat_effects.go) tính toán sát thương/khiên dựa trên Cảnh giới, Điểm Đạo Ngân (`DaoMultiplier`), và Cảnh giới áp chế (`RankFactor`).
+2. Trong [simulator/engine.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/simulator/engine.go), trạng thái bất lợi (BLEED, POISON, STUN, FREEZE, SILENCE...) được đưa vào danh sách `ActiveEffects` của combatant và được tick/trừ thời gian mỗi lượt.
+
+### D. Cơ Chế Ngoài Combat (World Capabilities)
+Các tính năng ngoài combat (như ngụy trang `DISGUISE`, chợ `MARKETPLACE_ACCESS`, giao dịch từ xa `REMOTE_TRADE`...) sử dụng mảng `other` trong JSON.
+Hệ thống sử dụng helper `models.InventoryHasGuMechanic(playerGuInv, "ACTION_CODE", requireEquipped)` để kiểm tra quyền hạn của người chơi.
 
 ---
 
-## 4. Special Mechanic Action Codes (20 types)
+## 3. Hướng Dẫn Chi Tiết: Thêm Effect & Cổ Mới (Developer Guide)
 
-| Code | Trigger | Description |
-|------|---------|-------------|
-| `MANA_REGEN_TICK` | ON_TICK | Mana regen per tick |
-| `THOUGHT_REGEN_TICK` | ON_TICK | Thought regen per tick |
-| `SOUL_REGEN_TICK` | ON_TICK | Soul regen per tick |
-| `GENERATE_STONES_TICK` | ON_TICK | Generate stones per tick |
-| `GENERATE_IMMORTAL_STONES_TICK` | ON_TICK | Generate immortal stones per tick |
-| `ADD_LIFESPAN_YEARS` | ON_TICK | Add lifespan years |
-| `RANK_PROGRESS` | ON_TICK | Rank progression |
-| `SACRIFICE_APTITUDE` | ON_TICK | Sacrifice aptitude |
-| `ADD_SOUL_MAX` | ON_TICK | Add soul max HP |
-| `SOUL_BOOST` | ON_TICK | Soul boost |
-| `RESTORE_SOUL_HP` | ON_TICK | Restore soul HP |
-| `INCREASE_TIME_SPEED` | ON_TICK | Increase time speed |
-| `REDUCE_STRESS` | ON_TICK | Reduce stress |
-| `RESTORE_MENTAL` | ON_TICK | Restore mental |
-| `RECORD` | ON_TICK | Record |
-| `CONTRACT_OATH` | ON_TICK | Contract oath |
-| `PORTAL_CREATE` | ON_TICK | Portal create |
-| `REGENERATE_TERRAIN` | ON_TICK | Regenerate terrain |
-| `HOT_TICK` | ON_TICK | Heal over time tick |
-| `ENSLAVE_BEAST_TIER` | ON_TICK | Enslave beast tier |
+### Trường Hợp 1: Thêm Cổ Mới Sử Dụng Effect ĐÃ CÓ SẴN (Không cần sửa Go Code)
+
+Nếu hiệu ứng bạn muốn dùng đã có trong hệ thống (như `damage_flat`, `shield_flat`, `stat_base_attack`, `apply_status: "STEALTH"`...):
+
+1. Mở file [backend/data/Gu.csv](file:///home/vippro67/Documents/GitHub/GuWorld/backend/data/Gu.csv).
+2. Thêm dòng Cổ mới với cấu trúc JSON trong cột `effects`:
+   ```csv
+   GU_LIGHTNING_BOLT,Lôi Đình Cổ,3,Active,6,"[""lightning_stone""]",300,"Bắn ra tia sét gây sát thương và có cơ hội làm choáng đối thủ.","[""Lightning Path""]",10.0,"{""active"": {""damage_flat"": 450, ""apply_status"": ""STUN"", ""status_duration_ticks"": 1}, ""passive"": {""stat_base_attack"": 15}, ""growth"": {}, ""other"": []}",,False,ATTACK_CORE,"[""ATTACK_CORE""]","[""lightning"",""damage""]","[""damage_boost""]",1200.0,
+   ```
+3. Đăng nhập Admin Panel -> Tab **Dữ liệu** -> Import bảng **Cổ Trùng**.
+4. Restart server backend.
 
 ---
 
-## 5. Combat Status Effects
+### Trường Hợp 2: Thêm Chỉ Số Passive Mới (Ví dụ: `stat_crit_damage_pct` - Tăng % sát thương bạo kích)
 
-### Legacy Tier-Based (14 constants)
+1. **Khai báo field trong struct `PassiveEffect`** tại [backend/internal/models/gu.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/models/gu.go#L69):
+   ```go
+   type PassiveEffect struct {
+       // ... các field khác
+       StatCritDamagePct float64 `json:"stat_crit_damage_pct,omitempty"`
+   }
+   ```
 
-| Constant | Type | Resistable | Description |
-|----------|------|------------|-------------|
-| `EffectSlow` | debuff | MentalResistance | Reduces speed |
-| `EffectSlow1` | debuff | **No** | Reduces speed (guaranteed) |
-| `EffectSlowDamage` | debuff | MentalResistance | Reduces speed + deals damage/turn |
-| `EffectWeak` | debuff | MentalResistance | Reduces damage dealt |
-| `EffectFreeze` | control | MentalResistance | Like stun, breakable by damage (50%) |
-| `EffectSilence` | control | MentalResistance | Prevents skills, only basic attack |
-| `EffectThorns` | buff | No | Reflects damage when hit |
-| `EffectRegen` | buff | No | Heals HP each turn |
-| `EffectAtkUp` | buff | No | Increases attack |
-| `EffectDefUp` | buff | No | Increases defense |
-| `EffectTaunt` | buff | No | Forces enemies to attack |
-| `EffectStun` | control | MentalResistance | Skips turn entirely |
-| `EffectBleed` | DoT | No | Damage over time |
-| `EffectPoison` | DoT | No | Damage over time |
+2. **Đăng ký key vào Catalog Manifest** tại [backend/internal/effectcatalog/manifest.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/effectcatalog/manifest.go#L58):
+   ```go
+   add("passive", DispositionSupported, "player-stats", 
+       "stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", 
+       "movement", "investigation", "hearing", "evasion", "luck", "accuracy", 
+       "damage_multiplier_on_hit", "cleansing_power", "disguise_level", 
+       "stat_crit_damage_pct") // <--- Thêm key mới vào đây
+   ```
 
-### Registry-Driven Statuses (18 catalog)
+3. **Cập nhật logic tính toán chỉ số**:
+   Trong hàm tính toán combat/stats (như `gamefx/fx.go` hoặc simulator), đọc `spec.Effects.Passive.StatCritDamagePct` và cộng dồn vào thuộc tính nhân vật.
 
-| Status ID | Behaviour | Resistable | Description |
-|-----------|-----------|------------|-------------|
-| `BLEED` | DOT | No | Damage over time |
-| `POISON` | DOT | No | Damage over time |
-| `BURN` | DOT | No | Fire DoT |
-| `FEAR` | force_basic | MentalResistance | Only basic attack allowed |
-| `CONFUSE` | confuse | MentalResistance | 40% chance to mis-target ally |
-| `STEALTH` | stealth | No | Untargetable by single-target, breaks on attack |
-| `SLEEP` | sleep | MentalResistance | Skip turn, breaks on any damage |
-| `BLIND` | blind | No | 35% miss chance |
-| `CHARM` | charm | MentalResistance | Attack allies |
-| `BIND` | bind | MentalResistance | Skip turn |
-| `HASTE` | haste | No | Speed up |
-| `ARMOR_BREAK` | armor_break | No | Defense down |
-| `DAMAGE_REDUCTION_UP` | damage_reduction | No | Reduce damage taken |
-| `INVINCIBLE` | invincible | No | Immune to damage |
-| `REVIVE_LOCK` | revive_lock | No | Prevent revival |
-| `STUN` | (legacy) | MentalResistance | Skip turn |
-| `SLOW` | (legacy) | MentalResistance | Speed debuff |
-| `SILENCE` | (legacy) | MentalResistance | No skills |
+4. **Thêm dữ liệu vào `Gu.csv`**, Import qua Admin Panel và restart backend.
 
 ---
 
-## 6. Character Effects Sources
+### Trường Hợp 3: Thêm Hiệu Ứng Active Combat Mới (Ví dụ: `burn_mana_flat` - Đốt Chân nguyên đối thủ)
 
-### Races (chủng tộc) - 10 total
-Loaded from `race_dictionary` (seeded from `Race.csv`):
-- `human` — no bonus (default)
-- `fur_people`, `merman`, `feathered`, `inkman`, `rockman`, `snowman`, `variant_beastman`, `dragonman`, `giant_sun_descendant`
+1. **Khai báo field trong struct `ActiveEffect`** tại [backend/internal/models/gu.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/models/gu.go#L16):
+   ```go
+   type ActiveEffect struct {
+       // ... các field khác
+       BurnManaFlat float64 `json:"burn_mana_flat,omitempty"`
+   }
+   ```
 
-Effects granted: StatMods, RefineBonus, DaoNganBonus, PathDamageBonus, PathResistanceBonus, LuckBonus, CultivationEfficiencyBonus
+2. **Đăng ký key vào Catalog Manifest** tại [backend/internal/effectcatalog/manifest.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/effectcatalog/manifest.go#L47):
+   ```go
+   add("active", DispositionSupported, "combat",
+       "damage_flat", "heal_flat", "shield_flat", ..., "burn_mana_flat")
+   ```
 
-### Constitutions (thể chất) - 11 total (10 Thập Tuyệt + 1 Mộng)
-Loaded from `constitution_dictionary` (seeded from `Constitution.csv`):
-- All Tier 3
-- Each grants: DaoNganBonus (path affinity ×1.5), MaxManaBonus (+40-50%), ManaRegenBonus (+100%)
-- Plus unique: StatMods, PathDamageBonus, PathResistanceBonus, MentalResistanceBonus, HealingReceivedBonus
+3. **Xử lý logic chiêu thức trong Combat Engine**:
+   Trong [simulator/engine.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/simulator/engine.go) hoặc [handlers/combat_effects.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/combat_effects.go):
+   ```go
+   if guSpec.Effects.Active != nil && guSpec.Effects.Active.BurnManaFlat > 0 {
+       target.Mana = math.Max(0, target.Mana - guSpec.Effects.Active.BurnManaFlat)
+   }
+   ```
 
-### Statuses (trạng thái) - 5 total
-Loaded from `status_dictionary`:
-- `severely_wounded`, `poisoned`, `exhausted`, `blessed`, `death_penalty`
-- Effects: StatMods, HealingReceivedBonus, BlockedActions, CultivationEfficiencyBonus
-
----
-
-## 7. Effect Resolution Flow
-
-### Character Effects Aggregation
-```go
-func Get(p *models.Player) Effects {
-    fx := Effects{...}
-    // 1. Race effects
-    if def, ok := effectiveRaces()[p.Race]; ok {
-        addEffects(&fx, def.Effects)
-    }
-    // 2. Active status effects
-    for _, status := range p.Statuses.Active() {
-        if def, ok := effectiveStatuses()[status.ID]; ok {
-            addEffects(&fx, def.Effects)
-        }
-    }
-    // 3. Constitution effects
-    if def, ok := effectiveConstitutions()[p.Constitution]; ok {
-        addEffects(&fx, def.Effects)
-    }
-    return fx
-}
-```
-
-### Additive Merging
-All numeric fields **add together** across Race + Constitution + Statuses.
-
-### Combat Integration
-- `DaoMultiplierForPaths()` - Computes dao mark damage multiplier per path
-- `PathDamageMultiplierForPaths()` - Computes path damage bonus
-- `EffectiveMaxHP()` - Includes passive Gu HP + buff_hp status
-- `EffectiveMaxMana()` - Includes MaxManaBonus from constitution
+4. **Thêm dữ liệu vào `Gu.csv`**, Import qua Admin Panel và restart backend.
 
 ---
 
-## 8. Combat State Tracking
+### Trường Hợp 4: Thêm Special Mechanic / Capability Mới (Ví dụ: `TELEPORT_HUB` - Dịch chuyển về Hub)
 
-### CombatantAuto Fields
-```go
-ActiveEffects []Effect        // Buffs/debuffs
-ActiveDoT     []DoTEffect     // Damage/heal over time
+1. **Đăng ký Action Code & Trigger** tại [backend/internal/effectcatalog/manifest.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/effectcatalog/manifest.go#L124):
+   ```go
+   add("CAPABILITY", DispositionSupported, "world", 
+       "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", ..., "TELEPORT_HUB")
+   ```
 
-// Derived stats (computed each turn)
-EffectiveSpeed        float64
-DamageMultiplier      float64  // from weak/atk_up
-DefenseMultiplier     float64  // from def_up
-ThornsDamage          float64  // % reflect
-IsSilenced, IsFrozen, IsSleeping, IsFeared, IsCharmed, IsStealthed,
-IsConfused, IsBlinded, IsBound, IsReviveLocked bool
-AccuracyPenalty       float64  // BLIND miss chance
-DamageTakenReduction  float64  // DAMAGE_REDUCTION_UP / INVINCIBLE
-```
+2. **Xử lý logic kiểm tra trong Handler**:
+   Trong handler di chuyển/hành động (ví dụ `player_explore.go`):
+   ```go
+   if models.InventoryHasGuMechanic(playerGuInv, "TELEPORT_HUB", true) {
+       // Cho phép dịch chuyển tức thời về thành chính
+   }
+   ```
 
-### Turn Processing
-1. **Tick DoTs** (bleed, poison, regen)
-2. **Tick status durations** + compute multipliers
-3. **Apply actions** with all multipliers
+3. **Định nghĩa Cổ trùng trong `Gu.csv`**:
+   ```csv
+   GU_SPACE_TELEPORT,Định Hướng Cổ,4,Support,6,"[""space_crystal""]",400,"Cho phép dịch chuyển tức thời về Hub.","[""Space Path""]",20.0,"{""active"": {}, ""passive"": {}, ""growth"": {}, ""other"": [{""event_trigger"": ""CAPABILITY"", ""action_code"": ""TELEPORT_HUB"", ""params"": {}}]}",,False,SUPPORT_UTILITY,"[""SUPPORT_UTILITY""]","[""space""]","[""utility_boost""]",2500.0,
+   ```
 
----
-
-## 9. Damage Formula (Simulator)
-
-```go
-hitDmg = a.Damage * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
-netDmg = hitDmg - targetDef
-netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))
-if netDmg < 1 { netDmg = 1 }
-```
-
-### Multipliers Applied
-
-| Source | Multiplier |
-|--------|------------|
-| `sword_dragon_form` buff | ×1.50 |
-| `borrow_past_power` buff | ×1.40 |
-| `Weak` debuff | ×(1 - weak%) |
-| `AtkUp` buff | ×(1 + atk_up%) |
-| `GU_SOVEREIGN_FETUS` equipped | ×2.0 |
-| Dao marks | `DaoMultiplierForPaths()` |
-| Path damage bonus | `PathDamageMultiplierForPaths()` |
-| Target path resistance | `1.0 - PathResistance` |
+4. **Import qua Admin Panel & Restart backend**.
 
 ---
 
-## 10. Status Resistance
+## 4. Danh Mục Hiệu Ứng Chiến Đấu & Status Effects
 
-| Status | Resistance Check |
-|--------|------------------|
-| STUN, FREEZE, SILENCE, SLOW, WEAK, FEAR, CONFUSE, SLEEP, CHARM, BIND | `rng.Float64() < MentalResistance` |
-| FREEZE break | 50% chance on taking damage |
-| SLEEP break | Breaks on any damage |
-| STEALTH break | Breaks on attack |
-| SLOW1 | **Cannot be resisted** |
+### A. Debuff Cơ Bản & Khống Chế
 
----
-
-## 11. Effect Storage & Serialization
-
-| Location | Format | Notes |
-|----------|--------|-------|
-| `players.race` | VARCHAR FK → `race_dictionary.key` | Effects in JSONB |
-| `players.constitution` | VARCHAR FK → `constitution_dictionary.key` | Effects in JSONB |
-| `players.statuses` | JSONB array | `{"id", "expires_at", "source", "value"}` |
-| `gu_dictionary.effects` | JSONB → `models.GuEffects` | Active/Passive/Growth/Other |
-| `item_dictionary.effects` | JSONB → `models.ItemEffects` | Flexible map[string]float64 |
-| `immortal_apertures.dao_marks` | JSONB map[string]int | Per-path Đạo Ngân |
-| `players.path_masteries` | JSONB map[string]int | Per-path mastery |
-| `players.dao_marks` | JSONB map[string]int | Player Đạo Ngân |
+| Hiệu ứng | T1 | T2 | T3 | T4 | T5 | Cơ chế vận hành | Lưu Phái |
+|---|---|---|---|---|---|---|---|
+| **SLOW** (Chậm) | 15% / 3t | 25% / 3t | 35% / 4t | 45% / 4t | 55% / 5t | Giảm `EffectiveSpeed`, tụt thứ tự hành động trong lượt. | Thổ / Trụ Đạo |
+| **WEAK** (Hư Nhược) | 10% / 3t | 20% / 3t | 30% / 4t | 40% / 4t | 50% / 5t | Giảm % sát thương gây ra của mục tiêu. | Âm / Khí Đạo |
+| **FREEZE** (Đóng Băng) | 1 lượt | 1 lượt | 2 lượt | 2 lượt | 3 lượt | Mất lượt; 50% vỡ băng khi nhận sát thương; chịu Melt Damage nếu trúng Hỏa. | Băng Tuyết Đạo |
+| **SILENCE** (Câm Lặng) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | Khóa Cổ kỹ năng và Sát Chiêu, chỉ được dùng Đánh Thường. | Âm Thanh / Khí Đạo |
+| **STUN** (Choáng Váng) | 1 lượt | 1 lượt | 2 lượt | 2 lượt | 3 lượt | Mất lượt hoàn toàn, không bị phá vỡ bởi sát thương. | Lực / Lôi Đạo |
+| **BLEED** (Xuất Huyết) | DoT | DoT | DoT | DoT | DoT | Trừ HP đầu lượt; kích hoạt bẫy nổ máu khi bị giải trừ cưỡng chế. | Huyết Đạo |
+| **POISON** (Trúng Độc) | DoT | DoT | DoT | DoT | DoT | Trừ HP đầu lượt; giảm 20% lượng hồi máu nhận vào. | Độc Đạo |
+| **BURN** (Thiêu Đốt) | DoT | DoT | DoT | DoT | DoT | Trừ HP mỗi lượt; bị dập tắt ngay bởi kỹ năng thuộc tính Thủy/Băng. | Viêm Đạo |
+| **BLIND** (Mù Mắt) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | 35% xác suất đòn đánh bị trượt (Miss hoàn toàn). | Quang / Ám Đạo |
+| **SLEEP** (Ngủ Say) | 1 lượt | 2 lượt | 2 lượt | 3 lượt | 3 lượt | Mất lượt; lập tức tỉnh dậy khi nhận bất kỳ sát thương nào. | Mộng Đạo |
+| **CONFUSE** (Mê Loạn) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | 40% xác suất xuất chiêu nhầm mục tiêu vào đồng minh. | Trí / Biến Hóa Đạo |
+| **CHARM** (Mê Hoặc) | 2 lượt | 3 lượt | 3 lượt | 4 lượt | 5 lượt | Bị thao túng hoàn toàn, quay sang tấn công phe mình. | Mị / Tình Đạo |
+| **BIND** (Trói Buộc) | 2 lượt | 3 lượt | 3 lượt | 4 lượt | 5 lượt | Khóa cử động vật lý, mất lượt hành động. | Mộc / Thổ Đạo |
+| **FEAR** (Khiếp Sợ) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | Chỉ có thể đánh thường, mất khả năng kích hoạt phản đòn. | Hồn / Ám Đạo |
 
 ---
 
-## 12. Adding New Effects
+### B. Hiệu Ứng Cổ Giới Đặc Thù (Cổ Chân Nhân Mechanics)
 
-### Character Effect (Race/Constitution/Status)
-1. Add field to `gamefx.Effects` struct (`fx.go`)
-2. Update `addEffects()` merger (`fx.go:106-148`)
-3. Add to CSV (`Constitution.csv` / `Race.csv` / `Status.csv`)
-4. Admin Panel → Data tab → Import table
-5. Restart backend (registries cached in memory)
-
-### Gu Active Effect
-1. Add field to `models.ActiveEffect` (`gu.go`)
-2. Update `normalize()` for shorthand status mapping
-3. Update `BuildCombatAction()` in `handlers/gu_effects.go`
-4. Update simulator if new mechanic
-
-### Combat Status
-1. Add constant to `statusfx/status.go`
-2. Add entry to `statusfx.Registry` in `statusfx/spec.go` with `StatusSpec`
-3. Add behaviour hook in `simulator/status_apply.go`
-4. (Manual turn-based combat đã bỏ; status in-combat chỉ chạy qua simulator/auto-battle.)
-
-### Special Mechanic Action Code
-1. Add case to `handleActionCode()` in `handlers/gu_effects.go`
-2. Define params structure
-3. Add to Gu CSV with `other` array entry
+| Hiệu ứng | Tier / Thời hạn | Bản chất & Cơ chế chi tiết | Lưu Phái |
+|---|---|---|---|
+| **ESSENCE_LEAK** (Ô Khiếu / Rò Rỉ Chân Nguyên) | 5%–25% / 3 lượt | Mỗi đầu lượt mất $X\%$ Chân Nguyên tối đa trong không khiếu. Khi Chân Nguyên = 0, Cổ Sư rơi vào trạng thái kiệt quệ, chỉ có thể đánh thường. | Thổ / Khí Đạo |
+| **GU_SEAL** (Phong Cổ / Trầm Miên) | 1 Cổ / 2–3 lượt | Phong ấn ngẫu nhiên 1 Cổ trùng đang trang bị. Cổ bị phong ấn không thể kích hoạt chủ động và vô hiệu hóa toàn bộ thuộc tính cộng thêm (Passive). | Luyện / Trụ Đạo |
+| **SOUL_WOUND** (Hồn Thương) | 2–4 lượt | Đòn đánh xâm thực hồn phách: Gây sát thương chuẩn (True Damage) bỏ qua $100\%$ Hộ giáp/Khiên; tăng 20% Chân Nguyên tiêu hao mỗi kỹ năng. | Hồn Đạo |
+| **THOUGHT_CHAOS** (Tạp Niệm / Loạn Ý) | 2–3 lượt | Chấn động niệm đầu: Mỗi khi kích hoạt Sát Chiêu (Killer Move), có $35\%$ xác suất bị đứt đoạn liên kết niệm đầu, dẫn tới thất bại, mất lượt và tiêu hao Chân Nguyên vô ích. | Trí Đạo |
+| **DAO_CONFLICT** (Xung Đột Đạo Ngân) | 3–5 lượt | Đạo ngân dị chủng bài xích: Giảm $50\%$ hiệu lực hồi phục/khiên từ đồng đội; tăng $25\%$ sát thương nhận vào từ các đòn đánh khắc hệ. | Biến Hóa Đạo |
+| **BACKLASH** (Phản Phệ) | Tức thì / 1 lượt | Bản mệnh chấn thương: Xảy ra khi Sát Chiêu bị cắt đứt hoặc Khiên bản mệnh vỡ nát, lập tức nhận sát thương phản chấn bằng $150\%$ uy lực chiêu thức. | Quy Tắc Đạo |
+| **REVIVE_LOCK** (Khóa Hồi Sinh) | 3 lượt | Phong tỏa dòng chảy sinh mệnh: Ngăn chặn hoàn toàn việc phục sinh, vô hiệu hóa Xuân Thu Thiền hoặc các Cổ mệnh bài tái sinh. | Trụ / Vũ Đạo |
 
 ---
 
-## 13. Key Files Reference
+### C. Buff Hộ Thể & Trợ Lực Bản Thân
 
-| File | Purpose |
-|------|---------|
-| `backend/internal/gamefx/fx.go` | Core Effects, Get(), Dao/Path multipliers |
-| `backend/internal/gamefx/statuses.go` | StatusDef, Registry, LoadStatusRegistry |
-| `backend/internal/gamefx/constitutions.go` | ConstitutionDef, Registry, defaults |
-| `backend/internal/gamefx/races.go` | RaceDef, Registry, defaults |
-| `backend/internal/gamefx/energy.go` | EnergyCost, mana calculation |
-| `backend/internal/gamefx/path_mastery.go` | Path mastery levels/multipliers |
-| `backend/internal/statusfx/spec.go` | StatusSpec, Registry, ResolveStatus |
-| `backend/internal/statusfx/status.go` | Status IDs, Behaviour constants |
-| `backend/internal/models/gu.go` | GuEffects, ActiveEffect, PassiveEffect, GuRegistry |
-| `backend/internal/models/item.go` | ItemEffects (flexible map) |
-| `backend/internal/simulator/models.go` | Effect, DoTEffect, CombatantAuto, CombatState |
-| `backend/internal/simulator/engine.go` | Simulate(), tickDoTs, tickStatusEffects |
-| `backend/internal/simulator/status_apply.go` | applyStatusOps, registry-driven status |
-| `backend/internal/handlers/combat_effects.go` | CalculateGuEffectForCombatant |
-| `backend/internal/handlers/gu_effects.go` | BuildCombatAction, status mapping |
-| `docs/GAME_DATA.md` | Complete data documentation |
+| Hiệu ứng | T1 | T2 | T3 | T4 | T5 | Cơ chế vận hành |
+|---|---|---|---|---|---|---|
+| **THORNS** (Khiên Gai) | 10% / 3t | 15% / 3t | 20% / 4t | 25% / 4t | 30% / 5t | Phản % sát thương trực tiếp lại cho kẻ tấn công (bị giảm trừ bởi Def kẻ địch). |
+| **REGEN** (Tự Dưỡng) | 3% / 3t | 5% / 4t | 8% / 4t | 12% / 5t | 16% / 5t | Hồi phục HP theo % Max HP vào đầu mỗi lượt hành động. |
+| **ATK_UP** (Cường Công) | 10% / 3t | 15% / 3t | 20% / 4t | 25% / 4t | 30% / 5t | Tăng % hệ số sát thương gây ra (`DamageMultiplier`). |
+| **DEF_UP** (Thiết Vách) | 10% / 3t | 15% / 3t | 20% / 4t | 25% / 4t | 30% / 5t | Tăng % chỉ số phòng ngự thực tế (`DefenseMultiplier`). |
+| **TAUNT** (Khiêu Khích) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | Cưỡng chế mục tiêu đơn của đối phương phải tấn công người thi triển. |
+| **STEALTH** (Ẩn Thân) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | Không thể bị chọn làm mục tiêu của kỹ năng đơn mục tiêu (vẫn chịu sát thương AoE). |
+| **HASTE** (Gia Tốc) | 15% / 2t | 25% / 3t | 35% / 3t | 45% / 4t | 55% / 4t | Tăng % tốc độ hành động (`EffectiveSpeed`), đẩy sớm lượt đánh. |
+| **INVINCIBLE** (Vô Địch) | 1 lượt | 1 lượt | 1 lượt | 1 lượt | 2 lượt | Miễn nhiễm $100\%$ mọi nguồn sát thương và kháng toàn bộ hiệu ứng mới. |
 
 ---
 
-## 14. Data Files (CSV → DB Import via Admin)
+### D. Tỉ Lệ Áp Dụng (Proc Rate & Cảnh Giới Áp Chế)
 
-| CSV | Table | Effect Column |
-|-----|-------|---------------|
-| `Gu.csv` | `gu_dictionary` | `effects` JSONB |
-| `Constitution.csv` | `constitution_dictionary` | `effects` JSONB |
-| `Race.csv` | `race_dictionary` | `effects` JSONB |
-| `Status.csv` | `status_dictionary` | `effects` JSONB, `blocked_actions` JSONB |
-| `Item.csv` | `item_dictionary` | `effects` JSONB |
+Xác suất dính hiệu ứng bất lợi phụ thuộc vào Tỉ lệ gốc của Cổ, Chênh lệch Cảnh giới (Chuyển), và Điểm Đạo Ngân:
 
----
+$$P_{\text{apply}} = P_{\text{base}} \times \left(1 + \frac{\text{DaoAttacker} - \text{DaoDefender}}{100}\right) \times \text{RankFactor} \times (1 - \text{Resist})$$
 
-## 15. JSONB Format Examples
+**Bảng Hệ Số Cảnh Giới (`RankFactor`):**
 
-### Gu Effects
-```json
-{
-  "active": {
-    "damage_flat": 100,
-    "apply_status": "BLEED",
-    "status_tick_damage": 25,
-    "status_duration_ticks": 3,
-    "target_selector": "COL"
-  },
-  "passive": {
-    "stat_base_attack": 50,
-    "stat_base_hp": 200
-  },
-  "other": [
-    {"event_trigger": "ON_TICK", "action_code": "MANA_REGEN_TICK", "params": {"value": 0.5}}
-  ]
-}
-```
+| Tương Quan Cảnh Giới | `RankFactor` | Ý Nghĩa Thực Chiến |
+|---|---|---|
+| Caster cao hơn $\ge 2$ Chuyển | **1.5** | Áp chế cảnh giới tuyệt đối; tỉ lệ dính gần như chắc chắn. |
+| Caster cao hơn $1$ Chuyển | **1.2** | Ưu thế lớn về áp lực Chân Nguyên. |
+| Cùng Cảnh Giới (Đồng cấp) | **1.0** | Tỉ lệ tiêu chuẩn theo phẩm chất Cổ. |
+| Caster thấp hơn $1$ Chuyển | **0.6** | Bị áp chế ngược, khó xuyên thấu phòng ngự. |
+| Caster thấp hơn $\ge 2$ Chuyển | **0.1** | Miễn nhiễm gần như hoàn toàn (Phàm Cổ không trói được Tiên Nhân). |
 
-### Character Effect (Race/Constitution/Status)
-```json
-{
-  "stat_mods": {"attack": 0.10, "defense": 0.10},
-  "dao_mark": {"fire": 0.20},
-  "path_damage": {"fire": 0.15},
-  "path_resistance": {"water": 0.10},
-  "max_mana": 0.50,
-  "mana_regen": 1.0,
-  "luck": 5,
-  "healing_received": 0.50
-}
-```
-
----
-
-*Last updated: Auto-generated from codebase analysis*
-*Run `cd backend && go test ./...` to verify changes*
+*Quy tắc Tiên Cổ (Rank 6+):* Khi sử dụng Tiên Cổ hoặc Tiên Đạo Sát Chiêu, `RankFactor` tối thiểu luôn là **1.0** bất kể mục tiêu có cảnh giới cao hơn, và tự động nâng lên **1.5** khi đánh vào Phàm Cổ Sư.

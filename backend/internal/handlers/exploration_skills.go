@@ -132,10 +132,16 @@ func UseGuOnMap(c *gin.Context) {
 		if active.PortalCreate {
 			// We can teleport to TargetX, TargetY if within bounds
 			if inWorld(req.TargetX, req.TargetY) {
+				oldX := player.X
+				oldY := player.Y
 				player.X = req.TargetX
 				player.Y = req.TargetY
 				player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-				logs = append(logs, fmt.Sprintf("%s xé rách không gian, dịch chuyển đến (%d, %d).", specs.Name, player.X, player.Y))
+				teleportMsg := fmt.Sprintf("%s xé rách không gian, dịch chuyển đến (%d, %d).", specs.Name, player.X, player.Y)
+				if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
+					teleportMsg += " " + debuffMsg
+				}
+				logs = append(logs, teleportMsg)
 				applied = true
 				cdDuration = 120 * time.Second
 				effectType = "teleport"
@@ -145,10 +151,16 @@ func UseGuOnMap(c *gin.Context) {
 			}
 		}
 		if active.RandomPortal {
+			oldX := player.X
+			oldY := player.Y
 			player.X = rand.Intn(WorldWidth)
 			player.Y = rand.Intn(WorldHeight)
 			player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-			logs = append(logs, fmt.Sprintf("%s xé rách không gian hỗn loạn, dịch chuyển ngẫu nhiên đến (%d, %d).", specs.Name, player.X, player.Y))
+			teleportMsg := fmt.Sprintf("%s xé rách không gian hỗn loạn, dịch chuyển ngẫu nhiên đến (%d, %d).", specs.Name, player.X, player.Y)
+			if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
+				teleportMsg += " " + debuffMsg
+			}
+			logs = append(logs, teleportMsg)
 			applied = true
 			cdDuration = 120 * time.Second
 			effectType = "teleport"

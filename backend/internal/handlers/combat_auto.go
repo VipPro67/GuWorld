@@ -556,6 +556,31 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		simEnemy.ManaThreshold = cs.ManaThreshold
 	}
 
+	// Passive mechanics come from every equipped, active Gu in enemy inventory.
+	var enemyMechanics []simulator.CombatMechanic
+	for _, guInst := range enemy.GuInventory {
+		if guInst.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
+		if !ok {
+			spec, ok = models.GetGuAny(guInst.GuID)
+		}
+		if !ok {
+			continue
+		}
+		for _, mechanic := range spec.Effects.Other {
+			if mechanic.EventTrigger != "ON_CAST" && mechanic.EventTrigger != "ON_HIT" {
+				enemyMechanics = append(enemyMechanics, simulator.CombatMechanic{
+					Trigger:    mechanic.EventTrigger,
+					ActionCode: mechanic.ActionCode,
+					Params:     append([]byte(nil), mechanic.Params...),
+				})
+			}
+		}
+	}
+	simEnemy.Mechanics = enemyMechanics
+
 	simEnemy.Actions = enemyActions
 	return simEnemy
 }

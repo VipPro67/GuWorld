@@ -19,30 +19,18 @@ export interface RegionInfo {
   is_active: boolean;
 }
 
-export interface TeleportResponse {
-  player: ApiResponseData;
-  x: number;
-  y: number;
-  region: string;
-  cost: number;
-  currency: string;
-  message: string;
-}
-
 function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [teleporting, setTeleporting] = useState(false);
-  const [tab, setTab] = useState<"standard" | "gu">("standard");
   const [targetX, setTargetX] = useState<string>("");
   const [targetY, setTargetY] = useState<string>("");
+  const [selectedRegionId, setSelectedRegionId] = useState<string>("");
 
   const player = useGameStore((s) => s.player);
-  const guDictionary = useGameStore((s) => s.guDictionary);
   const currentX = useWorldStore((s) => s.liveX);
   const currentY = useWorldStore((s) => s.liveY);
-  const teleportToRegion = useWorldStore((s) => s.teleportToRegion);
   const useGuOnMap = useWorldStore((s) => s.useGuOnMap);
 
   // Filter Portal Gu
@@ -61,14 +49,7 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     }
   }, [portalGus, selectedGu]);
 
-  const rank = player?.rank ?? 1;
-  const subRank = player?.sub_rank ?? 1;
-  const inventorySize = player?.gu_inventory?.length ?? 0;
-  const storage = 100; // base storage, actual may vary with passives
-  const primevalStones = player?.primeval_stones ?? 0;
-  const immortalStones = player?.immortal_stones ?? 0;
-
-  // Fetch regions on open
+  // Fetch regions on open for target region coordinate selection helper
   useEffect(() => {
     if (!isOpen) return;
     const fetchRegions = async () => {
@@ -89,40 +70,14 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     fetchRegions();
   }, [isOpen]);
 
-  // Calculate cost for a region
-  const calculateCost = (region: RegionInfo) => {
-    if (!player) return 0;
-    const safeX = region.safe_zone_x ?? region.entry_x;
-    const safeY = region.safe_zone_y ?? region.entry_y;
-    const dx = Math.abs(currentX - safeX);
-    const dy = Math.abs(currentY - safeY);
-    const distance = Math.max(dx, dy);
-
-    const baseCost = distance * 0.5;
-    const rankMult = 1.0 + (rank - 1) * 0.15 + subRank * 0.03;
-    const maxSlots = rank >= 6 ? 999 : storage;
-    const inventoryRatio = maxSlots > 0 ? inventorySize / maxSlots : 0;
-    const inventoryMult = 1.0 + inventoryRatio * 0.5;
-
-    let total = baseCost * rankMult * inventoryMult;
-    if (total < 10) total = 10;
-    if (total > 10000) total = 10000;
-    return Math.round(total);
-  };
-
-  const handleTeleport = async (region: RegionInfo) => {
-    if (teleporting) return;
-    setTeleporting(true);
-    setError(null);
-    try {
-      const resp = await teleportToRegion(region.id);
-      if (resp) {
-        onClose();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setTeleporting(false);
+  const handleSelectRegion = (regionId: string) => {
+    setSelectedRegionId(regionId);
+    const region = regions.find((r) => r.id === regionId);
+    if (region) {
+      const sx = region.safe_zone_x ?? region.entry_x;
+      const sy = region.safe_zone_y ?? region.entry_y;
+      setTargetX(String(sx));
+      setTargetY(String(sy));
     }
   };
 
@@ -149,125 +104,80 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
   if (!isOpen) return null;
 
-  // Filter to KHU_VUC and NGU_VUC zones that are active
   const availableRegions = regions
     .filter((r) => r.is_active && (r.zone_type === "KHU_VUC" || r.zone_type === "NGU_VUC"))
-    .map((r) => ({
-      ...r,
-      cost: calculateCost(r),
-      currency: rank >= 6 && calculateCost(r) > 5000 ? "immortal_stones" : "primeval_stones",
-    }))
-    .sort((a, b) => a.cost - b.cost);
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const currentRegionId = player?.current_region ?? "";
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-yellow-300">Di Chuyển Nhanh</h2>
+          <h2 className="text-xl font-bold text-purple-300">Dịch Chuyển Cổ Trùng</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        <div className="flex border-b border-gray-700">
-          <button
-            className={`flex-1 py-2 text-sm font-medium ${tab === "standard" ? "text-yellow-300 border-b-2 border-yellow-300" : "text-gray-400 hover:text-white"}`}
-            onClick={() => setTab("standard")}
-          >
-            Trạm Dịch Chuyển
-          </button>
-          {portalGus.length > 0 && (
-            <button
-              className={`flex-1 py-2 text-sm font-medium ${tab === "gu" ? "text-purple-300 border-b-2 border-purple-300" : "text-gray-400 hover:text-white"}`}
-              onClick={() => setTab("gu")}
-            >
-              Cổ Trùng Dịch Chuyển
-            </button>
-          )}
-        </div>
-
         <div className="p-4 border-b border-gray-700 bg-gray-800/50 flex flex-wrap gap-4 text-sm">
           <div className="text-gray-300">Vị trí hiện tại: <span className="text-white">({currentX}, {currentY})</span></div>
           <div className="text-gray-300">Khu vực: <span className="text-white">{currentRegionId || "Không xác định"}</span></div>
-          <div className="text-gray-300">Primeval: <span className="text-yellow-300">{primevalStones.toLocaleString()}</span></div>
-          <div className="text-gray-300">Immortal: <span className="text-purple-300">{immortalStones.toLocaleString()}</span></div>
-          <div className="text-gray-300">Tu vi: <span className="text-green-300">Cấp {rank}.{subRank}</span></div>
-          <div className="text-gray-300">Túi đồ: <span className="text-blue-300">{inventorySize}/{rank >= 6 ? "∞" : storage}</span></div>
         </div>
 
         {error && <div className="p-4 text-red-400 border-b border-red-900/50">{error}</div>}
 
         <div className="flex-1 overflow-y-auto p-4">
-          {tab === "standard" ? (
-            loading ? (
-              <div className="text-center text-gray-400 py-8">Đang tải danh sách khu vực...</div>
-            ) : (
-              <div className="space-y-2">
-                {availableRegions.map((region) => {
-                  const canAfford = region.currency === "primeval_stones"
-                    ? primevalStones >= region.cost
-                    : immortalStones >= region.cost;
-                  const isCurrent = region.id === currentRegionId;
-                  return (
-                    <button
-                      key={region.id}
-                      onClick={() => handleTeleport(region)}
-                      disabled={teleporting || !canAfford || isCurrent}
-                      className={`w-full text-left p-3 rounded border transition ${isCurrent
-                        ? "bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed"
-                        : canAfford
-                        ? "bg-gray-800 border-gray-600 hover:border-yellow-400 hover:bg-gray-700"
-                        : "bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed opacity-50"}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-medium text-white">{region.name}</div>
-                          <div className="text-xs text-gray-400">{region.id} • {region.zone_type}</div>
-                          <div className="text-xs text-gray-500">An toàn: ({region.safe_zone_x ?? region.entry_x}, {region.safe_zone_y ?? region.entry_y})</div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`font-bold ${canAfford ? "text-green-300" : "text-red-300"}`}>
-                            {region.cost.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {region.currency === "primeval_stones" ? "💎 Primeval" : "💜 Immortal"}
-                          </div>
-                        </div>
-                      </div>
-                      {isCurrent && <div className="text-xs text-gray-500 mt-1">Đang ở khu vực này</div>}
-                      {!canAfford && !isCurrent && (
-                        <div className="text-xs text-red-400 mt-1">Không đủ tiền</div>
-                      )}
-                    </button>
-                  );
-                })}
-                {availableRegions.length === 0 && (
-                  <div className="text-center text-gray-400 py-8">Không có khu vực khả dụng</div>
-                )}
+          {portalGus.length === 0 ? (
+            <div className="p-4 bg-amber-950/40 border border-amber-500/40 rounded-lg text-amber-200 text-sm space-y-2">
+              <div className="font-bold text-amber-300 text-base">⚠️ Chưa có Cổ trùng dịch chuyển phù hợp</div>
+              <p>
+                Cơ chế dịch chuyển bằng Linh Thạch / Nguyên Thạch đã bị hủy bỏ.
+              </p>
+              <p>
+                Để thực hiện dịch chuyển, đạo hữu cần trang bị Cổ trùng có khả năng Dịch Chuyển / Tạo Cổng (như Định Tiên Du, Môn Vực Cổ, Thần Du Fake,...) và thiết lập ở trạng thái <span className="text-green-400 font-semibold">ACTIVE</span>.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1 font-medium">Chọn Cổ Trùng Dịch Chuyển</label>
+                <select
+                  className="w-full bg-gray-800 border border-purple-500/50 rounded p-2.5 text-white focus:outline-none focus:border-purple-400"
+                  value={selectedGu}
+                  onChange={(e) => setSelectedGu(e.target.value)}
+                >
+                  {portalGus.map(g => (
+                    <option key={g.instance_id} value={g.instance_id}>
+                      {guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Cấp {g.rank})
+                    </option>
+                  ))}
+                </select>
               </div>
-            )) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Chọn Cổ Trùng</label>
-                  <select
-                    className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
-                    value={selectedGu}
-                    onChange={(e) => setSelectedGu(e.target.value)}
-                  >
-                    {portalGus.map(g => (
-                      <option key={g.instance_id} value={g.instance_id}>
-                        {guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Rank {g.rank})
-                      </option>
-                    ))}
-                  </select>
+
+              {isRandomPortal ? (
+                <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded text-purple-300 text-sm">
+                  ✨ Cổ trùng này sẽ dịch chuyển đạo hữu tới một vị trí ngẫu nhiên trên thế giới. Không cần nhập tọa độ.
                 </div>
-                {isRandomPortal ? (
-                  <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded text-purple-300 text-sm">
-                    Cổ trùng này sẽ dịch chuyển đạo hữu tới một vị trí ngẫu nhiên trên thế giới. Không cần nhập tọa độ.
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1 font-medium">Chọn nhanh vùng an toàn khu vực</label>
+                    <select
+                      className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
+                      value={selectedRegionId}
+                      onChange={(e) => handleSelectRegion(e.target.value)}
+                      disabled={loading}
+                    >
+                      <option value="">-- Chọn khu vực mục tiêu (Tùy chọn) --</option>
+                      {availableRegions.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} (An toàn: {r.safe_zone_x ?? r.entry_x}, {r.safe_zone_y ?? r.entry_y})
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                ) : (
+
                   <div className="flex gap-4">
                     <div className="flex-1">
                       <label className="block text-sm text-gray-400 mb-1">Tọa độ X</label>
@@ -290,21 +200,23 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
                       />
                     </div>
                   </div>
-                )}
-                <button
-                  onClick={handleGuTeleport}
-                  disabled={teleporting || (!isRandomPortal && (!targetX || !targetY)) || !selectedGu}
-                  className="w-full mt-4 bg-purple-900/50 border border-purple-500/50 hover:bg-purple-800/50 text-purple-200 p-3 rounded font-bold disabled:opacity-50"
-                >
-                  Kích Hoạt Dịch Chuyển
-                </button>
-              </div>
-            )}
+                </div>
+              )}
+
+              <button
+                onClick={handleGuTeleport}
+                disabled={teleporting || (!isRandomPortal && (!targetX || !targetY)) || !selectedGu}
+                className="w-full mt-4 bg-purple-900/60 border border-purple-500 hover:bg-purple-800 text-purple-100 p-3 rounded-lg font-bold disabled:opacity-50 transition shadow-lg shadow-purple-950/50"
+              >
+                Kích Hoạt Cổ Trùng Dịch Chuyển
+              </button>
+            </div>
+          )}
         </div>
 
         {teleporting && (
-          <div className="p-4 border-t border-gray-700 bg-gray-800/50 text-center text-yellow-300">
-            Đang dịch chuyển...
+          <div className="p-4 border-t border-gray-700 bg-gray-800/50 text-center text-purple-300 font-medium">
+            Đang thôi động Cổ trùng xé rách không gian...
           </div>
         )}
       </div>
@@ -313,3 +225,4 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 }
 
 export default TeleportModal;
+

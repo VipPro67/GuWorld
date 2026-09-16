@@ -364,7 +364,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - **Quái nhỏ, tài nguyên thấp, Cổ cấp thấp** được sinh procedural theo vùng (không lưu DB), **nội dung ổn định theo ô** — quái không tự đổi chỗ/re-randomize theo thời gian; sau khi đạo hữu dọn dẹp một ô, ô đó trống trong 15 phút rồi nội dung cũ quay lại (cooldown `cleared_cells`). **Boss và tài nguyên cấp cao** là điểm dùng chung toàn thế giới trong `map_cells`, có thời gian hồi sinh sau khi bị đánh bại/hái.
 - Nội dung mỗi vùng phụ thuộc dữ liệu do Admin import từ `backend/data/Region.csv`, `MonsterSpawn.csv` và `MapCell.csv`.
 - Thanh công cụ cho phép chuyển giữa **click để đi** và **kéo bản đồ**, đưa camera về nhân vật, đồng thời bật/tắt nhãn Quái & Cổ/Boss/HUB/Khu vực/Ngũ Vực. Chọn một người chơi để xem hồ sơ, mời tổ đội hoặc tiếp cận; chỉ có thể phát động PvP khi mục tiêu ở trong phạm vi 2 ô.
-- Có thể dịch chuyển tới vùng an toàn với phí hệ thống hiển thị trước, hoặc dùng Cổ cổng đang trang bị/ACTIVE. Cổ tạo cổng cho chọn tọa độ; loại cổng ngẫu nhiên tự chọn đích.
+- Có thể dịch chuyển tức thời đến các vị trí bằng Cổ trùng có khả năng Dịch Chuyển / Tạo Cổng (như Định Tiên Du, Môn Vực Cổ, Thần Du Fake,...) đang trang bị và ở trạng thái ACTIVE. Cổ tạo cổng cho chọn tọa độ hoặc chọn nhanh vùng an toàn khu vực; loại cổng ngẫu nhiên tự chọn đích. Cơ chế dịch chuyển bằng tiền (Linh Thạch / Nguyên Thạch) đã bị hủy bỏ.
 - **Chiến lợi phẩm mặt đất/hài cốt:** tài sản rơi khi tử vong được lưu trên ô bản đồ. Trong thời gian khóa, chỉ người hạ gục được nhặt; hết khóa, người khác có thể nhặt. Panel trên bản đồ cho xem nội dung và trạng thái khóa, người liên quan nhận thông báo khi tài sản bị nhặt.
 
 ## 9. Chiến đấu

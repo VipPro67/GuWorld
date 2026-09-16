@@ -22,7 +22,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 				if !ok {
 					spec, ok = models.GetGuAny(g.GuID)
 				}
-				if ok && hasCombatActiveEffects(&spec) {
+				if ok && hasCombatEffects(&spec) {
 					filteredGu = append(filteredGu, g)
 				}
 			}
