@@ -110,7 +110,7 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 			result[key] = MechanicDefinition{Trigger: trigger, ActionCode: action, Disposition: disposition, Owner: owner}
 		}
 	}
-	add("ON_CONSUME", DispositionSupported, "gu-consume", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS")
+	add("ON_CONSUME", DispositionSupported, "gu-consume", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED")
 	add("ON_TICK", DispositionSupported, "resource-regen", "MANA_REGEN_TICK", "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK")
 	add("ON_TICK", DispositionSupported, "hunger-worker", "GENERATE_STONES_TICK", "GENERATE_IMMORTAL_STONES_TICK")
 	add("ON_CONSUME", DispositionMigrate, "effect-runtime-v2", "MAN_BEAST_BURIAL", "POISON_VOW", "SPRING_EGG_HATCH", "STONE_APERTURE", "THIRD_WATCH")
