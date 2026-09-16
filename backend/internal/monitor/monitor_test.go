@@ -1,9 +1,58 @@
 package monitor
 
 import (
+	"io"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestCaptureRequestBodyRedactsAndPreservesJSON(t *testing.T) {
+	body := `{"username":"alice","password":"secret","nested":{"access_token":"abc"}}`
+	request := httptest.NewRequest("POST", "/api/player/action?token=secret&view=full", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+
+	captured, truncated := captureRequestBody(request)
+	if truncated {
+		t.Fatal("small body should not be truncated")
+	}
+	result := captured.(map[string]interface{})
+	if result["password"] != "[REDACTED]" || result["nested"].(map[string]interface{})["access_token"] != "[REDACTED]" {
+		t.Fatalf("sensitive values were not redacted: %#v", result)
+	}
+	replayed, err := io.ReadAll(request.Body)
+	if err != nil || string(replayed) != body {
+		t.Fatalf("request body was not preserved: %q, %v", replayed, err)
+	}
+	if got := sanitizeQuery(request.URL.RawQuery); got != "token=%5BREDACTED%5D&view=full" {
+		t.Fatalf("unexpected sanitized query: %s", got)
+	}
+}
+
+func TestCaptureRequestBodySkipsSensitiveRoutes(t *testing.T) {
+	request := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(`{"password":"secret"}`))
+	request.Header.Set("Content-Type", "application/json")
+	if captured, _ := captureRequestBody(request); captured != nil {
+		t.Fatalf("sensitive route body should not be captured: %#v", captured)
+	}
+}
+
+func TestCaptureRequestBodyLimitsAndSkipsNonJSON(t *testing.T) {
+	large := `{"value":"` + strings.Repeat("x", maxRequestBody) + `"}`
+	request := httptest.NewRequest("POST", "/api/test", strings.NewReader(large))
+	request.Header.Set("Content-Type", "application/json")
+	captured, truncated := captureRequestBody(request)
+	if !truncated || captured != "[TRUNCATED JSON OMITTED]" {
+		t.Fatalf("expected safely omitted truncated capture, got %#v", captured)
+	}
+
+	binary := httptest.NewRequest("POST", "/api/upload", strings.NewReader("secret"))
+	binary.Header.Set("Content-Type", "multipart/form-data")
+	if captured, _ := captureRequestBody(binary); captured != nil {
+		t.Fatalf("non-JSON body should not be captured: %#v", captured)
+	}
+}
 
 func TestRequestTracker_RecordAndSummary(t *testing.T) {
 	tracker := NewRequestTracker()

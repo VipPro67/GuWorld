@@ -57,6 +57,7 @@ import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
 import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
 import { SectMinesAdminTab } from "./admin/SectMinesAdminTab";
 import { GuHistoryAdminTab } from "./admin/GuHistoryAdminTab";
+import { MonitoringAdminTab } from "./admin/MonitoringAdminTab";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -471,7 +472,7 @@ export const AdminView: React.FC = () => {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
-  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes" | "apertures" | "topup_wallet" | "gu_history">("players");
+  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "monitoring" | "shop" | "mines" | "gift_codes" | "apertures" | "topup_wallet" | "gu_history">("players");
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
   const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
 
@@ -2534,6 +2535,9 @@ export const AdminView: React.FC = () => {
         <button onClick={() => setSection("logs")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "logs" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <BookOpen className="w-3.5 h-3.5 inline mr-1.5" />Nhật ký
         </button>
+        <button onClick={() => setSection("monitoring")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "monitoring" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <Activity className="w-3.5 h-3.5 inline mr-1.5" />Giám sát
+        </button>
         <button onClick={() => setSection("shop")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "shop" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Package className="w-3.5 h-3.5 inline mr-1.5" />Cửa hàng
         </button>
@@ -3354,6 +3358,9 @@ export const AdminView: React.FC = () => {
 
       {/* Gu History Section */}
       {section === "gu_history" && <GuHistoryAdminTab addToast={addToast} />}
+
+      {/* Runtime monitoring Section */}
+      {section === "monitoring" && <MonitoringAdminTab addToast={addToast} />}
 
       {/* Audit Logs section */}
       {section === "logs" && (
