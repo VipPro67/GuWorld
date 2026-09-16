@@ -6,20 +6,17 @@ import { useGameStore } from "@/store/useGameStore";
 
 const POOL_ICONS: Record<string, React.ReactNode> = {
   da_thuong: <Coins className="w-5 h-5 text-yellow-400" />,
-  tho_nguyen: <Heart className="w-5 h-5 text-emerald-400" />,
-  van_menh_co_tu: <Crown className="w-5 h-5 text-purple-400" />,
+  da_vip: <Crown className="w-5 h-5 text-purple-400" />,
 };
 
 const POOL_COLORS: Record<string, string> = {
   da_thuong: "from-yellow-600/30 to-amber-900/30 border-yellow-700/40",
-  tho_nguyen: "from-emerald-600/30 to-green-900/30 border-emerald-700/40",
-  van_menh_co_tu: "from-purple-600/30 to-violet-900/30 border-purple-700/40",
+  da_vip: "from-purple-600/30 to-violet-900/30 border-purple-700/40",
 };
 
 const POOL_BTN: Record<string, string> = {
   da_thuong: "bg-yellow-600 hover:bg-yellow-500",
-  tho_nguyen: "bg-emerald-600 hover:bg-emerald-500",
-  van_menh_co_tu: "bg-purple-600 hover:bg-purple-500",
+  da_vip: "bg-purple-600 hover:bg-purple-500",
 };
 
 const QUICK_QTYS = [1, 10, 50, 100];
@@ -82,7 +79,7 @@ export const GachaPanel: React.FC = () => {
     const v = totalCost(pool);
     return pool.cost_type === "primeval_stones"
       ? (player?.primeval_stones || 0) >= v
-      : (player?.lifespan || 0) >= v;
+      : (player?.immortal_stones || 0) >= v;
   };
 
   const renderRewardIcon = (r: ApiResponseData) => {

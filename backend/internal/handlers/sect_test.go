@@ -78,3 +78,35 @@ func TestSectVaultWithdrawHunger(t *testing.T) {
 		t.Fatalf("expected consumable Gu with 0 max to default to 100, got %d", gu3.Hunger)
 	}
 }
+
+func TestIsInsideSquareTerritory(t *testing.T) {
+	sx, sy := 50, 50
+	radius := 6 // e.g. main_hall level 1 => 5 + 1 = 6
+
+	tests := []struct {
+		name     string
+		x, y     int
+		expected bool
+	}{
+		{"center", 50, 50, true},
+		{"top edge", 50, 44, true},
+		{"bottom edge", 50, 56, true},
+		{"left edge", 44, 50, true},
+		{"right edge", 56, 50, true},
+		{"top-left corner", 44, 44, true},
+		{"bottom-right corner", 56, 56, true},
+		{"just outside right", 57, 50, false},
+		{"just outside top", 50, 43, false},
+		{"just outside corner", 57, 57, false},
+		{"far away", 100, 100, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := IsInsideSquareTerritory(tc.x, tc.y, sx, sy, radius)
+			if actual != tc.expected {
+				t.Errorf("at (%d, %d): expected %v, got %v", tc.x, tc.y, tc.expected, actual)
+			}
+		})
+	}
+}

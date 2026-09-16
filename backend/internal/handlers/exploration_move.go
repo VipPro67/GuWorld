@@ -35,6 +35,8 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	combatTriggered := false
 	pvpTriggered := false
 
+	playerTerritory := CheckPlayerSectTerritory(tx, player.ID, player.CurrentRegion, player.X, player.Y)
+
 	// Player-initiated PVP: attack target player within attack range (default <= 2 tiles, plus stats bonus)
 	if attackTargetID != "" {
 		targetUUID, errUUID := uuid.Parse(attackTargetID)
@@ -90,6 +92,14 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 
 				if isSafe1 || isSafe2 {
 					return "Không thể tấn công trong Vùng An Toàn!", false, nil
+				}
+
+				targetTerritory := CheckPlayerSectTerritory(tx, targetPlayer.ID, targetPlayer.CurrentRegion, targetPlayer.X, targetPlayer.Y)
+				if targetTerritory.InTerritory {
+					return fmt.Sprintf("Cổ Sư %s đang ở trong phạm vi lãnh địa Tông Môn %s, được trận pháp Hộ Sơn che chở không thể tấn công!", targetPlayer.Username, targetTerritory.SectName), false, nil
+				}
+				if playerTerritory.SectID != "" && playerTerritory.SectID == targetTerritory.SectID {
+					return "Đồng môn tương tàn là điều đại kỵ trong Tông Môn!", false, nil
 				}
 
 				if dist <= maxPvPRange {
@@ -260,8 +270,12 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				}
 			}
 		case "PVP":
-			if IsSafeZone(player.CurrentRegion, player.X, player.Y) {
-				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Vùng An Toàn yên bình, phong cảnh thanh bình.", player.X, player.Y)
+			if IsSafeZone(player.CurrentRegion, player.X, player.Y) || playerTerritory.InTerritory {
+				if playerTerritory.InTerritory {
+					logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Lãnh địa Tông Môn %s thanh tịnh, không ai dám quấy nhiễu.", player.X, player.Y, playerTerritory.SectName)
+				} else {
+					logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Vùng An Toàn yên bình, phong cảnh thanh bình.", player.X, player.Y)
+				}
 				break
 			}
 			var targetPlayer models.Player
@@ -311,7 +325,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 		}
 	}
 
-	if !combatTriggered && allowAmbush {
+	if !combatTriggered && allowAmbush && !playerTerritory.InTerritory {
 		for ax := -1; ax <= 1 && !combatTriggered; ax++ {
 			for ay := -1; ay <= 1 && !combatTriggered; ay++ {
 				if ax == 0 && ay == 0 {

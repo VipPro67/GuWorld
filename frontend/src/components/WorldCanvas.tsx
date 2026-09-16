@@ -769,13 +769,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
         const sectGroup = new Container();
 
-        // 1. Territory AoE Radius circle - NON-INTERACTIVE
+        // 1. Territory AoE Square - NON-INTERACTIVE
         const territoryG = new Graphics();
         const isMySect = s.id === mySectId;
         const mainHallLvl = s.buildings?.main_hall || s.level || 1;
         const territoryRadius = 5 + mainHallLvl;
+        const halfSize = territoryRadius + 0.5;
 
-        territoryG.circle(0, 0, territoryRadius);
+        territoryG.rect(-halfSize, -halfSize, halfSize * 2, halfSize * 2);
         territoryG.fill({ color: isMySect ? 0x3b82f6 : 0xf59e0b, alpha: 0.08 });
         territoryG.stroke({ color: isMySect ? 0x60a5fa : 0xfbbf24, width: 0.15, alpha: 0.4 });
         territoryG.eventMode = "none";
