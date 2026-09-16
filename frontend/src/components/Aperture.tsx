@@ -466,22 +466,27 @@ export const Aperture: React.FC<ApertureProps> = ({
   let equippedGus = guInventory.filter((g) => g.equipped && g.status !== "DEAD" && g.is_vital !== true);
   equippedGus = equippedGus.slice(0, 6);
 
-  // Compute disguise permissions based on active equipped Gu bugs
+  // Compute disguise permissions dynamically based on active equipped Gu effect mechanics
   const equippedActiveGus = guInventory.filter((g) => g.equipped && g.status === "ACTIVE");
-  const hasShadow = equippedActiveGus.some((g) => g.gu_id === "GU_SHADOW");
-  const hasShadowSteps = equippedActiveGus.some((g) => g.gu_id === "GU_SHADOW_STEPS");
-  const hasStealthScales = equippedActiveGus.some((g) => g.gu_id === "GU_STEALTH_SCALES");
-  const hasChangeForm = equippedActiveGus.some((g) => g.gu_id === "GU_CHANGE_FORM");
-  const hasAttitude = equippedActiveGus.some((g) => g.gu_id === "GU_ATTITUDE");
 
-  const hasConcealment = hasShadow || hasShadowSteps || hasStealthScales || hasChangeForm || hasAttitude;
-  const hasFaceChange = hasChangeForm || hasAttitude;
+  const checkMechanic = (actionCode: string) => {
+    return equippedActiveGus.some((g) => {
+      const spec = guSpecFor(g.gu_id, g.rank);
+      return spec?.effects?.other?.some((m) => m.action_code === actionCode) ?? false;
+    });
+  };
+
+  const hasConcealment = checkMechanic("DISGUISE") || equippedActiveGus.some((g) => {
+    const spec = guSpecFor(g.gu_id, g.rank);
+    return Number(spec?.effects?.passive?.disguise_level || 0) > 0;
+  });
+  const hasAttitude = checkMechanic("PERFECT_DISGUISE");
+  const hasFormChange = checkMechanic("CHANGE_FORM_DISGUISE");
+
+  const hasFaceChange = hasFormChange || hasAttitude;
 
   // Owned Gu IDs for fake Vital Gu select dropdown
-  const ownedGuIds = Array.from(new Set([
-    "GU_SHADOW",
-    ...guInventory.map((g) => g.gu_id)
-  ]));
+  const ownedGuIds = Array.from(new Set(guInventory.map((g) => g.gu_id)));
 
   // Orbit dot positions — evenly spaced, starting from top
   const orbitDots = equippedGus.map((g, i) => {

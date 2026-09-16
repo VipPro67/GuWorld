@@ -4439,3 +4439,7 @@ GU_GREEN_CLAW_I,6,1,"{""GU_GREEN_CLAW_5"": {""qty"": 1, ""rank"": 5}}","{""black
 GU_GREEN_CLAW_I,7,1,"{""GU_GREEN_CLAW_I"": {""qty"": 1, ""rank"": 6}}","{""sword_leaf_grass_rank7"": 14, ""millennium_divine_wood_heart"": 21}",0.01,0,200
 GU_GREEN_CLAW_I,8,1,"{""GU_GREEN_CLAW_I"": {""qty"": 1, ""rank"": 7}}","{""immemorial_desolate_beast_heart_blood"": 17, ""primal_creation_essence"": 25, ""mystic_dark_wind"": 18}",0.0001,0,500
 GU_GREEN_CLAW_I,9,1,"{""GU_GREEN_CLAW_I"": {""qty"": 1, ""rank"": 8}}","{""black_oil_rank9"": 21, ""world_tree_primordial_branch"": 28, ""wood_path_material"": 20}",1e-05,0,1600
+GU_THOUGHT_MIND,3,1,"{""GU_WISDOM_LIGHT_2"": {""qty"": 1, ""rank"": 2}}","{""iron_rank3"": 4, ""sound_stone_rank3"": 10, ""life_water"": 4}",0.7,80,0 
+GU_THOUGHT_SUPPORT,3,1,"{""GU_WISDOM_LIGHT_2"": {""qty"": 1, ""rank"": 2}}","{""iron_rank3"": 5, ""sound_stone_rank3"": 9, ""life_water"": 3}",0.7,80,0 
+GU_SUN,4,1,"{""GU_TIME_SANDGLASS_3"": {""qty"": 1, ""rank"": 3}}","{""century_time_water"": 3, ""sound_stone_rank4"": 6, ""season_changing_stone"": 4}",0.6,150,0 
+GU_MOON,4,1,"{""GU_TIME_SANDGLASS_3"": {""qty"": 1, ""rank"": 3}}","{""century_time_water"": 2, ""sound_stone_rank4"": 5, ""season_changing_stone"": 3}",0.6,150,0
