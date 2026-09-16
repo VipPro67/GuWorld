@@ -81,7 +81,7 @@ export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = (
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier, playerRace]);
+  }, [aperture.next_tribulation_at, aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier, playerRace]);
 
   if (isCompact) {
     return (

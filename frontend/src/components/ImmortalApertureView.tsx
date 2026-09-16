@@ -25,7 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
 import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
 import { CountdownTimer } from "./CountdownTimer";
@@ -801,13 +801,13 @@ return (
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-400">Tiến độ tích kiếp lực</span>
                     <span className="text-amber-400 font-semibold">
-                      {player?.race === "cuong_thi" ? "0.0% (Tử Khiếu)" : `${Math.min(100, Math.max(0, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)).toFixed(1)}%`}
+                      {player?.race === "cuong_thi" ? "0.0% (Tử Khiếu)" : `${calculateTribulationProgress(aperture, player?.race).toFixed(1)}%`}
                     </span>
                   </div>
                   <div className="w-full bg-slate-950/80 h-2 rounded-full overflow-hidden border border-slate-800">
                     <div
                       className="h-full bg-gradient-to-r from-cyan-500 to-amber-500"
-                      style={{ width: player?.race === "cuong_thi" ? "0%" : `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
+                      style={{ width: `${calculateTribulationProgress(aperture, player?.race)}%` }}
                     />
                   </div>
                   <TribulationRealTimeInfo aperture={aperture} timeSpeedMultiplier={player?.time_speed_multiplier ?? 1} isCompact={false} />

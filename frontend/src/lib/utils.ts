@@ -103,3 +103,34 @@ export function statusRemainLabel(expiresAt?: string | null, now = Date.now()): 
   if (min < 60) return ` · ${min}p`;
   return ` · ${Math.floor(min / 60)}h ${min % 60}p`;
 }
+
+export function calculateTribulationProgress(aperture?: {
+  internal_years_passed?: number;
+  next_tribulation_year?: number;
+  rank_start_year?: number;
+} | null, race?: string): number {
+  if (race === "cuong_thi") return 0;
+  if (!aperture) return 0;
+
+  const curr = aperture.internal_years_passed || 0;
+  const next = aperture.next_tribulation_year || 0;
+  const start = aperture.rank_start_year || 0;
+
+  if (next <= 0) return 0;
+  if (curr >= next) return 100;
+
+  const step = 10.0;
+  let prev = next - step;
+  if (prev < start) {
+    prev = start;
+  }
+  if (curr < prev) {
+    prev = Math.max(start, Math.floor((curr - start) / step) * step + start);
+  }
+
+  const range = next - prev;
+  if (range <= 0) return 100;
+
+  const percent = ((curr - prev) / range) * 100;
+  return Math.min(100, Math.max(0, percent));
+}

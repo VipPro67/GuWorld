@@ -91,7 +91,18 @@ func GetImmortalAperture(c *gin.Context) {
 
 	ap.CreatedAt = createdAt
 	ap.UpdatedAt = updatedAt
+
 	effectiveTimeRate := 0.0
+	if ap.TimeRate > 0 {
+		tsm := player.TimeSpeedMultiplier
+		if tsm <= 0 {
+			tsm = 1.0
+		}
+		if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
+			tsm += bonus
+		}
+		effectiveTimeRate = ap.TimeRate * tsm
+	}
 
 	// Project internal_years_passed forward based on real time elapsed since updated_at.
 	// This ensures the frontend always gets accurate time values even if other handlers
@@ -99,16 +110,8 @@ func GetImmortalAperture(c *gin.Context) {
 	if ap.State == "STABLE" || ap.State == "DAMAGED" {
 		now := time.Now()
 		elapsedSec := now.Sub(updatedAt).Seconds()
-		if elapsedSec > 0 && ap.TimeRate > 0 {
-			tsm := player.TimeSpeedMultiplier
-			if tsm <= 0 {
-				tsm = 1.0
-			}
-			if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
-				tsm += bonus
-			}
-			effectiveTimeRate = ap.TimeRate * tsm
-			elapsedInternalYears := elapsedSec * ap.TimeRate * tsm / 36000.0
+		if elapsedSec > 0 && effectiveTimeRate > 0 {
+			elapsedInternalYears := elapsedSec * effectiveTimeRate / 36000.0
 			ap.InternalYearsPassed += elapsedInternalYears
 			ap.UpdatedAt = now
 			_, _ = tx.Exec(`
