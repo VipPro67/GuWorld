@@ -62,6 +62,28 @@ var gachaPools = []GachaPool{
 			{Type: "recipe_rank", ID: "9", Min: 1, Max: 1, Weight: 0.05, Label: "Cổ Phương R9"},
 		},
 	},
+	{
+		ID:          "da_vip",
+		Name:        "Đá VIP",
+		Description: "Mở Đá kỳ bí, có cơ hội nhận được Tiên Nguyên Thạch, vật liệu quý hiếm và Cổ trùng huyền bí!",
+		CostType:    "immortal_stones",
+		CostAmount:  1000,
+		Rewards: []GachaRewardItem{
+			{Type: "item", Min: 1, Max: 1, Weight: 25.0, Label: "Vật liệu cấp thấp"},
+			{Type: "immortal_stones", Min: 500, Max: 2000, Weight: 10.0, Label: "2.000~5.000 Tiên Nguyên Thạch"},
+			{Type: "gu_rank", ID: "3", Min: 1, Max: 1, Weight: 2.0, Label: "Cổ Trùng R3"},
+			{Type: "gu_rank", ID: "4", Min: 1, Max: 1, Weight: 3.0, Label: "Cổ Trùng R4"},
+			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R5"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.00001, Label: "Cổ Trùng R6"},
+			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.0000001, Label: "Cổ Trùng R7"},
+			{Type: "recipe_rank", ID: "4", Min: 1, Max: 1, Weight: 4.5, Label: "Cổ Phương R4"},
+			{Type: "recipe_rank", ID: "5", Min: 1, Max: 1, Weight: 1.5, Label: "Cổ Phương R5"},
+			{Type: "recipe_rank", ID: "6", Min: 1, Max: 1, Weight: 0.5, Label: "Cổ Phương R6"},
+			{Type: "recipe_rank", ID: "7", Min: 1, Max: 1, Weight: 0.2, Label: "Cổ Phương R7"},
+			{Type: "recipe_rank", ID: "8", Min: 1, Max: 1, Weight: 0.1, Label: "Cổ Phương R8"},
+			{Type: "recipe_rank", ID: "9", Min: 1, Max: 1, Weight: 0.05, Label: "Cổ Phương R9"},
+		},
+	},
 }
 
 func GetGachaPools(c *gin.Context) {

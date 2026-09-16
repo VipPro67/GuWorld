@@ -154,13 +154,13 @@ func CreateListing(c *gin.Context) {
 
 	if req.ListingType == "MARKET" && req.Currency == "immortal" {
 		if player.ImmortalStones < upfrontFee {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Tiên Nguyên Thạch)", upfrontFee)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %.3f Tiên Nguyên Thạch)", upfrontFee)})
 			return
 		}
 		player.ImmortalStones -= upfrontFee
 	} else {
 		if player.PrimevalStones < upfrontFee {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Nguyên Thạch)", upfrontFee)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %.3f Nguyên Thạch)", upfrontFee)})
 			return
 		}
 		player.PrimevalStones -= upfrontFee
@@ -297,7 +297,7 @@ func CreateListing(c *gin.Context) {
 			if spec, ok := models.GetGu(g.GuID, g.Rank); ok && spec.Name != "" {
 				guName = spec.Name
 			}
-			summary := fmt.Sprintf("Cổ Sư [%s] niêm yết Cổ trùng [%s] R%d lên Bảo Hoàng Thiên (Giá: %d %s).", player.Username, guName, g.Rank, req.Price, req.Currency)
+			summary := fmt.Sprintf("Cổ Sư [%s] niêm yết Cổ trùng [%s] R%d lên Bảo Hoàng Thiên (Giá: %.3f %s).", player.Username, guName, g.Rank, req.Price, req.Currency)
 			_ = db.LogGuHistory(tx, g.InstanceID, g.GuID, g.Rank, "MARKET_LISTED", &player.ID, nil, summary, map[string]interface{}{
 				"listing_id": listingID,
 				"price":      req.Price,
@@ -325,9 +325,9 @@ func CreateListing(c *gin.Context) {
 		}
 		var msgContent string
 		if req.ListingType == "AUCTION" {
-			msgContent = fmt.Sprintf("Đạo hữu %s vừa đưa lên đấu giá %d %s với mức giá khởi điểm là %d %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
+			msgContent = fmt.Sprintf("Đạo hữu %s vừa đưa lên đấu giá %d %s với mức giá khởi điểm là %.3f %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
 		} else {
-			msgContent = fmt.Sprintf("Đạo hữu %s vừa treo bán %d %s với giá %d %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
+			msgContent = fmt.Sprintf("Đạo hữu %s vừa treo bán %d %s với giá %.3f %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
 		}
 		_ = SendSystemMessage("general", sql.NullString{}, msgContent)
 	}
@@ -335,7 +335,7 @@ func CreateListing(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.create_listing", EntityType: "auction",
 		EntityID:       listingID,
-		RequestSummary: fmt.Sprintf("người bán=%s (%s) | loại vật phẩm=%s | tên=%s | id=%s | sl=%d | giá=%d %s | loại=%s", player.Username, authID, req.ItemType, itemName, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
+		RequestSummary: fmt.Sprintf("người bán=%s (%s) | loại vật phẩm=%s | tên=%s | id=%s | sl=%d | giá=%.3f %s | loại=%s", player.Username, authID, req.ItemType, itemName, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đăng bán thành công", "listing_id": listingID})
@@ -507,7 +507,7 @@ func PlaceBid(c *gin.Context) {
 		return
 	}
 	if req.Amount <= current {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Giá phải cao hơn %d", current)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Giá phải cao hơn %.3f", current)})
 		return
 	}
 	neededAmount := req.Amount
@@ -555,7 +555,7 @@ func PlaceBid(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "refund failed"})
 			return
 		}
-		notify.Send(db.DB, prevBidder.ID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %d %s.", current, currency))
+		notify.Send(db.DB, prevBidder.ID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency))
 	}
 
 	if currency == "primeval" {
@@ -582,14 +582,14 @@ func PlaceBid(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%d %s | giá cũ=%d %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency, current, currency),
+		RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.3f %s | giá cũ=%.3f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency, current, currency),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	if sellerID != authID {
 		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.bid_notify", EntityType: "auction",
 			EntityID:       req.ListingID,
-			RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%d %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency),
+			RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.3f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency),
 			IPAddress:      c.ClientIP(), Success: true,
 		})
 		currencyName := "Nguyên Thạch"
@@ -599,7 +599,7 @@ func PlaceBid(c *gin.Context) {
 		var buyerUsername string
 		_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, authID).Scan(&buyerUsername)
 		notify.Send(db.DB, sellerID, "auction_bid", "Ai đó đặt giá",
-			fmt.Sprintf("%s đã đặt giá %d %s cho mặt hàng của bạn.", buyerUsername, req.Amount, currencyName))
+			fmt.Sprintf("%s đã đặt giá %.3f %s cho mặt hàng của bạn.", buyerUsername, req.Amount, currencyName))
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
 }
@@ -803,13 +803,13 @@ func BuyListing(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("người mua=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%d %s | loại=%s", buyer.Username, authID, seller.Username, sellerID, itemName, purchaseQty, totalPrice, currency, listingType),
+		RequestSummary: fmt.Sprintf("người mua=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.3f %s | loại=%s", buyer.Username, authID, seller.Username, sellerID, itemName, purchaseQty, totalPrice, currency, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &sellerID, Action: "marketplace.sold", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("người bán=%s (%s) | người mua=%s (%s) | vật phẩm=%s | sl=%d | nhận=%d %s (giá=%d, phí=%d) | loại=%s", seller.Username, sellerID, buyer.Username, authID, itemName, purchaseQty, payout, currency, totalPrice, commission, listingType),
+		RequestSummary: fmt.Sprintf("người bán=%s (%s) | người mua=%s (%s) | vật phẩm=%s | sl=%d | nhận=%.3f %s (giá=%.3f, phí=%.3f) | loại=%s", seller.Username, sellerID, buyer.Username, authID, itemName, purchaseQty, payout, currency, totalPrice, commission, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	currencyName := "Nguyên Thạch"
@@ -818,10 +818,10 @@ func BuyListing(c *gin.Context) {
 	}
 	if sellerID != authID {
 		notify.Send(db.DB, sellerID, "market_sold", "Mặt hàng đã bán",
-			fmt.Sprintf("%s đã mua %d %s với giá %d %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName))
+			fmt.Sprintf("%s đã mua %d %s với giá %.3f %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName))
 	}
 	notify.Send(db.DB, authID, "market_bought", "Mua hàng thành công",
-		fmt.Sprintf("Bạn đã mua %d %s với giá %d %s.", purchaseQty, itemName, totalPrice, currencyName))
+		fmt.Sprintf("Bạn đã mua %d %s với giá %.3f %s.", purchaseQty, itemName, totalPrice, currencyName))
 	respondActionWithInventory(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
 

@@ -247,10 +247,10 @@ func LootGroundDrop(c *gin.Context) {
 			return
 		}
 		if loot.PrimevalStones > 0 {
-			logs = append(logs, fmt.Sprintf("+%d Nguyên Thạch", loot.PrimevalStones))
+			logs = append(logs, fmt.Sprintf("+%.3f Nguyên Thạch", loot.PrimevalStones))
 		}
 		if loot.ImmortalStones > 0 {
-			logs = append(logs, fmt.Sprintf("+%d Tiên Nguyên Thạch", loot.ImmortalStones))
+			logs = append(logs, fmt.Sprintf("+%.3f Tiên Nguyên Thạch", loot.ImmortalStones))
 		}
 	}
 

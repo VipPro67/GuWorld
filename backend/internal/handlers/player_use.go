@@ -353,7 +353,7 @@ func UseItems(c *gin.Context) {
 		statChanges = append(statChanges, fmt.Sprintf("+%.0f Nhân Khí", diffHumanQi))
 	}
 	if diffStones := player.PrimevalStones - initialStones; diffStones > 0 {
-		statChanges = append(statChanges, fmt.Sprintf("+%d Nguyên Thạch", diffStones))
+		statChanges = append(statChanges, fmt.Sprintf("+%.3f Nguyên Thạch", diffStones))
 	}
 	finalSoul := int64(0)
 	if player.DaoMarks != nil {

@@ -128,7 +128,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID: &buyerID, Action: "marketplace.settle_auction_win", EntityType: "auction",
 			EntityID:       auctionID,
-			RequestSummary: fmt.Sprintf("người thắng đấu giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%d %s | loại=%s", buyer.Username, buyerID, seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
+			RequestSummary: fmt.Sprintf("người thắng đấu giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.3f %s | loại=%s", buyer.Username, buyerID, seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
 			Success:        true,
 		})
 	} else {
@@ -146,7 +146,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.settle_auction_expired", EntityType: "auction",
 			EntityID:       auctionID,
-			RequestSummary: fmt.Sprintf("đấu giá hết hạn không có người mua | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá khởi điểm=%d %s | loại=%s", seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
+			RequestSummary: fmt.Sprintf("đấu giá hết hạn không có người mua | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá khởi điểm=%.3f %s | loại=%s", seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
 			Success:        true,
 		})
 	}
@@ -163,9 +163,9 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 	if highestBidderID.Valid {
 		bidderUUID, _ := uuid.Parse(highestBidderID.String)
 		notify.Send(db.DB, bidderUUID, "auction_won", "Thắng đấu giá",
-			fmt.Sprintf("Bạn đã thắng đấu giá với giá %d %s!", currentPrice, currencyName))
+			fmt.Sprintf("Bạn đã thắng đấu giá với giá %.3f %s!", currentPrice, currencyName))
 		notify.Send(db.DB, sellerID, "auction_sold", "Đấu giá hoàn tất",
-			fmt.Sprintf("Mặt hàng đã được bán với giá %d %s.", currentPrice, currencyName))
+			fmt.Sprintf("Mặt hàng đã được bán với giá %.3f %s.", currentPrice, currencyName))
 	} else {
 		notify.Send(db.DB, sellerID, "auction_expired", "Đấu giá hết hạn",
 			"Phiên đấu giá đã hết hạn và không có người đặt giá.")

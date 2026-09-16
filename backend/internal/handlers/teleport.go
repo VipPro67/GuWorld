@@ -142,7 +142,7 @@ func TeleportToRegion(c *gin.Context) {
 		costAmount = totalCost
 		enoughPrimeval = player.PrimevalStones >= float64(costAmount)
 		if !enoughPrimeval {
-			c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough Primeval Stones. Need %d, have %d", costAmount, player.PrimevalStones)})
+			c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough Primeval Stones. Need %d, have %.3f", costAmount, player.PrimevalStones)})
 			return
 		}
 	} else {
@@ -162,7 +162,7 @@ func TeleportToRegion(c *gin.Context) {
 				costAmount = totalCost
 				enoughPrimeval = player.PrimevalStones >= float64(costAmount)
 				if !enoughPrimeval {
-					c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough stones. Need %d Immortal or Primeval, have Immortal: %d, Primeval: %d", costAmount, player.ImmortalStones, player.PrimevalStones)})
+					c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough stones. Need %d Immortal or Primeval, have Immortal: %.3f, Primeval: %.3f", costAmount, player.ImmortalStones, player.PrimevalStones)})
 					return
 				}
 			}
@@ -179,7 +179,7 @@ func TeleportToRegion(c *gin.Context) {
 				costAmount = totalCost
 				enoughImmortal = player.ImmortalStones >= float64(costAmount)
 				if !enoughImmortal {
-					c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough stones. Need %d Primeval or Immortal, have Primeval: %d, Immortal: %d", costAmount, player.PrimevalStones, player.ImmortalStones)})
+					c.JSON(400, gin.H{"error": fmt.Sprintf("Not enough stones. Need %d Primeval or Immortal, have Primeval: %.3f, Immortal: %.3f", costAmount, player.PrimevalStones, player.ImmortalStones)})
 					return
 				}
 			}

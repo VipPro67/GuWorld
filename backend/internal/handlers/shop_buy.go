@@ -239,7 +239,7 @@ func BuyShopItem(c *gin.Context) {
 		Action:         "shop.buy_item",
 		EntityType:     selectedItem.Type,
 		EntityID:       selectedItem.ID,
-		RequestSummary: fmt.Sprintf("Mua %dx %s | Giá: %d %s", req.Quantity, selectedItem.Name, totalCost, currencyName),
+		RequestSummary: fmt.Sprintf("Mua %dx %s | Giá: %.3f %s", req.Quantity, selectedItem.Name, totalCost, currencyName),
 		Metadata: map[string]interface{}{
 			"item_id":       selectedItem.ID,
 			"item_name":     selectedItem.Name,

@@ -23,7 +23,7 @@ func TestDeductGachaCostAmount(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if p.PrimevalStones != 3000 {
-		t.Errorf("expected 3000 stones, got %d", p.PrimevalStones)
+		t.Errorf("expected 3000 stones, got %.3f", p.PrimevalStones)
 	}
 
 	// Primeval stones insufficient
@@ -63,7 +63,7 @@ func TestApplyGachaRewardInMemory(t *testing.T) {
 
 	applyGachaRewardInMemory(p, GachaResultItem{Type: "primeval_stones", Amount: 500})
 	if p.PrimevalStones != 1500 {
-		t.Errorf("expected 1500 stones, got %d", p.PrimevalStones)
+		t.Errorf("expected 1500 stones, got %.3f", p.PrimevalStones)
 	}
 
 	applyGachaRewardInMemory(p, GachaResultItem{Type: "lifespan", Amount: 5})
