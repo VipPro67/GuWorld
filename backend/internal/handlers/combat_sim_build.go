@@ -161,7 +161,7 @@ func combatOutcome(simState *simulator.CombatState, playerID string) (enemiesAli
 // immortal stones and equipped-Gu hunger from the player, returning the usage
 // counts plus the corresponding log lines. Shared by AutoCombatStart and
 // AutoResolveCombat so resource consumption is identical on both paths.
-func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator.CombatantAuto, isVirtual bool, turn int) (itemsUsed int, stonesSpent, immortalStonesSpent int64, usageLogs []simulator.CombatLog) {
+func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator.CombatantAuto, isVirtual bool, turn int) (itemsUsed int, stonesSpent, immortalStonesSpent float64, usageLogs []simulator.CombatLog) {
 	itemsUsed = simPlayer.ItemsUsedInBattle
 
 	if !isVirtual {
@@ -233,14 +233,14 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 		usageLogs = append(usageLogs, simulator.CombatLog{
 			Turn:   turn,
 			Action: "AUTO_STONE_USAGE",
-			Detail: fmt.Sprintf("Đã tự động dùng %d Nguyên Thạch hồi phục chân nguyên.", stonesSpent),
+			Detail: fmt.Sprintf("Đã tự động dùng %.3f Nguyên Thạch hồi phục chân nguyên.", stonesSpent),
 		})
 	}
 	if immortalStonesSpent > 0 {
 		usageLogs = append(usageLogs, simulator.CombatLog{
 			Turn:   turn,
 			Action: "AUTO_STONE_USAGE",
-			Detail: fmt.Sprintf("Đã tự động dùng %d Tiên Nguyên Thạch hồi phục tiên nguyên.", immortalStonesSpent),
+			Detail: fmt.Sprintf("Đã tự động dùng %.3f Tiên Nguyên Thạch hồi phục tiên nguyên.", immortalStonesSpent),
 		})
 	}
 	return

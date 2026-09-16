@@ -24,7 +24,7 @@ export function formatNumber(n: number, decimals = 2): string {
     const abs = Math.abs(n);
 
     if (abs < 10_000) {
-        return Math.floor(n).toLocaleString("vi-VN");
+        return n.toLocaleString("vi-VN", { maximumFractionDigits: 3 });
     }
 
     const level = Math.floor(Math.log10(abs) / 4) - 1;

@@ -76,12 +76,12 @@ func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (i
 }
 
 func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi float64, chests int, mineType string) error {
-	var currentStones int64
-	var currentImmortalStones int64
+	var currentStones float64
+	var currentImmortalStones float64
 	var currentQi float64
 
 	err := tx.QueryRow(`
-		SELECT FLOOR(primeval_stones)::BIGINT, FLOOR(immortal_stones)::BIGINT, human_qi
+		SELECT primeval_stones, immortal_stones, human_qi
 		FROM players WHERE id = $1 FOR UPDATE
 	`, playerID).Scan(&currentStones, &currentImmortalStones, &currentQi)
 	if err != nil {
@@ -89,9 +89,9 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi f
 	}
 
 	if mineType == "immortal" {
-		currentImmortalStones += stones
+		currentImmortalStones += float64(stones)
 	} else {
-		currentStones += stones
+		currentStones += float64(stones)
 	}
 
 	currentQi += qi

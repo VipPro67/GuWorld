@@ -1039,7 +1039,8 @@ export function BaoHoangMarket({
                   </span>
                   <input
                     type="number"
-                    min={1}
+                    min={0.001}
+                    step={0.001}
                     value={price}
                     onChange={(e) => setPrice(Number(e.target.value))}
                     className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-mono"
@@ -1610,25 +1611,26 @@ export function BaoHoangMarket({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    disabled={bidAmount <= activeBidListing.current_price + 1}
-                    onClick={() => setBidAmount(prev => Math.max(activeBidListing.current_price + 1, prev - 1))}
+                    disabled={bidAmount <= activeBidListing.current_price + 0.001}
+                    onClick={() => setBidAmount(prev => Math.max(activeBidListing.current_price + 0.001, Math.round((prev - 0.001) * 1000) / 1000))}
                     className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-bold text-zinc-200 cursor-pointer transition-colors"
                   >
                     -
                   </button>
                   <input
                     type="number"
-                    min={activeBidListing.current_price + 1}
+                    min={activeBidListing.current_price + 0.001}
+                    step={0.001}
                     value={bidAmount}
                     onChange={(e) => {
-                      const val = Math.max(activeBidListing.current_price + 1, Number(e.target.value));
+                      const val = Math.max(activeBidListing.current_price + 0.001, Math.round(Number(e.target.value) * 1000) / 1000);
                       setBidAmount(val);
                     }}
                     className="w-20 bg-zinc-900/40 border border-zinc-850 rounded-lg p-1.5 font-mono text-xs text-zinc-200 text-center focus:outline-none focus:ring-0"
                   />
                   <button
                     type="button"
-                    onClick={() => setBidAmount(prev => prev + 1)}
+                    onClick={() => setBidAmount(prev => Math.round((prev + 0.001) * 1000) / 1000)}
                     className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 flex items-center justify-center font-bold text-zinc-200 cursor-pointer transition-colors"
                   >
                     +

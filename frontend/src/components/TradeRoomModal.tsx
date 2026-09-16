@@ -541,7 +541,8 @@ export const TradeRoomModal: React.FC = () => {
                           <input
                             type="number"
                             value={primevalInput}
-                            onChange={(e) => setPrimevalInput(parseInt(e.target.value) || 0)}
+                            step="0.001"
+                            onChange={(e) => setPrimevalInput(parseFloat(e.target.value) || 0)}
                             onBlur={syncStones}
                             onKeyDown={(e) => e.key === "Enter" && syncStones()}
                             min={0}
@@ -555,11 +556,11 @@ export const TradeRoomModal: React.FC = () => {
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
                               <span className="flex items-center gap-1 text-purple-400"><Sparkles className="w-3 h-3" /> Tiên Nguyên Thạch</span>
-                              <span>Sở hữu: {player.immortal_stones.toFixed(1)}</span>
+                              <span>Sở hữu: {player.immortal_stones.toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
                             </div>
                             <input
                               type="number"
-                              step="0.1"
+                              step="0.001"
                               value={immortalInput}
                               onChange={(e) => setImmortalInput(parseFloat(e.target.value) || 0)}
                               onBlur={syncStones}

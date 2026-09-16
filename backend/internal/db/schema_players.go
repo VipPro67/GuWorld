@@ -20,8 +20,8 @@ func schemaPlayers() error {
 		aptitude_grade INTEGER DEFAULT 4,
 		current_mana DOUBLE PRECISION NOT NULL,
 		max_mana DOUBLE PRECISION NOT NULL,
-		primeval_stones BIGINT DEFAULT 0,
-		immortal_stones BIGINT DEFAULT 0,
+		primeval_stones NUMERIC(30,3) NOT NULL DEFAULT 0,
+		immortal_stones NUMERIC(30,3) NOT NULL DEFAULT 0,
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		current_region VARCHAR(50) NOT NULL DEFAULT 'hub_nam_cuong' REFERENCES regions(id),
@@ -151,11 +151,11 @@ func schemaPlayers() error {
 	if err := execSchema("players_stones_type_upgrade", `
 	DO $$
 	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='primeval_stones' AND data_type='double precision') THEN
-			ALTER TABLE players ALTER COLUMN primeval_stones TYPE BIGINT USING COALESCE(primeval_stones, 0)::BIGINT;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='primeval_stones' AND data_type <> 'numeric') THEN
+			ALTER TABLE players ALTER COLUMN primeval_stones TYPE NUMERIC(30,3) USING ROUND(COALESCE(primeval_stones, 0)::NUMERIC, 3);
 		END IF;
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='immortal_stones' AND data_type='double precision') THEN
-			ALTER TABLE players ALTER COLUMN immortal_stones TYPE BIGINT USING COALESCE(immortal_stones, 0)::BIGINT;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='immortal_stones' AND data_type <> 'numeric') THEN
+			ALTER TABLE players ALTER COLUMN immortal_stones TYPE NUMERIC(30,3) USING ROUND(COALESCE(immortal_stones, 0)::NUMERIC, 3);
 		END IF;
 	END $$;`); err != nil {
 		return err

@@ -218,7 +218,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 					player.HP = 1.0
 					deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 					player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
-					
+
 					// Apply death drop (may drop items)
 					dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
 					if dropSummary != "" {
@@ -229,7 +229,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 							Detail: playerMsg,
 						})
 					}
-					
+
 					// Update player position in DB
 					_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3 WHERE id = $4`,
 						player.CurrentRegion, player.X, player.Y, player.ID)
@@ -286,7 +286,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		targetPlayerID = player.ActiveCombat.TargetPlayerID
 	}
 	go func() {
-		summaryStr := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, stonesSpent)
+		summaryStr := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
 		combatantInfosIface := make([]interface{}, len(combatantInfos))
 		for i, ci := range combatantInfos {
 			combatantInfosIface[i] = ci

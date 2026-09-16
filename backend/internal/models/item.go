@@ -43,7 +43,7 @@ type ItemSpec struct {
 	Rank        int         `json:"rank"`
 	Effects     ItemEffects `json:"effects"`
 	Description string      `json:"description"`
-	BasePrice   int64       `json:"base_price"`
+	BasePrice   float64     `json:"base_price"`
 	ImageURL    string      `json:"image_url"`
 	Rarity      int         `json:"rarity"`
 	Path        string      `json:"path"`

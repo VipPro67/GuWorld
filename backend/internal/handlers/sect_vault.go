@@ -167,7 +167,7 @@ func StockSectVault(c *gin.Context) {
 
 		// Recalculate cost for this Gu using pricing package
 		var stockGuRank int
-		var stockGuBasePrice int64
+		var stockGuBasePrice float64
 		_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, req.ItemID).Scan(&stockGuRank, &stockGuBasePrice)
 		if stockGuRank == 0 {
 			stockGuRank = 1
@@ -389,7 +389,7 @@ func StockSectVaultBulk(c *gin.Context) {
 		if line.itemType == "gu" {
 			// Recalculate cost for this Gu using pricing package
 			var stockGuRank int
-			var stockGuBasePrice int64
+			var stockGuBasePrice float64
 			_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, line.itemID).Scan(&stockGuRank, &stockGuBasePrice)
 			if stockGuRank == 0 {
 				stockGuRank = 1
@@ -619,7 +619,7 @@ func BuyFromSectVault(c *gin.Context) {
 		// Dynamic cost from item_dictionary base_price + rank via pricing package
 		{
 			var matRank int
-			var matBasePrice int64
+			var matBasePrice float64
 			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
 			cost = int64(pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))) * quantity
 		}

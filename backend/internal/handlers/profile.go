@@ -23,8 +23,8 @@ type PlayerProfileResponse struct {
 	AptitudePercent int                `json:"aptitude_percent"`
 	CurrentMana     float64            `json:"current_mana"`
 	MaxMana         float64            `json:"max_mana"`
-	PrimevalStones  int64              `json:"primeval_stones"`
-	ImmortalStones  int64              `json:"immortal_stones"`
+	PrimevalStones  float64            `json:"primeval_stones"`
+	ImmortalStones  float64            `json:"immortal_stones"`
 	HP              float64            `json:"hp"`
 	BaseHP          float64            `json:"base_hp"`
 	SectName        string             `json:"sect_name"`

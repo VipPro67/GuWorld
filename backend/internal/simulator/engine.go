@@ -1597,7 +1597,7 @@ func Simulate(state *CombatState) []CombatLog {
 										stonesNeeded := math.Ceil(neededMana / manaPerStone)
 										stonesToConsume := math.Min(stonesNeeded, float64(actor.ImmortalStones))
 										restore := stonesToConsume * manaPerStone
-										actor.ImmortalStones -= int64(stonesToConsume)
+										actor.ImmortalStones -= stonesToConsume
 										actor.Mana += restore
 										if actor.Mana > actor.MaxMana {
 											actor.Mana = actor.MaxMana
@@ -1620,7 +1620,7 @@ func Simulate(state *CombatState) []CombatLog {
 										stonesNeeded := math.Ceil(neededMana / manaPerStone)
 										stonesToConsume := math.Min(stonesNeeded, float64(actor.PrimevalStones))
 										restore := stonesToConsume * manaPerStone
-										actor.PrimevalStones -= int64(stonesToConsume)
+										actor.PrimevalStones -= stonesToConsume
 										actor.Mana += restore
 										if actor.Mana > actor.MaxMana {
 											actor.Mana = actor.MaxMana

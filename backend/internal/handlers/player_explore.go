@@ -78,7 +78,7 @@ func Explore(c *gin.Context) {
 	// 3. Deduct energy and roll reward stones
 	player.CurrentMana -= energyCost
 	rewardStones := int64(1 + rand.Intn(3)) // 1 to 3 primeval stones
-	player.PrimevalStones += rewardStones
+	player.PrimevalStones += float64(rewardStones)
 	player.LastManaUpdate = time.Now()
 
 	// 4. Roll random material drop for Phase 2 & 3

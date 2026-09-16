@@ -643,8 +643,8 @@ type MovePathPlayerUpdate struct {
 	CurrentMana     float64             `json:"current_mana"`
 	MaxMana         float64             `json:"max_mana"`
 	HumanQi         float64             `json:"human_qi"`
-	PrimevalStones  int64               `json:"primeval_stones"`
-	ImmortalStones  int64               `json:"immortal_stones"`
+	PrimevalStones  float64             `json:"primeval_stones"`
+	ImmortalStones  float64             `json:"immortal_stones"`
 	VisitedSubzones []string            `json:"visited_subzones,omitempty"`
 	ActiveCombat    *models.CombatState `json:"active_combat"`
 	GuInventory     models.GuInventory  `json:"gu_inventory,omitempty"`

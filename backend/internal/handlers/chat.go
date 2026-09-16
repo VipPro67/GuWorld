@@ -210,7 +210,7 @@ func SendBaoHoangChat(c *gin.Context) {
 		return
 	}
 
-	if player.PrimevalStones < fee {
+	if player.PrimevalStones < float64(fee) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %d Nguyên Thạch để gửi tin nhắn kênh này.", fee)})
 		return
 	}
@@ -252,7 +252,7 @@ func SendBaoHoangChat(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để chat kênh này"})
 			return
 		}
-		player.PrimevalStones -= fee
+		player.PrimevalStones -= float64(fee)
 	}
 
 	qiGained := 0.0

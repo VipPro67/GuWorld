@@ -42,7 +42,7 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
-	if player.PrimevalStones < int64(req.Amount) {
+	if player.PrimevalStones < float64(req.Amount) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Nguyên Thạch!"})
 		return
 	}
@@ -58,7 +58,7 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
-	player.PrimevalStones -= int64(req.Amount)
+	player.PrimevalStones -= float64(req.Amount)
 	m.ContributionPoints += int64(req.Amount)
 
 	// Increase sect funds
@@ -173,7 +173,7 @@ func DonateMaterials(c *gin.Context) {
 	}
 
 	// Calculate value dynamically from item_dictionary.base_price + rank (via pricing package)
-	var dbBasePrice int64
+	var dbBasePrice float64
 	var matRank int
 	var itemType string
 	if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, req.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
@@ -357,7 +357,7 @@ func DonateGu(c *gin.Context) {
 
 	// Fetch Gu base_price + rank for contribution calculation
 	var guRank int
-	var guBasePrice int64
+	var guBasePrice float64
 	err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, guInstance.GuID, guInstance.Rank).Scan(&guBasePrice, &guRank)
 	if err != nil {
 		guRank = 1
@@ -715,7 +715,7 @@ func DonateBulk(c *gin.Context) {
 			}
 
 			// Calculate contribution points dynamically
-			var dbBasePrice int64
+			var dbBasePrice float64
 			var matRank int
 			var itemType string
 			if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, matReq.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
@@ -828,7 +828,7 @@ func DonateBulk(c *gin.Context) {
 
 				// Fetch base price
 				var guRank int
-				var guBasePrice int64
+				var guBasePrice float64
 				err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, gi.GuID, gi.Rank).Scan(&guBasePrice, &guRank)
 				if err != nil {
 					guRank = 1

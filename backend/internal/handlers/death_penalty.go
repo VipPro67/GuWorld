@@ -171,9 +171,9 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, isAgg
 	loser.GuInventory = remainingGus
 
 	effectiveStonePct := math.Min(100.0, deathPenaltyConfig.PrimevalStonePct*mult)
-	primevalLoss := int64(math.Floor(float64(loser.PrimevalStones) * effectiveStonePct / 100))
+	primevalLoss := math.Floor(loser.PrimevalStones*effectiveStonePct/100*1000) / 1000
 	effectiveImmortalPct := math.Min(100.0, deathPenaltyConfig.ImmortalStonePct*mult)
-	immortalLoss := int64(math.Floor(float64(loser.ImmortalStones) * effectiveImmortalPct / 100))
+	immortalLoss := math.Floor(loser.ImmortalStones*effectiveImmortalPct/100*1000) / 1000
 	if primevalLoss < 0 {
 		primevalLoss = 0
 	}
@@ -199,7 +199,7 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, isAgg
 
 // applyDeathDropRecord applies the death penalty to a player record that is not fully loaded in memory.
 func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, isAggressor bool, deathPos ...DeathPos) string {
-	var primevalStones, immortalStones int64
+	var primevalStones, immortalStones float64
 	err := tx.QueryRow(`
 		SELECT primeval_stones, immortal_stones
 		FROM players WHERE id = $1 FOR UPDATE
@@ -211,9 +211,9 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID, isAggressor 
 	mult, satKhiLevel := getSatKhiMultiplier(tx, *loserID)
 
 	effectiveStonePct := math.Min(100.0, deathPenaltyConfig.PrimevalStonePct*mult)
-	primevalLoss := int64(math.Floor(float64(primevalStones) * effectiveStonePct / 100))
+	primevalLoss := math.Floor(primevalStones*effectiveStonePct/100*1000) / 1000
 	effectiveImmortalPct := math.Min(100.0, deathPenaltyConfig.ImmortalStonePct*mult)
-	immortalLoss := int64(math.Floor(float64(immortalStones) * effectiveImmortalPct / 100))
+	immortalLoss := math.Floor(immortalStones*effectiveImmortalPct/100*1000) / 1000
 	if primevalLoss < 0 {
 		primevalLoss = 0
 	}
@@ -240,15 +240,15 @@ type DroppedItem struct {
 }
 
 type GroundLootData struct {
-	PrimevalStones int64              `json:"primeval_stones,omitempty"`
-	ImmortalStones int64              `json:"immortal_stones,omitempty"`
+	PrimevalStones float64            `json:"primeval_stones,omitempty"`
+	ImmortalStones float64            `json:"immortal_stones,omitempty"`
 	Items          []DroppedItem      `json:"items,omitempty"`
 	Gus            models.GuInventory `json:"gus,omitempty"`
 	Recipes        []string           `json:"recipes,omitempty"`
 }
 
 // persistDeathDrop writes the computed losses to DB, creates a map_ground_drops record, and builds summary.
-func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggressor bool, primevalLoss, immortalLoss int64, droppedGus models.GuInventory, mult float64, satKhiLevel int, deathPos ...DeathPos) string {
+func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggressor bool, primevalLoss, immortalLoss float64, droppedGus models.GuInventory, mult float64, satKhiLevel int, deathPos ...DeathPos) string {
 	var lost []string
 	lootData := GroundLootData{
 		PrimevalStones: primevalLoss,
@@ -267,10 +267,10 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 			return ""
 		}
 		if primevalLoss >= 1 {
-			lost = append(lost, fmt.Sprintf("%d Nguyên Thạch", primevalLoss))
+			lost = append(lost, fmt.Sprintf("%.3f Nguyên Thạch", primevalLoss))
 		}
 		if immortalLoss >= 1 {
-			lost = append(lost, fmt.Sprintf("%d Tiên Nguyên Thạch", immortalLoss))
+			lost = append(lost, fmt.Sprintf("%.3f Tiên Nguyên Thạch", immortalLoss))
 		}
 	}
 

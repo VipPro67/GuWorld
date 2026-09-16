@@ -53,7 +53,7 @@ func AdminListGuItems(c *gin.Context) {
 		CombatRoles  json.RawMessage `json:"combat_roles"`
 		CombatTags   json.RawMessage `json:"combat_tags"`
 		SupportTags  json.RawMessage `json:"support_tags"`
-		BasePrice    int64           `json:"base_price"`
+		BasePrice    float64         `json:"base_price"`
 		ImageURL     string          `json:"image_url"`
 	}
 
@@ -90,7 +90,7 @@ type AdminGuInput struct {
 	CombatRoles  []string        `json:"combat_roles"`
 	CombatTags   []string        `json:"combat_tags"`
 	SupportTags  []string        `json:"support_tags"`
-	BasePrice    int64           `json:"base_price"`
+	BasePrice    float64         `json:"base_price"`
 	ImageURL     string          `json:"image_url"`
 }
 
@@ -400,7 +400,7 @@ func AdminListItemItems(c *gin.Context) {
 		Rank        int             `json:"rank"`
 		Effects     json.RawMessage `json:"effects"`
 		Description string          `json:"description"`
-		BasePrice   int64           `json:"base_price"`
+		BasePrice   float64         `json:"base_price"`
 		ImageURL    string          `json:"image_url"`
 		Rarity      int             `json:"rarity"`
 	}
@@ -422,7 +422,7 @@ type AdminItemInput struct {
 	Rank        int             `json:"rank"`
 	Effects     json.RawMessage `json:"effects"`
 	Description string          `json:"description"`
-	BasePrice   int64           `json:"base_price"`
+	BasePrice   float64         `json:"base_price"`
 	ImageURL    string          `json:"image_url"`
 	Rarity      int             `json:"rarity"`
 }

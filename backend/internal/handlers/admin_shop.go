@@ -10,19 +10,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 // -------- Admin: Shop Management --------
 
 type AdminShopItem struct {
-	ID        string `json:"id"`
-	Rank      int    `json:"rank"`
-	Price     int64  `json:"price"`
-	Stock     int    `json:"stock"`
-	IsDefault bool   `json:"is_default"`
-	SortOrder int    `json:"sort_order"`
-	Name      string `json:"name,omitempty"`
-	ItemType  string `json:"item_type,omitempty"`
+	ID        string  `json:"id"`
+	Rank      int     `json:"rank"`
+	Price     float64 `json:"price"`
+	Stock     int     `json:"stock"`
+	IsDefault bool    `json:"is_default"`
+	SortOrder int     `json:"sort_order"`
+	Name      string  `json:"name,omitempty"`
+	ItemType  string  `json:"item_type,omitempty"`
 }
 
 func AdminListShopItems(c *gin.Context) {
@@ -60,12 +61,12 @@ func AdminListShopItems(c *gin.Context) {
 }
 
 type AdminShopItemRequest struct {
-	ID        string `json:"id"`
-	Rank      int    `json:"rank"`
-	Price     int64  `json:"price"`
-	Stock     int    `json:"stock"`
-	IsDefault bool   `json:"is_default"`
-	SortOrder int    `json:"sort_order"`
+	ID        string  `json:"id"`
+	Rank      int     `json:"rank"`
+	Price     float64 `json:"price"`
+	Stock     int     `json:"stock"`
+	IsDefault bool    `json:"is_default"`
+	SortOrder int     `json:"sort_order"`
 }
 
 func AdminCreateShopItem(c *gin.Context) {
@@ -75,7 +76,7 @@ func AdminCreateShopItem(c *gin.Context) {
 	}
 
 	var req AdminShopItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Price <= 0 {
+	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Price < 0.001 || !pricing.IsValidAmount(req.Price) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
@@ -104,7 +105,7 @@ func AdminCreateShopItem(c *gin.Context) {
 		return
 	}
 
-	auditlog.Logf(db.DB, &adminID, "admin.create_shop_item", "id=%s rank=%d price=%d stock=%d", req.ID, req.Rank, req.Price, req.Stock)
+	auditlog.Logf(db.DB, &adminID, "admin.create_shop_item", "id=%s rank=%d price=%.3f stock=%d", req.ID, req.Rank, req.Price, req.Stock)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm mặt hàng vào shop"})
 }
 
@@ -120,7 +121,7 @@ func AdminUpdateShopItem(c *gin.Context) {
 		fmt.Sscanf(raw, "%d", &rank)
 	}
 	var req AdminShopItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil || req.Price < 0.001 || !pricing.IsValidAmount(req.Price) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
@@ -132,7 +133,7 @@ func AdminUpdateShopItem(c *gin.Context) {
 		return
 	}
 
-	auditlog.Logf(db.DB, &adminID, "admin.update_shop_item", "id=%s rank=%d price=%d stock=%d is_default=%v", itemID, rank, req.Price, req.Stock, req.IsDefault)
+	auditlog.Logf(db.DB, &adminID, "admin.update_shop_item", "id=%s rank=%d price=%.3f stock=%d is_default=%v", itemID, rank, req.Price, req.Stock, req.IsDefault)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng"})
 }
 

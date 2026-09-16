@@ -537,9 +537,9 @@ func seedItemsFromCSV(filename string) error {
 			desc = strings.TrimSpace(row[descIdx])
 		}
 
-		basePrice := 0
+		basePrice := 0.0
 		if basePriceIdx >= 0 && basePriceIdx < len(row) {
-			fmt.Sscanf(strings.TrimSpace(row[basePriceIdx]), "%d", &basePrice)
+			fmt.Sscanf(strings.TrimSpace(row[basePriceIdx]), "%f", &basePrice)
 		}
 
 		imageURL := ""
@@ -690,8 +690,8 @@ func seedGusFromCSV(filename string) error {
 		combatTagsRaw := get(row, combatTagsIdx)
 		supportTagsRaw := get(row, supportTagsIdx)
 		basePriceStr := get(row, basePriceIdx)
-		basePrice := 0
-		fmt.Sscanf(basePriceStr, "%d", &basePrice)
+		basePrice := 0.0
+		fmt.Sscanf(basePriceStr, "%f", &basePrice)
 
 		imageURL := get(row, imageURLIdx)
 
