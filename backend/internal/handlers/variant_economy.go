@@ -294,17 +294,22 @@ func CreateRefinementJob(c *gin.Context) {
 	}
 
 	// 1. Kiểm tra bí phương hoàn thiện của người chơi (player_recipe_progress)
+	var canonicalRecipeID string
 	var isUnlocked bool
 	var completionRate float64
 	err = db.DB.QueryRow(`
-		SELECT is_unlocked, completion_rate
+		SELECT recipe_id, is_unlocked, completion_rate
 		FROM player_recipe_progress
 		WHERE player_id = $1 AND (
 			recipe_id = $2 OR
 			recipe_id = 'recipe_' || $2 OR
+			recipe_id LIKE 'recipe_' || $2 || '_%' OR
+			recipe_id LIKE $2 || '_%' OR
 			('recipe_' || REPLACE($2, 'recipe_', '')) = recipe_id
 		)
-	`, playerID, req.RecipeID).Scan(&isUnlocked, &completionRate)
+		ORDER BY completion_rate DESC, is_unlocked DESC
+		LIMIT 1
+	`, playerID, req.RecipeID).Scan(&canonicalRecipeID, &isUnlocked, &completionRate)
 	if err == sql.ErrNoRows || (!isUnlocked && completionRate < 100.0) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa sở hữu bí phương hoàn thiện (100%) cho Cổ trùng này!"})
 		return
@@ -314,6 +319,11 @@ func CreateRefinementJob(c *gin.Context) {
 		return
 	}
 
+	actualRecipeID := canonicalRecipeID
+	if actualRecipeID == "" {
+		actualRecipeID = req.RecipeID
+	}
+
 	// 2. Kiểm tra nguyên liệu tương ứng trong kho/hành trang người chơi
 	var reqMatsJSON sql.NullString
 	_ = db.DB.QueryRow(`
@@ -321,8 +331,11 @@ func CreateRefinementJob(c *gin.Context) {
 		FROM refining_recipes
 		WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1
 		   OR target_gu_id = $1
+		   OR ('recipe_' || target_gu_id) = $1
+		   OR ('recipe_' || target_gu_id || '_') LIKE $1 || '%'
+		   OR ($1 LIKE 'recipe_%' AND ('recipe_' || target_gu_id || '_') LIKE REPLACE($1, 'recipe_', '') || '%')
 		LIMIT 1
-	`, req.RecipeID).Scan(&reqMatsJSON)
+	`, actualRecipeID).Scan(&reqMatsJSON)
 
 	var matSummary string
 	if reqMatsJSON.Valid && reqMatsJSON.String != "" && reqMatsJSON.String != "{}" {
@@ -353,7 +366,7 @@ func CreateRefinementJob(c *gin.Context) {
 	_, err = db.DB.Exec(`
 		INSERT INTO aperture_refinement_queue (id, aperture_id, recipe_id, mode, target_quantity, priority)
 		VALUES ($1, $2, $3, $4, $5, $6)
-	`, id, apertureID, req.RecipeID, req.Mode, req.TargetQuantity, req.Priority)
+	`, id, apertureID, actualRecipeID, req.Mode, req.TargetQuantity, req.Priority)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -368,7 +381,7 @@ func CreateRefinementJob(c *gin.Context) {
 
 	notify.Send(db.DB, playerID, "refine_job_created", "🔨 Tiếp Nhận Lệnh Luyện Cổ Tự Động", fmt.Sprintf(
 		"Tộc Mao Dân đã tiếp nhận lệnh luyện Cổ [%s]!\n\n📋 Chi tiết công việc:\n• Chế độ luyện: %s\n• Mục tiêu: %d con\n• Khấu trừ dự kiến: %s\n• Nơi lưu trữ: Kho Tiên Khiếu",
-		req.RecipeID, modeLabels[req.Mode], req.TargetQuantity, matSummary,
+		actualRecipeID, modeLabels[req.Mode], req.TargetQuantity, matSummary,
 	))
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Đã tạo lệnh luyện cổ tự động", "id": id})

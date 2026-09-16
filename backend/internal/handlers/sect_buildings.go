@@ -14,39 +14,27 @@ type UpgradeBuildingRequest struct {
 	BuildingName string `json:"building_name"`
 }
 
-func getBuildingCost(buildingName string, targetLevel int) (int64, int) {
+func getBuildingCost(buildingName string, targetLevel int) int64 {
 	// Cost scales with level
 	baseFunds := int64(1000)
-	baseMat := 100
 
 	switch buildingName {
 	case "main_hall":
 		baseFunds = 5000
-		baseMat = 500
 	case "defensive_array":
 		baseFunds = 2000
-		baseMat = 300
 	case "spirit_vein":
 		baseFunds = 3000
-		baseMat = 200
 	case "treasury":
 		baseFunds = 1500
-		baseMat = 150
 	case "training_ground":
 		baseFunds = 1500
-		baseMat = 100
 	default:
-		return 0, 0
+		return 0
 	}
 
 	mult := int64(targetLevel * targetLevel)
-	return baseFunds * mult, baseMat * targetLevel * targetLevel
-}
-
-func getRequiredMaterialsForBuilding(sectLevel int) string {
-	// Simple mapping for demo. Rank 1 Wood/Stone etc.
-	// You might want to use specific IDs or general 'Material' types.
-	return "mat_rank1_wood"
+	return baseFunds * mult
 }
 
 func UpgradeSectBuilding(c *gin.Context) {
@@ -122,7 +110,7 @@ func UpgradeSectBuilding(c *gin.Context) {
 	}
 
 	targetLevel := currentLevel + 1
-	reqFunds, reqMats := getBuildingCost(req.BuildingName, targetLevel)
+	reqFunds := getBuildingCost(req.BuildingName, targetLevel)
 
 	if funds < reqFunds {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Quỹ tông môn không đủ (cần %d)!", reqFunds)})
@@ -134,51 +122,12 @@ func UpgradeSectBuilding(c *gin.Context) {
 		vaultMats = make(map[string]int)
 	}
 
-	matID := getRequiredMaterialsForBuilding(level)
-	if vaultMats[matID] < reqMats {
-		// In a real game, you might allow any materials of correct rank, or specific ones.
-		// For simplicity, we just deduct random materials or a specific one.
-		// Let's assume a generic check or just skip mat check if none.
-		// Let's deduct from the highest qty material for now just for demo if they have enough total.
-		totalMats := 0
-		for _, v := range vaultMats {
-			totalMats += v
-		}
-		if totalMats < reqMats {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu (cần %d)!", reqMats)})
-			return
-		}
-
-		// Deduct mats
-		deducted := 0
-		for k, v := range vaultMats {
-			if deducted >= reqMats {
-				break
-			}
-			take := v
-			if deducted+take > reqMats {
-				take = reqMats - deducted
-			}
-			vaultMats[k] -= take
-			deducted += take
-			if vaultMats[k] <= 0 {
-				delete(vaultMats, k)
-			}
-		}
-	} else {
-		vaultMats[matID] -= reqMats
-		if vaultMats[matID] <= 0 {
-			delete(vaultMats, matID)
-		}
-	}
-
 	buildings[req.BuildingName] = targetLevel
 
 	newBuildings, _ := json.Marshal(buildings)
 	newVault, _ := json.Marshal(vaultMats)
 
 	if req.BuildingName == "main_hall" {
-		// Upgrade sect level as well
 		_, err = tx.Exec(`UPDATE sects SET level = $1, funds = funds - $2, buildings = $3, vault_materials = $4 WHERE id = $5`, targetLevel, reqFunds, newBuildings, newVault, sectID)
 	} else {
 		_, err = tx.Exec(`UPDATE sects SET funds = funds - $1, buildings = $2, vault_materials = $3 WHERE id = $4`, reqFunds, newBuildings, newVault, sectID)

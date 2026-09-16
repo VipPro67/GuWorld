@@ -2702,8 +2702,9 @@ return (
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {refinementQueue.map((job) => {
-                      const guInfo = guDictionary?.[job.recipe_id];
-                      const guName = guInfo?.name || job.recipe_id;
+                      const cleanGuId = job.recipe_id.replace(/^recipe_/, '').replace(/_\d+_\d+$/, '');
+                      const guInfo = guDictionary?.[job.recipe_id] || guDictionary?.[cleanGuId];
+                      const guName = guInfo?.name || cleanGuId || job.recipe_id;
 
                       const modeLabels: Record<string, { label: string; color: string }> = {
                         FIXED_COUNT: { label: "Số lượng cố định", color: "text-slate-300 bg-slate-800 border-slate-700" },
@@ -2801,11 +2802,15 @@ return (
                             );
                           }
 
+                          const currentSelectedId = completedRecipes.some((r) => r.id === refineRecipeId || r.target_gu_id === refineRecipeId)
+                            ? (completedRecipes.find((r) => r.id === refineRecipeId || r.target_gu_id === refineRecipeId)?.id || refineRecipeId)
+                            : (completedRecipes[0]?.id || completedRecipes[0]?.target_gu_id);
+
                           return (
                             <div className="space-y-1.5">
                               <label className="text-slate-300 font-bold">Chọn Bí Phương Hoàn Thiện</label>
                               <select
-                                value={refineRecipeId}
+                                value={currentSelectedId}
                                 onChange={(e) => setRefineRecipeId(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-orange-500"
                               >
@@ -2862,7 +2867,8 @@ return (
                             const completedRecipes = (recipes || []).filter(
                               (r) => (r.completion_rate ?? 0) >= 100 || (r as any).is_unlocked
                             );
-                            const selectedId = refineRecipeId || completedRecipes[0]?.id;
+                            const selectedRecipe = completedRecipes.find(r => r.id === refineRecipeId || r.target_gu_id === refineRecipeId) || completedRecipes[0];
+                            const selectedId = selectedRecipe?.id || selectedRecipe?.target_gu_id || refineRecipeId;
                             if (!selectedId) {
                               addToast("Cần có bí phương hoàn thiện để tạo lệnh!", "error");
                               return;
