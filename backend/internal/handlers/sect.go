@@ -217,9 +217,13 @@ type ExchangeVaultItemRequest struct {
 
 type VaultBuyRequest = ExchangeVaultItemRequest
 
-// GetSects lists all available sects
+// GetSects lists all available sects with lightweight projection (omits heavy vault JSONB payloads)
 func GetSects(c *gin.Context) {
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings FROM sects`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until 
+		FROM sects 
+		ORDER BY level DESC, funds DESC
+	`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sects: " + err.Error()})
 		return
@@ -229,11 +233,16 @@ func GetSects(c *gin.Context) {
 	var sects []Sect
 	for rows.Next() {
 		var s Sect
-		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil, &s.Buildings); err == nil {
+		s.VaultGu = json.RawMessage("[]")
+		s.VaultMaterials = json.RawMessage("{}")
+		s.VaultRecipes = json.RawMessage("[]")
+		s.Buildings = json.RawMessage("{}")
+		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil); err == nil {
 			sects = append(sects, s)
 		}
 	}
 
+	c.Header("Cache-Control", "public, max-age=15, stale-while-revalidate=30")
 	c.JSON(http.StatusOK, sects)
 }
 

@@ -516,9 +516,9 @@ func SetVitalGu(c *gin.Context) {
 		}
 	}
 
-	// Persist with two targeted statements: clear the old vital flag on every
-	// other Gu, then mark the target, instead of rewriting the whole inventory.
-	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = false, updated_at = NOW() WHERE player_id = $1 AND id <> $2`, player.ID, player.GuInventory[targetIndex].InstanceID); err != nil {
+	// Persist with two targeted statements: clear the old vital flag if one existed,
+	// then mark the target, without locking or rewriting the whole inventory.
+	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = false, updated_at = NOW() WHERE player_id = $1 AND is_vital = true AND id <> $2`, player.ID, player.GuInventory[targetIndex].InstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
 		return
 	}

@@ -1343,6 +1343,18 @@ export const useGameStore = create<GameState>((set, get) => {
     if (data.materials_inventory !== undefined) {
       updates.materials_inventory = data.materials_inventory ?? {};
     }
+    if (data.primeval_stones !== undefined) {
+      updates.primeval_stones = Number(data.primeval_stones);
+    }
+    if (data.immortal_stones !== undefined) {
+      updates.immortal_stones = Number(data.immortal_stones);
+    }
+    if (data.human_qi !== undefined) {
+      updates.human_qi = Number(data.human_qi);
+    }
+    if (data.recipes !== undefined) {
+      updates.unlocked_recipes = data.recipes;
+    }
     if (Object.keys(updates).length > 0) {
       const merged = normalizePlayer({ ...currentPlayer, ...updates });
       if (merged) {

@@ -714,11 +714,19 @@ func DonateBulk(c *gin.Context) {
 				return
 			}
 
-			// Calculate contribution points dynamically
+			// Calculate contribution points dynamically using in-memory registry
 			var dbBasePrice float64
-			var matRank int
+			var matRank int = 1
 			var itemType string
-			if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, matReq.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
+			materialName := matReq.MaterialID
+			if item, exists := models.ItemRegistry[matReq.MaterialID]; exists {
+				dbBasePrice = item.BasePrice
+				matRank = item.Rank
+				itemType = item.Type
+				if item.Name != "" {
+					materialName = item.Name
+				}
+			} else if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,''), COALESCE(name, '') FROM item_dictionary WHERE id=$1`, matReq.MaterialID).Scan(&dbBasePrice, &matRank, &itemType, &materialName); err != nil {
 				matRank = 1
 				dbBasePrice = 0
 				itemType = ""
@@ -771,13 +779,6 @@ func DonateBulk(c *gin.Context) {
 
 			// Update Sect Vault map
 			vaultMats[matReq.MaterialID] += matReq.Amount
-
-			// Get friendly name
-			materialName := matReq.MaterialID
-			_ = tx.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, matReq.MaterialID).Scan(&materialName)
-			if materialName == "" {
-				materialName = matReq.MaterialID
-			}
 			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d", materialName, matReq.Amount))
 		}
 
@@ -826,13 +827,22 @@ func DonateBulk(c *gin.Context) {
 					return
 				}
 
-				// Fetch base price
-				var guRank int
+				// Fetch base price using in-memory Gu registry
+				var guRank int = gi.Rank
 				var guBasePrice float64
-				err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, gi.GuID, gi.Rank).Scan(&guBasePrice, &guRank)
-				if err != nil {
-					guRank = 1
-					guBasePrice = 0
+				guName := gi.GuID
+				if spec, ok := models.GetGu(gi.GuID, gi.Rank); ok {
+					guRank = spec.Rank
+					guBasePrice = spec.BasePrice
+					if spec.Name != "" {
+						guName = spec.Name
+					}
+				} else {
+					err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, gi.GuID, gi.Rank).Scan(&guBasePrice, &guRank)
+					if err != nil {
+						guRank = 1
+						guBasePrice = 0
+					}
 				}
 				effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
 				gained := int64(pricing.DonatePoints(effectiveBase))
@@ -861,10 +871,6 @@ func DonateBulk(c *gin.Context) {
 					})
 				}
 
-				guName := gi.GuID
-				if spec, ok := models.GetGu(gi.GuID, gi.Rank); ok {
-					guName = spec.Name
-				}
 				auditSummaries = append(auditSummaries, guName)
 			} else {
 				newGuInventory = append(newGuInventory, gi)

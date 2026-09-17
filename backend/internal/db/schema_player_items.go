@@ -40,6 +40,10 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_gu_gu_id ON player_gu (gu_id);`); err != nil {
 		return err
 	}
+	if err := execSchema("player_gu_vital_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_vital ON player_gu (player_id) WHERE is_vital = true;`); err != nil {
+		return err
+	}
 
 	if err := execSchema("killer_moves", `
 	CREATE TABLE IF NOT EXISTS killer_moves (

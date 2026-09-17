@@ -306,10 +306,11 @@ export const ImmortalApertureView: React.FC = () => {
   useEffect(() => {
     if (aperture?.state === "TRIBULATION_ACTIVE") {
       const interval = setInterval(() => {
-        fetchApertureNodes();
-        fetchActiveTribulation();
+        if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+        fetchApertureNodes(true);
+        fetchActiveTribulation(true);
         // Also fetch aperture to update aperture HP if taking damage
-        fetchAperture();
+        fetchAperture(true);
       }, 15000);
       return () => clearInterval(interval);
     }
@@ -2786,7 +2787,7 @@ return (
                       <div className="space-y-4 text-xs">
                         {(() => {
                           const completedRecipes = (recipes || []).filter(
-                            (r) => (r.completion_rate ?? 0) >= 100 || (r as any).is_unlocked
+                            (r) => (r.completion_rate ?? 0) >= 100 || (r as { is_unlocked?: boolean }).is_unlocked
                           );
 
                           if (completedRecipes.length === 0) {
@@ -2865,7 +2866,7 @@ return (
                         <button
                           onClick={async () => {
                             const completedRecipes = (recipes || []).filter(
-                              (r) => (r.completion_rate ?? 0) >= 100 || (r as any).is_unlocked
+                              (r) => (r.completion_rate ?? 0) >= 100 || (r as { is_unlocked?: boolean }).is_unlocked
                             );
                             const selectedRecipe = completedRecipes.find(r => r.id === refineRecipeId || r.target_gu_id === refineRecipeId) || completedRecipes[0];
                             const selectedId = selectedRecipe?.id || selectedRecipe?.target_gu_id || refineRecipeId;

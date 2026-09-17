@@ -53,16 +53,32 @@ func LoginPlayer(c *gin.Context) {
 
 	loginEmail = normalizeEmail(loginEmail)
 
-	var player models.Player
+	var targetPlayerID uuid.UUID
 	var passwordHash string
+	err := db.DB.QueryRow(`SELECT id, password_hash FROM players WHERE LOWER(email) = $1`, loginEmail).Scan(&targetPlayerID, &passwordHash)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
+		}
+		return
+	}
 
+	// Verify hashed password before running heavy aggregation queries
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
+		return
+	}
+
+	var player models.Player
 	query := `
 		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregateEquipped("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, 		       party_id, arena_rank, COALESCE(email, ''), google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), 		COALESCE(avatar_url, ''), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses, growth_data
 		FROM players
-		WHERE LOWER(email) = $1
+		WHERE id = $1
 	`
 	var activeCombatBytes []byte
-	err := db.DB.QueryRow(query, loginEmail).Scan(
+	err = db.DB.QueryRow(query, targetPlayerID).Scan(
 		&player.ID, &player.Username, &passwordHash, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
@@ -78,20 +94,24 @@ func LoginPlayer(c *gin.Context) {
 		&player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
 		&player.GrowthData,
 	)
-	if err == nil {
-		if player.Rank >= 6 {
-			var daoMarks models.DaoMarksMap
-			errDb := db.DB.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&daoMarks)
-			if errDb == nil {
-				player.DaoMarks = daoMarks
-			} else {
-				player.DaoMarks = models.DaoMarksMap{"strength": 0}
-			}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
+		return
+	}
+
+	if player.Rank >= 6 {
+		var daoMarks models.DaoMarksMap
+		errDb := db.DB.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&daoMarks)
+		if errDb == nil {
+			player.DaoMarks = daoMarks
 		} else {
 			player.DaoMarks = models.DaoMarksMap{"strength": 0}
 		}
+	} else {
+		player.DaoMarks = models.DaoMarksMap{"strength": 0}
 	}
-	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
+
+	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
 		if errU := json.Unmarshal(activeCombatBytes, &cs); errU == nil {
 			if !cs.IsEmpty() {
@@ -100,22 +120,6 @@ func LoginPlayer(c *gin.Context) {
 		} else {
 			logger.S.Warnf("Login: failed to unmarshal active_combat for player=%s: %v", player.ID, errU)
 		}
-	}
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
-		}
-		return
-	}
-
-	// Verify hashed password
-	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password))
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
-		return
 	}
 
 	// Enforce fingerprint multi-login rotation limit

@@ -388,6 +388,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 	// Roll all rewards, batch items, apply non-item rewards in-memory
 	rewards := make([]GachaResultItem, quantity)
 	itemQtyMap := make(map[string]int64)
+	touchedRecipes := make(map[string]*services.RecipeProgress)
 	for i := 0; i < quantity; i++ {
 		rewards[i] = rollGachaRewardPrecomputed(pool, pc, excludedImmortal)
 		switch rewards[i].Type {
@@ -400,15 +401,18 @@ func runGachaOpen(c *gin.Context, forced int) {
 			if exists {
 				if completionRate > existing.CompletionRate {
 					existing.CompletionRate = completionRate
+					touchedRecipes[recipeID] = existing
 				}
 			} else {
-				unlockedMap[recipeID] = &services.RecipeProgress{
+				newRp := &services.RecipeProgress{
 					PlayerID:       player.ID.String(),
 					RecipeID:       recipeID,
 					CompletionRate: completionRate,
 					IsUnlocked:     true,
 					DeduceCount:    0,
 				}
+				unlockedMap[recipeID] = newRp
+				touchedRecipes[recipeID] = newRp
 			}
 		default:
 			applyGachaRewardInMemory(&player, rewards[i])
@@ -429,8 +433,8 @@ func runGachaOpen(c *gin.Context, forced int) {
 		}
 	}
 
-	// Upsert all recipes that were unlocked or updated
-	for _, rp := range unlockedMap {
+	// Upsert ONLY recipes that were unlocked or updated
+	for _, rp := range touchedRecipes {
 		if err := RecipeSvc.Upsert(tx, rp); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật bí phương"})
 			fmt.Println("Error updating recipe progress:", err)

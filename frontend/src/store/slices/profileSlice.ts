@@ -5,6 +5,10 @@ import { useUIStore } from "@/store/useUIStore";
 import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { Player } from "@/store/useGameStore";
 
+const lastStatusFetchTimes = new Map<string, number>();
+const pendingStatusFetches = new Map<string, Promise<void>>();
+const STATUS_FETCH_TTL_MS = 3000;
+
 export interface ProfileSlice {
   inspectedProfile: ApiResponseData | null;
   inspectedUsernameQuery: string | null;
@@ -91,34 +95,52 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return;
 
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/status/${id}`);
-
-      if (response.status === 401) {
-        logout();
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch status");
-      }
-
-      const player: Player = await response.json();
-      const currentPlayer = get().player;
-      if (currentPlayer && currentPlayer.id === id) {
-        // The status endpoint only projects equipped/vital Gus. Preserve the
-        // full inventory already in state so it is not clobbered by the sparse
-        // snapshot.
-        get().setPlayerFromServer({
-          ...player,
-          gu_inventory: currentPlayer.gu_inventory?.length ? currentPlayer.gu_inventory : player.gu_inventory,
-          equipped_gus: currentPlayer.gu_inventory?.length ? currentPlayer.equipped_gus : player.equipped_gus,
-        });
-      }
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("Status fetch failed:", err.message);
+    const now = Date.now();
+    const lastFetch = lastStatusFetchTimes.get(id) || 0;
+    if (now - lastFetch < STATUS_FETCH_TTL_MS) {
+      return;
     }
+
+    const inFlight = pendingStatusFetches.get(id);
+    if (inFlight) return inFlight;
+
+    const executeFetch = async () => {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/player/status/${id}`);
+
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch status");
+        }
+
+        lastStatusFetchTimes.set(id, Date.now());
+        const player: Player = await response.json();
+        const currentPlayer = get().player;
+        if (currentPlayer && currentPlayer.id === id) {
+          // The status endpoint only projects equipped/vital Gus. Preserve the
+          // full inventory already in state so it is not clobbered by the sparse
+          // snapshot.
+          get().setPlayerFromServer({
+            ...player,
+            gu_inventory: currentPlayer.gu_inventory?.length ? currentPlayer.gu_inventory : player.gu_inventory,
+            equipped_gus: currentPlayer.gu_inventory?.length ? currentPlayer.equipped_gus : player.equipped_gus,
+          });
+        }
+      } catch (caught: unknown) {
+        const err = caught instanceof Error ? caught : new Error(String(caught));
+        console.error("Status fetch failed:", err.message);
+      } finally {
+        pendingStatusFetches.delete(id);
+      }
+    };
+
+    const promise = executeFetch();
+    pendingStatusFetches.set(id, promise);
+    return promise;
   },
 
 

@@ -41,6 +41,9 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 		"success":             true,
 		"gu_inventory":        player.GuInventory,
 		"materials_inventory": loadMaterialsInventory(player.ID.String()),
+		"primeval_stones":     player.PrimevalStones,
+		"immortal_stones":     player.ImmortalStones,
+		"human_qi":            player.HumanQi,
 	}
 	for _, e := range extra {
 		for k, v := range e {
@@ -59,8 +62,11 @@ func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
 	resp := gin.H{
-		"success":      true,
-		"gu_inventory": player.GuInventory,
+		"success":         true,
+		"gu_inventory":    player.GuInventory,
+		"primeval_stones": player.PrimevalStones,
+		"immortal_stones": player.ImmortalStones,
+		"human_qi":        player.HumanQi,
 	}
 	for _, e := range extra {
 		for k, v := range e {

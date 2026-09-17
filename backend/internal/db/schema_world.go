@@ -180,6 +180,10 @@ func schemaWorld() error {
 	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_location ON map_ground_drops (region_id, x, y);`); err != nil {
 		return err
 	}
+	if err := execSchema("map_ground_drops_active_idx", `
+	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_active ON map_ground_drops (region_id, expires_at);`); err != nil {
+		return err
+	}
 
 	return nil
 }

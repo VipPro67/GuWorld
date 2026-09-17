@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"crypto/md5"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -64,15 +67,66 @@ func flatGuDictionary() []models.GuDictionaryItem {
 	return flatGu
 }
 
+type dictCacheEntry struct {
+	rawJSON []byte
+	etag    string
+}
+
+var (
+	dictCacheMu sync.RWMutex
+	dictCache   = make(map[string]dictCacheEntry)
+)
+
+// InvalidateDictionaryMemoryCache clears the local in-memory cache when registries change.
+func InvalidateDictionaryMemoryCache() {
+	dictCacheMu.Lock()
+	dictCache = make(map[string]dictCacheEntry)
+	dictCacheMu.Unlock()
+}
+
 func getCachedDictionaryPart(c *gin.Context, key string, target interface{}, build func() interface{}) {
-	if err := cache.GetJSON(key, target); err == nil {
-		c.JSON(http.StatusOK, target)
+	dictCacheMu.RLock()
+	entry, found := dictCache[key]
+	dictCacheMu.RUnlock()
+
+	if found {
+		if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == entry.etag {
+			c.Status(http.StatusNotModified)
+			return
+		}
+		c.Header("ETag", entry.etag)
+		c.Header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+		c.Data(http.StatusOK, "application/json; charset=utf-8", entry.rawJSON)
 		return
 	}
 
-	value := build()
-	_ = cache.SetJSON(key, value, 24*time.Hour)
-	c.JSON(http.StatusOK, value)
+	var raw []byte
+	if err := cache.GetJSON(key, target); err == nil {
+		raw, _ = json.Marshal(target)
+	} else {
+		val := build()
+		_ = cache.SetJSON(key, val, 24*time.Hour)
+		raw, _ = json.Marshal(val)
+	}
+
+	hash := md5.Sum(raw)
+	etag := fmt.Sprintf(`"%x"`, hash)
+
+	dictCacheMu.Lock()
+	dictCache[key] = dictCacheEntry{
+		rawJSON: raw,
+		etag:    etag,
+	}
+	dictCacheMu.Unlock()
+
+	if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == etag {
+		c.Status(http.StatusNotModified)
+		return
+	}
+
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
 }
 
 // GetGuDictionary returns only the Gu catalog used by gameplay screens.

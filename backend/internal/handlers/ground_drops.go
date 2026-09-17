@@ -170,12 +170,6 @@ func LootGroundDrop(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := evaluateManaTx(tx, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
-		return
-	}
-
 	var dropRegion string
 	var dropX, dropY int
 	var killerID sql.NullString
@@ -203,8 +197,14 @@ func LootGroundDrop(c *gin.Context) {
 
 	if time.Now().After(expiresAt) {
 		_, _ = tx.Exec("DELETE FROM map_ground_drops WHERE id = $1", dropUUID)
-		tx.Commit()
+		_ = tx.Commit()
 		c.JSON(http.StatusGone, gin.H{"error": "Chiến lợi phẩm đã bị thời gian làm hư hại hoàn toàn"})
+		return
+	}
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
 		return
 	}
 

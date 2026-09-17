@@ -48,7 +48,7 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Nhận thưởng thất bại."); }
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       get().fetchAchievements();
       get().addLog(data.message || "Nhận thưởng thành tựu thành công!");
       return { success: true, message: data.message };

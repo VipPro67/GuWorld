@@ -4,6 +4,8 @@ import { BACKEND_URL } from "@/lib/config";
 import type { Sect, MySectStatus, SectMission, SectMemberInfo, SectJoinRequest, SectPromotionRequest, SectMine } from "@/store/useGameStore";
 
 let fetchMySectStatusPromise: Promise<void> | null = null;
+let lastMySectFetchTime = 0;
+const MY_SECT_TTL_MS = 20000;
 
 export interface SectSlice {
   sects: Sect[];
@@ -16,7 +18,7 @@ export interface SectSlice {
   joinSect: (sectId: string) => Promise<boolean>;
   cancelSectJoinRequest: () => Promise<boolean>;
   leaveSect: () => Promise<boolean>;
-  fetchMySectStatus: () => Promise<void>;
+  fetchMySectStatus: (forceRefresh?: boolean) => Promise<void>;
   promoteSectRank: () => Promise<boolean>;
   donateSectStones: (amount: number) => Promise<boolean>;
   donateSectMaterials: (materialId: string, amount: number) => Promise<boolean>;
@@ -104,8 +106,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Gia nhập tông môn thất bại.");
       get().addToast(data.message || "Gia nhập tông môn thành công!", "success");
       get().addLog(data.message || `Gia nhập tông môn: ${sectId}`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -129,7 +130,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addToast(data.message || "Đã rời tông môn!", "info");
       get().addLog(data.message || "Rời tông môn.");
       set({ mySectStatus: null });
-      await get().initializeSession();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -162,7 +162,11 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     } finally { set({ actionLoading: false }); }
   },
 
-  fetchMySectStatus: async () => {
+  fetchMySectStatus: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && now - lastMySectFetchTime < MY_SECT_TTL_MS && get().mySectStatus !== null) {
+      return;
+    }
     if (fetchMySectStatusPromise) return fetchMySectStatusPromise;
     const executeFetch = async () => {
       const { token, logout } = get();
@@ -172,6 +176,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         if (response.status === 401) { logout(); return; }
         if (response.ok) {
           const data = await response.json();
+          lastMySectFetchTime = Date.now();
           set({ mySectStatus: data });
         }
       } catch (err) {
@@ -198,8 +203,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Khảo hạch thăng cấp thất bại.");
       get().addToast(data.message || "Thăng cấp thành công!", "success");
       get().addLog(data.message || "Thăng cấp tông môn.");
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -224,8 +229,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Nguyên Thạch thành công!", "success");
       get().addLog(data.message || `Quyên góp ${amount} Nguyên Thạch.`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -250,8 +255,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp nguyên liệu thành công!", "success");
       get().addLog(data.message || `Quyên góp ${amount}x ${materialId}.`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -276,8 +281,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Cổ trùng thành công!", "success");
       get().addLog(data.message || `Quyên góp Cổ trùng.`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -302,8 +307,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Bí phương thành công!", "success");
       get().addLog(data.message || `Quyên góp Bí phương.`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -332,8 +337,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Quyên góp hàng loạt thất bại.");
       get().addToast(data.message || "Quyên góp hàng loạt thành công!", "success");
       get().addLog(data.message || `Quyên góp hàng loạt vật phẩm.`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -358,8 +363,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Trao đổi vật phẩm thất bại.");
       get().addToast(data.message || "Trao đổi vật phẩm thành công!", "success");
       get().addLog(data.message || `Đổi ${itemType}: ${itemId} x${quantity} từ bảo khố.`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -398,8 +403,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Nhận nhiệm vụ thất bại.");
       get().addToast(data.message || "Nhận nhiệm vụ thành công!", "success");
       get().addLog(data.message || `Nhận nhiệm vụ tông môn: ${missionId}`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -422,8 +426,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Hoàn thành nhiệm vụ thất bại.");
       get().addToast(data.message || "Hoàn thành nhiệm vụ thành công!", "success");
       get().addLog(data.message || `Hoàn thành nhiệm vụ tông môn: ${missionId}`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -447,7 +451,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addToast(data.message || "Đã xóa nhiệm vụ tông môn!", "success");
       get().addLog(data.message || `Xóa nhiệm vụ tông môn: ${missionId}`);
       await get().fetchSectMissions();
-      await get().fetchMySectStatus();
+      await get().fetchMySectStatus(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -470,7 +474,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Hủy nhiệm vụ thất bại.");
       get().addToast(data.message || "Đã hủy nhiệm vụ tông môn!", "success");
       get().addLog(data.message || `Hủy nhiệm vụ tông môn: ${missionId}`);
-      await get().fetchMySectStatus();
+      await get().fetchMySectStatus(true);
       await get().fetchSectMissions();
       return true;
     } catch (caught: unknown) {
@@ -496,8 +500,8 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Lập phái thất bại.");
       get().addToast(data.message || "Khai tông lập phái thành công!", "success");
       get().addLog(data.message || `Lập phái: ${name}`);
-      await get().fetchMySectStatus();
-      await get().initializeSession();
+      await get().fetchMySectStatus(true);
+      await get().fetchSects();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

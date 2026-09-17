@@ -53,7 +53,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đăng bán thất bại");
       get().addLog(data.message || "Đăng bán thành công");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -74,7 +74,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đặt giá thất bại");
       get().addLog(data.message || "Đặt giá thành công");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
@@ -91,7 +91,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy listing thất bại");
       get().addLog(data.message || "Đã hủy");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
@@ -112,7 +112,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Mua hàng thất bại");
       get().addLog(data.message || "Mua hàng thành công");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {

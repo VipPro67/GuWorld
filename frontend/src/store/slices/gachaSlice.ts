@@ -41,8 +41,8 @@ export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mở Đá  thất bại."); }
-      // Re-sync full inventory from server
-      await get().initializeSession();
+      // Re-sync inventory from response
+      get().applyInventoryFromResponse(data);
       get().addLog(data.message || "Mở Đá  thành công!");
       return { success: true, message: data.message, reward: data.reward, rewards: data.rewards };
     } catch (caught: unknown) {

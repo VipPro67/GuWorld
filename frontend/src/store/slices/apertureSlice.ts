@@ -16,8 +16,22 @@ import type {
 } from "@/store/useGameStore";
 
 let fetchAperturePromise: Promise<void> | null = null;
+let lastApertureFetchTime = 0;
+const APERTURE_TTL_MS = 20000;
+
 let fetchApertureNodesPromise: Promise<void> | null = null;
+let lastApertureNodesFetchTime = 0;
+const APERTURE_NODES_TTL_MS = 10000;
+
 let fetchVariantHumansPromise: Promise<void> | null = null;
+
+let fetchDaoMarksPromise: Promise<void> | null = null;
+let lastDaoMarksFetchTime = 0;
+const DAO_MARKS_TTL_MS = 30000;
+
+let fetchActiveTribulationPromise: Promise<void> | null = null;
+let lastActiveTribulationFetchTime = 0;
+const ACTIVE_TRIBULATION_TTL_MS = 15000;
 
 export interface ApertureSlice {
   aperture: ImmortalAperture | null;
@@ -25,9 +39,9 @@ export interface ApertureSlice {
   apertureNodes: ApertureResourceNode[];
   variantHumans: ApertureVariantHuman[];
   activeTribulation: { event: TribulationEvent; enemies: TribulationEnemy[] } | null;
-  fetchAperture: () => Promise<void>;
-  fetchDaoMarks: () => Promise<void>;
-  fetchApertureNodes: () => Promise<void>;
+  fetchAperture: (forceRefresh?: boolean) => Promise<void>;
+  fetchDaoMarks: (forceRefresh?: boolean) => Promise<void>;
+  fetchApertureNodes: (forceRefresh?: boolean) => Promise<void>;
   fetchVariantHumans: () => Promise<void>;
   placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => Promise<boolean>;
   collectResourceNode: (nodeId: string) => Promise<boolean>;
@@ -39,7 +53,7 @@ export interface ApertureSlice {
   repairApertureNode: (nodeId: string) => Promise<boolean>;
   repairAllApertureNodes: () => Promise<boolean>;
   upgradeApertureNode: (nodeId: string) => Promise<boolean>;
-  fetchActiveTribulation: () => Promise<void>;
+  fetchActiveTribulation: (forceRefresh?: boolean) => Promise<void>;
   engageTribulationCombat: (eventId: string) => Promise<boolean>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
   nodeWorkers: ApertureNodeWorker[];
@@ -73,7 +87,11 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   variantNPCs: [],
   activeTribulation: null,
 
-  fetchAperture: async () => {
+  fetchAperture: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && now - lastApertureFetchTime < APERTURE_TTL_MS && get().aperture !== null) {
+      return;
+    }
     if (fetchAperturePromise) return fetchAperturePromise;
     const executeFetch = async () => {
       const { token, logout } = get();
@@ -89,6 +107,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           return;
         }
         const data = await response.json();
+        lastApertureFetchTime = Date.now();
         set({ aperture: data });
         const player = get().player;
         if (player) {
@@ -106,26 +125,42 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     return fetchAperturePromise;
   },
 
-  fetchDaoMarks: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/dao-marks`);
-      if (response.status === 401) {
-        logout();
-        return;
-      }
-      if (response.ok) {
-        const data = await response.json();
-        set({ daoMarks: data });
-      }
-    } catch (err) {
-      console.error("Failed to fetch Dao Marks:", err);
-      get().addToast("Lỗi tải dấu đạo.", "error");
+  fetchDaoMarks: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && now - lastDaoMarksFetchTime < DAO_MARKS_TTL_MS && get().daoMarks.length > 0) {
+      return;
     }
+    if (fetchDaoMarksPromise) return fetchDaoMarksPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/dao-marks`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          lastDaoMarksFetchTime = Date.now();
+          set({ daoMarks: Array.isArray(data) ? data : [] });
+        }
+      } catch (err) {
+        console.error("Failed to fetch Dao Marks:", err);
+        get().addToast("Lỗi tải dấu đạo.", "error");
+      } finally {
+        fetchDaoMarksPromise = null;
+      }
+    };
+    fetchDaoMarksPromise = executeFetch();
+    return fetchDaoMarksPromise;
   },
 
-  fetchApertureNodes: async () => {
+  fetchApertureNodes: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && now - lastApertureNodesFetchTime < APERTURE_NODES_TTL_MS && get().apertureNodes.length > 0) {
+      return;
+    }
     if (fetchApertureNodesPromise) return fetchApertureNodesPromise;
     const executeFetch = async () => {
       const { token, logout } = get();
@@ -138,7 +173,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         }
         if (response.ok) {
           const data = await response.json();
-          set({ apertureNodes: data });
+          lastApertureNodesFetchTime = Date.now();
+          set({ apertureNodes: Array.isArray(data) ? data : [] });
         }
       } catch (err) {
         console.error("Failed to fetch aperture nodes:", err);
@@ -171,8 +207,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Xây dựng mỏ tài nguyên thành công!", "success");
       get().addLog(data.message || "Đã đặt điểm tài nguyên mới.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       await get().fetchVariantHumans();
       return true;
     } catch (caught: unknown) {
@@ -203,8 +239,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Thu hoạch thành công!", "success");
       get().addLog(data.message || "Thu hoạch tài nguyên thành công.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -234,8 +270,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Thu hoạch hàng loạt thành công!", "success");
       get().addLog(data.message || "Thu hoạch hàng loạt tài nguyên thành công.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -265,8 +301,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Tháo dỡ thành công!", "success");
       get().addLog(data.message || "Đã tháo dỡ mỏ tài nguyên.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       await get().fetchVariantHumans();
       return true;
     } catch (caught: unknown) {
@@ -297,8 +333,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "San phẳng thành công!", "success");
       get().addLog(data.message || "Đã san phẳng mỏ tài nguyên.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       await get().fetchVariantHumans();
       return true;
     } catch (caught: unknown) {
@@ -686,8 +722,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Sửa chữa thành công!", "success");
       get().addLog(data.message || "Đã sửa chữa điểm tài nguyên.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       await get().fetchVariantHumans();
       return true;
     } catch (caught: unknown) {
@@ -718,8 +754,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Sửa chữa hàng loạt thành công!", "success");
       get().addLog(data.message || "Đã sửa chữa hàng loạt công trình.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       await get().fetchVariantHumans();
       return true;
     } catch (caught: unknown) {
@@ -750,8 +786,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Nâng cấp thành công!", "success");
       get().addLog(data.message || "Đã nâng cấp công trình.");
-      await get().initializeSession();
-      await get().fetchApertureNodes();
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -763,23 +799,35 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
   },
 
-  fetchActiveTribulation: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/tribulations/active`);
-      if (response.status === 401) {
-        logout();
-        return;
-      }
-      if (response.ok) {
-        const data = await response.json();
-        set({ activeTribulation: data });
-      }
-    } catch (err) {
-      console.error("Failed to fetch active tribulation:", err);
-      get().addToast("Lỗi tải thiên kiếp.", "error");
+  fetchActiveTribulation: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && now - lastActiveTribulationFetchTime < ACTIVE_TRIBULATION_TTL_MS) {
+      return;
     }
+    if (fetchActiveTribulationPromise) return fetchActiveTribulationPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/tribulations/active`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          lastActiveTribulationFetchTime = Date.now();
+          set({ activeTribulation: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch active tribulation:", err);
+        get().addToast("Lỗi tải thiên kiếp.", "error");
+      } finally {
+        fetchActiveTribulationPromise = null;
+      }
+    };
+    fetchActiveTribulationPromise = executeFetch();
+    return fetchActiveTribulationPromise;
   },
 
   engageTribulationCombat: async (eventId: string) => {
@@ -800,7 +848,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         throw new Error(data.error || "Xuất trận thất bại");
       }
       get().addLog(data.message || "Xuất trận nghênh chiến quái tai kiếp.");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
+      await get().fetchActiveTribulation(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -830,9 +879,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addToast(data.message || "Kết toán tai kiếp hoàn thành!", "success");
       get().addLog(data.message || "Kết toán tai kiếp hoàn thành.");
-      await get().initializeSession();
-      await get().fetchAperture();
-      await get().fetchDaoMarks();
+      get().applyInventoryFromResponse(data);
+      await get().fetchAperture(true);
+      await get().fetchDaoMarks(true);
       set({ activeTribulation: null });
       return true;
     } catch (caught: unknown) {

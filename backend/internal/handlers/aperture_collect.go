@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -311,53 +312,85 @@ func getPathDaoMultiplier(pathRaw string, nodeDaoMap map[string]int) float64 {
 	return 1.0 + float64(bestMarks)*0.0001
 }
 
-// computeApertureNodeReward computes the total reward for harvesting a single resource node,
-// applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)
-// and an optional bulkMultiplier (used by collect-all, e.g. 0.8 for a -20% bulk penalty).
-// It returns the reward amount and a suitability warning note (empty when production is optimal).
-func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) (int64, string, error) {
-	// 1. Dao Marks multiplier
+type apertureRewardContext struct {
+	nodeDaoMap          map[string]int
+	ignoresPathConflict bool
+	overgrazing         bool
+	herbivores          int
+	starvationHerb      bool
+	starvationCarn      bool
+	variantHumans       map[string]struct {
+		population     int
+		laborIntensity string
+	}
+}
+
+func loadApertureRewardContext(tx *sql.Tx, playerID uuid.UUID, apertureID any, allNodes []models.ApertureResourceNode) (*apertureRewardContext, error) {
+	ctx := &apertureRewardContext{
+		nodeDaoMap: make(map[string]int),
+		variantHumans: make(map[string]struct {
+			population     int
+			laborIntensity string
+		}),
+	}
+
 	var nodeDaoJSON []byte
-	if err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON); err != nil {
-		return 0, "", err
+	if err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON); err == nil && len(nodeDaoJSON) > 0 {
+		_ = json.Unmarshal(nodeDaoJSON, &ctx.nodeDaoMap)
 	}
-	nodeDaoMap := make(map[string]int)
-	if len(nodeDaoJSON) > 0 {
-		_ = json.Unmarshal(nodeDaoJSON, &nodeDaoMap)
+
+	_ = tx.QueryRow(`SELECT EXISTS (
+		SELECT 1 FROM player_gu pg
+		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.rank
+		WHERE pg.player_id = $1 AND pg.equipped = true AND pg.state = 'ACTIVE'
+		AND COALESCE((gd.effects->'passive'->>'path_conflict_reduction')::numeric, 0) >= 100
+	)`, playerID).Scan(&ctx.ignoresPathConflict)
+
+	_, ctx.herbivores, _, ctx.overgrazing, ctx.starvationHerb, ctx.starvationCarn = EvaluateEcosystem(allNodes)
+
+	vhRows, err := tx.Query(`SELECT race, population, labor_intensity FROM aperture_variant_humans WHERE aperture_id = $1`, apertureID)
+	if err == nil {
+		defer vhRows.Close()
+		for vhRows.Next() {
+			var race, intensity string
+			var pop int
+			if err := vhRows.Scan(&race, &pop, &intensity); err == nil {
+				ctx.variantHumans[race] = struct {
+					population     int
+					laborIntensity string
+				}{population: pop, laborIntensity: intensity}
+			}
+		}
 	}
-	daoMultiplier := getPathDaoMultiplier(n.Path, nodeDaoMap)
+
+	return ctx, nil
+}
+
+func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) int64 {
+	// 1. Dao Marks multiplier
+	daoMultiplier := getPathDaoMultiplier(n.Path, ctx.nodeDaoMap)
 
 	// 2. Conflict multiplier
 	conflictMultiplier := 1.0
-	if CheckNodeConflict(n, allNodes) {
-		var ignoresPathConflict bool
-		_ = tx.QueryRow(`SELECT EXISTS (
-			SELECT 1 FROM player_gu pg
-			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.rank
-			WHERE pg.player_id = $1 AND pg.equipped = true AND pg.state = 'ACTIVE'
-			AND COALESCE((gd.effects->'passive'->>'path_conflict_reduction')::numeric, 0) >= 100
-		)`, playerID).Scan(&ignoresPathConflict)
-		if !ignoresPathConflict {
-			conflictMultiplier = 0.5
-		}
+	if CheckNodeConflict(n, allNodes) && !ctx.ignoresPathConflict {
+		conflictMultiplier = 0.5
 	}
 
-	// 3. Ecosystem / Food Chain multiplier
-	_, herbivores, _, overgrazing, starvationHerb, starvationCarn := EvaluateEcosystem(allNodes)
+	// 3. Ecosystem multiplier
 	ecoMultiplier := 1.0
 	switch n.NodeType {
 	case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "FARMING_ZONE":
-		if overgrazing {
+		if ctx.overgrazing {
 			ecoMultiplier = 0.5
-		} else if herbivores > 0 {
-			ecoMultiplier = 1.25 // Fertilization bonus
+		} else if ctx.herbivores > 0 {
+			ecoMultiplier = 1.25
 		}
 	case "SPIRIT_DEER_PASTURE", "BREEDING_ZONE":
-		if starvationHerb {
+		if ctx.starvationHerb {
 			ecoMultiplier = 0.2
 		}
 	case "SILVER_WOLF_DEN":
-		if starvationCarn {
+		if ctx.starvationCarn {
 			ecoMultiplier = 0.2
 		}
 	}
@@ -367,17 +400,11 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	variantBonus := 1.0
 	race := getVariantHumanForNode(n.NodeType)
 	if race != "" {
-		var pop int
-		var intensity string
-		err := tx.QueryRow(`
-			SELECT population, labor_intensity FROM aperture_variant_humans 
-			WHERE aperture_id = $1 AND race = $2
-		`, n.ApertureID, race).Scan(&pop, &intensity)
-		if err == nil {
-			if pop > 0 {
-				variantBonus = 1.0 + float64(pop)/1000.0
+		if vh, ok := ctx.variantHumans[race]; ok {
+			if vh.population > 0 {
+				variantBonus = 1.0 + float64(vh.population)/1000.0
 			}
-			switch intensity {
+			switch vh.laborIntensity {
 			case "LOW":
 				laborMultiplier = 0.7
 			case "NORMAL":
@@ -392,14 +419,14 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 
 	suitabilityMultiplier := 1.0
 
-	// 5. Node Level / Rank multiplier (medium scaling: +20% per level above 1)
+	// 5. Node Level
 	nodeLevel := n.Level
 	if nodeLevel < 1 {
 		nodeLevel = 1
 	}
 	nodeLevelMultiplier := 1.0 + float64(nodeLevel-1)*0.20
 
-	// 6. Item Rank / Rarity divisor (scaled by standard rank power table P)
+	// 6. Item Rank / Rarity divisor
 	var itemFoodPathMultiplier float64 = 1.0
 	var itemRankDivisor float64 = 1.0
 	if n.ProductionType == "Material" {
@@ -407,7 +434,7 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 		if prodKey != "" {
 			if item, exists := models.ItemRegistry[prodKey]; exists {
 				if item.Path != "" {
-					itemFoodPathMultiplier = getPathDaoMultiplier(item.Path, nodeDaoMap)
+					itemFoodPathMultiplier = getPathDaoMultiplier(item.Path, ctx.nodeDaoMap)
 				}
 				effectiveRank := item.Rank
 				if item.Rarity > effectiveRank {
@@ -421,8 +448,6 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	}
 
 	baseReward := n.ProductionAmount * int64(multiples)
-
-	// Apply area size production multiplier, node level, item rank divisor + optional bulk discount
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
 	combinedMultiplier := (areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier * itemFoodPathMultiplier * nodeLevelMultiplier) / itemRankDivisor
 
@@ -430,9 +455,20 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	if n.ProductionType == "Material" && totalReward > 10000000 {
 		totalReward = 10000000
 	}
+	return totalReward
+}
 
-	note := ""
-	return totalReward, note, nil
+// computeApertureNodeReward computes the total reward for harvesting a single resource node,
+// applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)
+// and an optional bulkMultiplier (used by collect-all, e.g. 0.8 for a -20% bulk penalty).
+// It returns the reward amount and a suitability warning note (empty when production is optimal).
+func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) (int64, string, error) {
+	ctx, err := loadApertureRewardContext(tx, playerID, n.ApertureID, allNodes)
+	if err != nil {
+		return 0, "", err
+	}
+	totalReward := computeApertureNodeRewardWithCtx(ctx, n, multiples, areaSize, allNodes, bulkMultiplier)
+	return totalReward, "", nil
 }
 
 // CollectAllApertureResources harvests every resource node whose production timer is ready, in a
@@ -531,6 +567,13 @@ func CollectAllApertureResources(c *gin.Context) {
 
 	now := time.Now()
 
+	// Pre-load reward context once for all nodes to avoid N+1 queries
+	rewardCtx, err := loadApertureRewardContext(tx, playerID, apertureID, allNodes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải dữ liệu Tiên Khiếu"})
+		return
+	}
+
 	for _, n := range allNodes {
 		if n.NodeCategory != "RESOURCE" || n.ProductionAmount <= 0 {
 			continue
@@ -555,8 +598,8 @@ func CollectAllApertureResources(c *gin.Context) {
 		multiples := 1
 
 		// Calculate reward with 0.8 bulk discount (-20%)
-		reward, _, err := computeApertureNodeReward(tx, playerID, n, multiples, areaSize, allNodes, 0.8)
-		if err != nil || reward <= 0 {
+		reward := computeApertureNodeRewardWithCtx(rewardCtx, n, multiples, areaSize, allNodes, 0.8)
+		if reward <= 0 {
 			continue
 		}
 
@@ -583,11 +626,14 @@ func CollectAllApertureResources(c *gin.Context) {
 	}
 
 	// 4. Grant rewards
+	var updatedStones float64
 	if totalStones > 0 {
-		if _, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, totalStones, playerID); err != nil {
+		if err := tx.QueryRow(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2 RETURNING primeval_stones`, totalStones, playerID).Scan(&updatedStones); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Nguyên Thạch"})
 			return
 		}
+	} else {
+		_ = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&updatedStones)
 	}
 	if err := InventorySvc.BulkAddItems(tx, playerID.String(), "materials", materialTotals); err != nil {
 		logger.S.Errorf("CollectAllApertureResources BulkAddItems failed: player=%s, err=%v", playerID.String(), err)
@@ -595,9 +641,13 @@ func CollectAllApertureResources(c *gin.Context) {
 		return
 	}
 
-	// 5. Reset timers + Human Qi for harvested nodes
-	for _, r := range results {
-		if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET last_collected_at = NOW() WHERE id = $1`, r.NodeID); err != nil {
+	// 5. Reset timers in a single batch statement
+	harvestedIDs := make([]string, len(results))
+	for idx, r := range results {
+		harvestedIDs[idx] = r.NodeID
+	}
+	if len(harvestedIDs) > 0 {
+		if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET last_collected_at = NOW() WHERE id = ANY($1::uuid[])`, pq.Array(harvestedIDs)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật thời gian mỏ"})
 			return
 		}
@@ -628,11 +678,13 @@ func CollectAllApertureResources(c *gin.Context) {
 	notify.Send(db.DB, playerID, "aperture_harvest_bulk", "Thu Hoạch Hàng Loạt Tiên Khiếu", bulkMsg)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":      bulkMsg,
-		"count":        readyCount,
-		"total_stones": totalStones,
-		"materials":    materialTotals,
-		"collected":    results,
+		"message":             bulkMsg,
+		"count":               readyCount,
+		"total_stones":        totalStones,
+		"primeval_stones":     updatedStones,
+		"materials":           materialTotals,
+		"materials_inventory": loadMaterialsInventory(playerID.String()),
+		"collected":           results,
 	})
 }
 

@@ -58,7 +58,7 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Chiếm mỏ thất bại");
       get().addLog(data.message || "Chiếm mỏ thành công!");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       await get().fetchMineSlots();
       return true;
     } catch (caught: unknown) {
@@ -84,7 +84,7 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhận thưởng thất bại");
       get().addLog(data.message || "Đã nhận thưởng tích lũy!");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       await get().fetchMineSlots();
       return true;
     } catch (caught: unknown) {
@@ -110,7 +110,7 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rút lui thất bại");
       get().addLog(data.message || "Đã rời khỏi mỏ và nhận hết thưởng!");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       await get().fetchMineSlots();
       return true;
     } catch (caught: unknown) {
@@ -136,7 +136,7 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tấn công mỏ thất bại");
       get().addLog(data.message || "Bắt đầu thách đấu chiếm mỏ!");
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
