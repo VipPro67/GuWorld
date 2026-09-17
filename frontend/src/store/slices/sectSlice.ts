@@ -4,6 +4,7 @@ import { BACKEND_URL } from "@/lib/config";
 import type { Sect, MySectStatus, SectMission, SectMemberInfo, SectJoinRequest, SectPromotionRequest, SectMine } from "@/store/useGameStore";
 
 let fetchMySectStatusPromise: Promise<void> | null = null;
+let lastMySectFetchPlayerId: string | null = null;
 let lastMySectFetchTime = 0;
 const MY_SECT_TTL_MS = 20000;
 
@@ -163,8 +164,14 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   fetchMySectStatus: async (forceRefresh = false) => {
+    const currentPlayerId = get().player?.id || "";
     const now = Date.now();
-    if (!forceRefresh && now - lastMySectFetchTime < MY_SECT_TTL_MS && get().mySectStatus !== null) {
+    if (
+      !forceRefresh &&
+      lastMySectFetchPlayerId === currentPlayerId &&
+      now - lastMySectFetchTime < MY_SECT_TTL_MS &&
+      get().mySectStatus !== null
+    ) {
       return;
     }
     if (fetchMySectStatusPromise) return fetchMySectStatusPromise;
@@ -176,6 +183,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         if (response.status === 401) { logout(); return; }
         if (response.ok) {
           const data = await response.json();
+          lastMySectFetchPlayerId = currentPlayerId;
           lastMySectFetchTime = Date.now();
           set({ mySectStatus: data });
         }

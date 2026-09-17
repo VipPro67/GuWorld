@@ -26,7 +26,7 @@ export interface ProfileSlice {
     is_disguised?: boolean;
   }) => Promise<boolean>;
   uploadAvatar: (file: File) => Promise<string | null>;
-  fetchPlayerStatus: (id: string) => Promise<void>;
+  fetchPlayerStatus: (id: string, forceRefresh?: boolean) => Promise<void>;
   initializeSession: () => Promise<void>;
 }
 
@@ -91,13 +91,13 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     }
   },
 
-  fetchPlayerStatus: async (id) => {
+  fetchPlayerStatus: async (id, forceRefresh = false) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return;
 
     const now = Date.now();
     const lastFetch = lastStatusFetchTimes.get(id) || 0;
-    if (now - lastFetch < STATUS_FETCH_TTL_MS) {
+    if (!forceRefresh && now - lastFetch < STATUS_FETCH_TTL_MS) {
       return;
     }
 

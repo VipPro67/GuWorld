@@ -53,6 +53,7 @@ func AdminImportData(c *gin.Context) {
 	if err := InitInstanceCache(); err != nil {
 		logger.S.Warnf("failed to reload Instance registry after import: %v", err)
 	}
+	InvalidateDictionaryMemoryCache()
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.import_data",
@@ -153,6 +154,7 @@ func AdminImportTable(c *gin.Context) {
 			logger.S.Warnf("failed to reload Quest registry after import: %v", err)
 		}
 	}
+	InvalidateDictionaryMemoryCache()
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.import_table",
@@ -230,6 +232,7 @@ func AdminClearCache(c *gin.Context) {
 			cache.Client.Del(cache.Ctx, iter.Val())
 		}
 	}
+	InvalidateDictionaryMemoryCache()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa và tải lại toàn bộ cache dữ liệu thành công!"})
 }

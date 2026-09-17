@@ -246,7 +246,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     if (isPracticeMode) {
       return;
     }
-    await fetchPlayerStatus(player.id);
+    await fetchPlayerStatus(player.id, true);
     fetchMineSlots();
   };
 

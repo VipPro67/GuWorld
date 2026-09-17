@@ -190,7 +190,8 @@ func RepairApertureNode(c *gin.Context) {
 	}
 
 	// Deduct stones
-	_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, cost, playerID)
+	var newStones float64
+	err = tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, cost, playerID).Scan(&newStones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
 		return
@@ -212,7 +213,10 @@ func RepairApertureNode(c *gin.Context) {
 	repairMsg := fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, cost)
 	notify.Send(db.DB, playerID, "aperture_repair", "Sửa Chữa Tiên Khiếu", repairMsg)
 
-	c.JSON(http.StatusOK, gin.H{"message": repairMsg})
+	c.JSON(http.StatusOK, gin.H{
+		"message":         repairMsg,
+		"immortal_stones": newStones,
+	})
 }
 
 const MaxNodeLevel = 5
@@ -295,7 +299,8 @@ func UpgradeApertureNode(c *gin.Context) {
 	}
 
 	// Deduct stones
-	_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, upgradeCost, playerID)
+	var newStones float64
+	err = tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, upgradeCost, playerID).Scan(&newStones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
 		return
@@ -351,10 +356,11 @@ func UpgradeApertureNode(c *gin.Context) {
 	notify.Send(db.DB, playerID, "aperture_upgrade", "Nâng Cấp Tiên Khiếu", upgradeMsg)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":    upgradeMsg,
-		"new_level":  newLevel,
-		"new_max_hp": newMaxHP,
-		"cost":       upgradeCost,
+		"message":         upgradeMsg,
+		"new_level":       newLevel,
+		"new_max_hp":      newMaxHP,
+		"cost":            upgradeCost,
+		"immortal_stones": newStones,
 	})
 }
 

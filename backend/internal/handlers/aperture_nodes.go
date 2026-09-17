@@ -167,21 +167,24 @@ func PlaceApertureNode(c *gin.Context) {
 	}
 	hasItem := qty > 0
 
+	var newStones float64
 	if hasItem {
 		if err := InventorySvc.RemoveItem(tx, playerID.String(), nodeItemID, "materials", 1); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ vật phẩm cơ sở"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao vật phẩm mỏ"})
 			return
 		}
+		_ = tx.QueryRow(`SELECT immortal_stones FROM players WHERE id = $1`, playerID).Scan(&newStones)
 	} else {
 		if immortalStones < int64(template.CostStones) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Nguyên Thạch không đủ để xây dựng mỏ này (Yêu cầu: %d, Hiện có: %d).", template.CostStones, immortalStones)})
 			return
 		}
-		_, err = tx.Exec(`
+		err = tx.QueryRow(`
 			UPDATE players 
 			SET immortal_stones = immortal_stones - $1
 			WHERE id = $2
-		`, template.CostStones, playerID)
+			RETURNING immortal_stones
+		`, template.CostStones, playerID).Scan(&newStones)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ chi phí"})
 			return
@@ -343,10 +346,15 @@ func PlaceApertureNode(c *gin.Context) {
 		Success:   true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{
-		"node":    node,
-		"message": buildMsg,
-	})
+	resp := gin.H{
+		"node":            node,
+		"message":         buildMsg,
+		"immortal_stones": newStones,
+	}
+	if hasItem {
+		resp["materials_inventory"] = loadMaterialsInventory(playerID.String())
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // UninstallApertureNode uninstalls a node, deleting it and refunding 1x node_<type> to materials_inventory
@@ -420,8 +428,9 @@ func UninstallApertureNode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Tháo dỡ thành công %s, đã thu hồi lại mô hình mỏ vào túi đồ.", n.Name),
-		"node_id": nodeIDStr,
+		"message":             fmt.Sprintf("Tháo dỡ thành công %s, đã thu hồi lại mô hình mỏ vào túi đồ.", n.Name),
+		"node_id":             nodeIDStr,
+		"materials_inventory": loadMaterialsInventory(playerID.String()),
 	})
 }
 

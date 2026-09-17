@@ -5,6 +5,7 @@ import { BACKEND_URL } from "@/lib/config";
 import { useUIStore } from "@/store/useUIStore";
 import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { AuthResponse, Player } from "@/store/useGameStore";
+import { invalidateCache } from "@/lib/fetch";
 
 export interface AuthSlice {
   login: (email: string, password: string) => Promise<boolean>;
@@ -216,8 +217,26 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     get().unsubscribePlayerEvents();
     get().unsubscribeTradeEvents();
     get().unsubscribeBaoHoangMessages();
+    invalidateCache();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
-    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true, quests: [], guInventoryLoaded: false, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
+    set({
+      player: null,
+      manaSnapshot: null,
+      token: null,
+      recipes: [],
+      recipesLoaded: true,
+      quests: [],
+      guInventoryLoaded: false,
+      notifications: [],
+      notificationsLoaded: false,
+      unreadNotifications: 0,
+      mySectStatus: null,
+      aperture: null,
+      daoMarks: null,
+      apertureNodes: [],
+      activeTribulation: null,
+      marketplaceListings: [],
+    });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
     get().addLog("Đã rời khỏi thế giới Cổ sư.");

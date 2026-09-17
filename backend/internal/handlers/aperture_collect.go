@@ -193,9 +193,18 @@ func CollectApertureResource(c *gin.Context) {
 	fullRewardMsg := rewardMsg + " Nhân Khí +2."
 	notify.Send(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", fullRewardMsg)
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"message": fullRewardMsg,
-	})
+	}
+	if n.ProductionType == "Stones" {
+		var stones float64
+		_ = db.DB.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&stones)
+		resp["primeval_stones"] = stones
+	} else if n.ProductionType == "Material" {
+		resp["materials_inventory"] = loadMaterialsInventory(playerID.String())
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // applyBulkReward applies a combined multiplier and an optional bulk discount to a base reward,
@@ -771,17 +780,22 @@ func RepairAllApertureNodes(c *gin.Context) {
 	}
 
 	// 4. Deduct + repair
-	if _, err := tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, totalCost, playerID); err != nil {
+	var newStones float64
+	if err := tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, totalCost, playerID).Scan(&newStones); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
 		return
 	}
 
-	for _, r := range results {
+	nodeIDs := make([]string, len(results))
+	for idx, r := range results {
+		nodeIDs[idx] = r.NodeID
+	}
+	if len(nodeIDs) > 0 {
 		if _, err := tx.Exec(`
 			UPDATE aperture_resource_nodes
 			SET hp = max_hp, is_destroyed = false, updated_at = NOW()
-			WHERE id = $1
-		`, r.NodeID); err != nil {
+			WHERE id = ANY($1::uuid[])
+		`, pq.Array(nodeIDs)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái sửa chữa"})
 			return
 		}
@@ -796,9 +810,10 @@ func RepairAllApertureNodes(c *gin.Context) {
 	notify.Send(db.DB, playerID, "aperture_repair_bulk", "Sửa Chữa Hàng Loạt Tiên Khiếu", repairAllMsg)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":        repairAllMsg,
-		"repaired_count": len(results),
-		"total_cost":     totalCost,
-		"nodes":          results,
+		"message":         repairAllMsg,
+		"repaired_count":  len(results),
+		"total_cost":      totalCost,
+		"nodes":           results,
+		"immortal_stones": newStones,
 	})
 }

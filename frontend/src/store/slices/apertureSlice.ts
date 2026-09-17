@@ -16,20 +16,24 @@ import type {
 } from "@/store/useGameStore";
 
 let fetchAperturePromise: Promise<void> | null = null;
+let lastAperturePlayerId: string | null = null;
 let lastApertureFetchTime = 0;
 const APERTURE_TTL_MS = 20000;
 
 let fetchApertureNodesPromise: Promise<void> | null = null;
+let lastApertureNodesPlayerId: string | null = null;
 let lastApertureNodesFetchTime = 0;
 const APERTURE_NODES_TTL_MS = 10000;
 
 let fetchVariantHumansPromise: Promise<void> | null = null;
 
 let fetchDaoMarksPromise: Promise<void> | null = null;
+let lastDaoMarksPlayerId: string | null = null;
 let lastDaoMarksFetchTime = 0;
 const DAO_MARKS_TTL_MS = 30000;
 
 let fetchActiveTribulationPromise: Promise<void> | null = null;
+let lastActiveTribulationPlayerId: string | null = null;
 let lastActiveTribulationFetchTime = 0;
 const ACTIVE_TRIBULATION_TTL_MS = 15000;
 
@@ -88,8 +92,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   activeTribulation: null,
 
   fetchAperture: async (forceRefresh = false) => {
+    const currentPlayerId = get().player?.id || "";
     const now = Date.now();
-    if (!forceRefresh && now - lastApertureFetchTime < APERTURE_TTL_MS && get().aperture !== null) {
+    if (
+      !forceRefresh &&
+      lastAperturePlayerId === currentPlayerId &&
+      now - lastApertureFetchTime < APERTURE_TTL_MS &&
+      get().aperture !== null
+    ) {
       return;
     }
     if (fetchAperturePromise) return fetchAperturePromise;
@@ -107,6 +117,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
           return;
         }
         const data = await response.json();
+        lastAperturePlayerId = currentPlayerId;
         lastApertureFetchTime = Date.now();
         set({ aperture: data });
         const player = get().player;
@@ -126,8 +137,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchDaoMarks: async (forceRefresh = false) => {
+    const currentPlayerId = get().player?.id || "";
     const now = Date.now();
-    if (!forceRefresh && now - lastDaoMarksFetchTime < DAO_MARKS_TTL_MS && get().daoMarks.length > 0) {
+    if (
+      !forceRefresh &&
+      lastDaoMarksPlayerId === currentPlayerId &&
+      now - lastDaoMarksFetchTime < DAO_MARKS_TTL_MS &&
+      get().daoMarks.length > 0
+    ) {
       return;
     }
     if (fetchDaoMarksPromise) return fetchDaoMarksPromise;
@@ -142,6 +159,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         }
         if (response.ok) {
           const data = await response.json();
+          lastDaoMarksPlayerId = currentPlayerId;
           lastDaoMarksFetchTime = Date.now();
           set({ daoMarks: Array.isArray(data) ? data : [] });
         }
@@ -157,8 +175,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchApertureNodes: async (forceRefresh = false) => {
+    const currentPlayerId = get().player?.id || "";
     const now = Date.now();
-    if (!forceRefresh && now - lastApertureNodesFetchTime < APERTURE_NODES_TTL_MS && get().apertureNodes.length > 0) {
+    if (
+      !forceRefresh &&
+      lastApertureNodesPlayerId === currentPlayerId &&
+      now - lastApertureNodesFetchTime < APERTURE_NODES_TTL_MS &&
+      get().apertureNodes.length > 0
+    ) {
       return;
     }
     if (fetchApertureNodesPromise) return fetchApertureNodesPromise;
@@ -173,6 +197,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         }
         if (response.ok) {
           const data = await response.json();
+          lastApertureNodesPlayerId = currentPlayerId;
           lastApertureNodesFetchTime = Date.now();
           set({ apertureNodes: Array.isArray(data) ? data : [] });
         }
@@ -209,6 +234,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addLog(data.message || "Đã đặt điểm tài nguyên mới.");
       get().applyInventoryFromResponse(data);
       await get().fetchApertureNodes(true);
+      await get().fetchGuInventory();
       await get().fetchVariantHumans();
       return true;
     } catch (caught: unknown) {
@@ -800,8 +826,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchActiveTribulation: async (forceRefresh = false) => {
+    const currentPlayerId = get().player?.id || "";
     const now = Date.now();
-    if (!forceRefresh && now - lastActiveTribulationFetchTime < ACTIVE_TRIBULATION_TTL_MS) {
+    if (
+      !forceRefresh &&
+      lastActiveTribulationPlayerId === currentPlayerId &&
+      now - lastActiveTribulationFetchTime < ACTIVE_TRIBULATION_TTL_MS
+    ) {
       return;
     }
     if (fetchActiveTribulationPromise) return fetchActiveTribulationPromise;
@@ -816,6 +847,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         }
         if (response.ok) {
           const data = await response.json();
+          lastActiveTribulationPlayerId = currentPlayerId;
           lastActiveTribulationFetchTime = Date.now();
           set({ activeTribulation: data });
         }
@@ -882,6 +914,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().applyInventoryFromResponse(data);
       await get().fetchAperture(true);
       await get().fetchDaoMarks(true);
+      const pid = get().player?.id;
+      if (pid) {
+        await get().fetchPlayerStatus(pid, true);
+      }
       set({ activeTribulation: null });
       return true;
     } catch (caught: unknown) {

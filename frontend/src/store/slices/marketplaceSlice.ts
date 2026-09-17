@@ -54,6 +54,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (!response.ok) throw new Error(data.error || "Đăng bán thất bại");
       get().addLog(data.message || "Đăng bán thành công");
       get().applyInventoryFromResponse(data);
+      if (payload.itemType === "Gu") {
+        await get().fetchGuInventory();
+      }
+      const pid = get().player?.id;
+      if (pid) {
+        await get().fetchPlayerStatus(pid, true);
+      }
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -75,6 +82,10 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (!response.ok) throw new Error(data.error || "Đặt giá thất bại");
       get().addLog(data.message || "Đặt giá thành công");
       get().applyInventoryFromResponse(data);
+      const pid = get().player?.id;
+      if (pid) {
+        await get().fetchPlayerStatus(pid, true);
+      }
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
@@ -92,6 +103,11 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (!response.ok) throw new Error(data.error || "Hủy listing thất bại");
       get().addLog(data.message || "Đã hủy");
       get().applyInventoryFromResponse(data);
+      await get().fetchGuInventory();
+      const pid = get().player?.id;
+      if (pid) {
+        await get().fetchPlayerStatus(pid, true);
+      }
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
