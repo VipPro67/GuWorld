@@ -16,6 +16,8 @@ import {
   Clock,
   Eye,
   EyeOff,
+  ChevronRight,
+  ChevronDown,
   User,
   Camera,
   Swords,
@@ -249,6 +251,10 @@ export const Aperture: React.FC<ApertureProps> = ({
   const dashOffset = CIRC * (1 - percent / 100);
 
   const [activeTab, setActiveTab] = useState<"aperture" | "growth" | "referrals" | "settings">("aperture");
+  const [isGrowthCoreExpanded, setIsGrowthCoreExpanded] = useState(true);
+  const [isPassiveStatsExpanded, setIsPassiveStatsExpanded] = useState(true);
+  const [isActiveGrowthExpanded, setIsActiveGrowthExpanded] = useState(true);
+  const [isPathAttainmentsExpanded, setIsPathAttainmentsExpanded] = useState(true);
   const [giftCodeInput, setGiftCodeInput] = useState("");
   const [giftCodeMsg, setGiftCodeMsg] = useState<string | null>(null);
   const [giftCodeLoading, setGiftCodeLoading] = useState(false);
@@ -831,11 +837,17 @@ export const Aperture: React.FC<ApertureProps> = ({
 
             {/* Growth Boosts */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
-              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+              <button
+                type="button"
+                aria-expanded={isGrowthCoreExpanded}
+                onClick={() => setIsGrowthCoreExpanded((expanded) => !expanded)}
+                className="flex items-center gap-2 border-b border-zinc-900 pb-2.5 text-left"
+              >
+                {isGrowthCoreExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
                 <TrendingUp className="w-5 h-5 text-emerald-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Cốt Tủy Không Khiếu</span>
-              </div>
-              {(() => {
+              </button>
+              {isGrowthCoreExpanded && (() => {
                 const gd = player.growth_data;
                 const b = gd?.boosts;
                 const hasBoosts = b && (b.attack > 0 || b.defense > 0 || b.hp > 0 || b.speed > 0);
@@ -873,11 +885,17 @@ export const Aperture: React.FC<ApertureProps> = ({
 
             {/* Passive Effects from Equipped Gu */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
-              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+              <button
+                type="button"
+                aria-expanded={isPassiveStatsExpanded}
+                onClick={() => setIsPassiveStatsExpanded((expanded) => !expanded)}
+                className="flex items-center gap-2 border-b border-zinc-900 pb-2.5 text-left"
+              >
+                {isPassiveStatsExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
                 <Zap className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Thống Kê Bị Động</span>
-              </div>
-              {(() => {
+              </button>
+              {isPassiveStatsExpanded && (() => {
                 if (!passiveStats) return <div className="text-xs text-zinc-500 italic py-2">Đang tải...</div>;
                 const labels: Record<string, string> = {
                   attack: "Công Kích", defense: "Phòng Ngự", hp: "Máu",
@@ -926,7 +944,13 @@ export const Aperture: React.FC<ApertureProps> = ({
 
             {/* In-progress + Fully Grown Gu List */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner space-y-4">
-              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+              <button
+                type="button"
+                aria-expanded={isActiveGrowthExpanded}
+                onClick={() => setIsActiveGrowthExpanded((expanded) => !expanded)}
+                className="flex w-full items-center gap-2 border-b border-zinc-900 pb-2.5 text-left"
+              >
+                {isActiveGrowthExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
                 <Leaf className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Cổ Trùng Đang Có Hiệu Ứng</span>
                 <span className="ml-auto text-[10px] text-zinc-500 font-mono">{(() => {
@@ -934,8 +958,8 @@ export const Aperture: React.FC<ApertureProps> = ({
                   const doneSet = new Set((player.growth_data?.fully_grown || []).map(fg => `${fg.gu_id}@${fg.rank}`));
                   return `${types.filter(t => !doneSet.has(`${t.gu_id}@${t.rank}`)).length} đang / ${types.length} loại`;
                 })()}</span>
-              </div>
-              {(() => {
+              </button>
+              {isActiveGrowthExpanded && (() => {
                 // 1 GU ID + rank chỉ tăng 1 lần: tiến độ gom theo loại (gu_id+rank)
                 // và giữ vĩnh viễn, kể cả khi Cổ trùng đã được gỡ ra khỏi Không Khiếu.
                 const fullyGrown = player.growth_data?.fully_grown || [];
@@ -1008,11 +1032,17 @@ export const Aperture: React.FC<ApertureProps> = ({
 
             {/* Path Attainments */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner space-y-4">
-              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+              <button
+                type="button"
+                aria-expanded={isPathAttainmentsExpanded}
+                onClick={() => setIsPathAttainmentsExpanded((expanded) => !expanded)}
+                className="flex w-full items-center gap-2 border-b border-zinc-900 pb-2.5 text-left"
+              >
+                {isPathAttainmentsExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
                 <Crown className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              </button>
+              {isPathAttainmentsExpanded && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
                   Object.entries(player.path_masteries).map(([path, points]) => {
                     const level = masteryKeyForPoints(points as number);
@@ -1043,7 +1073,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                 ) : (
                   <div className="col-span-2 text-center text-xs text-zinc-650 italic py-4">Chưa ngộ chân ý bất kỳ lưu phái nào. Hãy thám hiểm Mộng Cảnh!</div>
                 )}
-              </div>
+              </div>}
             </div>
           </div>
         )}

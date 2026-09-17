@@ -5,6 +5,7 @@ import {
   Swords, SkipForward, Heart, Shield, Skull,
   Zap, FlaskConical, Sparkles, Flame, Play, Pause,
   ArrowLeft, ChevronRight, Droplets, Coins, Gem,
+  ChevronDown,
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
@@ -617,6 +618,10 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     c.maxHp > 0 ? Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100)) : 0;
 
   const [detailCombatant, setDetailCombatant] = React.useState<CombatantState | null>(null);
+  const [isVitalStatsExpanded, setIsVitalStatsExpanded] = React.useState(false);
+  const [isDaoMarksExpanded, setIsDaoMarksExpanded] = React.useState(false);
+  const [isPathMasteriesExpanded, setIsPathMasteriesExpanded] = React.useState(false);
+  const [isGuInventoryExpanded, setIsGuInventoryExpanded] = React.useState(false);
 
   const renderGridCell = (c: CombatantState | undefined, gridX: number, gridY: number) => {
     const isAlly = c?.kind === "ally";
@@ -788,7 +793,17 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             </div>
 
             {/* Vital stats */}
-            <div className="grid grid-cols-2 gap-2 bg-zinc-950/60 rounded-xl p-3 mt-2">
+            <div className="mt-2 bg-zinc-950/60 rounded-xl p-3">
+              <button
+                type="button"
+                aria-expanded={isVitalStatsExpanded}
+                onClick={() => setIsVitalStatsExpanded((expanded) => !expanded)}
+                className="flex w-full items-center gap-1.5 text-left text-zinc-400 text-[10px] font-semibold"
+              >
+                {isVitalStatsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                Chỉ Số Sinh Tồn
+              </button>
+              {isVitalStatsExpanded && <div className="grid grid-cols-2 gap-2 mt-2">
               <div><span className="text-zinc-500">Sinh lực</span><br /><span className="text-emerald-400 font-bold text-sm"><Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} /></span></div>
               <div>
                 <span className="text-zinc-500">{c.rank >= 6 ? "Tiên nguyên" : "Chân nguyên"}</span><br />
@@ -804,6 +819,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               <div><span className="text-zinc-500">Phòng thủ</span><br /><span className="text-blue-400 font-bold"><Num value={c.defense} /></span></div>
               <div><span className="text-zinc-500">Tốc độ</span><br /><span className="text-cyan-400 font-bold"><Num value={c.speed} /></span></div>
               <div><span className="text-zinc-500">Khiên</span><br /><span className="text-indigo-400 font-bold"><Num value={c.shield} /></span></div>
+              </div>}
             </div>
 
             {/* Position */}
@@ -814,36 +830,60 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             {/* Dao Marks */}
             {c.daoMarks && Object.keys(c.daoMarks).length > 0 && (
               <div className="border-t border-zinc-800 pt-2 mt-2">
-                <span className="text-zinc-500 text-[10px]">Đạo Ấn:</span>
-                <div className="flex flex-wrap gap-1 mt-1">
+                <button
+                  type="button"
+                  aria-expanded={isDaoMarksExpanded}
+                  onClick={() => setIsDaoMarksExpanded((expanded) => !expanded)}
+                  className="flex items-center gap-1.5 text-left text-zinc-500 text-[10px]"
+                >
+                  {isDaoMarksExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Đạo Ấn:
+                </button>
+                {isDaoMarksExpanded && <div className="flex flex-wrap gap-1 mt-1">
                   {Object.entries(c.daoMarks).map(([k, v]) => (
                     <span key={k} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/30 text-amber-400 border border-amber-800/40 font-mono">
                       {k}: {v}
                     </span>
                   ))}
-                </div>
+                </div>}
               </div>
             )}
 
             {/* Path Masteries */}
             {c.pathMasteries && Object.keys(c.pathMasteries).length > 0 && (
               <div className="border-t border-zinc-800 pt-2 mt-2">
-                <span className="text-zinc-500 text-[10px]">Đường Tu:</span>
-                <div className="flex flex-wrap gap-1 mt-1">
+                <button
+                  type="button"
+                  aria-expanded={isPathMasteriesExpanded}
+                  onClick={() => setIsPathMasteriesExpanded((expanded) => !expanded)}
+                  className="flex items-center gap-1.5 text-left text-zinc-500 text-[10px]"
+                >
+                  {isPathMasteriesExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Đường Tu:
+                </button>
+                {isPathMasteriesExpanded && <div className="flex flex-wrap gap-1 mt-1">
                   {Object.entries(c.pathMasteries).map(([k, points]) => (
                     <span key={k} className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/30 text-cyan-400 border border-cyan-800/40 font-mono">
                       {k}: {translateMastery(masteryKeyForPoints(points as number))}
                     </span>
                   ))}
-                </div>
+                </div>}
               </div>
             )}
 
             {/* Equipped Gu List */}
             {c.guInventory && c.guInventory.length > 0 && (
               <div className="border-t border-zinc-800 pt-2 mt-2">
-                <span className="text-zinc-500 text-[10px]">Cổ Trùng Trang Bị ({c.guInventory.length}):</span>
-                <div className="flex flex-wrap gap-1.5 mt-1">
+                <button
+                  type="button"
+                  aria-expanded={isGuInventoryExpanded}
+                  onClick={() => setIsGuInventoryExpanded((expanded) => !expanded)}
+                  className="flex items-center gap-1.5 text-left text-zinc-500 text-[10px]"
+                >
+                  {isGuInventoryExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Cổ Trùng Trang Bị ({c.guInventory.length}):
+                </button>
+                {isGuInventoryExpanded && <div className="flex flex-wrap gap-1.5 mt-1">
                   {c.guInventory.map((g, idx: number) => {
                     const item = g as Record<string, unknown>;
                     const rawId = String(item.gu_id || item.guId || item.GuID || item.id || "");
@@ -860,7 +900,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                       </span>
                     );
                   })}
-                </div>
+                </div>}
               </div>
             )}
 
