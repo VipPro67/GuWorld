@@ -545,7 +545,6 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		}
 		simEnemy.DamageMultiplier = globalMult
 	}
-	simEnemy.Speed += computeGlobalSpeedBoost(selectedGuIDs, loadoutSpec)
 	simEnemy.CritRateBonus = computeGlobalCritRate(selectedGuIDs, loadoutSpec)
 	simEnemy.IgnoreDefenseFlat, simEnemy.IgnoreDefensePct = computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec)
 	simEnemy.RefineManaTier = gamefx.RefineManaTier(enemy.Rank, enemy.GuInventory)
@@ -914,7 +913,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Mana:                 simMana,
 		BaseDmg:              playerStats["attack"],
 		BaseDef:              playerStats["defense"],
-		Speed:                playerStats["speed"] + computeGlobalSpeedBoost(selectedGuIDs, loadoutSpec),
+		Speed:                playerStats["speed"],
 		VirtualShield:        float64(virtualShield),
 		DaoMarks:             simulator.DaoMarks(player.DaoMarks),
 		PathMasteries:        player.PathMasteries,

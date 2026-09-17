@@ -1066,7 +1066,8 @@ GU_BLOOD_SWEAT,5,1,"{""GU_BLOOD_MOUNTAIN"": {""qty"": 1, ""rank"": 4}, ""GU_BLOO
 GU_BLOOD_WAR,5,1,"{""GU_BLOOD_FURNACE"": {""qty"": 1, ""rank"": 4}, ""GU_BLOOD_MOUNTAIN"": {""qty"": 1, ""rank"": 4}}","{""beast_blood_rank5"": 25}",0.5,300,0
 GU_THEFT_EMPTY_HAND_4,4,1,"{""GU_THEFT_HAND_3"": {""qty"": 1, ""rank"": 3}}","{""heaven_qi_rank4"": 6}",0.6,150,0
 GU_BLOOD_WIND,5,1,"{""GU_BLOOD_WING"": {""qty"": 1, ""rank"": 4}, ""GU_BLOOD_MOUNTAIN"": {""qty"": 1, ""rank"": 4}}","{""storm_qi_wind"": 5, ""beast_blood_rank5"": 22}",0.5,300,0
-GU_SPRING_AUTUMN_CICADA,6,1,"{""GU_SPRING_AUTUMN_CICADA"": {""qty"": 1, ""rank"": 5}}","{""water_rank6"": 35, ""immortal_essence"": 5, ""sword_leaf_grass_rank6"": 7}",0.05,600,100
+GU_SPRING_AUTUMN_CICADA,6,1,"{""GU_BLOOD_BLAST"": {""qty"": 5, ""rank"": 5}}","{""water_rank6"": 35, ""immortal_essence"": 5, ""sword_leaf_grass_rank6"": 7}",0.05,600,100
+GU_SPRING_AUTUMN_CICADA,6,2,"{""GU_TIME_SANDGLASS_5"": {""qty"": 5, ""rank"": 5}}","{""gu_master_blood"": 10, ""gu_master_blood"": 100, ""fresh_blood_relatives"": 10, ""time_river_water"": 10}",0.05,600,100
 GU_FLYING_BEAR_PHANTOM,6,1,{},"{""iron_rank6"": 1, ""sound_stone_rank6"": 16, ""heavy_gold_ore"": 24, ""beast_meat_rank6"": 5}",0.05,900,150
 GU_BLOOD_RED_SUN,6,1,"{""GU_BLOOD_BLAST"": {""qty"": 5, ""rank"": 5}, ""GU_BLOOD_HEAVEN"": {""qty"": 5, ""rank"": 5}, ""GU_HEAVENLY_FIRE"": {""qty"": 1, ""rank"": 5}}","{""beast_blood_rank6"": 37, ""heaven_qi_rank6"": 11}",0.05,600,100
 GU_BLOOD_RIVER_BRIDGE,6,1,"{""GU_BLOOD_HEAVEN"": {""qty"": 5, ""rank"": 5}, ""GU_BLOOD_WIND_ESCAPE"": {""qty"": 5, ""rank"": 5}}","{""heavenly_river_dew"": 11, ""beast_blood_rank6"": 37}",0.05,600,100

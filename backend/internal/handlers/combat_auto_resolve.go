@@ -635,24 +635,6 @@ func computeGlobalCritRate(selectedGuIDs []string, resolveSpec func(string) (mod
 	return total
 }
 
-// computeGlobalSpeedBoost aggregates speed_boost_flat from all equipped active Gu (additive).
-func computeGlobalSpeedBoost(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
-	total := 0.0
-	seen := make(map[string]struct{}, len(selectedGuIDs))
-	for _, guID := range selectedGuIDs {
-		if _, ok := seen[guID]; ok {
-			continue
-		}
-		seen[guID] = struct{}{}
-		spec, ok := resolveSpec(guID)
-		if !ok || spec.Effects.Active == nil {
-			continue
-		}
-		total += spec.Effects.Active.SpeedBoostFlat
-	}
-	return total
-}
-
 // computeGlobalAllStatsBuff aggregates all_stats_buff_percent from all equipped active Gu (additive, capped at 0.5).
 func computeGlobalAllStatsBuff(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
 	total := 0.0
