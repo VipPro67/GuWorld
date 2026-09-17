@@ -180,7 +180,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	}
 
 	// Sect Territory AoE Buff
-	if player.ID.String() != "" {
+	if db.DB != nil && player.ID.String() != "" {
 		territory := CheckPlayerSectTerritory(db.DB, player.ID, player.CurrentRegion, player.X, player.Y)
 		if territory.InTerritory {
 			// Player is inside their sect's territory!

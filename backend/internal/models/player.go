@@ -262,9 +262,13 @@ type CombatState struct {
 	EnemyPathResistance   map[string]float64 `json:"enemy_path_resistance,omitempty"`
 	EnemyMentalResistance float64            `json:"enemy_mental_resistance,omitempty"`
 	EnemyCombatSettings   *AutoCombatConfig  `json:"enemy_combat_settings,omitempty"`
-	SkillCooldowns        map[string]int     `json:"skill_cooldowns,omitempty"`
-	ItemsUsedCount        int                `json:"items_used_count"`
-	ItemCooldowns         map[string]int     `json:"item_cooldowns,omitempty"`
+	// EnemyMasked marks an arena opponent hidden by ARENA_IDENTITY_MASK. The
+	// masked loadout in EnemyGuInventory must be used verbatim instead of
+	// rebuilding the defender from their real player row.
+	EnemyMasked    bool           `json:"enemy_masked,omitempty"`
+	SkillCooldowns map[string]int `json:"skill_cooldowns,omitempty"`
+	ItemsUsedCount int            `json:"items_used_count"`
+	ItemCooldowns  map[string]int `json:"item_cooldowns,omitempty"`
 	// PathMasteryGained tracks Chân Ý points already earned in this battle, so
 	// combat gains can be capped at PathMasteryBattleGainLimit(rank) per battle.
 	PathMasteryGained int         `json:"path_mastery_gained,omitempty"`

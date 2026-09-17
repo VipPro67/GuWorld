@@ -93,11 +93,83 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 	// Build enemies
 	for idx := range player.ActiveCombat.Enemies {
 		enemy := &player.ActiveCombat.Enemies[idx]
+		if simDef, ok := buildSimPlayerDefender(tx, enemy, player.ActiveCombat, isVirtual); ok {
+			simState.Enemies = append(simState.Enemies, simDef)
+			continue
+		}
 		simEnemy := buildSimEnemyCombatant(tx, enemy, player.ActiveCombat)
 		simState.Enemies = append(simState.Enemies, simEnemy)
 	}
 
 	return simState, nil
+}
+
+// buildSimPlayerDefender rebuilds a real-player PVP defender with the same
+// buildSimCombatant pipeline used for the initiator, so passive mechanics,
+// killer moves and global buffs load identically on both sides. Returns
+// ok=false for monsters, pets, masked arena opponents (ARENA_IDENTITY_MASK)
+// and tx-less callers, which fall back to buildSimEnemyCombatant.
+func buildSimPlayerDefender(tx *sql.Tx, enemy *models.Combatant, activeCombat *models.CombatState, isVirtual bool) (*simulator.CombatantAuto, bool) {
+	if tx == nil || enemy == nil || activeCombat == nil || activeCombat.EnemyMasked {
+		return nil, false
+	}
+	isPlayer := enemy.Kind == "Player" ||
+		(activeCombat.EnemyType == "PVP" && activeCombat.TargetPlayerID != "" &&
+			enemy.Kind != "Pet" && enemy.Kind != "Boss" && enemy.Kind != "Normal")
+	if !isPlayer {
+		return nil, false
+	}
+	// Arena identity masks created before the EnemyMasked flag existed are
+	// detected by their sentinel inventory entry.
+	for _, g := range enemy.GuInventory {
+		if g.InstanceID == "attitude_mask" {
+			return nil, false
+		}
+	}
+	// Main PVP enemies normally carry the defender UUID; some encodings
+	// (exploration) leave EnemyTemplateID empty, so fall back to TargetPlayerID.
+	defenderID := enemy.ID
+	if _, errParseID := uuid.Parse(defenderID); errParseID != nil {
+		defenderID = activeCombat.TargetPlayerID
+	}
+	defUUID, errParse := uuid.Parse(defenderID)
+	if errParse != nil {
+		return nil, false
+	}
+	defPlayer, errLoad := evaluateManaTxEquippedReadonly(tx, defUUID)
+	if errLoad != nil {
+		logger.S.Warnf("buildSimPlayerDefender: failed to load defender %s: %v", enemy.ID, errLoad)
+		return nil, false
+	}
+	simDef, errBuild := buildSimCombatant(tx, &defPlayer, isVirtual, false, nil)
+	if errBuild != nil {
+		logger.S.Warnf("buildSimPlayerDefender: failed to build defender %s: %v", enemy.ID, errBuild)
+		return nil, false
+	}
+
+	// Keep the recorded encounter identity, grid slot and HP/mana snapshot.
+	simDef.Kind = "Enemy"
+	simDef.GridX = enemy.GridX
+	simDef.GridY = enemy.GridY
+	if enemy.MaxHP > 0 {
+		simDef.MaxHP = enemy.MaxHP
+	}
+	if enemy.HP > 0 {
+		simDef.HP = enemy.HP
+	}
+	if simDef.HP > simDef.MaxHP {
+		simDef.HP = simDef.MaxHP
+	}
+	if enemy.MaxMana > 0 {
+		simDef.MaxMana = enemy.MaxMana
+	}
+	if enemy.CurrentMana > 0 {
+		simDef.Mana = enemy.CurrentMana
+	}
+	if simDef.Mana > simDef.MaxMana {
+		simDef.Mana = simDef.MaxMana
+	}
+	return simDef, true
 }
 
 // applyLoveGuPenalties scans the combat log for Chaos Gamble (Love Gu) penalties

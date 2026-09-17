@@ -598,9 +598,9 @@ func AttackSect(c *gin.Context) {
 			}
 			defStats := CalculatePlayerStats(&defPlayer)
 			defCombatant := models.CombatantFromPlayer(&defPlayer, defStats)
-			defCombatant.Kind = "Normal" // treated as enemy combatant
+			defCombatant.Kind = "Player"
 			defCombatant.CombatSettings = &defPlayer.CombatSettings
-			defCombatant.GuInventory = filterGuLoadout(defPlayer.GuInventory, defPlayer.CombatSettings)
+			defCombatant.GuInventory = defPlayer.GuInventory
 			attacker.ActiveCombat.Enemies = append(attacker.ActiveCombat.Enemies, defCombatant)
 		}
 	}

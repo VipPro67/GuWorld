@@ -3,7 +3,9 @@ package handlers
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
 
 func setupGuRegistry(t *testing.T) {
@@ -226,5 +228,165 @@ func TestBuildSimEnemyCombatant_PopulatesPassiveMechanics(t *testing.T) {
 	}
 	if simEnemy.Mechanics[0].Trigger != "ON_DEATH" || simEnemy.Mechanics[0].ActionCode != "REBORN" {
 		t.Fatalf("unexpected mechanic on simEnemy: %+v", simEnemy.Mechanics[0])
+	}
+}
+
+// setupSymmetryGuRegistry installs a Gu with every global combat modifier plus a
+// passive mechanic, exercising the full buildSimCombatant stat pipeline.
+func setupSymmetryGuRegistry(t *testing.T) {
+	t.Helper()
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_OFFENSE": {1: {
+			ID:   "GU_OFFENSE",
+			Name: "Offense",
+			Rank: 1,
+			Effects: models.GuEffects{
+				Active: &models.ActiveEffect{
+					DamageFlat: 25, DamageMult: 1.4, SpeedBoostFlat: 7,
+					CritRateBoost: 0.2, IgnoreDefense: 3, IgnoreDefensePct: 0.15, ShieldFlat: 40,
+				},
+				Other: []models.SpecialMechanic{{EventTrigger: "ON_DEATH", ActionCode: "REBORN"}},
+			},
+		}},
+	}
+	t.Cleanup(func() { models.GuRegistry = map[string]map[int]models.GuDictionaryItem{} })
+}
+
+func symmetryTestInventory() models.GuInventory {
+	return models.GuInventory{
+		{InstanceID: "off1", GuID: "GU_OFFENSE", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
+	}
+}
+
+func symmetryTestSettings() models.AutoCombatConfig {
+	return models.AutoCombatConfig{GuPriorities: []models.GuTactic{{GuID: "GU_OFFENSE", Priority: 2}}}
+}
+
+func newSymmetryPlayer(id, name string) models.Player {
+	p := models.Player{}
+	p.ID = uuid.MustParse(id)
+	p.Username = name
+	p.Rank = 3
+	p.SubRank = 1
+	p.BaseHP = 500
+	p.HP = 500
+	p.MaxMana = 200
+	p.CurrentMana = 200
+	p.PrimevalStones = 123
+	p.ImmortalStones = 4
+	p.GuInventory = symmetryTestInventory()
+	p.DaoMarks = models.DaoMarksMap{"strength": 0}
+	p.PathMasteries = models.PathMasteriesMap{}
+	p.CombatSettings = symmetryTestSettings()
+	return p
+}
+
+// TestBuildSimCombatant_AttackerDefenderSymmetry guards against attacker/defender
+// drift: both sides must load the same active skills, passive mechanics and
+// global buffs (speed, crit, ignore-defense, shield, mana tier) from the same
+// equipped Gu loadout.
+func TestBuildSimCombatant_AttackerDefenderSymmetry(t *testing.T) {
+	setupSymmetryGuRegistry(t)
+
+	attacker := newSymmetryPlayer("11111111-1111-1111-1111-111111111111", "Attacker")
+	defender := newSymmetryPlayer("22222222-2222-2222-2222-222222222222", "Defender")
+
+	simAtt, err := buildSimCombatant(nil, &attacker, true, true, nil)
+	if err != nil {
+		t.Fatalf("build attacker: %v", err)
+	}
+	simDef, err := buildSimCombatant(nil, &defender, true, false, nil)
+	if err != nil {
+		t.Fatalf("build defender: %v", err)
+	}
+
+	countGuSkills := func(s *simulator.CombatantAuto) int {
+		n := 0
+		for _, a := range s.Actions {
+			if a.ActionType == "GU_SKILL" {
+				n++
+			}
+		}
+		return n
+	}
+
+	if simAtt.Speed != simDef.Speed {
+		t.Fatalf("speed asymmetry: attacker %.2f vs defender %.2f", simAtt.Speed, simDef.Speed)
+	}
+	if simAtt.CritRateBonus != simDef.CritRateBonus || simAtt.CritRateBonus != 0.2 {
+		t.Fatalf("crit asymmetry: attacker %.2f vs defender %.2f (want 0.2)", simAtt.CritRateBonus, simDef.CritRateBonus)
+	}
+	if simAtt.IgnoreDefenseFlat != simDef.IgnoreDefenseFlat || simAtt.IgnoreDefenseFlat != 3 {
+		t.Fatalf("ignore-defense flat asymmetry: attacker %.2f vs defender %.2f", simAtt.IgnoreDefenseFlat, simDef.IgnoreDefenseFlat)
+	}
+	if simAtt.IgnoreDefensePct != simDef.IgnoreDefensePct || simAtt.IgnoreDefensePct != 0.15 {
+		t.Fatalf("ignore-defense pct asymmetry: attacker %.2f vs defender %.2f", simAtt.IgnoreDefensePct, simDef.IgnoreDefensePct)
+	}
+	if simAtt.VirtualShield != simDef.VirtualShield || simAtt.VirtualShield != 40 {
+		t.Fatalf("virtual shield asymmetry: attacker %.2f vs defender %.2f (want 40)", simAtt.VirtualShield, simDef.VirtualShield)
+	}
+	if simAtt.RefineManaTier != simDef.RefineManaTier {
+		t.Fatalf("refine mana tier asymmetry: attacker %.2f vs defender %.2f", simAtt.RefineManaTier, simDef.RefineManaTier)
+	}
+	if len(simAtt.Mechanics) != len(simDef.Mechanics) || len(simAtt.Mechanics) != 1 {
+		t.Fatalf("passive mechanics asymmetry: attacker %d vs defender %d (want 1)", len(simAtt.Mechanics), len(simDef.Mechanics))
+	}
+	if countGuSkills(simAtt) != 1 || countGuSkills(simDef) != 1 {
+		t.Fatalf("active skill asymmetry: attacker %d vs defender %d (want 1)", countGuSkills(simAtt), countGuSkills(simDef))
+	}
+	if simAtt.PrimevalStones != 999999 || simDef.PrimevalStones != 999999 {
+		t.Fatalf("virtual primeval stones asymmetry: attacker %.0f vs defender %.0f", simAtt.PrimevalStones, simDef.PrimevalStones)
+	}
+}
+
+// TestBuildSimEnemyCombatant_PlayerFallbackGlobals verifies the monster/mock
+// fallback path still grants players the same global buffs and virtual-mode
+// recovery resources when no DB transaction is available.
+func TestBuildSimEnemyCombatant_PlayerFallbackGlobals(t *testing.T) {
+	setupSymmetryGuRegistry(t)
+
+	enemy := &models.Combatant{
+		ID:            "33333333-3333-3333-3333-333333333333",
+		Name:          "Enemy",
+		Kind:          "Player",
+		Rank:          3,
+		HP:            500,
+		MaxHP:         500,
+		CurrentMana:   200,
+		MaxMana:       200,
+		GuInventory:   symmetryTestInventory(),
+		PathMasteries: models.PathMasteriesMap{},
+	}
+	settings := symmetryTestSettings()
+	enemy.CombatSettings = &settings
+	active := &models.CombatState{CombatMode: "virtual", EnemyType: "PVP"}
+
+	simEnemy := buildSimEnemyCombatant(nil, enemy, active)
+
+	if simEnemy.CritRateBonus != 0.2 {
+		t.Fatalf("expected crit bonus 0.2, got %.2f", simEnemy.CritRateBonus)
+	}
+	if simEnemy.IgnoreDefenseFlat != 3 || simEnemy.IgnoreDefensePct != 0.15 {
+		t.Fatalf("expected ignore defense 3/0.15, got %.2f/%.2f", simEnemy.IgnoreDefenseFlat, simEnemy.IgnoreDefensePct)
+	}
+	if len(simEnemy.Mechanics) != 1 {
+		t.Fatalf("expected 1 passive mechanic, got %d", len(simEnemy.Mechanics))
+	}
+	if simEnemy.PrimevalStones != 999999 || simEnemy.ImmortalStones != 999999 || !simEnemy.AutoRestoreMana {
+		t.Fatalf("expected virtual recovery resources, got stones=%0.f/%0.f autoRestore=%v", simEnemy.PrimevalStones, simEnemy.ImmortalStones, simEnemy.AutoRestoreMana)
+	}
+}
+
+// TestBuildSimPlayerDefender_BailsOnNonPlayers ensures monsters and tx-less
+// callers fall back to buildSimEnemyCombatant instead of hitting the DB.
+func TestBuildSimPlayerDefender_BailsOnNonPlayers(t *testing.T) {
+	active := &models.CombatState{EnemyType: "PVP", TargetPlayerID: "11111111-1111-1111-1111-111111111111"}
+
+	if _, ok := buildSimPlayerDefender(nil, &models.Combatant{ID: active.TargetPlayerID, Kind: "Player"}, active, false); ok {
+		t.Fatal("expected false for nil tx")
+	}
+	monster := &models.Combatant{ID: "monster_slime", Kind: "Normal"}
+	if _, ok := buildSimPlayerDefender(nil, monster, active, false); ok {
+		t.Fatal("expected false for monster combatant")
 	}
 }

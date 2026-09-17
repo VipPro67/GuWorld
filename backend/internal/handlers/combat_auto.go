@@ -426,27 +426,67 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		simEnemy.MentalResistance = activeCombat.EnemyMentalResistance
 	}
 
-	// Build Gu actions from enemy inventory
-	var enemyActions []simulator.SimAction
-	for _, guInst := range enemy.GuInventory {
-		if guInst.Status != "ACTIVE" {
+	// Highest-rank ACTIVE instance per GuID, used to resolve loadout specs.
+	instByGuID := make(map[string]models.GuInstance)
+	for _, g := range enemy.GuInventory {
+		if g.Status != "ACTIVE" {
 			continue
 		}
-		spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
-		if !ok {
-			spec, ok = models.GetGuAny(guInst.GuID)
+		if best, ok := instByGuID[g.GuID]; !ok || g.Rank > best.Rank {
+			instByGuID[g.GuID] = g
 		}
+	}
+	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
+		inst, ok := instByGuID[guID]
 		if !ok {
-			continue
+			return models.GuDictionaryItem{}, false
 		}
-		if hasCombatActiveEffects(&spec) {
-			act, err := buildSimActionFromGu(enemy, &spec, "GU_SKILL")
-			if err != nil {
+		if spec, found := models.GetGu(guID, inst.Rank); found {
+			return spec, true
+		}
+		return models.GetGuAny(guID)
+	}
+
+	// Active GuIDs honoring the defender's saved loadout order when configured,
+	// otherwise every equipped ACTIVE Gu.
+	var selectedGuIDs []string
+	if cs != nil && len(cs.GuPriorities) > 0 {
+		seen := make(map[string]bool, len(cs.GuPriorities))
+		for _, t := range cs.GuPriorities {
+			if seen[t.GuID] {
 				continue
 			}
-			act.SourceID = guInst.GuID
-			enemyActions = append(enemyActions, act)
+			if _, ok := instByGuID[t.GuID]; !ok {
+				continue
+			}
+			seen[t.GuID] = true
+			selectedGuIDs = append(selectedGuIDs, t.GuID)
 		}
+	}
+	if len(selectedGuIDs) == 0 {
+		seen := make(map[string]bool, len(enemy.GuInventory))
+		for _, g := range enemy.GuInventory {
+			if g.Status != "ACTIVE" || seen[g.GuID] {
+				continue
+			}
+			seen[g.GuID] = true
+			selectedGuIDs = append(selectedGuIDs, g.GuID)
+		}
+	}
+
+	// Build Gu actions from the selected loadout, dropping duplicate GuIDs.
+	var enemyActions []simulator.SimAction
+	for _, guID := range selectedGuIDs {
+		spec, ok := loadoutSpec(guID)
+		if !ok || !hasCombatActiveEffects(&spec) {
+			continue
+		}
+		act, err := buildSimActionFromGu(enemy, &spec, "GU_SKILL")
+		if err != nil {
+			continue
+		}
+		act.SourceID = guID
+		enemyActions = append(enemyActions, act)
 	}
 
 	// For PVP defender with UUID, load active killer moves if any
@@ -497,26 +537,18 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		Priority:   999,
 	})
 
-	// Global damage multipliers from loadout Gus
-	var guIDs []string
-	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
-		for _, g := range enemy.GuInventory {
-			if g.GuID == guID {
-				return models.GetGu(guID, g.Rank)
-			}
-		}
-		return models.GuDictionaryItem{}, false
-	}
-	for _, g := range enemy.GuInventory {
-		guIDs = append(guIDs, g.GuID)
-	}
-	globalMult := computeGlobalGuDamageMultiplier(guIDs, loadoutSpec)
+	// Global multipliers and buffs from the selected loadout Gu.
+	globalMult := computeGlobalGuDamageMultiplier(selectedGuIDs, loadoutSpec)
 	if globalMult > 1.0 {
 		for i := range enemyActions {
 			enemyActions[i].Damage *= globalMult
 		}
 		simEnemy.DamageMultiplier = globalMult
 	}
+	simEnemy.Speed += computeGlobalSpeedBoost(selectedGuIDs, loadoutSpec)
+	simEnemy.CritRateBonus = computeGlobalCritRate(selectedGuIDs, loadoutSpec)
+	simEnemy.IgnoreDefenseFlat, simEnemy.IgnoreDefensePct = computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec)
+	simEnemy.RefineManaTier = gamefx.RefineManaTier(enemy.Rank, enemy.GuInventory)
 
 	// Apply tactics (Priority, UseCondition, ConditionValue) from CombatSettings
 	if cs != nil {
@@ -554,6 +586,14 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		simEnemy.HealThreshold = cs.HealThreshold
 		simEnemy.AutoRestoreMana = cs.AutoRestoreMana
 		simEnemy.ManaThreshold = cs.ManaThreshold
+	}
+
+	// Virtual illusions grant unlimited recovery resources so both sides can
+	// freely restore mana, matching the initiator's virtual-mode behavior.
+	if activeCombat != nil && activeCombat.CombatMode == "virtual" {
+		simEnemy.PrimevalStones = 999999
+		simEnemy.ImmortalStones = 999999
+		simEnemy.AutoRestoreMana = true
 	}
 
 	// Passive mechanics come from every equipped, active Gu in enemy inventory.
@@ -875,6 +915,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		BaseDmg:              playerStats["attack"],
 		BaseDef:              playerStats["defense"],
 		Speed:                playerStats["speed"] + computeGlobalSpeedBoost(selectedGuIDs, loadoutSpec),
+		VirtualShield:        float64(virtualShield),
 		DaoMarks:             simulator.DaoMarks(player.DaoMarks),
 		PathMasteries:        player.PathMasteries,
 		PathMasteryGainLimit: gamefx.PathMasteryBattleGainLimit(player.Rank),

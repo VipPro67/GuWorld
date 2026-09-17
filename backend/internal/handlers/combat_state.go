@@ -18,13 +18,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		var filteredGu []models.GuInstance
 		for _, g := range base.EnemyGuInventory {
 			if g.Equipped && g.Status == "ACTIVE" {
-				spec, ok := models.GetGu(g.GuID, g.Rank)
-				if !ok {
-					spec, ok = models.GetGuAny(g.GuID)
-				}
-				if ok && hasCombatEffects(&spec) {
-					filteredGu = append(filteredGu, g)
-				}
+				filteredGu = append(filteredGu, g)
 			}
 		}
 		base.EnemyGuInventory = filteredGu
@@ -275,7 +269,7 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool, charg
 }
 
 func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
-	if base.CombatMode != "virtual" && base.EnemyGuInventory != nil {
+	if base.CombatMode != "virtual" && base.EnemyGuInventory != nil && base.EnemyType != "PVP" {
 		var filteredGu []models.GuInstance
 		for _, g := range base.EnemyGuInventory {
 			spec, ok := models.GetGu(g.GuID, g.Rank)

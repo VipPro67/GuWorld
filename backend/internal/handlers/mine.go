@@ -591,13 +591,16 @@ func AttackMineSlot(c *gin.Context) {
 			EnemySpeed:          defenderStats["speed"],
 			EnemyRank:           defender.Rank,
 			EnemySubRank:        defender.SubRank,
-			EnemyGuInventory:    filterGuLoadout(defender.GuInventory, defender.CombatSettings),
+			EnemyGuInventory:    defender.GuInventory,
 			EnemyDaoMarks:       defender.DaoMarks,
 			EnemyPathMasteries:  defender.PathMasteries,
 			EnemyCombatSettings: &defender.CombatSettings,
 			TargetPlayerID:      defender.ID.String(),
 			MineSlotID:          req.SlotID,
 		}
+		defenderCharFX := gamefx.Get(&defender)
+		pvpCombat.EnemyPathResistance = defenderCharFX.PathResistanceBonus
+		pvpCombat.EnemyMentalResistance = defenderCharFX.MentalResistanceBonus
 	}
 
 	// Initialize and save
