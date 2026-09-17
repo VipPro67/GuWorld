@@ -10,7 +10,7 @@ export interface InventorySlice {
   fetchGuInventory: () => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
   feedGuGroup: (guId: string, rank?: number) => Promise<void>;
-  feedAllGu: () => Promise<void>;
+  feedAllGu: (scope?: "all" | "equipped" | "rest" | "unequipped") => Promise<void>;
   buyShopItem: (itemId: string, quantity: number, rank?: number) => Promise<boolean>;
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe", rank?: number) => Promise<boolean>;
   sellShopItemsBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe"; rank?: number }[]) => Promise<boolean>;
@@ -150,7 +150,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     }
   },
 
-  feedAllGu: async () => {
+  feedAllGu: async (scope?: "all" | "equipped" | "rest" | "unequipped") => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return;
 
@@ -161,6 +161,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify(scope ? { scope } : {}),
       });
 
       if (response.status === 401) {

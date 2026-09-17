@@ -83,3 +83,51 @@ func TestComputeFoodNutrition(t *testing.T) {
 		}
 	}
 }
+
+func TestFeedAllRequestFiltering(t *testing.T) {
+	bTrue := true
+	bFalse := false
+	tests := []struct {
+		name             string
+		req              FeedAllRequest
+		guEquipped       bool
+		expectedContinue bool // true if this gu is skipped
+	}{
+		{"scope all - equipped gu", FeedAllRequest{Scope: "all"}, true, false},
+		{"scope all - unequipped gu", FeedAllRequest{Scope: "all"}, false, false},
+		{"scope equipped - equipped gu", FeedAllRequest{Scope: "equipped"}, true, false},
+		{"scope equipped - unequipped gu", FeedAllRequest{Scope: "equipped"}, false, true},
+		{"scope unequipped - equipped gu", FeedAllRequest{Scope: "unequipped"}, true, true},
+		{"scope unequipped - unequipped gu", FeedAllRequest{Scope: "unequipped"}, false, false},
+		{"scope rest - equipped gu", FeedAllRequest{Scope: "rest"}, true, true},
+		{"scope rest - unequipped gu", FeedAllRequest{Scope: "rest"}, false, false},
+		{"equipped true bool - equipped gu", FeedAllRequest{Equipped: &bTrue}, true, false},
+		{"equipped true bool - unequipped gu", FeedAllRequest{Equipped: &bTrue}, false, true},
+		{"equipped false bool - equipped gu", FeedAllRequest{Equipped: &bFalse}, true, true},
+		{"equipped false bool - unequipped gu", FeedAllRequest{Equipped: &bFalse}, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scope := tt.req.Scope
+			if scope == "rest" {
+				scope = "unequipped"
+			}
+			filterEquipped := scope == "equipped" || (tt.req.Equipped != nil && *tt.req.Equipped)
+			filterUnequipped := scope == "unequipped" || (tt.req.Equipped != nil && !*tt.req.Equipped)
+
+			skip := false
+			if filterEquipped && !tt.guEquipped {
+				skip = true
+			}
+			if filterUnequipped && tt.guEquipped {
+				skip = true
+			}
+
+			if skip != tt.expectedContinue {
+				t.Errorf("got skip=%v, want %v", skip, tt.expectedContinue)
+			}
+		})
+	}
+}
+

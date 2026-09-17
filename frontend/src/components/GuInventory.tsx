@@ -13,7 +13,7 @@ interface GuInventoryProps {
   player: Player;
   onFeed: (guInstanceId: string) => Promise<void>;
   onFeedGroup?: (guId: string, rank?: number) => Promise<void>;
-  onFeedAll?: () => Promise<void>;
+  onFeedAll?: (scope?: "all" | "equipped" | "rest" | "unequipped") => Promise<void>;
   onUnequipAll?: () => Promise<void>;
   actionLoading: boolean;
   guDictionary: Record<string, GuSpec>;
@@ -134,28 +134,24 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     setFeedingAll(true);
     try {
       const activeGroups = guSubTab === "equipped" ? equippedGroups : restGroups;
-      let fedAny = false;
-      for (const group of activeGroups) {
-        const hungryCount = group.instances.filter(
+      const hungryCount = activeGroups.reduce((acc, group) => {
+        return acc + group.instances.filter(
           inst => inst.status !== "DEAD" && inst.status !== "SEALED" && inst.hunger < group.spec.max_hunger
         ).length;
-        if (hungryCount > 0 && onFeedGroup) {
-          await onFeedGroup(group.guId, group.spec.rank);
-          fedAny = true;
-        }
+      }, 0);
+
+      if (hungryCount === 0) {
+        useGameStore.getState().addToast(
+          guSubTab === "equipped"
+            ? "Không có Cổ trùng đang xuất trận nào cần cho ăn."
+            : "Không có Cổ trùng trong túi nào cần cho ăn.",
+          "info"
+        );
+        return;
       }
-      if (!fedAny) {
-        if (onFeedAll && activeGroups.length === 0) {
-          await onFeedAll();
-        } else {
-          useGameStore.getState().addToast(
-            guSubTab === "equipped"
-              ? "Không có Cổ trùng đang xuất trận nào cần cho ăn."
-              : "Không có Cổ trùng trong túi nào cần cho ăn.",
-            "info"
-          );
-        }
-      }
+
+      const feedFn = onFeedAll || useGameStore.getState().feedAllGu;
+      await feedFn(guSubTab);
     } finally {
       setFeedingAll(false);
     }

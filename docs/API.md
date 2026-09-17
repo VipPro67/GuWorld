@@ -100,7 +100,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | --- | --- |
 | POST | `/inventory/feed` |
 | POST | `/inventory/feed-group` |
-| POST | `/inventory/feed-all` |
+| POST | `/inventory/feed-all` | Cho ăn toàn bộ Cổ trùng. Nhận body JSON tùy chọn `{ "scope": "equipped" \| "rest" \| "unequipped" \| "all" }` hoặc `{ "equipped": true \| false }` để lọc theo Cổ trùng đang xuất trận hoặc trong túi. |
 | POST | `/inventory/equip` |
 | POST | `/inventory/unequip-all` |
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |

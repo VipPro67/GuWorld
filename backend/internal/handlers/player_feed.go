@@ -572,6 +572,11 @@ func FeedGroup(c *gin.Context) {
 	})
 }
 
+type FeedAllRequest struct {
+	Scope    string `json:"scope"`              // "all", "equipped", "unequipped" / "rest"
+	Equipped *bool  `json:"equipped,omitempty"` // true: equipped, false: unequipped
+}
+
 // FeedAll feeds all hungry Gu bugs in the player's inventory using available food
 func FeedAll(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
@@ -579,6 +584,18 @@ func FeedAll(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+
+	var req FeedAllRequest
+	_ = c.ShouldBindJSON(&req)
+	if req.Scope == "" {
+		req.Scope = c.Query("scope")
+	}
+	if req.Scope == "rest" {
+		req.Scope = "unequipped"
+	}
+
+	filterEquipped := req.Scope == "equipped" || (req.Equipped != nil && *req.Equipped)
+	filterUnequipped := req.Scope == "unequipped" || (req.Equipped != nil && !*req.Equipped)
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -641,6 +658,13 @@ func FeedAll(c *gin.Context) {
 	for i := 0; i < len(player.GuInventory); i++ {
 		gu := &player.GuInventory[i]
 		if gu.Status == "DEAD" || gu.Status == "SEALED" {
+			continue
+		}
+
+		if filterEquipped && !gu.Equipped {
+			continue
+		}
+		if filterUnequipped && gu.Equipped {
 			continue
 		}
 
@@ -718,7 +742,13 @@ func FeedAll(c *gin.Context) {
 	}
 
 	if fedCount == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có Cổ trùng nào cần cho ăn hoặc không có đủ thức ăn phù hợp"})
+		errMsg := "Không có Cổ trùng nào cần cho ăn hoặc không có đủ thức ăn phù hợp"
+		if filterEquipped {
+			errMsg = "Không có Cổ trùng đang xuất trận nào cần cho ăn hoặc không có đủ thức ăn phù hợp"
+		} else if filterUnequipped {
+			errMsg = "Không có Cổ trùng trong túi nào cần cho ăn hoặc không có đủ thức ăn phù hợp"
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		return
 	}
 
@@ -759,21 +789,32 @@ func FeedAll(c *gin.Context) {
 
 	foodStr := strings.Join(foodDetails, ", ")
 
+	scopeDesc := "toàn bộ"
+	scopeName := "tất cả Cổ trùng"
+	if filterEquipped {
+		scopeDesc = "toàn bộ Cổ trùng xuất trận"
+		scopeName = "Cổ trùng xuất trận"
+	} else if filterUnequipped {
+		scopeDesc = "toàn bộ Cổ trùng trong túi"
+		scopeName = "Cổ trùng trong túi"
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "gu.feed_all",
 		EntityType:     "player",
 		EntityID:       player.ID.String(),
-		RequestSummary: fmt.Sprintf("Cho toàn bộ %d Cổ trùng ăn | Tiêu hao: %s", fedCount, foodStr),
+		RequestSummary: fmt.Sprintf("Cho %s %d Cổ trùng ăn | Tiêu hao: %s", scopeDesc, fedCount, foodStr),
 		Metadata: map[string]interface{}{
 			"fed_count":     fedCount,
 			"food_consumed": foodConsumed,
+			"scope":         req.Scope,
 		},
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	})
 
 	respondActionGuOnly(c, http.StatusOK, player, gin.H{
-		"message": fmt.Sprintf("Cho tất cả Cổ trùng ăn thành công! Đã khôi phục cho %d Cổ trùng. Tiêu hao: %s.", fedCount, foodStr),
+		"message": fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục cho %d Cổ trùng. Tiêu hao: %s.", scopeName, fedCount, foodStr),
 	})
 }
