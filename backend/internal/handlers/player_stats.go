@@ -227,28 +227,6 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		}
 	}
 
-	// Apply speed_boost_flat from equipped Gu active effects
-	{
-		totalSpeedBoost := 0.0
-		for _, gu := range player.GuInventory {
-			if gu.Equipped && gu.Status == "ACTIVE" {
-				spec, ok := models.GetGu(gu.GuID, gu.Rank)
-				if !ok || spec.Effects.Active == nil {
-					continue
-				}
-				if spec.Effects.Active.SpeedBoostFlat > 0 {
-					totalSpeedBoost += spec.Effects.Active.SpeedBoostFlat
-				}
-			}
-		}
-		if totalSpeedBoost > 0 {
-			stats["speed"] += totalSpeedBoost
-			details = append(details, PassiveStatDetail{Key: "speed", Total: totalSpeedBoost, Sources: []PassiveStatSource{{
-				Source: "gu:active", Name: "Speed Boost", Value: totalSpeedBoost, Mult: 1, Dao: 1, Final: totalSpeedBoost,
-			}}})
-		}
-	}
-
 	// Apply all_stats_buff_percent from equipped Gu active effects
 	{
 		totalBuffPct := 0.0

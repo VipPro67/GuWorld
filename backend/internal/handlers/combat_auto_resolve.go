@@ -545,14 +545,19 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 		active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 ||
 		active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
 		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
-		active.IgnoreDefense > 0 || active.IgnoreDefensePct > 0 || active.CritRateBoost > 0 ||
-		active.AllStatsBuffPct > 0 || active.SpeedBoostFlat > 0 || active.SummonGrowthPhantoms
+		active.SummonGrowthPhantoms
 }
 
 // hasCombatEffects returns true if the Gu has any active action, passive mechanic, or combat-relevant passive stat.
 func hasCombatEffects(spec *models.GuDictionaryItem) bool {
 	if hasCombatActiveEffects(spec) {
 		return true
+	}
+	if spec.Effects.Active != nil {
+		active := spec.Effects.Active
+		if active.SpeedBoostFlat > 0 || active.CritRateBoost > 0 || active.IgnoreDefense > 0 || active.IgnoreDefensePct > 0 || active.AllStatsBuffPct > 0 {
+			return true
+		}
 	}
 	for _, mechanic := range spec.Effects.Other {
 		if mechanic.EventTrigger != "ON_CAST" && mechanic.EventTrigger != "ON_HIT" {

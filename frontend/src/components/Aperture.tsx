@@ -890,9 +890,23 @@ export const Aperture: React.FC<ApertureProps> = ({
                 };
                 const details = passiveStats.details.filter(d => d.total !== 0);
                 if (details.length === 0) return <div className="text-xs text-zinc-500 italic py-2">Không có chỉ số bị động nào.</div>;
+
+                // Deduplicate by key to guarantee exactly 1 tile per stat
+                const dedupedMap = new Map<string, (typeof details)[0]>();
+                for (const d of details) {
+                  const existing = dedupedMap.get(d.key);
+                  if (existing) {
+                    existing.total += d.total;
+                    existing.sources = [...existing.sources, ...d.sources];
+                  } else {
+                    dedupedMap.set(d.key, { ...d, sources: [...d.sources] });
+                  }
+                }
+                const dedupedDetails = Array.from(dedupedMap.values());
+
                 return (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {details.map(d => (
+                    {dedupedDetails.map(d => (
                       <div key={d.key} className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">{labels[d.key] || d.key}</div>
                         <div className="text-base font-bold text-zinc-100 font-mono">+{formatStat(d.total)}</div>
