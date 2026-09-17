@@ -226,14 +226,6 @@ func ChallengeArena(c *gin.Context) {
 	enemyRank := targetPlayer.Rank
 	enemySubRank := targetPlayer.SubRank
 
-	hasAttitudeGu := models.InventoryHasGuMechanic(targetPlayer.GuInventory, "ARENA_IDENTITY_MASK", true)
-	if hasAttitudeGu {
-		enemyRank = 1
-		enemySubRank = 1
-		enemyGuInventory = models.GuInventory{
-			{InstanceID: "attitude_mask", GuID: "GU_MOONLIGHT", Hunger: 0, Status: "ACTIVE", Equipped: true},
-		}
-	}
 	// Build PVP Combat State (virtual mode: full power, no real cost)
 	pvpCombat := models.CombatState{
 		EnemyTemplateID:     targetPlayer.ID.String(),
@@ -254,7 +246,6 @@ func ChallengeArena(c *gin.Context) {
 		EnemyPathMasteries:  targetPlayer.PathMasteries,
 		EnemyCombatSettings: &targetPlayer.CombatSettings,
 		TargetPlayerID:      targetPlayer.ID.String(),
-		EnemyMasked:         hasAttitudeGu,
 	}
 	enemyCharFX := gamefx.Get(&targetPlayer)
 	pvpCombat.EnemyPathResistance = enemyCharFX.PathResistanceBonus
