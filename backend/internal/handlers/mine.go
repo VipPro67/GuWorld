@@ -601,6 +601,11 @@ func AttackMineSlot(c *gin.Context) {
 		defenderCharFX := gamefx.Get(&defender)
 		pvpCombat.EnemyPathResistance = defenderCharFX.PathResistanceBonus
 		pvpCombat.EnemyMentalResistance = defenderCharFX.MentalResistanceBonus
+		pvpCombat.EnemyDaoBonus = defenderCharFX.DaoNganBonus
+		pvpCombat.EnemyPathDamageBonus = defenderCharFX.PathDamageBonus
+		pvpCombat.EnemyHealingReceived = defenderCharFX.HealingReceivedBonus
+		pvpCombat.EnemySoulDefenseBonus = defenderCharFX.SoulDefenseBonus
+		pvpCombat.EnemyLuckBonus = defenderCharFX.LuckBonus
 	}
 
 	// Initialize and save

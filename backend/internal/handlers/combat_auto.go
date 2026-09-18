@@ -424,6 +424,9 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	if activeCombat != nil {
 		simEnemy.PathResistance = activeCombat.EnemyPathResistance
 		simEnemy.MentalResistance = activeCombat.EnemyMentalResistance
+		simEnemy.DaoBonus = activeCombat.EnemyDaoBonus
+		simEnemy.PathDamageBonus = activeCombat.EnemyPathDamageBonus
+		simEnemy.HealingReceived = activeCombat.EnemyHealingReceived
 	}
 
 	// Highest-rank ACTIVE instance per GuID, used to resolve loadout specs.

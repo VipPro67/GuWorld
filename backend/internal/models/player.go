@@ -259,8 +259,13 @@ type CombatState struct {
 	EnemyStatusEffects  []StatusEffect `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects []StatusEffect `json:"player_status_effects,omitempty"`
 	// Defender-side character effects for PVP enemies (race/constitution/status).
-	EnemyPathResistance   map[string]float64 `json:"enemy_path_resistance,omitempty"`
-	EnemyMentalResistance float64            `json:"enemy_mental_resistance,omitempty"`
+	EnemyPathResistance    map[string]float64 `json:"enemy_path_resistance,omitempty"`
+	EnemyMentalResistance  float64            `json:"enemy_mental_resistance,omitempty"`
+	EnemyDaoBonus          map[string]float64 `json:"enemy_dao_bonus,omitempty"`
+	EnemyPathDamageBonus   map[string]float64 `json:"enemy_path_damage_bonus,omitempty"`
+	EnemyHealingReceived   float64            `json:"enemy_healing_received,omitempty"`
+	EnemySoulDefenseBonus  float64            `json:"enemy_soul_defense_bonus,omitempty"`
+	EnemyLuckBonus         float64            `json:"enemy_luck_bonus,omitempty"`
 	EnemyCombatSettings   *AutoCombatConfig  `json:"enemy_combat_settings,omitempty"`
 	// EnemyMasked marks an arena opponent hidden by ARENA_IDENTITY_MASK. The
 	// masked loadout in EnemyGuInventory must be used verbatim instead of

@@ -250,6 +250,11 @@ func ChallengeArena(c *gin.Context) {
 	enemyCharFX := gamefx.Get(&targetPlayer)
 	pvpCombat.EnemyPathResistance = enemyCharFX.PathResistanceBonus
 	pvpCombat.EnemyMentalResistance = enemyCharFX.MentalResistanceBonus
+	pvpCombat.EnemyDaoBonus = enemyCharFX.DaoNganBonus
+	pvpCombat.EnemyPathDamageBonus = enemyCharFX.PathDamageBonus
+	pvpCombat.EnemyHealingReceived = enemyCharFX.HealingReceivedBonus
+	pvpCombat.EnemySoulDefenseBonus = enemyCharFX.SoulDefenseBonus
+	pvpCombat.EnemyLuckBonus = enemyCharFX.LuckBonus
 
 	// Full mana for attacker in virtual mode
 	player.CurrentMana = player.MaxMana
