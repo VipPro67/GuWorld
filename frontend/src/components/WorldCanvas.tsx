@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
-import { useWorldStore, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
+import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
 
 function computeMovementSpeed(gamePlayer: Player | null, guDictionary: Record<string, GuSpec>): number {
@@ -34,6 +34,21 @@ interface WorldCanvasProps {
 const WORLD_W = 30000;
 const WORLD_H = 20000;
 const SUBZONE_SIZE = 1000;
+// Keep the camera in the level-of-detail range backed by the nearby-cell AOI.
+// Rendering a 30k x 20k overview made Pixi shade the whole world while the
+// server only provides useful interactive data around the player.
+const MIN_CAMERA_SCALE = 4;
+const MAX_CAMERA_SCALE = 40;
+const LIVE_POSITION_SYNC_MS = 100;
+const CELL_AOI_DIAMETER = 254;
+
+function cameraMinScale(app: Application | null): number {
+  if (!app) return MIN_CAMERA_SCALE;
+  // The cell endpoint exposes at most a 127-cell radius. Never let the camera
+  // show a wider area than that snapshot, otherwise interactive markers appear
+  // to vanish at the edge of large/ultrawide displays.
+  return Math.max(MIN_CAMERA_SCALE, app.screen.width / CELL_AOI_DIAMETER, app.screen.height / CELL_AOI_DIAMETER);
+}
 
 function clearContainer(container: Container) {
   for (const child of container.removeChildren()) {
@@ -52,6 +67,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const sectsContainerRef = useRef<Container>(new Container());
   const dropsContainerRef = useRef<Container>(new Container());
   const monstersContainerRef = useRef<Container>(new Container());
+  const monsterLabelsContainerRef = useRef<Container>(new Container());
   const playersContainerRef = useRef<Container>(new Container());
   const fogRef = useRef<Graphics>(new Graphics());
   const playerRef = useRef<Graphics>(new Graphics());
@@ -72,9 +88,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   }, [labelSettings]);
   const moveTargetRef = useRef<{ x: number; y: number } | null>(null);
   const animIdRef = useRef<number>(0);
+  const lastLivePositionSyncRef = useRef(0);
+  const lastCameraSyncRef = useRef(0);
   const isMovingRef = useRef(false);
   const walkVersionRef = useRef(0);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; active: boolean }>>(new Map());
+  const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk }>>(new Map());
+  const monsterLabelRenderKeyRef = useRef("");
+  const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
+  const nextRenderObjectIdRef = useRef(1);
+  const scheduleMonsterChunkSyncRef = useRef<() => void>(() => {});
   const performMoveRef = useRef<(x: number, y: number) => void>(() => {});
   const loadedTilesRef = useRef<Set<string>>(new Set());
 
@@ -86,8 +109,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const setPlayerFromServer = useGameStore((s) => s.setPlayerFromServer);
   const setExploredSubZones = useWorldStore((s) => s.setExploredSubZones);
   const movementRange = useWorldStore((s) => s.movementRange);
+  const investigationRange = useWorldStore((s) => s.investigationRange);
   const objects = useWorldStore((s) => s.objects);
   const nearbyCells = useWorldStore((s) => s.nearbyCells);
+  const cellChunks = useWorldStore((s) => s.cellChunks);
+  const cellRegion = useWorldStore((s) => s.cellRegion);
+  const nearbyWindow = useWorldStore((s) => s.nearbyWindow);
   const nearbyPlayers = useWorldStore((s) => s.nearbyPlayers);
   const fetchNearbyCells = useWorldStore((s) => s.fetchNearbyCells);
   const fetchNearbyPlayers = useWorldStore((s) => s.fetchNearbyPlayers);
@@ -267,12 +294,17 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     }
   }, [mode]);
 
-  const centerOnPlayer = useCallback((app: Application, px: number, py: number) => {
+  const centerOnPlayer = useCallback((app: Application, px: number, py: number, forceSync = true) => {
     const w = app.screen.width;
     const h = app.screen.height;
     const scale = scaleRef.current;
     stageRef.current.position.set(w / 2 - px * scale, h / 2 - py * scale);
-    setCamera(scale, stageRef.current.position.x, stageRef.current.position.y);
+    scheduleMonsterChunkSyncRef.current();
+    const now = performance.now();
+    if (forceSync || now - lastCameraSyncRef.current >= LIVE_POSITION_SYNC_MS) {
+      lastCameraSyncRef.current = now;
+      setCamera(scale, stageRef.current.position.x, stageRef.current.position.y);
+    }
     fogDirtyRef.current = true;
   }, [setCamera]);
 
@@ -289,9 +321,15 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const cx = startX + (targetX - startX) * eased;
         const cy = startY + (targetY - startY) * eased;
         playerRef.current.position.set(cx, cy);
-        setLivePosition(cx, cy);
+        // Pixi owns the frame-by-frame position. Publishing to Zustand on every
+        // animation frame caused WorldPage and every coordinate subscriber to
+        // re-render at 60 FPS, so expose a lower-frequency UI snapshot instead.
+        if (now - lastLivePositionSyncRef.current >= LIVE_POSITION_SYNC_MS || t >= 1) {
+          lastLivePositionSyncRef.current = now;
+          setLivePosition(cx, cy);
+        }
         if (appRef.current && modeRef.current === "select") {
-          centerOnPlayer(appRef.current, cx, cy);
+          centerOnPlayer(appRef.current, cx, cy, t >= 1);
         }
         if (t < 1) {
           animIdRef.current = requestAnimationFrame(step);
@@ -463,7 +501,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         return;
       }
 
-      const nearby = s.nearbyCells.find((c) => c.x === tx && c.y === ty);
+      const nearby = s.getCachedCell(tx, ty);
       const persistent = s.objects.find((c) => c.x === tx && c.y === ty);
       const nearbyPl = s.nearbyPlayers.find((p) => p.x === tx && p.y === ty);
       const dropOnTile = useGameStore.getState().groundDrops.find((d) => d.x === tx && d.y === ty);
@@ -1030,135 +1068,202 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     [handleObjectClick]
   );
 
-  const drawMonsters = useCallback(
-    (cells: typeof nearbyCells) => {
-      const container = monstersContainerRef.current;
-      clearContainer(container);
-      labelRenderStateRef.current = "";
+  const drawMonsterChunk = useCallback((container: Container, cells: NearbyCell[]) => {
+    clearContainer(container);
 
-      // Batch small markers into per-color Graphics so thousands of cells stay
-      // cheap for the renderer.
-      const batchMonster = new Graphics();
-      const batchResource = new Graphics();
-      const batchWild = new Graphics();
-      const monsterCount = Math.min(cells.filter((c) => c.cell_type === "Monster").length, 1500);
-      const resourceCount = Math.min(cells.filter((c) => c.cell_type === "Resource").length, 800);
-      const wildCount = Math.min(cells.filter((c) => c.cell_type === "WildGu").length, 400);
+    // Each visible 64x64 chunk owns only its marker geometry. A cell delta
+    // replaces one chunk object in Zustand, so every other Pixi batch survives.
+    const batchMonster = new Graphics();
+    const batchResource = new Graphics();
+    const batchWild = new Graphics();
+    let monsterCount = 0;
+    let resourceCount = 0;
+    let wildCount = 0;
 
-      let mM = 0, mR = 0, mW = 0;
-      for (const c of cells) {
-        if (c.cell_type === "Monster" && mM < monsterCount) {
-          // Draw a small red "creature" shape within 1x1 cell
-          batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
-          mM++;
-        } else if (c.cell_type === "Resource" && mR < resourceCount) {
-          // Draw small trees for resources within 1x1 cell
-          batchResource.circle(c.x + 0.5, c.y + 0.6, 0.3); // base
-          batchResource.circle(c.x + 0.5, c.y + 0.4, 0.2); // top
-          mR++;
-        } else if (c.cell_type === "WildGu" && mW < wildCount) {
-          // Draw a small diamond for Wild Gu
-          batchWild.poly([c.x + 0.5, c.y + 0.1, c.x + 0.8, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.2, c.y + 0.5]);
-          mW++;
-        }
+    for (const c of cells) {
+      if (c.cell_type === "Monster") {
+        batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
+        monsterCount++;
+      } else if (c.cell_type === "Resource") {
+        batchResource.circle(c.x + 0.5, c.y + 0.6, 0.3);
+        batchResource.circle(c.x + 0.5, c.y + 0.4, 0.2);
+        resourceCount++;
+      } else if (c.cell_type === "WildGu") {
+        batchWild.poly([c.x + 0.5, c.y + 0.1, c.x + 0.8, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.2, c.y + 0.5]);
+        wildCount++;
+      } else if (c.cell_type === "Boss") {
+        const boss = new Graphics();
+        boss.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
+        boss.fill({ color: 0xef4444 });
+        boss.stroke({ color: 0x7f1d1d, width: 0.1 });
+        boss.position.set(c.x + 0.5, c.y + 0.5);
+        container.addChild(boss);
       }
+    }
+
+    if (monsterCount) {
       batchMonster.fill({ color: 0xf87171, alpha: 0.9 });
       batchMonster.stroke({ color: 0x991b1b, width: 0.05 });
-
-      // We will re-fill the resource specifically with green
+      container.addChild(batchMonster);
+    } else batchMonster.destroy();
+    if (resourceCount) {
       batchResource.fill({ color: 0x10b981, alpha: 0.9 });
       batchResource.stroke({ color: 0x065f46, width: 0.05 });
-
+      container.addChild(batchResource);
+    } else batchResource.destroy();
+    if (wildCount) {
       batchWild.fill({ color: 0xfbbf24, alpha: 0.9 });
       batchWild.stroke({ color: 0xb45309, width: 0.05 });
-      container.addChild(batchMonster);
-      container.addChild(batchResource);
       container.addChild(batchWild);
+    } else batchWild.destroy();
+  }, []);
 
-      // Draw bosses separately with labels (few in number). Only show boss
-      // names when the user enables the nearby-boss toggle and the boss is in
-      // the current visible radius.
+  const drawMonsterLabels = useCallback((cells: NearbyCell[]) => {
+    const container = monsterLabelsContainerRef.current;
+    clearContainer(container);
+    const settings = labelSettingsRef.current;
+    const state = useGameStore.getState();
+    const player = state.player;
+    if (!player) return;
+
+    if (settings.bossNearby) {
       let bossCount = 0;
+      const investigationRange = useWorldStore.getState().investigationRange;
       for (const c of cells) {
-        if (c.cell_type !== "Boss") continue;
-        if (bossCount >= 40) break;
-        bossCount++;
-        const g = new Graphics();
-        g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
-        g.fill({ color: 0xef4444 });
-        g.stroke({ color: 0x7f1d1d, width: 0.1 });
-        const showBossLabel = !!labelSettings.bossNearby && !!gamePlayer && Math.hypot(c.x - gamePlayer.x, c.y - gamePlayer.y) <= useWorldStore.getState().investigationRange;
-        if (showBossLabel) {
-          const label = new Text({
-            text: monsterDictionary[c.content]?.name || c.content,
-            style: { fontSize: 12, fill: 0xfecaca, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 2 } },
-          });
-          label.anchor.set(0.5, 1);
-          label.y = -0.8;
-          g.addChild(label);
-        }
-        g.position.set(c.x + 0.5, c.y + 0.5);
-        container.addChild(g);
-      }
-
-      // Draw names/ranks for monsters, resources, and wild gu if enabled
-      if (labelSettings.monster && gamePlayer) {
-        const px = gamePlayer.x;
-        const py = gamePlayer.y;
-
-        const sortedCells = [...cells].sort((a, b) => {
-          const distA = Math.hypot(a.x - px, a.y - py);
-          const distB = Math.hypot(b.x - px, b.y - py);
-          return distA - distB;
+        if (c.cell_type !== "Boss" || Math.hypot(c.x - player.x, c.y - player.y) > investigationRange) continue;
+        if (bossCount++ >= 40) break;
+        const label = new Text({
+          text: state.monsterDictionary[c.content]?.name || c.content,
+          style: { fontSize: 12, fill: 0xfecaca, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 2 } },
         });
-
-        // Limit to nearest 250 cells to maintain good FPS
-        const labelCells = sortedCells.slice(0, 250);
-
-        for (const c of labelCells) {
-          if (c.cell_type === "Boss") continue; // Boss is already handled above
-          let text = "";
-          let fill = 0xffffff;
-          if (c.cell_type === "Monster") {
-            const name = monsterDictionary[c.content]?.name || c.content;
-            const r = c.rank ? ` R${c.rank}` : "";
-            text = `${name}${r}`;
-            fill = 0xfecaca;
-          } else if (c.cell_type === "WildGu") {
-            const name = guSpecFor(c.content, c.rank)?.name || c.content;
-            const r = c.rank ? ` R${c.rank}` : "";
-            text = `${name}${r}`;
-            fill = 0xf5d0fe;
-          } else if (c.cell_type === "Resource") {
-            const name = itemDictionary[c.content]?.name || c.content;
-            text = name;
-            fill = 0xd1fae5;
-          }
-
-          if (text) {
-            const label = new Text({
-              text,
-              style: {
-                fontSize: 11,
-                fill,
-                fontFamily: "sans-serif",
-                stroke: { color: 0x000000, width: 2 }
-              },
-            });
-            label.anchor.set(0.5, 1);
-            label.y = -0.6;
-
-            const labelContainer = new Container();
-            labelContainer.name = "monster-label";
-            labelContainer.position.set(c.x + 0.5, c.y + 0.5);
-            labelContainer.addChild(label);
-            container.addChild(labelContainer);
-          }
-        }
+        label.anchor.set(0.5, 1);
+        label.position.set(c.x + 0.5, c.y - 0.3);
+        label.name = "boss-label";
+        container.addChild(label);
       }
-    },
-    [monsterDictionary, guDictionary, itemDictionary, labelSettings.monster, gamePlayer],
-  );
+    }
+
+    if (!settings.monster) return;
+    const labelCells = cells
+      .filter((c) => c.cell_type === "Monster" || c.cell_type === "Resource" || c.cell_type === "WildGu")
+      .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
+      .slice(0, 250);
+
+    for (const c of labelCells) {
+      let text = "";
+      let fill = 0xffffff;
+      if (c.cell_type === "Monster") {
+        text = `${state.monsterDictionary[c.content]?.name || c.content}${c.rank ? ` R${c.rank}` : ""}`;
+        fill = 0xfecaca;
+      } else if (c.cell_type === "WildGu") {
+        text = `${guSpecFor(c.content, c.rank)?.name || c.content}${c.rank ? ` R${c.rank}` : ""}`;
+        fill = 0xf5d0fe;
+      } else if (c.cell_type === "Resource") {
+        text = state.itemDictionary[c.content]?.name || c.content;
+        fill = 0xd1fae5;
+      }
+      if (!text) continue;
+      const label = new Text({
+        text,
+        style: { fontSize: 11, fill, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 2 } },
+      });
+      label.anchor.set(0.5, 1);
+      label.position.set(c.x + 0.5, c.y - 0.1);
+      label.name = "monster-label";
+      container.addChild(label);
+    }
+  }, []);
+
+  const syncMonsterChunks = useCallback((chunks: Record<string, CellChunk>, region: string, window: typeof nearbyWindow) => {
+    const rendered = monsterChunksRef.current;
+    if (!window || !region) {
+      for (const entry of rendered.values()) entry.container.destroy({ children: true });
+      rendered.clear();
+      monstersContainerRef.current.removeChildren();
+      clearContainer(monsterLabelsContainerRef.current);
+      monsterLabelRenderKeyRef.current = "";
+      return;
+    }
+
+    const app = appRef.current;
+    const stage = stageRef.current;
+    const scale = scaleRef.current;
+    const overscan = CELL_CHUNK_SIZE;
+    const minWorldX = app ? Math.max(0, (-stage.position.x / scale) - overscan) : window.x - window.r;
+    const maxWorldX = app ? Math.min(WORLD_W - 1, ((app.screen.width - stage.position.x) / scale) + overscan) : window.x + window.r;
+    const minWorldY = app ? Math.max(0, (-stage.position.y / scale) - overscan) : window.y - window.r;
+    const maxWorldY = app ? Math.min(WORLD_H - 1, ((app.screen.height - stage.position.y) / scale) + overscan) : window.y + window.r;
+    const minChunkX = Math.floor(minWorldX / CELL_CHUNK_SIZE);
+    const maxChunkX = Math.floor(maxWorldX / CELL_CHUNK_SIZE);
+    const minChunkY = Math.floor(minWorldY / CELL_CHUNK_SIZE);
+    const maxChunkY = Math.floor(maxWorldY / CELL_CHUNK_SIZE);
+    const wanted = new Set<string>();
+    const visibleCells: NearbyCell[] = [];
+    const visibleChunkVersions: string[] = [];
+
+    for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+      for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+        const key = `${region}:${cx},${cy}`;
+        const chunk = chunks[key];
+        if (!chunk) continue;
+        wanted.add(key);
+        visibleCells.push(...Object.values(chunk.cells));
+        let objectId = renderObjectIdsRef.current.get(chunk);
+        if (!objectId) {
+          objectId = nextRenderObjectIdRef.current++;
+          renderObjectIdsRef.current.set(chunk, objectId);
+        }
+        visibleChunkVersions.push(`${key}@${objectId}`);
+        const existing = rendered.get(key);
+        if (existing?.source === chunk) continue;
+
+        const chunkContainer = existing?.container ?? new Container();
+        if (!existing) monstersContainerRef.current.addChild(chunkContainer);
+        drawMonsterChunk(chunkContainer, Object.values(chunk.cells));
+        rendered.set(key, { container: chunkContainer, source: chunk });
+      }
+    }
+
+    for (const [key, entry] of rendered) {
+      if (wanted.has(key)) continue;
+      monstersContainerRef.current.removeChild(entry.container);
+      entry.container.destroy({ children: true });
+      rendered.delete(key);
+    }
+    const state = useGameStore.getState();
+    const settings = labelSettingsRef.current;
+    const labelInputs = [state.monsterDictionary, state.itemDictionary, state.guDictionary];
+    const dictionaryIds = labelInputs.map((dictionary) => {
+      let objectId = renderObjectIdsRef.current.get(dictionary);
+      if (!objectId) {
+        objectId = nextRenderObjectIdRef.current++;
+        renderObjectIdsRef.current.set(dictionary, objectId);
+      }
+      return objectId;
+    });
+    const labelRenderKey = `${visibleChunkVersions.join("|")}:${Number(settings.monster)}${Number(settings.bossNearby)}:${state.player?.x ?? 0},${state.player?.y ?? 0}:${useWorldStore.getState().investigationRange}:${dictionaryIds.join(",")}`;
+    if (labelRenderKey !== monsterLabelRenderKeyRef.current) {
+      monsterLabelRenderKeyRef.current = labelRenderKey;
+      drawMonsterLabels(visibleCells);
+      labelRenderStateRef.current = "";
+    }
+  }, [drawMonsterChunk, drawMonsterLabels]);
+
+  useEffect(() => {
+    let frame = 0;
+    scheduleMonsterChunkSyncRef.current = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const state = useWorldStore.getState();
+        syncMonsterChunks(state.cellChunks, state.cellRegion, state.nearbyWindow);
+      });
+    };
+    return () => {
+      scheduleMonsterChunkSyncRef.current = () => {};
+      cancelAnimationFrame(frame);
+    };
+  }, [syncMonsterChunks]);
 
   const drawFog = useCallback(() => {
     const app = appRef.current;
@@ -1252,11 +1357,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       } else {
         newScale /= zoomFactor;
       }
-      // Zoom-out floor: the whole canvas may shrink until it fits the screen
-      // (never smaller). Zoom-in is allowed much further for detail viewing.
-      const app = appRef.current;
-      const minScale = app ? Math.min(app.screen.width / WORLD_W, app.screen.height / WORLD_H) : 0.005;
-      newScale = Math.max(minScale, Math.min(40, newScale));
+      newScale = Math.max(cameraMinScale(appRef.current), Math.min(MAX_CAMERA_SCALE, newScale));
       scaleRef.current = newScale;
 
       if (appRef.current && stageRef.current) {
@@ -1268,6 +1369,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const worldY = (mouseY - stageY) / oldScale;
         stageRef.current.scale.set(newScale);
         stageRef.current.position.set(mouseX - worldX * newScale, mouseY - worldY * newScale);
+        scheduleMonsterChunkSyncRef.current();
         setCamera(newScale, stageRef.current.position.x, stageRef.current.position.y);
         fogDirtyRef.current = true;
       }
@@ -1303,9 +1405,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const ratio = currentDistance / initialTouchDistance;
         let newScale = initialScale * ratio;
 
-        const app = appRef.current;
-        const minScale = app ? Math.min(app.screen.width / WORLD_W, app.screen.height / WORLD_H) : 0.005;
-        newScale = Math.max(minScale, Math.min(40, newScale));
+        newScale = Math.max(cameraMinScale(appRef.current), Math.min(MAX_CAMERA_SCALE, newScale));
 
         const oldScale = scaleRef.current;
         scaleRef.current = newScale;
@@ -1322,6 +1422,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
           stageRef.current.scale.set(newScale);
           stageRef.current.position.set(centerX - worldX * newScale, centerY - worldY * newScale);
+          scheduleMonsterChunkSyncRef.current();
           setCamera(newScale, stageRef.current.position.x, stageRef.current.position.y);
           fogDirtyRef.current = true;
         }
@@ -1332,10 +1433,13 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       initialTouchDistance = 0;
     };
 
+    const handleResize = () => scheduleMonsterChunkSyncRef.current();
+
     canvasElement.addEventListener("wheel", handleWheel, { passive: false });
     canvasElement.addEventListener("touchstart", handleTouchStart, { passive: false });
     canvasElement.addEventListener("touchmove", handleTouchMove, { passive: false });
     canvasElement.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("resize", handleResize);
 
     const initApp = async () => {
       const isMobile = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768;
@@ -1385,6 +1489,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       playerRef.current.eventMode = "none";
       targetRingRef.current.eventMode = "none";
       skillFxContainerRef.current.eventMode = "none";
+      monsterLabelsContainerRef.current.eventMode = "none";
 
       stageRef.current.addChild(regionsContainerRef.current);
       stageRef.current.addChild(fogRef.current);
@@ -1392,6 +1497,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       stageRef.current.addChild(sectsContainerRef.current);
       stageRef.current.addChild(dropsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
+      stageRef.current.addChild(monsterLabelsContainerRef.current);
       stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);
       stageRef.current.addChild(playerRef.current);
@@ -1402,7 +1508,6 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       drawRegions(regions);
       drawObjects(displayObjects);
       drawGroundDrops(groundDrops);
-      drawMonsters(nearbyCells);
       drawPlayers(nearbyPlayers);
       drawFog();
       drawRange();
@@ -1439,25 +1544,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           const showMonsters = settings.monster && currentScale >= 12;
           const targetScale = 1.0 / currentScale; // 1:1 crisp scale
 
-          for (const child of monstersContainerRef.current.children) {
-            if (child.name === "monster-label") {
-              child.visible = showMonsters;
-              if (showMonsters) {
-                for (const sub of child.children) {
-                  if (sub instanceof Text) {
-                    sub.scale.set(targetScale);
-                  }
-                }
-              }
-            } else if (child instanceof Graphics) {
-              // Bosses (Graphics containing a Text child)
-              for (const sub of child.children) {
-                if (sub instanceof Text) {
-                  sub.scale.set(targetScale);
-                  sub.y = -0.6 - (6 * targetScale);
-                }
-              }
-            }
+          for (const child of monsterLabelsContainerRef.current.children) {
+            if (!(child instanceof Text)) continue;
+            child.visible = child.name !== "monster-label" || showMonsters;
+            if (child.visible) child.scale.set(targetScale);
           }
 
           // Ground drop labels (scaled identically to monster labels)
@@ -1527,28 +1617,31 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       setAppReady(true);
 
-      // Restore the previous camera (position + zoom) if the canvas was
-      // unmounted by the combat screen; otherwise start fully zoomed out so
-      // the whole world fits the screen.
+      // Restore a compatible camera after combat; legacy whole-world camera
+      // values are recentered because their translation is invalid at the new
+      // detail-only zoom range.
       const saved = useWorldStore.getState();
       const savedScale = saved.cameraScale;
-      const fitScale = Math.min(app.screen.width / WORLD_W, app.screen.height / WORLD_H);
-      if (savedScale > 0) {
+      const minScale = cameraMinScale(app);
+      const canRestoreCamera = savedScale >= minScale && savedScale <= MAX_CAMERA_SCALE;
+      if (canRestoreCamera) {
         scaleRef.current = savedScale;
       } else {
-        scaleRef.current = 40; // Max zoom on initial load
+        scaleRef.current = MAX_CAMERA_SCALE;
       }
       stageRef.current.scale.set(scaleRef.current);
 
       if (gamePlayer) {
         playerRef.current.position.set(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
-        if (savedScale > 0) {
+        setLivePosition(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
+        if (canRestoreCamera) {
           stageRef.current.position.set(saved.cameraX, saved.cameraY);
           fogDirtyRef.current = true;
         } else {
           centerOnPlayer(app, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
         }
       }
+      scheduleMonsterChunkSyncRef.current();
 
       let isDragging = false;
       const dragStart = { x: 0, y: 0 };
@@ -1569,6 +1662,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const dx = e.global.x - dragStart.x;
         const dy = e.global.y - dragStart.y;
         stageRef.current.position.set(stageStart.x + dx, stageStart.y + dy);
+        scheduleMonsterChunkSyncRef.current();
         setCamera(scaleRef.current, stageRef.current.position.x, stageRef.current.position.y);
         fogDirtyRef.current = true;
       };
@@ -1605,10 +1699,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       canvasElement.removeEventListener("touchstart", handleTouchStart);
       canvasElement.removeEventListener("touchmove", handleTouchMove);
       canvasElement.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("resize", handleResize);
       if (appRef.current) {
         appRef.current.destroy();
         appRef.current = null;
       }
+      monsterChunksRef.current.clear();
     };
 
   }, []);
@@ -1616,6 +1712,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   useEffect(() => {
     if (!appReady || !appRef.current || !gamePlayer || isMovingRef.current) return;
     playerRef.current.position.set(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
+    setLivePosition(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
   }, [appReady, gamePlayer]);
 
   useEffect(() => {
@@ -1625,8 +1722,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
-    drawMonsters(nearbyCells);
-  }, [appReady, nearbyCells, drawMonsters]);
+    syncMonsterChunks(cellChunks, cellRegion, nearbyWindow);
+  }, [appReady, cellChunks, cellRegion, nearbyWindow, labelSettings.monster, labelSettings.bossNearby, gamePlayer?.x, gamePlayer?.y, investigationRange, monsterDictionary, itemDictionary, guDictionary, syncMonsterChunks]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
@@ -1651,7 +1748,6 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   // is open so markers stay fresh as the player moves. A separate, faster poll
   // keeps remote players fresh, and a background prefetch warms cells ahead of
   // the movement so markers appear progressively instead of popping in.
-  const investigationRange = useWorldStore((s) => s.investigationRange);
   useEffect(() => {
     if (!appReady || !useGameStore.getState().player) return;
     const pollCells = () => {
@@ -1813,8 +1909,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !appRef.current || !gamePlayer || cameraCenterRequest === 0) return;
-    scaleRef.current = 40;
-    stageRef.current.scale.set(40);
+    scaleRef.current = MAX_CAMERA_SCALE;
+    stageRef.current.scale.set(MAX_CAMERA_SCALE);
     centerOnPlayer(appRef.current, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
   }, [appReady, cameraCenterRequest, gamePlayer, centerOnPlayer]);
 
