@@ -201,15 +201,7 @@ func ChallengeArena(c *gin.Context) {
 		return
 	}
 
-	var targetPlayer models.Player
-	err = tx.QueryRow(`
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.current_mana, p.base_hp, p.combat_settings
-		FROM players p
-		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-		WHERE p.id = $1 FOR UPDATE OF p`, targetUUID).Scan(
-		&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-		&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CurrentMana, &targetPlayer.BaseHP, &targetPlayer.CombatSettings,
-	)
+	targetPlayer, err := evaluateManaTxEquippedReadonly(tx, targetUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy đối thủ"})
 		return

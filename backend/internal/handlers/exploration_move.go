@@ -132,28 +132,18 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 		if errUUID == nil {
 			var targetPlayer models.Player
 			queryStr := `
-				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.x, p.y, p.avatar_url, p.path_masteries, ` + db.GuInventoryAggregate("p.id") + `, COALESCE(ia.dao_marks, '{}'::jsonb), p.combat_settings
+				SELECT p.id
 				FROM players p
-				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 				WHERE p.id = $1 AND p.id != $2
 				  AND (p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes')
 			`
 			var errTarget error
+			var matchedID uuid.UUID
 			if player.PartyID != nil {
 				queryStr += ` AND (p.party_id IS NULL OR p.party_id != $3)`
-				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID, player.PartyID).Scan(
-					&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-					&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-					&targetPlayer.X, &targetPlayer.Y, &targetPlayer.AvatarURL,
-					&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
-				)
+				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID, player.PartyID).Scan(&matchedID)
 			} else {
-				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID).Scan(
-					&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-					&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-					&targetPlayer.X, &targetPlayer.Y, &targetPlayer.AvatarURL,
-					&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
-				)
+				errTarget = tx.QueryRow(queryStr, targetUUID, player.ID).Scan(&matchedID)
 			}
 
 			if errTarget != nil {
@@ -165,6 +155,11 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			}
 
 			if errTarget == nil {
+				var errLoad error
+				targetPlayer, errLoad = evaluateManaTxEquippedReadonly(tx, targetUUID)
+				if errLoad != nil {
+					return "Không thể tải thông tin đối thủ!", false, nil
+				}
 				// Distance check: Chebyshev distance max(|x1-x2|, |y1-y2|)
 				dx := math.Abs(float64(targetPlayer.X - player.X))
 				dy := math.Abs(float64(targetPlayer.Y - player.Y))
@@ -368,20 +363,23 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				}
 				break
 			}
-			var targetPlayer models.Player
+			var targetUUID uuid.UUID
 			err := tx.QueryRow(`
-				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.combat_settings
+				SELECT p.id
 				FROM players p
-				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 				WHERE p.id != $1 
+				ORDER BY RANDOM()
 				LIMIT 1`, player.ID,
-			).Scan(
-				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
-			)
+			).Scan(&targetUUID)
+
+			var targetPlayer models.Player
+			var errLoad error
+			if err == nil {
+				targetPlayer, errLoad = evaluateManaTxEquippedReadonly(tx, targetUUID)
+			}
 
 			combatTriggered = true
-			if err != nil {
+			if err != nil || errLoad != nil {
 				player.ActiveCombat = &models.CombatState{
 					EnemyName:      "Cổ Sư Lang Thang (Wandering Cultivator)",
 					EnemyHP:        100.0,

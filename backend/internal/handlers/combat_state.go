@@ -56,17 +56,8 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 				if m.ID != player.ID.String() {
 					mUUID, errParse := uuid.Parse(m.ID)
 					if errParse == nil {
-						var mPlayer models.Player
-						errMember := tx.QueryRow(`
-							SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.body_mods, p.base_hp, p.avatar_url
-							FROM players p 
-							LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-							WHERE p.id = $1 AND p.current_region = $2`,
-							mUUID, player.CurrentRegion).Scan(
-							&mPlayer.ID, &mPlayer.Username, &mPlayer.Rank, &mPlayer.SubRank,
-							&mPlayer.HP, &mPlayer.MaxMana, &mPlayer.CurrentMana, &mPlayer.PathMasteries, &mPlayer.GuInventory, &mPlayer.DaoMarks, &mPlayer.BodyMods, &mPlayer.BaseHP, &mPlayer.AvatarURL,
-						)
-						if errMember == nil && (mPlayer.HP > 0 || base.CombatMode == "virtual") {
+						mPlayer, errMember := evaluateManaTxEquippedReadonly(tx, mUUID)
+						if errMember == nil && mPlayer.CurrentRegion == player.CurrentRegion && (mPlayer.HP > 0 || base.CombatMode == "virtual") {
 							mStats := CalculatePlayerStats(&mPlayer)
 							mCombatant := models.CombatantFromPlayer(&mPlayer, mStats)
 							if mCombatant.HP > mCombatant.MaxHP {

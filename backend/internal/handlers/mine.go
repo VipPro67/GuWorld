@@ -551,15 +551,7 @@ func AttackMineSlot(c *gin.Context) {
 		}
 
 		// 4. Load defender (occupier) details
-		var defender models.Player
-		err = tx.QueryRow(`
-			SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.current_mana, p.base_hp, p.combat_settings
-			FROM players p
-			LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-			WHERE p.id = $1 FOR UPDATE OF p`, occupierUUID).Scan(
-			&defender.ID, &defender.Username, &defender.Rank, &defender.SubRank,
-			&defender.HP, &defender.MaxMana, &defender.PathMasteries, &defender.GuInventory, &defender.DaoMarks, &defender.CurrentMana, &defender.BaseHP, &defender.CombatSettings,
-		)
+		defender, err := evaluateManaTxEquippedReadonly(tx, occupierUUID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thông tin đối thủ"})
 			return

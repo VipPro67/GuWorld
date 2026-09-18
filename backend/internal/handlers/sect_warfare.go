@@ -582,17 +582,7 @@ func AttackSect(c *gin.Context) {
 			if defRows.Scan(&defID) != nil {
 				continue
 			}
-			var defPlayer models.Player
-			errDef := tx.QueryRow(`
-				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.path_masteries,
-				       `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.base_hp, p.combat_settings, p.avatar_url
-				FROM players p
-				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-				WHERE p.id = $1`, defID).Scan(
-				&defPlayer.ID, &defPlayer.Username, &defPlayer.Rank, &defPlayer.SubRank,
-				&defPlayer.HP, &defPlayer.MaxMana, &defPlayer.CurrentMana, &defPlayer.PathMasteries,
-				&defPlayer.GuInventory, &defPlayer.DaoMarks, &defPlayer.BaseHP, &defPlayer.CombatSettings, &defPlayer.AvatarURL,
-			)
+			defPlayer, errDef := evaluateManaTxEquippedReadonly(tx, defID)
 			if errDef != nil || defPlayer.HP <= 0 {
 				continue
 			}
