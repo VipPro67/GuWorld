@@ -35,13 +35,13 @@ type CellCacheState = {
   cellRegion: string;
 };
 
-type CellChunk = {
+export type CellChunk = {
   cells: Record<string, NearbyCell>;
   touchedAt: number;
   version?: number;
 };
 
-const CELL_CHUNK_SIZE = 64;
+export const CELL_CHUNK_SIZE = 64;
 const MAX_CELL_CHUNKS = 512;
 
 const currentCellRegion = () => useGameStore.getState().player?.current_region ?? "";
@@ -196,6 +196,7 @@ interface WorldStoreState {
   fetchObjects: () => Promise<void>;
   fetchNearbyCells: (x: number, y: number, r: number) => Promise<boolean>;
   fetchCellsRect: (minX: number, minY: number, maxX: number, maxY: number) => Promise<boolean>;
+  getCachedCell: (x: number, y: number) => NearbyCell | undefined;
   invalidateCell: (x: number, y: number) => void;
   mergeWSCells: (cells: NearbyCell[]) => void;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
@@ -511,6 +512,11 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     const boundedRadius = Math.min(Math.max(Math.round(r), 1), 127);
     set({ nearbyWindow: { x, y, r: boundedRadius } });
     return get().fetchCellsRect(x - boundedRadius, y - boundedRadius, x + boundedRadius, y + boundedRadius);
+  },
+
+  getCachedCell: (x, y) => {
+    const region = currentCellRegion();
+    return get().cellChunks[chunkKey(region, x, y)]?.cells[cellKey(x, y)];
   },
 
   invalidateCell: (x, y) => {
