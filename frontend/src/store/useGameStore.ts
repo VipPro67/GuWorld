@@ -29,6 +29,7 @@ import { createAuthSlice, type AuthSlice } from "@/store/slices/authSlice";
 import { createReferralsSlice, type ReferralsSlice } from "@/store/slices/referralsSlice";
 import { createMiscSlice, type MiscSlice } from "@/store/slices/miscSlice";
 import { createCombatSlice, type CombatSlice } from "@/store/slices/combatSlice";
+import { createTeleportSlice, type TeleportSlice } from "@/store/slices/teleportSlice";
 
 export interface GuInstance {
   instance_id: string;
@@ -1086,7 +1087,7 @@ export interface WorldConfig {
   hub_y: number;
 }
 
-interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice {
+interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice {
   player: Player | null;
   manaSnapshot: ManaSnapshot | null;
   token: string | null;
@@ -1495,6 +1496,7 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createReferralsSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createMiscSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createCombatSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createTeleportSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   applyInventoryFromResponse,
   player: null,
   manaSnapshot: null,

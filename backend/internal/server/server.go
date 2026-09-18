@@ -643,6 +643,22 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/world/drops", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetTileGroundDrops)
 		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
 
+		// Teleportation Arrays / Truyền Tống Trận
+		teleport := api.Group("/teleport")
+		teleport.Use(middleware.AuthRequired())
+		teleport.Use(middleware.RateLimitByPlayer(60, time.Minute))
+		{
+			teleport.GET("/templates", handlers.GetTeleportTemplates)
+			teleport.GET("/mine", handlers.GetMyTeleportArrays)
+			teleport.POST("/build", handlers.BuildTeleportArray)
+			teleport.GET("/directory", handlers.GetTeleportDirectory)
+			teleport.POST("/travel", handlers.TravelTeleport)
+			teleport.POST("/manage", handlers.ManageTeleportArray)
+			teleport.POST("/repair", handlers.RepairTeleportArray)
+			teleport.POST("/withdraw", handlers.WithdrawTeleportVault)
+			teleport.POST("/dismantle", handlers.DismantleTeleportArray)
+		}
+
 		// Shop — group: 30/min, per player: 10/min
 		api.GET("/shop/packages", middleware.AuthRequired(), handlers.GetPremiumShopPackages)
 		api.GET("/shop/list", handlers.GetShopList)

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useWorldStore } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import TeleportModal from "./TeleportModal";
+import type { TeleportArray } from "@/store/slices/teleportSlice";
 import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users } from "lucide-react";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
@@ -30,16 +31,20 @@ const ImmortalApertureView = dynamic(() => import("./ImmortalApertureView").then
 const PartyView = dynamic(() => import("./PartyView").then(m => m.PartyView), { ssr: false });
 const GuQuickBar = dynamic(() => import("./GuQuickBar").then(m => m.GuQuickBar), { ssr: false });
 const TargetHud = dynamic(() => import("./TargetHud").then(m => m.TargetHud), { ssr: false });
+const TeleportBuildModal = dynamic(() => import("./Teleport/TeleportBuildModal").then(m => m.TeleportBuildModal), { ssr: false });
+const TeleportDirectoryModal = dynamic(() => import("./Teleport/TeleportDirectoryModal").then(m => m.TeleportDirectoryModal), { ssr: false });
+const TeleportManagementModal = dynamic(() => import("./Teleport/TeleportManagementModal").then(m => m.TeleportManagementModal), { ssr: false });
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; borderColor: string; bgColor: string }> = {
-  Boss:       { icon: "⚔️",  label: "Boss",            color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
-  Monster:    { icon: "🐺",  label: "Yêu Thú",         color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
-  Resource:   { icon: "💎",  label: "Linh Tài",        color: "text-emerald-300", borderColor: "border-emerald-500/30", bgColor: "bg-emerald-950/60" },
-  WildGu:     { icon: "🐛",  label: "Cổ Trùng",        color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
-  Empty:      { icon: "🏯",  label: "Địa Điểm",        color: "text-amber-300",   borderColor: "border-amber-500/30",   bgColor: "bg-amber-950/60" },
-  Player:     { icon: "🥷",  label: "Cổ Sư",           color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
-  GroundDrop: { icon: "🎁",  label: "Chiến Lợi Phẩm", color: "text-amber-300",   borderColor: "border-amber-500/40",   bgColor: "bg-amber-950/70" },
-  Sect:       { icon: "🏯",  label: "Tông Môn",        color: "text-yellow-300",  borderColor: "border-yellow-500/50",  bgColor: "bg-yellow-950/70" },
+  Boss:          { icon: "⚔️",  label: "Boss",             color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
+  Monster:       { icon: "🐺",  label: "Yêu Thú",          color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
+  Resource:      { icon: "💎",  label: "Linh Tài",         color: "text-emerald-300", borderColor: "border-emerald-500/30", bgColor: "bg-emerald-950/60" },
+  WildGu:        { icon: "🐛",  label: "Cổ Trùng",         color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
+  Empty:         { icon: "🏯",  label: "Địa Điểm",         color: "text-amber-300",   borderColor: "border-amber-500/30",   bgColor: "bg-amber-950/60" },
+  Player:        { icon: "🥷",  label: "Cổ Sư",            color: "text-purple-300",  borderColor: "border-purple-500/30",  bgColor: "bg-purple-950/60" },
+  GroundDrop:    { icon: "🎁",  label: "Chiến Lợi Phẩm",  color: "text-amber-300",   borderColor: "border-amber-500/40",   bgColor: "bg-amber-950/70" },
+  Sect:          { icon: "🏯",  label: "Tông Môn",         color: "text-yellow-300",  borderColor: "border-yellow-500/50",  bgColor: "bg-yellow-950/70" },
+  TeleportArray: { icon: "🌀",  label: "Truyền Tống Trận", color: "text-cyan-300",    borderColor: "border-cyan-500/50",    bgColor: "bg-cyan-950/70" },
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
@@ -106,6 +111,11 @@ export function WorldPage() {
   const fetchGroundDrops = useGameStore((s) => s.fetchGroundDrops);
   const lootGroundDrop = useGameStore((s) => s.lootGroundDrop);
 
+  // Teleportation Arrays
+  const myTeleportArrays = useGameStore((s) => s.myTeleportArrays);
+  const fetchMyTeleportArrays = useGameStore((s) => s.fetchMyTeleportArrays);
+  const [managingTeleportArray, setManagingTeleportArray] = useState<TeleportArray | null>(null);
+
   const [mapMode, setMapMode] = useState<"select" | "drag">("select");
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -156,7 +166,8 @@ export function WorldPage() {
     { id: "party", label: "Tổ Đội", icon: Users, color: "text-amber-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
     { id: "market", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
-    { id: "teleport", label: "Di Chuyển", icon: Zap, color: "text-yellow-400" },
+    { id: "teleport_directory", label: "Truyền Tống", icon: Zap, color: "text-cyan-400" },
+    { id: "teleport_build", label: "Bố Trí Trận", icon: Sparkles, color: "text-blue-400" },
     // { id: "leaderboard", label: "Xếp Hạng", icon: Trophy, color: "text-yellow-400" },
     // { id: "gacha", label: "Rút Thưởng", icon: Gift, color: "text-pink-400" },
     // { id: "arena", label: "Đấu Trường", icon: Swords, color: "text-red-400" },
@@ -170,7 +181,8 @@ export function WorldPage() {
     fetchPartyInvitations();
     fetchGroundDrops();
     fetchSectsMap();
-  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap]);
+    fetchMyTeleportArrays();
+  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap, fetchMyTeleportArrays]);
 
   const setInvestigationRange = useWorldStore((s) => s.setInvestigationRange);
 
@@ -307,12 +319,46 @@ export function WorldPage() {
               {activeModal === "arena" && <ArenaView />}
               {activeModal === "premium_store" && <PremiumStoreView />}
               {activeModal === "dungeon" && <DungeonView />}
-              {activeModal === "teleport" && (
-                <TeleportModal isOpen={true} onClose={() => setActiveModal(null)} />
+              {(activeModal === "teleport" || activeModal === "teleport_directory") && gamePlayer && (
+                <TeleportDirectoryModal
+                  player={gamePlayer}
+                  onClose={() => setActiveModal(null)}
+                  onOpenManage={(arrayId) => {
+                    const found = myTeleportArrays.find((a: TeleportArray) => a.id === arrayId);
+                    if (found) {
+                      setActiveModal(null);
+                      setManagingTeleportArray(found);
+                    }
+                  }}
+                />
+              )}
+              {activeModal === "teleport_build" && gamePlayer && (
+                <TeleportBuildModal
+                  player={gamePlayer}
+                  onClose={() => setActiveModal(null)}
+                  onSuccess={() => {
+                    setActiveModal(null);
+                    fetchMyTeleportArrays();
+                    fetchGrid();
+                  }}
+                />
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Standalone Teleport Management Modal */}
+      {managingTeleportArray && gamePlayer && (
+        <TeleportManagementModal
+          player={gamePlayer}
+          array={managingTeleportArray}
+          onClose={() => setManagingTeleportArray(null)}
+          onUpdated={() => {
+            fetchMyTeleportArrays();
+            fetchGrid();
+          }}
+        />
       )}
 
       <div className="absolute top-2 left-2 flex flex-col gap-2 pointer-events-none z-10">
@@ -389,6 +435,21 @@ export function WorldPage() {
             className="w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer text-sky-400 hover:text-sky-300 border border-transparent hover:bg-sky-500/10"
           >
             <span className="text-lg">📍</span>
+          </button>
+          <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
+          <button
+            onClick={() => setActiveModal("teleport_directory")}
+            title="Danh Bạ Truyền Tống Trận"
+            className="w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer text-cyan-400 hover:text-cyan-300 border border-transparent hover:bg-cyan-500/10"
+          >
+            <span className="text-lg">🌀</span>
+          </button>
+          <button
+            onClick={() => setActiveModal("teleport_build")}
+            title="Bố Trí Truyền Tống Trận"
+            className="w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer text-blue-400 hover:text-blue-300 border border-transparent hover:bg-blue-500/10"
+          >
+            <span className="text-lg">🏛️</span>
           </button>
           <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
           <div className="relative">
@@ -566,6 +627,43 @@ export function WorldPage() {
               );
             })()}
 
+            {selectedObject.cell_type === "TeleportArray" && (() => {
+              const tpArray = myTeleportArrays.find((a: TeleportArray) => a.id === selectedObject.id || (a.x === selectedObject.x && a.y === selectedObject.y));
+
+              return (
+                <div className="mb-3 space-y-1.5 text-xs font-serif bg-cyan-950/30 border border-cyan-500/30 rounded-xl p-2.5">
+                  <div className="flex justify-between items-center text-[11px] font-mono text-zinc-300">
+                    <span>🌀 Cấp: <strong className="text-cyan-300">{tpArray?.tier || "TIER_1"}</strong></span>
+                    <span className="text-[10px] text-cyan-400 font-bold bg-cyan-950/40 border border-cyan-500/30 px-1.5 py-0.5 rounded">
+                      {tpArray?.direction_type === "ONE_WAY_SEND" ? "Gửi 1 Chiều" : tpArray?.direction_type === "ONE_WAY_RECEIVE" ? "Nhận 1 Chiều" : "2 Chiều"}
+                    </span>
+                  </div>
+                  {tpArray ? (
+                    <div className="space-y-1 text-[11px] font-mono text-zinc-400 pt-1 border-t border-cyan-900/30">
+                      <div className="flex justify-between">
+                        <span>Độ bền:</span>
+                        <span className="text-emerald-400 font-bold">{tpArray.current_durability} / {tpArray.max_durability}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Quyền hạn:</span>
+                        <span className="text-amber-400 font-bold">{tpArray.access_policy === "PUBLIC" ? "Công Khai" : tpArray.access_policy === "SECT" ? "Tông Môn" : "Cá Nhân"}</span>
+                      </div>
+                      {tpArray.fee_enabled && (
+                        <div className="flex justify-between">
+                          <span>Phí dùng:</span>
+                          <span className="text-yellow-400 font-bold">{tpArray.fee_amount.toLocaleString()} {tpArray.fee_currency === "immortal_stones" ? "Tiên Thạch" : "Nguyên Thạch"}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-zinc-400 font-mono">
+                      Truyền Tống Trận đồ cổ xưa trên Ngũ Vực.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="flex gap-2.5">
               {selectedObject.cell_type === "Player" ? (
                 (() => {
@@ -692,6 +790,48 @@ onClick={() => {
                       >
                         <span>🏃</span>
                       </button>
+                    </>
+                  );
+                })()
+              ) : selectedObject.cell_type === "TeleportArray" ? (
+                (() => {
+                  const tpArray = myTeleportArrays.find((a: TeleportArray) => a.id === selectedObject.id || (a.x === selectedObject.x && a.y === selectedObject.y));
+                  const isOwner = gamePlayer?.id && tpArray?.owner_id === gamePlayer.id;
+                  const isMySect = tpArray?.sect_id && tpArray.sect_id === mySectStatus?.sect?.id;
+                  const canManage = isOwner || (isMySect && (mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO"));
+                  const isStanding = gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y;
+
+                  return (
+                    <>
+                      <button
+                        onClick={() => setActiveModal("teleport_directory")}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
+                      >
+                        <span>🌀</span>
+                        <span>{isStanding ? "Truyền Tống" : "Xem Danh Bạ"}</span>
+                      </button>
+                      {canManage && tpArray && (
+                        <button
+                          onClick={() => setManagingTeleportArray(tpArray)}
+                          title="Quản Lý Trận Pháp"
+                          className="px-3 flex items-center justify-center rounded-xl bg-zinc-800 hover:bg-zinc-700 text-cyan-300 border border-cyan-700/40 text-xs font-serif transition-all cursor-pointer shadow-lg"
+                        >
+                          <span>⚙️</span>
+                        </button>
+                      )}
+                      {!isStanding && (
+                        <button
+                          disabled={isMoving}
+                          title="Tiếp Cận Truyền Tống Trận"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
+                        >
+                          <span>🏃</span>
+                          <span>Tiếp Cận</span>
+                        </button>
+                      )}
                     </>
                   );
                 })()

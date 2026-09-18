@@ -20,7 +20,6 @@ import { TradeRoomModal } from "@/components/TradeRoomModal";
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
 const RefiningFurnace = dynamic(() => import("@/components/RefiningFurnace").then(m => m.RefiningFurnace), { ssr: false });
-const ExplorationMap = dynamic(() => import("@/components/ExplorationMap").then(m => m.ExplorationMap), { ssr: false });
 const WorldPage = dynamic(() => import("@/components/WorldPage").then(m => m.WorldPage), { ssr: false });
 const CombatScreen = dynamic(() => import("@/components/CombatScreen").then(m => m.CombatScreen), { ssr: false });
 const CaravanShop = dynamic(() => import("@/components/CaravanShop").then(m => m.CaravanShop), { ssr: false });
@@ -375,15 +374,6 @@ export default function Home() {
               onUseGus={useGus}
               onDropGu={dropGu}
               onDropGus={dropGus}
-            />
-          </div>
-        ) : currentView === "explore" ? (
-          <div className="w-full">
-            <ExplorationMap
-              player={player}
-              actionLoading={actionLoading}
-              onExplore={exploreNode}
-              onBack={() => setView("dashboard")}
             />
           </div>
         ) : currentView === "world-map" ? (

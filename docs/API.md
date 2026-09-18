@@ -141,9 +141,22 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/explore/teleport` | *(Đã vô hiệu hóa)* Dịch chuyển bằng tiền đã bị hủy bỏ. Trả về `400 Bad Request` yêu cầu sử dụng Cổ trùng dịch chuyển (`POST /explore/use_gu`). |
 | GET | `/explore/players` | Người chơi ở gần để hiển thị/tương tác trên bản đồ. |
 | POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). |
-| POST | `/explore/use_killer_move` | Dùng sát chiêu lên mục tiêu bản đồ. |
 | GET | `/world/drops` | Danh sách chiến lợi phẩm/hài cốt tại ô hiện tại. |
 | POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
+
+## Truyền Tống Trận (Teleportation Arrays)
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/teleport/templates` | Lấy danh sách các phẩm cấp Trận Pháp (Tier 1: Vi Trận, Tier 2: Đại Vực Trận, Tier 3: Tiên Trận) kèm yêu cầu chi phí và cự ly. |
+| GET | `/teleport/mine` | Lấy danh sách các Trận Pháp do bản thân hoặc Tông Môn sở hữu. |
+| POST | `/teleport/build` | Bố trí Trận Pháp mới tại toạ độ hiện tại. Body: `{"name","tier","direction_type","access_policy","fee_enabled","fee_currency","fee_amount"}`. |
+| GET | `/teleport/directory` | Lấy danh bạ các điểm truyền tống khả dụng từ Trận Pháp mà người chơi đang đứng (lọc cự ly, hướng kết nối, quyền riêng tư, phí). |
+| POST | `/teleport/travel` | Kích hoạt truyền tống đến trận pháp đích. Body: `{"target_array_id": "uuid"}`. Trừ phí (95% vào két sắt trận, 5% hao tán), giảm 1 độ bền, áp dụng debuff Giới Vực Bích nếu nhảy xuyên vực. |
+| POST | `/teleport/manage` | Thay đổi tên, hướng (hai chiều/1 chiều), quyền (`PUBLIC`/`SECT`/`PERSONAL`), bật/tắt phí và mức giá vé. |
+| POST | `/teleport/repair` | Tiêu hao Nguyên Thạch phục hồi độ bền trận pháp. Body: `{"array_id": "uuid", "amount": 10}`. |
+| POST | `/teleport/withdraw` | Rút số dư doanh thu từ Két Sắt (`vault_balance`) về túi đồ của chủ sở hữu. Body: `{"array_id": "uuid", "amount": 0}` (0 = rút tất cả). |
+| POST | `/teleport/dismantle` | Thu hồi và phá dỡ trận pháp, hoàn trả 50% nguyên liệu chế tạo (tỉ lệ theo % độ bền) và tự động rút két sắt. Body: `{"array_id": "uuid"}`. |
 
 ## Sủng vật (Pets)
 

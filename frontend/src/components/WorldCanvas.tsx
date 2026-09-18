@@ -138,6 +138,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const groundDrops = useGameStore((s) => s.groundDrops);
   const sectMap = useGameStore((s) => s.sectMap);
   const fetchSectsMap = useGameStore((s) => s.fetchSectsMap);
+  const myTeleportArrays = useGameStore((s) => s.myTeleportArrays);
   const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
   const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
   const selectedTarget = useWorldStore((s) => s.selectedTarget);
@@ -256,7 +257,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       byKey.set(`${obj.x},${obj.y}`, obj);
     }
     for (const cell of nearbyCells) {
-      if (cell.cell_type !== "Boss" && cell.cell_type !== "Resource" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village") continue;
+      if (cell.cell_type !== "Boss" && cell.cell_type !== "Resource" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray") continue;
       const key = `${cell.x},${cell.y}`;
       if (!byKey.has(key)) {
         byKey.set(key, {
@@ -269,8 +270,22 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         });
       }
     }
+    if (myTeleportArrays) {
+      for (const t of myTeleportArrays) {
+        if (gamePlayer?.current_region && t.region_id !== gamePlayer.current_region) continue;
+        const key = `${t.x},${t.y}`;
+        byKey.set(key, {
+          id: t.id,
+          region_id: t.region_id,
+          x: t.x,
+          y: t.y,
+          cell_type: "TeleportArray",
+          content_id: t.name,
+        });
+      }
+    }
     return Array.from(byKey.values());
-  }, [objects, nearbyCells, gamePlayer?.current_region]);
+  }, [objects, nearbyCells, myTeleportArrays, gamePlayer]);
 
   // Ensure regions loaded so we can draw them
   useEffect(() => {
@@ -730,8 +745,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       for (const o of obs) {
         const isBoss = o.cell_type === "Boss";
         const isResource = o.cell_type === "Resource";
+        const isTeleport = o.cell_type === "TeleportArray";
         const g = new Graphics();
-        const size = isBoss ? 0.8 : 0.6;
+        const size = isBoss ? 0.8 : isTeleport ? 0.75 : 0.6;
         if (isBoss) {
           // Boss: Star/Diamond shape with glowing aura
           g.circle(0, 0, size + 0.2);
@@ -751,6 +767,21 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           g.fill({ color: 0x10b981 }); // Lighter top
           g.circle(-0.15, -0.3, size * 0.3);
           g.fill({ color: 0x34d399 }); // Highlight
+        } else if (isTeleport) {
+          // Teleport Array: Glowing cyan rune circle and magic vortex
+          g.circle(0, 0, size + 0.25);
+          g.fill({ color: 0x06b6d4, alpha: 0.25 }); // Outer glow
+          g.circle(0, 0, size);
+          g.fill({ color: 0x083344, alpha: 0.85 }); // Dark cyan base
+          g.stroke({ color: 0x22d3ee, width: 0.1 });
+          // Inner rune ring
+          g.circle(0, 0, size * 0.6);
+          g.stroke({ color: 0x67e8f9, width: 0.08, alpha: 0.7 });
+          // Portal diamond rune
+          g.poly([0, -size * 0.5, size * 0.35, 0, 0, size * 0.5, -size * 0.35, 0]);
+          g.fill({ color: 0xa5f3fc });
+          g.circle(0, 0, size * 0.2);
+          g.fill({ color: 0xffffff });
         } else {
           // Empty / Location: Small shrine or stone marker
           g.rect(-size / 1.5, -size / 2, size * 1.33, size);
@@ -767,7 +798,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         });
         container.addChild(g);
 
-        const labelColor = isBoss ? 0xfecaca : 0xffffff;
+        const labelColor = isBoss ? 0xfecaca : isTeleport ? 0x67e8f9 : 0xffffff;
         let text = o.content_id;
         if (isBoss || o.cell_type === "Monster") {
           text = monsterDictionary[o.content_id]?.name || text;
@@ -775,6 +806,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           text = itemDictionary[o.content_id]?.name || text;
         } else if (o.cell_type === "WildGu") {
           text = guSpecFor(o.content_id, o.rank)?.name || text;
+        } else if (isTeleport) {
+          text = `🌀 ${o.content_id || "Trận Pháp"}`;
         }
 
         const showBossLabel = isBoss && !!labelSettingsRef.current.bossNearby && !!gamePlayer && Math.hypot(o.x - gamePlayer.x, o.y - gamePlayer.y) <= useWorldStore.getState().investigationRange;

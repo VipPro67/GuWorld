@@ -727,3 +727,31 @@ Ví dụ bán-lại cho Thương Đội (10% `base_price`): Cổ rank 9 = 250 Ti
 - **100.000 Nguyên Thạch = 1 Tiên Nguyên Thạch** — đổi chiều `PRIMEVAL_STONE` → `IMMORTAL_ESSENCE_STONE` (`amount` phải là bội số của 100.000, nhận `amount / 100000`).
 
 Giao dịch đồng bộ cả `players.primeval_stones/immortal_stones` lẫn `wallets.primeval_stone/immortal_essence_stone`, ghi 2 dòng sổ cái `wallet_transactions` với `type = 'EXCHANGE'` (thêm vào CHECK constraint của bảng `wallet_transactions`; `InitSchema` tự `ALTER TABLE ... DROP/ADD CONSTRAINT` để áp dụng lên DB cũ).
+
+### Truyền Tống Trận Ngũ Vực (Teleportation Arrays)
+
+Bảng `teleport_arrays` lưu các thực thể trận pháp do người chơi và Tông Môn xây dựng trên bản đồ thế giới Ngũ Vực.
+
+#### Phân cấp trận pháp:
+- **`TIER_1` (Tiểu Hình Truyền Tống Trận / Vi Trận):**
+  - Tu vi tối thiểu: Chuyển 2 (Rank 2).
+  - Chi phí: 2.000 Nguyên Thạch + 2x Không Gian Thạch (`khong_gian_thach`).
+  - Phạm vi cự ly: Tối đa 1.000 ô trong cùng Đại Vực.
+  - Độ bền tối đa: 50 điểm (mỗi lượt nhảy giảm 1 điểm).
+- **`TIER_2` (Đại Vực Truyền Tống Trận):**
+  - Tu vi tối thiểu: Chuyển 4 (Rank 4).
+  - Chi phí: 10.000 Nguyên Thạch + 10x Không Gian Thạch (`khong_gian_thach`).
+  - Phạm vi cự ly: Tối đa 10.000 ô trong cùng Đại Vực.
+  - Độ bền tối đa: 100 điểm.
+- **`TIER_3` (Ngũ Vực Tiên Cấp Truyền Tống Trận):**
+  - Tu vi tối thiểu: Chuyển 6 (Rank 6 - Tiên Nhân).
+  - Chi phí: 50.000 Nguyên Thạch + 20 Tiên Nguyên Thạch + 50x Không Gian Thạch.
+  - Phạm vi: Tự do dịch chuyển xuyên tất cả các Đại Vực trong Ngũ Vực (`is_cross_region = true`).
+  - Độ bền tối đa: 200 điểm.
+  - Phản phệ Giới Vực Bích: Khi nhảy xuyên Đại Vực, người chơi vẫn phải chịu debuff áp chế thuộc tính theo Rank từ `CheckAndApplyRegionalWallDebuff`.
+
+#### Quy tắc kinh tế & vận hành:
+- **Chế độ kết nối:** Hai chiều (`TWO_WAY`), Cổng gửi đi (`ONE_WAY_SEND`), Cổng nhận (`ONE_WAY_RECEIVE`).
+- **Quyền truy cập:** `PUBLIC` (Toàn server), `SECT` (Thành viên Tông Môn), `PERSONAL` (Chỉ chủ sở hữu).
+- **Phí dịch chuyển & Két sắt:** Chủ sở hữu cấu hình bật/tắt thu phí và mức giá vé. Khi có người sử dụng, 95% phí được tích lũy vào Két Sắt Trận Pháp (`vault_balance`) để chủ sở hữu đến rút, 5% hao tán theo quy luật trời đất.
+- **Bảo trì & Thu hồi:** Tiêu hao Nguyên Thạch để sửa chữa hồi phục độ bền. Khi thu hồi (Dismantle), hoàn trả 50% chi phí xây dựng ban đầu (nhân theo tỉ lệ % độ bền còn lại) và tự động chuyển toàn bộ số dư Két Sắt về túi nhân vật.
