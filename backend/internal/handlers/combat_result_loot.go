@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -34,7 +35,8 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 					}
 					if activeCombat.MineSlotID <= 0 {
 						dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
-						hubRegion, hubX, hubY := NearestHub(targetX, targetY)
+						hubRegion, hubX, hubY := ResolveRespawnPosition(tx, targetUUID, targetRegion, targetX, targetY)
+						GrantPvpImmunity(tx, targetUUID, 10*time.Minute)
 						_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
 						if dropSummary != "" {
 							pvpMsg := fmt.Sprintf("Chiến thắng PVP vang dội! Rơi rớt từ bại binh: %s.", dropSummary)

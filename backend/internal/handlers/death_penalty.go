@@ -169,6 +169,19 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID, isAgg
 	mult, satKhiLevel := getSatKhiMultiplier(tx, loser.ID)
 	remainingGus, droppedGus := selectEligibleGus(loser.GuInventory, mult, satKhiLevel)
 	loser.GuInventory = remainingGus
+	if len(droppedGus) > 0 && len(loser.EquippedGus) > 0 {
+		droppedMap := make(map[string]bool)
+		for _, g := range droppedGus {
+			droppedMap[g.InstanceID] = true
+		}
+		newEquipped := make(models.EquippedGusList, 0, len(loser.EquippedGus))
+		for _, id := range loser.EquippedGus {
+			if !droppedMap[id] {
+				newEquipped = append(newEquipped, id)
+			}
+		}
+		loser.EquippedGus = newEquipped
+	}
 
 	effectiveStonePct := math.Min(100.0, deathPenaltyConfig.PrimevalStonePct*mult)
 	primevalLoss := math.Floor(loser.PrimevalStones*effectiveStonePct/100*1000) / 1000
@@ -350,7 +363,7 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 					loot_data, protected_until, expires_at
 				) VALUES (
 					$1, $2, $3, $4, $5, $6, $7,
-					$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '30 minutes'
+					$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '10 minutes'
 				)
 			`, loserRegion.String, loserX, loserY, loserID, loserName, winnerID, killerName, lootBytes)
 		}
@@ -364,12 +377,12 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 		}
 		if summary != "" {
 			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
-				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d) và rơi rớt tài sản: %s. Bạn đã được truyền tống về Vùng An Toàn!", attackerName, loserX, loserY, summary))
+				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d) và rơi rớt tài sản: %s. Bạn đã được đưa về nơi an dưỡng và hồi sinh!", attackerName, loserX, loserY, summary))
 			notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
 				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s]! Tài sản của đối phương rơi tại (%d, %d): %s.", loserName, loserX, loserY, summary))
 		} else {
 			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
-				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d). May mắn không bị rơi rớt tài sản! Bạn đã được truyền tống về Vùng An Toàn!", attackerName, loserX, loserY))
+				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d). May mắn không bị rơi rớt tài sản! Bạn đã được đưa về nơi an dưỡng và hồi sinh!", attackerName, loserX, loserY))
 			notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
 				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s] tại (%d, %d)! Đối phương không có tài sản rơi rớt.", loserName, loserX, loserY))
 		}
@@ -394,12 +407,16 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 	return summary
 }
 
-// selectEligibleGus returns the remaining inventory and the randomly chosen,
-// non-equipped, non-vital Gus to drop.
+// selectEligibleGus returns the remaining inventory and the randomly chosen Gus to drop.
+// Vital Gu (Cổ Bản Mệnh) is NEVER dropped.
+// Equipped Gus can only be dropped if satKhiLevel > 5.
 func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int) (models.GuInventory, models.GuInventory) {
 	eligible := make(models.GuInventory, 0, len(gus))
 	for _, g := range gus {
-		if g.Equipped || g.IsVital {
+		if g.IsVital {
+			continue
+		}
+		if g.Equipped && satKhiLevel <= 5 {
 			continue
 		}
 		eligible = append(eligible, g)

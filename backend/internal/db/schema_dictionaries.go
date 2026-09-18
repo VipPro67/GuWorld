@@ -340,6 +340,14 @@ func seedDefaultStatusRows() error {
 			`[]`,
 			"Chịu áp chế của Giới Vực Bích khi di chuyển giữa các Đại Vực. Tu vi rank càng cao bị áp chế càng nặng.",
 		},
+		{
+			"pvp_immunity",
+			"Miễn Chiến Hồi Sinh",
+			`{"pvp_immune":1.0}`,
+			10,
+			`[]`,
+			"Được Thiên Đạo che chở sau khi hồi sinh, miễn nhiễm mọi đòn tấn công PvP. Chủ động khai chiến sẽ phá vỡ trạng thái này.",
+		},
 	}
 
 	for _, s := range statuses {

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<!-- saved from url=(0047)file:///tmp/architecture-review-2026041412.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>Architecture Review - GuWorld</title>
+    <script src="./saved_resource"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .badge-strong { color: emerald-600; }
+      .badge-amber { color: amber-600; }
+      .badge-slate { color: slate-700; }
+    </style>
+  <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.mx-auto{margin-left:auto;margin-right:auto}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mt-12{margin-top:3rem}.mt-4{margin-top:1rem}.flex{display:flex}.grid{display:grid}.max-w-5xl{max-width:64rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.rounded-xl{border-radius:0.75rem}.border-t{border-top-width:1px}.border-slate-200{--tw-border-opacity:1;border-color:rgb(226 232 240 / var(--tw-border-opacity, 1))}.bg-stone-50{--tw-bg-opacity:1;background-color:rgb(250 250 249 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.p-6{padding:1.5rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-12{padding-top:3rem;padding-bottom:3rem}.pt-4{padding-top:1rem}.font-sans{font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}@media (min-width: 768px){.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}}</style></head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <header class="max-w-5xl mx-auto px-6 py-12">
+      <h1 class="text-3xl font-bold mb-4">Architecture Review</h1>
+      <p class="text-lg text-slate-600">GuWorld - Codebase Architecture Deepening</p>
+      <div class="flex gap-4 mt-4">
+        <span class="badge-strong">Shallow Modules</span>
+        <span class="badge-amber">Testability Gap</span>
+        <span class="badge-slate">Leaky Interfaces</span>
+      </div>
+    </header>
+
+    <section id="candidates" class="max-w-5xl mx-auto px-6 py-12">
+      <h2 class="text-2xl font-bold mb-6">Candidate Deepening Opportunities</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Candidate 1: Player Auth Pipeline -->
+        <article class="bg-white rounded-xl shadow-sm p-6">
+          <h3 class="text-xl font-semibold mb-3">Collapse the Player Auth Pipeline</h3>
+          <p class="text-gray-600 mb-4">The player registration and authorization handlers are among the largest in the codebase (200–500+ lines each). While their public interface is a simple gin endpoint, the implementation mixes HTTP handling, database transactions, password hashing, and gameplay logic—all intertwined. There are no internal seams, and the deletion test confirms that removing any handler would scatter complexity into other files (e.g., moving registration logic into models or db).</p>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Problem</h4>
+            <p>The handlers are <strong>shallow</strong> in interface (tiny gin function) but <strong>deep</strong> in implementation (mixed HTTP, DB, and game logic). This violates the principle that the interface should be small and stable while the implementation can evolve independently. Without internal seams, debugging and testing require stepping through dozens of lines in a single file.</p>
+          </div>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Solution</h4>
+            <p>Extract validation, database access, and gameplay logic into separate modules behind a single seam. Introduce an adapter for the HTTP layer so tests can mock the handler interface directly. This creates a deep module with a small, stable interface (the gin endpoint) and concentrated implementation behind a seam.</p>
+          </div>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Wins</h4>
+            <ul class="space-y-2">
+              <li>Tests hit one interface (the gin endpoint) rather than scattering across 200+ lines.</li>
+              <li>Bugs concentrate in one module, improving maintainability.</li>
+              <li>Leverage increases: the same validation and DB logic can be reused across auth, login, and registration flows.</li>
+            </ul>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-200">
+            <h4 class="font-medium mb-2">Recommendation</h4>
+            <p><span class="badge-strong">Strong</span> Deepen the player auth pipeline by extracting validation, DB access, and gameplay logic into testable modules behind a single seam.</p>
+          </div>
+        </article>
+
+        <!-- Candidate 2: Frontend Store Slices -->
+        <article class="bg-white rounded-xl shadow-sm p-6">
+          <h3 class="text-xl font-semibold mb-3">Deepen Frontend Store Slices</h3>
+          <p class="text-gray-600 mb-4">Each of the 22 Zustand slices combines state management, API calls, and cross‑cutting concerns (toasts, logs, event subscriptions). This leaks responsibilities across interfaces, making tests require network mocking and state synchronization. The deletion test shows that removing a slice would force related logic into other slices, increasing coupling.</p>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Problem</h4>
+            <p>Cross‑cutting concerns (addToast, addLog, subscribePlayerEvents) are embedded in every slice’s interface, violating the principle of localized interfaces. Each slice becomes a “fat” module where state, API, and side‑effects are entangled.</p>
+          </div>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Solution</h4>
+            <p>Extract cross‑cutting concerns into shared adapters (e.g., a <code>NotificationAdapter</code>, <code>LogAdapter</code>) and define clear seams between state management and API access. This yields shallow, testable slices where each interface exposes only its domain responsibility.</p>
+          </div>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Wins</h4>
+            <ul class="space-y-2">
+              <li>Interfaces become focused on a single domain (e.g., <code>authSlice</code> handles auth only).</li>
+              <li>Cross‑cutting concerns are centralized, reducing duplication.</li>
+              <li>Localizability improves: changes to logging or toasting affect one adapter, not twenty slices.</li>
+            </ul>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-200">
+            <h4 class="font-medium mb-2">Recommendation</h4>
+            <p><span class="badge-strong">Strong</span> Restructure the frontend store slices by extracting cross‑cutting concerns into reusable adapters and defining clear seams between state and API.</p>
+          </div>
+        </article>
+
+        <!-- Candidate 3: Combat System -->
+        <article class="bg-white rounded-xl shadow-sm p-6">
+          <h3 class="text-xl font-semibold mb-3">Deepen the Combat Module</h3>
+          <p class="text-gray-600 mb-4">The combat system spans ~6,256 lines across 20+ files (combat.go, combat_sim_build.go, combat_auto.go, etc.). The interface is fragmented across many exported functions, and core logic (damage, AI, loot) lacks unit tests. Integration tests dominate, leaving gaps in deterministic testing.</p>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Problem</h4>
+            <p>Multiple files share overlapping concerns (damage calculation, AI targeting, loot distribution) with no cohesive seam. The deletion test shows that removing a focused file pushes related logic into adjacent files, diluting cohesion.</p>
+          </div>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Solution</h4>
+            <p>Consolidate the combat logic into a single deep module with a small, unified interface (e.g., <code>InitializeCombatState</code>, <code>ApplyDamageWithLogs</code>, <code>CalculateLoot</code>). Introduce an adapter for the simulation engine so tests can run deterministic simulations without real game state.</p>
+          </div>
+          <div class="mb-4">
+            <h4 class="font-medium mb-2">Wins</h4>
+            <ul class="space-y-2">
+              <li>Deterministic simulation enables faster, repeatable tests.</li>
+              <li>Clearer ownership of combat concepts reduces cognitive load.</li>
+              <li>Leverage grows as the same combat primitives can be reused across PVP, PvE, and auto‑combat.</li>
+            </ul>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-200">
+            <h4 class="font-medium mb-2">Recommendation</h4>
+            <p><span class="badge-strong">Strong</span> Consolidate the combat system into one deep module with a focused interface and an adapter for the simulation engine.</p>
+          </div>
+        </article>
+      </div>
+
+      <section id="top-recommendation" class="mt-12">
+        <h2 class="text-2xl font-bold mb-6">Top Recommendation</h2>
+        <p class="text-gray-600">Deepen the <strong>Player Auth Pipeline</strong> first.</p>
+        <p>The handlers are the most prominent shallow modules: they have tiny interfaces but massive, tangled implementations. Extracting validation, DB access, and gameplay logic into testable modules behind a single seam will immediately improve testability, reduce coupling, and enable safer refactoring of the authentication flow.</p>
+      </section>
+    </section>
+  
+
+
+</body></html>

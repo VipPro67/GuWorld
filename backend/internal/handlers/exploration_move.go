@@ -160,6 +160,26 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				if errLoad != nil {
 					return "Không thể tải thông tin đối thủ!", false, nil
 				}
+				// If attacker has PvP immunity, attacking someone breaks their immunity
+				if player.Statuses.Has("pvp_immunity") {
+					RemovePvpImmunity(tx, player.ID)
+					player.Statuses.Remove("pvp_immunity")
+					logMsg += " [Chủ động khai chiến, trạng thái Miễn Chiến bị phá vỡ!]"
+				}
+
+				// Check target Sát Khí level
+				_, targetSatKhiLevel := getSatKhiMultiplier(tx, targetUUID)
+
+				// Newbie protection: Rank <= 3 cannot be attacked unless they carry Sát Khí
+				if targetPlayer.Rank <= 3 && targetSatKhiLevel == 0 {
+					return fmt.Sprintf("Cổ Sư %s đang ở cảnh giới %d Chuyển (Tân Thủ <= 3 Chuyển), được Thiên Đạo bảo hộ không thể bị tấn công!", targetPlayer.Username, targetPlayer.Rank), false, nil
+				}
+
+				// Target PvP immunity check (after death/respawn)
+				if targetPlayer.Statuses.Has("pvp_immunity") {
+					return fmt.Sprintf("Cổ Sư %s đang trong thời gian Miễn Chiến sau khi hồi sinh, không thể tấn công!", targetPlayer.Username), false, nil
+				}
+
 				// Distance check: Chebyshev distance max(|x1-x2|, |y1-y2|)
 				dx := math.Abs(float64(targetPlayer.X - player.X))
 				dy := math.Abs(float64(targetPlayer.Y - player.Y))
@@ -170,9 +190,17 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				bonusRange := int(stats["attack_range"]) + int(stats["combat_range"])
 				maxPvPRange := 2 + bonusRange
 
-				// Safe zone check
+				// Safe zone check (Wanted criminal with Sát Khí > 10 can be attacked in safe zones)
 				isSafe1 := IsSafeZone(player.CurrentRegion, player.X, player.Y)
 				isSafe2 := IsSafeZone(targetPlayer.CurrentRegion, targetPlayer.X, targetPlayer.Y)
+
+				if targetSatKhiLevel > 10 {
+					// Target's safe zone immunity is stripped due to excessive killing intent
+					isSafe2 = false
+					if isSafe1 {
+						isSafe1 = false // Attacker can strike the wanted criminal from safe zone
+					}
+				}
 
 				if isSafe1 || isSafe2 {
 					return "Không thể tấn công trong Vùng An Toàn!", false, nil

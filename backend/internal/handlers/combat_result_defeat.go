@@ -46,12 +46,16 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 				fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
 		}
 	}
+	deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
+	isPVP := player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP"
+	var winnerID *uuid.UUID
+
 	if isTribulation {
 		defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
 	} else if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 		defeatMsg = "Thất bại trong trận tranh đoạt Mỏ! May mắn không tổn hại đến bản thể và tài sản."
 	} else if player.ActiveCombat != nil && player.ActiveCombat.TargetSectID != "" {
-		defeatMsg = "Công kích Tông Môn thất bại! Đạo hữu trọng thương lui về thành trấn an dưỡng."
+		defeatMsg = "Công kích Tông Môn thất bại! Đạo hữu trọng thương lui về an dưỡng."
 		sectDefeatLogs := ApplySectWarDefeat(tx, player, player.ActiveCombat)
 		for _, sLog := range sectDefeatLogs {
 			defLogs = append(defLogs, simulator.CombatLog{
@@ -60,17 +64,19 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 				Detail: sLog,
 			})
 		}
-		player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
+		dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+		player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
+		if dropSummary != "" {
+			defeatMsg = fmt.Sprintf("Công kích Tông Môn thất bại! Đạo hữu trọng thương và rơi rớt mất: %s.", dropSummary)
+		}
 	} else {
-		deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
-		var winnerID *uuid.UUID
-		if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
+		if isPVP && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
 			if tUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil {
 				winnerID = &tUUID
 			}
 		}
 		dropSummary := applyDeathDrop(tx, player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
-		player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
+		player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
 		if dropSummary != "" {
 			defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
 		}
@@ -82,7 +88,14 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		}
 		allyUUID, errParse := uuid.Parse(ally.ID)
 		if errParse == nil && allyUUID != player.ID {
-			_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+			if isPVP || (player.ActiveCombat != nil && player.ActiveCombat.TargetSectID != "") {
+				// All party members suffer death drop and respawn in PvP / Sect War defeat
+				_ = applyDeathDropRecord(tx, &allyUUID, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+				aReg, aX, aY := ResolveRespawnPosition(tx, allyUUID, deathRegion, deathX, deathY)
+				_, _ = tx.Exec("UPDATE players SET hp = 1.0, current_region = $1, x = $2, y = $3, active_combat = NULL WHERE id = $4", aReg, aX, aY, allyUUID)
+			} else {
+				_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+			}
 		}
 	}
 

@@ -217,7 +217,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 					// Apply death-like penalty: teleport to hub, death drop
 					player.HP = 1.0
 					deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
-					player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
+					player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
 
 					// Apply death drop (may drop items)
 					dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})

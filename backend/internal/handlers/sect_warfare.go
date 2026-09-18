@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -493,15 +495,11 @@ func AttackSect(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Check attacker belongs to a sect
+	// Check attacker sect membership (optional: lone wolves / rogue cultivators can attack)
 	var mySectID string
-	err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&mySectID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn phải gia nhập Tông môn mới có thể phát động chiến tranh!"})
-		return
-	}
+	_ = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&mySectID)
 
-	if mySectID == req.TargetSectID {
+	if mySectID != "" && mySectID == req.TargetSectID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đánh tông môn của chính mình!"})
 		return
 	}
@@ -633,24 +631,36 @@ func AttackSect(c *gin.Context) {
 }
 
 // ApplySectWarVictory is called by auto-combat resolution when attacker wins a SECT_WAR combat.
-// It plunders funds and vault_materials from the target sect.
+// It plunders funds, vault_materials, vault_gu, and vault_recipes from the target sect.
 func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.CombatState) []string {
 	var logs []string
 	if combat == nil || combat.TargetSectID == "" {
 		return logs
 	}
 
-	var mySectID string
-	err := tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, player.ID).Scan(&mySectID)
-	if err != nil {
-		return logs
+	// Gather all team members (attacker + allies/party)
+	teamMembers := []uuid.UUID{player.ID}
+	for _, ally := range combat.Allies {
+		if ally.Kind == "Ally" || ally.Kind == "Player" {
+			if aUUID, parseErr := uuid.Parse(ally.ID); parseErr == nil && aUUID != player.ID {
+				teamMembers = append(teamMembers, aUUID)
+			}
+		}
 	}
+
+	var mySectID string
+	_ = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, player.ID).Scan(&mySectID)
 
 	var targetFunds int64
 	var targetBuildings []byte
 	var targetMaterials []byte
+	var targetGu []byte
+	var targetRecipes []byte
 	var targetName string
-	err = tx.QueryRow(`SELECT name, funds, buildings, vault_materials FROM sects WHERE id = $1 FOR UPDATE`, combat.TargetSectID).Scan(&targetName, &targetFunds, &targetBuildings, &targetMaterials)
+	err := tx.QueryRow(`
+		SELECT name, funds, buildings, vault_materials, vault_gu, vault_recipes
+		FROM sects WHERE id = $1 FOR UPDATE
+	`, combat.TargetSectID).Scan(&targetName, &targetFunds, &targetBuildings, &targetMaterials, &targetGu, &targetRecipes)
 	if err != nil {
 		return logs
 	}
@@ -664,10 +674,14 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		plunderPercent = 0.05
 	}
 
-	// Plunder funds
+	// 1. Plunder funds
 	stolenFunds := int64(float64(targetFunds) * plunderPercent)
+	if stolenFunds > 0 && mySectID != "" {
+		// Credit attacker's sect (if attacker has no sect, funds disappear into the void)
+		_, _ = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, stolenFunds, mySectID)
+	}
 
-	// Plunder vault_materials
+	// 2. Plunder vault_materials (items)
 	var targetMats map[string]interface{}
 	_ = json.Unmarshal(targetMaterials, &targetMats)
 	stolenMats := make(map[string]int64)
@@ -686,67 +700,168 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		}
 	}
 
+	// Distribute materials among team members
+	if len(stolenMats) > 0 {
+		numMembers := int64(len(teamMembers))
+		for matID, totalQty := range stolenMats {
+			perMember := totalQty / numMembers
+			rem := totalQty % numMembers
+			for i, mID := range teamMembers {
+				qty := perMember
+				if int64(i) < rem {
+					qty++
+				}
+				if qty > 0 {
+					_ = InventorySvc.AddItem(tx, mID.String(), matID, "materials", qty)
+				}
+			}
+		}
+	}
+
+	// 3. Plunder vault_gu
+	var targetVaultGus []SectVaultGuItem
+	if len(targetGu) > 0 {
+		_ = json.Unmarshal(targetGu, &targetVaultGus)
+	}
+	var remainingVaultGus []SectVaultGuItem
+	var stolenGus []SectVaultGuItem
+	for _, vg := range targetVaultGus {
+		stolenQty := int64(math.Ceil(float64(vg.Quantity) * plunderPercent))
+		if stolenQty > vg.Quantity {
+			stolenQty = vg.Quantity
+		}
+		if stolenQty > 0 {
+			stolenCopy := vg
+			stolenCopy.Quantity = stolenQty
+			stolenGus = append(stolenGus, stolenCopy)
+			vg.Quantity -= stolenQty
+		}
+		if vg.Quantity > 0 {
+			remainingVaultGus = append(remainingVaultGus, vg)
+		}
+	}
+
+	// Distribute stolen Gus to team members
+	if len(stolenGus) > 0 {
+		memberIdx := 0
+		for _, sg := range stolenGus {
+			for q := int64(0); q < sg.Quantity; q++ {
+				recipient := teamMembers[memberIdx%len(teamMembers)]
+				memberIdx++
+				instID := uuid.New().String()
+				r := sg.Rank
+				if r <= 0 {
+					r = 1
+				}
+				newGu := models.GuInstance{
+					InstanceID: instID,
+					GuID:       sg.ID,
+					Rank:       r,
+					Hunger:     int(sg.Hunger),
+					Status:     "NORMAL",
+					Equipped:   false,
+					IsVital:    false,
+				}
+				_ = db.AddPlayerGu(tx, recipient.String(), newGu)
+			}
+		}
+	}
+
+	// 4. Plunder vault_recipes
+	var targetVaultRecipes []models.SectVaultRecipe
+	if len(targetRecipes) > 0 {
+		_ = json.Unmarshal(targetRecipes, &targetVaultRecipes)
+	}
+	var remainingVaultRecipes []models.SectVaultRecipe
+	var stolenRecipes []models.SectVaultRecipe
+	for _, vr := range targetVaultRecipes {
+		if rand.Float64() < plunderPercent {
+			stolenRecipes = append(stolenRecipes, vr)
+		} else {
+			remainingVaultRecipes = append(remainingVaultRecipes, vr)
+		}
+	}
+	if len(targetVaultRecipes) > 0 && len(stolenRecipes) == 0 {
+		stolenRecipes = append(stolenRecipes, targetVaultRecipes[0])
+		remainingVaultRecipes = targetVaultRecipes[1:]
+	}
+
+	// Unlock stolen recipes for team members
+	for _, sr := range stolenRecipes {
+		for _, mID := range teamMembers {
+			_, _ = tx.Exec(`
+				INSERT INTO player_recipe_progress (player_id, recipe_id, completion_rate, is_unlocked, created_at, updated_at)
+				VALUES ($1, $2, $3, true, NOW(), NOW())
+				ON CONFLICT (player_id, recipe_id)
+				DO UPDATE SET is_unlocked = true, completion_rate = GREATEST(player_recipe_progress.completion_rate, EXCLUDED.completion_rate), updated_at = NOW()
+			`, mID, sr.RecipeID, sr.CompletionRate)
+		}
+	}
+
 	now := time.Now()
 	shieldHours := time.Duration(12 + arrLvl*2)
 	newShield := now.Add(shieldHours * time.Hour)
 
-	// Update target sect: deduct funds, update materials, set shield, reset defenders
+	// Update target sect in DB
 	updatedMats, _ := json.Marshal(targetMats)
-	_, _ = tx.Exec(`UPDATE sects SET funds = funds - $1, vault_materials = $2, shield_until = $3 WHERE id = $4`,
-		stolenFunds, string(updatedMats), newShield, combat.TargetSectID)
-
-	// Credit attacker's sect
-	_, _ = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, stolenFunds, mySectID)
-
-	// Transfer stolen materials to attacker's sect vault
-	if len(stolenMats) > 0 {
-		var mySectMats []byte
-		err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1 FOR UPDATE`, mySectID).Scan(&mySectMats)
-		if err == nil {
-			var myMats map[string]interface{}
-			_ = json.Unmarshal(mySectMats, &myMats)
-			if myMats == nil {
-				myMats = make(map[string]interface{})
-			}
-			for key, stolen := range stolenMats {
-				existing := int64(0)
-				if v, ok := myMats[key]; ok {
-					switch ev := v.(type) {
-					case float64:
-						existing = int64(ev)
-					case int64:
-						existing = ev
-					}
-				}
-				myMats[key] = existing + stolen
-			}
-			updatedMyMats, _ := json.Marshal(myMats)
-			_, _ = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, string(updatedMyMats), mySectID)
-		}
-	}
+	updatedGus, _ := json.Marshal(remainingVaultGus)
+	updatedRecipes, _ := json.Marshal(remainingVaultRecipes)
+	_, _ = tx.Exec(`
+		UPDATE sects SET
+			funds = GREATEST(0, funds - $1),
+			vault_materials = $2,
+			vault_gu = $3,
+			vault_recipes = $4,
+			shield_until = $5
+		WHERE id = $6
+	`, stolenFunds, string(updatedMats), string(updatedGus), string(updatedRecipes), newShield, combat.TargetSectID)
 
 	// Reset defending status for all target sect members
 	_, _ = tx.Exec(`UPDATE sect_members SET is_defending = false WHERE sect_id = $1`, combat.TargetSectID)
 
 	// Award attacker
 	_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, player.ID)
-	_, _ = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + 200 WHERE player_id = $1`, player.ID)
+	if mySectID != "" {
+		_, _ = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + 200 WHERE player_id = $1`, player.ID)
+	}
 
 	logs = append(logs, fmt.Sprintf("Công phá Tông Môn %s thành công!", targetName))
-	logs = append(logs, fmt.Sprintf("Cướp được %d Quỹ Tông Môn.", stolenFunds))
+	if stolenFunds > 0 {
+		if mySectID != "" {
+			logs = append(logs, fmt.Sprintf("Cướp được %d Quỹ Tông Môn chuyển vào Tông Môn ta.", stolenFunds))
+		} else {
+			logs = append(logs, fmt.Sprintf("Cướp phá tiêu hủy %d Quỹ Tông Môn (quỹ bị tiêu biến vào hư vô).", stolenFunds))
+		}
+	}
 	if len(stolenMats) > 0 {
-		matMsg := "Cướp tài nguyên kho tông:"
+		matMsg := "Cướp linh tài kho tông (chia đều cho đội):"
 		for key, val := range stolenMats {
 			matMsg += fmt.Sprintf(" %s x%d,", key, val)
 		}
 		logs = append(logs, matMsg)
 	}
+	if len(stolenGus) > 0 {
+		guMsg := "Cướp Cổ trùng kho tông (chia cho đội):"
+		for _, sg := range stolenGus {
+			guMsg += fmt.Sprintf(" %s R%d x%d,", sg.ID, sg.Rank, sg.Quantity)
+		}
+		logs = append(logs, guMsg)
+	}
+	if len(stolenRecipes) > 0 {
+		recMsg := "Cướp bí phương kho tông (mở khóa cho đội):"
+		for _, sr := range stolenRecipes {
+			recMsg += fmt.Sprintf(" %s,", sr.RecipeID)
+		}
+		logs = append(logs, recMsg)
+	}
 
 	// Notifications
-	_ = SendSystemMessage("sect", sql.NullString{String: mySectID, Valid: true},
-		fmt.Sprintf("Tông môn ta đã đánh chiếm %s! Cướp được %d Quỹ.", targetName, stolenFunds))
+	if mySectID != "" {
+		_ = SendSystemMessage("sect", sql.NullString{String: mySectID, Valid: true},
+			fmt.Sprintf("Tông môn ta đã đánh chiếm %s! Cướp được %d Quỹ.", targetName, stolenFunds))
+	}
 	_ = SendSystemMessage("sect", sql.NullString{String: combat.TargetSectID, Valid: true},
-		fmt.Sprintf("Tông môn bị đạo hữu %s tấn công và thất thủ! Mất %d Quỹ. Hộ Sơn Đại Trận bảo hộ trong %d giờ.", player.Username, stolenFunds, shieldHours))
+		fmt.Sprintf("Tông môn bị đạo hữu %s và đội ngũ tấn công và thất thủ! Mất %d Quỹ cùng Cổ trùng, linh tài kho. Hộ Sơn Đại Trận bảo hộ trong %d giờ.", player.Username, stolenFunds, shieldHours))
 
 	return logs
 }

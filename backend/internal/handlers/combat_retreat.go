@@ -415,9 +415,9 @@ func Flee(c *gin.Context) {
 			if isExploration {
 				deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 				player.HP = 1.0
-				player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
+				player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, deathRegion, deathX, deathY)
 
-				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã thấy ở an toàn.")
+				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng.")
 
 				// Death penalty applies to real PvE exploration and normal PvP only.
 				// Mine and arena (virtual) defeats never drop items/stones.
@@ -507,14 +507,14 @@ func Flee(c *gin.Context) {
 			deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 			player.HP = 1.0
 			dropSummary := applyDeathDropRecord(tx, &authID, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
-			player.CurrentRegion, player.X, player.Y = NearestHub(deathX, deathY)
+			player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, deathRegion, deathX, deathY)
 			droppedOnFlee = true
 			_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
 
 			if dropSummary != "" {
-				logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã thấy ở an toàn nhưng rơi rớt mất: %s.", enemyName, dropSummary)
+				logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng nhưng rơi rớt mất: %s.", enemyName, dropSummary)
 			} else {
-				logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã thấy ở an toàn.", enemyName)
+				logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng.", enemyName)
 			}
 		} else {
 			logMsg = fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s. Chịu thương tổn %.0f HP.", enemyName, damage)

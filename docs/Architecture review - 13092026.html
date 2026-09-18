@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<!-- saved from url=(0047)file:///tmp/architecture-review-1757769600.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>Architecture review — GuWorld</title>
+    <script src="./saved_resource"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mass-bar { transition: height 0.6s ease; }
+    </style>
+  <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.relative{position:relative}.mx-auto{margin-left:auto;margin-right:auto}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.h-3{height:0.75rem}.w-3{width:0.75rem}.w-6{width:1.5rem}.max-w-5xl{max-width:64rem}.list-inside{list-style-position:inside}.list-disc{list-style-type:disc}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.gap-1\.5{gap:0.375rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-10 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(2.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(2.5rem * var(--tw-space-y-reverse))}.space-y-12 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(3rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(3rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem * var(--tw-space-y-reverse))}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-2{border-width:2px}.border-t-2{border-top-width:2px}.border-dashed{border-style:dashed}.border-emerald-300{--tw-border-opacity:1;border-color:rgb(110 231 183 / var(--tw-border-opacity, 1))}.border-red-500{--tw-border-opacity:1;border-color:rgb(239 68 68 / var(--tw-border-opacity, 1))}.border-slate-200{--tw-border-opacity:1;border-color:rgb(226 232 240 / var(--tw-border-opacity, 1))}.border-slate-400{--tw-border-opacity:1;border-color:rgb(148 163 184 / var(--tw-border-opacity, 1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.bg-emerald-100{--tw-bg-opacity:1;background-color:rgb(209 250 229 / var(--tw-bg-opacity, 1))}.bg-emerald-50{--tw-bg-opacity:1;background-color:rgb(236 253 245 / var(--tw-bg-opacity, 1))}.bg-slate-100{--tw-bg-opacity:1;background-color:rgb(241 245 249 / var(--tw-bg-opacity, 1))}.bg-slate-800{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.bg-stone-50{--tw-bg-opacity:1;background-color:rgb(250 250 249 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.p-4{padding:1rem}.p-6{padding:1.5rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-12{padding-top:3rem;padding-bottom:3rem}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.font-sans{font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"}.font-serif{font-family:ui-serif, Georgia, Cambria, "Times New Roman", Times, serif}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.italic{font-style:italic}.tracking-tight{letter-spacing:-0.025em}.tracking-wider{letter-spacing:0.05em}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9 / var(--tw-text-opacity, 1))}.text-emerald-600{--tw-text-opacity:1;color:rgb(5 150 105 / var(--tw-text-opacity, 1))}.text-emerald-700{--tw-text-opacity:1;color:rgb(4 120 87 / var(--tw-text-opacity, 1))}.text-emerald-800{--tw-text-opacity:1;color:rgb(6 95 70 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.hover\:underline:hover{-webkit-text-decoration-line:underline;text-decoration-line:underline}@media (min-width: 768px){.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}}</style></head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <!-- HEADER -->
+      <header class="space-y-4">
+        <h1 class="text-3xl font-serif font-bold tracking-tight">Architecture review — GuWorld</h1>
+        <p class="text-sm text-slate-500">13 Sep 2026 · Hot-spot analysis from recent commit history</p>
+        <div class="flex gap-6 text-xs uppercase tracking-wider text-slate-500">
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-3 h-3 rounded border border-slate-400 bg-white"></span> Module
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-6 border-t-2 border-dashed border-slate-400"></span> Seam
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-3 h-3 rounded border-2 border-red-500"></span> Leakage
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-3 h-3 rounded bg-slate-800"></span> Deep module
+          </span>
+        </div>
+      </header>
+
+      <!-- CANDIDATES -->
+      <section id="candidates" class="space-y-10">
+
+        <!-- CANDIDATE 1: God Store -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-bold">1. Break the God Store into domain slices</h2>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Strong</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-600">
+            frontend/src/store/useGameStore.ts (7,971 lines)
+          </div>
+
+          <!-- BEFORE / AFTER -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- BEFORE -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Before</p>
+              <div class="relative" style="height:260px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 260">
+                  <!-- God store box -->
+                  <rect x="20" y="10" width="360" height="240" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"></rect>
+                  <text x="200" y="35" text-anchor="middle" class="text-xs" font-family="monospace" fill="#334155" font-size="11">useGameStore (7,971 lines)</text>
+                  <!-- Interface bar (nearly as tall as impl) -->
+                  <rect x="30" y="48" width="160" height="190" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="110" y="145" text-anchor="middle" font-family="monospace" fill="#475569" font-size="9">Interface: ~100 state</text>
+                  <text x="110" y="160" text-anchor="middle" font-family="monospace" fill="#475569" font-size="9">fields + 120 methods</text>
+                  <!-- Impl bar (barely taller) -->
+                  <rect x="210" y="48" width="160" height="190" rx="4" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="290" y="145" text-anchor="middle" font-family="monospace" fill="#475569" font-size="9">Implementation:</text>
+                  <text x="290" y="160" text-anchor="middle" font-family="monospace" fill="#475569" font-size="9">inline fetch calls</text>
+                  <!-- Leakage arrows -->
+                  <line x1="30" y1="250" x2="110" y2="238" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arrowRed)"></line>
+                  <line x1="370" y1="250" x2="290" y2="238" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arrowRed)"></line>
+                  <text x="200" y="258" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">every consumer couples to full state</text>
+                  <defs>
+                    <marker id="arrowRed" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <path d="M0,0 L6,3 L0,6 Z" fill="#dc2626"></path>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">After</p>
+              <div class="relative" style="height:260px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 260">
+                  <!-- Slice boxes -->
+                  <rect x="10" y="10" width="110" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="65" y="40" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">combatStore</text>
+                  <text x="65" y="52" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">state + actions</text>
+                  <text x="65" y="64" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~150 lines</text>
+
+                  <rect x="145" y="10" width="110" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="200" y="40" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">inventoryStore</text>
+                  <text x="200" y="52" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">state + actions</text>
+                  <text x="200" y="64" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~200 lines</text>
+
+                  <rect x="280" y="10" width="110" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="335" y="40" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">sectStore</text>
+                  <text x="335" y="52" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">state + actions</text>
+                  <text x="335" y="64" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~180 lines</text>
+
+                  <rect x="10" y="130" width="110" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="65" y="160" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">apertureStore</text>
+                  <text x="65" y="172" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">state + actions</text>
+                  <text x="65" y="184" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~220 lines</text>
+
+                  <rect x="145" y="130" width="110" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="200" y="160" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">authStore</text>
+                  <text x="200" y="172" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">login/session/OTP</text>
+                  <text x="200" y="184" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~120 lines</text>
+
+                  <rect x="280" y="130" width="110" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="335" y="160" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">tradeStore</text>
+                  <text x="335" y="172" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">marketplace/trade</text>
+                  <text x="335" y="184" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~160 lines</text>
+
+                  <!-- Shared authFetch -->
+                  <rect x="100" y="245" width="200" height="14" rx="3" fill="#1e293b"></rect>
+                  <text x="200" y="255" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">shared: authFetch, dictionaries, ws</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem:</strong> 100+ state fields, 120+ methods, 8 WS channels — all in one module. Every consumer imports the full store. Interface is nearly as wide as the implementation (shallow).</p>
+          <p class="text-sm"><strong>Solution:</strong> Slice into domain stores (combat, inventory, sect, aperture, auth, trade) that each own their state and actions. Shared utilities (authFetch, dictionaries, WS subscriptions) live in a thin coordination layer.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-600">
+            <li><strong>leverage:</strong> one combatStore serves combat components, not 7,971 lines of mixed concerns</li>
+            <li><strong>locality:</strong> combat bugs live in combatStore, not scattered across 120 methods</li>
+            <li><strong>testability:</strong> each slice testable in isolation with minimal mock state</li>
+            <li><strong>deletion test:</strong> deleting combatStore would force combat logic back into every component — earns its keep</li>
+          </ul>
+        </article>
+
+        <!-- CANDIDATE 2: Fat Handlers → Domain Modules -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-bold">2. Collapse fat handlers into domain modules</h2>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Strong</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-600">
+            backend/internal/handlers/player.go (5,511 lines) · admin.go (4,442) · sect.go (3,891) · combat_*.go (~9,300 total)
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- BEFORE -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Before</p>
+              <div class="relative" style="height:260px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 260">
+                  <!-- Handler boxes stacked -->
+                  <rect x="10" y="5" width="380" height="45" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"></rect>
+                  <text x="200" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="9">player.go — 36 exported + 28 unexported</text>
+                  <text x="200" y="40" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="8">auth · inventory · combat · cultivation · stats · feed · equip</text>
+
+                  <rect x="10" y="60" width="380" height="45" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"></rect>
+                  <text x="200" y="80" text-anchor="middle" font-family="monospace" fill="#334155" font-size="9">admin.go — 70 exported functions</text>
+                  <text x="200" y="95" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="8">players · sects · items · monsters · loot · shop · arena · mine</text>
+
+                  <rect x="10" y="115" width="380" height="45" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"></rect>
+                  <text x="200" y="135" text-anchor="middle" font-family="monospace" fill="#334155" font-size="9">sect.go — 31 exported functions</text>
+                  <text x="200" y="150" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="8">CRUD · donations · vault · missions · members · mines</text>
+
+                  <rect x="10" y="170" width="380" height="45" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"></rect>
+                  <text x="200" y="190" text-anchor="middle" font-family="monospace" fill="#334155" font-size="9">combat_*.go — 17 files, ~9,300 lines</text>
+                  <text x="200" y="205" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="8">attack · auto · AI · loot · retreat · capture · effects · targeting</text>
+
+                  <!-- Cross-calls -->
+                  <line x1="195" y1="50" x2="195" y2="60" stroke="#dc2626" stroke-width="1.5"></line>
+                  <line x1="195" y1="105" x2="195" y2="115" stroke="#dc2626" stroke-width="1.5"></line>
+                  <line x1="195" y1="160" x2="195" y2="170" stroke="#dc2626" stroke-width="1.5"></line>
+                  <text x="300" y="235" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">evaluateManaTxEquipped shared across files</text>
+                  <text x="300" y="248" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">responseWithPlayer* reused everywhere</text>
+                </svg>
+              </div>
+            </div>
+            <!-- AFTER -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">After</p>
+              <div class="relative" style="height:260px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 260">
+                  <!-- Deep modules -->
+                  <rect x="10" y="5" width="180" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="100" y="25" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">player module</text>
+                  <text x="100" y="38" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">auth · profile · stats</text>
+                  <text x="100" y="50" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~800 lines behind thin iface</text>
+
+                  <rect x="210" y="5" width="180" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="300" y="25" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">inventory module</text>
+                  <text x="300" y="38" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">feed · equip · drop · use</text>
+                  <text x="300" y="50" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~600 lines behind thin iface</text>
+
+                  <rect x="10" y="75" width="180" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="100" y="95" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">combat module</text>
+                  <text x="100" y="108" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">attack · auto · AI · loot</text>
+                  <text x="100" y="120" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~2,500 lines behind thin iface</text>
+
+                  <rect x="210" y="75" width="180" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="300" y="95" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">sect module</text>
+                  <text x="300" y="108" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">CRUD · missions · vault</text>
+                  <text x="300" y="120" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~1,200 lines behind thin iface</text>
+
+                  <rect x="10" y="145" width="180" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="100" y="165" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">aperture module</text>
+                  <text x="100" y="178" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">nodes · workers · tribulation</text>
+                  <text x="100" y="190" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~900 lines behind thin iface</text>
+
+                  <rect x="210" y="145" width="180" height="55" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="300" y="165" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">admin module</text>
+                  <text x="300" y="178" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">CRUD per domain</text>
+                  <text x="300" y="190" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">~1,500 lines behind thin iface</text>
+
+                  <!-- Shared layer -->
+                  <rect x="60" y="220" width="280" height="30" rx="4" fill="#1e293b"></rect>
+                  <text x="200" y="240" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">shared: evaluateMana, responseWithPlayer, transaction helpers</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem:</strong> player.go has 36 exported + 28 unexported functions covering auth, inventory, combat, cultivation, stats, and profile. Admin.go covers 10+ domains with 70 CRUD functions. Cross-file coupling via unexported <code>evaluateManaTxEquipped</code> (called from combat_auto, combat_auto_resolve, tribulation).</p>
+          <p class="text-sm"><strong>Solution:</strong> Extract domain modules (player, inventory, combat, sect, aperture, admin) each with a small interface. Shared helpers (evaluateMana, responseWithPlayer, transaction patterns) become module-internal or shared utilities. Handlers become thin HTTP adapters calling domain methods.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-600">
+            <li><strong>locality:</strong> combat bugs live in combat module, not scattered across 17 files + player.go</li>
+            <li><strong>leverage:</strong> one evaluateMana module serves all callers through a clean seam</li>
+            <li><strong>testability:</strong> domain modules testable without HTTP; handlers testable with mocked domain</li>
+            <li><strong>deletion test:</strong> deleting player module would force 36 handlers to inline 5,511 lines — earns its keep</li>
+          </ul>
+        </article>
+
+        <!-- CANDIDATE 3: Unexported Cross-File Coupling -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-bold">3. Eliminate unexported cross-file coupling</h2>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Strong</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-600">
+            evaluateManaTxEquipped · responseWithPlayer* · enemyPathResistance
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Before</p>
+              <div style="height:200px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 200">
+                  <rect x="10" y="5" width="110" height="40" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="65" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">combat_auto.go</text>
+                  <text x="65" y="37" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">calls evaluateMana</text>
+
+                  <rect x="145" y="5" width="110" height="40" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="200" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">combat_resolve.go</text>
+                  <text x="200" y="37" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">calls evaluateMana</text>
+
+                  <rect x="280" y="5" width="110" height="40" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="335" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">tribulation.go</text>
+                  <text x="335" y="37" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">calls evaluateMana</text>
+
+                  <!-- player.go in middle -->
+                  <rect x="120" y="70" width="160" height="50" rx="4" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"></rect>
+                  <text x="200" y="90" text-anchor="middle" font-family="monospace" fill="#92400e" font-size="8">player.go (unexported)</text>
+                  <text x="200" y="105" text-anchor="middle" font-family="monospace" fill="#92400e" font-size="7">evaluateManaTxEquipped()</text>
+
+                  <line x1="65" y1="45" x2="160" y2="70" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4 4"></line>
+                  <line x1="200" y1="45" x2="200" y2="70" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4 4"></line>
+                  <line x1="335" y1="45" x2="240" y2="70" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4 4"></line>
+
+                  <text x="200" y="145" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">implicit coupling via package-level unexported func</text>
+                  <text x="200" y="160" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">changing player.go breaks combat + tribulation</text>
+                  <text x="200" y="175" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">no seam — can't swap, mock, or test independently</text>
+                </svg>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">After</p>
+              <div style="height:200px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 200">
+                  <!-- Explicit module -->
+                  <rect x="120" y="70" width="160" height="50" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="200" y="90" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">mana module (exported)</text>
+                  <text x="200" y="105" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">EvaluateManaTx() — public seam</text>
+
+                  <rect x="10" y="5" width="110" height="40" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="65" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">combat_auto.go</text>
+
+                  <rect x="145" y="5" width="110" height="40" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="200" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">combat_resolve.go</text>
+
+                  <rect x="280" y="5" width="110" height="40" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="335" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">tribulation.go</text>
+
+                  <!-- Clean seams -->
+                  <line x1="65" y1="45" x2="160" y2="70" stroke="#059669" stroke-width="1.5"></line>
+                  <line x1="200" y1="45" x2="200" y2="70" stroke="#059669" stroke-width="1.5"></line>
+                  <line x1="335" y1="45" x2="240" y2="70" stroke="#059669" stroke-width="1.5"></line>
+
+                  <text x="200" y="145" text-anchor="middle" font-family="monospace" fill="#059669" font-size="8">explicit seam — importable, mockable, testable</text>
+                  <text x="200" y="160" text-anchor="middle" font-family="monospace" fill="#059669" font-size="8">changing mana module doesn't break unrelated files</text>
+                  <text x="200" y="175" text-anchor="middle" font-family="monospace" fill="#059669" font-size="8">two adapters justified: real DB + test mock</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem:</strong> <code>evaluateManaTxEquipped</code> is defined in player.go but called from combat_auto.go, combat_auto_resolve.go, and tribulation.go. Changing its signature silently breaks three files. No seam exists — can't mock for tests or swap implementations.</p>
+          <p class="text-sm"><strong>Solution:</strong> Extract to an exported module (<code>mana</code> or <code>combat/mana</code>) with a clean interface. Same for <code>responseWithPlayer*</code> helpers and <code>enemyPathResistance</code>. Two adapters (real DB + test mock) justify the seam.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-600">
+            <li><strong>locality:</strong> mana logic changes don't ripple across 3+ files</li>
+            <li><strong>leverage:</strong> one mana module serves all combat/cultivation callers</li>
+            <li><strong>testability:</strong> mock the mana seam in combat tests without touching player.go</li>
+            <li><strong>deletion test:</strong> deleting would force 3 files to inline ~200 lines of mana math</li>
+          </ul>
+        </article>
+
+        <!-- CANDIDATE 4: Duplicated Auth Utilities -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-bold">4. Consolidate duplicated auth/fetch utilities</h2>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Worth exploring</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-600">
+            frontend/src/store/useGameStore.ts · useWorldStore.ts · lib/auth.ts (proposed)
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Before</p>
+              <div style="height:160px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 160">
+                  <rect x="10" y="5" width="180" height="60" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="100" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">useGameStore.ts</text>
+                  <text x="100" y="40" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">getCookie() line 1515</text>
+                  <text x="100" y="52" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">authFetch() line 1550</text>
+
+                  <rect x="210" y="5" width="180" height="60" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="300" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">useWorldStore.ts</text>
+                  <text x="300" y="40" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">getCookie() line 77</text>
+                  <text x="300" y="52" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">authHeaders() line 83</text>
+
+                  <text x="200" y="95" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">identical getCookie() copy-pasted</text>
+                  <text x="200" y="110" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">authHeaders() reimplements authFetch()</text>
+                  <text x="200" y="125" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">ToastMessage interface duplicated</text>
+                  <text x="200" y="140" text-anchor="middle" font-family="monospace" fill="#dc2626" font-size="8">cell cache merge logic copy-pasted</text>
+                </svg>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">After</p>
+              <div style="height:160px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 160">
+                  <rect x="10" y="5" width="180" height="50" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="100" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">useGameStore.ts</text>
+                  <text x="100" y="40" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">imports from lib/auth</text>
+
+                  <rect x="210" y="5" width="180" height="50" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="300" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="8">useWorldStore.ts</text>
+                  <text x="300" y="40" text-anchor="middle" font-family="monospace" fill="#64748b" font-size="7">imports from lib/auth</text>
+
+                  <rect x="110" y="80" width="180" height="40" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="200" y="100" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">lib/auth.ts (shared)</text>
+                  <text x="200" y="112" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">getCookie · authFetch · authHeaders</text>
+
+                  <line x1="100" y1="55" x2="160" y2="80" stroke="#059669" stroke-width="1.5"></line>
+                  <line x1="300" y1="55" x2="240" y2="80" stroke="#059669" stroke-width="1.5"></line>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem:</strong> <code>getCookie()</code> is identical in both stores. <code>authHeaders()</code> in useWorldStore reimplements what <code>authFetch()</code> does in useGameStore. <code>ToastMessage</code> interface is declared twice. Cell cache merge logic is near-identical across two methods.</p>
+          <p class="text-sm"><strong>Solution:</strong> Extract <code>lib/auth.ts</code> with shared getCookie, authFetch, authHeaders. Extract <code>lib/types.ts</code> for shared interfaces. Merge duplicate cell cache logic.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-600">
+            <li><strong>locality:</strong> auth changes in one place, not two</li>
+            <li><strong>leverage:</strong> one authFetch serves all stores</li>
+            <li><strong>deletion test:</strong> deleting would force each store to reimplement token + CSRF logic</li>
+          </ul>
+        </article>
+
+        <!-- CANDIDATE 5: Hardcoded vs CSV Data Split -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-bold">5. Unify data-driven game data (hardcoded → CSV)</h2>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Worth exploring</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-600">
+            handlers/aperture.go (ResourceNodeTemplates) · handlers/player.go (disposableEmailDomains)
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Current state</p>
+              <div style="height:140px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 140">
+                  <!-- CSV-driven -->
+                  <rect x="10" y="5" width="170" height="50" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="1"></rect>
+                  <text x="95" y="25" text-anchor="middle" font-family="monospace" fill="#166534" font-size="8">CSV-driven (good)</text>
+                  <text x="95" y="40" text-anchor="middle" font-family="monospace" fill="#15803d" font-size="7">Gu · Item · Monster · Constitution · Race</text>
+
+                  <!-- Hardcoded -->
+                  <rect x="210" y="5" width="180" height="50" rx="4" fill="#fef3c7" stroke="#d97706" stroke-width="1"></rect>
+                  <text x="300" y="25" text-anchor="middle" font-family="monospace" fill="#92400e" font-size="8">Hardcoded (friction)</text>
+                  <text x="300" y="40" text-anchor="middle" font-family="monospace" fill="#a16207" font-size="7">ResourceNodeTemplates · email blocklist</text>
+
+                  <text x="200" y="85" text-anchor="middle" font-family="monospace" fill="#d97706" font-size="8">changing aperture nodes requires code deploy</text>
+                  <text x="200" y="100" text-anchor="middle" font-family="monospace" fill="#d97706" font-size="8">disposable email list can't be updated without restart</text>
+                  <text x="200" y="115" text-anchor="middle" font-family="monospace" fill="#d97706" font-size="8">data change = code change violates data/code separation</text>
+                </svg>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">After</p>
+              <div style="height:140px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 140">
+                  <rect x="50" y="5" width="300" height="50" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"></rect>
+                  <text x="200" y="25" text-anchor="middle" font-family="monospace" fill="#166534" font-size="8">All game data CSV-driven</text>
+                  <text x="200" y="40" text-anchor="middle" font-family="monospace" fill="#15803d" font-size="7">Gu · Item · Monster · Constitution · Race · Aperture Nodes · Loot Tables</text>
+
+                  <text x="200" y="85" text-anchor="middle" font-family="monospace" fill="#059669" font-size="8">data changes via Admin panel import</text>
+                  <text x="200" y="100" text-anchor="middle" font-family="monospace" fill="#059669" font-size="8">no code deploy needed for balance tweaks</text>
+                  <text x="200" y="115" text-anchor="middle" font-family="monospace" fill="#059669" font-size="8">consistent pattern: CSV → registry → handler</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem:</strong> Gu/Item/Monster/Constitution/Race data is CSV-driven via Admin import. But aperture ResourceNodeTemplates (15 node types with costs, production, defense) and disposable email blocklist (~350 domains) are hardcoded in Go. Changing aperture balance requires code deploy.</p>
+          <p class="text-sm"><strong>Solution:</strong> Move ResourceNodeTemplates to a CSV table (aperture_node_templates) loaded into a registry at startup, following the same pattern as Gu/Item registries. Move disposable email list to a DB table or config file.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-600">
+            <li><strong>locality:</strong> all game data follows one pattern (CSV → registry → handler)</li>
+            <li><strong>leverage:</strong> balance designers edit CSV, not Go code</li>
+            <li><strong>deletion test:</strong> deleting hardcoded templates would force inline data in handlers — moves in wrong direction</li>
+          </ul>
+        </article>
+
+        <!-- CANDIDATE 6: Worker-Handler Separation -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-xl font-serif font-bold">6. Separate workers from handler files</h2>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Worth exploring</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-600">
+            handlers/tribulation.go · handlers/arena_worker.go · handlers/death_arena_worker.go
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Before</p>
+              <div style="height:140px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 140">
+                  <rect x="30" y="5" width="340" height="120" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"></rect>
+                  <text x="200" y="25" text-anchor="middle" font-family="monospace" fill="#334155" font-size="9">tribulation.go — 2,315 lines</text>
+                  <!-- Handler section -->
+                  <rect x="40" y="35" width="150" height="40" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"></rect>
+                  <text x="115" y="55" text-anchor="middle" font-family="monospace" fill="#1e40af" font-size="7">HTTP handlers</text>
+                  <text x="115" y="67" text-anchor="middle" font-family="monospace" fill="#2563eb" font-size="7">GetActive · Engage · Resolve</text>
+                  <!-- Worker section -->
+                  <rect x="210" y="35" width="150" height="40" rx="3" fill="#fef3c7" stroke="#d97706" stroke-width="1"></rect>
+                  <text x="285" y="55" text-anchor="middle" font-family="monospace" fill="#92400e" font-size="7">Background workers</text>
+                  <text x="285" y="67" text-anchor="middle" font-family="monospace" fill="#a16207" font-size="7">Check · Process · Regenerate</text>
+                  <!-- Shared -->
+                  <rect x="40" y="85" width="320" height="30" rx="3" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"></rect>
+                  <text x="200" y="105" text-anchor="middle" font-family="monospace" fill="#475569" font-size="7">shared DB access, globals, state in same file</text>
+                </svg>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 space-y-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">After</p>
+              <div style="height:140px;">
+                <svg width="100%" height="100%" viewBox="0 0 400 140">
+                  <rect x="10" y="5" width="180" height="50" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="100" y="25" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">handlers/tribulation.go</text>
+                  <text x="100" y="40" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">HTTP handlers only ~600 lines</text>
+
+                  <rect x="210" y="5" width="180" height="50" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"></rect>
+                  <text x="300" y="25" text-anchor="middle" font-family="monospace" fill="#e2e8f0" font-size="8">worker/tribulation.go</text>
+                  <text x="300" y="40" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">background loop ~800 lines</text>
+
+                  <rect x="80" y="80" width="240" height="30" rx="4" fill="#1e293b"></rect>
+                  <text x="200" y="100" text-anchor="middle" font-family="monospace" fill="#94a3b8" font-size="7">shared: domain logic in separate module</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem:</strong> tribulation.go (2,315 lines) mixes HTTP handlers with background worker goroutines in the same file. Arena and death-arena workers follow the same pattern. Worker logic shares globals and DB access patterns with handlers, making it hard to reason about concurrency boundaries.</p>
+          <p class="text-sm"><strong>Solution:</strong> Move worker goroutines to <code>worker/</code> package files, keeping handlers as HTTP-only adapters. Workers share domain logic through exported module functions, not package-level globals.</p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-600">
+            <li><strong>locality:</strong> background logic separated from request-response logic</li>
+            <li><strong>testability:</strong> workers testable without HTTP context</li>
+            <li><strong>deletion test:</strong> deleting would mix worker goroutines into handler files — wrong direction</li>
+          </ul>
+        </article>
+
+      </section>
+
+      <!-- TOP RECOMMENDATION -->
+      <section id="top-recommendation" class="space-y-4">
+        <h2 class="text-xl font-serif font-bold">Top recommendation</h2>
+        <div class="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-6 space-y-3">
+          <p class="text-lg font-semibold text-emerald-800">
+            <a href="file:///tmp/architecture-review-1757769600.html#candidates" class="hover:underline">#1 Break the God Store into domain slices</a>
+          </p>
+          <p class="text-sm text-emerald-700">
+            The 7,971-line useGameStore is the single biggest friction point. It couples every frontend component to 100+ state fields and 120+ API methods. Slicing it into domain stores (combat, inventory, sect, aperture, auth, trade) with a shared authFetch/dictionaries layer would:
+          </p>
+          <ul class="text-sm space-y-1 list-disc list-inside text-emerald-700">
+            <li>Shrink each module to ~150-250 lines (deep, not shallow)</li>
+            <li>Eliminate the global actionLoading debounce lock</li>
+            <li>Make each domain testable with minimal mock state</li>
+            <li>Remove 3 instances of copy-pasted auth utilities</li>
+            <li>Enable targeted optimistic updates per domain</li>
+          </ul>
+          <p class="text-sm text-emerald-600 italic">
+            Start with combatStore (most complex state + WS subscriptions) as the pilot, then extract inventoryStore (most duplicated API calls). The pattern established by these two will guide the rest.
+          </p>
+        </div>
+      </section>
+
+    </main>
+  
+
+</body></html>
