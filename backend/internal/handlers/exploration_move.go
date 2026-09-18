@@ -229,14 +229,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 						EnemyCombatSettings: &targetPlayer.CombatSettings,
 						TargetPlayerID:      targetPlayer.ID.String(),
 					}
-					targetCharFX := gamefx.Get(&targetPlayer)
-				pvpCombat.EnemyPathResistance = targetCharFX.PathResistanceBonus
-				pvpCombat.EnemyMentalResistance = targetCharFX.MentalResistanceBonus
-				pvpCombat.EnemyDaoBonus = targetCharFX.DaoNganBonus
-				pvpCombat.EnemyPathDamageBonus = targetCharFX.PathDamageBonus
-				pvpCombat.EnemyHealingReceived = targetCharFX.HealingReceivedBonus
-				pvpCombat.EnemySoulDefenseBonus = targetCharFX.SoulDefenseBonus
-				pvpCombat.EnemyLuckBonus = targetCharFX.LuckBonus
+					gamefx.ApplyEnemyEffects(&pvpCombat, &targetPlayer)
 					player.ActiveCombat = &pvpCombat
 					logMsg = fmt.Sprintf("Khai chiến! Đạo hữu tấn công Cổ Sư %s tại khoảng cách %d ô!", targetPlayer.Username, dist)
 				} else {
@@ -417,14 +410,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					EnemyCombatSettings: &targetPlayer.CombatSettings,
 					TargetPlayerID:      targetPlayer.ID.String(),
 				}
-targetCharFX := gamefx.Get(&targetPlayer)
-			player.ActiveCombat.EnemyPathResistance = targetCharFX.PathResistanceBonus
-			player.ActiveCombat.EnemyMentalResistance = targetCharFX.MentalResistanceBonus
-			player.ActiveCombat.EnemyDaoBonus = targetCharFX.DaoNganBonus
-			player.ActiveCombat.EnemyPathDamageBonus = targetCharFX.PathDamageBonus
-			player.ActiveCombat.EnemyHealingReceived = targetCharFX.HealingReceivedBonus
-			player.ActiveCombat.EnemySoulDefenseBonus = targetCharFX.SoulDefenseBonus
-			player.ActiveCombat.EnemyLuckBonus = targetCharFX.LuckBonus
+				gamefx.ApplyEnemyEffects(player.ActiveCombat, &targetPlayer)
 				logMsg = fmt.Sprintf("Đạo hữu bắt gặp một Cổ Sư khác đang du ngoạn: %s! Lập tức giao đấu!", targetPlayer.Username)
 			}
 		}

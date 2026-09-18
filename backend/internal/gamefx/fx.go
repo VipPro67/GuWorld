@@ -71,6 +71,28 @@ type Effects struct {
 	BlockedActions map[string]bool `json:"blocked_actions,omitempty"`
 }
 
+// ApplyToEnemyCombatState populates all defender character effect properties into a CombatState.
+func (e Effects) ApplyToEnemyCombatState(combat *models.CombatState) {
+	if combat == nil {
+		return
+	}
+	combat.EnemyPathResistance = e.PathResistanceBonus
+	combat.EnemyMentalResistance = e.MentalResistanceBonus
+	combat.EnemyDaoBonus = e.DaoNganBonus
+	combat.EnemyPathDamageBonus = e.PathDamageBonus
+	combat.EnemyHealingReceived = e.HealingReceivedBonus
+	combat.EnemySoulDefenseBonus = e.SoulDefenseBonus
+	combat.EnemyLuckBonus = e.LuckBonus
+}
+
+// ApplyEnemyEffects evaluates character effects from defender and applies them to combat.
+func ApplyEnemyEffects(combat *models.CombatState, defender *models.Player) {
+	if combat == nil || defender == nil {
+		return
+	}
+	Get(defender).ApplyToEnemyCombatState(combat)
+}
+
 // ValidRaces returns the set of accepted race keys.
 func ValidRaces() map[string]bool {
 	defs := effectiveRaces()

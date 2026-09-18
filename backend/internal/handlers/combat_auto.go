@@ -427,6 +427,8 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		simEnemy.DaoBonus = activeCombat.EnemyDaoBonus
 		simEnemy.PathDamageBonus = activeCombat.EnemyPathDamageBonus
 		simEnemy.HealingReceived = activeCombat.EnemyHealingReceived
+		simEnemy.SoulDefenseBonus = activeCombat.EnemySoulDefenseBonus
+		simEnemy.LuckBonus = activeCombat.EnemyLuckBonus
 	}
 
 	// Highest-rank ACTIVE instance per GuID, used to resolve loadout specs.
@@ -926,6 +928,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		PathResistance:       charFX.PathResistanceBonus,
 		HealingReceived:      charFX.HealingReceivedBonus,
 		MentalResistance:     charFX.MentalResistanceBonus,
+		SoulDefenseBonus:     charFX.SoulDefenseBonus,
+		LuckBonus:            charFX.LuckBonus,
 		Actions:              allActions,
 		CategoryPriorities:   player.CombatSettings.CategoryPriorities,
 

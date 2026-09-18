@@ -110,7 +110,7 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 // ok=false for monsters, pets, masked arena opponents (ARENA_IDENTITY_MASK)
 // and tx-less callers, which fall back to buildSimEnemyCombatant.
 func buildSimPlayerDefender(tx *sql.Tx, enemy *models.Combatant, activeCombat *models.CombatState, isVirtual bool) (*simulator.CombatantAuto, bool) {
-	if tx == nil || enemy == nil || activeCombat == nil || activeCombat.EnemyMasked {
+	if tx == nil || enemy == nil || activeCombat == nil {
 		return nil, false
 	}
 	isPlayer := enemy.Kind == "Player" ||
@@ -119,14 +119,7 @@ func buildSimPlayerDefender(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	if !isPlayer {
 		return nil, false
 	}
-	// Arena identity masks created before the EnemyMasked flag existed are
-	// detected by their sentinel inventory entry.
-	for _, g := range enemy.GuInventory {
-		if g.InstanceID == "attitude_mask" {
-			return nil, false
-		}
-	}
-	// Main PVP enemies normally carry the defender UUID; some encodings
+
 	// (exploration) leave EnemyTemplateID empty, so fall back to TargetPlayerID.
 	defenderID := enemy.ID
 	if _, errParseID := uuid.Parse(defenderID); errParseID != nil {

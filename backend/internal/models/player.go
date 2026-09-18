@@ -267,10 +267,6 @@ type CombatState struct {
 	EnemySoulDefenseBonus  float64            `json:"enemy_soul_defense_bonus,omitempty"`
 	EnemyLuckBonus         float64            `json:"enemy_luck_bonus,omitempty"`
 	EnemyCombatSettings   *AutoCombatConfig  `json:"enemy_combat_settings,omitempty"`
-	// EnemyMasked marks an arena opponent hidden by ARENA_IDENTITY_MASK. The
-	// masked loadout in EnemyGuInventory must be used verbatim instead of
-	// rebuilding the defender from their real player row.
-	EnemyMasked    bool           `json:"enemy_masked,omitempty"`
 	SkillCooldowns map[string]int `json:"skill_cooldowns,omitempty"`
 	ItemsUsedCount int            `json:"items_used_count"`
 	ItemCooldowns  map[string]int `json:"item_cooldowns,omitempty"`

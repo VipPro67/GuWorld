@@ -233,6 +233,8 @@ type CombatantAuto struct {
 	PathResistance   map[string]float64 // additive damage reduction taken for a path
 	HealingReceived  float64            // multiplier bonus on healing received
 	MentalResistance float64            // chance (0-1) to resist control effects
+	SoulDefenseBonus float64            // percentage reduction of soul damage taken
+	LuckBonus        float64            // flat increase of luck stat
 
 	// Equipment / Loadout
 	Loadout            *CombatLoadout
