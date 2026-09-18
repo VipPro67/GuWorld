@@ -76,51 +76,16 @@ func tickStatusEffects(c *CombatantAuto, turn int) []CombatLog {
 	for _, eff := range c.ActiveEffects {
 		eff.Duration--
 		if eff.Duration <= 0 {
-			// Effect expired — log removal for notable effects
-			switch eff.ID {
-			case EffectStun:
-				logs = append(logs, CombatLog{
-					Turn: turn, ActorId: c.ID, ActorName: c.Name,
-					Action: "EFFECT_EXPIRED",
-					Detail: fmt.Sprintf("%s hết choáng!", c.Name),
-				})
-			case EffectFreeze:
-				logs = append(logs, CombatLog{
-					Turn: turn, ActorId: c.ID, ActorName: c.Name,
-					Action: "EFFECT_EXPIRED",
-					Detail: fmt.Sprintf("%s hết đóng băng!", c.Name),
-				})
-			case EffectSilence:
-				logs = append(logs, CombatLog{
-					Turn: turn, ActorId: c.ID, ActorName: c.Name,
-					Action: "EFFECT_EXPIRED",
-					Detail: fmt.Sprintf("%s hết bị im lặng!", c.Name),
-				})
-			case EffectSlow, EffectSlow1:
-				logs = append(logs, CombatLog{
-					Turn: turn, ActorId: c.ID, ActorName: c.Name,
-					Action: "EFFECT_EXPIRED",
-					Detail: fmt.Sprintf("%s hết bị chậm!", c.Name),
-				})
-			case EffectSlowDamage:
-				logs = append(logs, CombatLog{
-					Turn: turn, ActorId: c.ID, ActorName: c.Name,
-					Action: "EFFECT_EXPIRED",
-					Detail: fmt.Sprintf("%s hết bị chậm sát thương!", c.Name),
-				})
-			case EffectWeak:
-				logs = append(logs, CombatLog{
-					Turn: turn, ActorId: c.ID, ActorName: c.Name,
-					Action: "EFFECT_EXPIRED",
-					Detail: fmt.Sprintf("%s hết bị yếu!", c.Name),
-				})
-			case EffectTaunt:
-				logs = append(logs, CombatLog{
-					Turn: turn, ActorId: c.ID, ActorName: c.Name,
-					Action: "EFFECT_EXPIRED",
-					Detail: fmt.Sprintf("%s hết khiêu khích!", c.Name),
-				})
+			// Effect expired — log removal with its label
+			label := eff.ID
+			if spec, ok := statusfx.Spec(eff.ID); ok {
+				label = spec.Label
 			}
+			logs = append(logs, CombatLog{
+				Turn: turn, ActorId: c.ID, ActorName: c.Name,
+				Action: "EFFECT_EXPIRED",
+				Detail: fmt.Sprintf("%s hết hiệu ứng [%s]!", c.Name, label),
+			})
 			continue
 		}
 		kept = append(kept, eff)
@@ -159,66 +124,88 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 
 	speedMult := 1.0
 	for _, eff := range c.ActiveEffects {
-		switch eff.ID {
-		case EffectSlow, EffectSlow1, EffectSlowDamage:
+		spec, ok := statusfx.Spec(eff.ID)
+		behaviour := ""
+		if ok {
+			behaviour = spec.Behaviour
+		}
+
+		switch behaviour {
+		case statusfx.BehaviourSlow:
 			speedMult *= (1.0 - float64(eff.Value)/100.0)
-		case EffectWeak:
+		case statusfx.BehaviourHaste:
+			speedMult *= (1.0 + float64(eff.Value)/100.0)
+		case statusfx.BehaviourWeak:
 			c.DamageMultiplier *= (1.0 - float64(eff.Value)/100.0)
-		case EffectFreeze:
-			c.IsFrozen = true
-		case EffectSilence:
-			c.IsSilenced = true
-		case EffectThorns:
-			c.ThornsDamage += float64(eff.Value) / 100.0 // value is % of damage received
-		case EffectRegen:
-			// regen is handled via DoT tick, not multiplier
-		case EffectAtkUp:
+		case statusfx.BehaviourAtkUp:
 			c.DamageMultiplier *= (1.0 + float64(eff.Value)/100.0)
-		case EffectDefUp:
+		case statusfx.BehaviourDefUp:
 			c.DefenseMultiplier *= (1.0 + float64(eff.Value)/100.0)
-		case EffectTaunt:
+		case statusfx.BehaviourArmorBreak:
+			c.DefenseMultiplier *= (1.0 - float64(eff.Value)/100.0)
+		case statusfx.BehaviourThorns:
+			c.ThornsDamage += float64(eff.Value) / 100.0
+		case statusfx.BehaviourDamageReduction:
+			if r := float64(eff.Value) / 100.0; r > c.DamageTakenReduction {
+				c.DamageTakenReduction = r
+			}
+		case statusfx.BehaviourInvincible:
+			c.DamageTakenReduction = 1.0
+		case statusfx.BehaviourFreeze:
+			c.IsFrozen = true
+		case statusfx.BehaviourSilence:
+			c.IsSilenced = true
+		case statusfx.BehaviourForceBasic:
+			c.IsFeared = true
+		case statusfx.BehaviourSleep:
+			c.IsSleeping = true
+		case statusfx.BehaviourCharm:
+			c.IsCharmed = true
+		case statusfx.BehaviourStealth:
+			c.IsStealthed = true
+		case statusfx.BehaviourConfuse:
+			c.IsConfused = true
+		case statusfx.BehaviourBlind:
+			c.IsBlinded = true
+			c.AccuracyPenalty = float64(eff.Value) / 100.0
+		case statusfx.BehaviourBind:
+			c.IsBound = true
+		case statusfx.BehaviourTaunt:
 			c.HasTaunt = true
 			c.TaunterID = c.ID
-
-			// New registry-driven statuses.
-			case statusfx.StatusSleep:
-				c.IsSleeping = true
-			case statusfx.StatusFear:
-				c.IsFeared = true
-			case statusfx.StatusCharm:
-				c.IsCharmed = true
-			case statusfx.StatusStealth:
-				c.IsStealthed = true
-			case statusfx.StatusConfuse:
-				c.IsConfused = true
-			case statusfx.StatusBlind:
-				c.IsBlinded = true
-				c.AccuracyPenalty = float64(eff.Value) / 100.0
-			case statusfx.StatusBind:
-				c.IsBound = true
-			case statusfx.StatusInvincible:
-				c.DamageTakenReduction = 1.0
-			case statusfx.StatusHaste:
-				speedMult *= (1.0 + float64(eff.Value)/100.0)
-			case statusfx.StatusArmorBreak:
-				c.DefenseMultiplier *= (1.0 - float64(eff.Value)/100.0)
-			case statusfx.StatusDamageReduction:
-				if r := float64(eff.Value) / 100.0; r > c.DamageTakenReduction {
-					c.DamageTakenReduction = r
-				}
-			case statusfx.StatusReviveLock:
-				c.IsReviveLocked = true
-			case statusfx.StatusEssenceLeak:
-				c.IsEssenceLeaking = true
-			case statusfx.StatusGuSeal:
-				c.HasGuSeal = true
-			case statusfx.StatusSoulWound:
-				c.HasSoulWound = true
-			case statusfx.StatusThoughtChaos:
-				c.HasThoughtChaos = true
-			case statusfx.StatusDaoConflict:
-				c.HasDaoConflict = true
+		case statusfx.BehaviourReviveLock:
+			c.IsReviveLocked = true
+		case statusfx.BehaviourEssenceLeak:
+			c.IsEssenceLeaking = true
+		case statusfx.BehaviourGuSeal:
+			c.HasGuSeal = true
+		case statusfx.BehaviourSoulWound:
+			c.HasSoulWound = true
+		case statusfx.BehaviourThoughtChaos:
+			c.HasThoughtChaos = true
+		case statusfx.BehaviourDaoConflict:
+			c.HasDaoConflict = true
+		default:
+			switch eff.ID {
+			case EffectSlow, EffectSlow1, EffectSlowDamage:
+				speedMult *= (1.0 - float64(eff.Value)/100.0)
+			case EffectWeak:
+				c.DamageMultiplier *= (1.0 - float64(eff.Value)/100.0)
+			case EffectFreeze:
+				c.IsFrozen = true
+			case EffectSilence:
+				c.IsSilenced = true
+			case EffectThorns:
+				c.ThornsDamage += float64(eff.Value) / 100.0
+			case EffectAtkUp:
+				c.DamageMultiplier *= (1.0 + float64(eff.Value)/100.0)
+			case EffectDefUp:
+				c.DefenseMultiplier *= (1.0 + float64(eff.Value)/100.0)
+			case EffectTaunt:
+				c.HasTaunt = true
+				c.TaunterID = c.ID
 			}
+		}
 	}
 	c.EffectiveSpeed = c.Speed * speedMult
 }

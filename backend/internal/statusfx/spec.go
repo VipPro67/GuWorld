@@ -39,6 +39,7 @@ type StatusSpec struct {
 
 // Registry maps a canonical status ID to its spec.
 var Registry = map[string]StatusSpec{
+	// ── Physical / Elemental DoT & HoT ──
 	StatusBleed: {
 		ID: StatusBleed, Behaviour: BehaviourDot, Label: "Xuất Huyết",
 		Category: CategoryPhysicalDoT, Path: "blood", BaseChance: 0.6,
@@ -54,6 +55,43 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryPhysicalDoT, Path: "fire", BaseChance: 0.6,
 		DefaultTurns: 3,
 	},
+	StatusSlowDamage: {
+		ID: StatusSlowDamage, Behaviour: BehaviourDot, Label: "Tê Cóng",
+		Category: CategoryPhysicalDoT, Path: "ice", BaseChance: 0.6,
+		ResistGate: true, DefaultTurns: 3,
+	},
+	StatusRegen: {
+		ID: StatusRegen, Behaviour: BehaviourRegen, Label: "Hồi Phục",
+		Category: CategoryBuff, Path: "healing", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+
+	// ── Crowd Control (CC) & Mental Debuffs ──
+	StatusStun: {
+		ID: StatusStun, Behaviour: BehaviourStun, Label: "Choáng",
+		Category: CategoryMentalCC, Path: "soul", BaseChance: 0.6,
+		ResistGate: true, SkipTurn: true, DefaultTurns: 1,
+	},
+	StatusFreeze: {
+		ID: StatusFreeze, Behaviour: BehaviourFreeze, Label: "Đóng Băng",
+		Category: CategoryMentalCC, Path: "ice", BaseChance: 0.6,
+		ResistGate: true, SkipTurn: true, BreakOnDamage: true, DefaultTurns: 1,
+	},
+	StatusSleep: {
+		ID: StatusSleep, Behaviour: BehaviourSleep, Label: "Ngủ",
+		Category: CategoryMentalCC, Path: "dream", BaseChance: 0.6,
+		ResistGate: true, SkipTurn: true, BreakOnDamage: true, DefaultTurns: 2,
+	},
+	StatusBind: {
+		ID: StatusBind, Behaviour: BehaviourBind, Label: "Trói",
+		Category: CategoryMentalCC, Path: "earth", BaseChance: 0.6,
+		ResistGate: true, SkipTurn: true, DefaultTurns: 3,
+	},
+	StatusSilence: {
+		ID: StatusSilence, Behaviour: BehaviourSilence, Label: "Khóa Chiêu",
+		Category: CategoryMentalCC, Path: "wisdom", BaseChance: 0.6,
+		ResistGate: true, ForceBasic: true, DefaultTurns: 2,
+	},
 	StatusFear: {
 		ID: StatusFear, Behaviour: BehaviourForceBasic, Label: "Khiếp Sợ",
 		Category: CategoryMentalCC, Path: "soul", BaseChance: 0.6,
@@ -64,33 +102,58 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryMentalCC, Path: "dream", BaseChance: 0.6,
 		ResistGate: true, DefaultTurns: 2,
 	},
-	StatusStealth: {
-		ID: StatusStealth, Behaviour: BehaviourStealth, Label: "Ẩn Thân",
-		Category: CategoryBuff, Path: "shadow", BaseChance: 1.0,
-		SelfTarget: true, Untargetable: true, DefaultTurns: 2,
-	},
-	StatusSleep: {
-		ID: StatusSleep, Behaviour: BehaviourSleep, Label: "Ngủ",
-		Category: CategoryMentalCC, Path: "dream", BaseChance: 0.6,
-		ResistGate: true, SkipTurn: true, BreakOnDamage: true, DefaultTurns: 2,
+	StatusCharm: {
+		ID: StatusCharm, Behaviour: BehaviourCharm, Label: "Mê Hoặc",
+		Category: CategoryMentalCC, Path: "charm", BaseChance: 0.6,
+		ResistGate: true, Redirect: true, DefaultTurns: 3,
 	},
 	StatusBlind: {
 		ID: StatusBlind, Behaviour: BehaviourBlind, Label: "Mù",
 		Category: CategoryMentalCC, Path: "light", BaseChance: 0.6,
 		ResistGate: true, Accuracy: 0.35, DefaultTurns: 2,
 	},
-	StatusCharm: {
-		ID: StatusCharm, Behaviour: BehaviourCharm, Label: "Mê Hoặc",
-		Category: CategoryMentalCC, Path: "charm", BaseChance: 0.6,
-		ResistGate: true, Redirect: true, DefaultTurns: 3,
+	StatusWeak: {
+		ID: StatusWeak, Behaviour: BehaviourWeak, Label: "Suy Yếu",
+		Category: CategoryMentalCC, Path: "strength", BaseChance: 0.6,
+		ResistGate: true, DefaultTurns: 3,
 	},
-	StatusBind: {
-		ID: StatusBind, Behaviour: BehaviourBind, Label: "Trói",
-		Category: CategoryMentalCC, Path: "earth", BaseChance: 0.6,
-		ResistGate: true, SkipTurn: true, DefaultTurns: 3,
+	StatusSlow: {
+		ID: StatusSlow, Behaviour: BehaviourSlow, Label: "Làm Chậm",
+		Category: CategoryMentalCC, Path: "time", BaseChance: 0.6,
+		ResistGate: true, DefaultTurns: 3,
+	},
+	StatusSlow1: {
+		ID: StatusSlow1, Behaviour: BehaviourSlow, Label: "Làm Chậm Tuyệt Đối",
+		Category: CategoryBuff, Path: "time", BaseChance: 1.0,
+		ResistGate: false, DefaultTurns: 3,
 	},
 
-	// Catalog statuses — registered so they resolve, not yet combat-wired.
+	// ── Buffs & Combat Stances ──
+	StatusAtkUp: {
+		ID: StatusAtkUp, Behaviour: BehaviourAtkUp, Label: "Tăng Công",
+		Category: CategoryBuff, Path: "strength", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusDefUp: {
+		ID: StatusDefUp, Behaviour: BehaviourDefUp, Label: "Tăng Thủ",
+		Category: CategoryBuff, Path: "metal", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusThorns: {
+		ID: StatusThorns, Behaviour: BehaviourThorns, Label: "Phản Sát Thương",
+		Category: CategoryBuff, Path: "wood", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 3,
+	},
+	StatusTaunt: {
+		ID: StatusTaunt, Behaviour: BehaviourTaunt, Label: "Khiêu Khích",
+		Category: CategoryBuff, Path: "earth", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 2,
+	},
+	StatusStealth: {
+		ID: StatusStealth, Behaviour: BehaviourStealth, Label: "Ẩn Thân",
+		Category: CategoryBuff, Path: "shadow", BaseChance: 1.0,
+		SelfTarget: true, Untargetable: true, DefaultTurns: 2,
+	},
 	StatusHaste: {
 		ID: StatusHaste, Behaviour: BehaviourHaste, Label: "Tăng Tốc",
 		Category: CategoryBuff, Path: "wind", BaseChance: 1.0,
@@ -117,14 +180,14 @@ var Registry = map[string]StatusSpec{
 		ResistGate: true, DefaultTurns: 3,
 	},
 
-	// Gu World Dao Mechanics - New Status Effects
+	// ── Gu World Dao Mechanics ──
 	StatusEssenceLeak: {
-		ID: StatusEssenceLeak, Behaviour: BehaviourAperture, Label: "Ô Khiếu / Rò Rỉ Chân Nguyên",
+		ID: StatusEssenceLeak, Behaviour: BehaviourEssenceLeak, Label: "Ô Khiếu / Rò Rỉ Chân Nguyên",
 		Category: CategoryAperture, Path: "earth", BaseChance: 0.6,
 		ResistGate: true, DefaultTurns: 3,
 	},
 	StatusGuSeal: {
-		ID: StatusGuSeal, Behaviour: BehaviourAperture, Label: "Phong Cổ / Trầm Miên",
+		ID: StatusGuSeal, Behaviour: BehaviourGuSeal, Label: "Phong Cổ / Trầm Miên",
 		Category: CategoryAperture, Path: "refinement", BaseChance: 0.5,
 		ResistGate: true, DefaultTurns: 3,
 	},
@@ -157,6 +220,66 @@ func Spec(id string) (StatusSpec, bool) {
 	return s, ok
 }
 
+// TierToPercent converts a tier (1-5) to a percentage value for the status.
+func TierToPercent(effectType string, tier int) float64 {
+	if tier < 1 {
+		tier = 1
+	}
+	if tier > 5 {
+		tier = 5
+	}
+	switch strings.ToUpper(strings.TrimSpace(effectType)) {
+	case StatusSlow, StatusSlow1, StatusSlowDamage:
+		return []float64{0, 15, 25, 35, 45, 55}[tier]
+	case StatusWeak:
+		return []float64{0, 10, 20, 30, 40, 50}[tier]
+	case StatusFreeze, StatusSilence, StatusStun:
+		return []float64{0, 1, 1, 2, 2, 3}[tier]
+	case StatusThorns:
+		return []float64{0, 10, 15, 20, 25, 30}[tier]
+	case StatusRegen:
+		return []float64{0, 3, 5, 8, 12, 16}[tier]
+	case StatusAtkUp, StatusDefUp, StatusArmorBreak, StatusDamageReduction:
+		return []float64{0, 10, 15, 20, 25, 30}[tier]
+	case StatusTaunt:
+		return []float64{0, 1, 2, 2, 3, 3}[tier]
+	default:
+		return float64(tier * 10)
+	}
+}
+
+// TierToDuration returns the duration (in turns) for an effect at given tier.
+func TierToDuration(effectType string, tier int) int {
+	if tier < 1 {
+		tier = 1
+	}
+	if tier > 5 {
+		tier = 5
+	}
+	switch strings.ToUpper(strings.TrimSpace(effectType)) {
+	case StatusSlow, StatusSlow1, StatusSlowDamage:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case StatusWeak:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case StatusFreeze:
+		return []int{0, 1, 1, 2, 2, 3}[tier]
+	case StatusSilence:
+		return []int{0, 2, 2, 3, 3, 4}[tier]
+	case StatusThorns:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case StatusRegen:
+		return []int{0, 3, 4, 4, 5, 5}[tier]
+	case StatusAtkUp, StatusDefUp, StatusArmorBreak, StatusDamageReduction:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case StatusStun:
+		return []int{0, 1, 1, 2, 2, 3}[tier]
+	case StatusTaunt:
+		return []int{0, 2, 2, 3, 3, 4}[tier]
+	default:
+		return 3
+	}
+}
+
 // ResolveStatus normalizes a raw apply_status + value/duration pair into a
 // StatusOp using catalog semantics. Unknown IDs return an error so they are
 // surfaced instead of silently dropped.
@@ -165,10 +288,22 @@ func ResolveStatus(id string, value float64, turns int) (StatusOp, error) {
 	if !ok {
 		return StatusOp{}, &UnknownStatusError{ID: id}
 	}
+	// If duration is 0, check default or derive from tier
 	if turns <= 0 {
 		turns = spec.DefaultTurns
 	}
 	return StatusOp{ID: spec.ID, Value: value, Turns: turns}, nil
+}
+
+// ResolveStatusWithTier normalizes a status application when specified by tier (1-5).
+func ResolveStatusWithTier(id string, tier int) (StatusOp, error) {
+	spec, ok := Spec(id)
+	if !ok {
+		return StatusOp{}, &UnknownStatusError{ID: id}
+	}
+	val := TierToPercent(spec.ID, tier)
+	dur := TierToDuration(spec.ID, tier)
+	return StatusOp{ID: spec.ID, Value: val, Turns: dur}, nil
 }
 
 // UnknownStatusError reports an apply_status key not present in the registry.

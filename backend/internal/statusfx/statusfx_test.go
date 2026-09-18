@@ -46,11 +46,33 @@ func TestSpecKnownBehaviours(t *testing.T) {
 		StatusBurn, StatusFear, StatusConfuse, StatusStealth, StatusSleep,
 		StatusBlind, StatusCharm, StatusBind, StatusHaste, StatusArmorBreak,
 		StatusDamageReduction, StatusInvincible, StatusReviveLock,
-		StatusBleed, StatusPoison,
+		StatusBleed, StatusPoison, StatusStun, StatusSlow, StatusSlow1,
+		StatusSlowDamage, StatusWeak, StatusFreeze, StatusSilence,
+		StatusThorns, StatusRegen, StatusAtkUp, StatusDefUp, StatusTaunt,
+		StatusEssenceLeak, StatusGuSeal, StatusSoulWound, StatusThoughtChaos,
+		StatusDaoConflict, StatusBacklash,
 	} {
 		if _, ok := Spec(id); !ok {
 			t.Fatalf("status %s missing from registry", id)
 		}
+	}
+}
+
+func TestResolveStatusWithTier(t *testing.T) {
+	op, err := ResolveStatusWithTier(StatusStun, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if op.ID != StatusStun || op.Turns != 1 {
+		t.Fatalf("expected stun tier 2 to have 1 turn, got %+v", op)
+	}
+
+	opWeak, err := ResolveStatusWithTier(StatusWeak, 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opWeak.Value != 30 || opWeak.Turns != 4 {
+		t.Fatalf("expected weak tier 3 to have 30%% and 4 turns, got %+v", opWeak)
 	}
 }
 

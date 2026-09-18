@@ -444,54 +444,24 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		// SLEEP/BLIND/CHARM/BIND + catalog). Resolved with real turns from
 		// status_duration_ticks instead of a hardcoded 3.
 		if active.ApplyStatus != "" {
-			switch active.ApplyStatus {
-			// Tier-based legacy statuses keep their existing field mapping.
-			case "STUN", "SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "FREEZE",
-				"SILENCE", "THORNS", "REGEN", "ATK_UP", "DEF_UP", "TAUNT":
-				// handled below
-			default:
-				if op, err := statusfx.ResolveStatus(active.ApplyStatus, active.StatusTickDamage, active.StatusDurationTicks); err == nil {
-					act.StatusOps = append(act.StatusOps, op)
+			var op statusfx.StatusOp
+			var err error
+			if active.StatusTickDamage > 0 {
+				op, err = statusfx.ResolveStatus(active.ApplyStatus, active.StatusTickDamage, active.StatusDurationTicks)
+			} else if active.StatusDurationTicks > 0 {
+				if active.StatusDurationTicks <= 5 {
+					op, err = statusfx.ResolveStatusWithTier(active.ApplyStatus, active.StatusDurationTicks)
 				} else {
-					logger.S.Warnf("Gu %s: %v", spec.ID, err)
+					op, err = statusfx.ResolveStatus(active.ApplyStatus, 0, active.StatusDurationTicks)
 				}
+			} else {
+				op, err = statusfx.ResolveStatus(active.ApplyStatus, 0, 0)
 			}
-		}
-		if active.ApplyStatus == "STUN" {
-			act.StunTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "SLOW" {
-			act.SlowTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "SLOW1" {
-			act.Slow1Tier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "SLOW_DAMAGE" {
-			act.SlowDamageTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "WEAK" {
-			act.WeakTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "FREEZE" {
-			act.FreezeTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "SILENCE" {
-			act.SilenceTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "THORNS" {
-			act.ThornsTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "REGEN" {
-			act.RegenTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "ATK_UP" {
-			act.AtkUpTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "DEF_UP" {
-			act.DefUpTier = active.StatusDurationTicks
-		}
-		if active.ApplyStatus == "TAUNT" {
-			act.TauntTier = active.StatusDurationTicks
+			if err == nil {
+				act.StatusOps = append(act.StatusOps, op)
+			} else {
+				logger.S.Warnf("Gu %s: %v", spec.ID, err)
+			}
 		}
 		if active.LifeStealRate > 0 {
 			act.LifeStealPct += active.LifeStealRate
@@ -675,66 +645,25 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 
 	var effects map[string]float64
 	if err := json.Unmarshal(km.Effects, &effects); err == nil {
-		if v, ok := effects["bleed"]; ok {
-			act.BleedPerTurn += v
-		}
-		if v, ok := effects["poison"]; ok {
-			act.PoisonPerTurn += v
-		}
-		if v, ok := effects["stun"]; ok {
-			act.StunTier = int(v)
-		}
-		if v, ok := effects["life_steal"]; ok {
-			act.LifeStealPct += v / 100.0
-		}
-		if v, ok := effects["blood_drain"]; ok {
-			act.LifeStealPct += v / 100.0
-		}
-		if v, ok := effects["multi_hit"]; ok {
-			act.MultiHit = int(v)
-		}
-		if v, ok := effects["phantom_attack"]; ok {
-			act.PhantomDmg += v
-		}
-		if v, ok := effects["thorns_damage"]; ok {
-			act.ThornsDmg += v
-		}
-		if v, ok := effects["heal"]; ok {
-			act.Healing += v
-		}
-		// ── New tier-based effects ──
-		if v, ok := effects["slow"]; ok {
-			act.SlowTier = int(v)
-		}
-		if v, ok := effects["slow1"]; ok {
-			act.Slow1Tier = int(v)
-		}
-		if v, ok := effects["slow_damage"]; ok {
-			act.SlowDamageTier = int(v)
-		}
-		if v, ok := effects["weak"]; ok {
-			act.WeakTier = int(v)
-		}
-		if v, ok := effects["freeze"]; ok {
-			act.FreezeTier = int(v)
-		}
-		if v, ok := effects["silence"]; ok {
-			act.SilenceTier = int(v)
-		}
-		if v, ok := effects["thorns_buff"]; ok {
-			act.ThornsTier = int(v)
-		}
-		if v, ok := effects["regen"]; ok {
-			act.RegenTier = int(v)
-		}
-		if v, ok := effects["atk_up"]; ok {
-			act.AtkUpTier = int(v)
-		}
-		if v, ok := effects["def_up"]; ok {
-			act.DefUpTier = int(v)
-		}
-		if v, ok := effects["taunt"]; ok {
-			act.TauntTier = int(v)
+		for effectKey, v := range effects {
+			switch strings.ToLower(effectKey) {
+			case "life_steal", "blood_drain":
+				act.LifeStealPct += v / 100.0
+			case "multi_hit":
+				act.MultiHit = int(v)
+			case "phantom_attack":
+				act.PhantomDmg += v
+			case "thorns_damage":
+				act.ThornsDmg += v
+			case "heal":
+				act.Healing += v
+			default:
+				if op, err := statusfx.ResolveStatusWithTier(effectKey, int(v)); err == nil {
+					act.StatusOps = append(act.StatusOps, op)
+				} else if op, err := statusfx.ResolveStatus(effectKey, v, 0); err == nil {
+					act.StatusOps = append(act.StatusOps, op)
+				}
+			}
 		}
 	}
 

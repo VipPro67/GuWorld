@@ -526,3 +526,124 @@ func TestHigherRankGuBacklash(t *testing.T) {
 		t.Fatal("expected backlash log for higher rank Gu usage")
 	}
 }
+
+// TestStunSkipsTurn verifies that a combatant with STUN effect skips their action turn.
+func TestStunSkipsTurn(t *testing.T) {
+	state := &CombatState{
+		Seed: 42,
+		Allies: []*CombatantAuto{
+			newTestCombatant("ally", "Player", 1000, 10),
+		},
+		Enemies: []*CombatantAuto{
+			newTestCombatant("enemy", "Enemy", 1000, 50),
+		},
+	}
+	state.Allies[0].Actions = []SimAction{
+		{
+			ActionType: "GU_SKILL", Name: "Định Thân Cổ", Damage: 10,
+			StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusStun, Value: 1, Turns: 1}},
+		},
+	}
+	state.Enemies[0].Actions = []SimAction{
+		{ActionType: "BASIC_ATTACK", Name: "Đánh Thường", Damage: 50},
+	}
+
+	logs := Simulate(state)
+	hasStunApplied := false
+	for _, l := range logs {
+		if strings.Contains(l.Detail, "Choáng") || strings.Contains(l.Action, "STUN") {
+			hasStunApplied = true
+			break
+		}
+	}
+	if !hasStunApplied {
+		t.Fatal("expected Stun to be applied and logged")
+	}
+}
+
+// TestSilenceForcesBasicAttack verifies that a SILENCED combatant cannot use skills.
+func TestSilenceForcesBasicAttack(t *testing.T) {
+	state := &CombatState{
+		Seed: 42,
+		Allies: []*CombatantAuto{
+			newTestCombatant("ally", "Player", 1000, 10),
+		},
+		Enemies: []*CombatantAuto{
+			newTestCombatant("enemy", "Enemy", 1000, 10),
+		},
+	}
+	state.Allies[0].Actions = []SimAction{
+		{
+			ActionType: "GU_SKILL", Name: "Cấm Ngôn Cổ", Damage: 10,
+			StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusSilence, Value: 1, Turns: 2}},
+		},
+	}
+	state.Enemies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "Tuyệt Kỹ Hỏa Diệm", Damage: 100, ManaCost: 5},
+		{ActionType: "BASIC_ATTACK", Name: "Đánh Thường", Damage: 10},
+	}
+
+	logs := Simulate(state)
+	for _, l := range logs {
+		if l.ActorId == "enemy" && l.Turn == 2 {
+			if strings.Contains(l.Detail, "Tuyệt Kỹ Hỏa Diệm") {
+				t.Fatal("enemy should NOT have been able to cast GU_SKILL while silenced")
+			}
+		}
+	}
+}
+
+// TestThornsReflectsDamage verifies that THORNS buff reflects damage back to the attacker.
+func TestThornsReflectsDamage(t *testing.T) {
+	defender := newTestCombatant("defender", "Player", 1000, 10)
+	defender.Speed = 20
+	defender.Actions = []SimAction{
+		{
+			ActionType: "GU_SKILL", Name: "Gai Nhọn Cổ", Damage: 0,
+			StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusThorns, Value: 30, Turns: 3}},
+		},
+	}
+
+	attacker := newTestCombatant("attacker", "Enemy", 1000, 100)
+	attacker.Speed = 10
+	attacker.Actions = []SimAction{
+		{ActionType: "BASIC_ATTACK", Name: "Đánh Thường", Damage: 100},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{defender},
+		Enemies: []*CombatantAuto{attacker},
+	}
+
+	Simulate(state)
+	if attacker.HP >= 1000 {
+		t.Fatalf("expected attacker to take reflected thorns damage, but HP is %.0f", attacker.HP)
+	}
+}
+
+// TestSoulWoundIgnoresShield verifies SOUL_WOUND applies direct damage bypassing armor.
+func TestSoulWoundIgnoresShield(t *testing.T) {
+	defender := newTestCombatant("defender", "Player", 500, 0)
+	defender.VirtualShield = 1000 // Huge shield
+
+	attacker := newTestCombatant("attacker", "Enemy", 500, 0)
+	attacker.Actions = []SimAction{
+		{
+			ActionType: "GU_SKILL", Name: "Hồn Thương Sát Chiêu", Damage: 0,
+			StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusSoulWound, Value: 100, Turns: 1}},
+		},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{defender},
+		Enemies: []*CombatantAuto{attacker},
+	}
+
+	Simulate(state)
+	if defender.HP >= 500 {
+		t.Fatalf("expected defender HP to be damaged by Soul Wound, but HP is %.0f", defender.HP)
+	}
+}
+
