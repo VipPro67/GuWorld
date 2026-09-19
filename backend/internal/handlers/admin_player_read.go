@@ -191,6 +191,38 @@ func AdminGetPlayerDetail(c *gin.Context) {
 	var thoughtRegenRate float64
 	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(selected_title,''), COALESCE(selected_frame,''), COALESCE(thought_regen_rate,0) FROM players WHERE id=$1`, playerID).Scan(&selectedTitle, &selectedFrame, &thoughtRegenRate)
 
+	passiveStats := GetPassiveStats(&player)
+
+	equippedGus := []gin.H{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped {
+			name := gu.GuID
+			var path []string
+			var desc string
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+				name = spec.Name
+				path = spec.Path
+				desc = spec.Description
+			} else if spec, ok := models.GetGuAny(gu.GuID); ok {
+				name = spec.Name
+				path = spec.Path
+				desc = spec.Description
+			}
+			equippedGus = append(equippedGus, gin.H{
+				"instance_id":  gu.InstanceID,
+				"gu_id":        gu.GuID,
+				"name":         name,
+				"rank":         gu.Rank,
+				"hunger":       gu.Hunger,
+				"status":       gu.Status,
+				"is_vital":     gu.IsVital,
+				"growth_hours": gu.GrowthHours,
+				"path":         path,
+				"description":  desc,
+			})
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"id":                    player.ID,
 		"username":              player.Username,
@@ -226,6 +258,11 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"gender":                player.Gender,
 		"constitution":          player.Constitution,
 		"statuses":              player.Statuses,
+		"growth_data":           player.GrowthData,
+		"dao_marks":             player.DaoMarks,
+		"path_masteries":        player.PathMasteries,
+		"passive_stats":         passiveStats,
+		"equipped_gus":          equippedGus,
 		"current_thought":       player.CurrentThought,
 		"max_thought":           player.MaxThought,
 		"thought_regen_rate":    thoughtRegenRate,

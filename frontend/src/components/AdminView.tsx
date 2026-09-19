@@ -50,8 +50,14 @@ import {
   Swords,
   MapPin,
   History as HistoryIcon,
+  ChevronDown,
+  User,
+  TrendingUp,
+  Leaf,
 } from "lucide-react";
-import { translateGuType, translateItemType } from "@/lib/translate";
+import { translateGuType, translateItemType, translatePath, translateMastery, masteryKeyForPoints } from "@/lib/translate";
+import { formatGameEffects } from "@/lib/effects";
+import { statusRemainLabel } from "@/lib/utils";
 import { TopupWalletAdminTab } from "./admin/TopupWalletAdminTab";
 import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
 import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
@@ -168,6 +174,60 @@ interface PlayerRow {
   lifespan: number;
 }
 
+interface EquippedGuDetail {
+  instance_id: string;
+  gu_id: string;
+  name: string;
+  rank: number;
+  hunger: number;
+  status: string;
+  is_vital: boolean;
+  growth_hours?: number;
+  path?: string[];
+  description?: string;
+}
+
+interface PassiveStatSource {
+  source: string;
+  name: string;
+  value: number;
+  mult: number;
+  dao: number;
+  final: number;
+}
+
+interface PassiveStatDetail {
+  key: string;
+  total: number;
+  sources: PassiveStatSource[];
+}
+
+interface PassiveStatsResult {
+  stats: Record<string, number>;
+  details: PassiveStatDetail[];
+}
+
+interface GrowthBoosts {
+  attack: number;
+  defense: number;
+  hp: number;
+  speed: number;
+}
+
+interface FullyGrownInfo {
+  gu_id: string;
+  rank: number;
+  attack: number;
+  defense: number;
+  hp: number;
+  speed: number;
+}
+
+interface GrowthData {
+  boosts?: GrowthBoosts;
+  fully_grown?: FullyGrownInfo[];
+}
+
 interface PlayerDetail {
   id: string; username: string; email: string; rank: number; sub_rank: number;
   aptitude_type: string; aptitude_percent: number; aptitude_grade: string;
@@ -187,6 +247,11 @@ interface PlayerDetail {
   immortal_jade?: number;
   gu_count: number;
   item_count: number;
+  growth_data?: GrowthData;
+  dao_marks?: Record<string, number>;
+  path_masteries?: Record<string, number>;
+  passive_stats?: PassiveStatsResult;
+  equipped_gus?: EquippedGuDetail[];
 }
 
 interface PlayerItemRow {
@@ -207,6 +272,39 @@ interface PlayerGuRow {
   status: string;
   equipped: boolean;
   is_vital: boolean;
+}
+
+const raceLabels: Record<string, string> = {
+  human: "Nhân Tộc", cuong_thi: "Cương Thi", fur_people: "Người Lông", merman: "Nhân Ngư",
+  feathered: "Vũ Dân", inkman: "Mặc Nhân", rockman: "Thạch Nhân",
+  snowman: "Tuyết Dân", variant_beastman: "Thú Nhân", dragonman: "Long Nhân",
+  giant_sun_descendant: "Cự Dương Huyết Mạch",
+};
+const genderLabels: Record<string, string> = { male: "Nam", female: "Nữ" };
+const constitutionLabels: Record<string, string> = {
+  solar_sun_moon_body: "Thái Nhật Dương Mãng Thể",
+  ancient_moon_yin_desolate_body: "Cổ Nguyệt Âm Hoang Thể",
+  northern_dark_ice_soul_body: "Bắc Minh Băng Phách Thể",
+  forest_sea_reincarnation_body: "Sâm Hải Luân Hồi Thể",
+  myriad_gold_brilliant_flower_body: "Vạn Kim Diệu Hoa Thể",
+  blazing_glory_lightning_brilliance_body: "Viêm Hoàng Lôi Trạch Thể",
+  great_strength_true_martial_body: "Đại Lực Chân Võ Thể",
+  carefree_wisdom_heart_body: "Tiêu Dao Trí Tâm Thể",
+  great_earth_origin_body: "Hậu Thổ Nguyên Ương Thể",
+  universe_great_evolution_body: "Vũ Trụ Đại Diễn Thể",
+  pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
+};
+const statusLabels: Record<string, string> = {
+  severely_wounded: "Trọng Thương",
+  poisoned: "Trúng Độc",
+  exhausted: "Kiệt Sức",
+  blessed: "Phúc Trạch",
+  death_penalty: "Hình Phạt Tử Vong",
+};
+
+function formatStat(val: number): string {
+  if (Math.abs(val) >= 10000) return val.toLocaleString();
+  return val % 1 === 0 ? val.toString() : val.toFixed(2);
 }
 
 const rankNames = [
@@ -413,8 +511,13 @@ function guLocationLabel(loc: string): string {
 }
 
 export const AdminView: React.FC = () => {
-  const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary } = useGameStore();
-  const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets">("items");
+  const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
+  const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "combat">("items");
+  const [isCombatEquippedExpanded, setIsCombatEquippedExpanded] = useState(true);
+  const [isCombatStatsExpanded, setIsCombatStatsExpanded] = useState(true);
+  const [isCombatGrowthExpanded, setIsCombatGrowthExpanded] = useState(true);
+  const [isCombatIdentityExpanded, setIsCombatIdentityExpanded] = useState(true);
+  const [isCombatPathExpanded, setIsCombatPathExpanded] = useState(true);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -1356,6 +1459,9 @@ export const AdminView: React.FC = () => {
               <button onClick={() => setActiveTab("pets")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "pets" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
                 <PawPrint className="w-3.5 h-3.5 inline mr-1.5" />Sủng vật ({playerPetsTotal})
               </button>
+              <button onClick={() => setActiveTab("combat")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "combat" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <Swords className="w-3.5 h-3.5 inline mr-1.5" />Chỉ số & Chiến đấu ({detail.equipped_gus?.length || 0})
+              </button>
             </div>
 
             {/* Items Tab */}
@@ -1611,6 +1717,518 @@ export const AdminView: React.FC = () => {
                   </div>
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Combat & Player Stats Tab */}
+            {activeTab === "combat" && (
+              <div className="space-y-5">
+                {/* 1. Equipped Gu List */}
+                <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCombatEquippedExpanded((prev) => !prev)}
+                    className="flex w-full items-center gap-2 border-b border-zinc-800/80 pb-2.5 text-left cursor-pointer"
+                  >
+                    {isCombatEquippedExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+                    <Bug className="w-5 h-5 text-amber-400" />
+                    <span className="font-serif font-bold text-zinc-100 text-sm">Cổ Trùng Đang Trang Bị</span>
+                    <span className="ml-auto text-xs px-2.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800/40 font-mono font-semibold">
+                      {detail.equipped_gus?.length || 0} Cổ
+                    </span>
+                  </button>
+
+                  {isCombatEquippedExpanded && (
+                    <>
+                      {!detail.equipped_gus || detail.equipped_gus.length === 0 ? (
+                        <div className="text-center py-8 bg-zinc-950/30 border border-dashed border-zinc-800/80 rounded-xl">
+                          <Bug className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                          <p className="text-xs text-zinc-500 italic">Người chơi hiện chưa trang bị Cổ trùng nào trong Không Khiếu.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {detail.equipped_gus.map((gu) => {
+                            const spec = guSpecFor(gu.gu_id, gu.rank);
+                            const displayName = gu.name || spec?.name || gu.gu_id;
+                            const passive = spec?.effects?.passive;
+                            const active = spec?.effects?.active;
+                            const growth = spec?.effects?.growth;
+
+                            return (
+                              <div
+                                key={gu.instance_id}
+                                className={`bg-zinc-950/50 border rounded-xl p-3.5 flex flex-col gap-2.5 transition-all ${
+                                  gu.is_vital ? "border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.1)]" : "border-zinc-800 hover:border-zinc-700"
+                                }`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-11 h-11 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center font-bold text-base shrink-0 ${rankColor(gu.rank)}`}>
+                                    {displayName.slice(0, 2)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className={`text-sm font-bold font-serif truncate ${rankColor(gu.rank)}`}>
+                                        {displayName}
+                                      </span>
+                                      {gu.is_vital && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-950/60 text-amber-300 border border-amber-800/60 flex items-center gap-1 shrink-0">
+                                          <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                                          Bản Mệnh
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-zinc-500 font-mono mt-0.5 flex items-center gap-2">
+                                      <span>Rank {gu.rank}</span>
+                                      <span>•</span>
+                                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${statusColor(gu.status)}`}>
+                                        {statusLabel(gu.status)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-zinc-900 pt-2 text-zinc-400">
+                                  <div>Độ no: <span className="text-zinc-200 font-bold">{gu.hunger}/100</span></div>
+                                  <div>
+                                    Lưu phái:{" "}
+                                    <span className="text-amber-400 font-semibold">
+                                      {gu.path && gu.path.length > 0 ? gu.path.map((p) => translatePath(p)).join(", ") : "Chưa rõ"}
+                                    </span>
+                                  </div>
+                                  {gu.growth_hours && gu.growth_hours > 0 ? (
+                                    <div className="col-span-2 text-emerald-400">
+                                      Đã nuôi dưỡng: <strong>{gu.growth_hours.toFixed(1)} giờ</strong>
+                                    </div>
+                                  ) : null}
+                                </div>
+
+                                {/* Gu effects summary */}
+                                {(passive || active || growth || gu.description) && (
+                                  <div className="bg-zinc-900/60 rounded-lg p-2 text-[11px] text-zinc-300 space-y-1">
+                                    {passive && (
+                                      <div className="text-[10px] text-zinc-400 flex flex-wrap gap-1.5">
+                                        <span className="text-amber-400 font-semibold">Bị động:</span>
+                                        {passive.stat_base_attack ? <span>Công +{passive.stat_base_attack}</span> : null}
+                                        {passive.stat_base_defense ? <span>Thủ +{passive.stat_base_defense}</span> : null}
+                                        {passive.stat_base_hp ? <span>Máu +{passive.stat_base_hp}</span> : null}
+                                        {passive.stat_base_speed ? <span>Tốc +{passive.stat_base_speed}</span> : null}
+                                        {passive.evasion ? <span>Né +{passive.evasion}%</span> : null}
+                                      </div>
+                                    )}
+                                    {active && (
+                                      <div className="text-[10px] text-zinc-400 flex flex-wrap gap-1.5">
+                                        <span className="text-cyan-400 font-semibold">Chủ động:</span>
+                                        {active.damage ? <span>Sát thương {active.damage}</span> : null}
+                                        {active.heal_hp ? <span>Hồi máu +{active.heal_hp}</span> : null}
+                                        {active.mana_cost ? <span>Chân nguyên tiêu hao {active.mana_cost}</span> : null}
+                                      </div>
+                                    )}
+                                    {growth && (
+                                      <div className="text-[10px] text-zinc-400 flex flex-wrap gap-1.5">
+                                        <span className="text-emerald-400 font-semibold">Trưởng thành:</span>
+                                        {growth.max_attack ? <span>Công max +{growth.max_attack}</span> : null}
+                                        {growth.max_defense ? <span>Thủ max +{growth.max_defense}</span> : null}
+                                        {growth.max_hp ? <span>Máu max +{growth.max_hp}</span> : null}
+                                        {growth.max_speed ? <span>Tốc max +{growth.max_speed}</span> : null}
+                                      </div>
+                                    )}
+                                    {gu.description && !passive && !active && (
+                                      <div className="text-[10px] text-zinc-400 italic line-clamp-2">{gu.description}</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* 2. Combat & Passive Stats Breakdown */}
+                <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCombatStatsExpanded((prev) => !prev)}
+                    className="flex w-full items-center gap-2 border-b border-zinc-800/80 pb-2.5 text-left cursor-pointer"
+                  >
+                    {isCombatStatsExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+                    <Swords className="w-5 h-5 text-emerald-400" />
+                    <span className="font-serif font-bold text-zinc-100 text-sm">Tổng Hợp Chỉ Số Chiến Đấu & Bị Động</span>
+                  </button>
+
+                  {isCombatStatsExpanded && (() => {
+                    const ps = detail.passive_stats;
+                    const statLabelsMap: Record<string, string> = {
+                      attack: "Công Kích",
+                      defense: "Phòng Ngự",
+                      hp: "Máu Tối Đa",
+                      speed: "Tốc Độ",
+                      healing: "Hồi Phục",
+                      soul: "Hồn Lực",
+                      storage: "Vật Chứa",
+                      movement: "Di Chuyển",
+                      evasion: "Né Tránh",
+                      investigation: "Trinh Sát",
+                      hearing: "Thính Giác",
+                      mana_regen_mult: "Hồi Pháp",
+                      damage_multiplier: "Sát Thương Khi Mất Máu",
+                      refine_mana_tier: "Tinh Luyện",
+                      cleansing_power: "Tẩy Trừ",
+                      path_conflict_reduction: "Giảm Xung Đột",
+                    };
+
+                    const details = (ps?.details || []).filter((d) => d.total !== 0);
+
+                    // Deduplicate details by key
+                    const dedupedMap = new Map<string, PassiveStatDetail>();
+                    for (const d of details) {
+                      const existing = dedupedMap.get(d.key);
+                      if (existing) {
+                        existing.total += d.total;
+                        existing.sources = [...existing.sources, ...d.sources];
+                      } else {
+                        dedupedMap.set(d.key, { ...d, sources: [...d.sources] });
+                      }
+                    }
+                    const dedupedDetails = Array.from(dedupedMap.values());
+
+                    // Quick Combat Cards values
+                    const totalAtk = ps?.stats?.attack ?? dedupedMap.get("attack")?.total ?? (10 + (detail.rank - 1) * 10 + (detail.sub_rank - 1) * 2);
+                    const totalDef = ps?.stats?.defense ?? dedupedMap.get("defense")?.total ?? (5 + (detail.rank - 1) * 5 + (detail.sub_rank - 1) * 1);
+                    const totalSpd = ps?.stats?.speed ?? dedupedMap.get("speed")?.total ?? (10 + (detail.rank - 1) * 2 + (detail.sub_rank - 1) * 0.5);
+                    const totalHP = detail.base_hp || 100;
+
+                    return (
+                      <div className="space-y-4">
+                        {/* 4 Core Combat Cards */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="bg-zinc-950/60 p-3.5 rounded-xl border border-red-900/30">
+                            <div className="flex items-center gap-1.5 text-[10px] text-red-400 font-mono font-bold uppercase tracking-wider mb-1">
+                              <Sword className="w-3.5 h-3.5" /> Tổng Công Kích
+                            </div>
+                            <div className="text-xl font-bold text-red-300 font-mono">
+                              {formatStat(totalAtk)}
+                            </div>
+                          </div>
+                          <div className="bg-zinc-950/60 p-3.5 rounded-xl border border-blue-900/30">
+                            <div className="flex items-center gap-1.5 text-[10px] text-blue-400 font-mono font-bold uppercase tracking-wider mb-1">
+                              <Shield className="w-3.5 h-3.5" /> Tổng Phòng Ngự
+                            </div>
+                            <div className="text-xl font-bold text-blue-300 font-mono">
+                              {formatStat(totalDef)}
+                            </div>
+                          </div>
+                          <div className="bg-zinc-950/60 p-3.5 rounded-xl border border-amber-900/30">
+                            <div className="flex items-center gap-1.5 text-[10px] text-amber-400 font-mono font-bold uppercase tracking-wider mb-1">
+                              <Zap className="w-3.5 h-3.5" /> Tổng Tốc Độ
+                            </div>
+                            <div className="text-xl font-bold text-amber-300 font-mono">
+                              {formatStat(totalSpd)}
+                            </div>
+                          </div>
+                          <div className="bg-zinc-950/60 p-3.5 rounded-xl border border-emerald-900/30">
+                            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono font-bold uppercase tracking-wider mb-1">
+                              <Heart className="w-3.5 h-3.5" /> Sinh Mệnh (HP)
+                            </div>
+                            <div className="text-xl font-bold text-emerald-300 font-mono">
+                              {Math.round(detail.hp)} / {Math.round(totalHP)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Detailed Passive Stats Grid with Source Attribution */}
+                        <div>
+                          <h4 className="text-xs font-mono font-semibold text-zinc-400 mb-2.5 uppercase tracking-wider">
+                            Chi Tiết Đóng Góp Từng Nguồn
+                          </h4>
+                          {dedupedDetails.length === 0 ? (
+                            <div className="text-xs text-zinc-500 italic py-3">Không có chỉ số bị động bổ sung nào.</div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {dedupedDetails.map((d) => (
+                                <div key={d.key} className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800/80 flex flex-col justify-between">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] text-zinc-400 font-mono">{statLabelsMap[d.key] || d.key}</span>
+                                    <span className="text-base font-bold text-zinc-100 font-mono">+{formatStat(d.total)}</span>
+                                  </div>
+                                  {d.sources && d.sources.length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-zinc-900 text-[10px] text-zinc-500 space-y-1">
+                                      {d.sources.map((s, idx) => (
+                                        <div key={idx} className="flex items-center justify-between text-zinc-400">
+                                          <span className="truncate max-w-[150px]">{s.name}</span>
+                                          <span className="font-mono text-zinc-300 font-semibold">+{formatStat(s.final)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* 3. Growth Boosts & Fully Grown Gus */}
+                <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCombatGrowthExpanded((prev) => !prev)}
+                    className="flex w-full items-center gap-2 border-b border-zinc-800/80 pb-2.5 text-left cursor-pointer"
+                  >
+                    {isCombatGrowthExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+                    <TrendingUp className="w-5 h-5 text-emerald-400" />
+                    <span className="font-serif font-bold text-zinc-100 text-sm">Cốt Tủy Không Khiếu (Tăng Trưởng Vĩnh Viễn)</span>
+                  </button>
+
+                  {isCombatGrowthExpanded && (() => {
+                    const gd = detail.growth_data;
+                    const b = gd?.boosts;
+                    const fullyGrown = gd?.fully_grown || [];
+                    const hasBoosts = b && (b.attack > 0 || b.defense > 0 || b.hp > 0 || b.speed > 0);
+
+                    return (
+                      <div className="space-y-4">
+                        {!hasBoosts ? (
+                          <div className="text-xs text-zinc-500 italic py-2">Chưa có tăng trưởng cốt tủy nào.</div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {b.attack > 0 && (
+                              <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
+                                <div className="text-[10px] text-zinc-500 font-mono">Công Kích</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.attack.toFixed(2)}</div>
+                              </div>
+                            )}
+                            {b.defense > 0 && (
+                              <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
+                                <div className="text-[10px] text-zinc-500 font-mono">Phòng Ngự</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.defense.toFixed(2)}</div>
+                              </div>
+                            )}
+                            {b.hp > 0 && (
+                              <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
+                                <div className="text-[10px] text-zinc-500 font-mono">Máu Tối Đa</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.hp.toFixed(2)}</div>
+                              </div>
+                            )}
+                            {b.speed > 0 && (
+                              <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
+                                <div className="text-[10px] text-zinc-500 font-mono">Tốc Độ</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.speed.toFixed(2)}</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Fully Grown Gus */}
+                        {fullyGrown.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t border-zinc-800/60">
+                            <h4 className="text-xs font-mono font-semibold text-zinc-400 uppercase tracking-wider">
+                              Cổ Trùng Đã Nuôi Dưỡng Hoàn Tất ({fullyGrown.length})
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {fullyGrown.map((fg, i) => {
+                                const spec = guSpecFor(fg.gu_id, fg.rank);
+                                const parts: string[] = [];
+                                if (fg.attack > 0) parts.push(`Công +${fg.attack}`);
+                                if (fg.defense > 0) parts.push(`Thủ +${fg.defense}`);
+                                if (fg.hp > 0) parts.push(`Máu +${fg.hp}`);
+                                if (fg.speed > 0) parts.push(`Tốc +${fg.speed}`);
+
+                                return (
+                                  <div key={i} className="flex items-center gap-3 bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-800/60">
+                                    <div className="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center text-xs font-bold text-emerald-400">
+                                      {(spec?.name || fg.gu_id).slice(0, 2)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs font-bold text-zinc-200 font-mono truncate">
+                                        {spec?.name || fg.gu_id} <span className="text-zinc-500 text-[10px]">(Rank {fg.rank})</span>
+                                      </div>
+                                      <div className="text-[10px] text-emerald-400 font-mono">{parts.join(" | ")}</div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* 4. Identity, Constitution & Statuses */}
+                <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCombatIdentityExpanded((prev) => !prev)}
+                    className="flex w-full items-center gap-2 border-b border-zinc-800/80 pb-2.5 text-left cursor-pointer"
+                  >
+                    {isCombatIdentityExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+                    <User className="w-5 h-5 text-amber-400" />
+                    <span className="font-serif font-bold text-zinc-100 text-sm">Thân Phận, Thể Chất & Trạng Thái</span>
+                  </button>
+
+                  {isCombatIdentityExpanded && (() => {
+                    const raceLabel = (key: string): string => raceDictionary?.[key]?.name || raceLabels[key] || key;
+                    const raceEffects = detail.race ? raceDictionary?.[detail.race]?.effects : undefined;
+                    const constitutionLabel = (key: string): string => constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
+                    const constitutionEffects = detail.constitution ? constitutionDictionary?.[detail.constitution]?.effects : undefined;
+
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {/* Race */}
+                        <div className="p-3.5 rounded-xl border bg-zinc-950/40 border-zinc-800/80 flex flex-col gap-1">
+                          <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Chủng Tộc</div>
+                          <div className="text-base font-bold text-zinc-100 font-mono">{raceLabel(detail.race) || "Nhân Tộc"}</div>
+                          {raceEffects && formatGameEffects(raceEffects).length > 0 && (
+                            <ul className="mt-1.5 space-y-1">
+                              {formatGameEffects(raceEffects).map((eff, i) => (
+                                <li key={i} className="text-[10px] leading-snug text-amber-200/70">
+                                  <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
+                                  {eff}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+
+                        {/* Gender */}
+                        <div className="p-3.5 rounded-xl border bg-zinc-950/40 border-zinc-800/80 flex flex-col gap-1">
+                          <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Giới Tính</div>
+                          <div className="text-base font-bold text-zinc-100 font-mono">{genderLabels[detail.gender] || detail.gender || "Không rõ"}</div>
+                        </div>
+
+                        {/* Constitution */}
+                        <div className="p-3.5 rounded-xl border bg-zinc-950/40 border-zinc-800/80 flex flex-col gap-1">
+                          <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Thể Chất</div>
+                          <div className="text-base font-bold text-zinc-100 font-mono">{constitutionLabel(detail.constitution) || "Không có"}</div>
+                          {constitutionEffects && formatGameEffects(constitutionEffects).length > 0 && (
+                            <ul className="mt-1.5 space-y-1">
+                              {formatGameEffects(constitutionEffects).map((eff, i) => (
+                                <li key={i} className="text-[10px] leading-snug text-amber-200/70">
+                                  <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
+                                  {eff}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+
+                        {/* Statuses */}
+                        <div className="p-3.5 rounded-xl border bg-zinc-950/40 border-zinc-800/80 flex flex-col gap-1">
+                          <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Trạng Thái</div>
+                          {detail.statuses && detail.statuses.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {detail.statuses.map((s: string | { id: string; expires_at?: string | null }) => {
+                                const sId = typeof s === "string" ? s : s.id;
+                                const sExp = typeof s === "string" ? undefined : s.expires_at;
+                                let displayName = statusDictionary?.[sId]?.name || statusLabels[sId] || sId;
+                                if (sId.startsWith("cd_gu_")) displayName = "Hồi chiêu Cổ Trùng";
+                                else if (sId.startsWith("cd_km_")) displayName = "Hồi chiêu Sát Chiêu";
+
+                                return (
+                                  <span key={sId} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
+                                    {displayName}{statusRemainLabel(sExp)}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-base font-bold text-zinc-100 font-mono">Bình thường</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* 5. Path Attainments & Dao Marks */}
+                <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCombatPathExpanded((prev) => !prev)}
+                    className="flex w-full items-center gap-2 border-b border-zinc-800/80 pb-2.5 text-left cursor-pointer"
+                  >
+                    {isCombatPathExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+                    <Crown className="w-5 h-5 text-amber-400" />
+                    <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái & Đạo Ngân</span>
+                  </button>
+
+                  {isCombatPathExpanded && (
+                    <div className="space-y-4">
+                      {/* Path Masteries */}
+                      <div>
+                        <h4 className="text-xs font-mono font-semibold text-zinc-400 mb-2.5 uppercase tracking-wider">
+                          Cảnh Giới Lưu Phái
+                        </h4>
+                        {detail.path_masteries && Object.keys(detail.path_masteries).length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {Object.entries(detail.path_masteries).map(([path, points]) => {
+                              const level = masteryKeyForPoints(points as number);
+                              return (
+                                <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-800/80">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-zinc-200 font-mono text-xs font-bold">{translatePath(path)}</span>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
+                                      level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                                      level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
+                                      level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                                      level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                                      "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                                    }`}>
+                                      {translateMastery(level)}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500 font-mono">
+                                    {points} điểm Chân Ý
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-500 italic py-2">Chưa ngộ chân ý bất kỳ lưu phái nào.</div>
+                        )}
+                      </div>
+
+                      {/* Dao Marks */}
+                      <div className="pt-3 border-t border-zinc-800/60">
+                        <h4 className="text-xs font-mono font-semibold text-zinc-400 mb-2.5 uppercase tracking-wider">
+                          Đạo Ngân Tích Lũy {detail.rank >= 6 ? "(Cổ Tiên)" : "(Chưa Thăng Tiên)"}
+                        </h4>
+                        {detail.rank >= 6 ? (
+                          detail.dao_marks && Object.keys(detail.dao_marks).length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(detail.dao_marks).map(([path, amount]) => {
+                                if (Number(amount) <= 0) return null;
+                                return (
+                                  <span
+                                    key={path}
+                                    className="text-xs px-3 py-1.5 rounded-xl border font-mono font-semibold flex items-center gap-1.5 bg-purple-950/20 text-purple-300 border-purple-900/40"
+                                  >
+                                    <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
+                                    {translatePath(path)}: +{Number(amount).toLocaleString()}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-zinc-500 italic py-1">Chưa tích lũy Đạo Ngân nào.</div>
+                          )
+                        ) : (
+                          <div className="text-xs text-zinc-500 italic py-1">
+                            Cổ sư phàm nhân (Rank 1 - 5) chưa thăng tiên nên chưa có Thiên Địa Đạo Ngân.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </>
