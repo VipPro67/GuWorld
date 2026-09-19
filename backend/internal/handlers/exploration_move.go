@@ -207,7 +207,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				}
 
 				targetTerritory := CheckPlayerSectTerritory(tx, targetPlayer.ID, targetPlayer.CurrentRegion, targetPlayer.X, targetPlayer.Y)
-				if targetTerritory.InTerritory {
+				if targetTerritory.InTerritory && !targetTerritory.IsShielded {
 					return fmt.Sprintf("Cổ Sư %s đang ở trong phạm vi lãnh địa Tông Môn %s, được trận pháp Hộ Sơn che chở không thể tấn công!", targetPlayer.Username, targetTerritory.SectName), false, nil
 				}
 				if playerTerritory.SectID != "" && playerTerritory.SectID == targetTerritory.SectID {

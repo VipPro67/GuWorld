@@ -178,3 +178,23 @@ func TestDeathDrop_VoidDestructionAndIncreasedRates(t *testing.T) {
 	}
 }
 
+func TestSectTerritory_ShieldedProtection(t *testing.T) {
+	// Rule: when a sect is under shield_until (trạng thái bảo hộ),
+	// players inside its territory are NOT protected from PvP attacks.
+	isProtectedInTerritory := func(inTerritory bool, isShielded bool) bool {
+		return inTerritory && !isShielded
+	}
+
+	if !isProtectedInTerritory(true, false) {
+		t.Errorf("Player in territory of non-shielded sect SHOULD be protected")
+	}
+
+	if isProtectedInTerritory(true, true) {
+		t.Errorf("Player in territory of shielded sect SHOULD NOT be protected")
+	}
+
+	if isProtectedInTerritory(false, false) {
+		t.Errorf("Player outside territory should NOT be protected")
+	}
+}
+

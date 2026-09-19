@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -19,6 +20,8 @@ type SectTerritoryInfo struct {
 	MapX        int
 	MapY        int
 	Radius      int
+	IsShielded  bool
+	ShieldUntil *time.Time
 }
 
 // IsInsideSquareTerritory returns true if (x, y) is within the square territory centered at (mapX, mapY) with given radius.
@@ -45,14 +48,22 @@ func CheckPlayerSectTerritory(q dbRowQueryer, playerID uuid.UUID, region string,
 	}
 
 	var sRegion string
+	var shieldUntil sql.NullTime
 	err := q.QueryRow(`
-		SELECT s.id, s.name, s.map_x, s.map_y, s.region, COALESCE((s.buildings->>'main_hall')::int, 1)
+		SELECT s.id, s.name, s.map_x, s.map_y, s.region, COALESCE((s.buildings->>'main_hall')::int, 1), s.shield_until
 		FROM sect_members sm
 		JOIN sects s ON sm.sect_id = s.id
 		WHERE sm.player_id = $1
-	`, playerID).Scan(&info.SectID, &info.SectName, &info.MapX, &info.MapY, &sRegion, &info.MainHallLvl)
+	`, playerID).Scan(&info.SectID, &info.SectName, &info.MapX, &info.MapY, &sRegion, &info.MainHallLvl, &shieldUntil)
 	if err != nil || sRegion != region {
 		return info
+	}
+
+	if shieldUntil.Valid {
+		info.ShieldUntil = &shieldUntil.Time
+		if shieldUntil.Time.After(time.Now()) {
+			info.IsShielded = true
+		}
 	}
 
 	info.Radius = 5 + info.MainHallLvl

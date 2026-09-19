@@ -420,7 +420,12 @@ func RefineGu(c *gin.Context) {
 					if itemSpec, ok := models.ItemRegistry[matID]; ok && itemSpec.Name != "" {
 						matName = itemSpec.Name
 					}
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
+					if err == sql.ErrNoRows {
+						c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
+					} else {
+						logger.S.Error("RefineGu FailSafe DeductItem error:", err)
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi trừ nguyên liệu"})
+					}
 					return
 				}
 			}
@@ -432,7 +437,12 @@ func RefineGu(c *gin.Context) {
 				if itemSpec, ok := models.ItemRegistry[matID]; ok && itemSpec.Name != "" {
 					matName = itemSpec.Name
 				}
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
+				if err == sql.ErrNoRows {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
+				} else {
+					logger.S.Error("RefineGu DeductItem error:", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi trừ nguyên liệu"})
+				}
 				return
 			}
 		}
@@ -450,7 +460,7 @@ func RefineGu(c *gin.Context) {
 		for _, item := range player.GuInventory {
 			cleanInstID := strings.TrimSpace(item.InstanceID)
 			if seenInstances[item.InstanceID] || seenInstances[cleanInstID] {
-				consumedGuIDs = append(consumedGuIDs, item.InstanceID)
+				consumedGuIDs = append(consumedGuIDs, cleanInstID)
 				if item.IsVital {
 					hasVitalIngredient = true
 				}
@@ -522,7 +532,8 @@ func RefineGu(c *gin.Context) {
 
 		newInventory := models.GuInventory{}
 		for _, item := range player.GuInventory {
-			if seenInstances[item.InstanceID] {
+			cleanInstID := strings.TrimSpace(item.InstanceID)
+			if seenInstances[item.InstanceID] || seenInstances[cleanInstID] {
 				if item.IsVital {
 					item.Hunger = 1
 					item.Status = "DYING"
@@ -530,7 +541,7 @@ func RefineGu(c *gin.Context) {
 					newInventory = append(newInventory, item)
 					hasVitalSurvived = true
 				} else {
-					consumedGuIDs = append(consumedGuIDs, item.InstanceID)
+					consumedGuIDs = append(consumedGuIDs, cleanInstID)
 				}
 				if spec, ok := models.GetGu(item.GuID, item.Rank); ok {
 					if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
