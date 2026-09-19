@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -958,32 +959,14 @@ func ExecuteDivineGu(c *gin.Context) {
 		resourceBonus = manaCost * 0.25
 	}
 
-	// 3. Resolve Target Gu
-	var targetGu models.GuDictionaryItem
-	found := false
-	if req.TargetRank > 0 {
-		targetGu, found = models.GetGu(req.GuQuery, req.TargetRank)
-	}
-	if !found {
-		targetGu, found = models.GetGuAny(req.GuQuery)
-	}
-	if !found {
-		// Try matching by name
-		ids := models.GuIDsByName(req.GuQuery)
-		if len(ids) > 0 {
-			if req.TargetRank > 0 {
-				targetGu, found = models.GetGu(ids[0], req.TargetRank)
-			}
-			if !found {
-				targetGu, found = models.GetGuAny(ids[0])
-			}
-		}
-	}
-
+	// 3. Resolve Target Gu: Name / Query -> Gu ID & Spec from Dictionary
+	targetGu, found := models.FindGuByNameOrID(req.GuQuery, req.TargetRank)
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Thiên cơ mờ mịt, không tìm thấy cổ trùng này trong thiên địa thư quyển!"})
 		return
 	}
+
+	matchIDs := pq.Array([]string{targetGu.ID, strings.ToLower(targetGu.ID), strings.ToUpper(targetGu.ID)})
 
 	// 4. Query Holders across all 3 domains: Players, Sect Vaults, and Market/Auctions
 	type holderData struct {
@@ -1010,14 +993,15 @@ func ExecuteDivineGu(c *gin.Context) {
 	// 4a. Player Inventories & Apertures (player_gu)
 	queryPlayers := `
 		SELECT p.id, p.username, p.current_region, p.x, p.y, p.rank, p.sub_rank,
-		       pg.gu_rank, pg.state, pg.equipped, pg.is_vital, pg.location,
+		       COALESCE(pg.gu_rank, pg.rank, 1), pg.state, pg.equipped, pg.is_vital, pg.location,
 		       p.is_disguised, COALESCE(p.active_concealment, false),
 		       ` + db.GuInventoryAggregate("p.id") + `, p.path_masteries
 		FROM player_gu pg
 		JOIN players p ON pg.player_id = p.id
-		WHERE (pg.gu_id = $1) AND ($2 = 0 OR pg.gu_rank = $2)
+		WHERE (LOWER(pg.gu_id) = LOWER($1) OR pg.gu_id = ANY($3))
+		  AND ($2 = 0 OR pg.gu_rank = $2 OR pg.rank = $2)
 	`
-	pRows, err := db.DB.QueryContext(c.Request.Context(), queryPlayers, targetGu.ID, targetGu.Rank)
+	pRows, err := db.DB.QueryContext(c.Request.Context(), queryPlayers, targetGu.ID, targetGu.Rank, matchIDs)
 	if err == nil {
 		defer pRows.Close()
 		for pRows.Next() {
@@ -1088,10 +1072,10 @@ func ExecuteDivineGu(c *gin.Context) {
 				ELSE '[]'::jsonb 
 			END
 		) AS elem
-		WHERE (elem->>'id' = $1 OR elem->>'gu_id' = $1)
+		WHERE (LOWER(elem->>'id') = LOWER($1) OR LOWER(elem->>'gu_id') = LOWER($1) OR elem->>'id' = ANY($3) OR elem->>'gu_id' = ANY($3))
 		  AND ($2 = 0 OR COALESCE((elem->>'rank')::int, 1) = $2)
 	`
-	sRows, err := db.DB.QueryContext(c.Request.Context(), querySects, targetGu.ID, targetGu.Rank)
+	sRows, err := db.DB.QueryContext(c.Request.Context(), querySects, targetGu.ID, targetGu.Rank, matchIDs)
 	if err == nil {
 		defer sRows.Close()
 		for sRows.Next() {
@@ -1136,10 +1120,10 @@ func ExecuteDivineGu(c *gin.Context) {
 		) AS elem
 		WHERE a.item_type = 'Gu'
 		  AND a.status IN ('active', 'ACTIVE')
-		  AND (elem->>'gu_id' = $1 OR elem->>'id' = $1)
+		  AND (LOWER(elem->>'gu_id') = LOWER($1) OR LOWER(elem->>'id') = LOWER($1) OR elem->>'gu_id' = ANY($3) OR elem->>'id' = ANY($3))
 		  AND ($2 = 0 OR COALESCE((elem->>'rank')::int, 1) = $2)
 	`
-	aRows, err := db.DB.QueryContext(c.Request.Context(), queryAuctions, targetGu.ID, targetGu.Rank)
+	aRows, err := db.DB.QueryContext(c.Request.Context(), queryAuctions, targetGu.ID, targetGu.Rank, matchIDs)
 	if err == nil {
 		defer aRows.Close()
 		for aRows.Next() {
@@ -1362,7 +1346,9 @@ func ExecuteDivineGu(c *gin.Context) {
 		msg = fmt.Sprintf("Thiên cơ hỗn loạn, đạo ngân xung đột, chỉ nhìn thấy hình bóng mờ mịt của [%s].", targetGu.Name)
 	case "backfire":
 		msg = fmt.Sprintf("Dòm ngó thiên cơ của [%s] vượt quá năng lực! Bị Thiên Cơ Phản Phệ chịu %.0f sát thương linh hồn!", targetGu.Name, backfireDamage+backfireSoulDamage)
-		report = nil
+		report.Holders = nil
+		report.FoodHint = "Bị phản phệ làm mù quáng thần thức"
+		report.RecipeHint = "Bí phương bị đạo ngân tiên thiên phản phệ che khuất"
 	}
 
 	c.JSON(http.StatusOK, models.DivineGuResponse{

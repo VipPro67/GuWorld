@@ -131,5 +131,18 @@ func TestEvaluateGuDivination(t *testing.T) {
 	if dmg <= 0 || soulDmg <= 0 {
 		t.Errorf("expected positive backfire damages, got dmg=%f, soulDmg=%f", dmg, soulDmg)
 	}
+
+	// 3. Ownership resonance: when player equips the Gu, they get direct perception resonance
+	equippedGu := []models.GuInstance{
+		{GuID: "chun_qiu_chan", Rank: 6, Equipped: true, Status: "ACTIVE"},
+	}
+	ownerViewer := &models.Player{
+		CultivationState: models.CultivationState{Rank: 6},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"time": 1500}},
+	}
+	ownerStatus, ownerDelta, _, _ := EvaluateGuDivination(ownerViewer, equippedGu, nil, immortalGu, 1, 50.0, 10.0)
+	if ownerStatus != "full" || ownerDelta < 20.0 {
+		t.Errorf("expected full success with ownership resonance, got status=%s, delta=%f", ownerStatus, ownerDelta)
+	}
 }
 

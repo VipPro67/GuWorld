@@ -269,18 +269,39 @@ func EvaluateGuDivination(
 		resBonus = corePower * 0.35
 	}
 
-	pDiv := corePower + resBonus
+	// Ownership resonance bonus: If the viewer holds or equips this Gu, their perception resonates directly
+	viewerOwnsGu := false
+	for _, gu := range viewerGus {
+		if strings.EqualFold(gu.GuID, targetGu.ID) && (targetGu.Rank == 0 || gu.Rank == targetGu.Rank) {
+			viewerOwnsGu = true
+			break
+		}
+	}
+	if !viewerOwnsGu && viewer != nil {
+		for _, gu := range viewer.GuInventory {
+			if strings.EqualFold(gu.GuID, targetGu.ID) && (targetGu.Rank == 0 || gu.Rank == targetGu.Rank) {
+				viewerOwnsGu = true
+				break
+			}
+		}
+	}
+	ownershipBonus := 0.0
+	if viewerOwnsGu {
+		ownershipBonus = 200.0
+	}
+
+	pDiv := corePower + resBonus + ownershipBonus
 
 	// Target Gu Difficulty
 	var baseGuDifficulty float64
 	if targetGu.Rank >= 6 {
-		baseGuDifficulty = float64(targetGu.Rank)*45.0 + 50.0
+		baseGuDifficulty = float64(targetGu.Rank)*40.0 + 30.0
 	} else {
-		baseGuDifficulty = float64(targetGu.Rank)*15.0 + 10.0
+		baseGuDifficulty = float64(targetGu.Rank)*12.0 + 8.0
 	}
 
 	totalDifficulty := baseGuDifficulty
-	if holdersCount > 0 && maxHolderDefense > 0 {
+	if holdersCount > 0 && maxHolderDefense > 0 && !viewerOwnsGu {
 		totalDifficulty += maxHolderDefense * 0.4
 	}
 

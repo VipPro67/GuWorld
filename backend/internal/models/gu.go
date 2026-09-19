@@ -419,25 +419,52 @@ func rawEffectNumber(raw json.RawMessage) (float64, bool) {
 var GuRegistry = make(map[string]map[int]GuDictionaryItem)
 
 // GuIDsByName returns all gu ids whose name or ID contains the given search term (case/accent-insensitive).
+// Exact matches are returned first, followed by prefix and substring matches.
 func GuIDsByName(search string) []string {
 	if search == "" {
 		return nil
 	}
-	cleanSearch := RemoveAccents(search)
-	var ids []string
+	cleanSearch := RemoveAccents(strings.TrimSpace(search))
+	if cleanSearch == "" {
+		return nil
+	}
+	var exactMatches []string
+	var prefixMatches []string
+	var substringMatches []string
+
 	for id, ranks := range GuRegistry {
 		for _, item := range ranks {
-			if strings.Contains(RemoveAccents(item.Name), cleanSearch) || strings.Contains(strings.ToLower(id), cleanSearch) {
-				ids = append(ids, id)
+			cleanName := RemoveAccents(item.Name)
+			cleanID := strings.ToLower(id)
+			if cleanName == cleanSearch || cleanID == cleanSearch {
+				exactMatches = append(exactMatches, id)
+				break
+			} else if strings.HasPrefix(cleanName, cleanSearch) || strings.HasPrefix(cleanID, cleanSearch) {
+				prefixMatches = append(prefixMatches, id)
+				break
+			} else if strings.Contains(cleanName, cleanSearch) || strings.Contains(cleanID, cleanSearch) {
+				substringMatches = append(substringMatches, id)
 				break
 			}
 		}
 	}
-	return ids
+
+	result := append(exactMatches, prefixMatches...)
+	result = append(result, substringMatches...)
+	return result
 }
 
 func GetGu(id string, rank int) (GuDictionaryItem, bool) {
 	ranks, ok := GuRegistry[id]
+	if !ok {
+		for k, v := range GuRegistry {
+			if strings.EqualFold(k, id) {
+				ranks = v
+				ok = true
+				break
+			}
+		}
+	}
 	if !ok {
 		return GuDictionaryItem{}, false
 	}
@@ -447,6 +474,15 @@ func GetGu(id string, rank int) (GuDictionaryItem, bool) {
 
 func GetGuAny(id string) (GuDictionaryItem, bool) {
 	ranks, ok := GuRegistry[id]
+	if !ok {
+		for k, v := range GuRegistry {
+			if strings.EqualFold(k, id) {
+				ranks = v
+				ok = true
+				break
+			}
+		}
+	}
 	if !ok {
 		return GuDictionaryItem{}, false
 	}
@@ -464,6 +500,74 @@ func GetGuAny(id string) (GuDictionaryItem, bool) {
 		return GuDictionaryItem{}, false
 	}
 	return best, true
+}
+
+// FindGuByNameOrID resolves a Gu item from the dictionary by checking:
+// 1. Exact Name match (case/accent-insensitive)
+// 2. Exact ID match (case-insensitive)
+// 3. Prefix Name / ID match
+// 4. Substring Name / ID match
+// Filters by targetRank if targetRank > 0.
+func FindGuByNameOrID(query string, targetRank int) (GuDictionaryItem, bool) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return GuDictionaryItem{}, false
+	}
+	cleanQuery := RemoveAccents(query)
+
+	// Phase 1: Exact Name match
+	for _, ranks := range GuRegistry {
+		for rank, item := range ranks {
+			if targetRank > 0 && rank != targetRank {
+				continue
+			}
+			if RemoveAccents(item.Name) == cleanQuery {
+				return item, true
+			}
+		}
+	}
+
+	// Phase 2: Direct ID lookup
+	if targetRank > 0 {
+		if item, found := GetGu(query, targetRank); found {
+			return item, true
+		}
+	}
+	if item, found := GetGuAny(query); found {
+		if targetRank == 0 || item.Rank == targetRank {
+			return item, true
+		}
+	}
+
+	// Phase 3: Prefix Name or ID match
+	for id, ranks := range GuRegistry {
+		for rank, item := range ranks {
+			if targetRank > 0 && rank != targetRank {
+				continue
+			}
+			cleanName := RemoveAccents(item.Name)
+			cleanID := strings.ToLower(id)
+			if strings.HasPrefix(cleanName, cleanQuery) || strings.HasPrefix(cleanID, cleanQuery) {
+				return item, true
+			}
+		}
+	}
+
+	// Phase 4: Substring Name or ID match
+	for id, ranks := range GuRegistry {
+		for rank, item := range ranks {
+			if targetRank > 0 && rank != targetRank {
+				continue
+			}
+			cleanName := RemoveAccents(item.Name)
+			cleanID := strings.ToLower(id)
+			if strings.Contains(cleanName, cleanQuery) || strings.Contains(cleanID, cleanQuery) {
+				return item, true
+			}
+		}
+	}
+
+	return GuDictionaryItem{}, false
 }
 
 // HasImmortalRank returns true if any rank variant of the given Gu ID is >= 6 (Tiên Cổ).
