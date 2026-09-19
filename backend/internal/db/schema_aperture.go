@@ -354,12 +354,12 @@ func schemaAperture() error {
 	if err := execSchema("tribulation_enemies_float_upgrade", `
 	DO $$
 	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tribulation_enemies' AND column_name='hp' AND data_type IN ('bigint', 'integer', 'int')) THEN
-			ALTER TABLE tribulation_enemies ALTER COLUMN hp TYPE DOUBLE PRECISION USING hp::DOUBLE PRECISION;
-			ALTER TABLE tribulation_enemies ALTER COLUMN max_hp TYPE DOUBLE PRECISION USING max_hp::DOUBLE PRECISION;
-			ALTER TABLE tribulation_enemies ALTER COLUMN attack TYPE DOUBLE PRECISION USING attack::DOUBLE PRECISION;
-			ALTER TABLE tribulation_enemies ALTER COLUMN defense TYPE DOUBLE PRECISION USING defense::DOUBLE PRECISION;
-		END IF;
+		ALTER TABLE tribulation_enemies ALTER COLUMN hp TYPE DOUBLE PRECISION USING hp::DOUBLE PRECISION;
+		ALTER TABLE tribulation_enemies ALTER COLUMN max_hp TYPE DOUBLE PRECISION USING max_hp::DOUBLE PRECISION;
+		ALTER TABLE tribulation_enemies ALTER COLUMN attack TYPE DOUBLE PRECISION USING attack::DOUBLE PRECISION;
+		ALTER TABLE tribulation_enemies ALTER COLUMN defense TYPE DOUBLE PRECISION USING defense::DOUBLE PRECISION;
+	EXCEPTION WHEN OTHERS THEN
+		NULL;
 	END $$;`); err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
+import { getDictionaryCache, setDictionaryCache } from "@/lib/db-cache";
 import type {
   GuInstance,
   RefineRateBreakdown,
@@ -78,17 +79,45 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   fetchRegions: async () => {
+    let cachedEtag: string | undefined;
+
+    // 1. Read from IndexedDB for 0ms instant display
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/explore/regions`);
+      const cached = await getDictionaryCache<Region[]>("game_explore_regions");
+      if (cached && cached.data && Array.isArray(cached.data) && cached.data.length > 0) {
+        cachedEtag = cached.etag;
+        set({ regions: cached.data, regionsLoaded: true });
+      }
+    } catch (err) {
+      console.warn("[Regions] Failed to read from IndexedDB:", err);
+    }
+
+    // 2. Fetch from backend with ETag revalidation
+    try {
+      const headers: Record<string, string> = {};
+      if (cachedEtag) {
+        headers["If-None-Match"] = cachedEtag;
+      }
+
+      const response = await authFetch(`${BACKEND_URL}/api/explore/regions`, { headers });
+      if (response.status === 304) {
+        // Cached data is freshest
+        set({ regionsLoaded: true });
+        return;
+      }
       if (response.status === 401) {
-        set({ regions: [], regionsLoaded: true });
+        if (!get().regionsLoaded) {
+          set({ regions: [], regionsLoaded: true });
+        }
         return;
       }
       if (!response.ok) {
         throw new Error("Failed to load regions");
       }
       const data = await response.json();
+      const etag = response.headers.get("ETag") || undefined;
       set({ regions: data || [], regionsLoaded: true });
+      void setDictionaryCache("game_explore_regions", data || [], etag);
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Regions sync error:", err.message);

@@ -29,6 +29,8 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   const [selectedRegionId, setSelectedRegionId] = useState<string>("");
 
   const player = useGameStore((s) => s.player);
+  const storeRegions = useGameStore((s) => s.regions);
+  const fetchRegionsStore = useGameStore((s) => s.fetchRegions);
   const currentX = useWorldStore((s) => s.liveX);
   const currentY = useWorldStore((s) => s.liveY);
   const useGuOnMap = useWorldStore((s) => s.useGuOnMap);
@@ -49,26 +51,22 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     }
   }, [portalGus, selectedGu]);
 
+  // Sync store regions to local state
+  useEffect(() => {
+    if (storeRegions && storeRegions.length > 0) {
+      setRegions(storeRegions as unknown as RegionInfo[]);
+    }
+  }, [storeRegions]);
+
   // Fetch regions on open for target region coordinate selection helper
   useEffect(() => {
     if (!isOpen) return;
-    const fetchRegions = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080"}/api/explore/regions`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("gu_auth_token")}` },
-        });
-        if (!res.ok) throw new Error("Failed to fetch regions");
-        const data = await res.json();
-        setRegions(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRegions();
-  }, [isOpen]);
+    if (storeRegions && storeRegions.length > 0) {
+      setRegions(storeRegions as unknown as RegionInfo[]);
+      return;
+    }
+    void fetchRegionsStore();
+  }, [isOpen, storeRegions, fetchRegionsStore]);
 
   const handleSelectRegion = (regionId: string) => {
     setSelectedRegionId(regionId);

@@ -34,6 +34,8 @@ export interface TeleportTemplate {
   name: string;
   description: string;
   min_rank: number;
+  min_formation_realm?: number;
+  base_success_rate?: number;
   max_range: number;
   is_cross_region: boolean;
   max_durability: number;
@@ -59,6 +61,19 @@ export interface TeleportDirectoryData {
   destinations: TeleportDirectoryItem[];
 }
 
+export interface TeleportBuildResult {
+  success: boolean;
+  message: string;
+  array?: TeleportArray;
+  success_rate?: number;
+  formation_realm?: string;
+  formation_level?: number;
+  discount_percent?: number;
+  mastery_gained?: number;
+  paid_primeval_stones?: number;
+  paid_immortal_stones?: number;
+}
+
 export interface TeleportSlice {
   teleportTemplates: TeleportTemplate[];
   myTeleportArrays: TeleportArray[];
@@ -76,7 +91,7 @@ export interface TeleportSlice {
     fee_enabled?: boolean;
     fee_currency?: string;
     fee_amount?: number;
-  }) => Promise<boolean>;
+  }) => Promise<TeleportBuildResult>;
   travelTeleport: (targetArrayId: string) => Promise<{ success: boolean; message: string }>;
   manageTeleportArray: (req: {
     array_id: string;
@@ -102,7 +117,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/templates`);
       if (!response.ok) return;
-      const data = await response.json();
+      const data: TeleportTemplate[] = await response.json();
       set({ teleportTemplates: data });
     } catch (err) {
       console.error("Failed to fetch teleport templates", err);
@@ -116,10 +131,10 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       const response = await authFetch(`${BACKEND_URL}/api/teleport/mine`);
       if (response.status === 401) { logout(); return; }
       if (!response.ok) return;
-      const data = await response.json();
+      const data: TeleportArray[] = await response.json();
       set({ myTeleportArrays: data });
     } catch (err) {
-      console.error("Failed to fetch my teleport arrays", err);
+      console.error("Failed to fetch player teleport arrays", err);
     }
   },
 
@@ -142,7 +157,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
 
   buildTeleportArray: async (req) => {
     const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
+    if (!token || actionLoading) return { success: false, message: "Đang bận" };
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/build`, {
@@ -154,19 +169,23 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bố trí trận pháp thất bại");
 
-      get().addToast(data.message || "Bố trí trận pháp thành công!", "success");
-      get().addLog(data.message || "Bố trí trận pháp thành công!");
-      if (data.player) {
-        get().setPlayerFromServer(data.player);
+      if (data.success) {
+        get().addToast(data.message || "Bố trí trận pháp thành công!", "success");
+        get().addLog(data.message || "Bố trí trận pháp thành công!");
+      } else {
+        get().addToast(data.message || "Bố trận thất bại!", "warning");
+        get().addLog(data.message || "Bố trận thất bại!");
       }
+
+      await get().fetchPlayerProfile();
       await get().fetchMyTeleportArrays();
-      return true;
+      return data;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       get().addLog(`Thất bại: ${err.message}`);
-      return false;
+      return { success: false, message: err.message };
     } finally {
       set({ actionLoading: false });
     }

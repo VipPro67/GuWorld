@@ -484,6 +484,20 @@ func (g GuInventory) Value() (driver.Value, error) {
 	return json.Marshal(g)
 }
 
+// UnmarshalJSON handles both integer and float numbers from JSON to prevent unmarshal errors.
+func (m *MaterialsInventory) UnmarshalJSON(b []byte) error {
+	var raw map[string]float64
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	res := make(MaterialsInventory, len(raw))
+	for k, v := range raw {
+		res[k] = int64(v)
+	}
+	*m = res
+	return nil
+}
+
 // Scan implements the sql.Scanner interface for MaterialsInventory
 func (m *MaterialsInventory) Scan(value interface{}) error {
 	if value == nil {
@@ -508,6 +522,20 @@ func (m MaterialsInventory) Value() (driver.Value, error) {
 		return "{}", nil
 	}
 	return json.Marshal(m)
+}
+
+// UnmarshalJSON handles both integer and float numbers from JSON to prevent unmarshal errors.
+func (d *DaoMarksMap) UnmarshalJSON(b []byte) error {
+	var raw map[string]float64
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	res := make(DaoMarksMap, len(raw))
+	for k, v := range raw {
+		res[k] = int64(v)
+	}
+	*d = res
+	return nil
 }
 
 // Scan implements the sql.Scanner interface for DaoMarksMap
@@ -579,6 +607,20 @@ func (c *CombatState) Value() (driver.Value, error) {
 		return nil, err
 	}
 	return string(b), nil
+}
+
+// UnmarshalJSON handles both integer and float numbers from JSON to prevent unmarshal errors.
+func (p *PathMasteriesMap) UnmarshalJSON(b []byte) error {
+	var raw map[string]float64
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	res := make(PathMasteriesMap, len(raw))
+	for k, v := range raw {
+		res[k] = int(v)
+	}
+	*p = res
+	return nil
 }
 
 // Scan implements the sql.Scanner interface for PathMasteriesMap

@@ -365,7 +365,7 @@ func ResolveTribulation(c *gin.Context) {
 	now := time.Now()
 	didBreakthrough := false
 	breakthroughMsg := ""
-	updatedDaoMarks := make(map[string]int)
+	updatedDaoMarks := make(models.DaoMarksMap)
 
 	// Helper: recalc next_year, check breakthrough
 	handleSuccess := func(tribType string) {
@@ -630,7 +630,7 @@ func ResolveTribulation(c *gin.Context) {
 	var finalState string
 	_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ev.ApertureID).Scan(&finalState)
 
-	var finalDaoMarks map[string]int
+	var finalDaoMarks models.DaoMarksMap
 	if len(updatedDaoMarks) > 0 {
 		finalDaoMarks = updatedDaoMarks
 	} else {

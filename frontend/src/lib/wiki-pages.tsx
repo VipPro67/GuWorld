@@ -558,9 +558,60 @@ export const wikiPages: WikiPage[] = [
     ),
     cards: [
       { title: "Sinh tồn ngoài Ngũ Vực", targetId: "gameplay-world-survival", description: "Di chuyển, chiến đấu và nhặt hài cốt" },
+      { title: "Truyền Tống Trận & Trận Đạo", targetId: "gameplay-world-teleport", description: "Bố trí trận pháp, kết nối không gian và giảm giá Trận Đạo" },
       { title: "Chu kỳ hằng ngày", targetId: "gameplay-daily-loop", description: "Checklist phát triển nhân vật" },
       { title: "Tiên Khiếu & Dị Nhân", targetId: "gameplay-aperture-society", description: "Kinh tế dành cho Cổ Tiên" },
     ],
+  },
+  {
+    id: "gameplay-world-teleport",
+    title: "Truyền Tống Trận & Trận Đạo",
+    category: "activities",
+    subCategory: "gameplay-ui-navigation",
+    keywords: ["truyền tống", "trận pháp", "trận đạo", "teleport", "vi trận", "tiên trận", "danh bạ", "két sắt", "bố trận"],
+    content: (
+      <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+          <h3 className="font-bold text-amber-300 mb-2">Tổng Quan & Phẩm Cấp Trận Pháp</h3>
+          <p className="mb-2">
+            Cổ Sư có thể bố trí các điểm Truyền Tống Trận cố định trên bản đồ Thế Giới Ngũ Vực để du hành nhanh giữa các khu vực hoặc xuyên Đại Vực.
+          </p>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Vi Trận (Tier 1):</strong> Tầm 1,000 ô (nội bộ tiểu vực). Cần Rank 2. Gốc: 3,000 Nguyên Thạch, 20 Tinh Thể Vỡ Không Gian. Tỉ lệ gốc: 70%.</li>
+            <li><strong>Đại Vực Trận (Tier 2):</strong> Tầm 10,000 ô (toàn bộ Đại Vực). Cần Rank 4, Trận Đạo tối thiểu <strong>Đại Sư</strong>. Gốc: 15,000 Nguyên Thạch, 10 Đá Vực Không Gian Vô Tận, 20 Tinh Thể Vỡ Không Gian. Tỉ lệ gốc: 60%.</li>
+            <li><strong>Tiên Trận (Tier 3):</strong> Tầm Vô Hạn (Xuyên Ngũ Vực). Cần Rank 6 Tiên Nhân, Trận Đạo tối thiểu <strong>Tông Sư</strong>. Gốc: 100,000 Nguyên Thạch, 50 Tiên Nguyên Thạch, 50 Tinh Thể Vỡ Không Gian, 20 Đá Vực Không Gian Vô Tận, 10 Hư Không Thạch. Tỉ lệ gốc: 45%.</li>
+          </ul>
+        </section>
+
+        <section className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/20">
+          <h3 className="font-bold text-blue-300 mb-2">Ảnh Hưởng Của Cảnh Giới Trận Đạo</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Giảm Giá Chi Phí:</strong> Nhập Môn 0%, Đại Sư (100 pts) <strong>-15%</strong>, Tông Sư (1,000 pts) <strong>-30%</strong>, Đại Tông Sư (10,000 pts) <strong>-45%</strong>, Vô Thượng (100,000 pts) <strong>-60%</strong>.</li>
+            <li><strong>Tỉ Lệ Thành Công:</strong> Tăng thêm 15% mỗi bậc Trận Đạo, cộng thêm từ Tu Vi (Rank vượt chuẩn +3%/cấp) và Đạo Ngân Trận Đạo (+1% mỗi 500 Đạo Ngân).</li>
+            <li><strong>Sụp Đổ Trận Văn (Thất Bại):</strong> Tiêu hao 50% nguyên thạch/tiên thạch và vật liệu. Cổ trùng <strong>KHÔNG</strong> bị tổn hại. Nhận 50% điểm Chân Ý Trận Đạo.</li>
+          </ul>
+        </section>
+
+        <section className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
+          <h3 className="font-bold text-emerald-300 mb-2">Quyền Hạn & Bảo Mật Danh Bạ Không Gian</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Công Cộng (PUBLIC):</strong> Hiển thị trong tab Tất Cả, mở cho mọi Cổ Sư. Chủ trận có thể bật thu phí dịch chuyển.</li>
+            <li><strong>Tông Môn (SECT):</strong> Chỉ thành viên cùng môn phái mới tra cứu được trong tab Tông Môn và sử dụng. Không hiển thị cho người ngoài để bảo mật tọa độ căn cứ.</li>
+            <li><strong>Riêng Tư (PERSONAL):</strong> Chỉ chủ sở hữu mới thấy trong tab Của Ta và sử dụng. Tọa độ được ẩn hoàn toàn trước toàn bộ người chơi khác.</li>
+          </ul>
+        </section>
+
+        <section className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20">
+          <h3 className="font-bold text-purple-300 mb-2">Vận Hành, Thu Phí & Bảo Trì</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Hao mòn độ bền:</strong> Mỗi lượt truyền tống tiêu hao 1 độ bền. Hết độ bền cần sửa chữa để tiếp tục sử dụng.</li>
+            <li><strong>Sửa Chữa & Bạo Kích:</strong> Giảm giá sửa tối đa 50% theo Trận Đạo. Tỉ lệ Bạo Kích Sửa Chữa (+25% độ bền và cơ hội tăng Max Durability).</li>
+            <li><strong>Két Sắt Doanh Thu:</strong> Thu phí dịch chuyển từ người khác, rút về túi đồ bất cứ lúc nào.</li>
+            <li><strong>Thu Hồi:</strong> Phá dỡ trận pháp, hoàn trả 50% nguyên liệu (theo % độ bền) và rút toàn bộ số dư két sắt.</li>
+          </ul>
+        </section>
+      </div>
+    ),
   },
   {
     id: "gameplay-world-survival",
@@ -570,7 +621,7 @@ export const wikiPages: WikiPage[] = [
     keywords: ["ngũ vực", "bản đồ", "pvp", "hài cốt", "dịch chuyển"],
     content: (
       <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
-        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-sky-300 mb-2">Điều khiển bản đồ</h3><ul className="list-disc list-inside space-y-1"><li>Chuyển giữa click để đi và kéo bản đồ; nút định vị đưa camera về nhân vật.</li><li>Bật/tắt nhãn Quái & Cổ, Boss, HUB, Khu Vực và Ngũ Vực.</li><li>Click đích mới để đổi hướng; click ô đang đứng để dừng.</li><li>Dịch chuyển tức thời sử dụng Cổ trùng có khả năng Dịch Chuyển / Tạo Cổng (như Định Tiên Du, Môn Vực Cổ,...) đang trang bị và ở trạng thái ACTIVE.</li></ul></section>
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-sky-300 mb-2">Điều khiển bản đồ</h3><ul className="list-disc list-inside space-y-1"><li>Chuyển giữa click để đi và kéo bản đồ; nút định vị đưa camera về nhân vật.</li><li>Bật/tắt nhãn Quái & Cổ, Boss, HUB, Khu Vực và Ngũ Vực.</li><li>Click đích mới để đổi hướng; click ô đang đứng để dừng.</li><li>Dịch chuyển tức thời sử dụng Cổ trùng có khả năng Dịch Chuyển / Tạo Cổng (như Định Tiên Du, Môn Vực Cổ,...) đang trang bị và ở trạng thái ACTIVE.</li><li>Bố trí và sử dụng <strong>Truyền Tống Trận</strong> để di chuyển nhanh chóng giữa các khu vực hoặc xuyên suốt Ngũ Vực.</li></ul></section>
         <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-rose-300 mb-2">Gặp mục tiêu</h3><p>Chỉ bước đúng ô quái/Boss mới mở chiến đấu. Chọn người chơi để xem hồ sơ, mời tổ đội hoặc tiếp cận. Phạm vi PvP cơ bản là 2 ô và có thể tăng bằng chỉ số tầm đánh/tầm chiến đấu; không thể tấn công trong vùng an toàn.</p></section>
         <section className="p-4 rounded-xl bg-rose-950/15 border border-rose-500/20"><h3 className="font-bold text-rose-300 mb-2">Tử vong & hài cốt</h3><p>Thua trận có thể làm rơi thạch, nguyên liệu, Bí phương và Cổ không trang bị/không phải Bản Mệnh. Đồ nằm trên ô bản đồ. Nếu có người hạ gục, thời gian bảo hộ ưu tiên người đó; chiến lợi phẩm PvE không có người hạ gục không được khóa riêng. Luôn xem trạng thái hiển thị trước khi nhặt.</p></section>
       </div>

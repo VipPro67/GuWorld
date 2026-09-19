@@ -104,4 +104,14 @@ func TestDaoMarksMap_ScanCorrupted(t *testing.T) {
 	if dm2["fire"] != 1000 || dm2["water"] != 500 {
 		t.Errorf("Expected fire=1000, water=500, got %v", dm2)
 	}
+
+	// Floats and scientific notation in JSON should be gracefully parsed to int64
+	floatJSON := []byte(`{"lightning": 1234567.89, "heaven": 1e10, "earth": 9999999999}`)
+	var dm3 DaoMarksMap
+	if err := dm3.Scan(floatJSON); err != nil {
+		t.Errorf("Unexpected error parsing float JSON: %v", err)
+	}
+	if dm3["lightning"] != 1234567 || dm3["heaven"] != 10000000000 || dm3["earth"] != 9999999999 {
+		t.Errorf("Expected lightning=1234567, heaven=10000000000, earth=9999999999, got %v", dm3)
+	}
 }

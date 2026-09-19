@@ -7,6 +7,7 @@ import { wsManager } from "@/lib/websocket";
 import { authFetch } from "@/lib/auth";
 import { fetchWithDedupe } from "@/lib/fetch";
 import { BACKEND_URL } from "@/lib/config";
+import { getDictionaryCache, setDictionaryCache } from "@/lib/db-cache";
 import { createNotificationsSlice, type NotificationsSlice } from "@/store/slices/notificationsSlice";
 import { createMineSlice, type MineSlice } from "@/store/slices/mineSlice";
 import { createPartySlice, type PartySlice } from "@/store/slices/partySlice";
@@ -1101,19 +1102,24 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
   monsterDictionary: Record<string, MonsterSpec>;
   constitutionDictionary: Record<string, EffectDictionaryEntry>;
   raceDictionary: Record<string, EffectDictionaryEntry>;
+  statusDictionary: Record<string, EffectDictionaryEntry>;
   dictionaryLoaded: boolean;
+  dictionaryLoading: boolean;
+  dictionaryError: string | null;
   dictionaryPartsLoaded: {
     gus: boolean;
     items: boolean;
     monsters: boolean;
     constitutions: boolean;
     races: boolean;
+    statuses: boolean;
   };
   fetchGuDictionary: () => Promise<void>;
   fetchItemDictionary: () => Promise<void>;
   fetchMonsterDictionary: () => Promise<void>;
   fetchConstitutionDictionary: () => Promise<void>;
   fetchRaceDictionary: () => Promise<void>;
+  fetchStatusDictionary: () => Promise<void>;
   updateManaSnapshot: (player: Player | null) => void;
   setPlayerFromServer: (player: Player | Partial<Player> | null, extraState?: Partial<GameState>) => void;
   applyInventoryFromResponse: (data: ApiResponseData) => void;
@@ -1128,7 +1134,7 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
   unsubscribeTradeEvents: () => void;
   subscribeBaoHoangMessages: (channel: string) => void;
   unsubscribeBaoHoangMessages: () => void;
-  fetchDictionary: () => Promise<void>;
+  fetchDictionary: (forceFresh?: boolean) => Promise<void>;
 
   setShowChangelog: (v: boolean) => void;
 
@@ -1426,6 +1432,81 @@ export const useGameStore = create<GameState>((set, get) => {
     });
   };
 
+  interface UnifiedDictionaryPayload {
+    gu?: GuSpec[] | Record<string, GuSpec>;
+    items?: Record<string, ItemSpec>;
+    monsters?: Record<string, MonsterSpec>;
+    constitutions?: EffectDictionaryEntry[];
+    races?: EffectDictionaryEntry[];
+    statuses?: EffectDictionaryEntry[];
+  }
+
+  const populateDictionaries = (data: UnifiedDictionaryPayload) => {
+    if (!data) return;
+
+    let guMap: Record<string, GuSpec> = {};
+    let guByRank: Record<string, Record<number, GuSpec>> = {};
+    if (data.gu) {
+      const guArray = Array.isArray(data.gu) ? data.gu : Object.values(data.gu || {});
+      for (const item of guArray as GuSpec[]) {
+        if (!guByRank[item.id]) guByRank[item.id] = {};
+        guByRank[item.id][item.rank] = item;
+        if (!guMap[item.id] || item.rank > guMap[item.id].rank) {
+          guMap[item.id] = item;
+        }
+      }
+    } else {
+      guMap = get().guDictionary;
+      guByRank = get().guByRank;
+    }
+
+    const itemDictionary = data.items || get().itemDictionary;
+    const monsterDictionary = data.monsters || get().monsterDictionary;
+
+    let constitutionDictionary = get().constitutionDictionary;
+    if (data.constitutions) {
+      constitutionDictionary = {};
+      for (const entry of (Array.isArray(data.constitutions) ? data.constitutions : [])) {
+        constitutionDictionary[entry.key] = entry;
+      }
+    }
+
+    let raceDictionary = get().raceDictionary;
+    if (data.races) {
+      raceDictionary = {};
+      for (const entry of (Array.isArray(data.races) ? data.races : [])) {
+        raceDictionary[entry.key] = entry;
+      }
+    }
+
+    let statusDictionary = get().statusDictionary;
+    if (data.statuses) {
+      statusDictionary = {};
+      for (const entry of (Array.isArray(data.statuses) ? data.statuses : [])) {
+        statusDictionary[entry.key] = entry;
+      }
+    }
+
+    set({
+      guDictionary: guMap,
+      guByRank,
+      itemDictionary,
+      monsterDictionary,
+      constitutionDictionary,
+      raceDictionary,
+      statusDictionary,
+      dictionaryLoaded: true,
+      dictionaryPartsLoaded: {
+        gus: true,
+        items: true,
+        monsters: true,
+        constitutions: true,
+        races: true,
+        statuses: true,
+      },
+    });
+  };
+
   const fetchDictionaryPart = async (part: DictionaryPart): Promise<void> => {
     if (get().dictionaryPartsLoaded[part]) return;
 
@@ -1457,17 +1538,23 @@ export const useGameStore = create<GameState>((set, get) => {
             constitutionDictionary[entry.key] = entry;
           }
           set({ constitutionDictionary });
-        } else {
+        } else if (part === "races") {
           const raceDictionary: Record<string, EffectDictionaryEntry> = {};
           for (const entry of (Array.isArray(data) ? data : [])) {
             raceDictionary[entry.key] = entry;
           }
           set({ raceDictionary });
+        } else if (part === "statuses") {
+          const statusDictionary: Record<string, EffectDictionaryEntry> = {};
+          for (const entry of (Array.isArray(data) ? data : [])) {
+            statusDictionary[entry.key] = entry;
+          }
+          set({ statusDictionary });
         }
 
         markDictionaryPartLoaded(part);
       } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
+        const err = caught instanceof Error ? caught : new Error(String(caught));
         console.error(`${part} dictionary fetch failed:`, err.message);
       }
     });
@@ -1513,13 +1600,17 @@ export const useGameStore = create<GameState>((set, get) => {
   monsterDictionary: {},
   constitutionDictionary: {},
   raceDictionary: {},
+  statusDictionary: {},
   dictionaryLoaded: false,
+  dictionaryLoading: false,
+  dictionaryError: null,
   dictionaryPartsLoaded: {
     gus: false,
     items: false,
     monsters: false,
     constitutions: false,
     races: false,
+    statuses: false,
   },
   currentView: "dashboard",
 
@@ -1528,6 +1619,7 @@ export const useGameStore = create<GameState>((set, get) => {
   fetchMonsterDictionary: () => fetchDictionaryPart("monsters"),
   fetchConstitutionDictionary: () => fetchDictionaryPart("constitutions"),
   fetchRaceDictionary: () => fetchDictionaryPart("races"),
+  fetchStatusDictionary: () => fetchDictionaryPart("statuses"),
 
   setView: (view) => useUIStore.getState().setView(view),
   setShowChangelog: (v) => useUIStore.getState().setShowChangelog(v),
@@ -2045,14 +2137,87 @@ export const useGameStore = create<GameState>((set, get) => {
 
 
 
-  fetchDictionary: async () => {
-    await Promise.all([
-      fetchDictionaryPart("gus"),
-      fetchDictionaryPart("items"),
-      fetchDictionaryPart("monsters"),
-      fetchDictionaryPart("constitutions"),
-      fetchDictionaryPart("races"),
-    ]);
+  fetchDictionary: async (forceFresh = false) => {
+    let cachedEtag: string | undefined;
+
+    // Trigger regions preload concurrently
+    void get().fetchRegions();
+
+    // 1. Instant Cache Hydration: Read from IndexedDB first
+    if (!forceFresh) {
+      try {
+        const cached = await getDictionaryCache<UnifiedDictionaryPayload>("game_dictionary_unified");
+        if (cached && cached.data) {
+          cachedEtag = cached.etag;
+          populateDictionaries(cached.data);
+          set({ dictionaryLoaded: true, dictionaryError: null });
+        }
+      } catch (err) {
+        console.warn("[Dictionary] Failed to read from IndexedDB:", err);
+      }
+    }
+
+    const alreadyHasData = get().dictionaryLoaded;
+    if (!alreadyHasData) {
+      set({ dictionaryLoading: true, dictionaryError: null });
+    }
+
+    // 2. Network Fetch with Deduplication & Exponential Backoff Retry
+    await fetchWithDedupe("fetchDictionary:unified", async () => {
+      const maxRetries = 3;
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const headers: Record<string, string> = {};
+          if (cachedEtag && !forceFresh) {
+            headers["If-None-Match"] = cachedEtag;
+          }
+
+          const response = await fetch(`${BACKEND_URL}/api/dictionary`, {
+            headers,
+          });
+
+          if (response.status === 304) {
+            // Server data has not changed, current cache is fresh
+            set({ dictionaryLoaded: true, dictionaryLoading: false, dictionaryError: null });
+            return;
+          }
+
+          if (!response.ok) {
+            throw new Error(`Máy chủ phản hồi mã ${response.status}`);
+          }
+
+          const data = (await response.json()) as UnifiedDictionaryPayload;
+          const etag = response.headers.get("ETag") || undefined;
+
+          populateDictionaries(data);
+          set({ dictionaryLoaded: true, dictionaryLoading: false, dictionaryError: null });
+
+          // Save fresh data to IndexedDB
+          void setDictionaryCache("game_dictionary_unified", data, etag);
+          return;
+        } catch (caught: unknown) {
+          lastError = caught instanceof Error ? caught : new Error(String(caught));
+          console.warn(`[Dictionary] Fetch attempt ${attempt}/${maxRetries} failed:`, lastError.message);
+          if (attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+          }
+        }
+      }
+
+      // If all network attempts failed:
+      if (get().dictionaryLoaded) {
+        // Fall back gracefully to the existing cached data
+        set({ dictionaryLoading: false });
+        console.info("[Dictionary] Using existing local cache after network failure.");
+      } else {
+        set({
+          dictionaryLoading: false,
+          dictionaryError: lastError?.message || "Không thể kết nối đến máy chủ để tải dữ liệu game. Vui lòng kiểm tra mạng và thử lại.",
+        });
+      }
+    });
   },
 
 

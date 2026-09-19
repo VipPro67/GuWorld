@@ -3,8 +3,9 @@
 import React, { useState } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
 import { TeleportArray } from "@/store/slices/teleportSlice";
-import { X, Settings, Coins, Wrench, Trash2, Shield, ArrowRightLeft, Check, AlertTriangle } from "lucide-react";
+import { X, Settings, Coins, Wrench, Trash2, Shield, ArrowRightLeft, Check, AlertTriangle, Award, Sparkles } from "lucide-react";
 import { GameButton } from "@/components/ui";
+import { getFormationInfo } from "./TeleportBuildModal";
 
 interface TeleportManagementModalProps {
   player: Player;
@@ -34,6 +35,12 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
   const [feeEnabled, setFeeEnabled] = useState<boolean>(array.fee_enabled);
   const [feeCurrency, setFeeCurrency] = useState<string>(array.fee_currency || "primeval_stones");
   const [feeAmount, setFeeAmount] = useState<number>(array.fee_amount || 0);
+
+  // Formation Path & Dao Mark calculations
+  const formationPts = player.path_masteries?.["formation"] ?? player.path_masteries?.["formation path"] ?? 0;
+  const formationInfo = getFormationInfo(formationPts);
+  const repairDiscount = Math.min(50, Math.round(formationInfo.level * 12.5));
+  const repairCritChance = formationInfo.level * 10;
 
   const durPercent = Math.min(100, Math.round((array.current_durability / array.max_durability) * 100));
 
@@ -101,6 +108,25 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
           </button>
         </div>
 
+        {/* Formation Status Bar */}
+        <div className="px-6 py-2 bg-zinc-900/60 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span className="text-zinc-400 flex items-center gap-1">
+              <Award className="w-3.5 h-3.5 text-amber-400" />
+              Trận Đạo:
+            </span>
+            <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] border ${formationInfo.bg} ${formationInfo.border} ${formationInfo.color}`}>
+              {formationInfo.name}
+            </span>
+          </div>
+          {repairDiscount > 0 && (
+            <div className="text-emerald-400 font-bold text-[11px] flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              Giảm {repairDiscount}% Chi Phí Sửa
+            </div>
+          )}
+        </div>
+
         <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
           {/* Status & Vault overview */}
           <div className="grid grid-cols-2 gap-3">
@@ -124,15 +150,22 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
                 />
               </div>
               {array.current_durability < array.max_durability && (
-                <button
-                  type="button"
-                  onClick={handleRepair}
-                  disabled={actionLoading}
-                  className="w-full py-1.5 mt-1 rounded-xl bg-blue-950/40 border border-blue-800/60 text-blue-300 hover:bg-blue-900/60 text-[11px] font-mono font-bold transition-all flex items-center justify-center gap-1"
-                >
-                  <Wrench className="w-3 h-3" />
-                  Sửa Chữa (+{array.max_durability - array.current_durability})
-                </button>
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={handleRepair}
+                    disabled={actionLoading}
+                    className="w-full py-1.5 mt-1 rounded-xl bg-blue-950/40 border border-blue-800/60 text-blue-300 hover:bg-blue-900/60 text-[11px] font-mono font-bold transition-all flex items-center justify-center gap-1"
+                  >
+                    <Wrench className="w-3 h-3" />
+                    Sửa Chữa (+{array.max_durability - array.current_durability})
+                  </button>
+                  {repairCritChance > 0 && (
+                    <div className="text-[10px] font-mono text-cyan-400/90 text-center">
+                      ✨ {repairCritChance}% tỉ lệ Bạo Kích Sửa Chữa
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

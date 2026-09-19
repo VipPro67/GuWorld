@@ -367,6 +367,64 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - Có thể dịch chuyển tức thời đến các vị trí bằng Cổ trùng có khả năng Dịch Chuyển / Tạo Cổng (như Định Tiên Du, Môn Vực Cổ, Thần Du Fake,...) đang trang bị và ở trạng thái ACTIVE. Cổ tạo cổng cho chọn tọa độ hoặc chọn nhanh vùng an toàn khu vực; loại cổng ngẫu nhiên tự chọn đích. Cơ chế dịch chuyển bằng tiền (Linh Thạch / Nguyên Thạch) đã bị hủy bỏ.
 - **Chiến lợi phẩm mặt đất/hài cốt:** tài sản rơi khi tử vong được lưu trên ô bản đồ. Trong thời gian khóa, chỉ người hạ gục được nhặt; hết khóa, người khác có thể nhặt. Panel trên bản đồ cho xem nội dung và trạng thái khóa, người liên quan nhận thông báo khi tài sản bị nhặt.
 
+### Hệ Thống Truyền Tống Trận (Teleportation Arrays) & Trận Đạo Lưu Phái
+
+Cổ Sư có thể khắc họa trận văn, câu thông thiên địa để xây dựng các **Truyền Tống Trận** cố định trên bản đồ Thế Giới Ngũ Vực. Hệ thống kết nối các tọa độ không gian, hỗ trợ dịch chuyển nhanh cho cá nhân, tông môn hoặc toàn bộ tu chân giới.
+
+#### 1. Nguyên Lý Hoạt Động & Hướng Kết Nối
+- Cần tối thiểu **2 điểm truyền tống** trong tầm phủ sóng để tạo liên kết không gian.
+- **Hướng Kết Nối**:
+  - **Hai Chiều (`TWO_WAY`)**: Vừa phát tín hiệu truyền tống đi, vừa tiếp nhận Cổ Sư từ nơi khác đến.
+  - **Một Chiều Gửi (`ONE_WAY_SEND`)**: Chỉ cho phép truyền tống rời khỏi điểm này (không thể dùng làm điểm đến).
+  - **Một Chiều Nhận (`ONE_WAY_RECEIVE`)**: Chỉ tiếp nhận Cổ Sư truyền tống đến (không thể truyền tống đi từ điểm này).
+
+#### 2. Phẩm Cấp Trận Pháp & Yêu Cầu
+- **Vi Trận (Tier 1 - Phàm cấp)**:
+  - *Tầm phủ sóng:* 1,000 ô (nội bộ tiểu vực/khu vực lân cận).
+  - *Yêu cầu:* Tu vi Chuyển 2.
+  - *Chi phí gốc:* 3,000 Nguyên Thạch + 20 Tinh Thể Vỡ Không Gian. Độ bền: 50/50.
+  - *Tỉ lệ thành công cơ bản:* 70%.
+- **Đại Vực Trận (Tier 2 - Linh cấp)**:
+  - *Tầm phủ sóng:* 10,000 ô (bao quát toàn bộ 1 Đại Vực).
+  - *Yêu cầu:* Tu vi Chuyển 4, Trận Đạo tối thiểu **Đại Sư**.
+  - *Chi phí gốc:* 15,000 Nguyên Thạch + 10 Đá Vực Không Gian Vô Tận + 20 Tinh Thể Vỡ Không Gian. Độ bền: 200/200.
+  - *Tỉ lệ thành công cơ bản:* 60%.
+- **Tiên Trận Xuyên Vực (Tier 3 - Tiên cấp)**:
+  - *Tầm phủ sóng:* Vô hạn (Truyền tống xuyên suốt Ngũ Vực).
+  - *Yêu cầu:* Tu vi Chuyển 6 (Cổ Tiên), Trận Đạo tối thiểu **Tông Sư**.
+  - *Chi phí gốc:* 100,000 Nguyên Thạch + 50 Tiên Nguyên Thạch + 50 Tinh Thể Vỡ Không Gian + 20 Đá Vực Không Gian Vô Tận + 10 Hư Không Thạch. Độ bền: 1,000/1,000.
+  - *Tỉ lệ thành công cơ bản:* 45%.
+
+#### 3. Cảnh Giới Trận Đạo, Tỉ Lệ Thành Công & Giảm Giá
+Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh giới **Lưu Phái Trận Đạo (`path_masteries["formation"]`)** và **Đạo Ngân Trận Đạo**:
+- **Giảm Giá Chi Phí (Cost Discount)**:
+  - Nhập Môn (< 100 Chân Ý): `0%`
+  - Đại Sư (≥ 100 Chân Ý): `-15%` chi phí nguyên thạch & tiên nguyên
+  - Tông Sư (≥ 1,000 Chân Ý): `-30%` chi phí
+  - Đại Tông Sư (≥ 10,000 Chân Ý): `-45%` chi phí
+  - Vô Thượng Đại Tông Sư (≥ 100,000 Chân Ý): `-60%` chi phí
+- **Tỉ Lệ Thành Công Khi Bố Trận**:
+  $$\text{Tỉ Lệ} = \text{BaseRate} + (\text{Level} \times 15\%) + \max(0, \text{Rank} - \text{MinRank}) \times 3\% + \min\left(10\%, \lfloor\frac{\text{DaoMarks}}{500}\rfloor\right)$$
+- **Sụp Đổ Trận Văn (Khi Bố Trận Thất Bại)**:
+  - Tiêu hao 50% tiền tệ và 50% vật liệu tiêu hao do trận văn bị sụp đổ khi khắc họa.
+  - Cổ trùng **KHÔNG** bị tổn hại hoặc biến mất.
+  - Nhận **50% điểm Chân Ý Trận Đạo** từ kinh nghiệm thất bại.
+- **Tiến Hóa Chân Ý**: Bố trận thành công cộng +30 / +100 / +300 Chân Ý Trận Đạo tương ứng Tier 1/2/3.
+
+#### 4. Quyền Truy Cập & Bảo Mật Danh Bạ Không Gian
+- **Công Cộng (`PUBLIC`)**: Mọi Cổ Sư đều có thể tra cứu trong tab *Tất Cả* của Danh Bạ và trả phí để dịch chuyển.
+- **Tông Môn (`SECT`)**: Chỉ thành viên cùng môn phái mới tra cứu được trong tab *Tông Môn* và sử dụng. Không hiển thị cho người ngoài để bảo mật tuyệt đối căn cứ tông môn.
+- **Riêng Tư (`PERSONAL`)**: Chỉ chủ sở hữu mới thấy trong tab *Của Ta* và sử dụng. Tọa độ được ẩn hoàn toàn trước toàn bộ người chơi khác.
+
+#### 5. Vận Hành, Bảo Trì & Thu Hồi
+- **Hao Mòn Độ Bền:** Mỗi lượt truyền tống tiêu hao 1 điểm độ bền. Khi độ bền về 0, trận pháp ngưng hoạt động cho tới khi được sửa chữa.
+- **Sửa Chữa & Bạo Kích Sửa Chữa:**
+  - Chi phí sửa chữa được giảm giá lên đến 50% theo cấp Trận Đạo.
+  - Tỉ lệ Bạo Kích Sửa Chữa (10% ~ 40%): Phục hồi thêm +25% độ bền miễn phí và có cơ hội tăng vĩnh viễn giới hạn Max Durability nếu đạt Đại Tông Sư.
+- **Thu Phí Dịch Chuyển & Két Sắt:** Chủ trận có thể đặt mức phí (Nguyên Thạch hoặc Tiên Nguyên Thạch) đối với người ngoài; doanh thu tích lũy vào Két Sắt trận pháp và có thể rút về túi đồ bất cứ lúc nào.
+- **Thu Hồi & Phá Dỡ:** Chủ sở hữu có thể thu hồi trận pháp để hoàn lại 50% nguyên liệu chế tạo (tỉ lệ theo % độ bền hiện tại) và rút toàn bộ số dư Két Sắt.
+
+
 ## 9. Chiến đấu
 
 - Combat PvE khởi tạo từ thám hiểm, mỏ hoặc các hệ thống gọi combat.

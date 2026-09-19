@@ -52,6 +52,7 @@ type DictionaryResponse struct {
 	Monsters      interface{}              `json:"monsters"`
 	Constitutions []gamefx.ConstitutionDef `json:"constitutions"`
 	Races         []gamefx.RaceDef         `json:"races"`
+	Statuses      []gamefx.StatusDef       `json:"statuses"`
 	LootTables    []models.LootTable       `json:"loot_tables"`
 	Regions       []WikiRegion             `json:"regions"`
 	MonsterSpawns []WikiMonsterSpawn       `json:"monster_spawns"`
@@ -164,6 +165,13 @@ func GetRaceDictionary(c *gin.Context) {
 	})
 }
 
+// GetStatusDictionary returns only the status catalog.
+func GetStatusDictionary(c *gin.Context) {
+	getCachedDictionaryPart(c, "game_dictionary_statuses", &[]gamefx.StatusDef{}, func() interface{} {
+		return gamefx.AllStatuses()
+	})
+}
+
 // GetLootTables returns only the loot table catalog used by the public wiki.
 func GetLootTables(c *gin.Context) {
 	getCachedDictionaryPart(c, "game_dictionary_loot_tables", &[]models.LootTable{}, func() interface{} {
@@ -185,33 +193,23 @@ func GetMonsterSpawns(c *gin.Context) {
 	})
 }
 
-// GetDictionary returns the unified Gu and Item master catalogs, cached in Redis
+// GetDictionary returns the unified Gu and Item master catalogs, cached in memory/Redis with ETag support.
 func GetDictionary(c *gin.Context) {
-	var resp DictionaryResponse
-	cacheKey := "game_dictionary_unified"
-
-	if err := cache.GetJSON(cacheKey, &resp); err == nil && resp.Gu != nil && resp.Items != nil && resp.Monsters != nil && resp.LootTables != nil && resp.Regions != nil && resp.MonsterSpawns != nil {
-		c.JSON(http.StatusOK, resp)
-		return
-	}
-
-	flatGu := flatGuDictionary()
-
-	resp = DictionaryResponse{
-		Gu:            flatGu,
-		Items:         models.ItemRegistry,
-		Monsters:      models.MonsterRegistry,
-		Constitutions: gamefx.AllConstitutions(),
-		Races:         gamefx.AllRaces(),
-		LootTables:    loadAllLootTables(c),
-		Regions:       buildWikiRegions(),
-		MonsterSpawns: buildWikiMonsterSpawns(),
-	}
-
-	logger.S.Infof("GetDictionary: returning %d gu, %d items, %d monsters", len(flatGu), len(models.ItemRegistry), len(models.MonsterRegistry))
-
-	_ = cache.SetJSON(cacheKey, resp, 24*time.Hour)
-	c.JSON(http.StatusOK, resp)
+	getCachedDictionaryPart(c, "game_dictionary_unified", &DictionaryResponse{}, func() interface{} {
+		flatGu := flatGuDictionary()
+		logger.S.Infof("GetDictionary: returning %d gu, %d items, %d monsters", len(flatGu), len(models.ItemRegistry), len(models.MonsterRegistry))
+		return DictionaryResponse{
+			Gu:            flatGu,
+			Items:         models.ItemRegistry,
+			Monsters:      models.MonsterRegistry,
+			Constitutions: gamefx.AllConstitutions(),
+			Races:         gamefx.AllRaces(),
+			Statuses:      gamefx.AllStatuses(),
+			LootTables:    loadAllLootTables(c),
+			Regions:       buildWikiRegions(),
+			MonsterSpawns: buildWikiMonsterSpawns(),
+		}
+	})
 }
 
 // loadAllLootTables queries every loot table from the database and returns

@@ -192,3 +192,76 @@ func TestEvaluateTeleportLink(t *testing.T) {
 		t.Fatalf("expected different sect member to be blocked from sect array")
 	}
 }
+
+func TestFormationMasteryEffects(t *testing.T) {
+	tplTier1 := teleportTemplates[models.TeleportTier1]
+	tplTier3 := teleportTemplates[models.TeleportTier3]
+
+	// 1. Novice Player: Rank 2, 0 Chân Ý Trận Đạo
+	novicePlayer := &models.Player{}
+	novicePlayer.ID = uuid.New()
+	novicePlayer.Rank = 2
+	novicePlayer.PathMasteries = models.PathMasteriesMap{"formation": 0}
+	novicePlayer.DaoMarks = map[string]int64{"formation": 0}
+	novicePlayer.PrimevalStones = 5000
+
+	rateNovice, costNTNovice, costTTNovice, discNovice, gainNovice, lvlNovice, _ := calculateBuildStats(novicePlayer, tplTier1)
+	if lvlNovice != 0 {
+		t.Fatalf("expected level 0 for novice, got %d", lvlNovice)
+	}
+	if rateNovice != 70.0 {
+		t.Fatalf("expected 70.0%% success rate for novice tier 1, got %.1f", rateNovice)
+	}
+	if discNovice != 0.0 || costNTNovice != 3000.0 || costTTNovice != 0.0 {
+		t.Fatalf("expected 0%% discount and 3000 NT cost, got disc=%.0f, cost=%.0f", discNovice, costNTNovice)
+	}
+	if gainNovice != 15 {
+		t.Fatalf("expected 15 mastery gain for tier 1, got %d", gainNovice)
+	}
+
+	// 2. Master Player: Rank 3, 150 Chân Ý (Đại Sư), 500 Đạo Ngân
+	masterPlayer := &models.Player{}
+	masterPlayer.ID = uuid.New()
+	masterPlayer.Rank = 3
+	masterPlayer.PathMasteries = models.PathMasteriesMap{"formation": 150}
+	masterPlayer.DaoMarks = map[string]int64{"formation": 500}
+	masterPlayer.PrimevalStones = 5000
+
+	rateMaster, costNTMaster, _, discMaster, _, lvlMaster, lvlNameVN := calculateBuildStats(masterPlayer, tplTier1)
+	if lvlMaster != 1 || lvlNameVN != "Đại Sư" {
+		t.Fatalf("expected Master (1), got %d (%s)", lvlMaster, lvlNameVN)
+	}
+	// Expected rate = 70 + 15 (Master) + 3 (Rank 3 vs 2) + 1 (500 Dao Marks / 500) = 89.0%
+	if rateMaster != 89.0 {
+		t.Fatalf("expected 89.0%% rate for master, got %.1f", rateMaster)
+	}
+	// Expected cost = 3000 * (1 - 0.15) = 2550 NT
+	if discMaster != 15.0 || costNTMaster != 2550.0 {
+		t.Fatalf("expected 15%% discount and 2550 NT, got disc=%.0f, cost=%.0f", discMaster, costNTMaster)
+	}
+
+	// 3. Grandmaster Player: Rank 6, 1200 Chân Ý (Tông Sư)
+	grandmasterPlayer := &models.Player{}
+	grandmasterPlayer.ID = uuid.New()
+	grandmasterPlayer.Rank = 6
+	grandmasterPlayer.PathMasteries = models.PathMasteriesMap{"formation": 1200}
+	grandmasterPlayer.DaoMarks = map[string]int64{"formation": 0}
+	grandmasterPlayer.PrimevalStones = 200000
+	grandmasterPlayer.ImmortalStones = 100
+
+	rateGM, costNTGM, costTTGM, discGM, gainGM, lvlGM, _ := calculateBuildStats(grandmasterPlayer, tplTier3)
+	if lvlGM != 2 {
+		t.Fatalf("expected Grandmaster level 2, got %d", lvlGM)
+	}
+	// Expected Tier 3 rate = 45 (base) + 30 (Grandmaster) + 0 (Rank 6 vs 6) = 75.0%
+	if rateGM != 75.0 {
+		t.Fatalf("expected 75.0%% rate for GM tier 3, got %.1f", rateGM)
+	}
+	// Expected cost = 100,000 * 0.70 = 70,000 NT, 50 * 0.70 = 35 TT
+	if discGM != 30.0 || costNTGM != 70000.0 || costTTGM != 35.0 {
+		t.Fatalf("expected 30%% discount (70,000 NT, 35 TT), got disc=%.0f, costNT=%.0f, costTT=%.0f", discGM, costNTGM, costTTGM)
+	}
+	if gainGM != 200 {
+		t.Fatalf("expected 200 mastery gain for tier 3, got %d", gainGM)
+	}
+}

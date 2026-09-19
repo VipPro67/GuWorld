@@ -90,7 +90,7 @@ type TribulationEvent struct {
 	Status           string     `json:"status"` // 'ACTIVE' | 'SUCCESS' | 'FAILED'
 	ApertureHPBefore float64    `json:"aperture_hp_before"`
 	ApertureHPAfter  *float64   `json:"aperture_hp_after"`
-	RewardDaoMarks   int        `json:"reward_dao_marks"`
+	RewardDaoMarks   int64      `json:"reward_dao_marks"`
 	StartedAt        time.Time  `json:"started_at"`
 	EndedAt          *time.Time `json:"ended_at"`
 }
@@ -461,51 +461,52 @@ func GetTribulationRankAndSubRank(_ int, tribType string) (rank int, subRank int
 
 // CalculateTribulationReward calculates the Dao Marks reward based on player rank, tribulation type, and difficulty.
 // Scales smoothly with the target Dao Marks for each realm (Rank 6: ~40k, Rank 7: ~220k, Rank 8: ~1.4M, Rank 9: ~8.5M).
-func CalculateTribulationReward(rank int, tribType string, difficulty int) int {
+func CalculateTribulationReward(rank int, tribType string, difficulty int) int64 {
 	if rank < 6 {
 		rank = 6
 	} else if rank > 10 {
 		rank = 10
 	}
 
+	diff := int64(difficulty)
 	switch rank {
 	case 6:
 		switch tribType {
 		case "HEAVENLY_TRIBULATION":
-			return 750 + difficulty*150
+			return 750 + diff*150
 		default:
-			return 250 + difficulty*50
+			return 250 + diff*50
 		}
 	case 7:
 		switch tribType {
 		case "GRAND_TRIBULATION":
-			return 20000 + difficulty*2000
+			return 20000 + diff*2000
 		case "HEAVENLY_TRIBULATION":
-			return 5000 + difficulty*500
+			return 5000 + diff*500
 		default:
-			return 1500 + difficulty*200
+			return 1500 + diff*200
 		}
 	case 8:
 		switch tribType {
 		case "MYRIAD_TRIBULATION":
-			return 150000 + difficulty*10000
+			return 150000 + diff*10000
 		case "GRAND_TRIBULATION":
-			return 40000 + difficulty*3000
+			return 40000 + diff*3000
 		default:
-			return 10000 + difficulty*1000
+			return 10000 + diff*1000
 		}
 	case 9:
 		switch tribType {
 		case "CHAOS_CALAMITY":
-			return 1500000 + difficulty*50000
+			return 1500000 + diff*50000
 		case "MYRIAD_TRIBULATION":
-			return 200000 + difficulty*15000
+			return 200000 + diff*15000
 		default:
-			return 50000 + difficulty*5000
+			return 50000 + diff*5000
 		}
 	case 10:
-		return 1500000 + difficulty*50000
+		return 1500000 + diff*50000
 	default:
-		return 250 + difficulty*50
+		return 250 + diff*50
 	}
 }

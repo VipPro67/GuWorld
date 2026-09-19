@@ -24,7 +24,7 @@ const translatePath = (path: string): string => {
 };
 
 export const PlayerProfileModal: React.FC = () => {
-  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture, constitutionDictionary, raceDictionary } = useGameStore();
+  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
 
   if (!inspectedProfile) return null;
 
@@ -348,7 +348,7 @@ export const PlayerProfileModal: React.FC = () => {
               {statuses && statuses.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {statuses.map((s: { id: string; expires_at?: string | null }) => {
-                    let displayName = statusLabels[s.id] || s.id;
+                    let displayName = statusDictionary?.[s.id]?.name || statusLabels[s.id] || s.id;
                     if (s.id.startsWith("cd_gu_")) {
                       displayName = "Hồi chiêu Cổ Trùng";
                     } else if (s.id.startsWith("cd_km_")) {

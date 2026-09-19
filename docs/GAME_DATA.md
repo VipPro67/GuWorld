@@ -287,8 +287,8 @@ Lưu các quái vật sinh ra trong Kiếp Nạn Tiên Khiếu:
 - `name` (VARCHAR)
 - `enemy_type` (VARCHAR) — BOSS / MINION
 - `path` (VARCHAR)
-- `hp`, `max_hp` (BIGINT) — HP hiện tại và tối đa của quái vật (dùng BIGINT chống tràn số ở rank cao)
-- `attack`, `defense` (BIGINT) — Tấn công và phòng thủ của quái vật (dùng BIGINT chống tràn số)
+- `hp`, `max_hp` (DOUBLE PRECISION) — HP hiện tại và tối đa của quái vật (dùng DOUBLE PRECISION / float64 chống tràn số ở rank cao)
+- `attack`, `defense` (DOUBLE PRECISION) — Tấn công và phòng thủ của quái vật (dùng DOUBLE PRECISION / float64 chống tràn số)
 - `target_node_id` (UUID NULL FK → `aperture_resource_nodes(id)`)
 - `x`, `y` (INTEGER) — Toạ độ grid (0-19)
 - `is_boss` (BOOLEAN)

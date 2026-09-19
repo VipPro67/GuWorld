@@ -36,11 +36,18 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
 
   const mySectId = mySectStatus?.sect?.id;
 
-  const filteredDestinations = destinations.filter((dest) => {
-    if (filter === "MINE") return dest.array.owner_id === player.id;
-    if (filter === "SECT") return dest.array.access_policy === "SECT" || (dest.array.sect_id && dest.array.sect_id === mySectId);
-    return true;
-  });
+  const publicDestinations = destinations.filter((dest) => dest.array.access_policy === "PUBLIC");
+  const sectDestinations = destinations.filter(
+    (dest) => dest.array.access_policy === "SECT" || (dest.array.sect_id && dest.array.sect_id === mySectId)
+  );
+  const myDestinations = destinations.filter((dest) => dest.array.owner_id === player.id);
+
+  const filteredDestinations =
+    filter === "MINE"
+      ? myDestinations
+      : filter === "SECT"
+      ? sectDestinations
+      : publicDestinations;
 
   const handleTravel = async (targetArrayId: string) => {
     const res = await travelTeleport(targetArrayId);
@@ -115,7 +122,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
                 : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
             }`}
           >
-            Tất Cả ({destinations.length})
+            Tất Cả ({publicDestinations.length})
           </button>
           <button
             type="button"
@@ -126,7 +133,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
                 : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
             }`}
           >
-            Tông Môn
+            Tông Môn ({sectDestinations.length})
           </button>
           <button
             type="button"
@@ -137,7 +144,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
                 : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
             }`}
           >
-            Của Ta
+            Của Ta ({myDestinations.length})
           </button>
         </div>
 

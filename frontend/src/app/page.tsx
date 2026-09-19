@@ -16,6 +16,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { MaintenanceView } from "@/components/MaintenanceView";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { TradeRoomModal } from "@/components/TradeRoomModal";
+import { GameLoadingScreen } from "@/components/GameLoadingScreen";
 
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
@@ -96,6 +97,8 @@ export default function Home() {
     playerPets,
     monsterDictionary,
     party,
+    dictionaryLoaded,
+    dictionaryError,
   ] = useGameStore(
     useShallow((state) => [
       state.player,
@@ -148,6 +151,8 @@ export default function Home() {
       state.playerPets,
       state.monsterDictionary,
       state.party,
+      state.dictionaryLoaded,
+      state.dictionaryError,
     ])
   );
 
@@ -259,6 +264,15 @@ export default function Home() {
           <p className="text-xs text-zinc-600 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
         </footer>
       </div>
+    );
+  }
+
+  if (!dictionaryLoaded) {
+    return (
+      <GameLoadingScreen
+        error={dictionaryError}
+        onRetry={() => void fetchDictionary(true)}
+      />
     );
   }
 

@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -22,10 +24,12 @@ var teleportTemplates = map[string]models.TeleportTemplate{
 		Name:               "Tiểu Hình Truyền Tống Trận (Vi Trận)",
 		Description:        "Trận pháp sơ cấp, dịch chuyển trong phạm vi ngắn (cự ly tối đa 1.000 ô trong cùng khu vực).",
 		MinRank:            2,
+		MinFormationRealm:  0,
+		BaseSuccessRate:    70.0,
 		MaxRange:           1000,
 		IsCrossRegion:      false,
 		MaxDurability:      50,
-		CostPrimevalStones: 2000,
+		CostPrimevalStones: 3000,
 		CostImmortalStones: 0,
 		RequiredGu:         []string{},
 		RequiredItems:      map[string]int{"void_shattering_crystal": 20},
@@ -35,10 +39,12 @@ var teleportTemplates = map[string]models.TeleportTemplate{
 		Name:               "Đại Vực Truyền Tống Trận",
 		Description:        "Trận pháp trung cấp, dịch chuyển toàn bộ trong cùng một Đại Vực (cự ly 10.000 ô).",
 		MinRank:            4,
+		MinFormationRealm:  1,
+		BaseSuccessRate:    60.0,
 		MaxRange:           10000,
 		IsCrossRegion:      false,
 		MaxDurability:      100,
-		CostPrimevalStones: 10000,
+		CostPrimevalStones: 15000,
 		CostImmortalStones: 0,
 		RequiredGu:         []string{},
 		RequiredItems:      map[string]int{"boundless_space_domain_stone": 10, "void_shattering_crystal": 20},
@@ -48,14 +54,92 @@ var teleportTemplates = map[string]models.TeleportTemplate{
 		Name:               "Ngũ Vực Tiên Cấp Truyền Tống Trận",
 		Description:        "Tiên cấp trận pháp kỳ quan, cho phép dịch chuyển tự do xuyên qua các Đại Vực trong Ngũ Vực.",
 		MinRank:            6,
+		MinFormationRealm:  2,
+		BaseSuccessRate:    45.0,
 		MaxRange:           999999,
 		IsCrossRegion:      true,
 		MaxDurability:      200,
-		CostPrimevalStones: 50000,
-		CostImmortalStones: 20,
+		CostPrimevalStones: 100000,
+		CostImmortalStones: 50,
 		RequiredGu:         []string{},
-		RequiredItems:      map[string]int{"void_shattering_crystal": 50, "boundless_space_domain_stone": 20, "void_rocks": 5},
+		RequiredItems:      map[string]int{"void_shattering_crystal": 50, "boundless_space_domain_stone": 20, "void_rocks": 10},
 	},
+}
+
+func getFormationRealmVN(level int) string {
+	switch level {
+	case 1:
+		return "Đại Sư"
+	case 2:
+		return "Tông Sư"
+	case 3:
+		return "Đại Tông Sư"
+	case 4:
+		return "Vô Thượng Đại Tông Sư"
+	default:
+		return "Nhập Môn"
+	}
+}
+
+func getFormationStats(player *models.Player) (points int, level int, levelName string, levelNameVN string, daoMarks int) {
+	if player.PathMasteries != nil {
+		if pts, ok := player.PathMasteries["formation"]; ok {
+			points = pts
+		} else if pts, ok := player.PathMasteries["formation path"]; ok {
+			points = pts
+		}
+	}
+	level = gamefx.PathMasteryLevel(points)
+	levelName = gamefx.PathMasteryLevelName(level)
+	levelNameVN = getFormationRealmVN(level)
+	if player.DaoMarks != nil {
+		if dm, ok := player.DaoMarks["formation"]; ok {
+			daoMarks = int(dm)
+		}
+	}
+	return
+}
+
+func calculateBuildStats(player *models.Player, tpl models.TeleportTemplate) (successRate float64, costNT float64, costTT float64, discountPercent float64, baseMasteryGain int, level int, levelNameVN string) {
+	_, lvl, _, lvlNameVN, daoMarks := getFormationStats(player)
+	level = lvl
+	levelNameVN = lvlNameVN
+
+	// 1. Success Rate
+	masteryBonus := float64(level) * 15.0 // 0, 15, 30, 45, 60
+	rankDiff := player.Rank - tpl.MinRank
+	rankBonus := 0.0
+	if rankDiff > 0 {
+		rankBonus = float64(rankDiff) * 3.0
+	}
+	daoBonus := math.Min(10.0, float64(daoMarks)/500.0)
+
+	successRate = tpl.BaseSuccessRate + masteryBonus + rankBonus + daoBonus
+	if successRate > 100.0 {
+		successRate = 100.0
+	}
+	if successRate < 10.0 {
+		successRate = 10.0
+	}
+
+	// 2. Cost discount
+	discountPercent = float64(level) * 15.0 // 0%, 15%, 30%, 45%, 60%
+	discountFactor := 1.0 - (discountPercent / 100.0)
+	costNT = math.Round(tpl.CostPrimevalStones * discountFactor)
+	costTT = math.Round(tpl.CostImmortalStones * discountFactor)
+
+	// 3. Base Mastery Gain
+	switch tpl.Tier {
+	case models.TeleportTier1:
+		baseMasteryGain = 15
+	case models.TeleportTier2:
+		baseMasteryGain = 50
+	case models.TeleportTier3:
+		baseMasteryGain = 200
+	default:
+		baseMasteryGain = 15
+	}
+	return
 }
 
 // Helper to query player's sect ID
@@ -207,7 +291,15 @@ func BuildTeleportArray(c *gin.Context) {
 		return
 	}
 
-	// 2. Check cell validity: Cannot place on existing teleport array
+	successRate, costNT, costTT, discountPercent, baseMasteryGain, level, levelNameVN := calculateBuildStats(&player, tpl)
+
+	// 2. Check Formation Realm requirement
+	if level < tpl.MinFormationRealm {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần đạt cảnh giới Trận Đạo tối thiểu %s (Cấp %d) để thiết lập trận pháp này", getFormationRealmVN(tpl.MinFormationRealm), tpl.MinFormationRealm)})
+		return
+	}
+
+	// 3. Check cell validity: Cannot place on existing teleport array
 	var existingCount int
 	err = tx.QueryRow(`SELECT COUNT(*) FROM teleport_arrays WHERE region_id = $1 AND x = $2 AND y = $3`, player.CurrentRegion, player.X, player.Y).Scan(&existingCount)
 	if err != nil {
@@ -219,59 +311,137 @@ func BuildTeleportArray(c *gin.Context) {
 		return
 	}
 
-	// 3. Check Primeval Stones and Immortal Stones cost
-	if player.PrimevalStones < tpl.CostPrimevalStones {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %.0f Nguyên Thạch", tpl.CostPrimevalStones)})
+	// 4. Check Primeval Stones and Immortal Stones cost
+	if player.PrimevalStones < costNT {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %.0f Nguyên Thạch (đã giảm giá %.0f%% nhờ Trận Đạo %s)", costNT, discountPercent, levelNameVN)})
 		return
 	}
-	if player.ImmortalStones < tpl.CostImmortalStones {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên Thạch! Cần %.0f Tiên Nguyên Thạch", tpl.CostImmortalStones)})
+	if player.ImmortalStones < costTT {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên Thạch! Cần %.0f Tiên Nguyên Thạch (đã giảm giá %.0f%% nhờ Trận Đạo %s)", costTT, discountPercent, levelNameVN)})
 		return
 	}
 
-	// 4. Check & consume required items if any
+	// 5. Check & verify required items
 	if InventorySvc != nil {
 		for itemID, reqQty := range tpl.RequiredItems {
-			qty, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), itemID, "materials", "consumables", "other")
+			qty, _, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), itemID, "materials", "consumables", "other")
 			if qty < int64(reqQty) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ vật liệu xây trận! Cần %d x %s (hiện có: %d)", reqQty, itemID, qty)})
-				return
-			}
-			if err := InventorySvc.RemoveItem(tx, player.ID.String(), itemID, cat, int64(reqQty)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao vật liệu xây trận"})
 				return
 			}
 		}
 	}
 
-	// Deduct currencies
-	player.PrimevalStones -= tpl.CostPrimevalStones
-	player.ImmortalStones -= tpl.CostImmortalStones
+	if player.PathMasteries == nil {
+		player.PathMasteries = models.PathMasteriesMap{}
+	}
 
-	sectIDPtr := getPlayerSectID(tx, player.ID)
+	// Roll success rate
+	randVal := rand.Float64() * 100.0
+	isSuccess := randVal <= successRate
 
-	newID := uuid.New()
-	_, err = tx.Exec(`
-		INSERT INTO teleport_arrays (
-			id, name, owner_id, sect_id, region_id, x, y, tier, max_range,
-			is_cross_region, direction_type, access_policy, fee_enabled, fee_currency,
-			fee_amount, vault_balance, current_durability, max_durability, is_active
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9,
-			$10, $11, $12, $13, $14,
-			$15, 0, $16, $16, TRUE
-		)
-	`, newID, req.Name, player.ID, sectIDPtr, player.CurrentRegion, player.X, player.Y,
-		tpl.Tier, tpl.MaxRange, tpl.IsCrossRegion, req.DirectionType, req.AccessPolicy,
-		req.FeeEnabled, req.FeeCurrency, req.FeeAmount, tpl.MaxDurability)
-	if err != nil {
-		logger.S.Errorf("BuildTeleportArray insert error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Trận Pháp vào cơ sở dữ liệu"})
+	if isSuccess {
+		// Consume full items
+		if InventorySvc != nil {
+			for itemID, reqQty := range tpl.RequiredItems {
+				_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), itemID, "materials", "consumables", "other")
+				_ = InventorySvc.RemoveItem(tx, player.ID.String(), itemID, cat, int64(reqQty))
+			}
+		}
+
+		player.PrimevalStones -= costNT
+		player.ImmortalStones -= costTT
+		player.PathMasteries["formation"] += baseMasteryGain
+
+		sectIDPtr := getPlayerSectID(tx, player.ID)
+		newID := uuid.New()
+		_, err = tx.Exec(`
+			INSERT INTO teleport_arrays (
+				id, name, owner_id, sect_id, region_id, x, y, tier, max_range,
+				is_cross_region, direction_type, access_policy, fee_enabled, fee_currency,
+				fee_amount, vault_balance, current_durability, max_durability, is_active
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8, $9,
+				$10, $11, $12, $13, $14,
+				$15, 0, $16, $16, TRUE
+			)
+		`, newID, req.Name, player.ID, sectIDPtr, player.CurrentRegion, player.X, player.Y,
+			tpl.Tier, tpl.MaxRange, tpl.IsCrossRegion, req.DirectionType, req.AccessPolicy,
+			req.FeeEnabled, req.FeeCurrency, req.FeeAmount, tpl.MaxDurability)
+		if err != nil {
+			logger.S.Errorf("BuildTeleportArray insert error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Trận Pháp vào cơ sở dữ liệu"})
+			return
+		}
+
+		_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, path_masteries = $3 WHERE id = $4`,
+			player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận giao dịch"})
+			return
+		}
+
+		createdArray := models.TeleportArray{
+			ID:                newID.String(),
+			Name:              req.Name,
+			OwnerID:           player.ID.String(),
+			OwnerName:         player.Username,
+			RegionID:          player.CurrentRegion,
+			X:                 player.X,
+			Y:                 player.Y,
+			Tier:              tpl.Tier,
+			MaxRange:          tpl.MaxRange,
+			IsCrossRegion:     tpl.IsCrossRegion,
+			DirectionType:     req.DirectionType,
+			AccessPolicy:      req.AccessPolicy,
+			FeeEnabled:        req.FeeEnabled,
+			FeeCurrency:       req.FeeCurrency,
+			FeeAmount:         req.FeeAmount,
+			VaultBalance:      0,
+			CurrentDurability: tpl.MaxDurability,
+			MaxDurability:     tpl.MaxDurability,
+			IsActive:          true,
+		}
+
+		c.JSON(http.StatusOK, models.BuildTeleportArrayResp{
+			Success:            true,
+			Message:            fmt.Sprintf("Bố trí [%s] thành công! Tỉ lệ thành công: %.1f%% (Trận Đạo %s giảm giá %.0f%%). Đạo hữu nhận +%d điểm Chân Ý Trận Đạo!", req.Name, successRate, levelNameVN, discountPercent, baseMasteryGain),
+			Array:              &createdArray,
+			SuccessRate:        successRate,
+			FormationRealm:     levelNameVN,
+			FormationLevel:     level,
+			DiscountPercent:    discountPercent,
+			MasteryGained:      baseMasteryGain,
+			PaidPrimevalStones: costNT,
+			PaidImmortalStones: costTT,
+		})
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
-		player.PrimevalStones, player.ImmortalStones, player.ID)
+	// FAILURE Branch: Deduct 50% currencies and 50% materials
+	failCostNT := math.Round(costNT * 0.5)
+	failCostTT := math.Round(costTT * 0.5)
+	failMasteryGain := int(math.Max(5, float64(baseMasteryGain)*0.5))
+
+	if InventorySvc != nil {
+		for itemID, reqQty := range tpl.RequiredItems {
+			failQty := int64(math.Ceil(float64(reqQty) * 0.5))
+			_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), itemID, "materials", "consumables", "other")
+			_ = InventorySvc.RemoveItem(tx, player.ID.String(), itemID, cat, failQty)
+		}
+	}
+
+	player.PrimevalStones -= failCostNT
+	player.ImmortalStones -= failCostTT
+	player.PathMasteries["formation"] += failMasteryGain
+
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, path_masteries = $3 WHERE id = $4`,
+		player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
 		return
@@ -282,10 +452,16 @@ func BuildTeleportArray(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":  fmt.Sprintf("Bố trí thành công [%s] tại tọa độ (%d, %d)!", req.Name, player.X, player.Y),
-		"array_id": newID.String(),
-		"player":   player,
+	c.JSON(http.StatusOK, models.BuildTeleportArrayResp{
+		Success:            false,
+		Message:            fmt.Sprintf("Bố trận thất bại! Trận văn bị sụp đổ tiêu hao 50%% tài nguyên (%.0f NT, %.0f Tiên Thạch). Đạo hữu đã đúc kết được kinh nghiệm quý báu (+%d điểm Chân Ý Trận Đạo).", failCostNT, failCostTT, failMasteryGain),
+		SuccessRate:        successRate,
+		FormationRealm:     levelNameVN,
+		FormationLevel:     level,
+		DiscountPercent:    discountPercent,
+		MasteryGained:      failMasteryGain,
+		PaidPrimevalStones: failCostNT,
+		PaidImmortalStones: failCostTT,
 	})
 }
 
@@ -348,8 +524,11 @@ func GetTeleportDirectory(c *gin.Context) {
 		source.SectName = &sectName.String
 	}
 
-	// 2. Query all candidate destination arrays
-	rows, err := db.DB.Query(`
+	// 2. Query only accessible candidate destination arrays:
+	// - Public arrays (anyone can use)
+	// - Arrays owned by the player (Personal / Sect / Public)
+	// - Sect arrays where the player is an active member of that sect
+	query := `
 		SELECT t.id, t.name, t.owner_id, p.username, t.sect_id, s.name,
 		       t.region_id, r.name, t.x, t.y, t.tier, t.max_range, t.is_cross_region,
 		       t.direction_type, t.access_policy, t.fee_enabled, t.fee_currency,
@@ -360,8 +539,18 @@ func GetTeleportDirectory(c *gin.Context) {
 		LEFT JOIN sects s ON s.id = t.sect_id
 		JOIN regions r ON r.id = t.region_id
 		WHERE t.id != $1
-		ORDER BY t.created_at DESC
-	`, source.ID)
+		  AND (
+		      t.access_policy = 'PUBLIC'
+		      OR t.owner_id = $2
+	`
+	args := []interface{}{source.ID, authID}
+	if playerSectID != nil && *playerSectID != "" {
+		query += ` OR (t.sect_id = $3 AND t.access_policy = 'SECT')`
+		args = append(args, *playerSectID)
+	}
+	query += ` ) ORDER BY t.created_at DESC`
+
+	rows, err := db.DB.Query(query, args...)
 	if err != nil {
 		logger.S.Errorf("GetTeleportDirectory candidates query failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -785,33 +974,59 @@ func RepairTeleportArray(c *gin.Context) {
 		toRepair = missing
 	}
 
+	_, level, _, levelNameVN, _ := getFormationStats(&player)
+	discountPercent := math.Min(50.0, float64(level)*12.5) // 0%, 12.5%, 25%, 37.5%, 50%
+	discountFactor := 1.0 - (discountPercent / 100.0)
+
 	costPerPoint := 50.0
 	if tier == models.TeleportTier3 {
 		costPerPoint = 200.0
 	}
-	totalCost := float64(toRepair) * costPerPoint
+	totalCost := math.Round(float64(toRepair) * costPerPoint * discountFactor)
 
 	if player.PrimevalStones < totalCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch sửa chữa! Cần %.0f Nguyên Thạch", totalCost)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch sửa chữa! Cần %.0f Nguyên Thạch (đã giảm %.0f%% nhờ Trận Đạo %s)", totalCost, discountPercent, levelNameVN)})
 		return
 	}
 
+	// Critical repair
+	critChance := float64(level) * 10.0 // Master: 10%, Grandmaster: 20%, Great Grandmaster: 30%, Supreme: 40%
+	isCritical := rand.Float64()*100.0 <= critChance && level >= 1
+	criticalBonus := 0
+	if isCritical {
+		criticalBonus = int(math.Max(1, math.Round(float64(toRepair)*0.25)))
+		curDur = int(math.Min(float64(maxDur), float64(curDur+toRepair+criticalBonus)))
+		if level >= 3 && rand.Float64() < 0.25 {
+			maxDur += 5
+		}
+	} else {
+		curDur = int(math.Min(float64(maxDur), float64(curDur+toRepair)))
+	}
+
+	// Mastery gain from repair
+	masteryGain := int(math.Max(1, float64(toRepair)/5.0))
+	if masteryGain > 25 {
+		masteryGain = 25
+	}
+	if player.PathMasteries == nil {
+		player.PathMasteries = models.PathMasteriesMap{}
+	}
+	player.PathMasteries["formation"] += masteryGain
 	player.PrimevalStones -= totalCost
-	curDur += toRepair
 
 	_, err = tx.Exec(`
 		UPDATE teleport_arrays
-		SET current_durability = $1, is_active = TRUE, updated_at = NOW()
-		WHERE id = $2
-	`, curDur, arrayUUID)
+		SET current_durability = $1, max_durability = $2, is_active = TRUE, updated_at = NOW()
+		WHERE id = $3
+	`, curDur, maxDur, arrayUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật độ bền"})
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1 WHERE id = $2`, player.PrimevalStones, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, path_masteries = $2 WHERE id = $3`, player.PrimevalStones, player.PathMasteries, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ nguyên thạch"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản nhân vật"})
 		return
 	}
 
@@ -820,10 +1035,21 @@ func RepairTeleportArray(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":            fmt.Sprintf("Sửa chữa thành công +%d độ bền! Tiêu tốn %.0f Nguyên Thạch.", toRepair, totalCost),
-		"current_durability": curDur,
-		"player":             player,
+	msg := fmt.Sprintf("Sửa chữa thành công +%d độ bền! (Trận Đạo %s giảm giá %.0f%%, tiêu tốn %.0f NT, nhận +%d Chân Ý).", toRepair, levelNameVN, discountPercent, totalCost, masteryGain)
+	if isCritical {
+		msg = fmt.Sprintf("🌟 BẠO KÍCH SỬA CHỮA! Thưởng thêm +%d độ bền! (Trận Đạo %s giảm giá %.0f%%, tiêu tốn %.0f NT, nhận +%d Chân Ý).", criticalBonus, levelNameVN, discountPercent, totalCost, masteryGain)
+	}
+
+	c.JSON(http.StatusOK, models.RepairTeleportArrayResp{
+		Success:            true,
+		Message:            msg,
+		CurrentDurability:  curDur,
+		MaxDurability:      maxDur,
+		IsCriticalRepair:   isCritical,
+		CriticalBonus:      criticalBonus,
+		DiscountPercent:    discountPercent,
+		MasteryGained:      masteryGain,
+		PaidPrimevalStones: totalCost,
 	})
 }
 

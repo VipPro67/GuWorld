@@ -196,6 +196,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const store = useGameStore();
   const constitutionDictionary = store.constitutionDictionary;
   const raceDictionary = store.raceDictionary;
+  const statusDictionary = store.statusDictionary;
   const manaSnapshot = store.manaSnapshot;
   const passiveStats = store.passiveStats;
   const fetchPassiveStats = store.fetchPassiveStats;
@@ -810,7 +811,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       {player.statuses && player.statuses.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           {player.statuses.map((s: PlayerStatusInstance) => {
-                            let displayName = statusLabels[s.id] || s.id;
+                            let displayName = statusDictionary?.[s.id]?.name || statusLabels[s.id] || s.id;
                             if (s.id.startsWith("cd_gu_")) {
                               const instanceId = s.id.substring(6);
                               const gu = player.gu_inventory?.find((g: ApiResponseData) => g.instance_id === instanceId);

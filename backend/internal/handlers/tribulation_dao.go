@@ -19,15 +19,15 @@ func daoMarkGainMultiplierTx(tx *sql.Tx, playerID string) float64 {
 	return 1.0 + gamefx.Get(&models.Player{CharacterState: models.CharacterState{Constitution: constitution}}).DaoMarkGainBonus
 }
 
-func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
-	amount = int(float64(amount) * daoMarkGainMultiplierTx(tx, playerID))
+func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int64) error {
+	amount = int64(float64(amount) * daoMarkGainMultiplierTx(tx, playerID))
 	var daoJSON []byte
 	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
 	if err != nil {
 		return err
 	}
 
-	daoMap := make(map[string]int)
+	daoMap := make(models.DaoMarksMap)
 	if len(daoJSON) > 0 {
 		if err := json.Unmarshal(daoJSON, &daoMap); err != nil {
 			return err
@@ -44,10 +44,10 @@ func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
 	return err
 }
 
-func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) (map[string]int, error) {
+func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int64) (models.DaoMarksMap, error) {
 	mult := daoMarkGainMultiplierTx(tx, playerID)
 	for path, amount := range rewards {
-		rewards[path] = int(float64(amount) * mult)
+		rewards[path] = int64(float64(amount) * mult)
 	}
 	var daoJSON []byte
 	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
@@ -55,7 +55,7 @@ func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) 
 		return nil, err
 	}
 
-	daoMap := make(map[string]int)
+	daoMap := make(models.DaoMarksMap)
 	if len(daoJSON) > 0 {
 		if err := json.Unmarshal(daoJSON, &daoMap); err != nil {
 			return nil, err
@@ -77,13 +77,13 @@ func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) 
 	return daoMap, nil
 }
 
-func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
-	rewards := make(map[string]int)
+func distributeDaoMarks(mainPath string, totalMarks int64) map[string]int64 {
+	rewards := make(map[string]int64)
 	if totalMarks <= 0 {
 		return rewards
 	}
 	// Main path gets 70%
-	mainAmount := int(float64(totalMarks) * 0.7)
+	mainAmount := int64(float64(totalMarks) * 0.7)
 	if mainAmount < 1 {
 		mainAmount = totalMarks
 	}

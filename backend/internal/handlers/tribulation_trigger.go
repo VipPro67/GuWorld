@@ -683,12 +683,12 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		return err
 	}
 
-	var daoMarks map[string]int
+	var daoMarks models.DaoMarksMap
 	if len(daoMarksRaw) > 0 {
 		_ = json.Unmarshal(daoMarksRaw, &daoMarks)
 	}
 
-	maxDao := 0
+	maxDao := int64(0)
 	for _, val := range daoMarks {
 		if val > maxDao {
 			maxDao = val
@@ -730,7 +730,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	if rewardMult <= 0 {
 		rewardMult = 1.0
 	}
-	rewardMarks = int(float64(rewardMarks) * rewardMult)
+	rewardMarks = int64(float64(rewardMarks) * rewardMult)
 
 	// Insert Tribulation Event
 	eventID := uuid.New()
@@ -784,9 +784,9 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	// Apply difficulty scaling
 	diffMultiplier := 1.0 + float64(difficulty)*0.2
 	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, bossRank, bossSubRank, boss.Type)
-	bossHP := int(scaledHP * diffMultiplier * daoBalancingMult)
-	bossAtk := int(scaledAtk * diffMultiplier * daoBalancingMult)
-	bossDef := int(scaledDef * diffMultiplier * daoBalancingMult)
+	bossHP := scaledHP * diffMultiplier * daoBalancingMult
+	bossAtk := scaledAtk * diffMultiplier * daoBalancingMult
+	bossDef := scaledDef * diffMultiplier * daoBalancingMult
 
 	_, err = tx.Exec(`
 		INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead, rank, sub_rank)
@@ -815,9 +815,9 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	minionSubRank := 1
 	for i := 0; i < minionCount; i++ {
 		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, minionSubRank, minion.Type)
-		mHP := int(scaledHPm * diffMultiplier * daoBalancingMult)
-		mAtk := int(scaledAtkm * diffMultiplier * daoBalancingMult)
-		mDef := int(scaledDefm * diffMultiplier * daoBalancingMult)
+		mHP := scaledHPm * diffMultiplier * daoBalancingMult
+		mAtk := scaledAtkm * diffMultiplier * daoBalancingMult
+		mDef := scaledDefm * diffMultiplier * daoBalancingMult
 
 		_, err = tx.Exec(`
 			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_dead, rank, sub_rank)
@@ -886,7 +886,7 @@ func autoResolveEvent(eventID string, playerID string) {
 	}
 
 	hpFactor := 0.1 + 0.4*reduction
-	newHP := int(float64(ev.ApertureHPBefore) * hpFactor)
+	newHP := float64(ev.ApertureHPBefore) * hpFactor
 	if newHP < 100 {
 		newHP = 100
 	}

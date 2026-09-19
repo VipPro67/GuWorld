@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
-import { X, Sparkles, Compass, Shield, Coins, Layers, ArrowRightLeft, Lock, Users, Globe } from "lucide-react";
+import { X, Sparkles, Compass, Shield, Coins, Layers, ArrowRightLeft, Award, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { GameButton } from "@/components/ui";
 
 interface TeleportBuildModalProps {
@@ -10,6 +10,24 @@ interface TeleportBuildModalProps {
   onClose: () => void;
   onSuccess?: () => void;
 }
+
+export const getFormationInfo = (pts: number = 0) => {
+  if (pts >= 100000) return { level: 4, name: "Vô Thượng Đại Tông Sư", color: "text-purple-400", border: "border-purple-500/40", bg: "bg-purple-950/30" };
+  if (pts >= 10000) return { level: 3, name: "Đại Tông Sư", color: "text-amber-400", border: "border-amber-500/40", bg: "bg-amber-950/30" };
+  if (pts >= 1000) return { level: 2, name: "Tông Sư", color: "text-cyan-400", border: "border-cyan-500/40", bg: "bg-cyan-950/30" };
+  if (pts >= 100) return { level: 1, name: "Đại Sư", color: "text-blue-400", border: "border-blue-500/40", bg: "bg-blue-950/30" };
+  return { level: 0, name: "Nhập Môn", color: "text-zinc-400", border: "border-zinc-700/40", bg: "bg-zinc-900/40" };
+};
+
+export const getFormationRealmName = (level: number) => {
+  switch (level) {
+    case 4: return "Vô Thượng Đại Tông Sư";
+    case 3: return "Đại Tông Sư";
+    case 2: return "Tông Sư";
+    case 1: return "Đại Sư";
+    default: return "Nhập Môn";
+  }
+};
 
 export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
   player,
@@ -26,6 +44,12 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
   const [feeCurrency, setFeeCurrency] = useState<string>("primeval_stones");
   const [feeAmount, setFeeAmount] = useState<number>(100);
 
+  // Formation Path & Dao Mark calculations
+  const formationPts = player.path_masteries?.["formation"] ?? player.path_masteries?.["formation path"] ?? 0;
+  const daoMarks = player.dao_marks?.["formation"] ?? 0;
+  const formationInfo = getFormationInfo(formationPts);
+  const discountPercent = Math.min(60, formationInfo.level * 15);
+
   useEffect(() => {
     if (teleportTemplates.length === 0) {
       fetchTeleportTemplates();
@@ -34,9 +58,34 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
 
   const activeTpl = teleportTemplates.find((t) => t.tier === selectedTier) || teleportTemplates[0];
 
+  const getDiscountedCost = (cost: number) => {
+    if (discountPercent <= 0) return cost;
+    return Math.max(1, Math.round(cost * (1 - discountPercent / 100)));
+  };
+
+  const calculateSuccessBreakdown = (tpl: typeof activeTpl) => {
+    if (!tpl) return { base: 70, mastery: 0, rank: 0, dao: 0, total: 70 };
+    const base = tpl.base_success_rate ?? 70;
+    const mastery = formationInfo.level * 15;
+    const rank = Math.max(0, player.rank - tpl.min_rank) * 3;
+    const dao = Math.min(10, Math.floor(daoMarks / 500));
+    const total = Math.min(100, Math.max(10, base + mastery + rank + dao));
+    return { base, mastery, rank, dao, total };
+  };
+
+  const activeBreakdown = calculateSuccessBreakdown(activeTpl);
+  const activeDiscountedStones = activeTpl ? getDiscountedCost(activeTpl.cost_primeval_stones) : 0;
+  const activeDiscountedImmortal = activeTpl && activeTpl.cost_immortal_stones > 0 ? getDiscountedCost(activeTpl.cost_immortal_stones) : 0;
+
+  const canAffordActiveStones = activeTpl ? player.primeval_stones >= activeDiscountedStones : false;
+  const canAffordActiveImmortal = activeTpl ? player.immortal_stones >= activeDiscountedImmortal : false;
+  const meetsActiveRank = activeTpl ? player.rank >= activeTpl.min_rank : false;
+  const meetsActiveFormation = activeTpl ? formationInfo.level >= (activeTpl.min_formation_realm ?? 0) : true;
+  const canBuildActive = activeTpl && canAffordActiveStones && canAffordActiveImmortal && meetsActiveRank && meetsActiveFormation;
+
   const handleBuild = async () => {
     if (!activeTpl) return;
-    const ok = await buildTeleportArray({
+    const res = await buildTeleportArray({
       name: arrayName.trim() || activeTpl.name,
       tier: selectedTier,
       direction_type: directionType,
@@ -45,7 +94,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
       fee_currency: feeCurrency,
       fee_amount: Number(feeAmount) || 0,
     });
-    if (ok) {
+    if (res && res.success) {
       if (onSuccess) onSuccess();
       onClose();
     }
@@ -64,7 +113,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
             <div>
               <h3 className="text-base font-bold text-zinc-100 font-serif">Bố Trí Truyền Tống Trận</h3>
               <p className="text-[11px] text-zinc-400 font-mono">
-                Tọa độ hiện tại: ({player.x}, {player.y}) — Vực: {player.current_region}
+                Tọa độ: ({player.x}, {player.y}) — Vực: {player.current_region}
               </p>
             </div>
           </div>
@@ -76,7 +125,31 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
           </button>
         </div>
 
-        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
+        {/* Formation Mastery Status Banner */}
+        <div className="px-6 py-2.5 bg-zinc-900/60 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span className="text-zinc-400 flex items-center gap-1">
+              <Award className="w-3.5 h-3.5 text-amber-400" />
+              Trận Đạo:
+            </span>
+            <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] border ${formationInfo.bg} ${formationInfo.border} ${formationInfo.color}`}>
+              {formationInfo.name} ({formationPts.toLocaleString()} Chân Ý)
+            </span>
+            {daoMarks > 0 && (
+              <span className="text-zinc-400 text-[10px]">
+                · {daoMarks.toLocaleString()} Đạo Ngân
+              </span>
+            )}
+          </div>
+          {discountPercent > 0 && (
+            <div className="text-emerald-400 font-bold text-[11px] flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              Giảm {discountPercent}% Chi Phí
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 space-y-5 max-h-[72vh] overflow-y-auto custom-scrollbar">
           {/* Tier Selection */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
@@ -86,10 +159,15 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {teleportTemplates.map((tpl) => {
                 const isSelected = selectedTier === tpl.tier;
-                const canAffordStones = player.primeval_stones >= tpl.cost_primeval_stones;
-                const canAffordImmortal = player.immortal_stones >= tpl.cost_immortal_stones;
+                const discStones = getDiscountedCost(tpl.cost_primeval_stones);
+                const discImmortal = tpl.cost_immortal_stones > 0 ? getDiscountedCost(tpl.cost_immortal_stones) : 0;
+
+                const canAffordStones = player.primeval_stones >= discStones;
+                const canAffordImmortal = player.immortal_stones >= discImmortal;
                 const meetsRank = player.rank >= tpl.min_rank;
-                const isReady = canAffordStones && canAffordImmortal && meetsRank;
+                const minRealm = tpl.min_formation_realm ?? 0;
+                const meetsFormation = formationInfo.level >= minRealm;
+                const breakdown = calculateSuccessBreakdown(tpl);
 
                 return (
                   <button
@@ -103,38 +181,118 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
                     }`}
                   >
                     <div>
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
                         <span className="text-[10px] font-mono uppercase text-amber-400/90 font-bold">
                           {tpl.tier === "TIER_1" ? "Vi Trận" : tpl.tier === "TIER_2" ? "Đại Vực Trận" : "Tiên Trận"}
                         </span>
-                        {!meetsRank && (
-                          <span className="text-[9px] font-mono text-rose-400 bg-rose-950/40 px-1 rounded border border-rose-900/50">
-                            Cần Rank {tpl.min_rank}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {!meetsRank && (
+                            <span className="text-[9px] font-mono text-rose-400 bg-rose-950/40 px-1 rounded border border-rose-900/50">
+                              Rank {tpl.min_rank}
+                            </span>
+                          )}
+                          {!meetsFormation && (
+                            <span className="text-[9px] font-mono text-rose-400 bg-rose-950/40 px-1 rounded border border-rose-900/50">
+                              {getFormationRealmName(minRealm)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <h4 className="text-xs font-bold text-zinc-100 font-serif mt-1">{tpl.name}</h4>
                       <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed line-clamp-2">{tpl.description}</p>
                     </div>
 
-                    <div className="mt-3 pt-2 border-t border-zinc-800/60 space-y-0.5 text-[10px] font-mono">
-                      <div className="text-zinc-400">
-                        Phạm vi: <span className="text-emerald-400 font-bold">{tpl.is_cross_region ? "Ngũ Vực" : `${tpl.max_range.toLocaleString()} ô`}</span>
+                    <div className="mt-3 pt-2 border-t border-zinc-800/60 space-y-1 text-[10px] font-mono">
+                      <div className="flex justify-between items-center text-zinc-400">
+                        <span>Phạm vi:</span>
+                        <span className="text-emerald-400 font-bold">{tpl.is_cross_region ? "Ngũ Vực" : `${tpl.max_range.toLocaleString()} ô`}</span>
                       </div>
-                      <div className={canAffordStones ? "text-amber-300" : "text-rose-400"}>
-                        {tpl.cost_primeval_stones.toLocaleString()} Nguyên Thạch
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-400">Tỉ lệ thành công:</span>
+                        <span className={`font-bold ${breakdown.total >= 80 ? "text-emerald-400" : breakdown.total >= 50 ? "text-amber-400" : "text-rose-400"}`}>
+                          {breakdown.total}%
+                        </span>
                       </div>
-                      {tpl.cost_immortal_stones > 0 && (
-                        <div className={canAffordImmortal ? "text-cyan-300" : "text-rose-400"}>
-                          {tpl.cost_immortal_stones} Tiên Nguyên
+
+                      <div className="pt-1 border-t border-zinc-800/40">
+                        <div className={`flex justify-between items-center ${canAffordStones ? "text-amber-300" : "text-rose-400"}`}>
+                          <span>Nguyên Thạch:</span>
+                          <span className="flex items-center gap-1">
+                            {discountPercent > 0 && (
+                              <span className="line-through text-zinc-500 text-[9px]">{tpl.cost_primeval_stones.toLocaleString()}</span>
+                            )}
+                            <span className="font-bold">{discStones.toLocaleString()}</span>
+                          </span>
                         </div>
-                      )}
+                        {tpl.cost_immortal_stones > 0 && (
+                          <div className={`flex justify-between items-center ${canAffordImmortal ? "text-cyan-300" : "text-rose-400"}`}>
+                            <span>Tiên Nguyên:</span>
+                            <span className="flex items-center gap-1">
+                              {discountPercent > 0 && (
+                                <span className="line-through text-zinc-500 text-[9px]">{tpl.cost_immortal_stones}</span>
+                              )}
+                              <span className="font-bold">{discImmortal}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {/* Success Rate & Formation Details Card */}
+          {activeTpl && (
+            <div className="p-3.5 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl space-y-2.5 font-mono text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-300 font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className={`w-4 h-4 ${activeBreakdown.total >= 80 ? "text-emerald-400" : activeBreakdown.total >= 50 ? "text-amber-400" : "text-rose-400"}`} />
+                  Tỉ Lệ Thành Công Dự Kiến: {activeBreakdown.total}%
+                </span>
+                <span className="text-[10px] text-zinc-400">
+                  +{activeTpl.tier === "TIER_3" ? "300" : activeTpl.tier === "TIER_2" ? "100" : "30"} Chân Ý Trận Đạo
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    activeBreakdown.total >= 80 ? "bg-emerald-500" : activeBreakdown.total >= 50 ? "bg-amber-500" : "bg-rose-500"
+                  }`}
+                  style={{ width: `${activeBreakdown.total}%` }}
+                />
+              </div>
+
+              {/* Breakdown details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px] text-zinc-400">
+                <div className="bg-zinc-950/60 p-1.5 rounded-lg border border-zinc-800 text-center">
+                  Gốc: <span className="text-zinc-200 font-bold">{activeBreakdown.base}%</span>
+                </div>
+                <div className="bg-zinc-950/60 p-1.5 rounded-lg border border-zinc-800 text-center">
+                  Trận Đạo: <span className="text-emerald-400 font-bold">+{activeBreakdown.mastery}%</span>
+                </div>
+                <div className="bg-zinc-950/60 p-1.5 rounded-lg border border-zinc-800 text-center">
+                  Tu Vi: <span className="text-cyan-400 font-bold">+{activeBreakdown.rank}%</span>
+                </div>
+                <div className="bg-zinc-950/60 p-1.5 rounded-lg border border-zinc-800 text-center">
+                  Đạo Ngân: <span className="text-purple-400 font-bold">+{activeBreakdown.dao}%</span>
+                </div>
+              </div>
+
+              {activeBreakdown.total < 100 && (
+                <div className="flex items-start gap-1.5 p-2 rounded-xl bg-amber-950/20 border border-amber-900/40 text-[10px] text-amber-300/90 leading-relaxed">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  <span>
+                    Nếu sụp đổ trận pháp khi bố trí: tổn thất 50% Nguyên thạch / Tiên nguyên, Cổ trùng <strong>KHÔNG</strong> bị tổn hại và vẫn lĩnh ngộ 50% Chân Ý.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Form Settings */}
           <div className="space-y-4 bg-zinc-900/30 border border-zinc-800/60 p-4 rounded-2xl">
@@ -234,24 +392,38 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="border-t border-zinc-800/80 px-6 py-4 flex items-center justify-end gap-3 bg-zinc-950/80">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:bg-zinc-900 border border-zinc-800 transition-colors"
-          >
-            Hủy Bỏ
-          </button>
-          <GameButton
-            onClick={handleBuild}
-            variant="primary"
-            disabled={actionLoading || !activeTpl || player.rank < activeTpl.min_rank || player.primeval_stones < activeTpl.cost_primeval_stones || player.immortal_stones < activeTpl.cost_immortal_stones}
-            className="px-6 py-2 text-xs font-bold font-serif"
-          >
-            {actionLoading ? "Đang Bố Trí..." : "Bố Trí Trận Pháp"}
-          </GameButton>
+        <div className="border-t border-zinc-800/80 px-6 py-4 flex items-center justify-between gap-3 bg-zinc-950/80">
+          <div className="text-[11px] font-mono text-zinc-400">
+            {!meetsActiveRank ? (
+              <span className="text-rose-400">Yêu cầu Rank {activeTpl?.min_rank}</span>
+            ) : !meetsActiveFormation ? (
+              <span className="text-rose-400">Yêu cầu Trận Đạo {getFormationRealmName(activeTpl?.min_formation_realm ?? 0)}</span>
+            ) : !canAffordActiveStones || !canAffordActiveImmortal ? (
+              <span className="text-rose-400">Không đủ tài nguyên bố trận</span>
+            ) : (
+              <span className="text-emerald-400">Đủ điều kiện bố trận</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:bg-zinc-900 border border-zinc-800 transition-colors"
+            >
+              Hủy Bỏ
+            </button>
+            <GameButton
+              onClick={handleBuild}
+              variant="primary"
+              disabled={actionLoading || !canBuildActive}
+              className="px-6 py-2 text-xs font-bold font-serif"
+            >
+              {actionLoading ? "Đang Bố Trí..." : "Bố Trí Trận Pháp"}
+            </GameButton>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+

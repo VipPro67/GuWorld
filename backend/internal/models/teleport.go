@@ -51,6 +51,8 @@ type TeleportTemplate struct {
 	Name               string         `json:"name"`
 	Description        string         `json:"description"`
 	MinRank            int            `json:"min_rank"`
+	MinFormationRealm  int            `json:"min_formation_realm"` // 0=Ordinary, 1=Master, 2=Grandmaster, 3=Great Grandmaster, 4=Supreme
+	BaseSuccessRate    float64        `json:"base_success_rate"`   // Percentage: e.g. 70.0 for 70%
 	MaxRange           int            `json:"max_range"`
 	IsCrossRegion      bool           `json:"is_cross_region"`
 	MaxDurability      int            `json:"max_durability"`
@@ -69,6 +71,33 @@ type TeleportDirectoryItem struct {
 	Reason            string        `json:"reason,omitempty"`
 	FeeToPay          int64         `json:"fee_to_pay"`
 	FeeCurrency       string        `json:"fee_currency"`
+}
+
+// BuildTeleportArrayResp is returned after attempting to build a teleport array
+type BuildTeleportArrayResp struct {
+	Success            bool           `json:"success"`
+	Message            string         `json:"message"`
+	Array              *TeleportArray `json:"array,omitempty"`
+	SuccessRate        float64        `json:"success_rate"`
+	FormationRealm     string         `json:"formation_realm"`
+	FormationLevel     int            `json:"formation_level"`
+	DiscountPercent    float64        `json:"discount_percent"`
+	MasteryGained      int            `json:"mastery_gained"`
+	PaidPrimevalStones float64        `json:"paid_primeval_stones"`
+	PaidImmortalStones float64        `json:"paid_immortal_stones"`
+}
+
+// RepairTeleportArrayResp is returned after repairing a teleport array
+type RepairTeleportArrayResp struct {
+	Success            bool    `json:"success"`
+	Message            string  `json:"message"`
+	CurrentDurability  int     `json:"current_durability"`
+	MaxDurability      int     `json:"max_durability"`
+	IsCriticalRepair   bool    `json:"is_critical_repair"`
+	CriticalBonus      int     `json:"critical_bonus"`
+	DiscountPercent    float64 `json:"discount_percent"`
+	MasteryGained      int     `json:"mastery_gained"`
+	PaidPrimevalStones float64 `json:"paid_primeval_stones"`
 }
 
 // Request types
