@@ -6,6 +6,17 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại, di
 
 - Cổ sư đăng ký bằng username/email/password hoặc đăng nhập Google nếu cấu hình OAuth.
 - Hồ sơ hỗ trợ bio, avatar, đổi mật khẩu và cơ chế ngụy trang thông tin công khai.
+- **Đổi Đạo Hiệu (Hạn chế & Đại Đạo Phản Phệ)**:
+  - **Nhất Chuyển & Nhị Chuyển (Rank 1 - 2)**: Tự do đổi tên miễn phí, không tốn tài nguyên hay chịu phản phệ.
+  - **Tam Chuyển (Rank 3)**: Tốn **5.000 Nguyên Thạch**.
+  - **Tứ Chuyển (Rank 4)**: Tốn **20.000 Nguyên Thạch**.
+  - **Ngũ Chuyển (Rank 5)**: Tốn **100.000 Nguyên Thạch**.
+  - **Cổ Tiên & Tôn Giả (Rank 6 - 9)**: Nghịch thiên cải mệnh, đổi đạo hiệu gây chấn động Thiên Địa và chịu phản phệ cực lớn (không tụt tiểu cảnh giới):
+    - **Tiêu hao Tiên Nguyên Thạch**: Lục Chuyển (**100**), Thất Chuyển (**500**), Bát Chuyển (**2.500**), Cửu Chuyển (**10.000** TNT).
+    - **Tụt Đạo Ngân Tiên Khiếu**: Lục Chuyển (**-30%**), Thất Chuyển (**-40%**), Bát Chuyển (**-50%**), Cửu Chuyển (**-70%**).
+    - **Tụt Điểm Chân Ý (Cảnh Giới Lưu Phái)**: Lục Chuyển (**-30%**), Thất Chuyển (**-40%**), Bát Chuyển (**-50%**), Cửu Chuyển (**-70%**).
+    - **Tổn hại Tiên Khiếu**: Giảm HP Tiên Khiếu (20% / 30% / 40% / 50%) và tăng Áp lực Tiên Khiếu (+30 / +50 / +80 / +100).
+    - **Thiên Đạo Biến Động**: Phát thông cáo toàn cõi trên kênh Thế Giới (World Chat).
 - Referral có thống kê người được mời và phần thưởng/mốc xử lý ở backend.
 
 ### Chủng tộc, Giới tính, Thể chất, Trạng thái

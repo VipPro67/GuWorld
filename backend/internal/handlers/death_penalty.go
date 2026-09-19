@@ -89,6 +89,30 @@ func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID) {
 
 	notify.Send(tx, *killerID, "sat_khi_increase", "Sát Khí gia tăng!",
 		fmt.Sprintf("Tích tụ oán khí đồ sát! Sát Khí của bạn tăng lên Tầng %d. Nếu bị đánh bại, lượng tài sản đánh rơi sẽ gia tăng x%.1f!", newLevel, 1.0+float64(newLevel)*0.5))
+
+	// Broadcast wanted / hunt notice when killer has slaughtered multiple players (>= 3 kills / Sát Khí level >= 3)
+	if newLevel >= 3 {
+		var killerName, killerRegion string
+		var killerX, killerY int
+		_ = tx.QueryRow(`SELECT username, COALESCE(current_region, ''), x, y FROM players WHERE id = $1`, *killerID).Scan(&killerName, &killerRegion, &killerX, &killerY)
+
+		regionName := killerRegion
+		if z := ZoneByID(killerRegion); z != nil && z.Name != "" {
+			regionName = z.Name
+		}
+		var alertTitle string
+		switch {
+		case newLevel >= 10:
+			alertTitle = "🔴 [ĐẠI LỆNH TRUY SÁT - MA ĐẦU ĐẠI NẠN]"
+		case newLevel >= 5:
+			alertTitle = "⚠️ [LỆNH TRUY SÁT - SÁT NHÂN CUỒNG MA]"
+		default:
+			alertTitle = "⚡ [CẢNH BÁO TRUY SÁT]"
+		}
+		msg := fmt.Sprintf("%s Cổ Sư [%s] đã đồ sát liên tiếp %d đồng đạo, oán khí ngút trời (Sát Khí Tầng %d) tại %s (%d, %d)! Chư vị đồng đạo hãy liên thủ vây bắt tru diệt ma đầu!",
+			alertTitle, killerName, newLevel, newLevel, regionName, killerX, killerY)
+		_ = SendSystemMessage("world", sql.NullString{}, msg)
+	}
 }
 
 // getSatKhiMultiplier checks if player has sat_khi status and returns (multiplier, level).
@@ -389,6 +413,21 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 	} else if summary != "" {
 		notify.Send(tx, loserID, "death_drop", "Tử đạo - Mất tài sản",
 			fmt.Sprintf("Bạn đã tử đạo và đánh rơi tài sản tại (%d, %d): %s.", loserX, loserY, summary))
+	}
+
+	// Broadcast justice announcement to world chat when a wanted player (Sát Khí >= 3) is defeated
+	if satKhiLevel >= 3 && winnerID != nil {
+		regionName := loserRegion.String
+		if z := ZoneByID(loserRegion.String); z != nil && z.Name != "" {
+			regionName = z.Name
+		}
+		killerDisplayName := killerName
+		if killerDisplayName == "" {
+			killerDisplayName = "Nghĩa sĩ Cổ Sư"
+		}
+		justiceMsg := fmt.Sprintf("⚔️ [THIÊN ĐẠO TRỪ MA] Đại ma đầu [%s] (Sát Khí Tầng %d) đã bị nghĩa sĩ [%s] trảm sát tại %s (%d, %d)! Trừ đi một mối đại họa cho Cổ Giới!",
+			loserName, satKhiLevel, killerDisplayName, regionName, loserX, loserY)
+		_ = SendSystemMessage("world", sql.NullString{}, justiceMsg)
 	}
 
 	auditlog.Log(db.DB, auditlog.Entry{

@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"unicode"
@@ -8,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"golang.org/x/crypto/bcrypt"
@@ -21,6 +25,70 @@ type UpdateProfileSettingsRequest struct {
 	FakeSubRank int    `json:"fake_sub_rank"`
 	FakeVitalGu string `json:"fake_vital_gu"`
 	IsDisguised bool   `json:"is_disguised"`
+}
+
+// GetRenameCost returns the cost type ("free", "primeval", "immortal") and the cost amount for a given rank.
+func GetRenameCost(rank int) (string, float64) {
+	switch {
+	case rank <= 2:
+		return "free", 0
+	case rank == 3:
+		return "primeval", 5000
+	case rank == 4:
+		return "primeval", 20000
+	case rank == 5:
+		return "primeval", 100000
+	case rank == 6:
+		return "immortal", 100
+	case rank == 7:
+		return "immortal", 500
+	case rank == 8:
+		return "immortal", 2500
+	case rank >= 9:
+		return "immortal", 10000
+	default:
+		return "free", 0
+	}
+}
+
+// GetImmortalPenaltyRates returns the loss rates for dao marks, path masteries, aperture HP, and stress gain for a given immortal rank (6-9).
+func GetImmortalPenaltyRates(rank int) (daoLossRate float64, masteryLossRate float64, hpLossRate float64, stressGain float64) {
+	switch rank {
+	case 6:
+		return 0.30, 0.30, 0.20, 30.0
+	case 7:
+		return 0.40, 0.40, 0.30, 50.0
+	case 8:
+		return 0.50, 0.50, 0.40, 80.0
+	case 9:
+		return 0.70, 0.70, 0.50, 100.0
+	default:
+		if rank > 9 {
+			return 0.70, 0.70, 0.50, 100.0
+		}
+		return 0.30, 0.30, 0.20, 30.0
+	}
+}
+
+// ApplyImmortalRenamePenalty calculates the reduced dao marks, path masteries, and aperture damage without reducing sub-rank.
+func ApplyImmortalRenamePenalty(rank int, daoMarks models.DaoMarksMap, pathMasteries models.PathMasteriesMap, apertureHP float64) (models.DaoMarksMap, models.PathMasteriesMap, float64, float64) {
+	daoLossRate, masteryLossRate, hpLossRate, stressGain := GetImmortalPenaltyRates(rank)
+
+	newDao := make(models.DaoMarksMap)
+	daoRetain := 1.0 - daoLossRate
+	for k, v := range daoMarks {
+		newDao[k] = int64(float64(v) * daoRetain)
+	}
+
+	newMasteries := make(models.PathMasteriesMap)
+	masteryRetain := 1.0 - masteryLossRate
+	for k, v := range pathMasteries {
+		newMasteries[k] = int(float64(v) * masteryRetain)
+	}
+
+	newApertureHP := apertureHP * (1.0 - hpLossRate)
+
+	return newDao, newMasteries, newApertureHP, stressGain
 }
 
 // UpdateProfileSettings updates the current user's profile settings (email, bio, password, fake profile)
@@ -115,6 +183,9 @@ func UpdateProfileSettings(c *gin.Context) {
 		}
 	}
 
+	oldUsername := player.Username
+	renameSuccessMsg := "Cập nhật hồ sơ thành công!"
+
 	if username != player.Username {
 		var exists bool
 		err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE username = $1 AND id <> $2)`, username, player.ID).Scan(&exists)
@@ -126,7 +197,70 @@ func UpdateProfileSettings(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu này đã được sử dụng bởi cổ sư khác!"})
 			return
 		}
-		player.Username = username
+
+		costType, cost := GetRenameCost(player.Rank)
+		if costType == "free" {
+			// Rank 1-2: Miễn phí (Tự do đổi tên)
+			player.Username = username
+		} else if costType == "primeval" {
+			// Rank 3-5: Mất phí Nguyên Thạch
+			if player.PrimevalStones < cost {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Không đủ Nguyên Thạch! Đổi đạo hiệu ở cấp %d Chuyển cần %.0f Nguyên Thạch.", player.Rank, cost),
+				})
+				return
+			}
+			player.PrimevalStones -= cost
+			player.Username = username
+			renameSuccessMsg = fmt.Sprintf("Đổi đạo hiệu thành công! Đã tiêu hao %.0f Nguyên Thạch.", cost)
+		} else if costType == "immortal" {
+			// Rank 6-9: Cổ Tiên nghịch thiên cải mệnh, trả giá cực lớn
+			if player.ImmortalStones < cost {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Không đủ Tiên Nguyên Thạch! Cổ Tiên %d Chuyển đổi đạo hiệu cần tối thiểu %.0f Tiên Nguyên Thạch để áp chế thiên cơ.", player.Rank, cost),
+				})
+				return
+			}
+			player.ImmortalStones -= cost
+
+			var curApertureHP float64
+			var daoJSON []byte
+			_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb), COALESCE(aperture_hp, 10000) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, player.ID).Scan(&daoJSON, &curApertureHP)
+
+			currentDaoMap := make(models.DaoMarksMap)
+			if len(daoJSON) > 0 {
+				_ = json.Unmarshal(daoJSON, &currentDaoMap)
+			}
+
+			daoLossRate, _, _, _ := GetImmortalPenaltyRates(player.Rank)
+			newDao, newMasteries, newApertureHP, stressGain := ApplyImmortalRenamePenalty(player.Rank, currentDaoMap, player.PathMasteries, curApertureHP)
+
+			// 1. Cập nhật Đạo Ngân
+			player.DaoMarks = newDao
+			newDaoJSON, err := json.Marshal(newDao)
+			if err == nil {
+				_, _ = tx.Exec(`UPDATE immortal_apertures SET dao_marks = $1, aperture_hp = $2 WHERE player_id = $3`, newDaoJSON, newApertureHP, player.ID)
+			}
+			_, _ = tx.Exec(`UPDATE player_dao_path SET dao_marks = FLOOR(dao_marks * $1)::BIGINT WHERE player_id = $2`, 1.0-daoLossRate, player.ID.String())
+
+			// 2. Cập nhật Cảnh Giới Lưu Phái
+			player.PathMasteries = newMasteries
+			for k, v := range newMasteries {
+				lvl := gamefx.PathMasteryLevel(v)
+				masteryName := gamefx.PathMasteryLevelName(lvl)
+				_, _ = tx.Exec(`UPDATE player_dao_path SET mastery = $1 WHERE player_id = $2 AND path = $3`, masteryName, player.ID.String(), k)
+			}
+
+			// 3. Cập nhật Áp Lực Tiên Khiếu & Tiến Độ (không tụt tiểu cảnh giới)
+			player.ApertureStress += stressGain
+			player.WallProgress = 0
+
+			player.Username = username
+			renameSuccessMsg = fmt.Sprintf("Đổi đạo hiệu thành công! Chịu thiên cơ phản phệ: tiêu hao %.0f Tiên Nguyên Thạch, tụt %.0f%% Đạo Ngân & Cảnh Giới Lưu Phái, tổn hại Tiên Khiếu.", cost, daoLossRate*100)
+
+			// 4. Phát thông báo Thế Giới
+			_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("⚡ THIÊN ĐẠO BIẾN ĐỘNG: Cổ Tiên %s nghịch thiên cải mệnh, đổi đạo hiệu thành %s, chịu đại đạo phản phệ tổn thất Đạo Ngân và Tu Vi!", oldUsername, username))
+		}
 	}
 
 	player.Bio = req.Bio
@@ -145,13 +279,13 @@ func UpdateProfileSettings(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mã hóa mật khẩu"})
 			return
 		}
-		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6, password_hash = $7 WHERE id = $8`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, string(hash), player.ID)
+		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6, password_hash = $7, primeval_stones = $8, immortal_stones = $9, sub_rank = $10, wall_progress = $11, aperture_stress = $12, path_masteries = $13 WHERE id = $14`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, string(hash), player.PrimevalStones, player.ImmortalStones, player.SubRank, player.WallProgress, player.ApertureStress, player.PathMasteries, player.ID)
 		if err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
 			return
 		}
 	} else {
-		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6 WHERE id = $7`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, player.ID)
+		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6, primeval_stones = $7, immortal_stones = $8, sub_rank = $9, wall_progress = $10, aperture_stress = $11, path_masteries = $12 WHERE id = $13`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, player.PrimevalStones, player.ImmortalStones, player.SubRank, player.WallProgress, player.ApertureStress, player.PathMasteries, player.ID)
 		if err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
 			return
@@ -174,5 +308,5 @@ func UpdateProfileSettings(c *gin.Context) {
 		setAuthCookie(c, newToken)
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Cập nhật hồ sơ thành công!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": renameSuccessMsg})
 }
