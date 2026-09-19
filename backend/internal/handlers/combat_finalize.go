@@ -52,6 +52,7 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		`, apertureHP, player.ActiveCombat.TribulationEventID, player.ID)
 		if errAp != nil {
 			logger.S.Errorf("Failed to persist aperture HP after tribulation combat: %v", errAp)
+			return logs, errAp
 		}
 
 		// Sync enemy HP using LEAST so watchtower/worker damage is never overwritten upward.
@@ -74,6 +75,7 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 			`, finalHP, en.ID)
 			if errEn != nil {
 				logger.S.Errorf("Failed to sync tribulation enemy %s HP: %v", en.ID, errEn)
+				return logs, errEn
 			}
 		}
 	}
@@ -144,6 +146,7 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 			`, allyHP, simAlly.Mana, simAlly.PrimevalStones, simAlly.ImmortalStones, models.PathMasteriesMap(simAlly.PathMasteries), allyUUID)
 			if errUpd != nil {
 				logger.S.Errorf("Failed to update ally %s outcome: %v", simAlly.Name, errUpd)
+				return logs, errUpd
 			}
 		}
 	} else {
@@ -151,7 +154,14 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" {
 				continue
 			}
-			_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", uuid.MustParse(simAlly.ID))
+			allyID := simAlly.ID
+			if _, spErr := tx.Exec("SAVEPOINT sp_reset_ally"); spErr == nil {
+				if _, err := tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", uuid.MustParse(allyID)); err != nil {
+					_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_reset_ally")
+				} else {
+					_, _ = tx.Exec("RELEASE SAVEPOINT sp_reset_ally")
+				}
+			}
 		}
 	}
 
@@ -161,22 +171,33 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 			if simAlly.Kind != "Pet" {
 				continue
 			}
-			if simAlly.HP <= 0 {
-				// Pet died in combat — delete permanently
-				_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, simAlly.ID, player.ID)
-				_, _ = tx.Exec(`
-					INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-					VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
-				`, player.ID, simAlly.ID, fmt.Sprintf("%s chết khi chiến đấu với %s", simAlly.Name, player.ActiveCombat.EnemyName))
-				logs = append(logs, simulator.CombatLog{
-					Turn:   simState.Turn,
-					Action: "PET_DEATH",
-					Detail: fmt.Sprintf("%s đã chết trong chiến đấu!", simAlly.Name),
-				})
-			} else {
-				// Pet survived — update HP
-				_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
-					float64(simAlly.HP), simAlly.ID, player.ID)
+			if _, spErr := tx.Exec("SAVEPOINT sp_pet_ally"); spErr == nil {
+				var errPet error
+				if simAlly.HP <= 0 {
+					// Pet died in combat — delete permanently
+					_, errPet = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, simAlly.ID, player.ID)
+					if errPet == nil {
+						_, _ = tx.Exec(`
+							INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+							VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
+						`, player.ID, simAlly.ID, fmt.Sprintf("%s chết khi chiến đấu với %s", simAlly.Name, player.ActiveCombat.EnemyName))
+						logs = append(logs, simulator.CombatLog{
+							Turn:   simState.Turn,
+							Action: "PET_DEATH",
+							Detail: fmt.Sprintf("%s đã chết trong chiến đấu!", simAlly.Name),
+						})
+					}
+				} else {
+					// Pet survived — update HP
+					_, errPet = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+						float64(simAlly.HP), simAlly.ID, player.ID)
+				}
+				if errPet != nil {
+					logger.S.Warnf("Failed to update/delete pet %s for player %s: %v", simAlly.ID, player.ID, errPet)
+					_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_pet_ally")
+				} else {
+					_, _ = tx.Exec("RELEASE SAVEPOINT sp_pet_ally")
+				}
 			}
 		}
 
@@ -190,20 +211,31 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 				if simEnemy.Kind != "Pet" {
 					continue
 				}
-				if simEnemy.HP <= 0 {
-					_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, simEnemy.ID, defenderID)
-					_, _ = tx.Exec(`
-						INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-						VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
-					`, defenderID, simEnemy.ID, fmt.Sprintf("%s chết khi phòng thủ trước %s", simEnemy.Name, player.ActiveCombat.EnemyName))
-					logs = append(logs, simulator.CombatLog{
-						Turn:   simState.Turn,
-						Action: "PET_DEATH",
-						Detail: fmt.Sprintf("%s đã chết trong chiến đấu!", simEnemy.Name),
-					})
-				} else {
-					_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
-						float64(simEnemy.HP), simEnemy.ID, defenderID)
+				if _, spErr := tx.Exec("SAVEPOINT sp_pet_enemy"); spErr == nil {
+					var errPet error
+					if simEnemy.HP <= 0 {
+						_, errPet = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, simEnemy.ID, defenderID)
+						if errPet == nil {
+							_, _ = tx.Exec(`
+								INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+								VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
+							`, defenderID, simEnemy.ID, fmt.Sprintf("%s chết khi phòng thủ trước %s", simEnemy.Name, player.ActiveCombat.EnemyName))
+							logs = append(logs, simulator.CombatLog{
+								Turn:   simState.Turn,
+								Action: "PET_DEATH",
+								Detail: fmt.Sprintf("%s đã chết trong chiến đấu!", simEnemy.Name),
+							})
+						}
+					} else {
+						_, errPet = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+							float64(simEnemy.HP), simEnemy.ID, defenderID)
+					}
+					if errPet != nil {
+						logger.S.Warnf("Failed to update/delete defender pet %s: %v", simEnemy.ID, errPet)
+						_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_pet_enemy")
+					} else {
+						_, _ = tx.Exec("RELEASE SAVEPOINT sp_pet_enemy")
+					}
 				}
 			}
 		}

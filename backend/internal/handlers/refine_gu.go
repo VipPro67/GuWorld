@@ -399,7 +399,12 @@ func RefineGu(c *gin.Context) {
 
 	// Tiên cổ duy nhất check
 	if recipe.TargetRank >= 6 {
-		exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
+		exists, err := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
+		if err != nil {
+			logger.S.Errorf("RefineGu: CheckImmortalGuExists error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra Cổ duy nhất"})
+			return
+		}
 		if exists {
 			isUniqueImmortalFail = true
 			// Tiên cổ duy nhất đã tồn tại: không thể luyện thành công,

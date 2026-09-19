@@ -2515,7 +2515,15 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 
 	if tx != nil {
 		runner = tx
-		_, _ = tx.Exec(`SELECT pg_advisory_xact_lock(hashtext('refine_immortal_gu_' || $1))`, guID)
+		var lockOk bool
+		var err error
+		err = tx.QueryRow(`SELECT pg_try_advisory_xact_lock(hashtext('refine_immortal_gu_' || $1))`, guID).Scan(&lockOk)
+		if err != nil {
+			return false, err
+		}
+		if !lockOk {
+			return false, nil
+		}
 	} else if DB != nil {
 		runner = DB
 	} else {
@@ -2540,7 +2548,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		return true, nil
 	}
 
-	// 2. Kiểm tra trên sàn giao dịch/đấu giá (auction)
+	// 2. Kiểm tra trên sàn giao dịch/đấu giá (auction) và chợ public buyback_orders dạng sell
 	err = runner.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM auction,
@@ -2554,6 +2562,13 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 			  AND status = 'ACTIVE'
 			  AND elem->>'gu_id' = $1::text
 			  AND COALESCE((elem->>'rank')::int, 0) >= 6
+			UNION
+			SELECT 1 FROM buyback_orders
+			WHERE item_type = 'Gu'
+			  AND status = 'ACTIVE'
+			  AND order_type = 'SELL'
+			  AND item_target->>'gu_id' = $1::text
+			  AND COALESCE((item_target->>'rank')::int, 0) >= 6
 		)
 	`, guID).Scan(&exists)
 	if err != nil {
@@ -2563,21 +2578,11 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		return true, nil
 	}
 
-	// 3. Kiểm tra trong kho tông môn (sect_vault_gu hoặc fallback sects.vault_gu)
+	// 3. Kiểm tra trong kho tông môn (sect_vault_gu)
 	err = runner.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM sect_vault_gu
 			WHERE gu_id = $1 AND rank >= 6 AND quantity > 0
-			UNION
-			SELECT 1 FROM sects,
-			jsonb_array_elements(
-				CASE 
-					WHEN jsonb_typeof(vault_gu) = 'array' THEN vault_gu 
-					ELSE '[]'::jsonb 
-				END
-			) AS elem
-			WHERE elem->>'id' = $1::text
-			  AND COALESCE((elem->>'rank')::int, 0) >= 6
 		)
 	`, guID).Scan(&exists)
 	if err != nil {

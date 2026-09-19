@@ -147,6 +147,9 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			}
 
 			if errTarget != nil {
+				if errTarget != sql.ErrNoRows {
+					return "", false, errTarget
+				}
 				var exists bool
 				_ = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE id = $1)`, targetUUID).Scan(&exists)
 				if exists {
@@ -469,7 +472,11 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 
 					mon, ok := models.MonsterRegistry[adj.Content]
 					if !ok {
-						mon, _ = db.LoadMonsterTemplate(tx, adj.Content)
+						var errLoadMon error
+						mon, errLoadMon = db.LoadMonsterTemplate(tx, adj.Content)
+						if errLoadMon != nil {
+							return "", false, errLoadMon
+						}
 					}
 					if mon.ID != "" {
 						subRank := 1
@@ -631,6 +638,9 @@ func MovePlayer(c *gin.Context) {
 		winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during move: %v", err)
+			_ = tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
+			return
 		} else {
 			combatTriggered = false // Combat was auto-resolved
 			enemyName := "kẻ thù"
@@ -917,6 +927,9 @@ func MovePlayerPath(c *gin.Context) {
 		winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during path move: %v", err)
+			_ = tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
+			return
 		} else {
 			combatTriggered = false // Combat was auto-resolved
 			enemyName := "kẻ thù"

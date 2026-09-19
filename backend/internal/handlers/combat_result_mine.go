@@ -27,7 +27,12 @@ func applyAutoCombatMineOccupation(tx *sql.Tx, player *models.Player, activeComb
 	var monsterIDStr *string
 	var lastClaimedAt *time.Time
 	err := tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
-	if err == nil && currentOccupierStr != nil {
+	if err != nil {
+		if err != sql.ErrNoRows {
+			logger.S.Errorf("Failed to query mine slot %d: %v", slotID, err)
+			return nil, false
+		}
+	} else if currentOccupierStr != nil {
 		if defenderUUID, errParse := uuid.Parse(*currentOccupierStr); errParse == nil && defenderUUID != player.ID {
 			notify.Send(tx, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
 				fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
@@ -40,6 +45,7 @@ func applyAutoCombatMineOccupation(tx *sql.Tx, player *models.Player, activeComb
 			if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
 				if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
 					logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
+					return mineLogs, false
 				} else {
 					if mineType == "immortal" {
 						player.ImmortalStones += float64(stonesHalf)
@@ -66,7 +72,7 @@ func applyAutoCombatMineOccupation(tx *sql.Tx, player *models.Player, activeComb
 				})
 			}
 		}
-	} else if err == nil {
+	} else {
 		mineLogs = append(mineLogs, simulator.CombatLog{
 			Turn:   turn,
 			Action: "MINE_LOOT",

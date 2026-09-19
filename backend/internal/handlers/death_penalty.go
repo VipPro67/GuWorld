@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
@@ -442,15 +443,23 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 
 		if hasGroundLoot && loserRegion.Valid && loserRegion.String != "" && !IsSafeZone(loserRegion.String, loserX, loserY) {
 			lootBytes, _ := json.Marshal(lootData)
-			_, _ = tx.Exec(`
-				INSERT INTO map_ground_drops (
-					region_id, x, y, loser_id, loser_name, killer_id, killer_name,
-					loot_data, protected_until, expires_at
-				) VALUES (
-					$1, $2, $3, $4, $5, $6, $7,
-					$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '10 minutes'
-				)
-			`, loserRegion.String, loserX, loserY, loserID, loserName, winnerID, killerName, lootBytes)
+			if _, spErr := tx.Exec("SAVEPOINT sp_ground_drop"); spErr == nil {
+				_, errDrop := tx.Exec(`
+					INSERT INTO map_ground_drops (
+						region_id, x, y, loser_id, loser_name, killer_id, killer_name,
+						loot_data, protected_until, expires_at
+					) VALUES (
+						$1, $2, $3, $4, $5, $6, $7,
+						$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '10 minutes'
+					)
+				`, loserRegion.String, loserX, loserY, loserID, loserName, winnerID, killerName, lootBytes)
+				if errDrop != nil {
+					logger.S.Warnf("persistDeathDrop: failed to insert map_ground_drops for loser %s: %v", loserID, errDrop)
+					_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_ground_drop")
+				} else {
+					_, _ = tx.Exec("RELEASE SAVEPOINT sp_ground_drop")
+				}
+			}
 		}
 	}
 

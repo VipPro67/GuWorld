@@ -131,9 +131,9 @@ func ExploreNode(c *gin.Context) {
 			winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
 			if err != nil {
 				logger.S.Errorf("Auto-resolve combat failed: %v", err)
-				// Fall back to normal combat flow
-				logMsg = fmt.Sprintf("Nguy hiểm! Đột nhiên từ bụi cỏ rậm rạp tại %s, một con %s lao ra tấn công đạo hữu!", nodeName, enemy.EnemyName)
-				combatTriggered = true
+				_ = tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
+				return
 			} else {
 				combatTriggered = false // Combat was auto-resolved, no need for frontend combat screen
 				if winner == "Phe Ta" {
