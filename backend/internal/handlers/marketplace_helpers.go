@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
@@ -147,7 +148,9 @@ func StartAuctionSettlementWorker(ctx context.Context) {
 }
 
 func settleExpiredBuybackOrders() error {
-	rows, err := db.DB.Query(`SELECT id, buyer_id, unit_price, quantity_requested, quantity_filled, currency FROM buyback_orders WHERE status = 'ACTIVE' AND end_time <= NOW()`)
+	rows, err := db.DB.Query(`
+		SELECT id, buyer_id, order_type, item_type, item_target, COALESCE(item_data, 'null'::jsonb), unit_price, quantity_requested, quantity_filled, currency 
+		FROM buyback_orders WHERE status = 'ACTIVE' AND end_time <= NOW()`)
 	if err != nil {
 		return err
 	}
@@ -156,6 +159,10 @@ func settleExpiredBuybackOrders() error {
 	type expiredBuyback struct {
 		id                uuid.UUID
 		buyerID           uuid.UUID
+		orderType         string
+		itemType          string
+		itemTarget        []byte
+		itemData          []byte
 		unitPrice         float64
 		quantityRequested int64
 		quantityFilled    int64
@@ -164,7 +171,10 @@ func settleExpiredBuybackOrders() error {
 	var list []expiredBuyback
 	for rows.Next() {
 		var eb expiredBuyback
-		if err := rows.Scan(&eb.id, &eb.buyerID, &eb.unitPrice, &eb.quantityRequested, &eb.quantityFilled, &eb.currency); err == nil {
+		if err := rows.Scan(&eb.id, &eb.buyerID, &eb.orderType, &eb.itemType, &eb.itemTarget, &eb.itemData, &eb.unitPrice, &eb.quantityRequested, &eb.quantityFilled, &eb.currency); err == nil {
+			if eb.orderType == "" {
+				eb.orderType = "BUY"
+			}
 			list = append(list, eb)
 		}
 	}
@@ -175,7 +185,6 @@ func settleExpiredBuybackOrders() error {
 			db.DB.Exec(`UPDATE buyback_orders SET status = 'FILLED' WHERE id = $1`, eb.id)
 			continue
 		}
-		refundAmount := pricing.Quantize(float64(unfilledQty) * eb.unitPrice)
 		tx, err := db.DB.Begin()
 		if err != nil {
 			continue
@@ -185,10 +194,35 @@ func settleExpiredBuybackOrders() error {
 			tx.Rollback()
 			continue
 		}
-		if eb.currency == "immortal" {
-			_, _ = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`, refundAmount, eb.buyerID)
+		if eb.orderType == "BUY" {
+			refundAmount := pricing.Quantize(float64(unfilledQty) * eb.unitPrice)
+			if eb.currency == "immortal" {
+				_, _ = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`, refundAmount, eb.buyerID)
+			} else {
+				_, _ = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, refundAmount, eb.buyerID)
+			}
 		} else {
-			_, _ = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, refundAmount, eb.buyerID)
+			// SELL Order: restore items/gus/recipes
+			if eb.itemType == "Material" {
+				var targetMat string
+				_ = json.Unmarshal(eb.itemTarget, &targetMat)
+				_ = addMaterialTx(tx, eb.buyerID, targetMat, unfilledQty)
+			} else if eb.itemType == "Gu" {
+				var lockedGuIDs []string
+				_ = json.Unmarshal(eb.itemData, &lockedGuIDs)
+				for _, instID := range lockedGuIDs {
+					_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1 WHERE id = $2`, eb.buyerID, instID)
+				}
+			} else if eb.itemType == "Recipe" {
+				var recProgress services.RecipeProgress
+				_ = json.Unmarshal(eb.itemData, &recProgress)
+				_ = RecipeSvc.Upsert(tx, &services.RecipeProgress{
+					PlayerID:       eb.buyerID.String(),
+					RecipeID:       recProgress.RecipeID,
+					CompletionRate: recProgress.CompletionRate,
+					IsUnlocked:     true,
+				})
+			}
 		}
 		_, _ = tx.Exec(`UPDATE buyback_orders SET status = 'EXPIRED' WHERE id = $1`, eb.id)
 		tx.Commit()

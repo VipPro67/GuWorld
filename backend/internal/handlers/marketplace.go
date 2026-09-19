@@ -535,27 +535,22 @@ func PlaceBid(c *gin.Context) {
 		player.ImmortalStones -= neededAmount
 	}
 
-	// Refund the previous bidder
+	// Refund the previous bidder — atomic increment, no full player load needed
 	if bidder.Valid && bidder.String != player.ID.String() {
-		var prevBidder models.Player
 		prevBidderID, _ := uuid.Parse(bidder.String)
-		prevBidder, err = evaluateManaTx(tx, prevBidderID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load previous bidder"})
-			return
+		refundCol := "primeval_stones"
+		if currency == "immortal" {
+			refundCol = "immortal_stones"
 		}
-		if currency == "primeval" {
-			prevBidder.PrimevalStones += current
-			_, err = tx.Exec(`UPDATE players SET primeval_stones=$1 WHERE id=$2`, prevBidder.PrimevalStones, prevBidder.ID)
-		} else {
-			prevBidder.ImmortalStones += current
-			_, err = tx.Exec(`UPDATE players SET immortal_stones=$1 WHERE id=$2`, prevBidder.ImmortalStones, prevBidder.ID)
-		}
+		_, err = tx.Exec(
+			fmt.Sprintf(`UPDATE players SET %s = %s + $1 WHERE id = $2`, refundCol, refundCol),
+			current, prevBidderID,
+		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "refund failed"})
 			return
 		}
-		notify.Send(db.DB, prevBidder.ID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency))
+		notify.Send(db.DB, prevBidderID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency))
 	}
 
 	if currency == "primeval" {
@@ -596,10 +591,9 @@ func PlaceBid(c *gin.Context) {
 		if currency == "immortal" {
 			currencyName = "Tiên Nguyên Thạch"
 		}
-		var buyerUsername string
-		_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, authID).Scan(&buyerUsername)
+		// Use player.Username already loaded — no extra query needed
 		notify.Send(db.DB, sellerID, "auction_bid", "Ai đó đặt giá",
-			fmt.Sprintf("%s đã đặt giá %.3f %s cho mặt hàng của bạn.", buyerUsername, req.Amount, currencyName))
+			fmt.Sprintf("%s đã đặt giá %.3f %s cho mặt hàng của bạn.", player.Username, req.Amount, currencyName))
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
 }

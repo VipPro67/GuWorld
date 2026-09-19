@@ -97,20 +97,25 @@ export function BaoHoangMarket({
   // Form states for Order Creation
   const [createMode, setCreateMode] = useState<"buyback" | "sellOrder" | "tradeOffer" | "auction">("buyback");
   
+  const recipes = useGameStore((s) => s.recipes);
+  const fetchRecipes = useGameStore((s) => s.fetchRecipes);
+
   // Buyback Order Creation Form State
   const [bbItemType, setBbItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
   const [bbTargetMat, setBbTargetMat] = useState("");
   const [bbTargetGu, setBbTargetGu] = useState("");
   const [bbTargetRank, setBbTargetRank] = useState(1);
+  const [bbTargetRecipe, setBbTargetRecipe] = useState("");
   const [bbUnitPrice, setBbUnitPrice] = useState(10);
   const [bbQuantity, setBbQuantity] = useState(1);
   const [bbCurrency, setBbCurrency] = useState<"primeval" | "immortal">("primeval");
   const [bbDuration, setBbDuration] = useState(72);
 
   // Sell Order Creation Form State
-  const [sellItemType, setSellItemType] = useState<"Gu" | "Material">("Material");
+  const [sellItemType, setSellItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
   const [sellMatID, setSellMatID] = useState("");
   const [sellGuInstID, setSellGuInstID] = useState("");
+  const [sellRecipeID, setSellRecipeID] = useState("");
   const [sellUnitPrice, setSellUnitPrice] = useState(10);
   const [sellQuantity, setSellQuantity] = useState(1);
   const [sellCurrency, setSellCurrency] = useState<"primeval" | "immortal">("primeval");
@@ -123,14 +128,27 @@ export function BaoHoangMarket({
   // Form state for Async Trade Offer Creation
   const [offeredStones, setOfferedStones] = useState(0);
   const [offeredImmortal, setOfferedImmortal] = useState(0);
-  const [offeredGuIDs] = useState<string[]>([]);
-  const [offeredMats] = useState<Record<string, number>>({});
+  const [offeredGuIDs, setOfferedGuIDs] = useState<string[]>([]);
+  const [offeredMats, setOfferedMats] = useState<Record<string, number>>({});
+  const [offeredRecipes, setOfferedRecipes] = useState<Record<string, number>>({});
 
   const [requestedStones, setRequestedStones] = useState(0);
   const [requestedImmortal, setRequestedImmortal] = useState(0);
-  const [requestedGuIDs] = useState<string[]>([]);
-  const [requestedMats] = useState<Record<string, number>>({});
-  const [tradeOfferDuration] = useState(72);
+  const [requestedGuIDs, setRequestedGuIDs] = useState<string[]>([]);
+  const [requestedMats, setRequestedMats] = useState<Record<string, number>>({});
+  const [requestedRecipes, setRequestedRecipes] = useState<Record<string, number>>({});
+  const [tradeOfferDuration, setTradeOfferDuration] = useState(72);
+
+  // Picker temp states for Trade Offer Builder
+  const [addOffMatID, setAddOffMatID] = useState("");
+  const [addOffMatQty, setAddOffMatQty] = useState(1);
+  const [addOffGuID, setAddOffGuID] = useState("");
+  const [addOffRecID, setAddOffRecID] = useState("");
+
+  const [addReqMatID, setAddReqMatID] = useState("");
+  const [addReqMatQty, setAddReqMatQty] = useState(1);
+  const [addReqGuID, setAddReqGuID] = useState("");
+  const [addReqRecID, setAddReqRecID] = useState("");
 
   // Auction form state
   const [aucItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
@@ -141,6 +159,10 @@ export function BaoHoangMarket({
   const [selectedAucMat] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    fetchRecipes();
+  }, [fetchRecipes]);
 
   useEffect(() => {
     fetchBuybackOrders();
@@ -180,6 +202,9 @@ export function BaoHoangMarket({
     } else if (bbItemType === "Gu") {
       if (!bbTargetGu) return;
       targetPayload = { gu_id: bbTargetGu, rank: bbTargetRank };
+    } else if (bbItemType === "Recipe") {
+      if (!bbTargetRecipe) return;
+      targetPayload = bbTargetRecipe;
     }
     await createBuybackOrder({
       orderType: "BUY",
@@ -206,6 +231,9 @@ export function BaoHoangMarket({
       if (!g) return;
       targetPayload = { gu_id: g.gu_id, rank: g.rank };
       guInstIDs = [sellGuInstID];
+    } else if (sellItemType === "Recipe") {
+      if (!sellRecipeID) return;
+      targetPayload = sellRecipeID;
     }
     await createBuybackOrder({
       orderType: "SELL",
@@ -228,14 +256,14 @@ export function BaoHoangMarket({
         immortal_stones: offeredImmortal,
         gus: offeredGuIDs,
         materials: offeredMats,
-        recipes: {},
+        recipes: offeredRecipes,
       },
       requested: {
         primeval_stones: requestedStones,
         immortal_stones: requestedImmortal,
         gus: requestedGuIDs,
         materials: requestedMats,
-        recipes: {},
+        recipes: requestedRecipes,
       },
       durationHours: tradeOfferDuration,
     });
@@ -259,12 +287,69 @@ export function BaoHoangMarket({
     setTab("auction");
   };
 
-  const activeAuctionListings = listings.filter((l) => l.listing_type === "AUCTION");
+  // Auction custom bid modal state
+  const [biddingListing, setBiddingListing] = useState<Listing | null>(null);
+  const [customBidPrice, setCustomBidPrice] = useState(0);
+
+  const activeAuctionListings = listings.filter((l) => {
+    if (l.listing_type !== "AUCTION") return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const details = getListingDetails(l);
+    const seller = (l.target_buyer_username || l.seller_id).toLowerCase();
+    return details.title.toLowerCase().includes(q) || (details.subtitle && details.subtitle.toLowerCase().includes(q)) || seller.includes(q);
+  });
 
   const filteredOrderBook = buybackOrders.filter((o) => {
     const orderType = o.order_type || "BUY";
     if (orderBookFilter !== "all" && orderType !== orderBookFilter) return false;
-    return true;
+    if (!searchQuery.trim()) return true;
+
+    const q = searchQuery.toLowerCase();
+    let targetName = "Vật phẩm";
+    if (o.item_type === "Material" && typeof o.item_target === "string") {
+      targetName = itemDictionary[o.item_target]?.name || o.item_target;
+    } else if (o.item_type === "Gu" && typeof o.item_target === "object" && o.item_target !== null) {
+      const t = o.item_target as { gu_id?: string; rank?: number };
+      if (t.gu_id) {
+        targetName = guSpecFor(t.gu_id, t.rank || 1)?.name || t.gu_id;
+      }
+    } else if (o.item_type === "Recipe") {
+      const recId = typeof o.item_target === "string" ? o.item_target : String(o.item_target);
+      const rSpec = recipes.find((r) => r.id === recId);
+      const targetGuName = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+      targetName = targetGuName ? `Bí phương ${targetGuName}` : `Bí phương ${recId}`;
+    }
+    const buyerName = (o.buyer_username || o.buyer_id).toLowerCase();
+    return targetName.toLowerCase().includes(q) || o.item_type.toLowerCase().includes(q) || buyerName.includes(q);
+  });
+
+  const filteredTradeOffers = tradeOffers.filter((offer) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const creator = (offer.creator_username || offer.creator_id).toLowerCase();
+    const offeredMatNames = Object.keys(offer.offered.materials || {}).map((k) => (itemDictionary[k]?.name || k).toLowerCase());
+    const requestedMatNames = Object.keys(offer.requested.materials || {}).map((k) => (itemDictionary[k]?.name || k).toLowerCase());
+    const offeredGuNames = (offer.offered.gus || []).map((gid) => {
+      const g = guInventory.find((inst) => inst.instance_id === gid);
+      return g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id).toLowerCase() : gid.toLowerCase();
+    });
+    const requestedGuNames = (offer.requested.gus || []).map((gid) => {
+      const spec = guSpecFor(gid, 1);
+      return spec ? spec.name.toLowerCase() : gid.toLowerCase();
+    });
+    const offeredRecNames = Object.keys(offer.offered.recipes || {}).map((r) => r.toLowerCase());
+    const requestedRecNames = Object.keys(offer.requested.recipes || {}).map((r) => r.toLowerCase());
+
+    return (
+      creator.includes(q) ||
+      offeredMatNames.some((n) => n.includes(q)) ||
+      requestedMatNames.some((n) => n.includes(q)) ||
+      offeredGuNames.some((n) => n.includes(q)) ||
+      requestedGuNames.some((n) => n.includes(q)) ||
+      offeredRecNames.some((n) => n.includes(q)) ||
+      requestedRecNames.some((n) => n.includes(q))
+    );
   });
 
   const getListingDetails = (listing: Listing): { title: string; subtitle?: string } => {
@@ -416,6 +501,11 @@ export function BaoHoangMarket({
                     if (t.gu_id) {
                       targetName = guSpecFor(t.gu_id, t.rank || 1)?.name || t.gu_id;
                     }
+                  } else if (order.item_type === "Recipe") {
+                    const recId = typeof order.item_target === "string" ? order.item_target : String(order.item_target);
+                    const rSpec = recipes.find((r) => r.id === recId);
+                    const targetGuName = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                    targetName = targetGuName ? `Bí phương ${targetGuName}` : `Bí phương ${recId}`;
                   }
                   const isMine = order.buyer_id === player.id;
                   const remaining = order.quantity_requested - order.quantity_filled;
@@ -515,13 +605,25 @@ export function BaoHoangMarket({
         {/* TAB 2: TRAO ĐỔI AUTO (ASYNC TRADE OFFERS) */}
         {tab === "asyncTrade" && (
           <div className="space-y-4">
-            {tradeOffers.length === 0 ? (
+            <div className="flex justify-end">
+              <div className="relative w-64">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <GameInput
+                  placeholder="Tìm kiếm đơn trao đổi..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 text-xs"
+                />
+              </div>
+            </div>
+
+            {filteredTradeOffers.length === 0 ? (
               <div className="text-center py-16 bg-zinc-950/40 rounded-2xl border border-zinc-900 text-zinc-500 font-serif">
-                Chưa có đơn trao đổi tự động nào. Hãy đăng đơn trao đổi mới!
+                Chưa có đơn trao đổi tự động nào khớp với tìm kiếm.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {tradeOffers.map((offer) => {
+                {filteredTradeOffers.map((offer) => {
                   const isMine = offer.creator_id === player.id;
                   return (
                     <GameCard key={offer.id} variant="vital" className="p-4 space-y-4">
@@ -545,6 +647,17 @@ export function BaoHoangMarket({
                           {Object.entries(offer.offered.materials || {}).map(([k, v]) => (
                             <div key={k}>• {v}x {itemDictionary[k]?.name || k}</div>
                           ))}
+                          {(offer.offered.gus || []).map((instId) => {
+                            const g = guInventory.find((i) => i.instance_id === instId);
+                            const name = g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id) : instId;
+                            return <div key={instId}>• Cổ: {name}</div>;
+                          })}
+                          {Object.entries(offer.offered.recipes || {}).map(([recId, rate]) => {
+                            const rSpec = recipes.find((r) => r.id === recId);
+                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                            const name = targetGu ? `Bí phương ${targetGu}` : `Bí phương ${recId}`;
+                            return <div key={recId}>• {name} ({rate}%)</div>;
+                          })}
                         </div>
 
                         <div className="bg-amber-950/20 p-3 rounded-xl border border-amber-500/20 space-y-1">
@@ -556,6 +669,16 @@ export function BaoHoangMarket({
                           {Object.entries(offer.requested.materials || {}).map(([k, v]) => (
                             <div key={k}>• {v}x {itemDictionary[k]?.name || k}</div>
                           ))}
+                          {(offer.requested.gus || []).map((gid) => {
+                            const spec = guSpecFor(gid, 1);
+                            return <div key={gid}>• Cổ: {spec?.name || gid}</div>;
+                          })}
+                          {Object.entries(offer.requested.recipes || {}).map(([recId]) => {
+                            const rSpec = recipes.find((r) => r.id === recId);
+                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                            const name = targetGu ? `Bí phương ${targetGu}` : `Bí phương ${recId}`;
+                            return <div key={recId}>• {name}</div>;
+                          })}
                         </div>
                       </div>
 
@@ -593,9 +716,21 @@ export function BaoHoangMarket({
         {/* TAB 3: ĐẤU GIÁ (AUCTION) */}
         {tab === "auction" && (
           <div className="space-y-4">
+            <div className="flex justify-end">
+              <div className="relative w-64">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <GameInput
+                  placeholder="Tìm kiếm bảo vật đấu giá..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 text-xs"
+                />
+              </div>
+            </div>
+
             {activeAuctionListings.length === 0 ? (
               <div className="text-center py-16 bg-zinc-950/40 rounded-2xl border border-zinc-900 text-zinc-500 font-serif">
-                Hiện không có bảo vật nào đang được đấu giá.
+                Hiện không có bảo vật nào đang được đấu giá khớp tìm kiếm.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -629,14 +764,28 @@ export function BaoHoangMarket({
                           <Clock className="w-3 h-3 text-zinc-400" />
                           Hết hạn: {new Date(listing.end_time).toLocaleDateString()}
                         </span>
-                        <GameButton
-                          size="xs"
-                          variant="primary"
-                          onClick={() => onBid(listing.id, listing.current_price + 10)}
-                          loading={actionLoading}
-                        >
-                          Đặt Giá (+10)
-                        </GameButton>
+                        <div className="flex items-center gap-1.5">
+                          <GameButton
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => onBid(listing.id, listing.current_price + 10)}
+                            loading={actionLoading}
+                          >
+                            +10
+                          </GameButton>
+                          <GameButton
+                            size="xs"
+                            variant="primary"
+                            onClick={() => {
+                              setBiddingListing(listing);
+                              setCustomBidPrice(listing.current_price + 10);
+                            }}
+                            loading={actionLoading}
+                            leftIcon={<Gavel className="w-3 h-3" />}
+                          >
+                            Đặt Giá
+                          </GameButton>
+                        </div>
                       </div>
                     </GameCard>
                   );
@@ -693,6 +842,7 @@ export function BaoHoangMarket({
                     >
                       <option value="Material">Nguyên Liệu / Tiên Tài</option>
                       <option value="Gu">Cổ Trùng</option>
+                      <option value="Recipe">Bí Phương Phối Chế</option>
                     </select>
                   </div>
                   <div>
@@ -747,6 +897,27 @@ export function BaoHoangMarket({
                   </div>
                 )}
 
+                {bbItemType === "Recipe" && (
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Chọn Bí Phương Cần Thu Mua</label>
+                    <select
+                      value={bbTargetRecipe}
+                      onChange={(e) => setBbTargetRecipe(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
+                    >
+                      <option value="">-- Chọn Bí Phương --</option>
+                      {recipes.map((r) => {
+                        const targetGu = r.target_gu_id ? guSpecFor(r.target_gu_id, r.target_rank || 1)?.name : "";
+                        return (
+                          <option key={r.id} value={r.id}>
+                            {targetGu ? `Bí phương ${targetGu} (${r.id})` : r.id}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Đơn Giá Mua</label>
@@ -782,11 +953,12 @@ export function BaoHoangMarket({
                     <label className="text-xs text-zinc-400 block mb-1">Loại Vật Phẩm Bán</label>
                     <select
                       value={sellItemType}
-                      onChange={(e) => setSellItemType(e.target.value as "Gu" | "Material")}
+                      onChange={(e) => setSellItemType(e.target.value as "Gu" | "Material" | "Recipe")}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
                     >
                       <option value="Material">Nguyên Liệu / Tiên Tài</option>
                       <option value="Gu">Cổ Trùng Trong Túi</option>
+                      <option value="Recipe">Bí Phương Đã Khai Mở</option>
                     </select>
                   </div>
                   <div>
@@ -816,7 +988,7 @@ export function BaoHoangMarket({
                       ))}
                     </select>
                   </div>
-                ) : (
+                ) : sellItemType === "Gu" ? (
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Chọn Cổ Trùng Đăng Bán</label>
                     <select
@@ -830,6 +1002,26 @@ export function BaoHoangMarket({
                         return (
                           <option key={g.instance_id} value={g.instance_id}>
                             {spec?.name || g.gu_id} (Hạng {g.rank})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Chọn Bí Phương Đăng Bán</label>
+                    <select
+                      value={sellRecipeID}
+                      onChange={(e) => setSellRecipeID(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
+                    >
+                      <option value="">-- Chọn Bí Phương Trong Kho --</option>
+                      {(player.unlocked_recipes || []).map((ur) => {
+                        const rSpec = recipes.find((r) => r.id === ur.recipe_id);
+                        const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                        return (
+                          <option key={ur.recipe_id} value={ur.recipe_id}>
+                            {targetGu ? `Bí phương ${targetGu} (${ur.completion_rate}%)` : `${ur.recipe_id} (${ur.completion_rate}%)`}
                           </option>
                         );
                       })}
@@ -868,30 +1060,365 @@ export function BaoHoangMarket({
             {/* FORM 3: ASYNC TRADE OFFER */}
             {createMode === "tradeOffer" && (
               <form onSubmit={handleCreateTradeOfferSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-800 space-y-3">
-                    <h5 className="text-xs font-bold text-emerald-400 uppercase">Đồ Đem Trao Đổi (Offered)</h5>
-                    <div>
-                      <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch Đưa Đi</label>
-                      <GameInput type="number" min={0} value={offeredStones} onChange={(e) => setOfferedStones(Number(e.target.value))} />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên Đưa Đi</label>
-                      <GameInput type="number" min={0} value={offeredImmortal} onChange={(e) => setOfferedImmortal(Number(e.target.value))} />
+
+                {/* ===== PANEL: ĐỒ ĐEM TRAO ĐỔI ===== */}
+                <div className="rounded-xl border border-emerald-500/30 overflow-hidden">
+                  {/* Header */}
+                  <div className="bg-emerald-950/60 px-4 py-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 text-base">📤</span>
+                      <span className="text-sm font-bold text-emerald-300">Đồ Đem Trao Đổi</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">(tài sản sẽ bị khóa)</span>
                     </div>
                   </div>
 
-                  <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-800 space-y-3">
-                    <h5 className="text-xs font-bold text-amber-400 uppercase">Đồ Muốn Nhận (Requested)</h5>
+                  <div className="bg-zinc-950/70 p-4 space-y-4">
+                    {/* Currency */}
                     <div>
-                      <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch Yêu Cầu</label>
-                      <GameInput type="number" min={0} value={requestedStones} onChange={(e) => setRequestedStones(Number(e.target.value))} />
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">💰 Tiền Tệ</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch</label>
+                          <GameInput type="number" min={0} value={offeredStones} onChange={(e) => setOfferedStones(Number(e.target.value))} />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên</label>
+                          <GameInput type="number" min={0} value={offeredImmortal} onChange={(e) => setOfferedImmortal(Number(e.target.value))} />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên Yêu Cầu</label>
-                      <GameInput type="number" min={0} value={requestedImmortal} onChange={(e) => setRequestedImmortal(Number(e.target.value))} />
+
+                    {/* Materials */}
+                    <div className="border-t border-zinc-800 pt-3">
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📦 Vật Phẩm</p>
+                      <div className="flex gap-2">
+                        <select
+                          value={addOffMatID}
+                          onChange={(e) => setAddOffMatID(e.target.value)}
+                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
+                        >
+                          <option value="">-- Chọn Nguyên Liệu --</option>
+                          {Object.entries(itemDictionary).map(([k, v]) => (
+                            <option key={k} value={k}>{v.name} ({k})</option>
+                          ))}
+                        </select>
+                        <GameInput
+                          type="number"
+                          min={1}
+                          value={addOffMatQty}
+                          onChange={(e) => setAddOffMatQty(Number(e.target.value))}
+                          className="w-20 text-xs"
+                        />
+                        <GameButton
+                          size="xs"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => {
+                            if (!addOffMatID || addOffMatQty <= 0) return;
+                            setOfferedMats(prev => ({ ...prev, [addOffMatID]: (prev[addOffMatID] || 0) + addOffMatQty }));
+                            setAddOffMatID("");
+                          }}
+                        >
+                          Thêm
+                        </GameButton>
+                      </div>
+                      {Object.keys(offeredMats).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(offeredMats).map(([k, qty]) => (
+                            <span key={k} className="inline-flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/40 text-emerald-200 text-xs px-3 py-1 rounded-full">
+                              <span className="font-medium">{qty}×</span> {itemDictionary[k]?.name || k}
+                              <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...offeredMats }; delete c[k]; setOfferedMats(c); }} />
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Gu */}
+                    <div className="border-t border-zinc-800 pt-3">
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">🐛 Cổ Trùng</p>
+                      <div className="flex gap-2">
+                        <select
+                          value={addOffGuID}
+                          onChange={(e) => setAddOffGuID(e.target.value)}
+                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
+                        >
+                          <option value="">-- Chọn Cổ Trùng Trong Túi --</option>
+                          {guInventory.filter(g => !g.is_vital && g.status !== "DEAD" && !offeredGuIDs.includes(g.instance_id)).map((g) => {
+                            const spec = guSpecFor(g.gu_id, g.rank);
+                            return (
+                              <option key={g.instance_id} value={g.instance_id}>
+                                {spec?.name || g.gu_id} (Hạng {g.rank})
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <GameButton
+                          size="xs"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => {
+                            if (!addOffGuID) return;
+                            setOfferedGuIDs(prev => [...prev, addOffGuID]);
+                            setAddOffGuID("");
+                          }}
+                        >
+                          Thêm
+                        </GameButton>
+                      </div>
+                      {offeredGuIDs.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {offeredGuIDs.map((instId) => {
+                            const g = guInventory.find(i => i.instance_id === instId);
+                            const name = g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id) : instId;
+                            return (
+                              <span key={instId} className="inline-flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/40 text-emerald-200 text-xs px-3 py-1 rounded-full">
+                                {name}
+                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => setOfferedGuIDs(prev => prev.filter(id => id !== instId))} />
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Recipes */}
+                    <div className="border-t border-zinc-800 pt-3">
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📜 Bí Phương Đã Khai Mở</p>
+                      <div className="flex gap-2">
+                        <select
+                          value={addOffRecID}
+                          onChange={(e) => setAddOffRecID(e.target.value)}
+                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
+                        >
+                          <option value="">-- Chọn Bí Phương --</option>
+                          {(player.unlocked_recipes || []).filter(r => !offeredRecipes[r.recipe_id]).map((ur) => {
+                            const rSpec = recipes.find(r => r.id === ur.recipe_id);
+                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                            return (
+                              <option key={ur.recipe_id} value={ur.recipe_id}>
+                                {targetGu ? `Bí phương ${targetGu} (${ur.completion_rate}%)` : `${ur.recipe_id} (${ur.completion_rate}%)`}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <GameButton
+                          size="xs"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => {
+                            if (!addOffRecID) return;
+                            const ur = (player.unlocked_recipes || []).find(r => r.recipe_id === addOffRecID);
+                            setOfferedRecipes(prev => ({ ...prev, [addOffRecID]: ur ? ur.completion_rate : 100 }));
+                            setAddOffRecID("");
+                          }}
+                        >
+                          Thêm
+                        </GameButton>
+                      </div>
+                      {Object.keys(offeredRecipes).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(offeredRecipes).map(([recId, rate]) => {
+                            const rSpec = recipes.find(r => r.id === recId);
+                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                            const name = targetGu ? `Bí phương ${targetGu}` : recId;
+                            return (
+                              <span key={recId} className="inline-flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/40 text-emerald-200 text-xs px-3 py-1 rounded-full">
+                                {name} <span className="text-emerald-400">({rate}%)</span>
+                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...offeredRecipes }; delete c[recId]; setOfferedRecipes(c); }} />
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
+                </div>
+
+                {/* Arrow / divider */}
+                <div className="flex items-center gap-3 text-zinc-600">
+                  <div className="flex-1 border-t border-dashed border-zinc-700" />
+                  <span className="text-xl">⇅</span>
+                  <div className="flex-1 border-t border-dashed border-zinc-700" />
+                </div>
+
+                {/* ===== PANEL: ĐỒ MUỐN NHẬN ===== */}
+                <div className="rounded-xl border border-amber-500/30 overflow-hidden">
+                  {/* Header */}
+                  <div className="bg-amber-950/50 px-4 py-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-400 text-base">📥</span>
+                      <span className="text-sm font-bold text-amber-300">Đồ Muốn Nhận</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">(người đổi phải cung cấp)</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-950/70 p-4 space-y-4">
+                    {/* Currency */}
+                    <div>
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">💰 Tiền Tệ</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch</label>
+                          <GameInput type="number" min={0} value={requestedStones} onChange={(e) => setRequestedStones(Number(e.target.value))} />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên</label>
+                          <GameInput type="number" min={0} value={requestedImmortal} onChange={(e) => setRequestedImmortal(Number(e.target.value))} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Materials */}
+                    <div className="border-t border-zinc-800 pt-3">
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📦 Vật Phẩm</p>
+                      <div className="flex gap-2">
+                        <select
+                          value={addReqMatID}
+                          onChange={(e) => setAddReqMatID(e.target.value)}
+                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
+                        >
+                          <option value="">-- Chọn Nguyên Liệu --</option>
+                          {Object.entries(itemDictionary).map(([k, v]) => (
+                            <option key={k} value={k}>{v.name} ({k})</option>
+                          ))}
+                        </select>
+                        <GameInput
+                          type="number"
+                          min={1}
+                          value={addReqMatQty}
+                          onChange={(e) => setAddReqMatQty(Number(e.target.value))}
+                          className="w-20 text-xs"
+                        />
+                        <GameButton
+                          size="xs"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => {
+                            if (!addReqMatID || addReqMatQty <= 0) return;
+                            setRequestedMats(prev => ({ ...prev, [addReqMatID]: (prev[addReqMatID] || 0) + addReqMatQty }));
+                            setAddReqMatID("");
+                          }}
+                        >
+                          Thêm
+                        </GameButton>
+                      </div>
+                      {Object.keys(requestedMats).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(requestedMats).map(([k, qty]) => (
+                            <span key={k} className="inline-flex items-center gap-1.5 bg-amber-900/40 border border-amber-600/40 text-amber-200 text-xs px-3 py-1 rounded-full">
+                              <span className="font-medium">{qty}×</span> {itemDictionary[k]?.name || k}
+                              <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...requestedMats }; delete c[k]; setRequestedMats(c); }} />
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Gu */}
+                    <div className="border-t border-zinc-800 pt-3">
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">🐛 Cổ Trùng <span className="normal-case font-normal text-zinc-600">(nhập mã Cổ)</span></p>
+                      <div className="flex gap-2">
+                        <GameInput
+                          placeholder="VD: GU_DIVINE_SENSE"
+                          value={addReqGuID}
+                          onChange={(e) => setAddReqGuID(e.target.value)}
+                          className="flex-1 text-xs min-w-0"
+                        />
+                        <GameButton
+                          size="xs"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => {
+                            if (!addReqGuID.trim()) return;
+                            const clean = addReqGuID.trim();
+                            if (!requestedGuIDs.includes(clean)) {
+                              setRequestedGuIDs(prev => [...prev, clean]);
+                            }
+                            setAddReqGuID("");
+                          }}
+                        >
+                          Thêm
+                        </GameButton>
+                      </div>
+                      {requestedGuIDs.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {requestedGuIDs.map((gid) => {
+                            const spec = guSpecFor(gid, 1);
+                            return (
+                              <span key={gid} className="inline-flex items-center gap-1.5 bg-amber-900/40 border border-amber-600/40 text-amber-200 text-xs px-3 py-1 rounded-full">
+                                {spec?.name || gid}
+                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => setRequestedGuIDs(prev => prev.filter(id => id !== gid))} />
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Recipes */}
+                    <div className="border-t border-zinc-800 pt-3">
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📜 Bí Phương Yêu Cầu</p>
+                      <div className="flex gap-2">
+                        <select
+                          value={addReqRecID}
+                          onChange={(e) => setAddReqRecID(e.target.value)}
+                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
+                        >
+                          <option value="">-- Chọn Bí Phương Cần --</option>
+                          {recipes.filter(r => !requestedRecipes[r.id]).map((r) => {
+                            const targetGu = r.target_gu_id ? guSpecFor(r.target_gu_id, r.target_rank || 1)?.name : "";
+                            return (
+                              <option key={r.id} value={r.id}>
+                                {targetGu ? `Bí phương ${targetGu} (${r.id})` : r.id}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <GameButton
+                          size="xs"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => {
+                            if (!addReqRecID) return;
+                            setRequestedRecipes(prev => ({ ...prev, [addReqRecID]: 100 }));
+                            setAddReqRecID("");
+                          }}
+                        >
+                          Thêm
+                        </GameButton>
+                      </div>
+                      {Object.keys(requestedRecipes).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.keys(requestedRecipes).map((recId) => {
+                            const rSpec = recipes.find(r => r.id === recId);
+                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                            const name = targetGu ? `Bí phương ${targetGu}` : recId;
+                            return (
+                              <span key={recId} className="inline-flex items-center gap-1.5 bg-amber-900/40 border border-amber-600/40 text-amber-200 text-xs px-3 py-1 rounded-full">
+                                {name}
+                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...requestedRecipes }; delete c[recId]; setRequestedRecipes(c); }} />
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center gap-3 bg-zinc-900/60 rounded-lg px-4 py-2.5">
+                  <span className="text-xs text-zinc-400">⏱ Thời Hạn:</span>
+                  <GameInput
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={tradeOfferDuration}
+                    onChange={(e) => setTradeOfferDuration(Number(e.target.value))}
+                    className="w-20 text-xs"
+                  />
+                  <span className="text-xs text-zinc-500">giờ (tối đa 168)</span>
                 </div>
 
                 <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading}>
@@ -995,6 +1522,61 @@ export function BaoHoangMarket({
                 }}
               >
                 {selectedBuybackOrder.order_type === "SELL" ? "Xác Nhận Mua" : "Xác Nhận Bán"}
+              </GameButton>
+            </div>
+          </GameCard>
+        </div>
+      )}
+      {/* MODAL: CUSTOM BID FOR AUCTION LISTING */}
+      {biddingListing && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <GameCard variant="vital" className="p-6 max-w-md w-full space-y-4 relative">
+            <h3 className="text-lg font-bold font-serif text-amber-200">
+              Đặt Giá Đấu Giá Bảo Vật
+            </h3>
+            <p className="text-xs text-zinc-400">
+              {getListingDetails(biddingListing).title}
+            </p>
+            <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono space-y-1">
+              <div className="text-zinc-400">
+                • Giá hiện tại: <span className="text-amber-400 font-bold">{biddingListing.current_price} {biddingListing.currency === "immortal" ? "Tiên Nguyên" : "Nguyên Thạch"}</span>
+              </div>
+              <div className="text-zinc-400">
+                • Yêu cầu mức giá tối thiểu: <span className="text-emerald-400 font-bold">{biddingListing.current_price + 1}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-zinc-400 block mb-1">Mức giá đặt mới</label>
+              <GameInput
+                type="number"
+                min={biddingListing.current_price + 1}
+                value={customBidPrice}
+                onChange={(e) => setCustomBidPrice(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <GameButton
+                variant="ghost"
+                className="flex-1"
+                onClick={() => setBiddingListing(null)}
+              >
+                Hủy
+              </GameButton>
+              <GameButton
+                variant="primary"
+                className="flex-1"
+                loading={actionLoading}
+                disabled={customBidPrice <= biddingListing.current_price}
+                onClick={async () => {
+                  if (customBidPrice > biddingListing.current_price) {
+                    await onBid(biddingListing.id, customBidPrice);
+                    setBiddingListing(null);
+                  }
+                }}
+              >
+                Xác Nhận Đặt Giá
               </GameButton>
             </div>
           </GameCard>

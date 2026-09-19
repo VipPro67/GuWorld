@@ -12,7 +12,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -141,6 +143,21 @@ func CreateTradeOffer(c *gin.Context) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Cổ trùng trao đổi"})
 			return
+		}
+	}
+
+	for recID, rate := range offered.Recipes {
+		recProgress, err := RecipeSvc.Get(tx, creator.ID.String(), recID)
+		if err != nil || recProgress == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn chưa khai mở Bí phương %s để đem trao đổi", recID)})
+			return
+		}
+		if err := RecipeSvc.Delete(tx, creator.ID.String(), recID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Bí phương trao đổi"})
+			return
+		}
+		if rate <= 0 {
+			offered.Recipes[recID] = recProgress.CompletionRate
 		}
 	}
 
@@ -357,6 +374,13 @@ func AcceptTradeOffer(c *gin.Context) {
 			return
 		}
 	}
+	for reqRecID := range requested.Recipes {
+		recProgress, err := RecipeSvc.Get(tx, acceptor.ID.String(), reqRecID)
+		if err != nil || recProgress == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn không có Bí phương yêu cầu: %s", reqRecID)})
+			return
+		}
+	}
 
 	// 1. Deduct requested from Acceptor & give to Creator
 	if requested.PrimevalStones > 0 {
@@ -379,6 +403,14 @@ func AcceptTradeOffer(c *gin.Context) {
 	for _, guInstID := range matchedAcceptorGus {
 		_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, creator.ID, guInstID)
 	}
+	for reqRecID := range requested.Recipes {
+		recProgress, _ := RecipeSvc.Get(tx, acceptor.ID.String(), reqRecID)
+		rate := 0.0
+		if recProgress != nil {
+			rate = recProgress.CompletionRate
+		}
+		_ = transferRecipe(tx, acceptor.ID.String(), creator.ID.String(), reqRecID, rate)
+	}
 
 	// 2. Deliver offered from BHTH lock to Acceptor
 	if offered.PrimevalStones > 0 {
@@ -397,6 +429,23 @@ func AcceptTradeOffer(c *gin.Context) {
 	}
 	for _, guInstID := range offered.Gus {
 		_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, acceptor.ID, guInstID)
+	}
+	for offRecID, offRate := range offered.Recipes {
+		finalRate := offRate
+		if existing, err := RecipeSvc.Get(tx, acceptor.ID.String(), offRecID); err == nil && existing != nil {
+			if existing.CompletionRate > finalRate {
+				finalRate = existing.CompletionRate
+			}
+		}
+		if finalRate > 100.0 {
+			finalRate = 100.0
+		}
+		_ = RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			PlayerID:       acceptor.ID.String(),
+			RecipeID:       offRecID,
+			CompletionRate: finalRate,
+			IsUnlocked:     true,
+		})
 	}
 
 	// Mark completed
@@ -417,6 +466,10 @@ func AcceptTradeOffer(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("Chấp nhận đơn trao đổi của %s", creatorID.String()),
 		IPAddress: c.ClientIP(), Success: true,
 	})
+
+	// Notify the trade offer creator that their offer was accepted
+	notify.Send(db.DB, creatorID, "trade_offer_accepted", "Đơn Trao Đổi Đã Khớp",
+		fmt.Sprintf("Đạo hữu %s đã chấp nhận đơn trao đổi auto của bạn. Giao dịch hoàn tất!", acceptor.Username))
 
 	tx2, _ := db.DB.Begin()
 	updatedAcceptor, _ := evaluateManaTx(tx2, acceptor.ID)
@@ -538,6 +591,14 @@ func restoreTradeOfferItems(tx *sql.Tx, creatorID uuid.UUID, offered models.Trad
 		if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1 WHERE id = $2`, creatorID, guInstID); err != nil {
 			return err
 		}
+	}
+	for recID, recRate := range offered.Recipes {
+		_ = RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			PlayerID:       creatorID.String(),
+			RecipeID:       recID,
+			CompletionRate: recRate,
+			IsUnlocked:     true,
+		})
 	}
 	return nil
 }

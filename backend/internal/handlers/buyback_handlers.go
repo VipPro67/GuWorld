@@ -11,7 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -218,6 +220,19 @@ func CreateBuybackOrder(c *gin.Context) {
 				}
 			}
 			itemDataJSON, _ = json.Marshal(guInstIDs)
+		} else if req.ItemType == "Recipe" {
+			var recTarget string
+			_ = json.Unmarshal(req.ItemTarget, &recTarget)
+			recProgress, err := RecipeSvc.Get(tx, creator.ID.String(), recTarget)
+			if err != nil || recProgress == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn chưa khai mở Bí phương này để bán"})
+				return
+			}
+			if err := RecipeSvc.Delete(tx, creator.ID.String(), recTarget); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khóa Bí phương rao bán"})
+				return
+			}
+			itemDataJSON, _ = json.Marshal(recProgress)
 		}
 	}
 
@@ -434,6 +449,18 @@ func SellToBuybackOrder(c *gin.Context) {
 				}
 				_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, buyerUUID, instID)
 			}
+		} else if o.ItemType == "Recipe" {
+			var recTarget string
+			_ = json.Unmarshal(o.ItemTarget, &recTarget)
+			recProgress, err := RecipeSvc.Get(tx, actor.ID.String(), recTarget)
+			if err != nil || recProgress == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn chưa khai mở Bí phương này để bán"})
+				return
+			}
+			if err := transferRecipe(tx, actor.ID.String(), buyerUUID.String(), recTarget, recProgress.CompletionRate); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển giao Bí phương"})
+				return
+			}
 		}
 
 		if o.Currency == "immortal" {
@@ -460,6 +487,14 @@ func SellToBuybackOrder(c *gin.Context) {
 			RequestSummary: fmt.Sprintf("Bán %d vật phẩm vào đơn thu mua (nhận %.3f)", tradeQty, sellerPayout),
 			IPAddress: c.ClientIP(), Success: true,
 		})
+
+		// Notify the BUY order creator that their order was (partially) filled
+		currencyLabel := "Nguyên Thạch"
+		if o.Currency == "immortal" {
+			currencyLabel = "Tiên Nguyên Thạch"
+		}
+		notify.Send(db.DB, buyerUUID, "buyback_filled", "Đơn Thu Mua Đã Khớp",
+			fmt.Sprintf("Đạo hữu %s đã bán %d vật phẩm vào đơn thu mua của bạn. Bạn chi ra %.3f %s.", actor.Username, tradeQty, pricing.Quantize(o.UnitPrice*float64(tradeQty)), currencyLabel))
 
 		tx2, _ := db.DB.Begin()
 		updatedActor, _ := evaluateManaTx(tx2, actor.ID)
@@ -507,6 +542,24 @@ func SellToBuybackOrder(c *gin.Context) {
 			for _, instID := range toDeliver {
 				_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, actor.ID, instID)
 			}
+		} else if o.ItemType == "Recipe" {
+			var recProgress services.RecipeProgress
+			_ = json.Unmarshal(o.ItemData, &recProgress)
+			finalRate := recProgress.CompletionRate
+			if existing, err := RecipeSvc.Get(tx, actor.ID.String(), recProgress.RecipeID); err == nil && existing != nil {
+				if existing.CompletionRate > finalRate {
+					finalRate = existing.CompletionRate
+				}
+			}
+			if finalRate > 100.0 {
+				finalRate = 100.0
+			}
+			_ = RecipeSvc.Upsert(tx, &services.RecipeProgress{
+				PlayerID:       actor.ID.String(),
+				RecipeID:       recProgress.RecipeID,
+				CompletionRate: finalRate,
+				IsUnlocked:     true,
+			})
 		}
 
 		newFilled := o.QuantityFilled + tradeQty
@@ -527,6 +580,14 @@ func SellToBuybackOrder(c *gin.Context) {
 			RequestSummary: fmt.Sprintf("Mua %d vật phẩm từ đơn rao bán (trả %.3f)", tradeQty, totalCost),
 			IPAddress: c.ClientIP(), Success: true,
 		})
+
+		// Notify the SELL order creator that their item was sold
+		currencyLabel2 := "Nguyên Thạch"
+		if o.Currency == "immortal" {
+			currencyLabel2 = "Tiên Nguyên Thạch"
+		}
+		notify.Send(db.DB, sellerUUID, "sell_order_filled", "Đơn Đăng Bán Đã Khớp",
+			fmt.Sprintf("Đạo hữu %s đã mua %d vật phẩm trong đơn đăng bán của bạn. Bạn nhận %.3f %s.", actor.Username, tradeQty, sellerPayout, currencyLabel2))
 
 		tx2, _ := db.DB.Begin()
 		updatedActor, _ := evaluateManaTx(tx2, actor.ID)
@@ -617,6 +678,15 @@ func CancelBuybackOrder(c *gin.Context) {
 			for _, instID := range lockedGuIDs {
 				_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1 WHERE id = $2`, creator.ID, instID)
 			}
+		} else if itemType == "Recipe" {
+			var recProgress services.RecipeProgress
+			_ = json.Unmarshal(itemData, &recProgress)
+			_ = RecipeSvc.Upsert(tx, &services.RecipeProgress{
+				PlayerID:       creator.ID.String(),
+				RecipeID:       recProgress.RecipeID,
+				CompletionRate: recProgress.CompletionRate,
+				IsUnlocked:     true,
+			})
 		}
 	}
 
