@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -827,6 +828,30 @@ func TravelTeleport(c *gin.Context) {
 	}
 
 	logger.S.Infof("[Pháp Trận] Người chơi %s (ID: %s) truyền tống qua pháp trận từ [%s] (%s: %d, %d) đến [%s] (%s: %d, %d) - Tiêu hao: %d %s", player.Username, player.ID, source.Name, source.RegionID, source.X, source.Y, dest.Name, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
+
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &player.ID,
+		Action:         "teleport.travel",
+		EntityType:     "teleport_array",
+		EntityID:       dest.ID,
+		RequestSummary: fmt.Sprintf("Truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s] - Phí: %d %s", source.Name, source.X, source.Y, source.RegionID, dest.Name, dest.X, dest.Y, dest.RegionID, feePaid, evaluation.FeeCurrency),
+		Metadata: map[string]interface{}{
+			"source_array_id":   source.ID,
+			"source_name":       source.Name,
+			"source_region":     source.RegionID,
+			"source_x":          source.X,
+			"source_y":          source.Y,
+			"dest_array_id":     dest.ID,
+			"dest_name":         dest.Name,
+			"dest_region":       dest.RegionID,
+			"dest_x":            dest.X,
+			"dest_y":            dest.Y,
+			"fee_paid":          feePaid,
+			"fee_currency":      evaluation.FeeCurrency,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
 
 	_, err = tx.Exec(`
 		UPDATE players

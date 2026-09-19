@@ -99,7 +99,30 @@ func GetItemName(itemType string, itemDataJSON []byte) string {
 	return "Vật phẩm không rõ"
 }
 
-// StartAuctionSettlementWorker runs a background loop to periodically settle expired auctions.
+// HasBaoHoangAccess checks if player inventory has both GU_CONNECTING_HEAVEN and GU_DIVINE_SENSE alive
+func HasBaoHoangAccess(inventory models.GuInventory) bool {
+	hasConnectingHeaven := false
+	hasDivineSense := false
+	for _, g := range inventory {
+		if g.Status == "DEAD" {
+			continue
+		}
+		if g.GuID == "GU_CONNECTING_HEAVEN" {
+			hasConnectingHeaven = true
+		}
+		if g.GuID == "GU_DIVINE_SENSE" {
+			hasDivineSense = true
+		}
+	}
+	if !hasConnectingHeaven {
+		_, _, hasConnectingHeaven = models.FindFirstMatchingGu(inventory, func(gu models.GuInstance) bool {
+			return models.InventoryHasGuMechanic(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
+		})
+	}
+	return hasConnectingHeaven && hasDivineSense
+}
+
+// StartAuctionSettlementWorker runs a background loop to periodically settle expired auctions, buyback orders, and trade offers.
 func StartAuctionSettlementWorker(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
@@ -112,7 +135,108 @@ func StartAuctionSettlementWorker(ctx context.Context) {
 				if err := settleExpiredAuctions(); err != nil {
 					logger.S.Errorf("Failed to settle expired auctions: %v", err)
 				}
+				if err := settleExpiredBuybackOrders(); err != nil {
+					logger.S.Errorf("Failed to settle expired buyback orders: %v", err)
+				}
+				if err := settleExpiredTradeOffers(); err != nil {
+					logger.S.Errorf("Failed to settle expired trade offers: %v", err)
+				}
 			}
 		}
 	}()
 }
+
+func settleExpiredBuybackOrders() error {
+	rows, err := db.DB.Query(`SELECT id, buyer_id, unit_price, quantity_requested, quantity_filled, currency FROM buyback_orders WHERE status = 'ACTIVE' AND end_time <= NOW()`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type expiredBuyback struct {
+		id                uuid.UUID
+		buyerID           uuid.UUID
+		unitPrice         float64
+		quantityRequested int64
+		quantityFilled    int64
+		currency          string
+	}
+	var list []expiredBuyback
+	for rows.Next() {
+		var eb expiredBuyback
+		if err := rows.Scan(&eb.id, &eb.buyerID, &eb.unitPrice, &eb.quantityRequested, &eb.quantityFilled, &eb.currency); err == nil {
+			list = append(list, eb)
+		}
+	}
+
+	for _, eb := range list {
+		unfilledQty := eb.quantityRequested - eb.quantityFilled
+		if unfilledQty <= 0 {
+			db.DB.Exec(`UPDATE buyback_orders SET status = 'FILLED' WHERE id = $1`, eb.id)
+			continue
+		}
+		refundAmount := pricing.Quantize(float64(unfilledQty) * eb.unitPrice)
+		tx, err := db.DB.Begin()
+		if err != nil {
+			continue
+		}
+		var currentStatus string
+		if err := tx.QueryRow(`SELECT status FROM buyback_orders WHERE id = $1 FOR UPDATE`, eb.id).Scan(&currentStatus); err != nil || currentStatus != "ACTIVE" {
+			tx.Rollback()
+			continue
+		}
+		if eb.currency == "immortal" {
+			_, _ = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`, refundAmount, eb.buyerID)
+		} else {
+			_, _ = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, refundAmount, eb.buyerID)
+		}
+		_, _ = tx.Exec(`UPDATE buyback_orders SET status = 'EXPIRED' WHERE id = $1`, eb.id)
+		tx.Commit()
+	}
+	return nil
+}
+
+func settleExpiredTradeOffers() error {
+	rows, err := db.DB.Query(`SELECT id, creator_id, offered_data FROM trade_offers WHERE status = 'ACTIVE' AND end_time <= NOW()`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type expiredOffer struct {
+		id          uuid.UUID
+		creatorID   uuid.UUID
+		offeredJSON []byte
+	}
+	var list []expiredOffer
+	for rows.Next() {
+		var eo expiredOffer
+		if err := rows.Scan(&eo.id, &eo.creatorID, &eo.offeredJSON); err == nil {
+			list = append(list, eo)
+		}
+	}
+
+	for _, eo := range list {
+		var offer models.TradeOfferData
+		if err := json.Unmarshal(eo.offeredJSON, &offer); err != nil {
+			continue
+		}
+		tx, err := db.DB.Begin()
+		if err != nil {
+			continue
+		}
+		var currentStatus string
+		if err := tx.QueryRow(`SELECT status FROM trade_offers WHERE id = $1 FOR UPDATE`, eo.id).Scan(&currentStatus); err != nil || currentStatus != "ACTIVE" {
+			tx.Rollback()
+			continue
+		}
+		if err := restoreTradeOfferItems(tx, eo.creatorID, offer); err != nil {
+			tx.Rollback()
+			continue
+		}
+		_, _ = tx.Exec(`UPDATE trade_offers SET status = 'EXPIRED' WHERE id = $1`, eo.id)
+		tx.Commit()
+	}
+	return nil
+}
+

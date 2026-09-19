@@ -122,10 +122,32 @@ export const wikiPages: WikiPage[] = [
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Phiên Bản v0.8.0 (Hiện tại)</span>
+                <span>Phiên Bản v0.8.4 (Hiện tại)</span>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">
                   Mới nhất
                 </span>
+              </h4>
+
+              <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
+                <li>
+                  <strong>Thiên Đạo Tiêu Hủy (Void Destruction):</strong> Tăng hao hụt tử đạo lên 40% (tiền, nguyên liệu) và 30% (Cổ trùng, bí phương). 40% trong số đó bị tiêu hủy vĩnh viễn khỏi server; 60% còn lại rơi bãi đất tồn tại 10 phút. Chống triệt để việc lợi dụng chết tuồn chuyển tài nguyên.
+                </li>
+                <li>
+                  <strong>Cơ chế Sát Khí & Safe Zone:</strong> Sát Khí &gt; 10 bị tước quyền bảo hộ trong Safe Zone/Hub (có thể bị tấn công ngay trong Safe Zone, trừ khi trốn vào Lãnh địa Tông Môn). Sát Khí &gt; 5 có thể rơi Cổ đang trang bị khi chết (Cổ Bản Mệnh luôn được bảo toàn).
+                </li>
+                <li>
+                  <strong>Bảo Hộ Tân Thủ & Miễn Chiến Hồi Sinh:</strong> Cổ sư &le; 3 Chuyển (0 Sát Khí) miễn nhiễm bị tấn công nhưng vẫn được chủ động khai chiến. Nạn nhân bị tấn công và thua trận nhận 10 phút Miễn Chiến hồi sinh.
+                </li>
+                <li>
+                  <strong>Hồi Sinh Ngũ Vực & Tông Môn Chiến:</strong> Hồi sinh có 50% tỉ lệ về Tông Môn, 50% còn lại văng ngẫu nhiên trong Vực hiện tại (giữ nguyên Region). Tán tu không tông có thể phát động Tông Môn Chiến.
+                </li>
+              </ul>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phiên Bản v0.8.0</span>
               </h4>
 
               <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">

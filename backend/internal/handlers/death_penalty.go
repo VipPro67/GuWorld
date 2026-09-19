@@ -17,41 +17,47 @@ import (
 
 // deathPenaltyConfig — mức phạt khi chết (áp vào túi thật).
 // Chết PvE rơi vào hư không; chết PvP rơi cho kẻ thắng.
-// Chỉnh trực tiếp các giá trị bên dưới để tùy biến.
+// Chống lợi dụng chết chuyển đồ: Tăng tỷ lệ hao hụt tài nguyên và áp dụng
+// Thiên Đạo Tiêu Hủy (Void Destruction) để tiêu hủy vĩnh viễn một phần tài sản.
 var deathPenaltyConfig = struct {
-	// Tiền (Nguyên Thạch / Tiên Nguyên Thạch) — % hao hụt khi chết
+	// Tiền (Nguyên Thạch / Tiên Nguyên Thạch) — % hao hụt khi chết (tăng lên 40%)
 	PrimevalStonePct float64
 	ImmortalStonePct float64
 
-	// Vật phẩm (nguyên liệu trong túi thật)
+	// Vật phẩm (nguyên liệu trong túi thật) (tăng lên 40%)
 	ItemsEnabled    bool
 	ItemsTypePct    float64
 	ItemsMaxPerType int
 
-	// Cổ trùng (luôn loại trừ Cổ đang trang bị & Cổ Bản Mệnh)
+	// Cổ trùng (luôn loại trừ Cổ Bản Mệnh; Cổ trang bị chỉ rơi khi Sát Khí > 5) (tăng lên 30%)
 	GusEnabled  bool
 	GusPct      float64
 	GusMaxCount int
 
-	// Bí phương (player_recipe_progress)
+	// Bí phương (player_recipe_progress) (tăng lên 30%)
 	RecipesEnabled  bool
 	RecipesPct      float64
 	RecipesMaxCount int
+
+	// Tỷ lệ tiêu hủy vĩnh viễn (Void Destruction Ratio): 40% lượng mất bị Thiên Đạo xóa sổ vĩnh viễn
+	VoidDestructionPct float64
 }{
-	PrimevalStonePct: 20,
-	ImmortalStonePct: 20,
+	PrimevalStonePct: 40,
+	ImmortalStonePct: 40,
 
 	ItemsEnabled:    true,
-	ItemsTypePct:    20,
-	ItemsMaxPerType: 20,
+	ItemsTypePct:    40,
+	ItemsMaxPerType: 30,
 
 	GusEnabled:  true,
-	GusPct:      20,
+	GusPct:      30,
 	GusMaxCount: 20,
 
 	RecipesEnabled:  true,
-	RecipesPct:      20,
+	RecipesPct:      30,
 	RecipesMaxCount: 20,
+
+	VoidDestructionPct: 40,
 }
 
 // AddSatKhiStatus adds or increments Sát Khí status (sat_khi) for a PvP killer.
@@ -286,12 +292,20 @@ type GroundLootData struct {
 
 // persistDeathDrop writes the computed losses to DB, creates a map_ground_drops record, and builds summary.
 func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggressor bool, primevalLoss, immortalLoss float64, droppedGus models.GuInventory, mult float64, satKhiLevel int, deathPos ...DeathPos) string {
-	var lost []string
+	// Split stones: Void Destruction vs Ground Loot
+	voidPct := deathPenaltyConfig.VoidDestructionPct / 100.0
+
+	primevalDestroyed := math.Floor(primevalLoss*voidPct*1000) / 1000
+	primevalLoot := math.Floor((primevalLoss-primevalDestroyed)*1000) / 1000
+
+	immortalDestroyed := math.Floor(immortalLoss*voidPct*1000) / 1000
+	immortalLoot := math.Floor((immortalLoss-immortalDestroyed)*1000) / 1000
+
 	lootData := GroundLootData{
-		PrimevalStones: primevalLoss,
-		ImmortalStones: immortalLoss,
-		Gus:            droppedGus,
+		PrimevalStones: primevalLoot,
+		ImmortalStones: immortalLoot,
 	}
+	var lost []string
 
 	// Tiền — trừ bên thua
 	if primevalLoss >= 1 || immortalLoss >= 1 {
@@ -304,16 +318,29 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 			return ""
 		}
 		if primevalLoss >= 1 {
-			lost = append(lost, fmt.Sprintf("%.3f Nguyên Thạch", primevalLoss))
+			if primevalDestroyed > 0 && primevalLoot > 0 {
+				lost = append(lost, fmt.Sprintf("%.3f Nguyên Thạch (%.3f rơi tại chỗ, %.3f bị tiêu hủy vĩnh viễn)", primevalLoss, primevalLoot, primevalDestroyed))
+			} else if primevalDestroyed > 0 {
+				lost = append(lost, fmt.Sprintf("%.3f Nguyên Thạch (bị tiêu hủy vĩnh viễn)", primevalLoss))
+			} else {
+				lost = append(lost, fmt.Sprintf("%.3f Nguyên Thạch (rơi tại chỗ)", primevalLoss))
+			}
 		}
 		if immortalLoss >= 1 {
-			lost = append(lost, fmt.Sprintf("%.3f Tiên Nguyên Thạch", immortalLoss))
+			if immortalDestroyed > 0 && immortalLoot > 0 {
+				lost = append(lost, fmt.Sprintf("%.3f Tiên Nguyên Thạch (%.3f rơi tại chỗ, %.3f bị tiêu hủy vĩnh viễn)", immortalLoss, immortalLoot, immortalDestroyed))
+			} else if immortalDestroyed > 0 {
+				lost = append(lost, fmt.Sprintf("%.3f Tiên Nguyên Thạch (bị tiêu hủy vĩnh viễn)", immortalLoss))
+			} else {
+				lost = append(lost, fmt.Sprintf("%.3f Tiên Nguyên Thạch (rơi tại chỗ)", immortalLoss))
+			}
 		}
 	}
 
 	// Vật phẩm (nguyên liệu túi thật)
 	if deathPenaltyConfig.ItemsEnabled {
-		matItems, matLogs := dropMaterials(tx, loserID, mult, satKhiLevel)
+		matItems, matDestroyed, matLogs := dropMaterials(tx, loserID, mult, satKhiLevel)
+		_ = matDestroyed
 		lootData.Items = matItems
 		lost = append(lost, matLogs...)
 	}
@@ -335,13 +362,44 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 	// Cổ trùng
 	if deathPenaltyConfig.GusEnabled && len(droppedGus) > 0 {
 		ids := make([]string, 0, len(droppedGus))
-		for _, g := range droppedGus {
+		guDestroyCount := int(math.Round(float64(len(droppedGus)) * voidPct))
+		if len(droppedGus) == 1 {
+			if rand.Float64() < 0.5 {
+				guDestroyCount = 1
+			} else {
+				guDestroyCount = 0
+			}
+		} else if guDestroyCount >= len(droppedGus) {
+			guDestroyCount = len(droppedGus) - 1
+			if guDestroyCount < 0 {
+				guDestroyCount = 0
+			}
+		}
+
+		destroyedGus := droppedGus[:guDestroyCount]
+		groundGus := droppedGus[guDestroyCount:]
+		lootData.Gus = groundGus
+
+		for _, g := range destroyedGus {
 			ids = append(ids, g.InstanceID)
 			name := g.GuID
 			if guDef, ok := models.GetGuAny(g.GuID); ok && guDef.Name != "" {
 				name = guDef.Name
 			}
-			lost = append(lost, fmt.Sprintf("Cổ trùng %s", name))
+			lost = append(lost, fmt.Sprintf("Cổ trùng %s (bị chấn nát vĩnh viễn)", name))
+			deathSummary := fmt.Sprintf("Cổ Sư [%s] tử đạo, Cổ trùng [%s] R%d bị chấn nát vĩnh viễn vào cõi hư vô.", loserName, name, g.Rank)
+			_ = db.LogGuHistory(tx, g.InstanceID, g.GuID, g.Rank, "DEATH_DESTROYED", &loserID, winnerID, deathSummary, map[string]interface{}{
+				"gu_name": name,
+			})
+		}
+
+		for _, g := range groundGus {
+			ids = append(ids, g.InstanceID)
+			name := g.GuID
+			if guDef, ok := models.GetGuAny(g.GuID); ok && guDef.Name != "" {
+				name = guDef.Name
+			}
+			lost = append(lost, fmt.Sprintf("Cổ trùng %s (rơi tại chỗ)", name))
 			deathSummary := fmt.Sprintf("Cổ Sư [%s] tử đạo, đánh rơi Cổ trùng [%s] R%d xuống đất.", loserName, name, g.Rank)
 			_ = db.LogGuHistory(tx, g.InstanceID, g.GuID, g.Rank, "DEATH_DROPPED", &loserID, winnerID, deathSummary, map[string]interface{}{
 				"gu_name": name,
@@ -352,7 +410,8 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 
 	// Bí phương
 	if deathPenaltyConfig.RecipesEnabled {
-		recipeIDs, recipeLogs := dropRecipes(tx, loserID, mult, satKhiLevel)
+		recipeIDs, recipeDestroyed, recipeLogs := dropRecipes(tx, loserID, mult, satKhiLevel)
+		_ = recipeDestroyed
 		lootData.Recipes = recipeIDs
 		lost = append(lost, recipeLogs...)
 	}
@@ -373,13 +432,15 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 	}
 
 	summary := ""
+	hasGroundLoot := lootData.PrimevalStones > 0 || lootData.ImmortalStones > 0 || len(lootData.Items) > 0 || len(lootData.Gus) > 0 || len(lootData.Recipes) > 0
+
 	if len(lost) > 0 {
 		summary = joinDropList(lost)
 		if satKhiLevel > 0 {
 			summary += fmt.Sprintf(" [Oán Khí Tầng %d: Mất đồ x%.1f]", satKhiLevel, mult)
 		}
 
-		if loserRegion.Valid && loserRegion.String != "" && !IsSafeZone(loserRegion.String, loserX, loserY) {
+		if hasGroundLoot && loserRegion.Valid && loserRegion.String != "" && !IsSafeZone(loserRegion.String, loserX, loserY) {
 			lootBytes, _ := json.Marshal(lootData)
 			_, _ = tx.Exec(`
 				INSERT INTO map_ground_drops (
@@ -400,10 +461,10 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 			attackerName = "Kẻ thù"
 		}
 		if summary != "" {
-			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
-				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d) và rơi rớt tài sản: %s. Bạn đã được đưa về nơi an dưỡng và hồi sinh!", attackerName, loserX, loserY, summary))
+			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục (Tổn thất tài sản)",
+				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d)! Tổn thất: %s. (Lưu ý: Thiên Đạo chấn nát tiêu hủy vĩnh viễn một phần tài nguyên; phần còn lại rơi tại chỗ và sẽ tan biến sau 10 phút). Bạn đã được đưa về nơi an dưỡng và hồi sinh!", attackerName, loserX, loserY, summary))
 			notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
-				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s]! Tài sản của đối phương rơi tại (%d, %d): %s.", loserName, loserX, loserY, summary))
+				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s]! Chiến lợi phẩm của đối phương rơi tại (%d, %d): %s. (Lưu ý: Một phần tài sản đối phương đã bị tiêu hủy vĩnh viễn trong trận chiến).", loserName, loserX, loserY, summary))
 		} else {
 			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
 				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d). May mắn không bị rơi rớt tài sản! Bạn đã được đưa về nơi an dưỡng và hồi sinh!", attackerName, loserX, loserY))
@@ -412,7 +473,7 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 		}
 	} else if summary != "" {
 		notify.Send(tx, loserID, "death_drop", "Tử đạo - Mất tài sản",
-			fmt.Sprintf("Bạn đã tử đạo và đánh rơi tài sản tại (%d, %d): %s.", loserX, loserY, summary))
+			fmt.Sprintf("Bạn đã tử đạo tại (%d, %d)! Tổn thất: %s. (Lưu ý: Thiên Đạo chấn nát tiêu hủy vĩnh viễn một phần tài nguyên; phần còn lại rơi tại chỗ và sẽ tan biến sau 10 phút).", loserX, loserY, summary))
 	}
 
 	// Broadcast justice announcement to world chat when a wanted player (Sát Khí >= 3) is defeated
@@ -488,15 +549,17 @@ func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int) (m
 	return remaining, dropped
 }
 
-// dropMaterials samples a portion of the loser's real inventory by percentage and removes it in batch. Returns dropped items and human-readable lost lines.
-func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) ([]DroppedItem, []string) {
+// dropMaterials samples a portion of the loser's real inventory by percentage and removes it in batch.
+// Splitting lost items: a portion is destroyed forever (Void Destruction), and the rest is dropped on the ground.
+// Returns ground dropped items, destroyed items, and human-readable lost lines.
+func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) ([]DroppedItem, []DroppedItem, []string) {
 	rows, err := tx.Query(`
 		SELECT item_id, category, quantity
 		FROM player_inventory_items
 		WHERE player_id = $1 AND quantity > 0
 	`, loserID)
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	defer rows.Close()
 
@@ -515,7 +578,7 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 	}
 
 	if len(items) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.ItemsTypePct*mult)
@@ -527,9 +590,12 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 
 	rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
 
-	var dropped []DroppedItem
+	var groundDropped []DroppedItem
+	var destroyed []DroppedItem
 	var lost []string
 	itemsByCat := make(map[string]map[string]int64)
+
+	voidPct := deathPenaltyConfig.VoidDestructionPct / 100.0
 
 	for _, r := range items[:pickCount] {
 		// Calculated percentage of stack quantity
@@ -546,16 +612,49 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 		}
 		itemsByCat[r.category][r.itemID] = int64(qty)
 
-		dropped = append(dropped, DroppedItem{
-			ItemID:   r.itemID,
-			Category: r.category,
-			Quantity: qty,
-		})
+		// Split between void destruction and ground drop
+		destroyCount := int(math.Round(float64(qty) * voidPct))
+		if qty == 1 {
+			// If only 1 item lost, 50% chance destroyed forever
+			if rand.Float64() < 0.5 {
+				destroyCount = 1
+			} else {
+				destroyCount = 0
+			}
+		} else if destroyCount >= qty {
+			destroyCount = qty - 1
+			if destroyCount < 0 {
+				destroyCount = 0
+			}
+		}
+		dropCount := qty - destroyCount
+
+		if dropCount > 0 {
+			groundDropped = append(groundDropped, DroppedItem{
+				ItemID:   r.itemID,
+				Category: r.category,
+				Quantity: dropCount,
+			})
+		}
+		if destroyCount > 0 {
+			destroyed = append(destroyed, DroppedItem{
+				ItemID:   r.itemID,
+				Category: r.category,
+				Quantity: destroyCount,
+			})
+		}
+
 		name := r.itemID
 		if spec, ok := models.ItemRegistry[r.itemID]; ok && spec.Name != "" {
 			name = spec.Name
 		}
-		lost = append(lost, fmt.Sprintf("%dx %s", qty, name))
+		if destroyCount > 0 && dropCount > 0 {
+			lost = append(lost, fmt.Sprintf("%dx %s (%dx rơi tại chỗ, %dx bị chấn nát vĩnh viễn)", qty, name, dropCount, destroyCount))
+		} else if destroyCount > 0 {
+			lost = append(lost, fmt.Sprintf("%dx %s (bị chấn nát vĩnh viễn)", qty, name))
+		} else {
+			lost = append(lost, fmt.Sprintf("%dx %s (rơi tại chỗ)", qty, name))
+		}
 	}
 
 	// Batch remove inventory items by category
@@ -563,17 +662,19 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int)
 		_ = InventorySvc.BulkRemoveItems(tx, loserID.String(), cat, itemMap)
 	}
 
-	return dropped, lost
+	return groundDropped, destroyed, lost
 }
 
-// dropRecipes samples a portion of the loser's unlocked recipes by percentage and removes them in batch. Returns dropped recipe IDs and human-readable lost lines.
-func dropRecipes(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) ([]string, []string) {
+// dropRecipes samples a portion of the loser's unlocked recipes by percentage and removes them in batch.
+// Splitting lost recipes: a portion is destroyed forever (Void Destruction), and the rest is dropped on the ground.
+// Returns ground dropped recipe IDs, destroyed recipe IDs, and human-readable lost lines.
+func dropRecipes(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) ([]string, []string, []string) {
 	rows, err := tx.Query(`
 		SELECT recipe_id FROM player_recipe_progress
 		WHERE player_id = $1 AND is_unlocked = true
 	`, loserID)
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	defer rows.Close()
 
@@ -586,7 +687,7 @@ func dropRecipes(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) (
 		recipeIDs = append(recipeIDs, id)
 	}
 	if len(recipeIDs) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	effectivePct := math.Min(100.0, deathPenaltyConfig.RecipesPct*mult)
@@ -599,21 +700,47 @@ func dropRecipes(tx *sql.Tx, loserID uuid.UUID, mult float64, satKhiLevel int) (
 	rand.Shuffle(len(recipeIDs), func(i, j int) { recipeIDs[i], recipeIDs[j] = recipeIDs[j], recipeIDs[i] })
 
 	droppedIDs := recipeIDs[:pickCount]
-	var lost []string
-	for _, id := range droppedIDs {
-		name := id
-		if guDef, ok := models.GetGuAny(id); ok && guDef.Name != "" {
-			name = guDef.Name
-		}
-		lost = append(lost, fmt.Sprintf("Bí phương %s", name))
-	}
 
 	// Batch delete recipes in a single query
 	if len(droppedIDs) > 0 {
 		_ = RecipeSvc.DeleteBatch(tx, loserID.String(), droppedIDs)
 	}
 
-	return droppedIDs, lost
+	voidPct := deathPenaltyConfig.VoidDestructionPct / 100.0
+	destroyCount := int(math.Round(float64(len(droppedIDs)) * voidPct))
+	if len(droppedIDs) == 1 {
+		if rand.Float64() < 0.5 {
+			destroyCount = 1
+		} else {
+			destroyCount = 0
+		}
+	} else if destroyCount >= len(droppedIDs) {
+		destroyCount = len(droppedIDs) - 1
+		if destroyCount < 0 {
+			destroyCount = 0
+		}
+	}
+
+	destroyedIDs := droppedIDs[:destroyCount]
+	groundIDs := droppedIDs[destroyCount:]
+
+	var lost []string
+	for _, id := range destroyedIDs {
+		name := id
+		if guDef, ok := models.GetGuAny(id); ok && guDef.Name != "" {
+			name = guDef.Name
+		}
+		lost = append(lost, fmt.Sprintf("Bí phương %s (bị tiêu hủy vĩnh viễn)", name))
+	}
+	for _, id := range groundIDs {
+		name := id
+		if guDef, ok := models.GetGuAny(id); ok && guDef.Name != "" {
+			name = guDef.Name
+		}
+		lost = append(lost, fmt.Sprintf("Bí phương %s (rơi tại chỗ)", name))
+	}
+
+	return groundIDs, destroyedIDs, lost
 }
 
 func joinDropList(items []string) string {

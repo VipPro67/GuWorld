@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { Num } from "./Num";
-import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, guSpecFor } from "@/store/useGameStore";
+import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, guSpecFor, BuybackOrder } from "@/store/useGameStore";
 import {
   AlertCircle,
   ShoppingCart,
@@ -14,13 +12,13 @@ import {
   Clock,
   Trash2,
   Tag,
-  BookOpen,
   Sparkles,
   RefreshCw,
-  AlertTriangle,
+  ArrowRightLeft,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
-import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameSelect } from "@/components/ui";
-// UI migrated to shared components
+import { GamePanel, GameTabs, GameButton, GameCard, GameInput } from "@/components/ui";
 
 interface RecipeData {
   recipe_id: string;
@@ -73,432 +71,158 @@ interface Props {
 export function BaoHoangMarket({
   player,
   guInventory,
-  materials,
   actionLoading,
   listings,
   onRefresh,
   onCreate,
   onBid,
-  onCancel,
-  onBuy,
-  guDictionary,
   itemDictionary,
 }: Props) {
-  const [tab, setTab] = useState<"market" | "auction" | "sell">("market");
-  const [listingType, setListingType] = useState<"MARKET" | "AUCTION">("MARKET");
-  const [targetBuyerUsername, setTargetBuyerUsername] = useState("");
-  const [itemType, setItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
+  const [tab, setTab] = useState<"buyback" | "asyncTrade" | "auction" | "create">("buyback");
 
-  // Sell form inputs
-  const [price, setPrice] = useState(10);
-  const [durationHours, setDurationHours] = useState(72);
-  const [selectedGuType, setSelectedGuType] = useState("");
-  const [selectedGus, setSelectedGus] = useState<string[]>([]);
-  const [selectedMaterial, setSelectedMaterial] = useState("");
-  const [selectedRecipe, setSelectedRecipe] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [currency, setCurrency] = useState<"primeval" | "immortal">("primeval");
+  const buybackOrders = useGameStore((s) => s.buybackOrders);
+  const tradeOffers = useGameStore((s) => s.tradeOffers);
+  const fetchBuybackOrders = useGameStore((s) => s.fetchBuybackOrders);
+  const createBuybackOrder = useGameStore((s) => s.createBuybackOrder);
+  const sellToBuybackOrder = useGameStore((s) => s.sellToBuybackOrder);
+  const cancelBuybackOrder = useGameStore((s) => s.cancelBuybackOrder);
 
-  // Search & Filters
+  const fetchTradeOffers = useGameStore((s) => s.fetchTradeOffers);
+  const createTradeOffer = useGameStore((s) => s.createTradeOffer);
+  const acceptTradeOffer = useGameStore((s) => s.acceptTradeOffer);
+  const cancelTradeOffer = useGameStore((s) => s.cancelTradeOffer);
+
+  // Form states for Buyback Order Creation
+  const [createMode, setCreateMode] = useState<"buyback" | "tradeOffer" | "auction">("buyback");
+  const [bbItemType, setBbItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
+  const [bbTargetMat, setBbTargetMat] = useState("");
+  const [bbTargetGu, setBbTargetGu] = useState("");
+  const [bbTargetRank, setBbTargetRank] = useState(1);
+  const [bbUnitPrice, setBbUnitPrice] = useState(10);
+  const [bbQuantity, setBbQuantity] = useState(1);
+  const [bbCurrency, setBbCurrency] = useState<"primeval" | "immortal">("primeval");
+  const [bbDuration, setBbDuration] = useState(72);
+
+  // Modal state for Selling into Buyback Order
+  const [selectedBuybackOrder, setSelectedBuybackOrder] = useState<BuybackOrder | null>(null);
+  const [sellQtyInput, setSellQtyInput] = useState(1);
+  const [selectedGuForBuyback] = useState<string[]>([]);
+
+  // Form state for Async Trade Offer Creation
+  const [offeredStones, setOfferedStones] = useState(0);
+  const [offeredImmortal, setOfferedImmortal] = useState(0);
+  const [offeredGuIDs] = useState<string[]>([]);
+  const [offeredMats] = useState<Record<string, number>>({});
+
+  const [requestedStones, setRequestedStones] = useState(0);
+  const [requestedImmortal, setRequestedImmortal] = useState(0);
+  const [requestedGuIDs] = useState<string[]>([]);
+  const [requestedMats] = useState<Record<string, number>>({});
+  const [tradeOfferDuration] = useState(72);
+
+  // Auction form state
+  const [aucItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
+  const [aucPrice, setAucPrice] = useState(10);
+  const [aucDuration] = useState(24);
+  const [aucCurrency] = useState<"primeval" | "immortal">("primeval");
+  const [selectedAucGu, setSelectedAucGu] = useState("");
+  const [selectedAucMat] = useState("");
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "Gu" | "Material" | "Recipe">("all");
-
-  // Sell tab search inputs
-  const [guTypeSearch, setGuTypeSearch] = useState("");
-  const [materialSearch, setMaterialSearch] = useState("");
-  const [recipeSearch, setRecipeSearch] = useState("");
-
-  // Custom End Time state
-  const [customEndMode, setCustomEndMode] = useState<boolean>(false);
-  const [customEndTime, setCustomEndTime] = useState<string>("");
-  const [minCustomTime, setMinCustomTime] = useState<string>("");
-
-  // Advanced filters for listings
-  const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "expiry_asc">("newest");
-  const [filterRank, setFilterRank] = useState<number | "all">("all");
-  const [sellFilterRank, setSellFilterRank] = useState<number | "all">("all");
-  const [showOnlyMine, setShowOnlyMine] = useState<boolean>(false);
-
-  // Helper function to remove Vietnamese diacritics
-  const removeAccents = (str: string): string => {
-    return str
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/đ/g, "d")
-      .replace(/Đ/g, "D");
-  };
-
-  const [bidAmounts, setBidAmounts] = useState<Record<string, number>>({});
-  const [activePurchaseListing, setActivePurchaseListing] = useState<Listing | null>(null);
-  const [purchaseQuantity, setPurchaseQuantity] = useState<number>(1);
-  const [activeBidListing, setActiveBidListing] = useState<Listing | null>(null);
-  const [bidAmount, setBidAmount] = useState<number>(0);
-  const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   useEffect(() => {
+    fetchBuybackOrders();
+    fetchTradeOffers();
     onRefresh();
-  }, [onRefresh]);
-
-  useEffect(() => {
-    if (!message) return;
-    const timer = setTimeout(() => setMessage(null), 5000);
-    return () => clearTimeout(timer);
-  }, [message]);
-
-  const materialKeys = Object.keys(materials);
-
-  const getDisplayName = (listing: Listing): string => {
-    if (listing.item_type === "Recipe") {
-      const rData = typeof listing.item_data === "object" && !Array.isArray(listing.item_data) ? listing.item_data : null;
-      if (rData) {
-        return `${formatRecipeName(rData.recipe_id)} (${rData.completion_rate}%)`;
-      }
-      return `Bí phương: ${String(listing.item_data)}`;
-    }
-
-    let guId = "";
-    let guRank: number | undefined;
-    if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
-      guId = (listing.item_data[0] as ApiResponseData)?.gu_id || "";
-      guRank = Number((listing.item_data[0] as ApiResponseData)?.rank) || undefined;
-    } else if (typeof listing.item_data === "string") {
-      guId = listing.item_data;
-    }
-    if (listing.item_type === "Gu") {
-      const spec = guSpecFor(guId, guRank);
-      return spec?.name || guId.replace(/^GU_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-    }
-
-    const spec = itemDictionary[guId];
-    return spec?.name || guId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  };
-
-  const getRecipeDisplayName = (recipeId: string): string => {
-    return formatRecipeName(recipeId);
-  };
-
-  // Duration-based fees calculation
-  const getFeeTier = (hours: number) => {
-    if (hours <= 24) return 1;
-    if (hours <= 72) return 2;
-    if (hours <= 168) return 3;
-    return 4;
-  };
-  const getUpfrontFee = () => {
-    if (listingType === "AUCTION") {
-      const tier = getFeeTier(durationHours);
-      return [20, 40, 80, 200][tier - 1];
-    }
-    // MARKET: 4% of total listed price
-    const totalQty = itemType === "Material" ? quantity : itemType === "Gu" ? selectedGus.length : 1;
-    const totalPrice = (totalQty || 1) * price;
-    return Math.round(totalPrice * 0.04);
-  };
-  const getCommissionRateText = () => {
-    if (listingType === "AUCTION") {
-      return "15%";
-    }
-    // MARKET: 6% fixed
-    return "6%";
-  };
-
-  const createListing = async () => {
-    if (actionLoading) return;
-
-    if (itemType === "Gu" && selectedGus.length === 0) {
-      setMessage({ type: "error", text: "Vui lòng chọn ít nhất một Cổ trùng cần bán." });
-      return;
-    }
-    if (itemType === "Material" && !selectedMaterial) {
-      setMessage({ type: "error", text: "Vui lòng chọn nguyên liệu cần bán." });
-      return;
-    }
-    if (itemType === "Recipe" && !selectedRecipe) {
-      setMessage({ type: "error", text: "Vui lòng chọn Bí phương cần bán." });
-      return;
-    }
-    if (quantity < 1) {
-      setMessage({ type: "error", text: "Số lượng phải tối thiểu là 1." });
-      return;
-    }
-    if (price <= 0) {
-      setMessage({ type: "error", text: "Đơn giá/Giá khởi điểm phải lớn hơn 0." });
-      return;
-    }
-    if (listingType === "AUCTION" && (durationHours < 1 || durationHours > 24)) {
-      setMessage({ type: "error", text: "Thời gian đấu giá phải từ 1 đến 24 giờ (dưới 1 ngày)." });
-      return;
-    }
-    if (listingType === "MARKET" && (durationHours < 1 || durationHours > 168)) {
-      setMessage({ type: "error", text: "Thời gian đăng bán chợ chỉ từ 1 đến 7 ngày (tối đa 168 giờ)." });
-      return;
-    }
-    if (durationHours < 1) {
-      setMessage({ type: "error", text: "Thời gian đăng bán phải tối thiểu là 1 giờ." });
-      return;
-    }
-
-    const upfrontFee = getUpfrontFee();
-    const upfrontCurrency = listingType === "MARKET" && currency === "immortal" ? "immortal" : "primeval";
-    const balance = upfrontCurrency === "immortal" ? player.immortal_stones : player.primeval_stones;
-    const currencyText = upfrontCurrency === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
-    if (balance < upfrontFee) {
-      setMessage({ type: "error", text: `Đạo hữu không đủ ${currencyText} đóng phí cơ bản (cần ${upfrontFee} ${currencyText}).` });
-      return;
-    }
-
-    if (itemType === "Gu") {
-      const ok = await onCreate({
-        itemType,
-        guInstanceIds: selectedGus,
-        quantity: selectedGus.length,
-        price,
-        durationHours,
-        currency: player.rank >= 6 ? currency : "primeval",
-        listingType,
-        targetBuyerUsername: undefined,
-      } as ApiResponseData);
-
-      if (ok) {
-        await onRefresh();
-        setSelectedGuType("");
-        setSelectedGus([]);
-        setMessage({ type: "success", text: `Đã đăng bán thành công ${selectedGus.length} Cổ trùng!` });
-        return;
-      }
-      setMessage({ type: "error", text: "Đăng bán thất bại. Hãy kiểm tra số dư Nguyên Thạch của bạn." });
-    } else {
-      const ok = await onCreate({
-        itemType,
-        itemId: itemType === "Material" ? selectedMaterial : selectedRecipe,
-        recipeId: itemType === "Recipe" ? selectedRecipe : undefined,
-        itemIdRecipe: itemType === "Recipe" ? selectedRecipe : undefined,
-        quantity: itemType === "Material" ? quantity : 1,
-        price,
-        durationHours,
-        currency: player.rank >= 6 ? currency : "primeval",
-        listingType,
-        targetBuyerUsername: undefined,
-      } as ApiResponseData);
-
-      if (ok) {
-        await onRefresh();
-        setSelectedMaterial("");
-        setSelectedRecipe("");
-        setQuantity(1);
-        setMessage({ type: "success", text: "Đăng bán thành công!" });
-        return;
-      }
-      setMessage({ type: "error", text: "Đăng bán thất bại. Hãy kiểm tra số dư Nguyên Thạch của bạn." });
-    }
-  };
-
-  const handleBuy = async (
-    listingId: string,
-    purchaseQty: number,
-    unitPrice: number,
-    currType: string,
-    displayName: string,
-    skipConfirm = false
-  ) => {
-    if (actionLoading) return;
-
-    const listing = listings.find((l) => l.id === listingId);
-    if (listing && listing.listing_type === "TRADE") {
-      const hasConnectingHeaven = guInventory.some(
-        (g) => g.gu_id === "GU_CONNECTING_HEAVEN" && g.status !== "DEAD"
-      );
-      if (!hasConnectingHeaven) {
-        setMessage({ type: "error", text: "Để thực hiện giao dịch trực tiếp, bạn cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN)!" });
-        return;
-      }
-    }
-
-    const totalPrice = purchaseQty * unitPrice;
-    if (currType === "primeval" && player.primeval_stones < totalPrice) {
-      setMessage({ type: "error", text: "Đạo hữu không đủ Nguyên Thạch." });
-      return;
-    }
-    if (currType === "immortal" && player.immortal_stones < totalPrice) {
-      setMessage({ type: "error", text: "Đạo hữu không đủ Tiên Nguyên Thạch." });
-      return;
-    }
-
-    if (!skipConfirm) {
-      const currencyText = currType === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên Thạch";
-      const confirmMsg = `Đạo hữu có chắc chắn muốn dùng ${totalPrice} ${currencyText} để mua ngay "${displayName}" không?`;
-      if (!await useGameStore.getState().showConfirm(confirmMsg)) {
-        return;
-      }
-    }
-
-    const ok = await onBuy(listingId, purchaseQty);
-    if (ok) {
-      await onRefresh();
-      setMessage({ type: "success", text: "Mua hàng thành công! Linh vật đã được gửi vào túi đồ." });
-      return;
-    }
-    const storeError = useGameStore.getState().error;
-    setMessage({ type: "error", text: `Giao dịch thất bại: ${storeError || "Hãy thử lại."}` });
-  };
-
-  const handleBid = async (
-    listingId: string,
-    amount: number,
-    currentPrice: number,
-    displayName: string,
-    skipConfirm = false,
-    currency: string = "primeval"
-  ) => {
-    if (actionLoading) return;
-
-    const currencyName = currency === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
-    const balance = currency === "immortal" ? player.immortal_stones : player.primeval_stones;
-
-    if (amount <= currentPrice) {
-      setMessage({ type: "error", text: "Giá đặt phải cao hơn giá hiện tại của phiên đấu giá." });
-      return;
-    }
-    if (balance < amount) {
-      setMessage({ type: "error", text: `Đạo hữu không đủ ${currencyName} để đặt giá này.` });
-      return;
-    }
-
-    if (!skipConfirm) {
-      const confirmMsg = `Đạo hữu có chắc chắn muốn đặt giá thầu ${amount} ${currencyName} cho "${displayName}" không?`;
-      if (!await useGameStore.getState().showConfirm(confirmMsg)) {
-        return;
-      }
-    }
-
-    const ok = await onBid(listingId, amount);
-    if (ok) {
-      await onRefresh();
-      setMessage({ type: "success", text: "Đặt giá đấu thầu thành công." });
-      return;
-    }
-    const storeError = useGameStore.getState().error;
-    setMessage({ type: "error", text: `Đặt giá thất bại: ${storeError || "Có thể đã có người thầu giá cao hơn."}` });
-  };
-
-  const handleCancel = async (listingId: string) => {
-    if (actionLoading) return;
-
-    const ok = await onCancel(listingId);
-    if (ok) {
-      await onRefresh();
-      setMessage({ type: "success", text: "Đã hủy đăng bán và hoàn trả linh vật vào hành lý." });
-      return;
-    }
-    const storeError = useGameStore.getState().error;
-    setMessage({ type: "error", text: `Không thể hủy phiên giao dịch: ${storeError || "Vui lòng thử lại lúc khác."}` });
-  };
-
-  // Filter and sort listings
-  const filteredListings = listings
-    .filter((l) => {
-      if (tab === "market" && l.listing_type !== "MARKET") return false;
-      if (tab === "auction" && l.listing_type !== "AUCTION") return false;
-
-      if (filterType !== "all" && l.item_type !== filterType) return false;
-
-      // Filter by "Only Mine"
-      if (showOnlyMine && l.seller_id !== player.id) return false;
-
-      // Filter by Rank (Gu, Material, Recipe)
-      if (filterRank !== "all") {
-        let rank = 0;
-        if (l.item_type === "Gu") {
-          if (Array.isArray(l.item_data) && l.item_data.length > 0) {
-            rank = (l.item_data[0] as { rank?: number })?.rank || 0;
-          } else if (typeof l.item_data === "string") {
-            rank = guDictionary[l.item_data]?.rank || 0;
-          }
-        } else if (l.item_type === "Material") {
-          let itemId = "";
-          if (typeof l.item_data === "string") {
-            itemId = l.item_data;
-          } else if (Array.isArray(l.item_data) && l.item_data.length > 0) {
-            itemId = (l.item_data[0] as { gu_id?: string })?.gu_id || "";
-          }
-          rank = itemDictionary[itemId]?.rank || 0;
-        } else if (l.item_type === "Recipe") {
-          const rData = typeof l.item_data === "object" && !Array.isArray(l.item_data) ? l.item_data : null;
-          const recipeId = rData ? rData.recipe_id : String(l.item_data);
-          const targetGuId = recipeId.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
-          const targetGuIdAlt = targetGuId.replace("GU", "GU_");
-          rank = guDictionary[targetGuId]?.rank || guDictionary[targetGuIdAlt]?.rank || 0;
-        }
-        if (rank !== filterRank) return false;
-      }
-
-      // Filter by searchQuery (without diacritics)
-      if (searchQuery) {
-        const nameNormalized = removeAccents(getDisplayName(l).toLowerCase());
-        const queryNormalized = removeAccents(searchQuery.toLowerCase());
-        if (!nameNormalized.includes(queryNormalized)) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === "price_asc") {
-        return a.current_price - b.current_price;
-      }
-      if (sortBy === "price_desc") {
-        return b.current_price - a.current_price;
-      }
-      if (sortBy === "expiry_asc") {
-        return new Date(a.end_time).getTime() - new Date(b.end_time).getTime();
-      }
-      // "newest"
-      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-    });
-
-  if (!Array.isArray(guInventory) || !materials || typeof materials !== 'object') {
-    return (
-      <div className="w-full mx-auto glass-panel-gold p-3 sm:p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <AlertCircle className="w-16 h-16 text-zinc-700 mb-6" />
-          <h3 className="text-lg font-serif font-bold text-zinc-500 mb-2">Chưa thể kết nối Bảo Hoàng Thiên</h3>
-          <p className="text-sm text-zinc-600 font-serif max-w-md">
-            Đạo hữu chưa đủ điều kiện để tham gia giao dịch tại Bảo Hoàng Thiên.
-            Hãy tu luyện và quay lại sau.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  }, [fetchBuybackOrders, fetchTradeOffers, onRefresh]);
 
   const hasConnectingHeaven = Array.isArray(guInventory) && guInventory.some(
     (g) => g.gu_id === "GU_CONNECTING_HEAVEN" && g.status !== "DEAD"
   );
+  const hasDivineSense = Array.isArray(guInventory) && guInventory.some(
+    (g) => g.gu_id === "GU_DIVINE_SENSE" && g.status !== "DEAD"
+  );
 
-  if (!hasConnectingHeaven) {
+  if (!hasConnectingHeaven || !hasDivineSense) {
     return (
       <div className="w-full mx-auto glass-panel-gold p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <AlertCircle className="w-16 h-16 text-zinc-700 mb-6" />
-          <h3 className="text-lg font-serif font-bold text-zinc-500 mb-2">Chưa thể kết nối Bảo Hoàng Thiên</h3>
-          <p className="text-sm text-zinc-600 font-serif max-w-md">
-            Đạo hữu cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối với Bảo Hoàng Thiên.
-            Hãy tu luyện và tìm kiếm thêm.
+          <AlertCircle className="w-16 h-16 text-amber-500 mb-6 animate-pulse" />
+          <h3 className="text-xl font-serif font-bold text-amber-200 mb-2">Chưa Thể Kết Nối Bảo Hoàng Thiên</h3>
+          <p className="text-sm text-zinc-400 font-serif max-w-md leading-relaxed">
+            Đạo hữu cần sở hữu đồng thời <strong className="text-amber-300">Thông Thiên Cổ (`GU_CONNECTING_HEAVEN`)</strong> VÀ <strong className="text-amber-300">Thần Niệm Cổ (`GU_DIVINE_SENSE`)</strong> còn sống trong túi đồ để mở kết nối Thần Niệm với Bảo Hoàng Thiên.
           </p>
         </div>
       </div>
     );
   }
 
+  const handleCreateBuybackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let targetPayload: string | { gu_id: string; rank: number } = "";
+    if (bbItemType === "Material") {
+      if (!bbTargetMat) return;
+      targetPayload = bbTargetMat;
+    } else if (bbItemType === "Gu") {
+      if (!bbTargetGu) return;
+      targetPayload = { gu_id: bbTargetGu, rank: bbTargetRank };
+    }
+    await createBuybackOrder({
+      itemType: bbItemType,
+      itemTarget: targetPayload,
+      unitPrice: bbUnitPrice,
+      quantityRequested: bbQuantity,
+      currency: bbCurrency,
+      durationHours: bbDuration,
+    });
+    setTab("buyback");
+  };
+
+  const handleCreateTradeOfferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createTradeOffer({
+      offered: {
+        primeval_stones: offeredStones,
+        immortal_stones: offeredImmortal,
+        gus: offeredGuIDs,
+        materials: offeredMats,
+        recipes: {},
+      },
+      requested: {
+        primeval_stones: requestedStones,
+        immortal_stones: requestedImmortal,
+        gus: requestedGuIDs,
+        materials: requestedMats,
+        recipes: {},
+      },
+      durationHours: tradeOfferDuration,
+    });
+    setTab("asyncTrade");
+  };
+
+  const handleCreateAuctionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (aucItemType === "Gu" && !selectedAucGu) return;
+    if (aucItemType === "Material" && !selectedAucMat) return;
+    await onCreate({
+      itemType: aucItemType,
+      guInstanceId: selectedAucGu,
+      itemId: selectedAucMat,
+      quantity: 1,
+      price: aucPrice,
+      durationHours: aucDuration,
+      currency: aucCurrency,
+      listingType: "AUCTION",
+    });
+    setTab("auction");
+  };
+
+  const activeAuctionListings = listings.filter((l) => l.listing_type === "AUCTION");
+
   return (
     <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 border border-amber-500/20 shadow-2xl relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
-
-      {/* Header section */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-amber-500/10 pb-5 mb-6">
         <div>
           <h2 className="text-2xl font-bold font-serif text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-300 to-amber-500 tracking-wider flex items-center gap-2">
@@ -506,11 +230,10 @@ export function BaoHoangMarket({
             BẢO HOÀNG THIÊN
           </h2>
           <p className="text-xs text-zinc-500 font-mono mt-1">
-            Sàn giao dịch tối cao xuyên Không gian & Thời gian • Miễn phí giao thương cho mọi Cổ Sư
+            Chợ Giao Thương Cổ Tiên • Thu Mua - Trao Đổi Auto - Đấu Giá Bảo Vật
           </p>
         </div>
 
-        {/* Player Assets display */}
         <div className="flex items-center gap-3 bg-zinc-950/60 px-4 py-2.5 rounded-2xl border border-zinc-800/80 font-mono text-xs">
           <div className="flex items-center gap-1.5 pr-3 border-r border-zinc-850">
             <Coins className="w-4 h-4 text-amber-500" />
@@ -518,1165 +241,501 @@ export function BaoHoangMarket({
             <span className="text-amber-400 font-bold text-sm">{player.primeval_stones}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-violet-400" />
+            <Sparkles className="w-4 h-4 text-cyan-400" />
             <span className="text-zinc-400">Tiên Nguyên:</span>
-            <span className="text-violet-300 font-bold text-sm">{player.immortal_stones.toFixed(2)}</span>
+            <span className="text-cyan-400 font-bold text-sm">{player.immortal_stones}</span>
           </div>
+          <GameButton
+            size="xs"
+            variant="ghost"
+            onClick={() => {
+              fetchBuybackOrders();
+              fetchTradeOffers();
+              onRefresh();
+            }}
+            loading={actionLoading}
+            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+          >
+            Làm Mới
+          </GameButton>
         </div>
       </div>
 
-      {/* Navigation tabs & Actions */}
-      <div className="flex flex-col items-stretch gap-3 mb-6">
-        <GameTabs
-          items={[
-            { id: "market", label: "Chợ Giao Dịch", icon: <ShoppingCart className="w-4 h-4" />, disabled: false },
-            { id: "auction", label: "Sảnh Đấu Giá", icon: <Gavel className="w-4 h-4" />, disabled: false },
-            { id: "sell", label: "Đăng Bán", icon: <PlusCircle className="w-4 h-4" />, disabled: false },
-          ]}
-          activeId={tab}
-          onChange={(id) => setTab(id as ApiResponseData)}
-          variant="pills"
-          size="sm"
-          scrollable={true}
-          fullWidth={false}
-        >
-        </GameTabs>
+      <GameTabs
+        activeId={tab}
+        onChange={(id) => setTab(id as "buyback" | "asyncTrade" | "auction" | "create")}
+        items={[
+          { id: "buyback", label: "Thu Mua (Order Book)", icon: <ShoppingCart className="w-4 h-4" /> },
+          { id: "asyncTrade", label: "Trao Đổi Auto", icon: <ArrowRightLeft className="w-4 h-4" /> },
+          { id: "auction", label: "Đấu Giá Bảo Vật", icon: <Gavel className="w-4 h-4" /> },
+          { id: "create", label: "Đăng Đơn Mới", icon: <PlusCircle className="w-4 h-4" /> },
+        ]}
+      />
 
-        {tab !== "sell" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 flex-wrap w-full">
-              <button
-                type="button"
-                onClick={onRefresh}
-                disabled={actionLoading}
-                className="bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-100 p-2.5 rounded-xl text-zinc-400 transition-all cursor-pointer shrink-0"
-                title="Làm mới"
-              >
-                <RefreshCw className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`} />
-              </button>
-
-              {/* Search Input */}
-              <div className="relative flex-1 min-w-[200px]">
+      <div className="mt-6">
+        {/* TAB 1: THU MUA (BUYBACK ORDER BOOK) */}
+        {tab === "buyback" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="relative flex-1">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Tìm tên bảo vật (hỗ trợ không dấu)..."
+                <GameInput
+                  placeholder="Tìm đơn thu mua..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 focus:border-amber-500/30 text-xs text-zinc-200 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-0 transition-all placeholder:text-zinc-600 font-serif"
+                  className="pl-9 text-xs"
                 />
               </div>
-
-              {/* Type Filter */}
-              <select
-                value={filterType}
-                onChange={(e) => {
-                  setFilterType(e.target.value as ApiResponseData);
-                  if (e.target.value !== "Gu") setFilterRank("all");
-                }}
-                className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0 cursor-pointer"
-              >
-                <option value="all">Tất cả loại</option>
-                <option value="Gu">Cổ Trùng</option>
-                <option value="Material">Vật Phẩm</option>
-                <option value="Recipe">Bí Phương</option>
-              </select>
-
-              {/* Sort By Filter */}
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as ApiResponseData)}
-                className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0 cursor-pointer"
-              >
-                <option value="newest">Mới đăng</option>
-                <option value="price_asc">Giá: Thấp → Cao</option>
-                <option value="price_desc">Giá: Cao → Thấp</option>
-                <option value="expiry_asc">Thời hạn: Ngắn nhất</option>
-              </select>
             </div>
 
-            {/* Advanced Sub-filters */}
-            <div className="flex items-center gap-4 flex-wrap bg-zinc-950/40 px-4 py-2.5 rounded-xl border border-zinc-900 text-xs text-zinc-400">
-              <div className="flex items-center gap-2">
-                <span className="font-serif">Lọc theo Rank:</span>
-                <select
-                  value={filterRank}
-                  onChange={(e) => setFilterRank(e.target.value === "all" ? "all" : Number(e.target.value))}
-                  className="bg-zinc-950 border border-zinc-850 rounded-lg text-[11px] px-2.5 py-1 focus:outline-none focus:ring-0 font-mono text-zinc-300 cursor-pointer"
-                >
-                  <option value="all">Tất cả Rank</option>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => (
-                    <option key={r} value={r}>Rank {r}</option>
-                  ))}
-                </select>
+            {buybackOrders.length === 0 ? (
+              <div className="text-center py-16 bg-zinc-950/40 rounded-2xl border border-zinc-900 text-zinc-500 font-serif">
+                Chưa có đơn thu mua nào trên Bảo Hoàng Thiên. Hãy đăng đơn thu mua đầu tiên!
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {buybackOrders.map((order) => {
+                  let targetName = "Vật phẩm";
+                  if (order.item_type === "Material" && typeof order.item_target === "string") {
+                    targetName = itemDictionary[order.item_target]?.name || order.item_target;
+                  } else if (order.item_type === "Gu" && typeof order.item_target === "object" && order.item_target !== null) {
+                    const t = order.item_target as { gu_id?: string; rank?: number };
+                    if (t.gu_id) {
+                      targetName = guSpecFor(t.gu_id, t.rank || 1)?.name || t.gu_id;
+                    }
+                  }
+                  const isMine = order.buyer_id === player.id;
+                  const remaining = order.quantity_requested - order.quantity_filled;
 
-              <label className="flex items-center gap-2 cursor-pointer select-none font-serif hover:text-zinc-300 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={showOnlyMine}
-                  onChange={(e) => setShowOnlyMine(e.target.checked)}
-                  className="rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer w-3.5 h-3.5"
-                />
-                <span>Chỉ hiển thị giao dịch của ta</span>
-              </label>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Message Notifications */}
-      {message && (
-        <div
-          className={`flex items-start gap-2.5 p-4 mb-6 rounded-2xl border ${
-            message.type === "error"
-              ? "border-rose-500/30 bg-rose-500/5 text-rose-200"
-              : "border-emerald-500/30 bg-emerald-500/5 text-emerald-250"
-          } animate-in fade-in duration-300`}
-        >
-          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-          <div className="text-xs leading-normal">{message.text}</div>
-        </div>
-      )}
-
-      {/* Tab Contents */}
-      {tab === "sell" ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Sell Form */}
-          <div className="lg:col-span-8 space-y-5 bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl">
-            <h3 className="text-sm font-serif font-bold text-amber-300 border-b border-zinc-900 pb-2 mb-4 uppercase tracking-wider">
-              Thiết lập giao dịch mới
-            </h3>
-
-            {/* Step 1: Listing Mode */}
-            <div className="space-y-3">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Chế độ giao dịch</span>
-              <div className="flex gap-2 bg-zinc-950 p-1.5 rounded-xl border border-zinc-900 flex-wrap sm:flex-nowrap">
-                <button
-                  type="button"
-                  onClick={() => setListingType("MARKET")}
-                  className={`flex-1 py-2 text-xs font-serif font-bold rounded-lg transition-all cursor-pointer min-w-[100px] ${
-                    listingType === "MARKET"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  Chợ (Mở)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setListingType("AUCTION");
-                    if (durationHours > 24) setDurationHours(24);
-                  }}
-                  className={`flex-1 py-2 text-xs font-serif font-bold rounded-lg transition-all cursor-pointer min-w-[100px] ${
-                    listingType === "AUCTION"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  Đấu Giá
-                </button>
-              </div>
-            </div>
-
-            {/* Step 2: Item category & specifics */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label className="space-y-2">
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Phân loại hàng hóa</span>
-                <select
-                  value={itemType}
-                  onChange={(e) => {
-                    setItemType(e.target.value as ApiResponseData);
-                    setSelectedGuType("");
-                    setSelectedGus([]);
-                    setSelectedMaterial("");
-                    setSelectedRecipe("");
-                    setQuantity(1);
-                  }}
-                  className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif"
-                >
-                  <option value="Material">Nguyên Liệu / Vật Phẩm</option>
-                  <option value="Gu">Cổ Trùng</option>
-                  <option value="Recipe">Bí Phương</option>
-                </select>
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Lọc theo Rank hành lý</span>
-                <select
-                  value={sellFilterRank}
-                  onChange={(e) => setSellFilterRank(e.target.value === "all" ? "all" : Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif cursor-pointer"
-                >
-                  <option value="all">Tất cả Rank</option>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => (
-                    <option key={r} value={r}>Rank {r}</option>
-                  ))}
-                </select>
-              </label>
-
-              {itemType === "Gu" && (
-                <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-amber-300/90">Chọn Cổ trùng đăng bán</span>
-
-                  {/* Ô tìm kiếm loài Cổ trùng */}
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Nhập tên loài Cổ trùng cần tìm..."
-                      value={guTypeSearch}
-                      onChange={(e) => setGuTypeSearch(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-xs text-zinc-300 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none placeholder:text-zinc-600 font-serif"
-                    />
-                  </div>
-
-                  {/* Grid các loài Cổ trùng tìm thấy */}
-                  <div className="space-y-1">
-                    <span className="text-[9px] text-zinc-500 block italic font-serif">Danh sách loài Cổ khả dụng trong rương (click chọn):</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                      {(() => {
-                        const tradeable = guInventory.filter((g) => !g.is_vital && g.status !== "DEAD");
-                        const typesMap: Record<string, { guId: string; count: number; name: string; rank: number }> = {};
-                        tradeable.forEach((g) => {
-                          const rank = g.rank || 1;
-                          const groupKey = `${g.gu_id}::${rank}`;
-                          if (!typesMap[groupKey]) {
-                            const name = guSpecFor(g.gu_id, rank)?.name || g.gu_id;
-                            typesMap[groupKey] = { guId: g.gu_id, count: 0, name, rank };
-                          }
-                          typesMap[groupKey].count++;
-                        });
-
-                        const filteredTypes = Object.entries(typesMap).filter(([, info]) => {
-                          if (sellFilterRank !== "all" && info.rank !== sellFilterRank) return false;
-                          if (!guTypeSearch) return true;
-                          const normName = removeAccents(info.name.toLowerCase());
-                          const normId = removeAccents(info.guId.toLowerCase());
-                          const normSearch = removeAccents(guTypeSearch.toLowerCase());
-                          return normName.includes(normSearch) || normId.includes(normSearch);
-                        });
-
-                        if (filteredTypes.length === 0) {
-                          return (
-                            <div className="col-span-full py-4 text-center text-xs text-zinc-650 font-serif italic">
-                              Không tìm thấy loài Cổ trùng phù hợp.
-                            </div>
-                          );
-                        }
-
-                        return filteredTypes.map(([groupKey, info]) => {
-                          const isSelected = selectedGuType === groupKey;
-                          return (
-                            <button
-                              key={groupKey}
-                              type="button"
-                              onClick={() => {
-                                setSelectedGuType(groupKey);
-                                setSelectedGus([]);
-                              }}
-                              className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer select-none ${
-                                isSelected
-                                  ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
-                                  : "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800 text-zinc-400"
-                              }`}
-                            >
-                              <div className="font-bold font-serif truncate">{info.name}</div>
-                              <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
-                                <span>Rank {info.rank}</span>
-                                <span>Số lượng: {info.count} con</span>
-                              </div>
-                            </button>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* If a Gu Type is selected, show the instances list with checkboxes */}
-                  {selectedGuType && (
-                    <div className="border border-zinc-900 rounded-xl p-3 bg-zinc-950/40 space-y-2 mt-2">
-                      <div className="flex justify-between items-center pb-2 border-b border-zinc-900/60">
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          Đã chọn {selectedGus.length} con Cổ trùng thuộc loài này
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const insts = guInventory
-                                .filter((g) => `${g.gu_id}::${g.rank || 1}` === selectedGuType && !g.is_vital && g.status !== "DEAD")
-                                .map((g) => g.instance_id);
-                              setSelectedGus(insts);
-                            }}
-                            className="text-[9px] text-amber-400 hover:underline font-mono cursor-pointer"
-                          >
-                            Chọn tất cả
-                          </button>
-                          <span className="text-zinc-700 font-mono">|</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedGus([])}
-                            className="text-[9px] text-zinc-500 hover:underline font-mono cursor-pointer"
-                          >
-                            Bỏ chọn
-                          </button>
+                  return (
+                    <GameCard key={order.id} variant="vital" className="p-4 space-y-3 relative overflow-hidden">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            Cần Mua: {order.item_type}
+                          </span>
+                          <h4 className="text-base font-bold font-serif text-amber-100 mt-1">{targetName}</h4>
+                          <p className="text-xs text-zinc-500 font-mono">Người mua: {order.buyer_username}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-bold text-amber-400 font-mono">
+                            {order.unit_price} {order.currency === "immortal" ? "Tiên Nguyên" : "Nguyên Thạch"}
+                          </div>
+                          <span className="text-[10px] text-zinc-500">/ 1 món</span>
                         </div>
                       </div>
 
-                      <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
-                        {guInventory
-                          .filter((g) => `${g.gu_id}::${g.rank || 1}` === selectedGuType && !g.is_vital && g.status !== "DEAD")
-                          .map((g) => {
-                            const selected = selectedGus.includes(g.instance_id);
-                            const hungerText = `Độ no: ${g.hunger}/100`;
-                            const statusText = g.equipped ? "Xuất Trận" : g.status === "SLEEPING" ? "Ngủ Đông" : g.status === "SEALED" ? "Phong Ấn" : "Chờ Lệnh";
-
-                            return (
-                              <label
-                                key={g.instance_id}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all cursor-pointer select-none ${
-                                  selected
-                                    ? "bg-amber-500/5 border-amber-500/30 text-amber-400"
-                                    : "bg-zinc-950/20 border-zinc-900/60 hover:border-zinc-800 text-zinc-400"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={selected}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedGus((prev) => [...prev, g.instance_id]);
-                                      } else {
-                                        setSelectedGus((prev) => prev.filter((id) => id !== g.instance_id));
-                                      }
-                                    }}
-                                    className="rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                                  />
-                                  <span className="font-bold">#{g.instance_id.slice(0, 6)}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px]">
-                                  <span className="text-zinc-500">{hungerText}</span>
-                                  <span className="text-zinc-700">•</span>
-                                  <span className={g.equipped ? "text-emerald-500 font-bold" : g.status === "SLEEPING" ? "text-amber-500/80" : g.status === "SEALED" ? "text-cyan-400" : "text-zinc-500"}>
-                                    {statusText}
-                                  </span>
-                                </div>
-                              </label>
-                            );
-                          })}
+                      <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/60 space-y-1 font-mono text-xs">
+                        <div className="flex justify-between text-zinc-400">
+                          <span>Tiến độ thu mua:</span>
+                          <span className="text-amber-300 font-bold">
+                            {order.quantity_filled} / {order.quantity_requested} (Còn {remaining})
+                          </span>
+                        </div>
+                        <div className="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-amber-400 h-full rounded-full transition-all"
+                            style={{ width: `${Math.min(100, (order.quantity_filled / order.quantity_requested) * 100)}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
 
-              {itemType === "Recipe" && (
-                <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-violet-300/90">Chọn Bí Phương cần bán</span>
-
-                  {/* Ô tìm kiếm bí phương */}
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Nhập tên bí phương/công thức cần tìm..."
-                      value={recipeSearch}
-                      onChange={(e) => setRecipeSearch(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-xs text-zinc-300 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none placeholder:text-zinc-600 font-serif"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[9px] text-zinc-500 block italic font-serif">Danh sách công thức đã mở (click chọn):</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                      {(() => {
-                        const recipes = player.unlocked_recipes || [];
-                        const filteredRecipes = recipes.filter((ur) => {
-                          const targetGuID = ur.recipe_id.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
-                          const rank = guDictionary[targetGuID]?.rank || 0;
-                          if (sellFilterRank !== "all" && rank !== sellFilterRank) return false;
-
-                          const name = getRecipeDisplayName(ur.recipe_id);
-                          if (!recipeSearch) return true;
-
-                          const normName = removeAccents(name.toLowerCase());
-                          const normId = removeAccents(ur.recipe_id.toLowerCase());
-                          const normSearch = removeAccents(recipeSearch.toLowerCase());
-                          return normName.includes(normSearch) || normId.includes(normSearch);
-                        });
-
-                        if (filteredRecipes.length === 0) {
-                          return (
-                            <div className="col-span-full py-4 text-center text-xs text-zinc-650 font-serif italic">
-                              Không tìm thấy công thức phù hợp đã mở khóa.
-                            </div>
-                          );
-                        }
-
-                        return filteredRecipes.map((ur) => {
-                          const isSelected = selectedRecipe === ur.recipe_id;
-                          return (
-                            <button
-                              key={ur.recipe_id}
-                              type="button"
-                              onClick={() => setSelectedRecipe(ur.recipe_id)}
-                              className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer select-none ${
-                                isSelected
-                                  ? "bg-violet-500/10 border-violet-500/40 text-violet-400 font-bold"
-                                  : "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800 text-zinc-400"
-                              }`}
-                            >
-                              <div className="font-serif truncate">{getRecipeDisplayName(ur.recipe_id)}</div>
-                              <div className="text-[10px] font-mono text-zinc-500">
-                                Tiến độ: {ur.completion_rate}%
-                              </div>
-                            </button>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {itemType === "Material" && (
-                <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-emerald-300/90">Chọn Vật phẩm cần bán</span>
-
-                  {/* Ô tìm kiếm vật phẩm */}
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Nhập tên vật phẩm/nguyên liệu cần tìm..."
-                      value={materialSearch}
-                      onChange={(e) => setMaterialSearch(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-xs text-zinc-300 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none placeholder:text-zinc-600 font-serif"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[9px] text-zinc-500 block italic font-serif">Danh sách vật phẩm khả dụng (click chọn):</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                      {(() => {
-                        const filteredMaterials = materialKeys.filter((k) => {
-                          const qty = materials[k] || 0;
-                          if (qty <= 0) return false;
-
-                          const rank = itemDictionary[k]?.rank || 0;
-                          if (sellFilterRank !== "all" && rank !== sellFilterRank) return false;
-
-                          const name = itemDictionary[k]?.name || k;
-                          if (!materialSearch) return true;
-
-                          const normName = removeAccents(name.toLowerCase());
-                          const normKey = removeAccents(k.toLowerCase());
-                          const normSearch = removeAccents(materialSearch.toLowerCase());
-                          return normName.includes(normSearch) || normKey.includes(normSearch);
-                        });
-
-                        if (filteredMaterials.length === 0) {
-                          return (
-                            <div className="col-span-full py-4 text-center text-xs text-zinc-650 font-serif italic">
-                              Không tìm thấy vật phẩm phù hợp trong rương.
-                            </div>
-                          );
-                        }
-
-                        return filteredMaterials.map((k) => {
-                          const isSelected = selectedMaterial === k;
-                          const name = itemDictionary[k]?.name || k;
-                          const qty = materials[k];
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => {
-                                setSelectedMaterial(k);
-                                if (quantity > qty) setQuantity(qty);
-                              }}
-                              className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer select-none ${
-                                isSelected
-                                  ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
-                                  : "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800 text-zinc-400"
-                              }`}
-                            >
-                              <div className="font-serif truncate">{name}</div>
-                              <div className="text-[10px] font-mono text-zinc-500">
-                                Bạn có: x{qty}
-                              </div>
-                            </button>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Step 3: Quantity, Price & Duration */}
-            <div className="space-y-3 block sm:col-span-2">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <label className="space-y-2">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Số lượng</span>
-                  <input
-                    type="number"
-                    min={1}
-                    disabled={itemType !== "Material"}
-                    value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
-                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
-                    {listingType === "MARKET" ? "Đơn giá bán" : "Giá khởi điểm"}
-                  </span>
-                  <input
-                    type="number"
-                    min={0.001}
-                    step={0.001}
-                    value={price}
-                    onChange={(e) => setPrice(Number(e.target.value))}
-                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-mono"
-                    placeholder="100"
-                  />
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Thời hạn thầu</span>
-                  <select
-                    value={customEndMode ? "custom" : durationHours}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === "custom") {
-                        setCustomEndMode(true);
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        const formatted = tomorrow.toISOString().substring(0, 16);
-
-                        // Khởi tạo minCustomTime là 1 giờ sau thời điểm hiện tại
-                        const minTime = new Date(Date.now() + 3600000);
-                        const formattedMin = minTime.toISOString().substring(0, 16);
-
-                        setMinCustomTime(formattedMin);
-                        setCustomEndTime(formatted);
-                        setDurationHours(24);
-                      } else {
-                        setCustomEndMode(false);
-                        setDurationHours(Number(val));
-                      }
-                    }}
-                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif cursor-pointer"
-                  >
-                    {listingType === "AUCTION" ? (
-                      <>
-                        <option value={1}>1 Giờ</option>
-                        <option value={2}>2 Giờ</option>
-                        <option value={4}>4 Giờ</option>
-                        <option value={6}>6 Giờ</option>
-                        <option value={12}>12 Giờ</option>
-                        <option value={24}>24 Giờ (1 Ngày)</option>
-                        <option value="custom">Tùy chọn mốc thời gian (dưới 24h)...</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value={24}>1 Ngày (24 Giờ)</option>
-                        <option value={72}>3 Ngày (72 Giờ)</option>
-                        <option value={168}>7 Ngày (168 Giờ)</option>
-                        <option value="custom">Tùy chọn mốc thời gian (dưới 7 ngày)...</option>
-                      </>
-                    )}
-                  </select>
-                </label>
-              </div>
-
-              {/* Input datetime-local for custom end time */}
-              {customEndMode && (
-                <div className="p-3 bg-zinc-950/60 border border-zinc-900 rounded-xl space-y-2 animate-in slide-in-from-top-2 duration-200">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                    <label className="flex-1 space-y-1">
-                      <span className="text-[9px] text-zinc-500 block uppercase tracking-wider font-bold">Mốc kết thúc trong tương lai:</span>
-                      <input
-                        type="datetime-local"
-                        value={customEndTime}
-                        min={minCustomTime}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCustomEndTime(val);
-                          if (val) {
-                            const diffMs = new Date(val).getTime() - Date.now();
-                            const hours = Math.ceil(diffMs / 3600000);
-                            const cappedHours = listingType === "AUCTION" ? Math.min(24, Math.max(1, hours)) : Math.min(168, Math.max(1, hours));
-                            setDurationHours(cappedHours);
-                          }
-                        }}
-                        className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-850 rounded-lg p-2 text-xs text-zinc-350 focus:outline-none font-mono cursor-pointer"
-                      />
-                    </label>
-                    <div className="flex flex-col justify-end text-[10px] text-zinc-500 font-serif leading-relaxed px-1 shrink-0">
-                      <div>Đơn hàng sẽ kết thúc sau:</div>
-                      <div className="text-amber-400 font-bold font-mono text-[11px]">
-                        {durationHours} giờ (~ {Math.floor(durationHours / 24)} ngày {durationHours % 24} giờ)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Currency Option */}
-            <div className="space-y-2">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Loại tiền tệ thụ hưởng</span>
-              {player.rank < 6 ? (
-                <div className="flex items-center gap-2 bg-zinc-950/60 p-3 rounded-xl border border-zinc-900 text-xs text-zinc-500 font-serif">
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
-                  <span>Tu vi phàm nhân (dưới 6 Chuyển) chỉ giao dịch bằng <strong>Nguyên Thạch</strong>.</span>
-                </div>
-              ) : (
-                <div className="flex gap-2 bg-zinc-950 p-1.5 rounded-xl border border-zinc-900">
-                  <button
-                    type="button"
-                    onClick={() => setCurrency("primeval")}
-                    className={`flex-1 py-2 text-xs font-serif font-bold rounded-lg transition-all cursor-pointer ${
-                      currency === "primeval"
-                        ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                        : "text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    Nguyên Thạch
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrency("immortal")}
-                    className={`flex-1 py-2 text-xs font-serif font-bold rounded-lg transition-all cursor-pointer ${
-                      currency === "immortal"
-                        ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                        : "text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    Tiên Nguyên Thạch
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Fee details & submit card */}
-          <div className="lg:col-span-4 space-y-4">
-            {/* Fee Box */}
-            <div className="bg-zinc-950/60 border border-amber-500/15 p-5 rounded-2xl space-y-4 font-mono text-xs relative">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-              <h4 className="font-serif font-bold text-amber-300 border-b border-zinc-900 pb-2 uppercase text-center">
-                Bảng Ước Tính Lệ Phí
-              </h4>
-
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>Phí Đăng Upfront:</span>
-                  <span className="text-zinc-200 font-bold">{getUpfrontFee()} {listingType === "MARKET" && currency === "immortal" ? "Tiên Nguyên" : "Nguyên Thạch"}</span>
-                </div>
-                <div className="flex justify-between items-center text-zinc-500 text-[10px] leading-tight pl-2">
-                  <span>* Thanh toán tức thì bằng {listingType === "MARKET" && currency === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch"} (4% giá đặt đối với Cửa hàng) và không được hoàn lại.</span>
-                </div>
-
-                <div className="h-px bg-zinc-900 my-2" />
-
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>Phí Hoa Hồng (sau bán):</span>
-                  <span className="text-amber-400 font-bold">{getCommissionRateText()} doanh thu</span>
-                </div>
-                <div className="flex justify-between items-center text-zinc-500 text-[10px] leading-tight pl-2">
-                  <span>* Chỉ khấu trừ khi hàng hóa bán thành công.</span>
-                </div>
-              </div>
-
-              <div className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-900 space-y-1.5">
-                <div className="text-[10px] text-zinc-500 uppercase tracking-wider block">Giao Dịch Dự Kiến</div>
-                <div className="text-zinc-300 font-serif">
-                  {itemType === "Material" ? `${quantity}x ` : itemType === "Gu" ? `${selectedGus.length}x ` : "1x "}
-                  <span className="font-bold text-zinc-100">
-                    {itemType === "Gu" && selectedGuType ? (() => {
-                      const [guId, rank] = selectedGuType.split("::");
-                      return guSpecFor(guId, Number(rank))?.name || guId;
-                    })() : ""}
-                    {itemType === "Material" && selectedMaterial ? itemDictionary[selectedMaterial]?.name || selectedMaterial : ""}
-                    {itemType === "Recipe" && selectedRecipe ? getRecipeDisplayName(selectedRecipe) : ""}
-                  </span>
-                </div>
-                <div className="text-[11px] text-amber-400 font-bold">
-                  Tổng thu thầu: <Num value={itemType === "Material" ? quantity * price : itemType === "Gu" ? selectedGus.length * price : price} /> {currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
-                </div>
-              </div>
-            </div>
-
-            <button
-              disabled={actionLoading || player.primeval_stones < getUpfrontFee()}
-              onClick={createListing}
-              className={`w-full py-3.5 px-4 rounded-xl font-serif font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
-                player.primeval_stones >= getUpfrontFee() && !actionLoading
-                  ? "bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 shadow-amber-950/10 active:scale-[0.98]"
-                  : "bg-zinc-900 border border-zinc-850 text-zinc-650 cursor-not-allowed"
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              ĐỒNG Ý ĐĂNG BÁN
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Active Listings Display */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredListings.map((listing) => {
-              const isSelf = listing.seller_id === player.id;
-              const unitPrice = listing.current_price;
-              const totalPrice = listing.quantity * unitPrice;
-              const currencyName = listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên Thạch";
-              const currencyBadge = listing.currency === "primeval"
-                ? "text-amber-400 border-amber-500/20 bg-amber-950/10"
-                : "text-purple-400 border-purple-500/20 bg-purple-950/10";
-
-              let typeBadge = "text-amber-400 border-amber-500/10 bg-amber-950/5";
-              if (listing.item_type === "Material") typeBadge = "text-emerald-400 border-emerald-500/10 bg-emerald-950/5";
-              if (listing.item_type === "Recipe") typeBadge = "text-violet-400 border-violet-500/10 bg-violet-950/5";
-
-              return (
-                <div
-                  key={listing.id}
-                  className="bg-zinc-950/55 border border-zinc-900 hover:border-zinc-850 rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all relative overflow-hidden group shadow-md"
-                >
-                  {/* Decorative corner light */}
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/2 rounded-full blur-xl group-hover:bg-amber-500/5 transition-all pointer-events-none" />
-
-                  {/* Top info row */}
-                  <div className="flex justify-between items-start gap-2 relative z-10">
-                    <div className="space-y-1">
-                      <div className="flex items-center flex-wrap gap-1">
-                        <span className={`text-[9px] font-mono border px-1.5 py-0.2 rounded uppercase ${typeBadge}`}>
-                          {listing.item_type === "Gu" ? "Cổ Trùng" : listing.item_type === "Material" ? "Vật Phẩm" : "Bí Phương"}
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-[10px] text-zinc-500 flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3 text-zinc-400" />
+                          Hết hạn: {new Date(order.end_time).toLocaleDateString()}
                         </span>
-                        {listing.listing_type === "TRADE" && (
-                          <span className="text-[9px] font-mono border border-amber-500/30 bg-amber-950/20 text-amber-400 px-1.5 py-0.2 rounded uppercase">
-                            Giao Dịch Riêng
-                          </span>
-                        )}
-                        {isSelf && (
-                          <span className="text-[9px] font-mono border border-cyan-500/20 bg-cyan-950/15 text-cyan-400 px-1.5 py-0.2 rounded uppercase">
-                            Của Bạn
-                          </span>
+                        {isMine ? (
+                          <GameButton
+                            size="xs"
+                            variant="danger"
+                            onClick={() => cancelBuybackOrder(order.id)}
+                            loading={actionLoading}
+                            leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                          >
+                            Hủy Đơn
+                          </GameButton>
+                        ) : (
+                          <GameButton
+                            size="xs"
+                            variant="primary"
+                            onClick={() => {
+                              setSelectedBuybackOrder(order);
+                              setSellQtyInput(1);
+                            }}
+                            loading={actionLoading}
+                            leftIcon={<Tag className="w-3.5 h-3.5" />}
+                          >
+                            Bán Ngay
+                          </GameButton>
                         )}
                       </div>
-                      <h4 className="text-zinc-100 font-serif font-bold text-sm leading-snug group-hover:text-amber-300 transition-colors pt-0.5">
-                        {getDisplayName(listing)}
-                        {(() => {
-                          let rank = 0;
-                          if (listing.item_type === "Gu") {
-                            if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
-                              rank = (listing.item_data[0] as { rank?: number })?.rank || 0;
-                            } else if (typeof listing.item_data === "string") {
-                              rank = guDictionary[listing.item_data]?.rank || 0;
-                            }
-                          } else if (listing.item_type === "Material") {
-                            let itemId = "";
-                            if (typeof listing.item_data === "string") {
-                              itemId = listing.item_data;
-                            } else if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
-                              itemId = (listing.item_data[0] as { gu_id?: string })?.gu_id || "";
-                            }
-                            rank = itemDictionary[itemId]?.rank || 0;
-                          } else if (listing.item_type === "Recipe") {
-                            const rData = typeof listing.item_data === "object" && !Array.isArray(listing.item_data) ? listing.item_data : null;
-                            const recipeId = rData ? rData.recipe_id : String(listing.item_data);
-                            const targetGuId = recipeId.replace("recipe_", "GU_").toUpperCase();
-                            const targetGuIdAlt = recipeId.replace("recipe_", "GU").toUpperCase();
-                            rank = guDictionary[targetGuId]?.rank || guDictionary[targetGuIdAlt]?.rank || 0;
-                          }
-                          return rank > 0 ? (
-                            <span className="text-[10px] font-mono border border-amber-500/20 px-1.5 py-0.2 rounded text-amber-400 uppercase ml-2">
-                              Rank {rank}
-                            </span>
-                          ) : null;
-                        })()}
-                      </h4>
-                      {listing.listing_type === "TRADE" && listing.target_buyer_username && (
-                        <p className="text-[10px] text-amber-400/90 font-mono">
-                          Người nhận: {listing.target_buyer_username}
-                        </p>
-                      )}
-                      {listing.item_type === "Gu" && (() => {
-                        let guId = "";
-                        if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
-                          guId = (listing.item_data[0] as ApiResponseData)?.gu_id || "";
-                        } else if (typeof listing.item_data === "string") {
-                          guId = listing.item_data;
-                        }
-                        const desc = guDictionary[guId]?.description || "";
-                        return desc ? (
-                          <p className="text-[10px] text-zinc-500 line-clamp-1 italic font-serif">{desc}</p>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
+                    </GameCard>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
-                  {/* Price & quantities details */}
-                  <div className="bg-zinc-950/80 p-3 rounded-xl border border-zinc-900/60 flex justify-between items-center font-mono text-[11px] leading-tight relative z-10 font-serif">
-                    <div className="space-y-1">
-                      <div>Số lượng: <span className="text-zinc-200 font-bold font-mono">{listing.quantity}</span></div>
+        {/* TAB 2: TRAO ĐỔI AUTO (ASYNC TRADE OFFERS) */}
+        {tab === "asyncTrade" && (
+          <div className="space-y-4">
+            {tradeOffers.length === 0 ? (
+              <div className="text-center py-16 bg-zinc-950/40 rounded-2xl border border-zinc-900 text-zinc-500 font-serif">
+                Chưa có đơn trao đổi tự động nào. Hãy đăng đơn trao đổi mới!
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {tradeOffers.map((offer) => {
+                  const isMine = offer.creator_id === player.id;
+                  return (
+                    <GameCard key={offer.id} variant="vital" className="p-4 space-y-4">
+                      <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                        <div className="flex items-center gap-2">
+                          <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
+                          <span className="text-sm font-bold font-serif text-zinc-200">{offer.creator_username}</span>
+                        </div>
+                        <span className="text-xs text-zinc-500 font-mono">
+                          Thời hạn: {new Date(offer.end_time).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                        <div className="bg-emerald-950/20 p-3 rounded-xl border border-emerald-500/20 space-y-1">
+                          <span className="text-emerald-400 font-bold text-[11px] block border-b border-emerald-500/20 pb-1 mb-1">
+                            VẬT NỔI BẬT ĐƯA ĐI (OFFERED)
+                          </span>
+                          {offer.offered.primeval_stones > 0 && <div>• {offer.offered.primeval_stones} Nguyên Thạch</div>}
+                          {offer.offered.immortal_stones > 0 && <div>• {offer.offered.immortal_stones} Tiên Nguyên</div>}
+                          {Object.entries(offer.offered.materials || {}).map(([k, v]) => (
+                            <div key={k}>• {v}x {itemDictionary[k]?.name || k}</div>
+                          ))}
+                        </div>
+
+                        <div className="bg-amber-950/20 p-3 rounded-xl border border-amber-500/20 space-y-1">
+                          <span className="text-amber-400 font-bold text-[11px] block border-b border-amber-500/20 pb-1 mb-1">
+                            VẬT YÊU CẦU NHẬN (REQUESTED)
+                          </span>
+                          {offer.requested.primeval_stones > 0 && <div>• {offer.requested.primeval_stones} Nguyên Thạch</div>}
+                          {offer.requested.immortal_stones > 0 && <div>• {offer.requested.immortal_stones} Tiên Nguyên</div>}
+                          {Object.entries(offer.requested.materials || {}).map(([k, v]) => (
+                            <div key={k}>• {v}x {itemDictionary[k]?.name || k}</div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        {isMine ? (
+                          <GameButton
+                            size="xs"
+                            variant="danger"
+                            onClick={() => cancelTradeOffer(offer.id)}
+                            loading={actionLoading}
+                            leftIcon={<XCircle className="w-3.5 h-3.5" />}
+                          >
+                            Hủy Trao Đổi
+                          </GameButton>
+                        ) : (
+                          <GameButton
+                            size="xs"
+                            variant="primary"
+                            onClick={() => acceptTradeOffer(offer.id)}
+                            loading={actionLoading}
+                            leftIcon={<CheckCircle className="w-3.5 h-3.5" />}
+                          >
+                            Chấp Nhận Trao Đổi (Exact Match)
+                          </GameButton>
+                        )}
+                      </div>
+                    </GameCard>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: ĐẤU GIÁ (AUCTION) */}
+        {tab === "auction" && (
+          <div className="space-y-4">
+            {activeAuctionListings.length === 0 ? (
+              <div className="text-center py-16 bg-zinc-950/40 rounded-2xl border border-zinc-900 text-zinc-500 font-serif">
+                Hiện không có bảo vật nào đang được đấu giá.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {activeAuctionListings.map((listing) => (
+                  <GameCard key={listing.id} variant="vital" className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
                       <div>
-                        Đơn giá:{" "}
-                        <span className={`${listing.currency === "primeval" ? "text-amber-400" : "text-purple-400"} font-bold font-mono`}>
-                          <Num value={unitPrice} /> {listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                          Đấu Giá: {listing.item_type}
                         </span>
+                        <h4 className="text-base font-bold font-serif text-amber-100 mt-1">Đấu giá Bảo Vật</h4>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-amber-400 font-mono">
+                          {listing.current_price} {listing.currency === "immortal" ? "Tiên Nguyên" : "Nguyên Thạch"}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right space-y-1">
-                      <div className="text-zinc-500">
-                        {listing.listing_type === "MARKET" ? "Tổng tiền mua:" : listing.listing_type === "TRADE" ? "Giao dịch riêng:" : "Giá thầu hiện tại:"}
-                      </div>
-                      <div className={`${listing.currency === "primeval" ? "text-amber-400" : "text-purple-400"} font-bold text-xs font-mono`}>
-                        <Num value={listing.listing_type === "MARKET" || listing.listing_type === "TRADE" ? totalPrice : listing.current_price} /> {listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
-                      </div>
+                    <div className="pt-2 flex justify-end">
+                      <GameButton
+                        size="xs"
+                        variant="primary"
+                        onClick={() => onBid(listing.id, listing.current_price + 10)}
+                        loading={actionLoading}
+                      >
+                        Đặt Giá (+10)
+                      </GameButton>
+                    </div>
+                  </GameCard>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: ĐĂNG ĐƠN MỚI */}
+        {tab === "create" && (
+          <GameCard variant="vital" className="p-6 max-w-2xl mx-auto space-y-6">
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
+              <GameButton
+                size="sm"
+                variant={createMode === "buyback" ? "primary" : "ghost"}
+                onClick={() => setCreateMode("buyback")}
+              >
+                Tạo Đơn Thu Mua
+              </GameButton>
+              <GameButton
+                size="sm"
+                variant={createMode === "tradeOffer" ? "primary" : "ghost"}
+                onClick={() => setCreateMode("tradeOffer")}
+              >
+                Đăng Trao Đổi Auto
+              </GameButton>
+              <GameButton
+                size="sm"
+                variant={createMode === "auction" ? "primary" : "ghost"}
+                onClick={() => setCreateMode("auction")}
+              >
+                Đăng Đấu Giá
+              </GameButton>
+            </div>
+
+            {/* FORM 1: BUYBACK ORDER */}
+            {createMode === "buyback" && (
+              <form onSubmit={handleCreateBuybackSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Loại Vật Phẩm Cần Mua</label>
+                    <select
+                      value={bbItemType}
+                      onChange={(e) => setBbItemType(e.target.value as "Gu" | "Material" | "Recipe")}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
+                    >
+                      <option value="Material">Nguyên Liệu / Tiên Tài</option>
+                      <option value="Gu">Cổ Trùng</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Đơn Vị Tiền Trả</label>
+                    <select
+                      value={bbCurrency}
+                      onChange={(e) => setBbCurrency(e.target.value as "primeval" | "immortal")}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
+                    >
+                      <option value="primeval">Nguyên Thạch</option>
+                      <option value="immortal">Tiên Nguyên Thạch</option>
+                    </select>
+                  </div>
+                </div>
+
+                {bbItemType === "Material" && (
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Chọn Nguyên Liệu Cần Mua</label>
+                    <select
+                      value={bbTargetMat}
+                      onChange={(e) => setBbTargetMat(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
+                    >
+                      <option value="">-- Chọn Nguyên Liệu --</option>
+                      {Object.entries(itemDictionary).map(([k, v]) => (
+                        <option key={k} value={k}>{v.name} ({k})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {bbItemType === "Gu" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Mã Cổ Trùng (Gu ID)</label>
+                      <GameInput
+                        placeholder="VD: GU_DIVINE_SENSE"
+                        value={bbTargetGu}
+                        onChange={(e) => setBbTargetGu(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Chuyển (Hạng)</label>
+                      <GameInput
+                        type="number"
+                        min={1}
+                        max={9}
+                        value={bbTargetRank}
+                        onChange={(e) => setBbTargetRank(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Đơn Giá Mua</label>
+                    <GameInput type="number" min={1} value={bbUnitPrice} onChange={(e) => setBbUnitPrice(Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Số Lượng Cần Mua</label>
+                    <GameInput type="number" min={1} value={bbQuantity} onChange={(e) => setBbQuantity(Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Thời Hạn (Giờ)</label>
+                    <GameInput type="number" min={1} max={168} value={bbDuration} onChange={(e) => setBbDuration(Number(e.target.value))} />
+                  </div>
+                </div>
+
+                <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono text-zinc-400 space-y-1">
+                  <div>• Tổng giá trị đơn: <strong className="text-amber-400">{bbUnitPrice * bbQuantity} {bbCurrency}</strong></div>
+                  <div>• Phí niêm yết (4% trả trước): <strong className="text-amber-400">{(bbUnitPrice * bbQuantity * 0.04).toFixed(3)} {bbCurrency}</strong></div>
+                  <div>• Tổng tiền cọc bị khóa: <strong className="text-amber-300">{(bbUnitPrice * bbQuantity * 1.04).toFixed(3)} {bbCurrency}</strong></div>
+                </div>
+
+                <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading}>
+                  Đăng Đơn Thu Mua
+                </GameButton>
+              </form>
+            )}
+
+            {/* FORM 2: ASYNC TRADE OFFER */}
+            {createMode === "tradeOffer" && (
+              <form onSubmit={handleCreateTradeOfferSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-800 space-y-3">
+                    <h5 className="text-xs font-bold text-emerald-400 uppercase">Đồ Đem Trao Đổi (Offered)</h5>
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch Đưa Đi</label>
+                      <GameInput type="number" min={0} value={offeredStones} onChange={(e) => setOfferedStones(Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên Đưa Đi</label>
+                      <GameInput type="number" min={0} value={offeredImmortal} onChange={(e) => setOfferedImmortal(Number(e.target.value))} />
                     </div>
                   </div>
 
-                  {/* Expiry & Actions */}
-                  <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-1 border-t border-zinc-900/40 relative z-10 font-serif">
-                    <div className="flex items-center gap-1 font-mono">
-                      <Clock className="w-3.5 h-3.5 text-zinc-650" />
-                      <span>
-                        Hết hạn: {new Date(listing.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} {new Date(listing.end_time).toLocaleDateString([], { month: '2-digit', day: '2-digit' })}
-                      </span>
+                  <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-800 space-y-3">
+                    <h5 className="text-xs font-bold text-amber-400 uppercase">Đồ Muốn Nhận (Requested)</h5>
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch Yêu Cầu</label>
+                      <GameInput type="number" min={0} value={requestedStones} onChange={(e) => setRequestedStones(Number(e.target.value))} />
                     </div>
-
-                    <div className="flex gap-2 items-center">
-                      {isSelf ? (
-                        (() => {
-                          const isAuctionWithBid = listing.listing_type === "AUCTION" && !!listing.highest_bidder_id;
-                          return (
-                            <button
-                              disabled={actionLoading || isAuctionWithBid}
-                              onClick={() => handleCancel(listing.id)}
-                              title={isAuctionWithBid ? "Đã có người đặt giá, không thể hủy phiên đấu giá" : "Hủy đăng bán"}
-                              className={`px-3.5 py-1.5 rounded-xl font-bold font-serif text-[10px] transition-all flex items-center gap-1 active:scale-95 ${
-                                isAuctionWithBid
-                                  ? "bg-zinc-900 border border-zinc-800 text-zinc-600 cursor-not-allowed"
-                                  : "bg-rose-950/20 border border-rose-900/30 hover:border-rose-500/50 hover:bg-rose-950/40 text-rose-300 cursor-pointer disabled:opacity-50"
-                              }`}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              {isAuctionWithBid ? "Đã Có Thầu" : "Hủy Bán"}
-                            </button>
-                          );
-                        })()
-                      ) : (
-                        <>
-                          {listing.listing_type === "MARKET" || listing.listing_type === "TRADE" ? (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => {
-                                if (listing.quantity > 1) {
-                                  setActivePurchaseListing(listing);
-                                  setPurchaseQuantity(1);
-                                } else {
-                                  handleBuy(listing.id, 1, listing.current_price, listing.currency, getDisplayName(listing));
-                                }
-                              }}
-                              className="px-4 py-1.5 rounded-xl bg-cyan-900/30 border border-cyan-500/30 hover:bg-cyan-900/60 hover:border-cyan-400 text-cyan-300 font-bold font-serif text-[10px] cursor-pointer transition-all active:scale-95"
-                            >
-                              Mua Ngay
-                            </button>
-                          ) : (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => {
-                                setActiveBidListing(listing);
-                                setBidAmount(listing.current_price + 1);
-                              }}
-                              className="px-4 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-400 text-amber-400 font-bold font-serif text-[10px] cursor-pointer transition-all active:scale-95"
-                            >
-                              Đấu Thầu
-                            </button>
-                          )}
-                        </>
-                      )}
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên Yêu Cầu</label>
+                      <GameInput type="number" min={0} value={requestedImmortal} onChange={(e) => setRequestedImmortal(Number(e.target.value))} />
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
 
-          {filteredListings.length === 0 && (
-            <div className="py-16 text-center border border-dashed border-zinc-900 rounded-3xl space-y-2 bg-zinc-950/20">
-              <AlertCircle className="w-8 h-8 text-zinc-650 mx-auto" />
-              <p className="text-zinc-500 text-sm font-serif italic">
-                {tab === "market"
-                  ? "Sàn chợ chưa có linh bảo nào đăng bán trực tiếp."
-                  : tab === "auction"
-                  ? "Chưa có bảo thạch nào được mang đấu thầu lúc này."
-                  : "Đạo hữu không có giao dịch riêng tư nào lúc này."}
-              </p>
+                <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading}>
+                  Đăng Đơn Trao Đổi Auto
+                </GameButton>
+              </form>
+            )}
+
+            {/* FORM 3: AUCTION */}
+            {createMode === "auction" && (
+              <form onSubmit={handleCreateAuctionSubmit} className="space-y-4">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Chọn Cổ Trùng Đưa Đấu Giá</label>
+                  <select
+                    value={selectedAucGu}
+                    onChange={(e) => setSelectedAucGu(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
+                  >
+                    <option value="">-- Chọn Cổ Trùng --</option>
+                    {guInventory.map((g) => (
+                      <option key={g.instance_id} value={g.instance_id}>
+                        {g.gu_id} (Hạng {g.rank})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Giá Khởi Điểm</label>
+                  <GameInput type="number" min={1} value={aucPrice} onChange={(e) => setAucPrice(Number(e.target.value))} />
+                </div>
+                <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading}>
+                  Đưa Lên Đấu Giá
+                </GameButton>
+              </form>
+            )}
+          </GameCard>
+        )}
+      </div>
+
+      {/* MODAL: SELL TO BUYBACK ORDER */}
+      {selectedBuybackOrder && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <GameCard variant="vital" className="p-6 max-w-md w-full space-y-4 relative">
+            <h3 className="text-lg font-bold font-serif text-amber-200">Bán Vật Phẩm Vào Đơn Thu Mua</h3>
+            <p className="text-xs text-zinc-400">
+              Đơn thu mua yêu cầu: <strong className="text-amber-300">{selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled} món</strong> với đơn giá <strong className="text-amber-300">{selectedBuybackOrder.unit_price} {selectedBuybackOrder.currency}</strong>.
+            </p>
+
+            <div>
+              <label className="text-xs text-zinc-400 block mb-1">Số lượng bán</label>
+              <GameInput
+                type="number"
+                min={1}
+                max={selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled}
+                value={sellQtyInput}
+                onChange={(e) => setSellQtyInput(Number(e.target.value))}
+              />
             </div>
-          )}
+
+            <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono space-y-1">
+              <div className="text-zinc-400">• Tổng nhận thô: <span className="text-amber-400">{sellQtyInput * selectedBuybackOrder.unit_price} {selectedBuybackOrder.currency}</span></div>
+              <div className="text-zinc-400">• Phí hoa hồng (6%): <span className="text-red-400">-{(sellQtyInput * selectedBuybackOrder.unit_price * 0.06).toFixed(3)} {selectedBuybackOrder.currency}</span></div>
+              <div className="text-amber-200 font-bold">• Thực nhận: {(sellQtyInput * selectedBuybackOrder.unit_price * 0.94).toFixed(3)} {selectedBuybackOrder.currency}</div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <GameButton
+                variant="ghost"
+                className="flex-1"
+                onClick={() => setSelectedBuybackOrder(null)}
+              >
+                Hủy Thao Tác
+              </GameButton>
+              <GameButton
+                variant="primary"
+                className="flex-1"
+                loading={actionLoading}
+                onClick={async () => {
+                  await sellToBuybackOrder({
+                    orderId: selectedBuybackOrder.id,
+                    quantity: sellQtyInput,
+                    guInstanceIds: selectedGuForBuyback,
+                  });
+                  setSelectedBuybackOrder(null);
+                }}
+              >
+                Xác Nhận Bán
+              </GameButton>
+            </div>
+          </GameCard>
         </div>
-      )}
-
-      {/* Retail Buyout Modal */}
-      {activePurchaseListing && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setActivePurchaseListing(null)}>
-          <div className="bg-zinc-950/95 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-5 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            {/* Close button */}
-            <button
-              onClick={() => setActivePurchaseListing(null)}
-              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
-            >
-              <span className="font-sans font-bold text-sm">✕</span>
-            </button>
-
-            {/* Header / Item Visual */}
-            <div className="text-center space-y-3">
-              <div className="w-20 h-20 mx-auto flex items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 relative shadow-inner">
-                {activePurchaseListing.item_type === "Gu" ? (
-                  <Sparkles className="w-10 h-10 text-amber-400 animate-pulse" />
-                ) : activePurchaseListing.item_type === "Recipe" ? (
-                  <BookOpen className="w-10 h-10 text-violet-400" />
-                ) : (
-                  <Tag className="w-10 h-10 text-emerald-400" />
-                )}
-              </div>
-              <h4 className="text-sm font-serif font-bold text-zinc-100 uppercase tracking-wide">
-                {getDisplayName(activePurchaseListing)}
-              </h4>
-            </div>
-
-            <div className="h-px bg-zinc-900" />
-
-            {/* Form Fields */}
-            <div className="space-y-4 text-xs font-serif">
-              {/* Quantity Selector */}
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Số lượng</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={purchaseQuantity <= 1}
-                    onClick={() => setPurchaseQuantity(prev => Math.max(1, prev - 1))}
-                    className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-bold text-zinc-200 cursor-pointer transition-colors"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={activePurchaseListing.quantity}
-                    value={purchaseQuantity}
-                    onChange={(e) => {
-                      const val = Math.max(1, Math.min(activePurchaseListing.quantity, Number(e.target.value)));
-                      setPurchaseQuantity(val);
-                    }}
-                    className="w-14 bg-zinc-900/40 border border-zinc-850 rounded-lg p-1.5 font-mono text-xs text-zinc-200 text-center focus:outline-none focus:ring-0"
-                  />
-                  <button
-                    type="button"
-                    disabled={purchaseQuantity >= activePurchaseListing.quantity}
-                    onClick={() => setPurchaseQuantity(prev => Math.min(activePurchaseListing.quantity, prev + 1))}
-                    className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-bold text-zinc-200 cursor-pointer transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Unit Price */}
-              <div className="flex justify-between items-center">
-                <span className="text-zinc-400">Đơn giá</span>
-                <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-200">
-                  <span><Num value={activePurchaseListing.current_price} /></span>
-                  {activePurchaseListing.currency === "primeval" ? (
-                    <Coins className="w-4 h-4 text-amber-500" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 text-violet-400" />
-                  )}
-                </div>
-              </div>
-
-              {/* Total Price */}
-              <div className="flex justify-between items-center">
-                <span className="text-zinc-400">Tổng phí</span>
-                <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-200 text-sm">
-                  <span><Num value={purchaseQuantity * activePurchaseListing.current_price} /></span>
-                  {activePurchaseListing.currency === "primeval" ? (
-                    <Coins className="w-4.5 h-4.5 text-amber-500" />
-                  ) : (
-                    <Sparkles className="w-4.5 h-4.5 text-violet-400" />
-                  )}
-                </div>
-              </div>
-
-              {/* Owned Balance */}
-              <div className="flex justify-between items-center">
-                <span className="text-zinc-400">Đang có</span>
-                <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-350">
-                  <span>
-                    {activePurchaseListing.currency === "primeval"
-                      ? player.primeval_stones
-                      : player.immortal_stones.toFixed(2)}
-                  </span>
-                  {activePurchaseListing.currency === "primeval" ? (
-                    <Coins className="w-4 h-4 text-amber-500" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 text-violet-400" />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Purchase Action Button */}
-            <button
-              onClick={async () => {
-                const listing = activePurchaseListing;
-                setActivePurchaseListing(null);
-                await handleBuy(
-                  listing.id,
-                  purchaseQuantity,
-                  listing.current_price,
-                  listing.currency,
-                  getDisplayName(listing),
-                  true
-                );
-              }}
-              className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-serif font-bold text-xs tracking-wider transition-all text-white shadow-lg cursor-pointer active:scale-[0.98]"
-            >
-              Mua
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Auction Bid Modal */}
-      {activeBidListing && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setActiveBidListing(null)}>
-          <div className="bg-zinc-950/95 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-5 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            {/* Close button */}
-            <button
-              onClick={() => setActiveBidListing(null)}
-              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer"
-            >
-              <span className="font-sans font-bold text-sm">✕</span>
-            </button>
-
-            {/* Header / Item Visual */}
-            <div className="text-center space-y-3">
-              <div className="w-20 h-20 mx-auto flex items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 relative shadow-inner">
-                {activeBidListing.item_type === "Gu" ? (
-                  <Sparkles className="w-10 h-10 text-amber-400 animate-pulse" />
-                ) : activeBidListing.item_type === "Recipe" ? (
-                  <BookOpen className="w-10 h-10 text-violet-400" />
-                ) : (
-                  <Tag className="w-10 h-10 text-emerald-400" />
-                )}
-              </div>
-              <h4 className="text-sm font-serif font-bold text-zinc-100 uppercase tracking-wide">
-                {getDisplayName(activeBidListing)}
-              </h4>
-            </div>
-
-            <div className="h-px bg-zinc-900" />
-
-            {/* Form Fields */}
-            <div className="space-y-4 text-xs font-serif">
-              {/* Current Price */}
-              <div className="flex justify-between items-center">
-                <span className="text-zinc-400">Giá hiện tại</span>
-                <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-200">
-                  <span><Num value={activeBidListing.current_price} /></span>
-                  {activeBidListing.currency === "primeval" ? (
-                    <Coins className="w-4 h-4 text-amber-500" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 text-violet-400" />
-                  )}
-                </div>
-              </div>
-
-              {/* Bid Amount Input */}
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Giá đấu</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={bidAmount <= activeBidListing.current_price + 0.001}
-                    onClick={() => setBidAmount(prev => Math.max(activeBidListing.current_price + 0.001, Math.round((prev - 0.001) * 1000) / 1000))}
-                    className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-bold text-zinc-200 cursor-pointer transition-colors"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={activeBidListing.current_price + 0.001}
-                    step={0.001}
-                    value={bidAmount}
-                    onChange={(e) => {
-                      const val = Math.max(activeBidListing.current_price + 0.001, Math.round(Number(e.target.value) * 1000) / 1000);
-                      setBidAmount(val);
-                    }}
-                    className="w-20 bg-zinc-900/40 border border-zinc-850 rounded-lg p-1.5 font-mono text-xs text-zinc-200 text-center focus:outline-none focus:ring-0"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setBidAmount(prev => Math.round((prev + 0.001) * 1000) / 1000)}
-                    className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 flex items-center justify-center font-bold text-zinc-200 cursor-pointer transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Owned Balance */}
-              <div className="flex justify-between items-center">
-                <span className="text-zinc-400">Đang có</span>
-                <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-350">
-                  <span>
-                    {activeBidListing.currency === "primeval"
-                      ? player.primeval_stones
-                      : player.immortal_stones.toFixed(2)}
-                  </span>
-                  {activeBidListing.currency === "primeval" ? (
-                    <Coins className="w-4 h-4 text-amber-500" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 text-violet-400" />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Bid Action Button */}
-            <button
-              onClick={async () => {
-                const listing = activeBidListing;
-                setActiveBidListing(null);
-                await handleBid(
-                  listing.id,
-                  bidAmount,
-                  listing.current_price,
-                  getDisplayName(listing),
-                  true,
-                  listing.currency
-                );
-              }}
-              className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 font-serif font-bold text-xs tracking-wider transition-all text-zinc-950 shadow-lg cursor-pointer active:scale-[0.98]"
-            >
-              Đấu Thầu
-            </button>
-          </div>
-        </div>,
-        document.body
       )}
     </GamePanel>
   );

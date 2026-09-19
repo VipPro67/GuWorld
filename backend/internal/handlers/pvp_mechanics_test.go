@@ -148,3 +148,33 @@ func TestWorldPosIndex_ImmediatePresenceAndNearby(t *testing.T) {
 		t.Errorf("expected player-a at (100, 100)")
 	}
 }
+
+func TestDeathDrop_VoidDestructionAndIncreasedRates(t *testing.T) {
+	// Verify configured rates
+	if deathPenaltyConfig.PrimevalStonePct < 40 {
+		t.Errorf("expected PrimevalStonePct >= 40, got %f", deathPenaltyConfig.PrimevalStonePct)
+	}
+	if deathPenaltyConfig.ImmortalStonePct < 40 {
+		t.Errorf("expected ImmortalStonePct >= 40, got %f", deathPenaltyConfig.ImmortalStonePct)
+	}
+	if deathPenaltyConfig.ItemsTypePct < 40 {
+		t.Errorf("expected ItemsTypePct >= 40, got %f", deathPenaltyConfig.ItemsTypePct)
+	}
+	if deathPenaltyConfig.VoidDestructionPct != 40 {
+		t.Errorf("expected VoidDestructionPct == 40, got %f", deathPenaltyConfig.VoidDestructionPct)
+	}
+
+	// Test stone void destruction calculation
+	primevalLoss := 100.0
+	voidPct := deathPenaltyConfig.VoidDestructionPct / 100.0
+	primevalDestroyed := primevalLoss * voidPct
+	primevalLoot := primevalLoss - primevalDestroyed
+
+	if primevalDestroyed != 40.0 {
+		t.Errorf("expected 40 primeval stones destroyed, got %f", primevalDestroyed)
+	}
+	if primevalLoot != 60.0 {
+		t.Errorf("expected 60 primeval stones in ground loot, got %f", primevalLoot)
+	}
+}
+

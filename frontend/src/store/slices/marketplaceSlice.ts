@@ -2,17 +2,71 @@ import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
+export interface BuybackOrder {
+  id: string;
+  buyer_id: string;
+  buyer_username: string;
+  item_type: "Gu" | "Material" | "Recipe";
+  item_target: string | Record<string, unknown>;
+  unit_price: number;
+  quantity_requested: number;
+  quantity_filled: number;
+  currency: "primeval" | "immortal";
+  upfront_fee: number;
+  total_locked: number;
+  status: string;
+  duration_hours: number;
+  end_time: string;
+  created_at: string;
+}
+
+export interface TradeOfferData {
+  primeval_stones: number;
+  immortal_stones: number;
+  gus: string[];
+  materials: Record<string, number>;
+  recipes: Record<string, number>;
+}
+
+export interface AsyncTradeOffer {
+  id: string;
+  creator_id: string;
+  creator_username: string;
+  offered: TradeOfferData;
+  requested: TradeOfferData;
+  status: string;
+  duration_hours: number;
+  end_time: string;
+  created_at: string;
+}
+
 export interface MarketplaceSlice {
   marketplaceListings: ApiResponseData[];
+  buybackOrders: BuybackOrder[];
+  tradeOffers: AsyncTradeOffer[];
   fetchMarketplaceListings: () => Promise<void>;
   createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; guInstanceIds?: string[]; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
   placeMarketplaceBid: (listingId: string, amount: number) => Promise<boolean>;
   cancelMarketplaceListing: (listingId: string) => Promise<boolean>;
   buyMarketplaceListing: (listingId: string, quantity?: number) => Promise<boolean>;
+
+  // Buyback Order Book
+  fetchBuybackOrders: () => Promise<void>;
+  createBuybackOrder: (payload: { itemType: "Gu" | "Material" | "Recipe"; itemTarget: unknown; unitPrice: number; quantityRequested: number; currency: "primeval" | "immortal"; durationHours: number }) => Promise<boolean>;
+  sellToBuybackOrder: (payload: { orderId: string; quantity: number; guInstanceId?: string; guInstanceIds?: string[] }) => Promise<boolean>;
+  cancelBuybackOrder: (orderId: string) => Promise<boolean>;
+
+  // Async Trade Offers
+  fetchTradeOffers: () => Promise<void>;
+  createTradeOffer: (payload: { offered: TradeOfferData; requested: TradeOfferData; durationHours: number }) => Promise<boolean>;
+  acceptTradeOffer: (offerId: string) => Promise<boolean>;
+  cancelTradeOffer: (offerId: string) => Promise<boolean>;
 }
 
 export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, MarketplaceSlice> = (set, get) => ({
   marketplaceListings: [],
+  buybackOrders: [],
+  tradeOffers: [],
 
   fetchMarketplaceListings: async () => {
     const { token, logout } = get();
@@ -136,6 +190,222 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mua hàng thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  // Buyback Orders
+  fetchBuybackOrders: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback`, {});
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({ buybackOrders: Array.isArray(data) ? data : [] });
+    } catch (err) {
+      console.error("fetch buyback orders failed", err);
+    }
+  },
+
+  createBuybackOrder: async (payload) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item_type: payload.itemType,
+          item_target: payload.itemTarget,
+          unit_price: payload.unitPrice,
+          quantity_requested: payload.quantityRequested,
+          currency: payload.currency,
+          duration_hours: payload.durationHours,
+        }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Tạo đơn thu mua thất bại");
+      get().addLog(data.message || "Tạo đơn thu mua thành công");
+      get().addToast(data.message || "Tạo đơn thu mua thành công", "success");
+      get().applyInventoryFromResponse(data);
+      const pid = get().player?.id;
+      if (pid) await get().fetchPlayerStatus(pid, true);
+      await get().fetchBuybackOrders();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  sellToBuybackOrder: async (payload) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback/sell`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: payload.orderId,
+          quantity: payload.quantity,
+          gu_instance_id: payload.guInstanceId || "",
+          gu_instance_ids: payload.guInstanceIds || [],
+        }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bán vào đơn thu mua thất bại");
+      get().addLog(data.message || "Bán vật phẩm thành công");
+      get().addToast(data.message || "Bán vật phẩm thành công", "success");
+      get().applyInventoryFromResponse(data);
+      await get().fetchGuInventory();
+      const pid = get().player?.id;
+      if (pid) await get().fetchPlayerStatus(pid, true);
+      await get().fetchBuybackOrders();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  cancelBuybackOrder: async (orderId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy đơn thu mua thất bại");
+      get().addLog(data.message || "Hủy đơn thu mua thành công");
+      get().addToast(data.message || "Hủy đơn thu mua thành công", "success");
+      get().applyInventoryFromResponse(data);
+      const pid = get().player?.id;
+      if (pid) await get().fetchPlayerStatus(pid, true);
+      await get().fetchBuybackOrders();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  // Async Trade Offers
+  fetchTradeOffers: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers`, {});
+      if (response.status === 401) { logout(); return; }
+      const data = await response.json();
+      set({ tradeOffers: Array.isArray(data) ? data : [] });
+    } catch (err) {
+      console.error("fetch trade offers failed", err);
+    }
+  },
+
+  createTradeOffer: async (payload) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offered: payload.offered,
+          requested: payload.requested,
+          duration_hours: payload.durationHours,
+        }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Đăng đơn trao đổi thất bại");
+      get().addLog(data.message || "Đăng đơn trao đổi thành công");
+      get().addToast(data.message || "Đăng đơn trao đổi thành công", "success");
+      get().applyInventoryFromResponse(data);
+      await get().fetchGuInventory();
+      const pid = get().player?.id;
+      if (pid) await get().fetchPlayerStatus(pid, true);
+      await get().fetchTradeOffers();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  acceptTradeOffer: async (offerId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offer_id: offerId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Chấp nhận trao đổi thất bại");
+      get().addLog(data.message || "Trao đổi tự động thành công");
+      get().addToast(data.message || "Trao đổi tự động thành công", "success");
+      get().applyInventoryFromResponse(data);
+      await get().fetchGuInventory();
+      const pid = get().player?.id;
+      if (pid) await get().fetchPlayerStatus(pid, true);
+      await get().fetchTradeOffers();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  cancelTradeOffer: async (offerId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offer_id: offerId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy đơn trao đổi thất bại");
+      get().addLog(data.message || "Hủy đơn trao đổi thành công");
+      get().addToast(data.message || "Hủy đơn trao đổi thành công", "success");
+      get().applyInventoryFromResponse(data);
+      await get().fetchGuInventory();
+      const pid = get().player?.id;
+      if (pid) await get().fetchPlayerStatus(pid, true);
+      await get().fetchTradeOffers();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
       return false;
     } finally { set({ actionLoading: false }); }
   },

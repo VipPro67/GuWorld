@@ -692,7 +692,20 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			shop.POST("/bao-hoang/bid", handlers.PlaceBid)
 			shop.POST("/bao-hoang/cancel", handlers.CancelListing)
 			shop.POST("/bao-hoang/settle", handlers.SettleExpiredAuctions)
+
+			// Buyback Order Book
+			shop.GET("/bao-hoang/buyback", handlers.GetBuybackOrders)
+			shop.POST("/bao-hoang/buyback", handlers.CreateBuybackOrder)
+			shop.POST("/bao-hoang/buyback/sell", handlers.SellToBuybackOrder)
+			shop.POST("/bao-hoang/buyback/cancel", handlers.CancelBuybackOrder)
+
+			// Async Trade Offers
+			shop.GET("/bao-hoang/trade-offers", handlers.GetTradeOffers)
+			shop.POST("/bao-hoang/trade-offers", handlers.CreateTradeOffer)
+			shop.POST("/bao-hoang/trade-offers/accept", handlers.AcceptTradeOffer)
+			shop.POST("/bao-hoang/trade-offers/cancel", handlers.CancelTradeOffer)
 		}
+
 
 		// Trade — group: 25/min, per player: 8/min
 		trade := api.Group("/trade")

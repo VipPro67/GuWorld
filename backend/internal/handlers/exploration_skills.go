@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -553,7 +554,25 @@ func UseKillerMoveOnMap(c *gin.Context) {
 					}
 					logs = append(logs, teleportMsg)
 					applied = true
-					logger.S.Infof("[Sát Chiêu Dịch Chuyển] Người chơi %s (ID: %s) kích hoạt sát chiêu %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, move.Name, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+					auditlog.Log(tx, auditlog.Entry{
+						PlayerID:       &player.ID,
+						Action:         "killer_move.portal_create",
+						EntityType:     "killer_move",
+						EntityID:       move.ID,
+						RequestSummary: fmt.Sprintf("Dịch chuyển sát chiêu %s từ (%d, %d) [%s] đến (%d, %d) [%s]", move.Name, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion),
+						Metadata: map[string]interface{}{
+							"move_id":     move.ID,
+							"move_name":   move.Name,
+							"from_x":      oldX,
+							"from_y":      oldY,
+							"from_region": oldRegion,
+							"to_x":        player.X,
+							"to_y":        player.Y,
+							"to_region":   player.CurrentRegion,
+						},
+						IPAddress: c.ClientIP(),
+						Success:   true,
+					})
 				} else {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
 					return
@@ -572,7 +591,25 @@ func UseKillerMoveOnMap(c *gin.Context) {
 				}
 				logs = append(logs, teleportMsg)
 				applied = true
-				logger.S.Infof("[Sát Chiêu Dịch Chuyển] Người chơi %s (ID: %s) kích hoạt sát chiêu %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, move.Name, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+				auditlog.Log(tx, auditlog.Entry{
+					PlayerID:       &player.ID,
+					Action:         "killer_move.random_portal",
+					EntityType:     "killer_move",
+					EntityID:       move.ID,
+					RequestSummary: fmt.Sprintf("Dịch chuyển ngẫu nhiên sát chiêu %s từ (%d, %d) [%s] đến (%d, %d) [%s]", move.Name, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion),
+					Metadata: map[string]interface{}{
+						"move_id":     move.ID,
+						"move_name":   move.Name,
+						"from_x":      oldX,
+						"from_y":      oldY,
+						"from_region": oldRegion,
+						"to_x":        player.X,
+						"to_y":        player.Y,
+						"to_region":   player.CurrentRegion,
+					},
+					IPAddress: c.ClientIP(),
+					Success:   true,
+				})
 			}
 		}
 

@@ -136,5 +136,58 @@ func schemaTrade() error {
 		return err
 	}
 
+	if err := execSchema("buyback_orders", `
+	CREATE TABLE IF NOT EXISTS buyback_orders (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		buyer_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		item_type VARCHAR(20) NOT NULL,
+		item_target JSONB NOT NULL,
+		unit_price NUMERIC(30,3) NOT NULL,
+		quantity_requested BIGINT NOT NULL,
+		quantity_filled BIGINT NOT NULL DEFAULT 0,
+		currency VARCHAR(20) NOT NULL DEFAULT 'primeval',
+		upfront_fee NUMERIC(30,3) NOT NULL DEFAULT 0,
+		total_locked NUMERIC(30,3) NOT NULL DEFAULT 0,
+		status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+		duration_hours INTEGER NOT NULL DEFAULT 72,
+		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("buyback_buyer_idx", `
+	CREATE INDEX IF NOT EXISTS idx_buyback_buyer ON buyback_orders (buyer_id);`); err != nil {
+		return err
+	}
+	if err := execSchema("buyback_status_idx", `
+	CREATE INDEX IF NOT EXISTS idx_buyback_status ON buyback_orders (status);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("trade_offers", `
+	CREATE TABLE IF NOT EXISTS trade_offers (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		creator_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		offered_data JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
+		requested_data JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
+		status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+		duration_hours INTEGER NOT NULL DEFAULT 168,
+		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("trade_offers_creator_idx", `
+	CREATE INDEX IF NOT EXISTS idx_trade_offers_creator ON trade_offers (creator_id);`); err != nil {
+		return err
+	}
+	if err := execSchema("trade_offers_status_idx", `
+	CREATE INDEX IF NOT EXISTS idx_trade_offers_status ON trade_offers (status);`); err != nil {
+		return err
+	}
+
+	execSchema("deprecate_market_listings", `UPDATE auction SET status = 'cancelled' WHERE listing_type = 'MARKET' AND status = 'active';`)
+
 	return nil
 }
+

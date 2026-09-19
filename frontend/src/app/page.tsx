@@ -554,6 +554,38 @@ export default function Home() {
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-y-auto space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed pr-1 custom-scrollbar">
+              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.4</strong> — Cải Tiến PvP Ngũ Vực & Chống Lợi Dụng Chuyển Đồ:</p>
+              <div className="space-y-2">
+                <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">💥</span>
+                  <div>
+                    <span className="font-bold text-red-400">Thiên Đạo Tiêu Hủy (40% Void Destruction)</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Tăng tỷ lệ tổn thất khi tử đạo lên 40% tiền, 40% nguyên liệu, 30% Cổ trùng và Bí phương. Trong lượng mất, <strong>40% bị chấn nát tiêu hủy vĩnh viễn khỏi server</strong>, chỉ 60% còn lại rơi ra bãi đất (tồn tại 10 phút). Chống triệt để việc mượn cái chết để tuồn chuyển tài nguyên.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">⚔️</span>
+                  <div>
+                    <span className="font-bold text-amber-300">Cơ Chế Sát Khí & Safe Zone</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Kẻ đồ sát có Sát Khí &gt; 10 sẽ bị tước bỏ quyền bảo hộ trong Safe Zone/Hub (người khác có thể vây sát ngay trong vùng an toàn, trừ khi kẻ này trốn vào Lãnh địa Tông Môn). Khi Sát Khí &gt; 5, Cổ trùng đang trang bị có thể bị đánh rơi khi bại trận (Cổ Bản Mệnh luôn được bảo toàn).</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🛡️</span>
+                  <div>
+                    <span className="font-bold text-emerald-300">Bảo Hộ Tân Thủ & Miễn Chiến Hồi Sinh</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Cổ sư cảnh giới &le; 3 Chuyển (và 0 Sát Khí) được miễn nhiễm mọi đòn tấn công từ người chơi khác, nhưng vẫn được phép chủ động khai chiến. Khi bị người khác tấn công và thua trận, nạn nhân nhận buff <strong>Miễn Chiến 10 phút</strong> (chủ động khai chiến sẽ mất buff).</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🏰</span>
+                  <div>
+                    <span className="font-bold text-purple-300">Hồi Sinh Ngũ Vực & Tông Môn Chiến</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Khi tử đạo, người có tông môn có 50% tỉ lệ hồi sinh về Tông Môn, còn lại văng ngẫu nhiên trong Vực hiện tại (giữ nguyên Region). Tán tu không tông có thể phát động Tông Môn Chiến (khi thắng: Cổ/item/bí phương chia đều, Quỹ cướp được sẽ đi vào hư vô; khi thua: toàn đội bị tử đạo rơi đồ).</p>
+                  </div>
+                </div>
+              </div>
+
               <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.3</strong> — Tuổi Thọ, Trạng Thái Tử Vong & Tiên Cương:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">
