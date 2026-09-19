@@ -75,12 +75,16 @@ export interface DivineGuRequest {
 }
 
 export interface DivineGuHolderInfo {
+  holder_type?: "player" | "sect_vault" | "auction_listing" | string;
   holder_username?: string;
+  holder_name?: string;
   region?: string;
   coordinates?: { x: number; y: number };
   is_vital?: boolean;
   equipped?: boolean;
   location_state?: string;
+  quantity?: number;
+  price_info?: string;
   concealed: boolean;
 }
 
@@ -92,6 +96,9 @@ export interface DivineGuReport {
   is_immortal: boolean;
   is_refined: boolean;
   world_count: number;
+  player_count?: number;
+  sect_vault_count?: number;
+  market_count?: number;
   holders?: DivineGuHolderInfo[];
   food_hint?: string;
   recipe_hint?: string;

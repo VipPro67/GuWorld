@@ -985,52 +985,198 @@ func ExecuteDivineGu(c *gin.Context) {
 		return
 	}
 
-	// 4. Query Holders in the world (player_gu table)
-	queryHolders := `
+	// 4. Query Holders across all 3 domains: Players, Sect Vaults, and Market/Auctions
+	type holderData struct {
+		holderType     string
+		holderName     string
+		holderUsername string
+		region         string
+		x, y           int
+		hasCoords      bool
+		isVital        bool
+		equipped       bool
+		state          string
+		quantity       int
+		priceInfo      string
+		activeConceal  bool
+		defense        float64
+	}
+	var allHolders []holderData
+	maxHolderDefense := 0.0
+	playerCount := 0
+	sectVaultCount := 0
+	marketCount := 0
+
+	// 4a. Player Inventories & Apertures (player_gu)
+	queryPlayers := `
 		SELECT p.id, p.username, p.current_region, p.x, p.y, p.rank, p.sub_rank,
 		       pg.gu_rank, pg.state, pg.equipped, pg.is_vital, pg.location,
 		       p.is_disguised, COALESCE(p.active_concealment, false),
 		       ` + db.GuInventoryAggregate("p.id") + `, p.path_masteries
 		FROM player_gu pg
 		JOIN players p ON pg.player_id = p.id
-		WHERE pg.gu_id = $1 AND ($2 = 0 OR pg.gu_rank = $2)
+		WHERE (pg.gu_id = $1) AND ($2 = 0 OR pg.gu_rank = $2)
 	`
-	rows, err := db.DB.QueryContext(c.Request.Context(), queryHolders, targetGu.ID, targetGu.Rank)
-	type holderData struct {
-		player        models.Player
-		pg            models.PlayerGu
-		isVital       bool
-		equipped      bool
-		state         string
-		activeConceal bool
-	}
-	var holders []holderData
-	maxHolderDefense := 0.0
-
+	pRows, err := db.DB.QueryContext(c.Request.Context(), queryPlayers, targetGu.ID, targetGu.Rank)
 	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var h holderData
-			var hGus models.GuInventory
-			var activeConceal bool
-			if err := rows.Scan(
-				&h.player.ID, &h.player.Username, &h.player.CurrentRegion, &h.player.X, &h.player.Y,
-				&h.player.Rank, &h.player.SubRank, &h.pg.Rank, &h.state, &h.equipped, &h.isVital,
-				&h.pg.Location, &h.player.IsDisguised, &activeConceal, &hGus, &h.player.PathMasteries,
+		defer pRows.Close()
+		for pRows.Next() {
+			var pID uuid.UUID
+			var pUsername, pRegion, pState, pLocation string
+			var pX, pY, pRank, pSubRank, pgRank int
+			var pEquipped, pIsVital, pDisguised, pActiveConceal bool
+			var pGus models.GuInventory
+			var pMasteries models.PathMasteriesMap
+
+			if err := pRows.Scan(
+				&pID, &pUsername, &pRegion, &pX, &pY, &pRank, &pSubRank,
+				&pgRank, &pState, &pEquipped, &pIsVital, &pLocation,
+				&pDisguised, &pActiveConceal, &pGus, &pMasteries,
 			); err == nil {
-				h.activeConceal = activeConceal
-				h.player.GuInventory = hGus
-				def := gamefx.CalculateConcealmentDefense(&h.player, models.FilterEquippedActive(hGus), nil, viewer.CurrentRegion)
-				if activeConceal {
+				targetPlayer := models.Player{
+					Account:          models.Account{ID: pID, Username: pUsername, IsDisguised: pDisguised},
+					CultivationState: models.CultivationState{Rank: pRank, SubRank: pSubRank},
+					WorldState:       models.WorldState{CurrentRegion: pRegion, X: pX, Y: pY},
+					DaoState:         models.DaoState{PathMasteries: pMasteries},
+				}
+				def := gamefx.CalculateConcealmentDefense(&targetPlayer, models.FilterEquippedActive(pGus), nil, viewer.CurrentRegion)
+				if pActiveConceal {
 					def += 50.0
 				}
 				if def > maxHolderDefense {
 					maxHolderDefense = def
 				}
-				holders = append(holders, h)
+
+				locState := "inventory"
+				if pEquipped {
+					locState = "equipped"
+				} else if pState == "SLEEPING" {
+					locState = "sleeping"
+				}
+
+				allHolders = append(allHolders, holderData{
+					holderType:     "player",
+					holderName:     pUsername,
+					holderUsername: pUsername,
+					region:         pRegion,
+					x:              pX,
+					y:              pY,
+					hasCoords:      true,
+					isVital:        pIsVital,
+					equipped:       pEquipped,
+					state:          locState,
+					quantity:       1,
+					activeConceal:  pActiveConceal || pDisguised,
+					defense:        def,
+				})
+				playerCount++
 			}
 		}
 	}
+
+	// 4b. Sect Vaults (sects.vault_gu)
+	querySects := `
+		SELECT s.id, s.name, s.region, COALESCE(s.map_x, 0), COALESCE(s.map_y, 0), s.level,
+		       elem->>'id' AS gu_id,
+		       COALESCE((elem->>'rank')::int, 1) AS gu_rank,
+		       COALESCE((elem->>'quantity')::int, 1) AS quantity,
+		       COALESCE((elem->>'cost')::int, 0) AS cost
+		FROM sects s,
+		LATERAL jsonb_array_elements(
+			CASE 
+				WHEN jsonb_typeof(s.vault_gu) = 'array' THEN s.vault_gu 
+				ELSE '[]'::jsonb 
+			END
+		) AS elem
+		WHERE (elem->>'id' = $1 OR elem->>'gu_id' = $1)
+		  AND ($2 = 0 OR COALESCE((elem->>'rank')::int, 1) = $2)
+	`
+	sRows, err := db.DB.QueryContext(c.Request.Context(), querySects, targetGu.ID, targetGu.Rank)
+	if err == nil {
+		defer sRows.Close()
+		for sRows.Next() {
+			var sID, sName, sRegion, guID string
+			var sMapX, sMapY, sLevel, guRank, qty, cost int
+			if err := sRows.Scan(&sID, &sName, &sRegion, &sMapX, &sMapY, &sLevel, &guID, &guRank, &qty, &cost); err == nil {
+				sectDef := float64(sLevel * 10)
+				if sectDef > maxHolderDefense {
+					maxHolderDefense = sectDef
+				}
+
+				allHolders = append(allHolders, holderData{
+					holderType:    "sect_vault",
+					holderName:    fmt.Sprintf("Bảo Khố Tông Môn [%s]", sName),
+					region:        sRegion,
+					x:             sMapX,
+					y:             sMapY,
+					hasCoords:     sMapX != 0 || sMapY != 0,
+					state:         "sect_vault",
+					quantity:      qty,
+					priceInfo:     fmt.Sprintf("Cống hiến đổi: %d điểm", cost),
+					activeConceal: false,
+					defense:       sectDef,
+				})
+				sectVaultCount += qty
+			}
+		}
+	}
+
+	// 4c. Marketplace & Auction Listings (auction)
+	queryAuctions := `
+		SELECT a.id, a.seller_id, p.username, p.current_region, p.x, p.y,
+		       a.currency, a.start_price, a.current_price, a.listing_type, a.quantity,
+		       COALESCE((elem->>'rank')::int, 1) AS gu_rank
+		FROM auction a
+		JOIN players p ON a.seller_id = p.id,
+		LATERAL jsonb_array_elements(
+			CASE 
+				WHEN jsonb_typeof(a.item_data) = 'array' THEN a.item_data 
+				ELSE '[]'::jsonb 
+			END
+		) AS elem
+		WHERE a.item_type = 'Gu'
+		  AND a.status IN ('active', 'ACTIVE')
+		  AND (elem->>'gu_id' = $1 OR elem->>'id' = $1)
+		  AND ($2 = 0 OR COALESCE((elem->>'rank')::int, 1) = $2)
+	`
+	aRows, err := db.DB.QueryContext(c.Request.Context(), queryAuctions, targetGu.ID, targetGu.Rank)
+	if err == nil {
+		defer aRows.Close()
+		for aRows.Next() {
+			var aID uuid.UUID
+			var aSellerID uuid.UUID
+			var sellerName, sellerRegion, currency, listingType string
+			var sellerX, sellerY, guRank, qty int
+			var startPrice, currentPrice float64
+			if err := aRows.Scan(
+				&aID, &aSellerID, &sellerName, &sellerRegion, &sellerX, &sellerY,
+				&currency, &startPrice, &currentPrice, &listingType, &qty, &guRank,
+			); err == nil {
+				currLabel := "Nguyên Thạch"
+				if strings.EqualFold(currency, "immortal_stone") || strings.EqualFold(currency, "immortal_stones") {
+					currLabel = "Tiên Nguyên Thạch"
+				}
+
+				allHolders = append(allHolders, holderData{
+					holderType:     "auction_listing",
+					holderName:     fmt.Sprintf("Sàn Đấu Giá (Người bán: %s)", sellerName),
+					holderUsername: sellerName,
+					region:         sellerRegion,
+					x:              sellerX,
+					y:              sellerY,
+					hasCoords:      false,
+					state:          "auction_listing",
+					quantity:       qty,
+					priceInfo:      fmt.Sprintf("%.0f %s (%s)", currentPrice, currLabel, listingType),
+					activeConceal:  false,
+					defense:        15.0,
+				})
+				marketCount += qty
+			}
+		}
+	}
+
+	totalWorldCount := playerCount + sectVaultCount + marketCount
 
 	// 5. Query Recipe Clues
 	var reqGusJSON, reqMatsJSON sql.NullString
@@ -1048,7 +1194,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		models.FilterEquippedActive(viewer.GuInventory),
 		viewerDaoMarks,
 		targetGu,
-		len(holders),
+		totalWorldCount,
 		maxHolderDefense,
 		resourceBonus,
 	)
@@ -1102,20 +1248,20 @@ func ExecuteDivineGu(c *gin.Context) {
 
 	// 8. Build Report
 	isImmortal := targetGu.Rank >= 6
-	isRefined := len(holders) > 0
+	isRefined := totalWorldCount > 0
 
 	var loreStatus string
 	if isImmortal {
 		if isRefined {
-			loreStatus = "Tiên Cổ Đã Xuất Thế — Thiên địa độc nhất vô nhị! Hiện đang có Cổ Tiên nắm giữ."
+			loreStatus = fmt.Sprintf("Tiên Cổ Đã Xuất Thế — Thiên địa độc nhất vô nhị! Hiện đang tồn tại trong thế giới (%d nơi lưu giữ).", totalWorldCount)
 		} else {
-			loreStatus = "Tiên Cổ Vô Chủ — Độc nhất vô nhị trong thiên địa! Hiện tại chưa có ai luyện thành (hoặc đã bị hủy diệt / thất lạc)."
+			loreStatus = "Tiên Cổ Vô Chủ — Độc nhất vô nhị trong thiên địa! Hiện tại chưa ai luyện thành (hoặc đã bị hủy diệt / thất lạc). Cổ trùng đang lưu lạc hoang dã hoặc chờ đợi cổ sư luyện chế!"
 		}
 	} else {
 		if isRefined {
-			loreStatus = fmt.Sprintf("Phàm Cổ — Hiện có %d con đang lưu hành trong thiên hạ.", len(holders))
+			loreStatus = fmt.Sprintf("Phàm Cổ — Hiện có tổng cộng %d con trong thiên hạ (Cổ Sư: %d, Kho Tông Môn: %d, Đang Treo Bán: %d).", totalWorldCount, playerCount, sectVaultCount, marketCount)
 		} else {
-			loreStatus = "Phàm Cổ — Hiện tại chưa có cổ sư nào mang theo bên mình."
+			loreStatus = "Phàm Cổ — Hiện không có bản thể nào được lưu giữ trong tay Cổ Sư, Tông Môn hay Chợ Đấu Giá."
 		}
 	}
 
@@ -1146,34 +1292,43 @@ func ExecuteDivineGu(c *gin.Context) {
 
 	var holderInfos []models.DivineGuHolderInfo
 	if statusType == "full" {
-		for _, h := range holders {
+		for _, h := range allHolders {
 			info := models.DivineGuHolderInfo{
-				HolderUsername: h.player.Username,
-				Region:         h.player.CurrentRegion,
+				HolderType:     h.holderType,
+				HolderUsername: h.holderUsername,
+				HolderName:     h.holderName,
+				Region:         h.region,
 				IsVital:        h.isVital,
 				Equipped:       h.equipped,
 				LocationState:  h.state,
+				Quantity:       h.quantity,
+				PriceInfo:      h.priceInfo,
 				Concealed:      h.activeConceal,
 			}
-			if strings.EqualFold(viewer.CurrentRegion, h.player.CurrentRegion) {
-				info.Coordinates = &models.Coordinates{X: h.player.X, Y: h.player.Y}
+			if h.hasCoords && strings.EqualFold(viewer.CurrentRegion, h.region) {
+				info.Coordinates = &models.Coordinates{X: h.x, Y: h.y}
 			}
 			holderInfos = append(holderInfos, info)
 		}
 	} else if statusType == "partial" {
-		for _, h := range holders {
-			name := "Cổ sư thần bí"
-			if !h.activeConceal && !h.player.IsDisguised {
-				if len(h.player.Username) > 2 {
-					name = h.player.Username[:2] + "****"
-				} else {
-					name = h.player.Username
+		for _, h := range allHolders {
+			name := h.holderName
+			if h.holderType == "player" {
+				if h.activeConceal {
+					name = "Cổ sư bí ẩn"
+				} else if len(h.holderUsername) > 2 {
+					name = h.holderUsername[:2] + "****"
 				}
 			}
 			holderInfos = append(holderInfos, models.DivineGuHolderInfo{
+				HolderType:     h.holderType,
 				HolderUsername: name,
-				Region:         h.player.CurrentRegion,
+				HolderName:     name,
+				Region:         h.region,
 				Equipped:       h.equipped,
+				LocationState:  h.state,
+				Quantity:       h.quantity,
+				PriceInfo:      h.priceInfo,
 				Concealed:      h.activeConceal,
 			})
 		}
@@ -1186,7 +1341,10 @@ func ExecuteDivineGu(c *gin.Context) {
 		Path:           strings.Join(targetGu.Path, ", "),
 		IsImmortal:     isImmortal,
 		IsRefined:      isRefined,
-		WorldCount:     len(holders),
+		WorldCount:     totalWorldCount,
+		PlayerCount:    playerCount,
+		SectVaultCount: sectVaultCount,
+		MarketCount:    marketCount,
 		Holders:        holderInfos,
 		FoodHint:       foodHint,
 		RecipeHint:     recipeHint,

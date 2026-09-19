@@ -16,6 +16,9 @@ import {
   Clock,
   Shield,
   BookOpen,
+  Building2,
+  Store,
+  User,
 } from "lucide-react";
 
 export const DivinationModal: React.FC = () => {
@@ -547,10 +550,35 @@ export const DivinationModal: React.FC = () => {
                           <span className="font-semibold text-cyan-300">{gReport.path || "Tự nhiên"}</span>
                         </div>
                         <div className="rounded bg-neutral-900/80 p-2.5">
-                          <span className="text-neutral-400">Số lượng:</span>{" "}
+                          <span className="text-neutral-400">Tổng Số Lượng:</span>{" "}
                           <span className="font-semibold text-yellow-300">
-                            {gReport.world_count} con trong thế giới
+                            {gReport.world_count} con
                           </span>
+                        </div>
+                      </div>
+
+                      {/* Multi-Domain Breakdown Chips */}
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="rounded-lg border border-amber-500/20 bg-neutral-900/70 p-2">
+                          <div className="flex items-center justify-center gap-1 text-amber-400 mb-0.5">
+                            <User className="h-3.5 w-3.5" />
+                            <span className="font-semibold">Cổ Sư Sở Hữu</span>
+                          </div>
+                          <span className="text-base font-bold text-white">{gReport.player_count ?? 0}</span>
+                        </div>
+                        <div className="rounded-lg border border-purple-500/20 bg-neutral-900/70 p-2">
+                          <div className="flex items-center justify-center gap-1 text-purple-400 mb-0.5">
+                            <Building2 className="h-3.5 w-3.5" />
+                            <span className="font-semibold">Kho Tông Môn</span>
+                          </div>
+                          <span className="text-base font-bold text-white">{gReport.sect_vault_count ?? 0}</span>
+                        </div>
+                        <div className="rounded-lg border border-emerald-500/20 bg-neutral-900/70 p-2">
+                          <div className="flex items-center justify-center gap-1 text-emerald-400 mb-0.5">
+                            <Store className="h-3.5 w-3.5" />
+                            <span className="font-semibold">Sàn Đấu Giá</span>
+                          </div>
+                          <span className="text-base font-bold text-white">{gReport.market_count ?? 0}</span>
                         </div>
                       </div>
 
@@ -578,29 +606,80 @@ export const DivinationModal: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Holders list */}
-                      {gReport.holders && gReport.holders.length > 0 && (
+                      {/* Multi-Domain Holders list */}
+                      {gReport.holders && gReport.holders.length > 0 ? (
                         <div className="rounded bg-neutral-900/80 p-3">
-                          <span className="font-semibold text-neutral-300 mb-2 block">Cổ Sư Nắm Giữ:</span>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-neutral-300">Vết Tích Nơi Lưu Trữ Trong Thiên Địa:</span>
+                            <span className="text-[11px] text-neutral-500">{gReport.holders.length} vị trí phát hiện</span>
+                          </div>
                           <div className="space-y-2">
-                            {gReport.holders.map((h, idx) => (
-                              <div key={idx} className="flex items-center justify-between rounded bg-neutral-950 p-2 border border-neutral-800">
-                                <div>
-                                  <span className="font-bold text-white">{h.holder_username || "Cổ sư ẩn danh"}</span>
-                                  <span className="ml-2 text-[10px] text-neutral-400">({h.region})</span>
-                                  {h.is_vital && <span className="ml-2 text-[10px] text-rose-400 font-semibold">[Bản Mệnh Cổ]</span>}
-                                  {h.equipped && <span className="ml-1 text-[10px] text-amber-400">[Đang Trang Bị]</span>}
+                            {gReport.holders.map((h, idx) => {
+                              const isPlayer = h.holder_type === "player" || (!h.holder_type && h.holder_username);
+                              const isSectVault = h.holder_type === "sect_vault";
+                              const isAuction = h.holder_type === "auction_listing";
+
+                              return (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between rounded bg-neutral-950 p-2.5 border border-neutral-800 hover:border-neutral-700 transition"
+                                >
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      {isPlayer && (
+                                        <span className="flex items-center gap-1 rounded bg-amber-950/80 px-2 py-0.5 text-[10px] text-amber-300 border border-amber-800/40">
+                                          <User className="h-3 w-3" /> Cổ Sư
+                                        </span>
+                                      )}
+                                      {isSectVault && (
+                                        <span className="flex items-center gap-1 rounded bg-purple-950/80 px-2 py-0.5 text-[10px] text-purple-300 border border-purple-800/40">
+                                          <Building2 className="h-3 w-3" /> Kho Tông Môn
+                                        </span>
+                                      )}
+                                      {isAuction && (
+                                        <span className="flex items-center gap-1 rounded bg-emerald-950/80 px-2 py-0.5 text-[10px] text-emerald-300 border border-emerald-800/40">
+                                          <Store className="h-3 w-3" /> Sàn Giao Dịch
+                                        </span>
+                                      )}
+                                      <span className="font-bold text-white">
+                                        {h.holder_username || h.holder_name || "Thế lực ẩn danh"}
+                                      </span>
+                                      {h.quantity && h.quantity > 1 && (
+                                        <span className="rounded bg-neutral-800 px-1.5 py-0.2 text-[10px] font-mono text-yellow-300">
+                                          x{h.quantity}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[11px] text-neutral-400">
+                                      {h.region && <span>Vùng: <strong className="text-neutral-300">{h.region}</strong></span>}
+                                      {h.is_vital && <span className="text-rose-400 font-semibold">[Bản Mệnh Cổ]</span>}
+                                      {h.equipped && <span className="text-amber-400">[Đang Trang Bị]</span>}
+                                      {h.location_state && !h.equipped && !h.is_vital && (
+                                        <span className="text-neutral-400">[{h.location_state === "inventory" ? "Trong Túi" : h.location_state === "sleeping" ? "Ngủ Say" : h.location_state}]</span>
+                                      )}
+                                      {h.price_info && (
+                                        <span className="text-yellow-400 font-mono">[{h.price_info}]</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {h.coordinates ? (
+                                    <div className="flex items-center gap-1 font-mono text-xs text-cyan-300 bg-cyan-950/40 border border-cyan-800/40 rounded px-2 py-1">
+                                      <MapPin className="h-3 w-3 text-cyan-400" />
+                                      <span>({h.coordinates.x}, {h.coordinates.y})</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-neutral-600 italic">Tọa độ mờ ảo</span>
+                                  )}
                                 </div>
-                                {h.coordinates && (
-                                  <span className="font-mono text-cyan-300">
-                                    ({h.coordinates.x}, {h.coordinates.y})
-                                  </span>
-                                )}
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
-                      )}
+                      ) : gReport.world_count > 0 ? (
+                        <div className="rounded bg-neutral-900/80 p-3 text-center text-neutral-500 italic">
+                          Cổ trùng đã xuất thế trong thiên địa nhưng khí tức bị che giấu hoặc chưa đủ độ chính xác để định vị danh xưng.
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </div>

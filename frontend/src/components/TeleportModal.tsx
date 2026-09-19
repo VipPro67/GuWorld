@@ -47,9 +47,10 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
   useEffect(() => {
     if (portalGus.length > 0 && !selectedGu) {
-      setSelectedGu(portalGus[0].instance_id);
+      const eligible = portalGus.find((g) => g.rank >= (player?.rank ?? 1));
+      setSelectedGu(eligible ? eligible.instance_id : portalGus[0].instance_id);
     }
-  }, [portalGus, selectedGu]);
+  }, [portalGus, selectedGu, player?.rank]);
 
   // Sync store regions to local state
   useEffect(() => {
@@ -79,8 +80,10 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     }
   };
 
+  const isRankSufficient = Boolean(activeGu && player && activeGu.rank >= player.rank);
+
   const handleGuTeleport = async () => {
-    if (!selectedGu) return;
+    if (!selectedGu || !isRankSufficient) return;
     if (!isRandomPortal && (!targetX || !targetY)) return;
 
     setTeleporting(true);
@@ -109,23 +112,27 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   const currentRegionId = player?.current_region ?? "";
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-purple-300">Dịch Chuyển Cổ Trùng</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-[9999] p-2 sm:p-4">
+      <div className="bg-zinc-950 border border-purple-500/40 rounded-3xl w-full max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-left">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-gradient-to-r from-purple-950/30 via-zinc-900/40 to-transparent">
+          <div>
+            <h2 className="text-base font-bold text-purple-300 font-serif">Dịch Chuyển Cổ Trùng</h2>
+            <p className="text-[11px] text-zinc-400 font-mono">Yêu cầu: Cổ dịch chuyển Rank ≥ Rank Cổ sư (Rank {player?.rank ?? 1})</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        <div className="p-4 border-b border-gray-700 bg-gray-800/50 flex flex-wrap gap-4 text-sm">
-          <div className="text-gray-300">Vị trí hiện tại: <span className="text-white">({currentX}, {currentY})</span></div>
-          <div className="text-gray-300">Khu vực: <span className="text-white">{currentRegionId || "Không xác định"}</span></div>
+        <div className="shrink-0 px-6 py-2.5 border-b border-zinc-800/80 bg-zinc-900/50 flex flex-wrap gap-4 text-xs font-mono">
+          <div className="text-zinc-400">Vị trí hiện tại: <span className="text-emerald-400 font-bold">({currentX}, {currentY})</span></div>
+          <div className="text-zinc-400">Khu vực: <span className="text-amber-400 font-bold">{currentRegionId || "Không xác định"}</span></div>
+          <div className="text-zinc-400">Cảnh giới: <span className="text-cyan-400 font-bold">Rank {player?.rank ?? 1}</span></div>
         </div>
 
-        {error && <div className="p-4 text-red-400 border-b border-red-900/50">{error}</div>}
+        {error && <div className="shrink-0 px-6 py-2.5 text-xs font-mono text-red-400 bg-red-950/30 border-b border-red-900/50">{error}</div>}
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
           {portalGus.length === 0 ? (
             <div className="p-4 bg-amber-950/40 border border-amber-500/40 rounded-lg text-amber-200 text-sm space-y-2">
               <div className="font-bold text-amber-300 text-base">⚠️ Chưa có Cổ trùng dịch chuyển phù hợp</div>
@@ -139,19 +146,35 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1 font-medium">Chọn Cổ Trùng Dịch Chuyển</label>
+                <label className="block text-sm text-gray-400 mb-1 font-medium font-serif">Chọn Cổ Trùng Dịch Chuyển</label>
                 <select
-                  className="w-full bg-gray-800 border border-purple-500/50 rounded p-2.5 text-white focus:outline-none focus:border-purple-400"
+                  className="w-full bg-zinc-900 border border-purple-500/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-400 text-xs font-mono"
                   value={selectedGu}
                   onChange={(e) => setSelectedGu(e.target.value)}
                 >
-                  {portalGus.map(g => (
-                    <option key={g.instance_id} value={g.instance_id}>
-                      {guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Cấp {g.rank})
-                    </option>
-                  ))}
+                  {portalGus.map(g => {
+                    const spec = guSpecFor(g.gu_id, g.rank);
+                    const meetsRank = g.rank >= (player?.rank ?? 1);
+                    return (
+                      <option key={g.instance_id} value={g.instance_id}>
+                        {spec?.name || g.gu_id} (Rank {g.rank}) {meetsRank ? "— Hợp Lệ" : `— Yêu Cầu Rank ≥ ${player?.rank ?? 1}`}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
+
+              {!isRankSufficient && activeGu && player && (
+                <div className="p-3 bg-red-950/40 border border-red-500/40 rounded-xl text-xs font-mono text-red-300 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-red-400">
+                    <span>⚠️</span>
+                    <span>Phẩm cấp Cổ trùng không đủ</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-zinc-300">
+                    Cổ trùng <strong>{activeSpec?.name}</strong> có phẩm cấp (Rank {activeGu.rank}) thấp hơn cảnh giới bản thân (Rank {player.rank}). Để dịch chuyển bản thể, Cổ trùng dịch chuyển phải có phẩm cấp tối thiểu bằng cảnh giới Cổ sư (Rank ≥ {player.rank})!
+                  </p>
+                </div>
+              )}
 
               {isRandomPortal ? (
                 <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded text-purple-300 text-sm">
@@ -160,9 +183,9 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm text-gray-400 mb-1 font-medium">Chọn nhanh vùng an toàn khu vực</label>
+                    <label className="block text-sm text-gray-400 mb-1 font-medium font-serif">Chọn nhanh vùng an toàn khu vực</label>
                     <select
-                      className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-2 text-white text-xs font-mono"
                       value={selectedRegionId}
                       onChange={(e) => handleSelectRegion(e.target.value)}
                       disabled={loading}
@@ -178,22 +201,22 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
                   <div className="flex gap-4">
                     <div className="flex-1">
-                      <label className="block text-sm text-gray-400 mb-1">Tọa độ X</label>
+                      <label className="block text-xs text-gray-400 mb-1 font-mono">Tọa độ X</label>
                       <input
                         type="number"
                         value={targetX}
                         onChange={e => setTargetX(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-2 text-white text-xs font-mono"
                         placeholder="Ví dụ: 100"
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm text-gray-400 mb-1">Tọa độ Y</label>
+                      <label className="block text-xs text-gray-400 mb-1 font-mono">Tọa độ Y</label>
                       <input
                         type="number"
                         value={targetY}
                         onChange={e => setTargetY(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-2 text-white text-xs font-mono"
                         placeholder="Ví dụ: 100"
                       />
                     </div>
@@ -203,17 +226,21 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
               <button
                 onClick={handleGuTeleport}
-                disabled={teleporting || (!isRandomPortal && (!targetX || !targetY)) || !selectedGu}
-                className="w-full mt-4 bg-purple-900/60 border border-purple-500 hover:bg-purple-800 text-purple-100 p-3 rounded-lg font-bold disabled:opacity-50 transition shadow-lg shadow-purple-950/50"
+                disabled={teleporting || !isRankSufficient || (!isRandomPortal && (!targetX || !targetY)) || !selectedGu}
+                className="w-full mt-4 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-500 border border-purple-400/30 disabled:border-zinc-700 text-white p-3 rounded-xl font-bold font-serif disabled:opacity-60 transition shadow-lg shadow-purple-950/50 cursor-pointer disabled:cursor-not-allowed"
               >
-                Kích Hoạt Cổ Trùng Dịch Chuyển
+                {teleporting
+                  ? "Đang Dịch Chuyển..."
+                  : !isRankSufficient
+                  ? `Yêu Cầu Cổ Dịch Chuyển Rank ≥ ${player?.rank ?? 1}`
+                  : "Kích Hoạt Cổ Trùng Dịch Chuyển"}
               </button>
             </div>
           )}
         </div>
 
         {teleporting && (
-          <div className="p-4 border-t border-gray-700 bg-gray-800/50 text-center text-purple-300 font-medium">
+          <div className="shrink-0 p-3 border-t border-zinc-800 bg-zinc-900/60 text-center text-xs font-mono text-purple-300 font-medium">
             Đang thôi động Cổ trùng xé rách không gian...
           </div>
         )}

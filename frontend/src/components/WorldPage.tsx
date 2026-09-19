@@ -166,8 +166,7 @@ export function WorldPage() {
     { id: "party", label: "Tổ Đội", icon: Users, color: "text-amber-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
     { id: "market", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
-    { id: "teleport_directory", label: "Truyền Tống", icon: Zap, color: "text-cyan-400" },
-    { id: "teleport_build", label: "Bố Trí Trận", icon: Sparkles, color: "text-blue-400" },
+    { id: "teleport", label: "Dịch Chuyển", icon: Compass, color: "text-cyan-400" },
     // { id: "leaderboard", label: "Xếp Hạng", icon: Trophy, color: "text-yellow-400" },
     // { id: "gacha", label: "Rút Thưởng", icon: Gift, color: "text-pink-400" },
     // { id: "arena", label: "Đấu Trường", icon: Swords, color: "text-red-400" },
@@ -319,7 +318,7 @@ export function WorldPage() {
               {activeModal === "arena" && <ArenaView />}
               {activeModal === "premium_store" && <PremiumStoreView />}
               {activeModal === "dungeon" && <DungeonView />}
-              {(activeModal === "teleport" || activeModal === "teleport_directory") && gamePlayer && (
+              {activeModal === "teleport_directory" && gamePlayer && (
                 <TeleportDirectoryModal
                   player={gamePlayer}
                   onClose={() => setActiveModal(null)}
@@ -346,6 +345,11 @@ export function WorldPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Gu Teleport Modal */}
+      {activeModal === "teleport" && (
+        <TeleportModal isOpen={true} onClose={() => setActiveModal(null)} />
       )}
 
       {/* Standalone Teleport Management Modal */}

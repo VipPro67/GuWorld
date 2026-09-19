@@ -146,14 +146,18 @@ type DivineGuRequest struct {
 	ResourceAmount float64 `json:"resource_amount"`
 }
 
-// DivineGuHolderInfo represents intelligence on a player holding the Gu
+// DivineGuHolderInfo represents intelligence on an entity holding or listing the Gu
 type DivineGuHolderInfo struct {
+	HolderType     string       `json:"holder_type"` // "player" | "sect_vault" | "auction_listing"
 	HolderUsername string       `json:"holder_username,omitempty"`
+	HolderName     string       `json:"holder_name,omitempty"`
 	Region         string       `json:"region,omitempty"`
 	Coordinates    *Coordinates `json:"coordinates,omitempty"`
 	IsVital        bool         `json:"is_vital,omitempty"`
 	Equipped       bool         `json:"equipped,omitempty"`
-	LocationState  string       `json:"location_state,omitempty"` // "equipped", "inventory", "sleeping"
+	LocationState  string       `json:"location_state,omitempty"` // "equipped", "inventory", "sleeping", "sect_vault", "auction_listing"
+	Quantity       int          `json:"quantity"`
+	PriceInfo      string       `json:"price_info,omitempty"`
 	Concealed      bool         `json:"concealed"`
 }
 
@@ -166,6 +170,9 @@ type DivineGuReport struct {
 	IsImmortal     bool                 `json:"is_immortal"`
 	IsRefined      bool                 `json:"is_refined"`
 	WorldCount     int                  `json:"world_count"`
+	PlayerCount    int                  `json:"player_count"`
+	SectVaultCount int                  `json:"sect_vault_count"`
+	MarketCount    int                  `json:"market_count"`
 	Holders        []DivineGuHolderInfo `json:"holders,omitempty"`
 	FoodHint       string               `json:"food_hint,omitempty"`
 	RecipeHint     string               `json:"recipe_hint,omitempty"`

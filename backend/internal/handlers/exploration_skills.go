@@ -130,6 +130,12 @@ func UseGuOnMap(c *gin.Context) {
 			effectValue = active.ManaRegen
 		}
 		if active.PortalCreate {
+			if targetGu.Rank < player.Rank {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Không thể thực hiện dịch chuyển: Cổ trùng dịch chuyển (%s Rank %d) thấp hơn tu vi bản thân (Rank %d)!", specs.Name, targetGu.Rank, player.Rank),
+				})
+				return
+			}
 			// We can teleport to TargetX, TargetY if within bounds
 			if inWorld(req.TargetX, req.TargetY) {
 				oldX := player.X
@@ -151,6 +157,12 @@ func UseGuOnMap(c *gin.Context) {
 			}
 		}
 		if active.RandomPortal {
+			if targetGu.Rank < player.Rank {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Không thể thực hiện dịch chuyển: Cổ trùng dịch chuyển (%s Rank %d) thấp hơn tu vi bản thân (Rank %d)!", specs.Name, targetGu.Rank, player.Rank),
+				})
+				return
+			}
 			oldX := player.X
 			oldY := player.Y
 			player.X = rand.Intn(WorldWidth)

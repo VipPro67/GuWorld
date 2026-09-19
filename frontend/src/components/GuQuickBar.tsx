@@ -120,6 +120,11 @@ export function GuQuickBar() {
     const cd = getCooldownRemains(slot.gu.instance_id);
     if (cd > 0) return;
 
+    if (slot.effectType === "teleport" && player && slot.gu.rank < player.rank) {
+      useGameStore.getState().addToast(`Không thể dịch chuyển: Cổ trùng ${slot.spec.name} (Rank ${slot.gu.rank}) thấp hơn tu vi bản thân (Rank ${player.rank})!`, "error");
+      return;
+    }
+
     if (slot.isTargeted) {
       if (targetingGu?.guInstanceId === slot.gu.instance_id) {
         setTargetingGu(null);
