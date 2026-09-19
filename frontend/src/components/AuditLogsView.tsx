@@ -21,18 +21,24 @@ export const AuditLogsView: React.FC = () => {
   const formatRequestSummary = (msg: string): string => {
     if (!msg) return "";
     let formatted = msg;
-    Object.keys(guDictionary || {}).forEach((id) => {
-      const name = guDictionary[id]?.name;
-      if (name) formatted = formatted.split(id).join(name);
-    });
-    Object.keys(itemDictionary || {}).forEach((id) => {
-      const name = itemDictionary[id]?.name;
-      if (name) formatted = formatted.split(id).join(name);
-    });
-    Object.keys(monsterDictionary || {}).forEach((id) => {
-      const name = monsterDictionary[id]?.name;
-      if (name) formatted = formatted.split(id).join(name);
-    });
+    Object.keys(guDictionary || {})
+      .sort((a, b) => b.length - a.length)
+      .forEach((id) => {
+        const name = guDictionary[id]?.name;
+        if (name) formatted = formatted.split(id).join(name);
+      });
+    Object.keys(itemDictionary || {})
+      .sort((a, b) => b.length - a.length)
+      .forEach((id) => {
+        const name = itemDictionary[id]?.name;
+        if (name) formatted = formatted.split(id).join(name);
+      });
+    Object.keys(monsterDictionary || {})
+      .sort((a, b) => b.length - a.length)
+      .forEach((id) => {
+        const name = monsterDictionary[id]?.name;
+        if (name) formatted = formatted.split(id).join(name);
+      });
     return formatted;
   };
 

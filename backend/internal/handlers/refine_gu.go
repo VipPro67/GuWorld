@@ -127,7 +127,11 @@ func RefineGu(c *gin.Context) {
 	for matID, reqQty := range recipe.RequiredMaterials {
 		currentQty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), matID)
 		if currentQty < reqQty {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough required material items: " + matID})
+			matName := matID
+			if itemSpec, ok := models.ItemRegistry[matID]; ok && itemSpec.Name != "" {
+				matName = itemSpec.Name
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
 			return
 		}
 	}
@@ -410,24 +414,24 @@ func RefineGu(c *gin.Context) {
 		for matID, reqQty := range recipe.RequiredMaterials {
 			deductQty := int64(math.Ceil(float64(reqQty) * 0.5))
 			if deductQty > 0 {
-				_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), matID, "materials", "consumables", "other")
-				if cat == "" {
-					cat = "materials"
-				}
-				if err := InventorySvc.RemoveItem(tx, player.ID.String(), matID, cat, deductQty); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matID)})
+				if err := InventorySvc.DeductItem(tx, player.ID.String(), matID, deductQty); err != nil {
+					matName := matID
+					if itemSpec, ok := models.ItemRegistry[matID]; ok && itemSpec.Name != "" {
+						matName = itemSpec.Name
+					}
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
 					return
 				}
 			}
 		}
 	} else {
 		for matID, reqQty := range recipe.RequiredMaterials {
-			_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), matID, "materials", "consumables", "other")
-			if cat == "" {
-				cat = "materials"
-			}
-			if err := InventorySvc.RemoveItem(tx, player.ID.String(), matID, cat, reqQty); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matID)})
+			if err := InventorySvc.DeductItem(tx, player.ID.String(), matID, reqQty); err != nil {
+				matName := matID
+				if itemSpec, ok := models.ItemRegistry[matID]; ok && itemSpec.Name != "" {
+					matName = itemSpec.Name
+				}
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matName)})
 				return
 			}
 		}

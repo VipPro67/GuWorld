@@ -1389,29 +1389,35 @@ export const useGameStore = create<GameState>((set, get) => {
     let formatted = msg;
     const { guDictionary, itemDictionary, monsterDictionary } = get();
 
-    // Replace Gu IDs
-    Object.keys(guDictionary || {}).forEach((id) => {
-      const name = guDictionary[id]?.name;
-      if (name && formatted.includes(id)) {
-        formatted = formatted.split(id).join(name);
-      }
-    });
+    // Replace Gu IDs (sorted by length descending so longer IDs match first)
+    Object.keys(guDictionary || {})
+      .sort((a, b) => b.length - a.length)
+      .forEach((id) => {
+        const name = guDictionary[id]?.name;
+        if (name && formatted.includes(id)) {
+          formatted = formatted.split(id).join(name);
+        }
+      });
 
-    // Replace Item IDs
-    Object.keys(itemDictionary || {}).forEach((id) => {
-      const name = itemDictionary[id]?.name;
-      if (name && formatted.includes(id)) {
-        formatted = formatted.split(id).join(name);
-      }
-    });
+    // Replace Item IDs (sorted by length descending so longer IDs match first)
+    Object.keys(itemDictionary || {})
+      .sort((a, b) => b.length - a.length)
+      .forEach((id) => {
+        const name = itemDictionary[id]?.name;
+        if (name && formatted.includes(id)) {
+          formatted = formatted.split(id).join(name);
+        }
+      });
 
-    // Replace Monster IDs
-    Object.keys(monsterDictionary || {}).forEach((id) => {
-      const name = monsterDictionary[id]?.name;
-      if (name && formatted.includes(id)) {
-        formatted = formatted.split(id).join(name);
-      }
-    });
+    // Replace Monster IDs (sorted by length descending so longer IDs match first)
+    Object.keys(monsterDictionary || {})
+      .sort((a, b) => b.length - a.length)
+      .forEach((id) => {
+        const name = monsterDictionary[id]?.name;
+        if (name && formatted.includes(id)) {
+          formatted = formatted.split(id).join(name);
+        }
+      });
 
     translateCache.set(cacheKey, formatted);
     if (translateCache.size > 500) {

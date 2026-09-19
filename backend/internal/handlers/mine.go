@@ -465,26 +465,15 @@ func AttackMineSlot(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// 1. Verify attacker is not in active combat
-	var activeCombatBytes []byte
-	var attackerHP float64
-	var attackerCurrentMana float64
-	var attackerMaxMana float64
-	var attackerUsername string
-	err = tx.QueryRow(`
-		SELECT active_combat, hp, current_mana, max_mana, username
-		FROM players WHERE id = $1 FOR UPDATE
-	`, authID).Scan(&activeCombatBytes, &attackerHP, &attackerCurrentMana, &attackerMaxMana, &attackerUsername)
+	// 1. Load attacker and verify not in active combat
+	attacker, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player info"})
 		return
 	}
-	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
-		var checkCS models.CombatState
-		if err := json.Unmarshal(activeCombatBytes, &checkCS); err == nil && !checkCS.IsEmpty() {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang ở trong trạng thái chiến đấu!"})
-			return
-		}
+	if attacker.ActiveCombat != nil && !attacker.ActiveCombat.IsEmpty() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang ở trong trạng thái chiến đấu!"})
+		return
 	}
 
 	// 2. Verify player does not already occupy a mine slot
@@ -516,14 +505,6 @@ func AttackMineSlot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ này trống, hãy dùng lệnh chiếm đóng thay vì tấn công!"})
 		return
 	}
-
-	// Load attacker details to build CombatState
-	var attacker models.Player
-	attacker.ID = authID
-	attacker.Username = attackerUsername
-	attacker.HP = attackerHP
-	attacker.CurrentMana = attackerCurrentMana
-	attacker.MaxMana = attackerMaxMana
 
 	var pvpCombat models.CombatState
 
@@ -595,9 +576,10 @@ func AttackMineSlot(c *gin.Context) {
 
 	// Initialize and save
 	attacker.ActiveCombat = StartCombat(tx, &pvpCombat, &attacker)
+	qiGained := AddHumanQi(&attacker, 3.0)
 
 	combatBytes, _ := json.Marshal(attacker.ActiveCombat)
-	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3", string(combatBytes), MaxHumanQi, authID)
+	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = $2 WHERE id = $3", string(combatBytes), attacker.HumanQi, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
 		return
@@ -609,7 +591,7 @@ func AttackMineSlot(c *gin.Context) {
 		return
 	}
 
-	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": "Khởi động chiến đấu chiếm mỏ thành công! Nhân Khí +3."})
+	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": fmt.Sprintf("Khởi động chiến đấu chiếm mỏ thành công! Nhân Khí +%.0f.", qiGained)})
 }
 
 // StartMineMonsterWorker runs periodically to assign monsters to abandoned mines

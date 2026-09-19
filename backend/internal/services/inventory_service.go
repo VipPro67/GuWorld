@@ -188,6 +188,83 @@ func (s *InventoryService) RemoveItem(tx *sql.Tx, playerID, itemID, category str
 	return err
 }
 
+// DeductItem decrements quantity across any inventory categories for a player in order of quantity descending.
+// If total available quantity across all categories is less than required quantity, returns sql.ErrNoRows.
+func (s *InventoryService) DeductItem(tx *sql.Tx, playerID, itemID string, quantity int64) error {
+	if quantity <= 0 {
+		return nil
+	}
+
+	var rows *sql.Rows
+	var err error
+	if tx != nil {
+		rows, err = tx.Query(`
+			SELECT category, quantity FROM player_inventory_items
+			WHERE player_id = $1 AND item_id = $2 AND quantity > 0
+			ORDER BY quantity DESC
+			FOR UPDATE
+		`, playerID, itemID)
+	} else {
+		rows, err = s.db.Query(`
+			SELECT category, quantity FROM player_inventory_items
+			WHERE player_id = $1 AND item_id = $2 AND quantity > 0
+			ORDER BY quantity DESC
+		`, playerID, itemID)
+	}
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type itemCategoryRow struct {
+		category string
+		quantity int64
+	}
+	var entries []itemCategoryRow
+	var totalAvail int64
+	for rows.Next() {
+		var entry itemCategoryRow
+		if err := rows.Scan(&entry.category, &entry.quantity); err != nil {
+			return err
+		}
+		entries = append(entries, entry)
+		totalAvail += entry.quantity
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if totalAvail < quantity {
+		return sql.ErrNoRows
+	}
+
+	remaining := quantity
+	for _, entry := range entries {
+		if remaining <= 0 {
+			break
+		}
+		if entry.quantity <= remaining {
+			if tx != nil {
+				_, err = tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = $3`, playerID, itemID, entry.category)
+			} else {
+				_, err = s.db.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = $3`, playerID, itemID, entry.category)
+			}
+			remaining -= entry.quantity
+		} else {
+			if tx != nil {
+				_, err = tx.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1, updated_at = NOW() WHERE player_id = $2 AND item_id = $3 AND category = $4`, remaining, playerID, itemID, entry.category)
+			} else {
+				_, err = s.db.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1, updated_at = NOW() WHERE player_id = $2 AND item_id = $3 AND category = $4`, remaining, playerID, itemID, entry.category)
+			}
+			remaining = 0
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SetQuantity sets the exact quantity for an item (inserts or deletes if 0).
 func (s *InventoryService) SetQuantity(tx *sql.Tx, playerID, itemID, category string, quantity int64) error {
 	if quantity <= 0 {
