@@ -32,9 +32,6 @@ func requestLogging() gin.HandlerFunc {
 		clientIP := c.ClientIP()
 		traceID, _ := c.Get("trace_id")
 
-		writer := newLoggingResponseWriter(c.Writer)
-		c.Writer = writer
-
 		if method != http.MethodOptions {
 			logger.L.Debug("http_request_started", zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path), zap.String("client_ip", clientIP))
 		}
@@ -63,8 +60,15 @@ func requestLogging() gin.HandlerFunc {
 		username, _ := c.Get("username")
 		requestBody, _ := c.Get("request_body")
 		bodyTruncated, _ := c.Get("request_body_truncated")
-		responseBody := writer.Body()
-		errMsg := writer.ErrorMessage()
+		responseBodyRaw, _ := c.Get("response_body")
+		errMsgRaw, _ := c.Get("error_msg")
+		var responseBody, errMsg string
+		if v, ok := responseBodyRaw.(string); ok {
+			responseBody = v
+		}
+		if v, ok := errMsgRaw.(string); ok {
+			errMsg = v
+		}
 
 		isTruncated, _ := bodyTruncated.(bool)
 		if status >= 400 {

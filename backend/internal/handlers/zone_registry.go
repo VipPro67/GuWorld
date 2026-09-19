@@ -367,9 +367,6 @@ func IsSafeZone(regionID string, x, y int) bool {
 			return true
 		}
 	}
-	if regionID == HubRegionID || regionID == "Southern_Border" || strings.HasPrefix(regionID, "hub_") || strings.HasPrefix(regionID, "tan_thu_coc_") {
-		return true
-	}
 	return false
 }
 

@@ -32,6 +32,54 @@ func generateTraceID() string {
 	return fmt.Sprintf("%08x%04x", uint32(now), uint16(seq))
 }
 
+// loggingResponseWriter wraps gin.ResponseWriter to capture the response body.
+type loggingResponseWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func newLoggingResponseWriter(w gin.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
+}
+
+func (w *loggingResponseWriter) Write(p []byte) (int, error) {
+	w.body.Write(p)
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *loggingResponseWriter) WriteString(s string) (int, error) {
+	w.body.WriteString(s)
+	return w.ResponseWriter.WriteString(s)
+}
+
+func (w *loggingResponseWriter) WriteHeader(code int) {
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *loggingResponseWriter) Body() string {
+	return w.body.String()
+}
+
+func (w *loggingResponseWriter) ErrorMessage() string {
+	body := w.body.String()
+	if body == "" {
+		return ""
+	}
+	var generic map[string]any
+	if err := json.Unmarshal([]byte(body), &generic); err != nil {
+		return body
+	}
+	if msg, ok := generic["error"].(string); ok {
+		return msg
+	}
+	if errObj, ok := generic["error"].(map[string]any); ok {
+		if msg, ok := errObj["message"].(string); ok {
+			return msg
+		}
+	}
+	return body
+}
+
 // RequestTrace stores individual request execution details for diagnosis.
 type RequestTrace struct {
 	ID            string      `json:"id"`
@@ -50,6 +98,8 @@ type RequestTrace struct {
 	Username      string      `json:"username,omitempty"`
 	UserAgent     string      `json:"user_agent,omitempty"`
 	Error         string      `json:"error,omitempty"`
+	ResponseBody  string      `json:"response_body,omitempty"`
+	ErrorMessage  string      `json:"error_message,omitempty"`
 }
 
 var sensitiveKeys = map[string]struct{}{
@@ -571,6 +621,9 @@ func Middleware() gin.HandlerFunc {
 		c.Set("request_body", requestBody)
 		c.Set("request_body_truncated", bodyTruncated)
 
+		rw := newLoggingResponseWriter(c.Writer)
+		c.Writer = rw
+
 		c.Next()
 
 		duration := time.Since(start)
@@ -596,10 +649,13 @@ func Middleware() gin.HandlerFunc {
 			usernameStr = fmt.Sprintf("%v", u)
 		}
 
-		var errMsg string
-		if len(c.Errors) > 0 {
+		responseBody := rw.Body()
+		errMsg := rw.ErrorMessage()
+		if errMsg == "" && len(c.Errors) > 0 {
 			errMsg = c.Errors.String()
 		}
+		c.Set("response_body", responseBody)
+		c.Set("error_msg", errMsg)
 
 		durMs := float64(duration.Nanoseconds()) / 1e6
 
@@ -620,6 +676,8 @@ func Middleware() gin.HandlerFunc {
 			Username:      usernameStr,
 			UserAgent:     userAgent,
 			Error:         errMsg,
+			ResponseBody:  responseBody,
+			ErrorMessage:  errMsg,
 		})
 	}
 }
