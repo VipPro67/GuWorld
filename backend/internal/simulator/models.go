@@ -189,9 +189,10 @@ type Effect struct {
 
 // DoTEffect tracks a damage-over-time or heal-over-time effect on a combatant.
 type DoTEffect struct {
-	Type  string  // "bleed", "poison", "regen"
-	Value float64 // damage or heal per turn
-	Turns int     // remaining turns
+	Type     string  // "bleed", "poison", "regen"
+	Value    float64 // damage or heal per turn
+	Turns    int     // remaining turns
+	DirectHP bool    // true if damage subtracts directly from HP bypassing shield
 }
 
 // DaoMarks represents the dao marks of a combatant, grouped by path.

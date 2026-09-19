@@ -32,10 +32,6 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 				Detail:    fmt.Sprintf("%s hồi phục %.0f HP do Hồi Sinh (còn %.0f HP).", c.Name, heal, c.HP),
 			})
 		} else {
-			c.HP -= dot.Value
-			if c.HP < 0 {
-				c.HP = 0
-			}
 			label := ""
 			switch dot.Type {
 			case EffectBleed:
@@ -49,14 +45,60 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 			default:
 				label = dot.Type
 			}
-			logs = append(logs, CombatLog{
-				Turn:      turn,
-				ActorId:   c.ID,
-				ActorName: c.Name,
-				Action:    "DOT_TICK",
-				Damage:    dot.Value,
-				Detail:    fmt.Sprintf("%s chịu %.0f %s sát thương (còn %.0f HP).", c.Name, dot.Value, label, c.HP),
-			})
+
+			dmg := dot.Value
+			if dot.DirectHP {
+				c.HP -= dmg
+				if c.HP < 0 {
+					c.HP = 0
+				}
+				logs = append(logs, CombatLog{
+					Turn:      turn,
+					ActorId:   c.ID,
+					ActorName: c.Name,
+					Action:    "DOT_TICK",
+					Damage:    dmg,
+					Detail:    fmt.Sprintf("%s chịu %.0f %s sát thương trực tiếp (còn %.0f HP).", c.Name, dmg, label, c.HP),
+				})
+			} else {
+				hpDmg := dmg
+				shieldDmg := 0.0
+				if c.VirtualShield > 0 {
+					if c.VirtualShield >= dmg {
+						shieldDmg = dmg
+						c.VirtualShield -= dmg
+						hpDmg = 0
+					} else {
+						shieldDmg = c.VirtualShield
+						hpDmg = dmg - c.VirtualShield
+						c.VirtualShield = 0
+					}
+				}
+				if hpDmg > 0 {
+					c.HP -= hpDmg
+					if c.HP < 0 {
+						c.HP = 0
+					}
+				}
+
+				detail := ""
+				if shieldDmg > 0 && hpDmg > 0 {
+					detail = fmt.Sprintf("%s chịu %.0f %s sát thương (khiên trừ %.0f, còn %.0f khiên, %.0f HP).", c.Name, dmg, label, shieldDmg, c.VirtualShield, c.HP)
+				} else if shieldDmg > 0 {
+					detail = fmt.Sprintf("%s chịu %.0f %s sát thương bị khiên hấp thụ (còn %.0f khiên, %.0f HP).", c.Name, dmg, label, c.VirtualShield, c.HP)
+				} else {
+					detail = fmt.Sprintf("%s chịu %.0f %s sát thương (còn %.0f HP).", c.Name, dmg, label, c.HP)
+				}
+
+				logs = append(logs, CombatLog{
+					Turn:      turn,
+					ActorId:   c.ID,
+					ActorName: c.Name,
+					Action:    "DOT_TICK",
+					Damage:    dmg,
+					Detail:    detail,
+				})
+			}
 		}
 		dot.Turns--
 		if dot.Turns > 0 {

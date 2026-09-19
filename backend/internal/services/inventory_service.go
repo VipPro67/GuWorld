@@ -233,6 +233,7 @@ func (s *InventoryService) DeductItem(tx *sql.Tx, playerID, itemID string, quant
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	rows.Close()
 
 	if totalAvail < quantity {
 		return sql.ErrNoRows

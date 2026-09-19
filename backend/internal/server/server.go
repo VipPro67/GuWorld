@@ -32,6 +32,9 @@ func requestLogging() gin.HandlerFunc {
 		clientIP := c.ClientIP()
 		traceID, _ := c.Get("trace_id")
 
+		writer := newLoggingResponseWriter(c.Writer)
+		c.Writer = writer
+
 		if method != http.MethodOptions {
 			logger.L.Debug("http_request_started", zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path), zap.String("client_ip", clientIP))
 		}
@@ -55,16 +58,34 @@ func requestLogging() gin.HandlerFunc {
 		case status >= 400:
 			level = zapcore.InfoLevel
 		}
+
+		playerID, _ := c.Get("player_id")
+		username, _ := c.Get("username")
+		requestBody, _ := c.Get("request_body")
+		bodyTruncated, _ := c.Get("request_body_truncated")
+		responseBody := writer.Body()
+		errMsg := writer.ErrorMessage()
+
+		isTruncated, _ := bodyTruncated.(bool)
+		if status >= 400 {
+			if checked := logger.L.Check(level, "http_request_error"); checked != nil {
+				checked.Write(
+					zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path),
+					zap.String("route", c.FullPath()), zap.Int("status", status), zap.Float64("duration_ms", float64(duration.Microseconds())/1000),
+					zap.String("client_ip", clientIP), zap.Any("player_id", playerID), zap.Any("username", username),
+					zap.Any("request_body", requestBody), zap.Bool("body_truncated", isTruncated),
+					zap.String("response_body", responseBody), zap.String("error", errMsg),
+					zap.String("user_agent", c.Request.UserAgent()),
+				)
+			}
+		}
+
 		if checked := logger.L.Check(level, "http_request_completed"); checked != nil {
-			playerID, _ := c.Get("player_id")
-			username, _ := c.Get("username")
-			requestBody, _ := c.Get("request_body")
-			bodyTruncated, _ := c.Get("request_body_truncated")
 			checked.Write(
 				zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path),
 				zap.String("route", c.FullPath()), zap.Int("status", status), zap.Float64("duration_ms", float64(duration.Microseconds())/1000),
 				zap.String("client_ip", clientIP), zap.Any("player_id", playerID), zap.Any("username", username),
-				zap.Any("request_body", requestBody), zap.Any("body_truncated", bodyTruncated), zap.String("user_agent", c.Request.UserAgent()),
+				zap.Any("request_body", requestBody), zap.Bool("body_truncated", isTruncated), zap.String("user_agent", c.Request.UserAgent()),
 			)
 		}
 	}

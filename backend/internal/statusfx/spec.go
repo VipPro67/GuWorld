@@ -35,6 +35,7 @@ type StatusSpec struct {
 	Redirect      bool    // forces attackers to redirect (charm)
 	Accuracy      float64 // miss/accuracy penalty 0..1 (blind)
 	DefaultTurns  int     // fallback duration when CSV has none
+	DirectHP      bool    // true if status/DoT damage pierces shield to deal direct HP damage
 }
 
 // Registry maps a canonical status ID to its spec.
@@ -194,7 +195,7 @@ var Registry = map[string]StatusSpec{
 	StatusSoulWound: {
 		ID: StatusSoulWound, Behaviour: BehaviourSoulWound, Label: "Hồn Thương",
 		Category: CategoryDaoConflict, Path: "soul", BaseChance: 0.5,
-		ResistGate: true, DefaultTurns: 3,
+		ResistGate: true, DefaultTurns: 3, DirectHP: true,
 	},
 	StatusThoughtChaos: {
 		ID: StatusThoughtChaos, Behaviour: BehaviourThoughtChaos, Label: "Tạp Niệm / Loạn Ý",

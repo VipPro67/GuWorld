@@ -152,6 +152,7 @@ func RefineGu(c *gin.Context) {
 	materialQualityBonus := 0.0
 
 	for _, instID := range req.SelectedGuInstanceIDs {
+		instID = strings.TrimSpace(instID)
 		if seenInstances[instID] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Duplicate Gu instance selected"})
 			return
@@ -447,7 +448,8 @@ func RefineGu(c *gin.Context) {
 		statusMsg = "Hợp luyện thành công! Đạo hữu luyện chế được Cổ trùng mới."
 		newInventory := models.GuInventory{}
 		for _, item := range player.GuInventory {
-			if seenInstances[item.InstanceID] {
+			cleanInstID := strings.TrimSpace(item.InstanceID)
+			if seenInstances[item.InstanceID] || seenInstances[cleanInstID] {
 				consumedGuIDs = append(consumedGuIDs, item.InstanceID)
 				if item.IsVital {
 					hasVitalIngredient = true

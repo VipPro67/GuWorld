@@ -647,3 +647,55 @@ func TestSoulWoundIgnoresShield(t *testing.T) {
 	}
 }
 
+// TestDoTSubtractsShieldFirst verifies standard DoTs deduct shield before HP.
+func TestDoTSubtractsShieldFirst(t *testing.T) {
+	c := newTestCombatant("target", "Player", 500, 0)
+	c.VirtualShield = 100
+	c.ActiveDoT = []DoTEffect{
+		{Type: "burn", Value: 60, Turns: 1, DirectHP: false},
+	}
+
+	logs := tickDoTs(c, 1)
+
+	if c.VirtualShield != 40 {
+		t.Fatalf("expected shield to be 40 after 60 DoT damage, got %.0f", c.VirtualShield)
+	}
+	if c.HP != 500 {
+		t.Fatalf("expected HP to remain 500, got %.0f", c.HP)
+	}
+	if len(logs) == 0 || !strings.Contains(logs[0].Detail, "khiên hấp thụ") {
+		t.Fatalf("expected log detail to mention shield absorption, got %v", logs)
+	}
+
+	// Test overflow DoT damage
+	c.ActiveDoT = []DoTEffect{
+		{Type: "bleed", Value: 70, Turns: 1, DirectHP: false},
+	}
+	tickDoTs(c, 2)
+	if c.VirtualShield != 0 {
+		t.Fatalf("expected shield to be depleted (0), got %.0f", c.VirtualShield)
+	}
+	if c.HP != 470 {
+		t.Fatalf("expected HP to be 470 after 30 excess DoT damage, got %.0f", c.HP)
+	}
+}
+
+// TestDirectHPDoTBypassesShield verifies direct HP DoT effects bypass shield completely.
+func TestDirectHPDoTBypassesShield(t *testing.T) {
+	c := newTestCombatant("target", "Player", 500, 0)
+	c.VirtualShield = 100
+	c.ActiveDoT = []DoTEffect{
+		{Type: "soul_wound", Value: 60, Turns: 1, DirectHP: true},
+	}
+
+	tickDoTs(c, 1)
+
+	if c.VirtualShield != 100 {
+		t.Fatalf("expected shield to remain 100, got %.0f", c.VirtualShield)
+	}
+	if c.HP != 440 {
+		t.Fatalf("expected HP to be reduced to 440, got %.0f", c.HP)
+	}
+}
+
+

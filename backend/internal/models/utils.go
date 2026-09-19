@@ -87,8 +87,9 @@ func CountEquippedActive(inventory GuInventory) int {
 
 // FindGuByInstanceID finds a Gu by its InstanceID, returning pointer, index, and found flag.
 func FindGuByInstanceID(inventory GuInventory, instanceID string) (*GuInstance, int, bool) {
+	cleanID := strings.TrimSpace(instanceID)
 	for i, gu := range inventory {
-		if gu.InstanceID == instanceID {
+		if strings.TrimSpace(gu.InstanceID) == cleanID {
 			return &inventory[i], i, true
 		}
 	}

@@ -131,9 +131,10 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			val = 10
 		}
 		target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-			Type:  dotType(op.ID),
-			Value: val,
-			Turns: op.Turns,
+			Type:     dotType(op.ID),
+			Value:    val,
+			Turns:    op.Turns,
+			DirectHP: spec.DirectHP,
 		})
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,

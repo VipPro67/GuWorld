@@ -142,7 +142,7 @@ func loadMaterialsInventory(playerID string) models.MaterialsInventory {
 	}
 	mi := make(models.MaterialsInventory)
 	for _, item := range items {
-		mi[item.ItemID] = item.Quantity
+		mi[item.ItemID] += item.Quantity
 	}
 	return mi
 }
