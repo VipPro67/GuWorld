@@ -569,9 +569,43 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 | --- | --- | --- |
 | `funds` | BIGINT | Quỹ tông môn (đổi từ INTEGER → BIGINT để tránh tràn số khi tích lũy lãnh địa). |
 | `require_approval` | BOOLEAN | DEFAULT FALSE. Bật = phải duyệt đơn gia nhập. |
-| `vault_gu` | JSONB | Cổ trùng trong Bảo khố, gộp theo `(id, rank)`. Định dạng `[{"id": "...", "rank": 1, "cost": N, "quantity": N, "hunger": float}]`. Cổ trùng trong Bảo khố không bị đói hay hao hụt độ no theo thời gian (cơ chế đói kho đã được loại bỏ để tối ưu CPU/DB). Khi thành viên đổi/rút Cổ ra khỏi kho, độ no của Cổ trùng được rút ra sẽ là 1 (đối với Cổ có cơ chế đói `hunger_rate > 0`) để người chơi cần cho ăn ngay; đối với Cổ không có cơ chế đói (`hunger_rate = 0`) thì nhận `max_hunger`. |
+| `vault_gu` | JSONB | *(Legacy)* Đã chuyển sang bảng quan hệ `sect_vault_gu`. |
+| `vault_materials` | JSONB | *(Legacy)* Đã chuyển sang bảng quan hệ `sect_vault_materials`. |
+| `vault_recipes` | JSONB | *(Legacy)* Đã chuyển sang bảng quan hệ `sect_vault_recipes`. |
 | `last_vault_decay_at` | TIMESTAMPTZ | Cột lịch sử (không còn dùng do đã bỏ cơ chế tính đói kho tông môn). |
-| `vault_recipes` | JSONB | Danh sách Bí phương trong bảo khố. Định dạng `[{"recipe_id": "recipe_...", "completion_rate": 100}]`. Seed từ `Sect.csv`. |
+
+### Bảng `sect_vault_materials` (Kho Linh tài Tông môn)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `sect_id` | VARCHAR(50) PK FK | → `sects(id)` ON DELETE CASCADE |
+| `item_id` | VARCHAR(100) PK | ID vật phẩm/linh tài |
+| `quantity` | BIGINT | Số lượng lưu trữ, `CHECK (quantity >= 0)` |
+| `created_at` | TIMESTAMPTZ | Thời điểm thêm vào |
+| `updated_at` | TIMESTAMPTZ | Thời điểm cập nhật cuối |
+
+### Bảng `sect_vault_gu` (Bảo Khố Cổ Trùng Tông môn)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `id` | VARCHAR(80) PK | Định danh duy nhất dòng (`sect_id:gu_id:rank` hoặc `sect_id:instance_id`) |
+| `sect_id` | VARCHAR(50) FK | → `sects(id)` ON DELETE CASCADE |
+| `gu_id` | VARCHAR(50) | ID Cổ trùng |
+| `rank` | INTEGER | Phẩm cấp Cổ (1-9) |
+| `quantity` | BIGINT | Số lượng tích lũy |
+| `cost` | BIGINT | Giá điểm cống hiến để đổi |
+| `hunger` | DOUBLE PRECISION | Độ no lưu trữ |
+| `instance_id` | VARCHAR(80) | Instance ID gốc (đối với Tiên Cổ rank ≥ 6) |
+
+### Bảng `sect_vault_recipes` (Tàng Kinh Các / Bí Phương Tông môn)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `sect_id` | VARCHAR(50) PK FK | → `sects(id)` ON DELETE CASCADE |
+| `recipe_id` | VARCHAR(100) PK | ID Bí phương luyện Cổ |
+| `completion_rate` | FLOAT | Tiến độ nghiên cứu / hoàn thiện (100.0) |
+| `unlocked_at` | TIMESTAMPTZ | Thời điểm mở khóa |
+
 
 Các cột được thêm sau khi tạo bảng bằng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` trong `db.go`.
 

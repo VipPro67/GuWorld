@@ -12,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -95,11 +94,12 @@ func AdminGetSectDetail(c *gin.Context) {
 		VaultRecipes             json.RawMessage `json:"vault_recipes"`
 	}
 	var s sectVault
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT id, name, description, region, level, funds, require_approval, require_promotion_approval, vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.RequirePromotionApproval, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT id, name, description, region, level, funds, require_approval, require_promotion_approval FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.RequirePromotionApproval)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn"})
 		return
 	}
+	s.VaultGu, s.VaultMaterials, s.VaultRecipes, _ = LoadSectVaultJSON(c.Request.Context(), db.DB, s.ID)
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT sm.player_id, p.username, sm.member_rank, sm.contribution_points, sm.joined_at, p.rank
@@ -465,57 +465,43 @@ func AdminStockSectVault(c *gin.Context) {
 
 	switch req.ItemType {
 	case "gu":
-		var guItems []SectVaultGuItem
-		json.Unmarshal(vaultGuJSON, &guItems)
-		if guItems == nil {
-			guItems = []SectVaultGuItem{}
+		if req.Rank <= 0 {
+			req.Rank = 1
 		}
-		found := false
-		for i, item := range guItems {
-			if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
-				guItems[i].Quantity += req.Quantity
-				guItems[i].Hunger = vaultGuMaxHunger(req.ItemID, item.Rank)
-				found = true
-				break
-			}
+		hunger := vaultGuMaxHunger(req.ItemID, req.Rank)
+		var stockInstID string
+		var rowID string
+		if req.Quantity == 1 {
+			stockInstID = uuid.New().String()
+			rowID = fmt.Sprintf("%s:%s", sectID, stockInstID)
+		} else {
+			rowID = fmt.Sprintf("%s:%s:%d", sectID, req.ItemID, req.Rank)
 		}
-		if !found {
-			guItems = append(guItems, SectVaultGuItem{ID: req.ItemID, Rank: req.Rank, Cost: 0, Quantity: req.Quantity, Hunger: vaultGuMaxHunger(req.ItemID, req.Rank)})
-		}
-		updated, _ := json.Marshal(guItems)
-		_, err = tx.Exec(`UPDATE sects SET vault_gu=$1 WHERE id=$2`, updated, sectID)
+		_, err = tx.Exec(`
+			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
+			VALUES ($1, $2, $3, $4, $5, 0, $6, $7)
+			ON CONFLICT (id) DO UPDATE SET
+				quantity = sect_vault_gu.quantity + EXCLUDED.quantity,
+				hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
+				updated_at = NOW()
+		`, rowID, sectID, req.ItemID, req.Rank, req.Quantity, hunger, stockInstID)
 
 	case "material":
-		var mats map[string]int64
-		json.Unmarshal(vaultMatsJSON, &mats)
-		if mats == nil {
-			mats = map[string]int64{}
-		}
-		mats[req.ItemID] += req.Quantity
-		updated, _ := json.Marshal(mats)
-		_, err = tx.Exec(`UPDATE sects SET vault_materials=$1 WHERE id=$2`, updated, sectID)
+		_, err = tx.Exec(`
+			INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (sect_id, item_id) DO UPDATE SET
+				quantity = sect_vault_materials.quantity + EXCLUDED.quantity,
+				updated_at = NOW()
+		`, sectID, req.ItemID, req.Quantity)
 
 	case "recipe":
-		var recipes []models.SectVaultRecipe
-		json.Unmarshal(vaultRecipesJSON, &recipes)
-		if recipes == nil {
-			recipes = []models.SectVaultRecipe{}
-		}
-		found := false
-		for i := range recipes {
-			if recipes[i].RecipeID == req.ItemID {
-				if recipes[i].CompletionRate < 100.0 {
-					recipes[i].CompletionRate = 100.0
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			recipes = append(recipes, models.SectVaultRecipe{RecipeID: req.ItemID, CompletionRate: 100.0})
-		}
-		updated, _ := json.Marshal(recipes)
-		_, err = tx.Exec(`UPDATE sects SET vault_recipes=$1 WHERE id=$2`, updated, sectID)
+		_, err = tx.Exec(`
+			INSERT INTO sect_vault_recipes (sect_id, recipe_id, completion_rate)
+			VALUES ($1, $2, 100.0)
+			ON CONFLICT (sect_id, recipe_id) DO UPDATE SET
+				completion_rate = 100.0, unlocked_at = NOW()
+		`, sectID, req.ItemID)
 
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại vật phẩm không hợp lệ (gu, material, recipe)"})
@@ -523,7 +509,7 @@ func AdminStockSectVault(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
 		return
 	}
 
@@ -557,71 +543,55 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var vaultGuJSON, vaultMatsJSON, vaultRecipesJSON []byte
-	err = tx.QueryRow(`SELECT vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&vaultGuJSON, &vaultMatsJSON, &vaultRecipesJSON)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn"})
-		return
-	}
-
 	switch req.ItemType {
 	case "gu":
-		var guItems []SectVaultGuItem
-		json.Unmarshal(vaultGuJSON, &guItems)
-		found := false
-		for i, item := range guItems {
-			if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
-				if item.Quantity < req.Quantity {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ số lượng trong bảo khố"})
-					return
-				}
-				guItems[i].Quantity -= req.Quantity
-				if guItems[i].Quantity <= 0 {
-					guItems = append(guItems[:i], guItems[i+1:]...)
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
+		var vgID string
+		var vgQty int64
+		err = tx.QueryRow(`
+			SELECT id, quantity FROM sect_vault_gu
+			WHERE sect_id = $1 AND gu_id = $2 AND ($3 = 0 OR rank = $3)
+			LIMIT 1 FOR UPDATE
+		`, sectID, req.ItemID, req.Rank).Scan(&vgID, &vgQty)
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm trong bảo khố"})
 			return
 		}
-		updated, _ := json.Marshal(guItems)
-		_, err = tx.Exec(`UPDATE sects SET vault_gu=$1 WHERE id=$2`, updated, sectID)
-
-	case "material":
-		var mats map[string]int64
-		json.Unmarshal(vaultMatsJSON, &mats)
-		if mats[req.ItemID] < req.Quantity {
+		if vgQty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ số lượng trong bảo khố"})
 			return
 		}
-		mats[req.ItemID] -= req.Quantity
-		if mats[req.ItemID] <= 0 {
-			delete(mats, req.ItemID)
+		if vgQty == req.Quantity {
+			_, err = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, vgID)
+		} else {
+			_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, req.Quantity, vgID)
 		}
-		updated, _ := json.Marshal(mats)
-		_, err = tx.Exec(`UPDATE sects SET vault_materials=$1 WHERE id=$2`, updated, sectID)
+
+	case "material":
+		res, err := tx.Exec(`
+			UPDATE sect_vault_materials 
+			SET quantity = quantity - $1, updated_at = NOW() 
+			WHERE sect_id = $2 AND item_id = $3 AND quantity >= $1
+		`, req.Quantity, sectID, req.ItemID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+			return
+		}
+		if rows, _ := res.RowsAffected(); rows == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ số lượng trong bảo khố hoặc không tìm thấy"})
+			return
+		}
+		_, _ = tx.Exec(`DELETE FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2 AND quantity <= 0`, sectID, req.ItemID)
 
 	case "recipe":
-		var recipes []models.SectVaultRecipe
-		json.Unmarshal(vaultRecipesJSON, &recipes)
-		removed := int64(0)
-		newRecipes := make([]models.SectVaultRecipe, 0, len(recipes))
-		for _, r := range recipes {
-			if r.RecipeID == req.ItemID && removed < req.Quantity {
-				removed++
-				continue
-			}
-			newRecipes = append(newRecipes, r)
+		res, err := tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, sectID, req.ItemID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+			return
 		}
-		if removed == 0 {
+		if rows, _ := res.RowsAffected(); rows == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Bí phương trong bảo khố"})
 			return
 		}
-		updated, _ := json.Marshal(newRecipes)
-		_, err = tx.Exec(`UPDATE sects SET vault_recipes=$1 WHERE id=$2`, updated, sectID)
 
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại vật phẩm không hợp lệ"})
@@ -629,7 +599,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
 		return
 	}
 

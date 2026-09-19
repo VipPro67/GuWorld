@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -189,6 +190,72 @@ func createVaultWithdrawnGu(guID string, rank int, guSpec models.Gu) models.GuIn
 		Status:     "ACTIVE",
 		Equipped:   false,
 	}
+}
+
+type QueryContextRunner interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// LoadSectVaultJSON loads items, Gu, and recipes from the dedicated relational tables
+// and formats them as json.RawMessage matching legacy JSON fields.
+func LoadSectVaultJSON(ctx context.Context, runner QueryContextRunner, sectID string) (vaultGu, vaultMat, vaultRec json.RawMessage, err error) {
+	// 1. Materials
+	matRows, err := runner.QueryContext(ctx, `SELECT item_id, quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0`, sectID)
+	if err == nil {
+		defer matRows.Close()
+		materialsMap := make(map[string]int64)
+		for matRows.Next() {
+			var itemID string
+			var qty int64
+			if err := matRows.Scan(&itemID, &qty); err == nil {
+				materialsMap[itemID] = qty
+			}
+		}
+		vaultMat, _ = json.Marshal(materialsMap)
+	} else {
+		vaultMat = json.RawMessage("{}")
+	}
+
+	// 2. Gu
+	guRows, err := runner.QueryContext(ctx, `SELECT gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 ORDER BY rank DESC, gu_id`, sectID)
+	if err == nil {
+		defer guRows.Close()
+		var gus []SectVaultGuItem
+		for guRows.Next() {
+			var g SectVaultGuItem
+			if err := guRows.Scan(&g.ID, &g.Rank, &g.Cost, &g.Quantity, &g.Hunger, &g.InstanceID); err == nil {
+				gus = append(gus, g)
+			}
+		}
+		if gus == nil {
+			gus = []SectVaultGuItem{}
+		}
+		vaultGu, _ = json.Marshal(gus)
+	} else {
+		vaultGu = json.RawMessage("[]")
+	}
+
+	// 3. Recipes
+	recRows, err := runner.QueryContext(ctx, `SELECT recipe_id, completion_rate FROM sect_vault_recipes WHERE sect_id = $1 ORDER BY recipe_id`, sectID)
+	if err == nil {
+		defer recRows.Close()
+		var recs []models.SectVaultRecipe
+		for recRows.Next() {
+			var r models.SectVaultRecipe
+			if err := recRows.Scan(&r.RecipeID, &r.CompletionRate); err == nil {
+				recs = append(recs, r)
+			}
+		}
+		if recs == nil {
+			recs = []models.SectVaultRecipe{}
+		}
+		vaultRec, _ = json.Marshal(recs)
+	} else {
+		vaultRec = json.RawMessage("[]")
+	}
+
+	return vaultGu, vaultMat, vaultRec, nil
 }
 
 type DonateStonesRequest struct {
@@ -443,14 +510,15 @@ func GetMySectStatus(c *gin.Context) {
 
 	var s Sect
 	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings
+		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings
 		FROM sects
 		WHERE id = $1
-	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil, &s.Buildings)
+	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil, &s.Buildings)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return
 	}
+	s.VaultGu, s.VaultMaterials, s.VaultRecipes, _ = LoadSectVaultJSON(c.Request.Context(), db.DB, s.ID)
 
 	// Active mission if any
 	var activeMission SectMission

@@ -653,14 +653,11 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 
 	var targetFunds int64
 	var targetBuildings []byte
-	var targetMaterials []byte
-	var targetGu []byte
-	var targetRecipes []byte
 	var targetName string
 	err := tx.QueryRow(`
-		SELECT name, funds, buildings, vault_materials, vault_gu, vault_recipes
+		SELECT name, funds, buildings
 		FROM sects WHERE id = $1 FOR UPDATE
-	`, combat.TargetSectID).Scan(&targetName, &targetFunds, &targetBuildings, &targetMaterials, &targetGu, &targetRecipes)
+	`, combat.TargetSectID).Scan(&targetName, &targetFunds, &targetBuildings)
 	if err != nil {
 		return logs
 	}
@@ -682,21 +679,32 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 	}
 
 	// 2. Plunder vault_materials (items)
-	var targetMats map[string]interface{}
-	_ = json.Unmarshal(targetMaterials, &targetMats)
+	matRows, err := tx.Query(`SELECT item_id, quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0 FOR UPDATE`, combat.TargetSectID)
 	stolenMats := make(map[string]int64)
-	for key, val := range targetMats {
-		var amount int64
-		switch v := val.(type) {
-		case float64:
-			amount = int64(v)
-		case int64:
-			amount = v
+	if err == nil {
+		type targetMatRow struct {
+			itemID string
+			qty    int64
 		}
-		stolen := int64(float64(amount) * plunderPercent)
-		if stolen > 0 {
-			stolenMats[key] = stolen
-			targetMats[key] = amount - stolen
+		var matsList []targetMatRow
+		for matRows.Next() {
+			var tm targetMatRow
+			if err := matRows.Scan(&tm.itemID, &tm.qty); err == nil {
+				matsList = append(matsList, tm)
+			}
+		}
+		matRows.Close()
+
+		for _, tm := range matsList {
+			stolen := int64(float64(tm.qty) * plunderPercent)
+			if stolen > 0 {
+				stolenMats[tm.itemID] = stolen
+				if stolen >= tm.qty {
+					_, _ = tx.Exec(`DELETE FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2`, combat.TargetSectID, tm.itemID)
+				} else {
+					_, _ = tx.Exec(`UPDATE sect_vault_materials SET quantity = quantity - $1, updated_at = NOW() WHERE sect_id = $2 AND item_id = $3`, stolen, combat.TargetSectID, tm.itemID)
+				}
+			}
 		}
 	}
 
@@ -719,25 +727,47 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 	}
 
 	// 3. Plunder vault_gu
-	var targetVaultGus []SectVaultGuItem
-	if len(targetGu) > 0 {
-		_ = json.Unmarshal(targetGu, &targetVaultGus)
-	}
-	var remainingVaultGus []SectVaultGuItem
+	guRows, err := tx.Query(`SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 FOR UPDATE`, combat.TargetSectID)
 	var stolenGus []SectVaultGuItem
-	for _, vg := range targetVaultGus {
-		stolenQty := int64(math.Ceil(float64(vg.Quantity) * plunderPercent))
-		if stolenQty > vg.Quantity {
-			stolenQty = vg.Quantity
+	if err == nil {
+		type targetGuRow struct {
+			id         string
+			guID       string
+			rank       int
+			cost       int64
+			quantity   int64
+			hunger     float64
+			instanceID string
 		}
-		if stolenQty > 0 {
-			stolenCopy := vg
-			stolenCopy.Quantity = stolenQty
-			stolenGus = append(stolenGus, stolenCopy)
-			vg.Quantity -= stolenQty
+		var gusList []targetGuRow
+		for guRows.Next() {
+			var tg targetGuRow
+			if err := guRows.Scan(&tg.id, &tg.guID, &tg.rank, &tg.cost, &tg.quantity, &tg.hunger, &tg.instanceID); err == nil {
+				gusList = append(gusList, tg)
+			}
 		}
-		if vg.Quantity > 0 {
-			remainingVaultGus = append(remainingVaultGus, vg)
+		guRows.Close()
+
+		for _, tg := range gusList {
+			stolenQty := int64(math.Ceil(float64(tg.quantity) * plunderPercent))
+			if stolenQty > tg.quantity {
+				stolenQty = tg.quantity
+			}
+			if stolenQty > 0 {
+				stolenGus = append(stolenGus, SectVaultGuItem{
+					ID:         tg.guID,
+					InstanceID: tg.instanceID,
+					Rank:       tg.rank,
+					Cost:       tg.cost,
+					Quantity:   stolenQty,
+					Hunger:     tg.hunger,
+				})
+				if stolenQty >= tg.quantity {
+					_, _ = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, tg.id)
+				} else {
+					_, _ = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, stolenQty, tg.id)
+				}
+			}
 		}
 	}
 
@@ -748,7 +778,10 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 			for q := int64(0); q < sg.Quantity; q++ {
 				recipient := teamMembers[memberIdx%len(teamMembers)]
 				memberIdx++
-				instID := uuid.New().String()
+				instID := sg.InstanceID
+				if instID == "" || q > 0 {
+					instID = uuid.New().String()
+				}
 				r := sg.Rank
 				if r <= 0 {
 					r = 1
@@ -768,22 +801,30 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 	}
 
 	// 4. Plunder vault_recipes
-	var targetVaultRecipes []models.SectVaultRecipe
-	if len(targetRecipes) > 0 {
-		_ = json.Unmarshal(targetRecipes, &targetVaultRecipes)
-	}
-	var remainingVaultRecipes []models.SectVaultRecipe
+	recRows, err := tx.Query(`SELECT recipe_id, completion_rate FROM sect_vault_recipes WHERE sect_id = $1 FOR UPDATE`, combat.TargetSectID)
 	var stolenRecipes []models.SectVaultRecipe
-	for _, vr := range targetVaultRecipes {
-		if rand.Float64() < plunderPercent {
-			stolenRecipes = append(stolenRecipes, vr)
-		} else {
-			remainingVaultRecipes = append(remainingVaultRecipes, vr)
+	if err == nil {
+		var targetVaultRecipes []models.SectVaultRecipe
+		for recRows.Next() {
+			var vr models.SectVaultRecipe
+			if err := recRows.Scan(&vr.RecipeID, &vr.CompletionRate); err == nil {
+				targetVaultRecipes = append(targetVaultRecipes, vr)
+			}
 		}
-	}
-	if len(targetVaultRecipes) > 0 && len(stolenRecipes) == 0 {
-		stolenRecipes = append(stolenRecipes, targetVaultRecipes[0])
-		remainingVaultRecipes = targetVaultRecipes[1:]
+		recRows.Close()
+
+		for _, vr := range targetVaultRecipes {
+			if rand.Float64() < plunderPercent {
+				stolenRecipes = append(stolenRecipes, vr)
+			}
+		}
+		if len(targetVaultRecipes) > 0 && len(stolenRecipes) == 0 {
+			stolenRecipes = append(stolenRecipes, targetVaultRecipes[0])
+		}
+
+		for _, sr := range stolenRecipes {
+			_, _ = tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, combat.TargetSectID, sr.RecipeID)
+		}
 	}
 
 	// Unlock stolen recipes for team members
@@ -803,18 +844,12 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 	newShield := now.Add(shieldHours * time.Hour)
 
 	// Update target sect in DB
-	updatedMats, _ := json.Marshal(targetMats)
-	updatedGus, _ := json.Marshal(remainingVaultGus)
-	updatedRecipes, _ := json.Marshal(remainingVaultRecipes)
 	_, _ = tx.Exec(`
 		UPDATE sects SET
 			funds = GREATEST(0, funds - $1),
-			vault_materials = $2,
-			vault_gu = $3,
-			vault_recipes = $4,
-			shield_until = $5
-		WHERE id = $6
-	`, stolenFunds, string(updatedMats), string(updatedGus), string(updatedRecipes), newShield, combat.TargetSectID)
+			shield_until = $2
+		WHERE id = $3
+	`, stolenFunds, newShield, combat.TargetSectID)
 
 	// Reset defending status for all target sect members
 	_, _ = tx.Exec(`UPDATE sect_members SET is_defending = false WHERE sect_id = $1`, combat.TargetSectID)

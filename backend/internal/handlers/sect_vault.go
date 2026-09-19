@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -133,10 +133,11 @@ func StockSectVault(c *gin.Context) {
 	// Fetch sect details
 	var s Sect
 	err = tx.QueryRow(`
-		SELECT id, vault_gu, vault_materials, vault_recipes, funds, level
+		SELECT id, funds, level
 		FROM sects
 		WHERE id = $1
-	`, sectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level)
+		FOR UPDATE
+	`, sectID).Scan(&s.ID, &s.Funds, &s.Level)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
 		return
@@ -157,15 +158,14 @@ func StockSectVault(c *gin.Context) {
 
 	// Deduct funds
 	s.Funds -= totalCost
+	_, err = tx.Exec(`UPDATE sects SET funds = $1 WHERE id = $2`, s.Funds, s.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds: " + err.Error()})
+		return
+	}
 
-	// Update vault json
+	// Update vault relational tables
 	if itemType == "gu" {
-		var vaultGus []SectVaultGuItem
-		if len(s.VaultGu) > 0 {
-			_ = json.Unmarshal(s.VaultGu, &vaultGus)
-		}
-
-		// Recalculate cost for this Gu using pricing package
 		var stockGuRank int
 		var stockGuBasePrice float64
 		_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, req.ItemID).Scan(&stockGuRank, &stockGuBasePrice)
@@ -173,84 +173,56 @@ func StockSectVault(c *gin.Context) {
 			stockGuRank = 1
 		}
 		stockGuCost := int64(pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank)))
-
-		found := false
-		for i, v := range vaultGus {
-			if v.ID == req.ItemID {
-				vaultGus[i].Quantity += req.Quantity
-				vaultGus[i].Cost = stockGuCost // refresh cost to current pricing
-				vaultGus[i].Hunger = vaultGuMaxHunger(req.ItemID, stockGuRank)
-				found = true
-				break
-			}
+		maxHunger := vaultGuMaxHunger(req.ItemID, stockGuRank)
+		var stockInstID string
+		var rowID string
+		if req.Quantity == 1 {
+			stockInstID = uuid.New().String()
+			rowID = fmt.Sprintf("%s:%s", s.ID, stockInstID)
+		} else {
+			rowID = fmt.Sprintf("%s:%s:%d", s.ID, req.ItemID, stockGuRank)
 		}
 
-		if !found {
-			vaultGus = append(vaultGus, SectVaultGuItem{
-				ID:       req.ItemID,
-				Rank:     stockGuRank,
-				Cost:     stockGuCost,
-				Quantity: req.Quantity,
-				Hunger:   vaultGuMaxHunger(req.ItemID, stockGuRank),
-			})
-		}
-
-		newVaultGu, _ := json.Marshal(vaultGus)
-		_, err = tx.Exec(`UPDATE sects SET vault_gu = $1, funds = $2 WHERE id = $3`, newVaultGu, s.Funds, s.ID)
+		_, err = tx.Exec(`
+			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (id) DO UPDATE SET
+				quantity = sect_vault_gu.quantity + EXCLUDED.quantity,
+				cost = EXCLUDED.cost,
+				hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
+				updated_at = NOW()
+		`, rowID, s.ID, req.ItemID, stockGuRank, req.Quantity, stockGuCost, maxHunger, stockInstID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
 			return
 		}
 	} else if itemType == "recipe" {
-		var vaultRecipes []models.SectVaultRecipe
-		if len(s.VaultRecipes) > 0 {
-			_ = json.Unmarshal(s.VaultRecipes, &vaultRecipes)
-		}
-		if vaultRecipes == nil {
-			vaultRecipes = []models.SectVaultRecipe{}
-		}
-
-		found := false
-		for i := range vaultRecipes {
-			if vaultRecipes[i].RecipeID == req.ItemID {
-				if vaultRecipes[i].CompletionRate < 100.0 {
-					vaultRecipes[i].CompletionRate = 100.0
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			vaultRecipes = append(vaultRecipes, models.SectVaultRecipe{
-				RecipeID:       req.ItemID,
-				CompletionRate: 100.0,
-			})
-		}
-
-		newVaultRecipes, _ := json.Marshal(vaultRecipes)
-		_, err = tx.Exec(`UPDATE sects SET vault_recipes = $1, funds = $2 WHERE id = $3`, newVaultRecipes, s.Funds, s.ID)
+		_, err = tx.Exec(`
+			INSERT INTO sect_vault_recipes (sect_id, recipe_id, completion_rate)
+			VALUES ($1, $2, 100.0)
+			ON CONFLICT (sect_id, recipe_id) DO UPDATE SET
+				completion_rate = 100.0, unlocked_at = NOW()
+		`, s.ID, req.ItemID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
 			return
 		}
 	} else {
-		vaultMats := make(map[string]int64)
-		if len(s.VaultMaterials) > 0 {
-			_ = json.Unmarshal(s.VaultMaterials, &vaultMats)
-		}
-
-		vaultMats[req.ItemID] += req.Quantity
-
-		newVaultMats, _ := json.Marshal(vaultMats)
-		_, err = tx.Exec(`UPDATE sects SET vault_materials = $1, funds = $2 WHERE id = $3`, newVaultMats, s.Funds, s.ID)
+		_, err = tx.Exec(`
+			INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (sect_id, item_id) DO UPDATE SET
+				quantity = sect_vault_materials.quantity + EXCLUDED.quantity,
+				updated_at = NOW()
+		`, s.ID, req.ItemID, req.Quantity)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials: " + err.Error()})
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}
 
@@ -263,26 +235,34 @@ func StockSectVault(c *gin.Context) {
 	}
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
-	itemName := req.ItemID
-	if itemType == "gu" {
-		if spec, ok := models.GetGuAny(req.ItemID); ok {
-			itemName = spec.Name
-		}
-	} else if itemType == "material" {
-		if spec, ok := models.ItemRegistry[req.ItemID]; ok {
-			itemName = spec.Name
-		}
-	} else if itemType == "recipe" {
-		if targetGuID, _, _, err := ParseRecipeID(req.ItemID); err == nil {
-			if spec, ok := models.GetGuAny(targetGuID); ok {
+	if username != "" {
+		itemName := req.ItemID
+		if itemType == "gu" {
+			if spec, ok := models.GetGuAny(req.ItemID); ok {
 				itemName = spec.Name
 			}
+		} else if itemType == "material" {
+			_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&itemName)
 		}
-		itemName = "Bí phương " + itemName
+		if itemName == "" {
+			itemName = req.ItemID
+		}
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã mua thêm %d %s vào bảo khố tông môn.", rankName, username, req.Quantity, itemName))
 	}
-	if username != "" {
-		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã nhập thêm %d %s vào bảo khố tông môn.", rankName, username, req.Quantity, itemName))
-	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.stock_vault", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("%s | %s x%d | tổng giá %d quỹ tông môn", req.ItemType, req.ItemID, req.Quantity, totalCost),
+		Metadata: map[string]interface{}{
+			"item_type":    req.ItemType,
+			"item_id":      req.ItemID,
+			"quantity":     req.Quantity,
+			"total_cost":   totalCost,
+			"funds_change": -totalCost,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "Nhập thêm vật phẩm vào bảo khố thành công!",
@@ -339,7 +319,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	}
 
 	var s Sect
-	err = tx.QueryRow(`SELECT id, vault_gu, vault_materials, vault_recipes, funds, level FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level)
+	err = tx.QueryRow(`SELECT id, funds, level FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&s.ID, &s.Funds, &s.Level)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
 		return
@@ -368,26 +348,14 @@ func StockSectVaultBulk(c *gin.Context) {
 		return
 	}
 	s.Funds -= totalCost
-
-	var vaultGus []SectVaultGuItem
-	if len(s.VaultGu) > 0 {
-		_ = json.Unmarshal(s.VaultGu, &vaultGus)
-	}
-	vaultMats := make(map[string]int64)
-	if len(s.VaultMaterials) > 0 {
-		_ = json.Unmarshal(s.VaultMaterials, &vaultMats)
-	}
-	var vaultRecipes []models.SectVaultRecipe
-	if len(s.VaultRecipes) > 0 {
-		_ = json.Unmarshal(s.VaultRecipes, &vaultRecipes)
-	}
-	if vaultRecipes == nil {
-		vaultRecipes = []models.SectVaultRecipe{}
+	_, err = tx.Exec(`UPDATE sects SET funds = $1 WHERE id = $2`, s.Funds, s.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds: " + err.Error()})
+		return
 	}
 
 	for _, line := range lines {
 		if line.itemType == "gu" {
-			// Recalculate cost for this Gu using pricing package
 			var stockGuRank int
 			var stockGuBasePrice float64
 			_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, line.itemID).Scan(&stockGuRank, &stockGuBasePrice)
@@ -395,49 +363,53 @@ func StockSectVaultBulk(c *gin.Context) {
 				stockGuRank = 1
 			}
 			stockGuCost := int64(pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank)))
-
-			found := false
-			for i := range vaultGus {
-				if vaultGus[i].ID == line.itemID {
-					vaultGus[i].Quantity += line.quantity
-					vaultGus[i].Cost = stockGuCost
-					vaultGus[i].Hunger = vaultGuMaxHunger(line.itemID, stockGuRank)
-					found = true
-					break
-				}
+			maxHunger := vaultGuMaxHunger(line.itemID, stockGuRank)
+			var stockInstID string
+			var rowID string
+			if line.quantity == 1 {
+				stockInstID = uuid.New().String()
+				rowID = fmt.Sprintf("%s:%s", s.ID, stockInstID)
+			} else {
+				rowID = fmt.Sprintf("%s:%s:%d", s.ID, line.itemID, stockGuRank)
 			}
-			if !found {
-				vaultGus = append(vaultGus, SectVaultGuItem{ID: line.itemID, Rank: stockGuRank, Cost: stockGuCost, Quantity: line.quantity, Hunger: vaultGuMaxHunger(line.itemID, stockGuRank)})
+
+			_, err = tx.Exec(`
+				INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				ON CONFLICT (id) DO UPDATE SET
+					quantity = sect_vault_gu.quantity + EXCLUDED.quantity,
+					cost = EXCLUDED.cost,
+					hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
+					updated_at = NOW()
+			`, rowID, s.ID, line.itemID, stockGuRank, line.quantity, stockGuCost, maxHunger, stockInstID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
+				return
 			}
 		} else if line.itemType == "recipe" {
-			found := false
-			for i := range vaultRecipes {
-				if vaultRecipes[i].RecipeID == line.itemID {
-					if vaultRecipes[i].CompletionRate < 100.0 {
-						vaultRecipes[i].CompletionRate = 100.0
-					}
-					found = true
-					break
-				}
-			}
-			if !found {
-				vaultRecipes = append(vaultRecipes, models.SectVaultRecipe{
-					RecipeID:       line.itemID,
-					CompletionRate: 100.0,
-				})
+			_, err = tx.Exec(`
+				INSERT INTO sect_vault_recipes (sect_id, recipe_id, completion_rate)
+				VALUES ($1, $2, 100.0)
+				ON CONFLICT (sect_id, recipe_id) DO UPDATE SET
+					completion_rate = 100.0, unlocked_at = NOW()
+			`, s.ID, line.itemID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
+				return
 			}
 		} else {
-			vaultMats[line.itemID] += line.quantity
+			_, err = tx.Exec(`
+				INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (sect_id, item_id) DO UPDATE SET
+					quantity = sect_vault_materials.quantity + EXCLUDED.quantity,
+					updated_at = NOW()
+			`, s.ID, line.itemID, line.quantity)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials: " + err.Error()})
+				return
+			}
 		}
-	}
-
-	newVaultGu, _ := json.Marshal(vaultGus)
-	newVaultMats, _ := json.Marshal(vaultMats)
-	newVaultRecipes, _ := json.Marshal(vaultRecipes)
-	_, err = tx.Exec(`UPDATE sects SET vault_gu = $1, vault_materials = $2, vault_recipes = $3, funds = $4 WHERE id = $5`, newVaultGu, newVaultMats, newVaultRecipes, s.Funds, s.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault: " + err.Error()})
-		return
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -512,66 +484,60 @@ func BuyFromSectVault(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
-	var s Sect
-	err = tx.QueryRow(`
-		SELECT id, vault_gu, vault_materials, vault_recipes
-		FROM sects
-		WHERE id = $1
-		FOR UPDATE
-	`, m.SectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
-		return
-	}
 
 	var cost int64
 	if strings.ToLower(req.ItemType) == "gu" {
-		var vaultGus []SectVaultGuItem
-		if err := json.Unmarshal(s.VaultGu, &vaultGus); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse vault Gu list"})
-			return
-		}
+		var vgID string
+		var vgGuID string
+		var vgRank int
+		var vgCost int64
+		var vgQty int64
+		var vgHunger float64
+		var vgInstID string
 
-		targetIdx := -1
-		for idx, item := range vaultGus {
-			if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
-				targetIdx = idx
-				break
+		guQuery := `
+			SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '')
+			FROM sect_vault_gu
+			WHERE sect_id = $1 AND gu_id = $2 AND ($3 = 0 OR rank = $3) AND quantity >= $4
+			FOR UPDATE
+			LIMIT 1
+		`
+		err = tx.QueryRow(guQuery, m.SectID, req.ItemID, req.Rank, quantity).Scan(&vgID, &vgGuID, &vgRank, &vgCost, &vgQty, &vgHunger, &vgInstID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không đủ số lượng hoặc không có sẵn trong Bảo khố!"})
+				return
 			}
-		}
-
-		if targetIdx == -1 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Cổ trùng này không có sẵn trong Bảo khố!"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn bảo khố: " + err.Error()})
 			return
 		}
 
-		if vaultGus[targetIdx].Quantity < quantity {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bảo khố chỉ còn %d con Cổ trùng này!", vaultGus[targetIdx].Quantity)})
-			return
-		}
-
-		cost = int64(vaultGus[targetIdx].Cost * quantity)
+		cost = vgCost * quantity
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
 		}
 
 		m.ContributionPoints -= cost
-		vaultGus[targetIdx].Quantity -= quantity
+		if vgQty <= quantity {
+			_, err = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, vgID)
+		} else {
+			_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, quantity, vgID)
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct Gu from vault: " + err.Error()})
+			return
+		}
 
 		guSpec, _ := models.GetGuAny(req.ItemID)
-		actualRank := vaultGus[targetIdx].Rank
+		actualRank := vgRank
 		if actualRank == 0 {
 			actualRank = guSpec.Rank
 		}
-		withdrawnInstID := vaultGus[targetIdx].InstanceID
-		if vaultGus[targetIdx].Quantity <= 0 {
-			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
-		}
 		for i := int64(0); i < quantity; i++ {
 			newGu := createVaultWithdrawnGu(req.ItemID, actualRank, guSpec)
-			if withdrawnInstID != "" {
-				newGu.InstanceID = withdrawnInstID
+			if vgInstID != "" {
+				newGu.InstanceID = vgInstID
 			}
 			player.GuInventory = append(player.GuInventory, newGu)
 
@@ -581,7 +547,7 @@ func BuyFromSectVault(c *gin.Context) {
 			}
 			withdrawSummary := fmt.Sprintf("Cổ Sư [%s] rút/đổi Cổ trùng [%s] R%d từ Kho Tông Môn.", player.Username, guName, actualRank)
 			_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "SECT_VAULT_WITHDRAWN", nil, &player.ID, withdrawSummary, map[string]interface{}{
-				"sect_id": s.ID,
+				"sect_id": m.SectID,
 				"cost":    cost,
 				"gu_name": guName,
 			})
@@ -592,74 +558,50 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		newVaultGu, err := json.Marshal(vaultGus)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize updated Gu list"})
-			return
-		}
-		_, err = tx.Exec(`UPDATE sects SET vault_gu = $1 WHERE id = $2`, newVaultGu, s.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu list"})
-			return
-		}
-
 	} else if strings.ToLower(req.ItemType) == "material" {
-		var vaultMats map[string]int64
-		if err := json.Unmarshal(s.VaultMaterials, &vaultMats); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse vault materials"})
-			return
-		}
-
-		qty, hasMat := vaultMats[req.ItemID]
-		if !hasMat || qty < quantity {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Linh tài này không đủ số lượng trong Bảo khố!"})
-			return
-		}
-
-		// Dynamic cost from item_dictionary base_price + rank via pricing package
-		{
-			var matRank int
-			var matBasePrice float64
-			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
-			cost = int64(pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))) * quantity
-		}
+		var matRank int
+		var matBasePrice float64
+		_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
+		cost = int64(pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))) * quantity
 
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
 		}
 
-		m.ContributionPoints -= cost
-		vaultMats[req.ItemID] -= quantity
-		if vaultMats[req.ItemID] <= 0 {
-			delete(vaultMats, req.ItemID)
+		res, err := tx.Exec(`
+			UPDATE sect_vault_materials 
+			SET quantity = quantity - $1, updated_at = NOW() 
+			WHERE sect_id = $2 AND item_id = $3 AND quantity >= $1
+		`, quantity, m.SectID, req.ItemID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vault materials: " + err.Error()})
+			return
 		}
+		if rows, _ := res.RowsAffected(); rows == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Linh tài này không đủ số lượng trong Bảo khố!"})
+			return
+		}
+		_, _ = tx.Exec(`DELETE FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2 AND quantity <= 0`, m.SectID, req.ItemID)
 
+		m.ContributionPoints -= cost
 		InventorySvc.AddItem(tx, player.ID.String(), req.ItemID, "materials", quantity)
 
-		newVaultMats, _ := json.Marshal(vaultMats)
-		_, err = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, newVaultMats, s.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vault materials"})
-			return
-		}
 	} else if strings.ToLower(req.ItemType) == "recipe" {
-		var vaultRecipes []models.SectVaultRecipe
-		if err := json.Unmarshal(s.VaultRecipes, &vaultRecipes); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse recipes list"})
-			return
-		}
-
-		var recipeEntry *models.SectVaultRecipe
-		for i := range vaultRecipes {
-			if vaultRecipes[i].RecipeID == req.ItemID {
-				recipeEntry = &vaultRecipes[i]
-				break
+		var vrRecipeID string
+		var vrCompletionRate float64
+		err = tx.QueryRow(`
+			SELECT recipe_id, completion_rate 
+			FROM sect_vault_recipes 
+			WHERE sect_id = $1 AND recipe_id = $2 
+			FOR UPDATE
+		`, m.SectID, req.ItemID).Scan(&vrRecipeID, &vrCompletionRate)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Công thức này không có sẵn trong Bảo khố!"})
+				return
 			}
-		}
-
-		if recipeEntry == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Công thức này không có sẵn trong Bảo khố!"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 			return
 		}
 
@@ -668,16 +610,14 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		// Dynamic recipe cost based on target Gu rank via pricing package
-		{
-			var targetGuRank int = 1
-			if _, tr, _, err := ParseRecipeID(req.ItemID); err == nil {
-				targetGuRank = tr
-			} else {
-				_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1`, req.ItemID).Scan(&targetGuRank)
-			}
-			cost = int64(pricing.RecipeCostByGuRank(targetGuRank))
+		var targetGuRank int = 1
+		if _, tr, _, err := ParseRecipeID(req.ItemID); err == nil {
+			targetGuRank = tr
+		} else {
+			_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1`, req.ItemID).Scan(&targetGuRank)
 		}
+		cost = int64(pricing.RecipeCostByGuRank(targetGuRank))
+
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
@@ -685,26 +625,13 @@ func BuyFromSectVault(c *gin.Context) {
 
 		m.ContributionPoints -= cost
 
-		// Remove recipe from vault
-		for i := range vaultRecipes {
-			if vaultRecipes[i].RecipeID == req.ItemID {
-				vaultRecipes = append(vaultRecipes[:i], vaultRecipes[i+1:]...)
-				break
-			}
-		}
-		newVaultRecipes, err := json.Marshal(vaultRecipes)
+		_, err = tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, m.SectID, req.ItemID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize updated recipes list"})
-			return
-		}
-		_, err = tx.Exec(`UPDATE sects SET vault_recipes = $1 WHERE id = $2`, newVaultRecipes, s.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes list"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
 			return
 		}
 
-		// Grant the recipe to the buyer, keeping the higher completion rate.
-		grantedRate := recipeEntry.CompletionRate
+		grantedRate := vrCompletionRate
 		if existing, err := RecipeSvc.Get(tx, player.ID.String(), req.ItemID); err == nil && existing != nil {
 			if existing.CompletionRate > grantedRate {
 				grantedRate = existing.CompletionRate

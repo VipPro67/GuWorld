@@ -222,5 +222,61 @@ func schemaSects() error {
 		return err
 	}
 
+	if err := execSchema("sect_vault_materials", `
+	CREATE TABLE IF NOT EXISTS sect_vault_materials (
+		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+		item_id VARCHAR(100) NOT NULL,
+		quantity BIGINT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (sect_id, item_id)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("idx_sect_vault_materials_item", `
+	CREATE INDEX IF NOT EXISTS idx_sect_vault_materials_item ON sect_vault_materials (item_id) WHERE quantity > 0;`); err != nil {
+		return err
+	}
+
+	if err := execSchema("sect_vault_gu", `
+	CREATE TABLE IF NOT EXISTS sect_vault_gu (
+		id VARCHAR(80) PRIMARY KEY,
+		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+		gu_id VARCHAR(50) NOT NULL,
+		rank INTEGER NOT NULL DEFAULT 1 CHECK (rank >= 1 AND rank <= 9),
+		quantity BIGINT NOT NULL DEFAULT 1 CHECK (quantity >= 0),
+		cost BIGINT NOT NULL DEFAULT 0,
+		hunger DOUBLE PRECISION NOT NULL DEFAULT 100.0 CHECK (hunger >= 0),
+		instance_id VARCHAR(80) DEFAULT '',
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("idx_sect_vault_gu_sect_gu", `
+	CREATE INDEX IF NOT EXISTS idx_sect_vault_gu_sect_gu ON sect_vault_gu (sect_id, gu_id, rank);`); err != nil {
+		return err
+	}
+	if err := execSchema("idx_sect_vault_gu_gu_id", `
+	CREATE INDEX IF NOT EXISTS idx_sect_vault_gu_gu_id ON sect_vault_gu (gu_id, rank);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("sect_vault_recipes", `
+	CREATE TABLE IF NOT EXISTS sect_vault_recipes (
+		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+		recipe_id VARCHAR(100) NOT NULL,
+		completion_rate FLOAT NOT NULL DEFAULT 100.0 CHECK (completion_rate >= 0 AND completion_rate <= 100.0),
+		unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (sect_id, recipe_id)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("idx_sect_vault_recipes_sect", `
+	CREATE INDEX IF NOT EXISTS idx_sect_vault_recipes_sect ON sect_vault_recipes (sect_id);`); err != nil {
+		return err
+	}
+
 	return nil
 }
+

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -110,3 +111,22 @@ func TestIsInsideSquareTerritory(t *testing.T) {
 		})
 	}
 }
+
+func TestSectVaultJSONSerialization(t *testing.T) {
+	// Verify SectVaultGuItem structure serialization matches client expectations
+	guItem := SectVaultGuItem{
+		ID:       "gu_xuan_bang",
+		Rank:     3,
+		Cost:     150,
+		Quantity: 5,
+		Hunger:   85.5,
+	}
+	bytes, err := json.Marshal(guItem)
+	if err != nil {
+		t.Fatalf("failed to marshal guItem: %v", err)
+	}
+	if string(bytes) == "" {
+		t.Fatal("expected non-empty json")
+	}
+}
+

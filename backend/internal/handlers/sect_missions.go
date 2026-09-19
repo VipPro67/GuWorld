@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -214,17 +213,13 @@ func CompleteSectMission(c *gin.Context) {
 		var memberForVault SectMember
 		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&memberForVault.SectID)
 		if err == nil {
-			var vaultMaterialsRaw json.RawMessage
-			err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1 FOR UPDATE`, memberForVault.SectID).Scan(&vaultMaterialsRaw)
-			if err == nil {
-				vaultMats := make(map[string]int64)
-				if len(vaultMaterialsRaw) > 0 {
-					_ = json.Unmarshal(vaultMaterialsRaw, &vaultMats)
-				}
-				vaultMats[sm.TargetID] += sm.TargetAmount
-				newVaultMats, _ := json.Marshal(vaultMats)
-				_, _ = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, newVaultMats, memberForVault.SectID)
-			}
+			_, _ = tx.Exec(`
+				INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (sect_id, item_id) DO UPDATE SET
+					quantity = sect_vault_materials.quantity + EXCLUDED.quantity,
+					updated_at = NOW()
+			`, memberForVault.SectID, sm.TargetID, sm.TargetAmount)
 		}
 	} else if sm.MissionType == "DONATE" {
 		// Donate a Gu bug
@@ -261,39 +256,28 @@ func CompleteSectMission(c *gin.Context) {
 		var memberForVault SectMember
 		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&memberForVault.SectID)
 		if err == nil {
-			var vaultGuRaw json.RawMessage
-			err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, memberForVault.SectID).Scan(&vaultGuRaw)
-			if err == nil {
-				var vaultGus []SectVaultGuItem
-				if len(vaultGuRaw) > 0 {
-					_ = json.Unmarshal(vaultGuRaw, &vaultGus)
-				}
-				var donatedGuRank int
-				var donatedGuBase int64
-				_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, donatedGuID).Scan(&donatedGuBase, &donatedGuRank)
-				if donatedGuRank == 0 {
-					donatedGuRank = 1
-				}
-				missionGuFound := false
-				for i, v := range vaultGus {
-					if v.ID == donatedGuID {
-						vaultGus[i].Quantity++
-						vaultGus[i].Hunger = mergeVaultGuHunger(donatedGuID, donatedGuInstRank, v.Hunger, donatedGuHunger)
-						missionGuFound = true
-						break
-					}
-				}
-				if !missionGuFound {
-					vaultGus = append(vaultGus, SectVaultGuItem{
-						ID:       donatedGuID,
-						Cost:     int64(pricing.VaultCost(pricing.GuBasePrice(float64(donatedGuBase), donatedGuRank))),
-						Quantity: 1,
-						Hunger:   normalizeVaultGuHunger(donatedGuID, donatedGuInstRank, donatedGuHunger),
-					})
-				}
-				newVaultGus, _ := json.Marshal(vaultGus)
-				_, _ = tx.Exec(`UPDATE sects SET vault_gu = $1 WHERE id = $2`, newVaultGus, memberForVault.SectID)
+			var donatedGuRank int
+			var donatedGuBase int64
+			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, donatedGuID).Scan(&donatedGuBase, &donatedGuRank)
+			if donatedGuRank == 0 {
+				donatedGuRank = 1
 			}
+			vaultItemCost := int64(pricing.VaultCost(pricing.GuBasePrice(float64(donatedGuBase), donatedGuRank)))
+			itemInstID := donatedInstanceID
+			if itemInstID == "" {
+				itemInstID = uuid.New().String()
+			}
+			rowID := fmt.Sprintf("%s:%s", memberForVault.SectID, itemInstID)
+			normHunger := normalizeVaultGuHunger(donatedGuID, donatedGuInstRank, donatedGuHunger)
+			_, _ = tx.Exec(`
+				INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
+				VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+				ON CONFLICT (id) DO UPDATE SET
+					quantity = sect_vault_gu.quantity + 1,
+					cost = EXCLUDED.cost,
+					hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
+					updated_at = NOW()
+			`, rowID, memberForVault.SectID, donatedGuID, donatedGuInstRank, vaultItemCost, normHunger, itemInstID)
 		}
 	}
 

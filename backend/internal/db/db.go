@@ -158,6 +158,9 @@ func InitSchema() error {
 	if err := seedQuestsFromCSV(); err != nil {
 		logger.S.Warnf("seedQuestsFromCSV: %v", err)
 	}
+	if err := backfillSectVaultTables(); err != nil {
+		logger.S.Warnf("backfillSectVaultTables: %v", err)
+	}
 
 	// Clean up any stale active_combat records for non-leader party members
 	_, _ = DB.Exec(`UPDATE players SET active_combat = NULL WHERE party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`)
@@ -2299,9 +2302,144 @@ func seedSectsFromCSV(filename string) error {
 		if err != nil {
 			return fmt.Errorf("failed to seed sect %s: %w", id, err)
 		}
+		_ = syncSectVaultFromJSON(id, vaultGu, vaultMat, vaultRec)
 		seeded++
 	}
 	logger.S.Infof("Seeded %d sects from %s", seeded, filename)
+	return nil
+}
+
+func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
+	// 1. Materials
+	if strings.TrimSpace(vaultMat) != "" && vaultMat != "{}" && vaultMat != "null" {
+		var mats map[string]int64
+		if err := json.Unmarshal([]byte(vaultMat), &mats); err == nil {
+			for itemID, qty := range mats {
+				if qty > 0 {
+					_, _ = DB.Exec(`
+						INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
+						VALUES ($1, $2, $3)
+						ON CONFLICT (sect_id, item_id) DO UPDATE SET
+							quantity = EXCLUDED.quantity, updated_at = NOW()
+					`, sectID, itemID, qty)
+				}
+			}
+		}
+	}
+
+	// 2. Gu
+	if strings.TrimSpace(vaultGu) != "" && vaultGu != "[]" && vaultGu != "null" {
+		type guItem struct {
+			ID         string  `json:"id"`
+			GuID       string  `json:"gu_id,omitempty"`
+			Rank       int     `json:"rank"`
+			Cost       int64   `json:"cost"`
+			Quantity   int64   `json:"quantity"`
+			Hunger     float64 `json:"hunger"`
+			InstanceID string  `json:"instance_id,omitempty"`
+		}
+		var gus []guItem
+		if err := json.Unmarshal([]byte(vaultGu), &gus); err == nil {
+			for _, g := range gus {
+				guID := g.ID
+				if guID == "" {
+					guID = g.GuID
+				}
+				if guID == "" {
+					continue
+				}
+				rank := g.Rank
+				if rank <= 0 {
+					rank = 1
+				}
+				qty := g.Quantity
+				if qty <= 0 {
+					qty = 1
+				}
+				hunger := g.Hunger
+				if hunger <= 0 {
+					hunger = 100
+				}
+				instID := g.InstanceID
+				if instID == "" && qty == 1 {
+					instID = fmt.Sprintf("gu_%s_%s_%d", sectID, guID, rank)
+				}
+				rowID := fmt.Sprintf("%s:%s:%d", sectID, guID, rank)
+				if instID != "" {
+					rowID = fmt.Sprintf("%s:%s", sectID, instID)
+				}
+				_, _ = DB.Exec(`
+					INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+					ON CONFLICT (id) DO UPDATE SET
+						quantity = EXCLUDED.quantity, hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
+						cost = EXCLUDED.cost, updated_at = NOW()
+				`, rowID, sectID, guID, rank, qty, g.Cost, hunger, instID)
+			}
+		}
+	}
+
+	// 3. Recipes
+	if strings.TrimSpace(vaultRec) != "" && vaultRec != "[]" && vaultRec != "null" {
+		type recItem struct {
+			RecipeID       string  `json:"recipe_id"`
+			CompletionRate float64 `json:"completion_rate"`
+		}
+		var recs []recItem
+		if err := json.Unmarshal([]byte(vaultRec), &recs); err == nil {
+			for _, r := range recs {
+				if r.RecipeID == "" {
+					continue
+				}
+				rate := r.CompletionRate
+				if rate <= 0 {
+					rate = 100.0
+				}
+				_, _ = DB.Exec(`
+					INSERT INTO sect_vault_recipes (sect_id, recipe_id, completion_rate)
+					VALUES ($1, $2, $3)
+					ON CONFLICT (sect_id, recipe_id) DO UPDATE SET
+						completion_rate = GREATEST(sect_vault_recipes.completion_rate, EXCLUDED.completion_rate)
+				`, sectID, r.RecipeID, rate)
+			}
+		}
+	}
+	return nil
+}
+
+func backfillSectVaultTables() error {
+	rows, err := DB.Query(`SELECT id, COALESCE(vault_gu::text, '[]'), COALESCE(vault_materials::text, '{}'), COALESCE(vault_recipes::text, '[]') FROM sects`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type sectRow struct {
+		id       string
+		vaultGu  string
+		vaultMat string
+		vaultRec string
+	}
+	var sects []sectRow
+	for rows.Next() {
+		var s sectRow
+		if err := rows.Scan(&s.id, &s.vaultGu, &s.vaultMat, &s.vaultRec); err == nil {
+			sects = append(sects, s)
+		}
+	}
+
+	for _, s := range sects {
+		// Chỉ backfill nếu tông môn này chưa có bất kỳ dữ liệu kho nào trong các bảng mới.
+		// Tránh ghi đè dữ liệu gameplay mới bằng dữ liệu JSONB cũ khi server restart lại nhiều lần.
+		var matCount, guCount, recCount int
+		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_materials WHERE sect_id = $1`, s.id).Scan(&matCount)
+		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_gu WHERE sect_id = $1`, s.id).Scan(&guCount)
+		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_recipes WHERE sect_id = $1`, s.id).Scan(&recCount)
+
+		if matCount == 0 && guCount == 0 && recCount == 0 {
+			_ = syncSectVaultFromJSON(s.id, s.vaultGu, s.vaultMat, s.vaultRec)
+		}
+	}
 	return nil
 }
 
@@ -2425,10 +2563,12 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		return true, nil
 	}
 
-	// 3. Kiểm tra trong kho tông môn (sects.vault_gu) — một tiên cổ nằm trong kho vẫn
-	//    được tính là "đang tồn tại trong thiên hạ".
+	// 3. Kiểm tra trong kho tông môn (sect_vault_gu hoặc fallback sects.vault_gu)
 	err = runner.QueryRow(`
 		SELECT EXISTS(
+			SELECT 1 FROM sect_vault_gu
+			WHERE gu_id = $1 AND rank >= 6 AND quantity > 0
+			UNION
 			SELECT 1 FROM sects,
 			jsonb_array_elements(
 				CASE 
@@ -2449,7 +2589,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 
 // GetExistingImmortalGuIDs returns the set of gu_ids that currently have at least one
 // rank >= 6 (Immortal Gu) instance anywhere in the world: any player's player_gu,
-// ACTIVE auction listings, or the sect vault (sects.vault_gu).
+// ACTIVE auction listings, or the sect vault (sect_vault_gu / sects.vault_gu).
 func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 	rows, err := tx.Query(`
 		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
@@ -2462,6 +2602,8 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 				END
 			) AS elem
 			WHERE item_type = 'Gu' AND status = 'ACTIVE' AND COALESCE((elem->>'rank')::int, 0) >= 6
+		UNION
+		SELECT DISTINCT gu_id FROM sect_vault_gu WHERE rank >= 6 AND quantity > 0
 		UNION
 		SELECT DISTINCT elem->>'id' FROM sects,
 			jsonb_array_elements(
@@ -2663,7 +2805,26 @@ func ExportToCSV() error {
 		{
 			filename: "Sect.csv",
 			columns:  []string{"id", "name", "description", "region", "vault_gu", "vault_materials", "vault_recipes"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(region,''), COALESCE(vault_gu::text,'[]'), COALESCE(vault_materials::text,'{}'), COALESCE(vault_recipes::text,'[]') FROM sects ORDER BY id`,
+			query: `SELECT 
+				s.id, 
+				s.name, 
+				COALESCE(s.description,''), 
+				COALESCE(s.region,''), 
+				COALESCE((
+					SELECT jsonb_agg(jsonb_build_object(
+						'id', vg.gu_id, 'rank', vg.rank, 'cost', vg.cost, 'quantity', vg.quantity, 'hunger', vg.hunger, 'instance_id', vg.instance_id
+					)) FROM sect_vault_gu vg WHERE vg.sect_id = s.id AND vg.quantity > 0
+				)::text, s.vault_gu::text, '[]'),
+				COALESCE((
+					SELECT jsonb_object_agg(vm.item_id, vm.quantity) 
+					FROM sect_vault_materials vm WHERE vm.sect_id = s.id AND vm.quantity > 0
+				)::text, s.vault_materials::text, '{}'),
+				COALESCE((
+					SELECT jsonb_agg(jsonb_build_object(
+						'recipe_id', vr.recipe_id, 'completion_rate', vr.completion_rate
+					)) FROM sect_vault_recipes vr WHERE vr.sect_id = s.id
+				)::text, s.vault_recipes::text, '[]')
+			FROM sects s ORDER BY s.id`,
 		},
 		{
 			filename: "SectMission.csv",

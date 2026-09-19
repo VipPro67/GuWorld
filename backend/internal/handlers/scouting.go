@@ -1058,22 +1058,15 @@ func ExecuteDivineGu(c *gin.Context) {
 		}
 	}
 
-	// 4b. Sect Vaults (sects.vault_gu)
+	// 4b. Sect Vaults (sect_vault_gu)
 	querySects := `
 		SELECT s.id, s.name, s.region, COALESCE(s.map_x, 0), COALESCE(s.map_y, 0), s.level,
-		       elem->>'id' AS gu_id,
-		       COALESCE((elem->>'rank')::int, 1) AS gu_rank,
-		       COALESCE((elem->>'quantity')::int, 1) AS quantity,
-		       COALESCE((elem->>'cost')::int, 0) AS cost
-		FROM sects s,
-		LATERAL jsonb_array_elements(
-			CASE 
-				WHEN jsonb_typeof(s.vault_gu) = 'array' THEN s.vault_gu 
-				ELSE '[]'::jsonb 
-			END
-		) AS elem
-		WHERE (LOWER(elem->>'id') = LOWER($1) OR LOWER(elem->>'gu_id') = LOWER($1) OR elem->>'id' = ANY($3) OR elem->>'gu_id' = ANY($3))
-		  AND ($2 = 0 OR COALESCE((elem->>'rank')::int, 1) = $2)
+		       vg.gu_id, vg.rank, vg.quantity, vg.cost
+		FROM sect_vault_gu vg
+		JOIN sects s ON s.id = vg.sect_id
+		WHERE (LOWER(vg.gu_id) = LOWER($1) OR vg.gu_id = ANY($3))
+		  AND ($2 = 0 OR vg.rank = $2)
+		  AND vg.quantity > 0
 	`
 	sRows, err := db.DB.QueryContext(c.Request.Context(), querySects, targetGu.ID, targetGu.Rank, matchIDs)
 	if err == nil {
