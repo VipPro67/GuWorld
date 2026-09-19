@@ -57,11 +57,11 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} />
-      <div className="relative bg-zinc-950 border border-amber-500/30 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+      <div className="relative bg-zinc-950 border border-amber-500/30 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800/80 px-6 py-4 bg-gradient-to-r from-blue-950/20 via-zinc-900/40 to-transparent">
+        <div className="shrink-0 flex items-center justify-between border-b border-zinc-800/80 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-blue-950/20 via-zinc-900/40 to-transparent">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
               <Compass className="w-5 h-5 animate-spin" />
@@ -87,7 +87,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
                   onClose();
                   onOpenManage(source.id);
                 }}
-                className="p-2 rounded-xl bg-zinc-900 border border-zinc-700/80 text-zinc-300 hover:text-amber-400 hover:border-amber-500/50 transition-all text-xs font-mono flex items-center gap-1"
+                className="p-2 rounded-xl bg-zinc-900 border border-zinc-700/80 text-zinc-300 hover:text-amber-400 hover:border-amber-500/50 transition-all text-xs font-mono flex items-center gap-1 cursor-pointer"
                 title="Quản lý trận pháp hiện tại"
               >
                 <Settings className="w-3.5 h-3.5" />
@@ -97,14 +97,14 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
             <button
               onClick={() => fetchTeleportDirectory()}
               disabled={teleportLoading}
-              className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-colors"
+              className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
               title="Làm mới"
             >
               <RefreshCw className={`w-4 h-4 ${teleportLoading ? "animate-spin" : ""}`} />
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors"
+              className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -112,11 +112,11 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
         </div>
 
         {/* Filters */}
-        <div className="px-6 pt-4 pb-2 flex items-center gap-2 border-b border-zinc-900/60 bg-zinc-950/40">
+        <div className="shrink-0 px-4 sm:px-6 pt-3 pb-2 flex items-center gap-2 border-b border-zinc-900/60 bg-zinc-950/40 overflow-x-auto">
           <button
             type="button"
             onClick={() => setFilter("ALL")}
-            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all ${
+            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer ${
               filter === "ALL"
                 ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
                 : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
@@ -127,7 +127,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
           <button
             type="button"
             onClick={() => setFilter("SECT")}
-            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all ${
+            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer ${
               filter === "SECT"
                 ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
                 : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
@@ -138,7 +138,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
           <button
             type="button"
             onClick={() => setFilter("MINE")}
-            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all ${
+            className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer ${
               filter === "MINE"
                 ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
                 : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
@@ -149,7 +149,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
         </div>
 
         {/* Content List */}
-        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+        <div className="p-4 sm:p-6 space-y-3 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
           {teleportLoading ? (
             <div className="py-12 text-center text-zinc-500 font-mono text-xs flex flex-col items-center gap-2">
               <Compass className="w-6 h-6 animate-spin text-amber-500" />

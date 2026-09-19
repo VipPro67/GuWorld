@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"database/sql"
+	"math"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -93,33 +95,42 @@ func GetPlayerProfile(c *gin.Context) {
 
 	// 1. Fetch viewer details for scouting calculation
 	var viewerRank int
+	var viewerRegion string
+	var viewerX, viewerY int
+	var viewerPartyID *uuid.UUID
+	var viewerSectID sql.NullString
 	var viewerGuInventory models.GuInventory
 	var viewerPathMasteries models.PathMasteriesMap
 
 	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT rank, `+db.GuInventoryAggregate("players.id")+`, path_masteries
+		SELECT rank, current_region, x, y, party_id, `+db.GuInventoryAggregate("players.id")+`, path_masteries
 		FROM players
 		WHERE id = $1
-	`, viewerID).Scan(&viewerRank, &viewerGuInventory, &viewerPathMasteries)
+	`, viewerID).Scan(&viewerRank, &viewerRegion, &viewerX, &viewerY, &viewerPartyID, &viewerGuInventory, &viewerPathMasteries)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load viewer data: " + err.Error()})
 		return
 	}
 
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id::text FROM sect_members WHERE player_id = $1`, viewerID).Scan(&viewerSectID)
+
 	// 2. Fetch target details and target's sect name
 	var target models.Player
+	var targetSectID sql.NullString
 	var targetSectName sql.NullString
 	var targetDaoMarks models.DaoMarksMap
 
 	query := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, ` + db.GuInventoryAggregate("p.id") + `, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised, COALESCE(p.race, ''), COALESCE(p.gender, ''), COALESCE(p.constitution, ''), p.statuses
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, p.current_region, p.x, p.y, p.party_id, ` + db.GuInventoryAggregate("p.id") + `, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised, COALESCE(p.race, ''), COALESCE(p.gender, ''), COALESCE(p.constitution, ''), p.statuses
 		FROM players p
 		WHERE p.username = $1
 	`
 	err = db.DB.QueryRowContext(c.Request.Context(), query, targetUsername).Scan(
 		&target.ID, &target.Username, &target.Rank, &target.SubRank,
 		&target.AptitudeType, &target.AptitudePercent, &target.CurrentMana, &target.MaxMana,
-		&target.PrimevalStones, &target.ImmortalStones, &target.HP, &target.BaseHP, &target.GuInventory, &target.PathMasteries,
+		&target.PrimevalStones, &target.ImmortalStones, &target.HP, &target.BaseHP,
+		&target.CurrentRegion, &target.X, &target.Y, &target.PartyID,
+		&target.GuInventory, &target.PathMasteries,
 		&target.Bio, &target.AvatarURL, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
 		&target.Race, &target.Gender, &target.Constitution, &target.Statuses,
 	)
@@ -131,20 +142,37 @@ func GetPlayerProfile(c *gin.Context) {
 		return
 	}
 
-	if target.Rank >= 6 {
-		_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, target.ID).Scan(&targetDaoMarks)
-	}
-	if targetDaoMarks == nil {
-		targetDaoMarks = models.DaoMarksMap{"strength": 0}
-	}
-
-	// Fetch sect name separately to keep query simpler and safe
 	_ = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT s.name 
+		SELECT sm.sect_id::text, s.name 
 		FROM sect_members sm 
 		JOIN sects s ON sm.sect_id = s.id 
 		WHERE sm.player_id = $1
-	`, target.ID).Scan(&targetSectName)
+	`, target.ID).Scan(&targetSectID, &targetSectName)
+
+	// Check self-inspection or proximity
+	isSelf := viewerID == target.ID
+	isSameParty := viewerPartyID != nil && target.PartyID != nil && *viewerPartyID == *target.PartyID
+	isSameSect := viewerSectID.Valid && targetSectID.Valid && viewerSectID.String == targetSectID.String
+
+	if !isSelf && !isSameParty && !isSameSect {
+		if viewerRegion != target.CurrentRegion {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Không thể xem thông tin từ xa! Hãy dùng Suy Diễn Thiên Cơ."})
+			return
+		}
+
+		investigationRange := 15.0 + float64(viewerRank)*2.0
+		for _, gu := range models.FilterEquippedActive(viewerGuInventory) {
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
+				investigationRange += spec.Effects.Passive.Investigation * 2.0
+			}
+		}
+
+		dist := math.Hypot(float64(viewerX-target.X), float64(viewerY-target.Y))
+		if dist > investigationRange {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Đối phương nằm ngoài tầm mắt! Hãy dùng Suy Diễn Thiên Cơ để suy đoán từ xa."})
+			return
+		}
+	}
 
 	// 3. Compute Scouting Level of Viewer
 	scoutingLevel := float64(viewerRank)

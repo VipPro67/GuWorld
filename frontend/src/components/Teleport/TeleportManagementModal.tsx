@@ -84,11 +84,11 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} />
-      <div className="relative bg-zinc-950 border border-amber-500/30 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+      <div className="relative bg-zinc-950 border border-amber-500/30 rounded-3xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800/80 px-6 py-4 bg-gradient-to-r from-amber-950/20 via-zinc-900/40 to-transparent">
+        <div className="shrink-0 flex items-center justify-between border-b border-zinc-800/80 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-950/20 via-zinc-900/40 to-transparent">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
               <Settings className="w-5 h-5 animate-spin" />
@@ -102,14 +102,14 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors"
+            className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Formation Status Bar */}
-        <div className="px-6 py-2 bg-zinc-900/60 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+        <div className="shrink-0 px-4 sm:px-6 py-2 bg-zinc-900/60 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
           <div className="flex items-center gap-2">
             <span className="text-zinc-400 flex items-center gap-1">
               <Award className="w-3.5 h-3.5 text-amber-400" />
@@ -127,7 +127,7 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
           )}
         </div>
 
-        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
           {/* Status & Vault overview */}
           <div className="grid grid-cols-2 gap-3">
             {/* Durability Card */}

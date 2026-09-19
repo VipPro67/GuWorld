@@ -203,19 +203,19 @@ export function WorldPage() {
   const cfg = selectedObject ? TYPE_CONFIG[selectedObject.cell_type] || DEFAULT_CONFIG : DEFAULT_CONFIG;
 
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative flex flex-col min-h-0 overflow-hidden">
       {loading && (
-        <div className="absolute top-20 sm:top-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-900/80 rounded-xl border border-zinc-800 text-xs text-zinc-400 font-serif">
+        <div className="absolute top-20 sm:top-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-900/80 rounded-xl border border-zinc-800 text-xs text-zinc-400 font-serif z-20">
           Đang khám phá thế giới...
         </div>
       )}
       {error && (
-        <div className="absolute top-20 sm:top-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-red-950/80 rounded-xl border border-red-800/40 text-xs text-red-400 font-serif">
+        <div className="absolute top-20 sm:top-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-red-950/80 rounded-xl border border-red-800/40 text-xs text-red-400 font-serif z-20">
           {error}
         </div>
       )}
 
-      <div className="w-full h-[calc(100vh-8rem)] min-h-[480px]">
+      <div className="w-full h-full flex-1 min-h-0 relative">
         <WorldCanvas mode={mapMode} labelSettings={labelSettings} />
       </div>
 
@@ -230,7 +230,7 @@ export function WorldPage() {
         </button>
 
         {menuOpen && (
-          <div className="flex flex-col gap-1.5 p-2 bg-zinc-900/95 backdrop-blur-md rounded-xl border border-zinc-700/50 shadow-2xl pointer-events-auto w-48 max-h-[70vh] overflow-y-auto animate-fade-in-down origin-top-right">
+          <div className="flex flex-col gap-1.5 p-2 bg-zinc-900/95 backdrop-blur-md rounded-xl border border-zinc-700/50 shadow-2xl pointer-events-auto w-48 max-h-[calc(100dvh-6rem)] overflow-y-auto custom-scrollbar animate-fade-in-down origin-top-right">
             {menuItems.map((item) => (
               <button
                 key={item.id}
@@ -254,8 +254,8 @@ export function WorldPage() {
       </div>
 
       {activeModal && (
-        <div className="absolute inset-0 z-40 bg-black/70 flex items-center justify-center p-4 sm:p-8 backdrop-blur-sm overflow-hidden pointer-events-auto">
-          <div className="relative w-full h-full max-w-7xl max-h-[90vh] bg-zinc-950/95 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-y-auto">
+        <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-2 sm:p-6 backdrop-blur-sm overflow-hidden pointer-events-auto">
+          <div className="relative w-full h-full max-w-7xl max-h-[calc(100dvh-2rem)] bg-zinc-950/95 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden">
             <button
               onClick={() => setActiveModal(null)}
               className="absolute top-4 right-6 z-50 p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors border border-zinc-600 cursor-pointer shadow-lg"
@@ -263,7 +263,7 @@ export function WorldPage() {
             >
               <X className="w-6 h-6" />
             </button>
-            <div className="flex-1 w-full p-2 sm:p-4 overflow-y-auto relative">
+            <div className="flex-1 min-h-0 w-full p-2 sm:p-4 overflow-y-auto relative custom-scrollbar">
               {activeModal === "character" && <Aperture player={gamePlayer!} guDictionary={guDictionary} />}
               {activeModal === "inventory" && (
                 <GuInventory
@@ -518,8 +518,8 @@ export function WorldPage() {
         </div>
       </div>
       {selectedObject && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-auto animate-fade-in z-20">
-          <div className={`relative w-72 px-4 py-4 rounded-2xl border ${cfg.borderColor} ${cfg.bgColor} backdrop-blur-md shadow-2xl`}>
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-auto animate-fade-in z-20 max-w-[calc(100vw-2rem)]">
+          <div className={`relative w-72 max-w-full px-4 py-4 rounded-2xl border ${cfg.borderColor} ${cfg.bgColor} backdrop-blur-md shadow-2xl max-h-[calc(100dvh-10rem)] overflow-y-auto custom-scrollbar`}>
             <button
               onClick={() => selectObject(null)}
               className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs transition-colors cursor-pointer"
@@ -865,9 +865,9 @@ onClick={() => {
 
       {/* Challenge Sect Modal */}
       {attackTargetSect && (
-        <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm pointer-events-auto">
-          <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4 text-left shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm pointer-events-auto">
+          <div className="w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4 text-left shadow-2xl">
+            <div className="shrink-0 flex items-center justify-between border-b border-zinc-900 pb-3">
               <div>
                 <h3 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
                   <span>🏯</span> Khiêu Chiến Tông Môn — {attackTargetSect.name || attackTargetSect.content_id}
@@ -879,35 +879,39 @@ onClick={() => {
               <button onClick={() => setAttackTargetSect(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
             </div>
 
-            <div className="flex flex-col gap-1 text-xs font-mono bg-zinc-900/40 p-3 rounded-xl border border-zinc-900">
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Sức Phòng Thủ Hộ Sơn:</span>
-                <span className="text-rose-400 font-bold">🛡 {Math.round(attackTargetSect.total_defense_power || 0).toLocaleString()}</span>
-              </div>
-              {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() && (
-                <div className="flex justify-between text-rose-400 font-bold mt-1">
-                  <span>Đại Trận Bảo Hộ:</span>
-                  <span>{new Date(attackTargetSect.shield_until).toLocaleTimeString()}</span>
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+              <div className="flex flex-col gap-1 text-xs font-mono bg-zinc-900/40 p-3 rounded-xl border border-zinc-900">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Sức Phòng Thủ Hộ Sơn:</span>
+                  <span className="text-rose-400 font-bold">🛡 {Math.round(attackTargetSect.total_defense_power || 0).toLocaleString()}</span>
                 </div>
-              )}
+                {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() && (
+                  <div className="flex justify-between text-rose-400 font-bold mt-1">
+                    <span>Đại Trận Bảo Hộ:</span>
+                    <span>{new Date(attackTargetSect.shield_until).toLocaleTimeString()}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs text-zinc-500 font-mono">
+                  Đấu sẽ sử dụng Hộ Sơn Thần Thú + Đọc allied: Độc Lí + Minh Quân hội üy hội + Thú Nuôi
+                </p>
+              </div>
             </div>
 
-<div className="flex flex-col gap-1.5">
-              <p className="text-xs text-zinc-500 font-mono">
-                Đấu sẽ sử dụng Hộ Sơn Thần Thú + Đọc allied: Độc Lí + Minh Quân hội üy hội + Thú Nuôi
-              </p>
+            <div className="shrink-0 pt-2 border-t border-zinc-900">
+              <button
+                disabled={actionLoading || (attackTargetSect.shield_until ? new Date(attackTargetSect.shield_until).getTime() > Date.now() : false)}
+                onClick={async () => {
+                  const ok = await attackSect(attackTargetSect.id);
+                  if (ok) setAttackTargetSect(null);
+                }}
+                className="w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-600 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() ? "Đang Bảo Hộ" : "Phát Động Công Kích Tông Môn"}
+              </button>
             </div>
-
-            <button
-              disabled={actionLoading || (attackTargetSect.shield_until ? new Date(attackTargetSect.shield_until).getTime() > Date.now() : false)}
-              onClick={async () => {
-                const ok = await attackSect(attackTargetSect.id);
-                if (ok) setAttackTargetSect(null);
-              }}
-              className="w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-600 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
-            >
-              {attackTargetSect.shield_until && new Date(attackTargetSect.shield_until).getTime() > Date.now() ? "Đang Bảo Hộ" : "Phát Động Công Kích Tông Môn"}
-            </button>
           </div>
         </div>
       )}

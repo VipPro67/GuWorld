@@ -1474,6 +1474,15 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     canvasElement.addEventListener("touchend", handleTouchEnd);
     window.addEventListener("resize", handleResize);
 
+    const resizeObserver = new ResizeObserver(() => {
+      if (appRef.current && !destroyed) {
+        appRef.current.resize();
+        scheduleMonsterChunkSyncRef.current();
+        fogDirtyRef.current = true;
+      }
+    });
+    resizeObserver.observe(canvasElement);
+
     const initApp = async () => {
       const isMobile = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768;
       const app = new Application();
@@ -1493,6 +1502,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         return;
       }
 
+      app.canvas.style.display = "block";
+      app.canvas.style.width = "100%";
+      app.canvas.style.height = "100%";
       canvasElement.appendChild(app.canvas);
       appRef.current = app;
       // Keep animations smooth without forcing mobile GPUs to redraw this
@@ -1728,6 +1740,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       destroyed = true;
       setAppReady(false);
       cancelAnimationFrame(animIdRef.current);
+      resizeObserver.disconnect();
       canvasElement.removeEventListener("wheel", handleWheel);
       canvasElement.removeEventListener("touchstart", handleTouchStart);
       canvasElement.removeEventListener("touchmove", handleTouchMove);

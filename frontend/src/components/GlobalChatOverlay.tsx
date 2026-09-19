@@ -33,6 +33,8 @@ export const GlobalChatOverlay: React.FC = () => {
     sendBaoHoangChat,
     actionLoading,
     fetchPlayerProfile,
+    openDivinationModal,
+    invitePlayer,
     addToast,
     activeChannel,
     setActiveChannel,
@@ -45,6 +47,7 @@ export const GlobalChatOverlay: React.FC = () => {
 
   const [chatInput, setChatInput] = useState("");
   const [showTimeIds, setShowTimeIds] = useState<Record<string, boolean>>({});
+  const [selectedUserMenu, setSelectedUserMenu] = useState<{ username: string } | null>(null);
 
   const toggleTimeVisibility = (id: string) => {
     setShowTimeIds((prev) => ({
@@ -287,10 +290,12 @@ export const GlobalChatOverlay: React.FC = () => {
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (!isSystem && !isMe) fetchPlayerProfile(msg.sender_username);
+                          if (!isSystem && !isMe) {
+                            setSelectedUserMenu(selectedUserMenu?.username === msg.sender_username ? null : { username: msg.sender_username });
+                          }
                         }}
                         className={`${nameColorClass} mr-1.5`}
-                        title={!isSystem && !isMe ? "Bấm để trinh thám cổ sư" : undefined}
+                        title={!isSystem && !isMe ? "Bấm để mở tùy chọn cổ sư" : undefined}
                       >
                         {msg.sender_title && (
                           <span className="mr-1" title={(achievements.find((a: ApiResponseData) => a.id === msg.sender_title) as ApiResponseData)?.name || msg.sender_title}>
@@ -306,6 +311,52 @@ export const GlobalChatOverlay: React.FC = () => {
                         :
                       </span>
                       <span className={`${contentColorClass} ml-0.5`}>{msg.content}</span>
+
+                      {/* User Context Actions Popup */}
+                      {selectedUserMenu?.username === msg.sender_username && (
+                        <div
+                          className="mt-1.5 flex flex-wrap gap-1.5 rounded-lg border border-amber-500/40 bg-neutral-900/95 p-2 shadow-xl backdrop-blur-md"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => {
+                              openDivinationModal(msg.sender_username);
+                              setSelectedUserMenu(null);
+                            }}
+                            className="flex items-center gap-1 rounded bg-amber-700/80 px-2 py-1 text-[10px] font-bold text-white hover:bg-amber-600"
+                          >
+                            🔮 Suy Diễn Thiên Cơ
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleReply(msg.sender_username);
+                              setSelectedUserMenu(null);
+                            }}
+                            className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
+                          >
+                            💬 Nhắc tên
+                          </button>
+                          <button
+                            onClick={() => {
+                              invitePlayer(msg.sender_username);
+                              setSelectedUserMenu(null);
+                            }}
+                            className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
+                          >
+                            ⚔️ Mời đội
+                          </button>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard?.writeText(msg.sender_username);
+                              addToast(`Đã sao chép: ${msg.sender_username}`, "info");
+                              setSelectedUserMenu(null);
+                            }}
+                            className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
+                          >
+                            📋 Sao chép
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {!isSystem && (
                       <button

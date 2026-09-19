@@ -23,7 +23,9 @@ import {
   Award,
   Trophy,
   PawPrint,
+  Radar,
   Layers,
+  Eye,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
@@ -65,6 +67,8 @@ export const LobbyView: React.FC = () => {
     logs,
     setView,
     fetchPlayerProfile,
+    openDivinationModal,
+    toggleRadarDrawer,
     mySectStatus,
     addToast,
     aperture,
@@ -326,6 +330,15 @@ export const LobbyView: React.FC = () => {
       //locked: true, // Locked for dev
     },
     {
+      id: "divination",
+      label: "Thiên Cơ Các",
+      icon: Eye,
+      gradient: "from-amber-600 via-purple-600 to-cyan-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(168,85,247,0.45)]",
+      borderColor: "border-purple-400/40",
+      iconColor: "text-purple-300",
+    },
+    {
       id: "feedback",
       label: "Thỉnh Thiên Đạo",
       icon: Sparkles,
@@ -356,6 +369,10 @@ export const LobbyView: React.FC = () => {
 
   const handleItemClick = (item: HubItem) => {
     if (item.locked) return;
+    if (item.id === "divination") {
+      openDivinationModal();
+      return;
+    }
     setView(item.id);
   };
 

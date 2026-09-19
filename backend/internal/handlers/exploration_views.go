@@ -229,8 +229,10 @@ func GetNearbyPlayers(c *gin.Context) {
 	if region == "" {
 		if player, err := loadPlayerForStatus(db.DB, authID, false); err == nil {
 			x, y, region = player.X, player.Y, player.CurrentRegion
+			setWorldPosFromPlayer(&player)
 		}
 	}
+	TouchPlayerActivity(authID)
 
 	type NearbyPlayer struct {
 		ID        string `json:"id"`

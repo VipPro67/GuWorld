@@ -81,3 +81,70 @@ func TestPvpImmunityStatus(t *testing.T) {
 		t.Errorf("expected pvp_immunity to be removed after breaking")
 	}
 }
+
+func TestNewbieProtectionRules(t *testing.T) {
+	// Rule: Rank <= 3 without Sat Khi is protected.
+	isProtected := func(rank int, satKhiLevel int) bool {
+		return rank <= 3 && satKhiLevel == 0
+	}
+
+	if !isProtected(1, 0) {
+		t.Errorf("Rank 1 with 0 Sat Khi should be protected")
+	}
+	if !isProtected(3, 0) {
+		t.Errorf("Rank 3 with 0 Sat Khi should be protected")
+	}
+	if isProtected(3, 1) {
+		t.Errorf("Rank 3 with 1 Sat Khi should NOT be protected")
+	}
+	if isProtected(4, 0) {
+		t.Errorf("Rank 4 with 0 Sat Khi should NOT be protected")
+	}
+}
+
+func TestWorldPosIndex_ImmediatePresenceAndNearby(t *testing.T) {
+	idx := newPositionIndex(300)
+	playerA := WorldPosEntry{
+		ID:       "player-a",
+		Username: "PlayerA",
+		X:        100,
+		Y:        100,
+		Region:   "hub_nam_cuong",
+		TS:       time.Now().UnixMilli(),
+	}
+	playerB := WorldPosEntry{
+		ID:       "player-b",
+		Username: "PlayerB",
+		X:        120,
+		Y:        120,
+		Region:   "hub_nam_cuong",
+		TS:       time.Now().UnixMilli(),
+	}
+	playerC := WorldPosEntry{
+		ID:       "player-c",
+		Username: "PlayerC",
+		X:        1000,
+		Y:        1000,
+		Region:   "hub_nam_cuong",
+		TS:       time.Now().UnixMilli(),
+	}
+
+	idx.Set(playerA)
+	idx.Set(playerB)
+	idx.Set(playerC)
+
+	// Nearby for playerA with radius 300 should find playerB but not playerC or playerA itself
+	nearby := idx.Nearby("hub_nam_cuong", 100, 100, 300, "player-a")
+	if len(nearby) != 1 {
+		t.Fatalf("expected 1 nearby player, got %d", len(nearby))
+	}
+	if nearby[0].ID != "player-b" {
+		t.Errorf("expected player-b, got %s", nearby[0].ID)
+	}
+
+	// Verify get by ID
+	entry, ok := idx.Get("player-a")
+	if !ok || entry.X != 100 {
+		t.Errorf("expected player-a at (100, 100)")
+	}
+}

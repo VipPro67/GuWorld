@@ -110,6 +110,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 
 	client.hub.register <- client
 	handlers.TouchPlayerActivity(client.playerID)
+	handlers.EnsureWorldPosLoaded(client.playerID.String())
 
 	// Auto-subscribe to player-specific and global channels
 	shub.Subscribe(client, ChannelName("player:"+playerID.String()))

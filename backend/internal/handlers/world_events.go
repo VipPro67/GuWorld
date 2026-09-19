@@ -34,7 +34,7 @@ var worldPosHub = struct {
 }{subs: map[string]map[chan WorldPosEvent]struct{}{}}
 
 func subscribeWorldPos(playerID string) chan WorldPosEvent {
-	ensureWorldPosLoaded(playerID)
+	EnsureWorldPosLoaded(playerID)
 	ch := make(chan WorldPosEvent, 1)
 	worldPosHub.Lock()
 	defer worldPosHub.Unlock()
@@ -92,17 +92,16 @@ func mustMarshal(v any) []byte {
 	return b
 }
 
-// ensureWorldPosLoaded makes sure a subscriber has an entry in the position
-// index so interest-managed fan-out can find it. Positions are loaded from the
-// database on first use; movement broadcasts then keep it fresh.
-func ensureWorldPosLoaded(playerID string) {
+// EnsureWorldPosLoaded makes sure a player has an entry in the position
+// index so interest-managed fan-out and nearby queries can find it immediately.
+func EnsureWorldPosLoaded(playerID string) {
 	if _, ok := worldPosIndex.Get(playerID); ok {
 		return
 	}
 	var e WorldPosEntry
 	var ts time.Time
 	err := db.DB.QueryRow(`
-		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, ''), last_mana_update
+		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, ''), COALESCE(last_mana_update, NOW())
 		FROM players
 		WHERE id = $1
 	`, playerID).Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region, &ts)

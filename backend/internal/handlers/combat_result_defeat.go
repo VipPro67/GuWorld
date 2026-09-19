@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -77,6 +78,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		}
 		dropSummary := applyDeathDrop(tx, player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
 		player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
+		setWorldPosFromPlayer(player)
 		if dropSummary != "" {
 			defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
 		}
@@ -92,6 +94,15 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 				// All party members suffer death drop and respawn in PvP / Sect War defeat
 				_ = applyDeathDropRecord(tx, &allyUUID, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
 				aReg, aX, aY := ResolveRespawnPosition(tx, allyUUID, deathRegion, deathX, deathY)
+				worldPosIndex.Set(WorldPosEntry{
+					ID:        allyUUID.String(),
+					Username:  ally.Name,
+					AvatarURL: ally.AvatarURL,
+					X:         aX,
+					Y:         aY,
+					Region:    aReg,
+					TS:        time.Now().UnixMilli(),
+				})
 				_, _ = tx.Exec("UPDATE players SET hp = 1.0, current_region = $1, x = $2, y = $3, active_combat = NULL WHERE id = $4", aReg, aX, aY, allyUUID)
 			} else {
 				_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)

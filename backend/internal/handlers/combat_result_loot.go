@@ -37,6 +37,13 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 						dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID, true, DeathPos{Region: targetRegion, X: targetX, Y: targetY})
 						hubRegion, hubX, hubY := ResolveRespawnPosition(tx, targetUUID, targetRegion, targetX, targetY)
 						GrantPvpImmunity(tx, targetUUID, 10*time.Minute)
+						worldPosIndex.Set(WorldPosEntry{
+							ID:     targetUUID.String(),
+							X:      hubX,
+							Y:      hubY,
+							Region: hubRegion,
+							TS:     time.Now().UnixMilli(),
+						})
 						_, _ = tx.Exec("UPDATE players SET hp = $1, current_region = $2, x = $3, y = $4, active_combat = NULL WHERE id = $5", targetHP, hubRegion, hubX, hubY, targetUUID)
 						if dropSummary != "" {
 							pvpMsg := fmt.Sprintf("Chiến thắng PVP vang dội! Rơi rớt từ bại binh: %s.", dropSummary)

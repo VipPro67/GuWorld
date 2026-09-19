@@ -478,6 +478,20 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			refining.POST("/deduce", handlers.DeduceRecipe)
 		}
 
+		// Scouting & Divination — group: 60/min, per player: 30/min
+		scouting := api.Group("/scouting")
+		scouting.Use(middleware.AuthRequired())
+		scouting.Use(middleware.RateLimitByPlayer(60, time.Minute))
+		{
+			scouting.POST("/inspect", handlers.InspectLocalPlayer)
+			scouting.POST("/divine", handlers.ExecuteDivination)
+			scouting.POST("/divine-gu", handlers.ExecuteDivineGu)
+			scouting.POST("/apply-mark", handlers.ApplyTrackingMark)
+			scouting.GET("/tracked-targets", handlers.GetTrackedTargets)
+			scouting.POST("/sever-clues", handlers.SeverClues)
+			scouting.POST("/resonance-scan", handlers.ResonanceScan)
+		}
+
 		// Pets — group: 30/min, per player: 20/min
 		pets := api.Group("/pets")
 		pets.Use(middleware.AuthRequired())

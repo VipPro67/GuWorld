@@ -454,3 +454,16 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 | GET | `/death-arena/rewards` | Lấy danh sách phần thưởng giải đấu của bản thân. |
 | POST | `/death-arena/claim-reward` | Nhận phần thưởng giải đấu. |
 | GET | `/death-arena/history` | Lịch sử các mùa giải Đấu Trường Sinh Tử trước. |
+
+## Trinh Sát & Suy Diễn Thiên Cơ (Scouting & Divination) — Auth
+
+| Method | Endpoint | Mô tả |
+| --- | --- | --- |
+| POST | `/scouting/inspect` | Trinh sát cục bộ mục tiêu. Bắt buộc cùng vị trí/FOV (hoặc cùng Party/Sect). Body: `{"target_id", "target_username"}`. |
+| POST | `/scouting/divine` | Suy diễn thiên cơ từ xa bằng Đạo ngân & Chân ý Trí/Tín Đạo. Body: `{"target_username", "suspected_region", "suspected_sect", "suspected_gu", "item_clue_id", "resource_type", "resource_amount"}`. |
+| POST | `/scouting/divine-gu` | Suy tính cổ trùng (ai nắm giữ, đã luyện ra chưa, số lượng thiên hạ, bí phương & thức ăn). Body: `{"gu_query", "target_rank", "resource_type", "resource_amount"}`. |
+| POST | `/scouting/apply-mark` | Gieo ấn ký truy tung lên mục tiêu (Trí Niệm / Huyết Mạch). Giới hạn 3 (phàm nhân) / 10 (tiên nhân). Body: `{"target_id", "mark_type"}`. |
+| GET | `/scouting/tracked-targets` | Lấy danh sách con mồi đang mang ấn ký kèm tọa độ thời gian thực `(region, x, y)`. |
+| POST | `/scouting/sever-clues` | Đoạn tuyệt thiên cơ, chém đứt toàn bộ ấn ký đang theo dõi và tàn dư ô bản đồ. |
+| POST | `/scouting/resonance-scan` | Cảm ứng Cổ trùng và xung kích Đạo ngân (Dao Pulses) trong khu vực. |
+

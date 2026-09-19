@@ -31,6 +31,7 @@ import { createReferralsSlice, type ReferralsSlice } from "@/store/slices/referr
 import { createMiscSlice, type MiscSlice } from "@/store/slices/miscSlice";
 import { createCombatSlice, type CombatSlice } from "@/store/slices/combatSlice";
 import { createTeleportSlice, type TeleportSlice } from "@/store/slices/teleportSlice";
+import { createScoutingSlice, type ScoutingSlice } from "@/store/slices/scoutingSlice";
 
 export interface GuInstance {
   instance_id: string;
@@ -285,6 +286,8 @@ export interface Player {
   is_admin?: boolean;
   is_sparse_gu_inventory?: boolean;
   avatar_url?: string;
+  active_concealment?: boolean;
+  last_sever_clues_at?: string;
   combat_settings?: AutoCombatConfig;
   needs_onboarding?: boolean;
   current_thought: number;
@@ -1088,7 +1091,7 @@ export interface WorldConfig {
   hub_y: number;
 }
 
-interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice {
+interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice {
   player: Player | null;
   manaSnapshot: ManaSnapshot | null;
   token: string | null;
@@ -1584,6 +1587,7 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createMiscSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createCombatSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createTeleportSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createScoutingSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   applyInventoryFromResponse,
   player: null,
   manaSnapshot: null,

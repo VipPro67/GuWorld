@@ -67,7 +67,7 @@ export const LeaderboardView: React.FC = () => {
     fetchLeaderboard,
     toggleLeaderboardVisibility,
     fetchLeaderboardSettings,
-    fetchPlayerProfile,
+    openDivinationModal,
     aperture,
   } = useGameStore();
 
@@ -251,9 +251,9 @@ export const LeaderboardView: React.FC = () => {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
-                        onClick={() => !isMe && fetchPlayerProfile(entry.username)}
+                        onClick={() => !isMe && openDivinationModal(entry.username)}
                         className={`font-serif text-sm font-bold truncate ${isMe ? "text-amber-400" : "text-zinc-200 cursor-pointer hover:text-amber-400 hover:underline decoration-dotted transition-colors"}`}
-                        title={!isMe ? "Bấm để trinh thám cổ sư" : undefined}
+                        title={!isMe ? "Bấm để suy diễn thiên cơ cổ sư" : undefined}
                       >
                         {entry.username}
                       </span>
