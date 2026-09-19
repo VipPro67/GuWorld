@@ -532,14 +532,14 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 
 // selectEligibleGus returns the remaining inventory and the randomly chosen Gus to drop.
 // Vital Gu (Cổ Bản Mệnh) is NEVER dropped.
-// Equipped Gus can only be dropped if satKhiLevel > 5.
+// Equipped Gus can only be dropped if satKhiLevel > 0.
 func selectEligibleGus(gus models.GuInventory, mult float64, satKhiLevel int) (models.GuInventory, models.GuInventory) {
 	eligible := make(models.GuInventory, 0, len(gus))
 	for _, g := range gus {
 		if g.IsVital {
 			continue
 		}
-		if g.Equipped && satKhiLevel <= 5 {
+		if g.Equipped && satKhiLevel <= 0 {
 			continue
 		}
 		eligible = append(eligible, g)
