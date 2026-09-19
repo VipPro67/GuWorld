@@ -140,10 +140,11 @@ func UseGuOnMap(c *gin.Context) {
 			if inWorld(req.TargetX, req.TargetY) {
 				oldX := player.X
 				oldY := player.Y
+				oldRegion := player.CurrentRegion
 				player.X = req.TargetX
 				player.Y = req.TargetY
 				player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-				teleportMsg := fmt.Sprintf("%s xé rách không gian, dịch chuyển đến (%d, %d).", specs.Name, player.X, player.Y)
+				teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 				if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
 					teleportMsg += " " + debuffMsg
 				}
@@ -151,6 +152,7 @@ func UseGuOnMap(c *gin.Context) {
 				applied = true
 				cdDuration = 120 * time.Second
 				effectType = "teleport"
+				logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 			} else {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
 				return
@@ -165,10 +167,11 @@ func UseGuOnMap(c *gin.Context) {
 			}
 			oldX := player.X
 			oldY := player.Y
+			oldRegion := player.CurrentRegion
 			player.X = rand.Intn(WorldWidth)
 			player.Y = rand.Intn(WorldHeight)
 			player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-			teleportMsg := fmt.Sprintf("%s xé rách không gian hỗn loạn, dịch chuyển ngẫu nhiên đến (%d, %d).", specs.Name, player.X, player.Y)
+			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 			if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
 				teleportMsg += " " + debuffMsg
 			}
@@ -176,6 +179,7 @@ func UseGuOnMap(c *gin.Context) {
 			applied = true
 			cdDuration = 120 * time.Second
 			effectType = "teleport"
+			logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 		}
 		// HOT tick -> heal
 		if active.ApplyStatus == "REGEN" {
@@ -537,22 +541,38 @@ func UseKillerMoveOnMap(c *gin.Context) {
 			}
 			if k == "portal_create" {
 				if inWorld(req.TargetX, req.TargetY) {
+					oldX := player.X
+					oldY := player.Y
+					oldRegion := player.CurrentRegion
 					player.X = req.TargetX
 					player.Y = req.TargetY
 					player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-					logs = append(logs, fmt.Sprintf("Sát chiêu xé rách không gian, dịch chuyển đến (%d, %d).", player.X, player.Y))
+					teleportMsg := fmt.Sprintf("🌀 Sát chiêu %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", move.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+					if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
+						teleportMsg += " " + debuffMsg
+					}
+					logs = append(logs, teleportMsg)
 					applied = true
+					logger.S.Infof("[Sát Chiêu Dịch Chuyển] Người chơi %s (ID: %s) kích hoạt sát chiêu %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, move.Name, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 				} else {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
 					return
 				}
 			}
 			if k == "random_portal" {
+				oldX := player.X
+				oldY := player.Y
+				oldRegion := player.CurrentRegion
 				player.X = rand.Intn(WorldWidth)
 				player.Y = rand.Intn(WorldHeight)
 				player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-				logs = append(logs, fmt.Sprintf("Sát chiêu xé rách không gian hỗn loạn, dịch chuyển ngẫu nhiên đến (%d, %d).", player.X, player.Y))
+				teleportMsg := fmt.Sprintf("🌀 Sát chiêu %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", move.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+				if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
+					teleportMsg += " " + debuffMsg
+				}
+				logs = append(logs, teleportMsg)
 				applied = true
+				logger.S.Infof("[Sát Chiêu Dịch Chuyển] Người chơi %s (ID: %s) kích hoạt sát chiêu %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, move.Name, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 			}
 		}
 

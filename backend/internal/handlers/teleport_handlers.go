@@ -819,12 +819,14 @@ func TravelTeleport(c *gin.Context) {
 	player.X = dest.X
 	player.Y = dest.Y
 
-	logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] đến [%s] (%d, %d).", source.Name, dest.Name, dest.X, dest.Y)
+	logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, dest.X, dest.Y, dest.RegionID)
 	if oldRegion != dest.RegionID {
 		if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, dest.X, dest.Y); debuffMsg != "" {
 			logMsg += " " + debuffMsg
 		}
 	}
+
+	logger.S.Infof("[Pháp Trận] Người chơi %s (ID: %s) truyền tống qua pháp trận từ [%s] (%s: %d, %d) đến [%s] (%s: %d, %d) - Tiêu hao: %d %s", player.Username, player.ID, source.Name, source.RegionID, source.X, source.Y, dest.Name, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
 
 	_, err = tx.Exec(`
 		UPDATE players

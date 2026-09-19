@@ -390,6 +390,16 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
             data.player.y
           );
         }
+
+        if (data.logs && Array.isArray(data.logs) && data.logs.length > 0) {
+          for (const logText of data.logs) {
+            get().addWorldLog(logText);
+            useGameStore.getState().addLog(logText);
+          }
+        } else if (data.message) {
+          get().addWorldLog(data.message);
+          useGameStore.getState().addLog(data.message);
+        }
       }
       set({ loading: false, targetingGu: null });
       return data;
