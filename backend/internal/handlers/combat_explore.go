@@ -236,6 +236,9 @@ func ExploreNode(c *gin.Context) {
 
 		if err := InventorySvc.AddItem(tx, player.ID.String(), foodID, "materials", 1); err != nil {
 			logger.S.Errorf("Failed to add explore food %s to player %s: %v", foodID, player.ID, err)
+			_ = tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm nguyên liệu vào túi"})
+			return
 		}
 		logMsg = fmt.Sprintf("Đi qua khu rừng rậm ở %s, đạo hữu nhặt được nguyên liệu trân quý: 1x %s.", nodeName, foodName)
 	} else {

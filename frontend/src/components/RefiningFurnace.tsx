@@ -5,7 +5,7 @@ import { GamePanel, GameCard } from "@/components/ui";
 // UI migrated to shared components
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
-import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search, Brain } from "lucide-react";
+import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search, Brain, ShieldCheck, Clock, TrendingUp, Award } from "lucide-react";
 
 interface RefiningFurnaceProps {
   player: Player;
@@ -409,6 +409,86 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     }
 
     return { name, desc, icon, colorClass, bgClass };
+  };
+
+  const parseRefineMessage = (rawMessage: string, isSuccess: boolean) => {
+    let text = rawMessage || "";
+
+    let successRateStr: string | undefined;
+    const rateMatch = text.match(/\(Tỉ lệ:\s*([\d.]+%)\)/i);
+    if (rateMatch) {
+      successRateStr = rateMatch[1];
+      text = text.replace(rateMatch[0], "");
+    }
+
+    let backfireText: string | undefined;
+    const backfireMatch = text.match(/(Luyện cổ CHÁY NỔ.*?\.|Ép Luyện thất bại!.*?\.)/i);
+    if (backfireMatch) {
+      backfireText = backfireMatch[0].trim();
+      text = text.replace(backfireMatch[0], "");
+    }
+
+    let vitalSurvivedText: string | undefined;
+    const vitalMatch = text.match(/(Riêng Cổ Bản Mệnh vẫn sống sót.*?!)/i);
+    if (vitalMatch) {
+      vitalSurvivedText = vitalMatch[0].trim();
+      text = text.replace(vitalMatch[0], "");
+    }
+
+    let statusDebuffText: string | undefined;
+    const statusMatch = text.match(/(\[(?:Tâm Thần Mệt Mỏi|Luyện Cổ Phản Phệ)\].*?\.|Trạng thái \[\w+.*?\.)/i);
+    if (statusMatch) {
+      statusDebuffText = statusMatch[0].trim();
+      text = text.replace(statusMatch[0], "");
+    }
+
+    let gainsText: string | undefined;
+    const gainsParts: string[] = [];
+    const daoMatch = text.match(/(Ngộ Đạo tăng tiến!.*?\.)/i);
+    if (daoMatch) {
+      gainsParts.push(daoMatch[0].trim());
+      text = text.replace(daoMatch[0], "");
+    }
+    const qiMatch = text.match(/(Nhân Khí \+[\d\.]+\.?)/i);
+    if (qiMatch) {
+      if (qiMatch[0].trim() !== "Nhân Khí +0.") {
+        gainsParts.push(qiMatch[0].trim());
+      }
+      text = text.replace(qiMatch[0], "");
+    }
+    if (gainsParts.length > 0) {
+      gainsText = gainsParts.join(" ");
+    }
+
+    const isBackfire = rawMessage.includes("Backfire") || rawMessage.includes("CHÁY NỔ") || rawMessage.includes("Phản phệ dữ dội");
+    const isFailsafe = rawMessage.includes("bảo toàn Cổ nguyên liệu");
+
+    let mainText = text
+      .replace(/^Hợp luyện thất bại!\s*/i, "")
+      .replace(/^Luyện cổ thất bại nhưng\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!mainText) {
+      if (isSuccess) {
+        mainText = "Hợp luyện thành công tân Cổ trùng!";
+      } else if (isFailsafe) {
+        mainText = "Cảnh Giới thâm hậu giúp bảo toàn Cổ nguyên liệu phụ!";
+      } else {
+        mainText = "Các nguyên liệu thường đã hóa thành tro bụi.";
+      }
+    }
+
+    return {
+      mainText,
+      successRateStr,
+      backfireText,
+      vitalSurvivedText,
+      statusDebuffText,
+      gainsText,
+      isBackfire,
+      isFailsafe,
+    };
   };
 
   const renderRateBreakdown = (breakdown?: RefineRateBreakdown) => {
@@ -1109,13 +1189,13 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
         {/* 3. FULL SCREEN RESULT MODAL OVERLAY (GACHA SHOWCASE) */}
         {refineResult && (
-          <div className="absolute inset-0 bg-zinc-950/95 backdrop-filter backdrop-blur-md flex flex-col justify-center items-center z-50 p-6 animate-fade-in text-center">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-md animate-fade-in overflow-y-auto select-none">
             {/* Flash Effect on start */}
             <div className="absolute inset-0 bg-white opacity-0 pointer-events-none animate-flash z-50" />
 
             {refineResult.status === "success" ? (
-              <div className="space-y-6 max-w-md w-full animate-gold-glow p-6 rounded-3xl border border-amber-500/40 bg-zinc-950 relative overflow-hidden">
-                <div className="absolute inset-0 bg-radial-gradient from-amber-500/10 to-transparent pointer-events-none" />
+              <div className="relative w-full max-w-md my-auto space-y-5 animate-gold-glow p-6 rounded-3xl border border-amber-500/50 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-950 shadow-[0_0_60px_rgba(245,158,11,0.25)] overflow-hidden text-center">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/15 via-transparent to-transparent pointer-events-none" />
 
                 {/* Close/Exit Button */}
                 <button
@@ -1123,56 +1203,91 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     setRefineResult(null);
                     setSlottedGus({});
                   }}
-                  className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1 rounded-lg hover:bg-zinc-900 cursor-pointer z-10"
+                  className="absolute top-4 right-4 text-zinc-400 hover:text-amber-400 transition-colors p-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/40 cursor-pointer z-10"
                   title="Thoát"
                 >
                   <X className="w-4 h-4" />
                 </button>
 
                 {/* Celebration header */}
-                <div className="space-y-1">
-                  <div className="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-2 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
-                    <Sparkles className="w-7 h-7 text-amber-400 animate-spin" />
+                <div className="space-y-2 pt-2">
+                  <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-400/40 flex items-center justify-center mx-auto shadow-[0_0_25px_rgba(245,158,11,0.35)]">
+                    <Sparkles className="w-9 h-9 text-amber-400 animate-pulse" />
+                    <div className="absolute -inset-1 rounded-2xl bg-amber-400/10 blur-sm animate-ping -z-10" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-amber-400 font-serif tracking-wider">
-                    HỢP LUYỆN THÀNH CÔNG!
-                  </h3>
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">
-                    Đã Khai Sinh Tân Cổ Trùng
-                  </span>
+                  <div>
+                    <h3 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 font-serif tracking-widest uppercase">
+                      HỢP LUYỆN THÀNH CÔNG!
+                    </h3>
+                    <span className="text-[11px] text-amber-400/80 uppercase tracking-widest font-mono font-medium block mt-1">
+                      ✨ Khai Sinh Tân Cổ Trùng • Đạo Pháp Thông Thiên ✨
+                    </span>
+                  </div>
                 </div>
 
                 {/* Show created Gu bug specs */}
-                {refineResult.new_gu && (
-                  <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-900 space-y-2.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-base font-bold text-zinc-100 font-serif">
-                        {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.name || refineResult.new_gu.gu_id} (Bậc {refineResult.new_gu.rank})
-                      </span>
-                      <span className="text-[9px] font-mono border border-amber-500/30 px-1.5 py-0.2 rounded text-amber-400 font-bold uppercase">
-                        Bậc {refineResult.new_gu.rank}
-                      </span>
-                    </div>
-                    <div className="text-[9px] text-left text-zinc-505 font-mono">
-                      Loại: {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.gu_type || "Thượng Cổ"}
-                    </div>
-                    <p className={`text-[11px] text-left text-zinc-400 leading-relaxed italic border-t border-zinc-900 pt-2 transition-all ${!showFullDesc ? "line-clamp-2" : ""}`}>
-                      {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.description || ""}
-                    </p>
-                    {(guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.description?.length || 0) > 40 && (
-                      <button
-                        onClick={() => setShowFullDesc(!showFullDesc)}
-                        className="text-[9px] text-amber-500 hover:text-amber-400 block mt-1 cursor-pointer select-none mx-auto border border-amber-500/20 px-2 py-0.5 rounded bg-zinc-950/40"
-                      >
-                        {showFullDesc ? "Rút gọn mô tả" : "Xem thêm mô tả"}
-                      </button>
-                    )}
-                  </div>
-                )}
+                {refineResult.new_gu && (() => {
+                  const spec = guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank);
+                  const guName = spec?.name || refineResult.new_gu.gu_id;
+                  const guType = spec?.gu_type || "Thượng Cổ";
+                  const guDesc = spec?.description || "";
 
-                <p className="text-xs text-emerald-400 font-semibold px-2">
-                  {refineResult.message}
-                </p>
+                  return (
+                    <div className="p-4 rounded-2xl bg-zinc-900/90 border border-amber-500/30 space-y-3 text-left shadow-inner relative overflow-hidden">
+                      <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+
+                      <div className="flex justify-between items-center border-b border-zinc-800 pb-2.5">
+                        <div>
+                          <div className="text-[10px] text-amber-400 font-mono uppercase tracking-wider font-semibold">
+                            Cổ Trùng Thu Đắc
+                          </div>
+                          <h4 className="text-base font-bold text-zinc-100 font-serif">
+                            {guName}
+                          </h4>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-[10px] font-mono border border-amber-400/40 bg-amber-950/60 px-2 py-0.5 rounded-full text-amber-300 font-bold uppercase shadow-sm">
+                            Bậc {refineResult.new_gu.rank}
+                          </span>
+                          <span className="text-[9px] text-zinc-400 font-mono">
+                            Loại: <span className="text-zinc-200">{guType}</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {guDesc && (
+                        <div className="space-y-1.5">
+                          <p className={`text-xs text-zinc-300 leading-relaxed italic bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80 ${!showFullDesc ? "line-clamp-3" : ""}`}>
+                            "{guDesc}"
+                          </p>
+                          {guDesc.length > 80 && (
+                            <button
+                              onClick={() => setShowFullDesc(!showFullDesc)}
+                              className="text-[10px] text-amber-400 hover:text-amber-300 block mx-auto font-mono cursor-pointer select-none border border-amber-500/30 px-2.5 py-0.5 rounded-lg bg-zinc-900/60"
+                            >
+                              {showFullDesc ? "Rút gọn mô tả ▲" : "Xem đầy đủ mô tả ▼"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Message / Gains Banner */}
+                {(() => {
+                  const parsed = parseRefineMessage(refineResult.message, true);
+                  return (
+                    <div className="space-y-2">
+                      {parsed.gainsText && (
+                        <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-300 font-medium justify-center shadow-sm">
+                          <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>{parsed.gainsText}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {renderRateBreakdown(refineResult.rate_breakdown)}
 
@@ -1181,41 +1296,128 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     setRefineResult(null);
                     setSlottedGus({});
                   }}
-                  className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-zinc-950 transition-all font-serif cursor-pointer tracking-wider"
+                  className="w-full py-3 px-5 rounded-2xl text-xs font-bold bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-zinc-950 transition-all font-serif cursor-pointer tracking-wider shadow-lg shadow-amber-500/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2"
                 >
-                  XÁC NHẬN THU HỒI
+                  <Award className="w-4 h-4 text-zinc-950" />
+                  <span>XÁC NHẬN THU HỒI</span>
                 </button>
               </div>
             ) : (
-              <div className="space-y-6 max-w-md w-full p-6 rounded-3xl border border-rose-500/20 bg-zinc-950 relative overflow-hidden">
-                <div className="space-y-2">
-                  <div className="w-14 h-14 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto mb-2">
-                    <AlertCircle className="w-7 h-7 text-rose-500" />
+              /* FAILURE / BACKFIRE / FAILSAFE MODAL */
+              (() => {
+                const parsed = parseRefineMessage(refineResult.message, false);
+
+                let headerColor = "border-rose-500/30 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-950 shadow-[0_0_40px_rgba(244,63,94,0.15)]";
+                let iconBg = "bg-rose-500/15 border border-rose-500/30 text-rose-400";
+                let mainTitle = "HỢP LUYỆN THẤT BẠI!";
+                let mainSubtitle = "Khói đen nghi ngút, hỏa lò tro tàn";
+                let IconComponent = AlertCircle;
+
+                if (parsed.isBackfire) {
+                  headerColor = "border-rose-500/60 bg-gradient-to-b from-rose-950/40 via-zinc-950 to-zinc-950 shadow-[0_0_50px_rgba(244,63,94,0.3)] animate-pulse";
+                  iconBg = "bg-rose-600/20 border border-rose-500/50 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)]";
+                  mainTitle = "HỎA LÒ CHÁY NỔ - PHẢN PHỆ!";
+                  mainSubtitle = "Kinh mạch chấn động, thần hồn suy giảm";
+                  IconComponent = Flame;
+                } else if (parsed.isFailsafe) {
+                  headerColor = "border-emerald-500/40 bg-gradient-to-b from-emerald-950/30 via-zinc-950 to-zinc-950 shadow-[0_0_35px_rgba(16,185,129,0.15)]";
+                  iconBg = "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400";
+                  mainTitle = "BẢO TOÀN NGUYÊN LIỆU!";
+                  mainSubtitle = "Cảnh giới thâm hậu, giảm thiểu tổn thất";
+                  IconComponent = ShieldCheck;
+                }
+
+                return (
+                  <div className={`relative w-full max-w-md my-auto space-y-4 p-6 rounded-3xl border ${headerColor} overflow-hidden text-center`}>
+                    {/* Close/Exit Button */}
+                    <button
+                      onClick={() => {
+                        setRefineResult(null);
+                        setSlottedGus({});
+                      }}
+                      className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 cursor-pointer z-10"
+                      title="Thoát"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    {/* Header */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className={`w-14 h-14 rounded-2xl ${iconBg} flex items-center justify-center mx-auto mb-1`}>
+                        <IconComponent className="w-8 h-8" />
+                      </div>
+                      <h3 className={`text-xl font-extrabold font-serif tracking-widest uppercase ${parsed.isBackfire ? "text-rose-400" : parsed.isFailsafe ? "text-emerald-400" : "text-rose-500"}`}>
+                        {mainTitle}
+                      </h3>
+                      <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-mono block">
+                        {mainSubtitle}
+                      </span>
+                    </div>
+
+                    {/* Primary Story Text */}
+                    <div className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 text-xs text-zinc-300 leading-relaxed italic shadow-inner">
+                      "{parsed.mainText}"
+                    </div>
+
+                    {/* Detailed Badges for Backfire, Vital Gu, Status Debuffs */}
+                    <div className="space-y-2 text-left text-xs">
+                      {parsed.backfireText && (
+                        <div className="bg-rose-950/50 border border-rose-800/60 p-3 rounded-2xl flex items-start gap-3 shadow-sm">
+                          <Flame className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 animate-pulse" />
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] uppercase font-mono font-bold text-rose-300 block">
+                              Tổn Thất Phản Phệ
+                            </span>
+                            <p className="text-xs text-rose-200/90 font-sans leading-snug">
+                              {parsed.backfireText}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {parsed.statusDebuffText && (
+                        <div className="bg-amber-950/40 border border-amber-800/50 p-3 rounded-2xl flex items-start gap-3 shadow-sm">
+                          <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] uppercase font-mono font-bold text-amber-300 block">
+                              Hiệu Ứng Mệt Mỏi / Suy Nhược
+                            </span>
+                            <p className="text-xs text-amber-200/90 font-sans leading-snug">
+                              {parsed.statusDebuffText}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {parsed.vitalSurvivedText && (
+                        <div className="bg-emerald-950/40 border border-emerald-800/50 p-3 rounded-2xl flex items-start gap-3 shadow-sm">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] uppercase font-mono font-bold text-emerald-300 block">
+                              Bảo Hộ Bản Mệnh
+                            </span>
+                            <p className="text-xs text-emerald-200/90 font-sans leading-snug">
+                              {parsed.vitalSurvivedText}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {renderRateBreakdown(refineResult.rate_breakdown)}
+
+                    <button
+                      onClick={() => {
+                        setRefineResult(null);
+                        setSlottedGus({});
+                      }}
+                      className="w-full py-3 px-4 rounded-2xl text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 transition-all font-serif cursor-pointer tracking-wider border border-zinc-700/80 hover:border-zinc-500 shadow-md active:scale-[0.98] uppercase"
+                    >
+                      RÚT KINH NGHIỆM
+                    </button>
                   </div>
-                  <h3 className="text-lg font-bold text-rose-500 font-serif tracking-wider">
-                    HỢP LUYỆN THẤT BẠI!
-                  </h3>
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">
-                    Khói đen nghi ngút, hỏa lò tro tàn
-                  </span>
-                </div>
-
-                <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed border border-zinc-900 p-4 rounded-2xl italic bg-zinc-950/60">
-                  {refineResult.message}
-                </p>
-
-                {renderRateBreakdown(refineResult.rate_breakdown)}
-
-                <button
-                  onClick={() => {
-                    setRefineResult(null);
-                    setSlottedGus({});
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-zinc-850 text-zinc-300 transition-all font-serif cursor-pointer tracking-wider border border-zinc-800"
-                >
-                  RÚT KINH NGHIỆM
-                </button>
-              </div>
+                );
+              })()
             )}
           </div>
         )}

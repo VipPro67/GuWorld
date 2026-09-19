@@ -292,7 +292,7 @@ func RefineGu(c *gin.Context) {
 
 	// Environment Bonus
 	var regionPathsRaw []byte
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(paths, '[]') FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&regionPathsRaw); err != nil {
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(paths, '[]') FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&regionPathsRaw); err != nil {
 		logger.S.Warnf("RefineGu: failed to query region paths for region %s: %v", player.CurrentRegion, err)
 	}
 	var regionPaths []string

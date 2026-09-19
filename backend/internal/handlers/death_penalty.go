@@ -90,9 +90,16 @@ func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID) {
 
 	newLevel := currentLevel + 1 // Bỏ giới hạn cấp Sát Khí (tăng liên tục theo số mạng đồ sát)
 
-	sl.Add("sat_khi", "pvp_kill", 2*time.Hour, float64(newLevel))
+	sl.Add("sat_khi", "pvp_kill", 24*time.Hour, float64(newLevel))
 	newBytes, _ := json.Marshal(sl)
-	_, _ = tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, *killerID)
+	if _, spErr := tx.Exec("SAVEPOINT sp_sat_khi_add"); spErr == nil {
+		if _, err := tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, *killerID); err != nil {
+			logger.S.Warnf("AddSatKhiStatus: failed to update statuses for player %s: %v", *killerID, err)
+			_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_sat_khi_add")
+		} else {
+			_, _ = tx.Exec("RELEASE SAVEPOINT sp_sat_khi_add")
+		}
+	}
 
 	notify.Send(tx, *killerID, "sat_khi_increase", "Sát Khí gia tăng!",
 		fmt.Sprintf("Tích tụ oán khí đồ sát! Sát Khí của bạn tăng lên Tầng %d. Nếu bị đánh bại, lượng tài sản đánh rơi sẽ gia tăng x%.1f!", newLevel, 1.0+float64(newLevel)*0.5))
@@ -180,13 +187,20 @@ func reduceSatKhiOnDeath(tx *sql.Tx, playerID uuid.UUID) {
 	}
 
 	if currentLevel > 1 {
-		sl.Add("sat_khi", "pvp_death", 2*time.Hour, float64(currentLevel-1))
+		sl.Add("sat_khi", "pvp_death", 24*time.Hour, float64(currentLevel-1))
 	} else {
 		sl.Remove("sat_khi")
 	}
 
 	newBytes, _ := json.Marshal(sl)
-	_, _ = tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, playerID)
+	if _, spErr := tx.Exec("SAVEPOINT sp_sat_khi_reduce"); spErr == nil {
+		if _, err := tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, playerID); err != nil {
+			logger.S.Warnf("reduceSatKhiOnDeath: failed to update statuses for player %s: %v", playerID, err)
+			_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_sat_khi_reduce")
+		} else {
+			_, _ = tx.Exec("RELEASE SAVEPOINT sp_sat_khi_reduce")
+		}
+	}
 }
 
 type DeathPos struct {

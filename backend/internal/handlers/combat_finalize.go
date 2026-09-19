@@ -126,8 +126,13 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 						if cat == "" {
 							cat = "consumables"
 						}
-						if err := InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, cat, remove); err != nil {
-							logger.S.Warnf("Failed to remove consumable %s for ally %s: %v", inv.ItemID, simAlly.ID, err)
+						if _, spErr := tx.Exec("SAVEPOINT sp_ally_item"); spErr == nil {
+							if err := InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, cat, remove); err != nil {
+								logger.S.Warnf("Failed to remove consumable %s for ally %s: %v", inv.ItemID, simAlly.ID, err)
+								_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_ally_item")
+							} else {
+								_, _ = tx.Exec("RELEASE SAVEPOINT sp_ally_item")
+							}
 						}
 						remaining -= int(remove)
 					}
@@ -155,11 +160,13 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 				continue
 			}
 			allyID := simAlly.ID
-			if _, spErr := tx.Exec("SAVEPOINT sp_reset_ally"); spErr == nil {
-				if _, err := tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", uuid.MustParse(allyID)); err != nil {
-					_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_reset_ally")
-				} else {
-					_, _ = tx.Exec("RELEASE SAVEPOINT sp_reset_ally")
+			if allyUUID, errParse := uuid.Parse(allyID); errParse == nil {
+				if _, spErr := tx.Exec("SAVEPOINT sp_reset_ally"); spErr == nil {
+					if _, err := tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID); err != nil {
+						_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_reset_ally")
+					} else {
+						_, _ = tx.Exec("RELEASE SAVEPOINT sp_reset_ally")
+					}
 				}
 			}
 		}
