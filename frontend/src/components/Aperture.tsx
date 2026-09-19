@@ -279,7 +279,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [isDisguised, setIsDisguised] = useState(player.is_disguised || false);
   const [fakeRank, setFakeRank] = useState(player.fake_rank || player.rank);
   const [fakeSubRank, setFakeSubRank] = useState(player.fake_sub_rank || player.sub_rank);
-  const [fakeVitalGu, setFakeVitalGu] = useState(player.fake_vital_gu || "GU_SHADOW");
+  const [fakeVitalGu, setFakeVitalGu] = useState(player.fake_vital_gu || "");
   const [settingsUsername, setSettingsUsername] = useState(player.username || "");
 
   useEffect(() => {
@@ -319,13 +319,6 @@ export const Aperture: React.FC<ApertureProps> = ({
       setCsKMPriorities(cs.km_priorities || []);
     }
   }, [store.combatSettings, combatSettingsLoaded]);
-
-  React.useEffect(() => {
-    setIsDisguised(player.is_disguised || false);
-    setFakeRank(player.fake_rank || player.rank);
-    setFakeSubRank(player.fake_sub_rank || player.sub_rank);
-    setFakeVitalGu(player.fake_vital_gu || "GU_SHADOW");
-  }, [player.is_disguised, player.fake_rank, player.fake_sub_rank, player.fake_vital_gu, player.rank, player.sub_rank]);
 
   React.useEffect(() => {
     if (activeTab === "referrals") {
@@ -400,6 +393,13 @@ export const Aperture: React.FC<ApertureProps> = ({
   const hasFormChange = checkMechanic("CHANGE_FORM_DISGUISE");
 
   const hasFaceChange = hasFormChange || hasAttitude;
+
+  React.useEffect(() => {
+    setIsDisguised(Boolean(hasConcealment && player.is_disguised));
+    setFakeRank(player.fake_rank || player.rank);
+    setFakeSubRank(player.fake_sub_rank || player.sub_rank);
+    setFakeVitalGu(player.fake_vital_gu || "");
+  }, [hasConcealment, player.is_disguised, player.fake_rank, player.fake_sub_rank, player.fake_vital_gu, player.rank, player.sub_rank]);
 
   // Owned Gu IDs for fake Vital Gu select dropdown
   const ownedGuIds = Array.from(new Set(guInventory.map((g) => g.gu_id)));
@@ -1397,7 +1397,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                   username: usernameInput,
                   bio: bioInput,
                   new_password: newPasswordInput || undefined,
-                  is_disguised: isDisguised,
+                  is_disguised: Boolean(hasConcealment && isDisguised),
                   fake_rank: Number(fakeRank),
                   fake_sub_rank: Number(fakeSubRank),
                   fake_vital_gu: fakeVitalGu,
@@ -1588,7 +1588,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                           </select>
                           {!hasAttitude && (
                             <span className="text-[8px] text-amber-500 font-mono leading-tight">
-                              * Chỉ giả yếu (&le; {RANK_NAMES[player.rank]}). Cần Thái Độ Cổ để giả mạnh!
+                              * Chỉ giả yếu (&le; {RANK_NAMES[player.rank]}). Cần hiệu ứng Ngụy Trang Hoàn Mỹ để giả mạnh!
                             </span>
                           )}
                         </div>
@@ -1616,7 +1616,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         <div className="flex justify-between items-center">
                           <label htmlFor="settings-fakeVitalGu" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Bản Mệnh Cổ Giả</label>
                           {!hasFaceChange && (
-                            <span className="text-[8px] bg-rose-950/40 text-rose-400 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu Biến Hóa/Thái Độ Cổ</span>
+                            <span className="text-[8px] bg-rose-950/40 text-rose-400 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu hiệu ứng Biến Hóa / Ngụy Trang Hoàn Mỹ</span>
                           )}
                         </div>
                         <select
@@ -1626,6 +1626,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                           onChange={(e) => setFakeVitalGu(e.target.value)}
                           className="w-full bg-zinc-950 disabled:bg-zinc-950/30 disabled:opacity-40 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
                         >
+                          <option value="">-- Mặc định (Không ngụy tạo) --</option>
                           {ownedGuIds.map((guId) => {
                             const name = guDictionary[guId]?.name || guId;
                             return (

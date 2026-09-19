@@ -347,9 +347,12 @@ func GetPlayerProfile(c *gin.Context) {
 				resp.PrimevalStones = 0
 				resp.ImmortalStones = 0
 				resp.HP = 50
-				resp.BaseHP = 100
 				resp.SectName = "Không tông môn"
-				resp.EquippedGus = []string{"GU_SHADOW"}
+				if target.FakeVitalGu != "" {
+					resp.EquippedGus = []string{target.FakeVitalGu}
+				} else {
+					resp.EquippedGus = []string{}
+				}
 				// resp.ScoutingStatus = "Thất bại trinh sát! Đối phương ngụy trang hoàn hảo hoặc tu vi/trí đạo vượt trội."
 				resp.DominantPath = "Trí Đạo"
 				resp.DaoMarks = models.DaoMarksMap{"wisdom": 50}

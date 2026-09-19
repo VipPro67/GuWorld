@@ -6,8 +6,10 @@ export interface BuybackOrder {
   id: string;
   buyer_id: string;
   buyer_username: string;
+  order_type?: "BUY" | "SELL";
   item_type: "Gu" | "Material" | "Recipe";
   item_target: string | Record<string, unknown>;
+  item_data?: string | Record<string, unknown>;
   unit_price: number;
   quantity_requested: number;
   quantity_filled: number;
@@ -52,7 +54,7 @@ export interface MarketplaceSlice {
 
   // Buyback Order Book
   fetchBuybackOrders: () => Promise<void>;
-  createBuybackOrder: (payload: { itemType: "Gu" | "Material" | "Recipe"; itemTarget: unknown; unitPrice: number; quantityRequested: number; currency: "primeval" | "immortal"; durationHours: number }) => Promise<boolean>;
+  createBuybackOrder: (payload: { orderType?: "BUY" | "SELL"; itemType: "Gu" | "Material" | "Recipe"; itemTarget: unknown; guInstanceId?: string; guInstanceIds?: string[]; unitPrice: number; quantityRequested: number; currency: "primeval" | "immortal"; durationHours: number }) => Promise<boolean>;
   sellToBuybackOrder: (payload: { orderId: string; quantity: number; guInstanceId?: string; guInstanceIds?: string[] }) => Promise<boolean>;
   cancelBuybackOrder: (orderId: string) => Promise<boolean>;
 
@@ -217,8 +219,11 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          order_type: payload.orderType || "BUY",
           item_type: payload.itemType,
           item_target: payload.itemTarget,
+          gu_instance_id: payload.guInstanceId || "",
+          gu_instance_ids: payload.guInstanceIds || [],
           unit_price: payload.unitPrice,
           quantity_requested: payload.quantityRequested,
           currency: payload.currency,

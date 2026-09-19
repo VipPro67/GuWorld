@@ -140,8 +140,10 @@ func schemaTrade() error {
 	CREATE TABLE IF NOT EXISTS buyback_orders (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		buyer_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		order_type VARCHAR(10) NOT NULL DEFAULT 'BUY',
 		item_type VARCHAR(20) NOT NULL,
 		item_target JSONB NOT NULL,
+		item_data JSONB DEFAULT NULL,
 		unit_price NUMERIC(30,3) NOT NULL,
 		quantity_requested BIGINT NOT NULL,
 		quantity_filled BIGINT NOT NULL DEFAULT 0,
@@ -155,6 +157,8 @@ func schemaTrade() error {
 	);`); err != nil {
 		return err
 	}
+	execSchema("buyback_orders_order_type", `ALTER TABLE buyback_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(10) NOT NULL DEFAULT 'BUY';`)
+	execSchema("buyback_orders_item_data", `ALTER TABLE buyback_orders ADD COLUMN IF NOT EXISTS item_data JSONB DEFAULT NULL;`)
 	if err := execSchema("buyback_buyer_idx", `
 	CREATE INDEX IF NOT EXISTS idx_buyback_buyer ON buyback_orders (buyer_id);`); err != nil {
 		return err

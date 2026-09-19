@@ -123,17 +123,13 @@ func UpdateProfileSettings(c *gin.Context) {
 	hasAttitude := models.InventoryHasGuMechanic(player.GuInventory, "PERFECT_DISGUISE", true)
 	hasFormChange := models.InventoryHasGuMechanic(player.GuInventory, "CHANGE_FORM_DISGUISE", true)
 
-	if req.IsDisguised {
-		if !hasConcealment {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không trang bị cổ trùng ngụy trang nào hoạt động! Cần trang bị các cổ trùng như Ẩn Lân Cổ, Biến Hóa Cổ, Thái Độ Cổ..."})
-			return
-		}
-
+	isDisguised := req.IsDisguised && hasConcealment
+	if isDisguised {
 		if req.FakeRank != player.Rank {
 			if !hasAttitude {
 				// Standard stealth only allows hiding/lowering rank ("giả yếu")
 				if req.FakeRank > player.Rank || req.FakeRank < 1 {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng hiện tại chỉ hỗ trợ giấu khí tức làm yếu đi, không thể giả làm cường giả mạnh hơn tu vi bản thân! Chỉ có Thái Độ Cổ mới đạt tới mức ngụy trang vô ngại."})
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng hiện tại chỉ hỗ trợ giấu khí tức làm yếu đi, không thể giả làm cường giả mạnh hơn tu vi bản thân! Cần cổ trùng có hiệu ứng ngụy trang hoàn mỹ (PERFECT_DISGUISE) để đạt tới mức ngụy trang vô ngại."})
 					return
 				}
 			} else {
@@ -146,10 +142,10 @@ func UpdateProfileSettings(c *gin.Context) {
 
 		if req.FakeVitalGu != "" {
 			if !hasAttitude && !hasFormChange {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Cần trang bị Biến Hóa Cổ hoặc Thái Độ Cổ để tạo dựng Bản Mệnh Cổ giả!"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Cần trang bị cổ trùng có hiệu ứng biến hóa hình thái hoặc ngụy trang hoàn mỹ để tạo dựng Bản Mệnh Cổ giả!"})
 				return
 			}
-			// Optional: verify they own this Gu or it is a valid Gu ID in registry
+			// Verify it is a valid Gu ID in registry or player inventory
 			found := false
 			for _, gu := range player.GuInventory {
 				if gu.GuID == req.FakeVitalGu {
@@ -157,10 +153,11 @@ func UpdateProfileSettings(c *gin.Context) {
 					break
 				}
 			}
-			if req.FakeVitalGu != "GU_SHADOW" && !found {
-				// Allow standard fakes or anything they actually own
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không sở hữu cổ trùng " + req.FakeVitalGu + " để thiết lập ngụy trang!"})
-				return
+			if !found {
+				if _, exists := models.GetGuAny(req.FakeVitalGu); !exists {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng ngụy tạo " + req.FakeVitalGu + " không tồn tại trong điển tịch Cổ Trùng!"})
+					return
+				}
 			}
 		}
 	}
@@ -267,7 +264,7 @@ func UpdateProfileSettings(c *gin.Context) {
 	player.FakeRank = req.FakeRank
 	player.FakeSubRank = req.FakeSubRank
 	player.FakeVitalGu = req.FakeVitalGu
-	player.IsDisguised = req.IsDisguised
+	player.IsDisguised = isDisguised
 
 	if req.NewPassword != "" {
 		if len(req.NewPassword) < 6 {

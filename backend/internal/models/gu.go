@@ -161,6 +161,15 @@ func InventoryHasGuMechanic(inventory GuInventory, actionCode string, requireEqu
 		if _, ok := GuMechanic(instance, actionCode); ok {
 			return true
 		}
+		if actionCode == "DISGUISE" {
+			spec, ok := GetGu(instance.GuID, instance.Rank)
+			if !ok {
+				spec, ok = GetGuAny(instance.GuID)
+			}
+			if ok && spec.Effects.Passive != nil && spec.Effects.Passive.DisguiseLevel > 0 {
+				return true
+			}
+		}
 	}
 	return false
 }
