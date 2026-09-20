@@ -37,31 +37,31 @@ func GetRegionalWallDebuff(rank int, subRank int) (float64, time.Duration) {
 	switch rank {
 	case 1:
 		basePct = 0.10
-		baseDuration = 5 * time.Minute
+		baseDuration = 5 * time.Hour
 	case 2:
 		basePct = 0.15
-		baseDuration = 8 * time.Minute
+		baseDuration = 8 * time.Hour
 	case 3:
 		basePct = 0.20
-		baseDuration = 10 * time.Minute
+		baseDuration = 10 * time.Hour
 	case 4:
 		basePct = 0.25
-		baseDuration = 12 * time.Minute
+		baseDuration = 12 * time.Hour
 	case 5:
 		basePct = 0.30
-		baseDuration = 15 * time.Minute
+		baseDuration = 15 * time.Hour
 	case 6:
 		basePct = 0.45
-		baseDuration = 20 * time.Minute
+		baseDuration = 20 * time.Hour
 	case 7:
 		basePct = 0.55
-		baseDuration = 25 * time.Minute
+		baseDuration = 25 * time.Hour
 	case 8:
 		basePct = 0.65
-		baseDuration = 30 * time.Minute
+		baseDuration = 30 * time.Hour
 	default: // Rank 9+
 		basePct = 0.75
-		baseDuration = 40 * time.Minute
+		baseDuration = 40 * time.Hour
 	}
 
 	subRankBonus := float64(subRank-1) * 0.01
@@ -99,8 +99,13 @@ func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, t
 	player.Statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
 
 	debuffInt := int(math.Abs(debuffPct * 100))
+	durMinutes := int(duration.Minutes())
+	if durMinutes >= 60 {
+		return fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d giờ).",
+			oldZone.Name, newZone.Name, debuffInt, durMinutes/60)
+	}
 	return fmt.Sprintf("⚠️ Đạo hữu vừa vượt qua Giới Vực Bích từ %s sang %s! Quy tắc địa giới phản phệ gây ra [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %d%% trong %d phút).",
-		oldZone.Name, newZone.Name, debuffInt, int(duration.Minutes()))
+		oldZone.Name, newZone.Name, debuffInt, durMinutes)
 }
 
 // returns the log message plus whether a fight was started. attackTargetID is
