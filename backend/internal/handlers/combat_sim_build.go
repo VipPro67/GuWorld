@@ -322,6 +322,8 @@ func combatTypeLabel(cm *models.CombatState) string {
 		return "Mỏ Linh Thạch (Yêu quái)"
 	case "PVP":
 		return "Đấu trường / PVP"
+	case "TRIBULATION_BOSS", "TRIBULATION_MONSTER":
+		return "Tai Kiếp Thiên Địa"
 	default:
 		return "Dã ngoại"
 	}

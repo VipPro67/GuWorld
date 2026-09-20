@@ -318,9 +318,9 @@ func ApplyThornsDamage(defender, attacker *CombatantAuto, damageDealt float64, t
 }
 
 // CheckBossPhaseTransitions tracks HP thresholds for bosses and triggers phases.
-func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto) []CombatLog {
+func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto, turn int) []CombatLog {
 	var logs []CombatLog
-	if boss.Kind != "Boss" {
+	if boss.Kind != "Boss" || boss.HP <= 0 || boss.IsDead {
 		return logs
 	}
 
@@ -329,6 +329,7 @@ func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto) []Combat
 	if hpPercent <= 0.70 && hpPercent > 0.30 && state.BossPhase < 1 {
 		state.BossPhase = 1
 		logs = append(logs, CombatLog{
+			Turn:      turn,
 			ActorId:   boss.ID,
 			ActorName: boss.Name,
 			Action:    "PHASE_TRANSITION",
@@ -341,6 +342,7 @@ func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto) []Combat
 		}
 		state.Enemies = append(state.Enemies, minion1)
 		logs = append(logs, CombatLog{
+			Turn:      turn,
 			ActorId:   minion1.ID,
 			ActorName: minion1.Name,
 			Action:    "SUMMONED",
@@ -348,11 +350,12 @@ func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto) []Combat
 		})
 	}
 
-	if hpPercent <= 0.30 && state.BossPhase < 2 {
+	if hpPercent <= 0.30 && hpPercent > 0 && state.BossPhase < 2 {
 		state.BossPhase = 2
 		boss.BaseDmg *= 3
 		boss.BaseDef = 0
 		logs = append(logs, CombatLog{
+			Turn:      turn,
 			ActorId:   boss.ID,
 			ActorName: boss.Name,
 			Action:    "PHASE_TRANSITION",

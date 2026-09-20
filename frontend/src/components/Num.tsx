@@ -14,7 +14,7 @@ export function Num({ value, className }: NumProps) {
 
   return (
     <span
-      className={`cursor-pointer select-none ${className ?? ""}`}
+      className={`cursor-pointer ${className ?? ""}`}
       title={value.toLocaleString("en-US")}
       onClick={(e) => {
         e.stopPropagation();
