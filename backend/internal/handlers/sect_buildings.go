@@ -121,11 +121,18 @@ func UpgradeSectBuilding(c *gin.Context) {
 
 	newBuildings, _ := json.Marshal(buildings)
 
+	// Sync sect level with main_hall level
+	var newLevel int
 	if req.BuildingName == "main_hall" {
-		_, err = tx.Exec(`UPDATE sects SET level = $1, funds = funds - $2, buildings = $3 WHERE id = $4`, targetLevel, reqFunds, newBuildings, sectID)
+		newLevel = targetLevel
 	} else {
-		_, err = tx.Exec(`UPDATE sects SET funds = funds - $1, buildings = $2 WHERE id = $3`, reqFunds, newBuildings, sectID)
+		newLevel = buildings["main_hall"]
+		if newLevel == 0 {
+			newLevel = 1
+		}
 	}
+
+	_, err = tx.Exec(`UPDATE sects SET level = $1, funds = funds - $2, buildings = $3 WHERE id = $4`, newLevel, reqFunds, newBuildings, sectID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect"})

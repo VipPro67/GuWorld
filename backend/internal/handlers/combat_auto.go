@@ -542,19 +542,8 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		Priority:   999,
 	})
 
-	// Global multipliers and buffs from the selected loadout Gu.
-	globalMult := computeGlobalGuDamageMultiplier(selectedGuIDs, loadoutSpec)
-	if globalMult > 1.0 {
-		for i := range enemyActions {
-			enemyActions[i].Damage *= globalMult
-		}
-		simEnemy.DamageMultiplier = globalMult
-	}
 	simEnemy.CritRateBonus = computeGlobalCritRate(selectedGuIDs, loadoutSpec)
 	simEnemy.IgnoreDefenseFlat, simEnemy.IgnoreDefensePct = computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec)
-	simEnemy.RefineManaTier = gamefx.RefineManaTier(enemy.Rank, enemy.GuInventory)
-
-	// Apply tactics (Priority, UseCondition, ConditionValue) from CombatSettings
 	if cs != nil {
 		for i := range enemyActions {
 			act := &enemyActions[i]
@@ -791,15 +780,6 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Damage:     playerStats["attack"],
 		ManaCost:   0,
 	})
-
-	// Global damage multipliers from loadout Gus. Apply each GuID at most once,
-	// using the highest-rank equipped instance for that GuID.
-	globalMultiplier := computeGlobalGuDamageMultiplier(selectedGuIDs, loadoutSpec)
-	if globalMultiplier > 1.0 {
-		for i := range allActions {
-			allActions[i].Damage *= globalMultiplier
-		}
-	}
 
 	// Apply persistent tactics (priority + conditions) to actions
 	settings := player.CombatSettings

@@ -117,6 +117,7 @@ type SimAction struct {
 	Rank          int      // rank of the Gu/Skill
 	Damage        float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
 	DamageMult    float64  // damage multiplier (applied on top of Damage)
+	ShieldMult    float64  // shield multiplier (applied on top of Defense)
 	Defense       float64  // shield value granted to self (excludes dao bonus)
 	Healing       float64  // HP restored to self (excludes dao bonus)
 	ManaCost      float64  // mana consumed on use

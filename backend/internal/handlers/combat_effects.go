@@ -26,11 +26,6 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	var baseDef float64
 	if guSpec.Effects.Active != nil {
 		baseDmg = guSpec.Effects.Active.DamageFlat
-		if baseDmg == 0 && guSpec.Effects.Active.DamageMult > 0 {
-			baseDmg = actor.BaseAttack * guSpec.Effects.Active.DamageMult
-		} else if baseDmg > 0 && guSpec.Effects.Active.DamageMult > 1.0 {
-			baseDmg *= guSpec.Effects.Active.DamageMult
-		}
 		baseDef = guSpec.Effects.Active.ShieldFlat
 	}
 

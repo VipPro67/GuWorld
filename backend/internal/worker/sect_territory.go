@@ -233,16 +233,16 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		}
 
 		vaultMap := map[string]map[string]int{}
-		if vRows, err := tx.Query(`SELECT id, vault_materials FROM sects WHERE id = ANY($1::text[])`, pq.Array(vaultIDs)); err == nil {
+		if vRows, err := tx.Query(`SELECT sect_id, item_id, quantity FROM sect_vault_materials WHERE sect_id = ANY($1::text[])`, pq.Array(vaultIDs)); err == nil {
 			for vRows.Next() {
 				var sid string
-				var raw []byte
-				if vRows.Scan(&sid, &raw) == nil {
-					vault := map[string]int{}
-					if len(raw) > 0 {
-						_ = json.Unmarshal(raw, &vault)
+				var itemID string
+				var qty int
+				if vRows.Scan(&sid, &itemID, &qty) == nil {
+					if vaultMap[sid] == nil {
+						vaultMap[sid] = map[string]int{}
 					}
-					vaultMap[sid] = vault
+					vaultMap[sid][itemID] += qty
 				}
 			}
 			vRows.Close()
@@ -266,21 +266,19 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 			}
 		}
 
-		writeIDs := make([]string, 0, len(vaultMap))
-		writeRaw := make([]string, 0, len(vaultMap))
+		// Update sect_vault_materials using upsert
 		for sid, vault := range vaultMap {
-			raw, _ := json.Marshal(vault)
-			writeIDs = append(writeIDs, sid)
-			writeRaw = append(writeRaw, string(raw))
-		}
-		if len(writeIDs) > 0 {
-			if _, err := tx.Exec(`
-				UPDATE sects s SET vault_materials = v.vault
-				FROM (SELECT unnest($1::text[]) AS id, unnest($2::jsonb[]) AS vault) v
-				WHERE s.id = v.id
-			`, pq.Array(writeIDs), pq.Array(writeRaw)); err != nil {
-				logger.S.Errorf("Sect Territory Worker: batch update vaults failed: %v", err)
-				return
+			for matID, qty := range vault {
+				_, err := tx.Exec(`
+					INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
+					VALUES ($1, $2, $3)
+					ON CONFLICT (sect_id, item_id) DO UPDATE SET
+						quantity = sect_vault_materials.quantity + EXCLUDED.quantity,
+						updated_at = NOW()
+				`, sid, matID, qty)
+				if err != nil {
+					logger.S.Errorf("Sect Territory Worker: failed to update vault material %s for sect %s: %v", matID, sid, err)
+				}
 			}
 		}
 	}

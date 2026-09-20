@@ -31,6 +31,7 @@ type ActiveEffect struct {
 	LifeStealRate      float64 `json:"lifesteal_rate,omitempty"`
 	RefineManaTier     float64 `json:"refine_mana_tier,omitempty"`
 	DamageMult         float64 `json:"damage_mult,omitempty"`
+	ShieldMult          float64 `json:"shield_mult,omitempty"`
 	CleansingPower     float64 `json:"cleansing_power,omitempty"`
 	SummonPhantom      bool    `json:"summon_phantom,omitempty"`
 	GenerateGu         bool    `json:"generate_gu,omitempty"`
@@ -315,6 +316,9 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		if gu.Effects.Active.DamageMult > 0 {
 			res["damage_multiplier"] = gu.Effects.Active.DamageMult
+		}
+		if gu.Effects.Active.ShieldMult > 0 {
+			res["shield_multiplier"] = gu.Effects.Active.ShieldMult
 		}
 		if gu.Effects.Active.ApplyStatus == "BLEED" {
 			res["bleed"] = gu.Effects.Active.StatusTickDamage

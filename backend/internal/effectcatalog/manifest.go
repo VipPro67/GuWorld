@@ -45,7 +45,7 @@ func buildFieldDefinitions() map[string]map[string]Definition {
 	}
 
 	add("active", DispositionSupported, "combat",
-		"damage_flat", "heal_flat", "shield_flat", "damage_mult", "apply_status", "status_tick_damage", "status_duration_ticks",
+		"damage_flat", "heal_flat", "shield_flat", "damage_mult", "shield_mult", "apply_status", "status_tick_damage", "status_duration_ticks",
 		"target_selector", "speed_boost_flat", "ignore_defense", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent",
 		"lifesteal_rate", "blood_drain", "curve_attack", "summon_phantom", "freeze", "slow", "slow1", "weak", "stun",
 		"silence", "bleed", "poison", "thorns", "regen", "atk_up", "def_up", "taunt")

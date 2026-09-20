@@ -77,7 +77,7 @@ var runtimeFields = map[string]map[string]bool{
 	"active": set(
 		"damage_flat", "heal_flat", "shield_flat", "apply_status", "status_tick_damage", "status_duration_ticks", "target_selector",
 		"range", "curve_attack", "mana_regen", "wood_transformation", "blood_drain", "replicate", "lifesteal_rate", "refine_mana_tier",
-		"damage_mult", "cleansing_power", "summon_phantom", "generate_gu", "capture_bonus", "portal_create", "random_portal",
+		"damage_mult", "shield_mult", "cleansing_power", "summon_phantom", "generate_gu", "capture_bonus", "portal_create", "random_portal",
 		"summon_growth_phantoms", "summon_count_per_tick", "phantom_damage_scale", "ignore_defense", "ignore_defense_pct", "crit_rate_boost",
 		"all_stats_buff_percent", "speed_boost_flat", "freeze", "slow", "slow1", "weak", "stun", "silence", "bleed", "poison",
 		"thorns", "regen", "atk_up", "def_up", "taunt",
@@ -92,7 +92,7 @@ var runtimeFields = map[string]map[string]bool{
 
 var numberFields = set(
 	"damage_flat", "heal_flat", "shield_flat", "status_tick_damage", "range", "mana_regen", "lifesteal_rate", "refine_mana_tier",
-	"damage_mult", "cleansing_power", "capture_bonus", "summon_count_per_tick", "phantom_damage_scale", "ignore_defense", "ignore_defense_pct",
+	"damage_mult", "shield_mult", "cleansing_power", "capture_bonus", "summon_count_per_tick", "phantom_damage_scale", "ignore_defense", "ignore_defense_pct",
 	"crit_rate_boost", "all_stats_buff_percent", "speed_boost_flat", "freeze", "slow", "slow1", "weak", "stun", "silence", "bleed",
 	"poison", "thorns", "regen", "atk_up", "def_up", "taunt", "stat_base_attack", "stat_base_defense", "stat_base_hp",
 	"stat_base_speed", "path_conflict_reduction", "damage_multiplier_on_hit", "soul_refinement", "storage_capacity", "movement",

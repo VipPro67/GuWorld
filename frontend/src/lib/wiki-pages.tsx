@@ -737,6 +737,38 @@ export const wikiPages: WikiPage[] = [
             </ul>
           </div>
         </div>
+
+        {/* Glossary Table */}
+        <div className="space-y-4 pt-6 border-t border-[var(--border)]">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">📖 Glossary / Bảng Thuật Ngữ</h3>
+          <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="bg-zinc-950 text-[var(--text-secondary)] border-b border-[var(--border)]">
+                <tr>
+                  <th className="p-3">Thuật Ngữ</th>
+                  <th className="p-3">Giải Thích</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900 text-[var(--text-primary)] bg-[var(--surface)]">
+                <tr><td className="p-3 font-bold text-amber-400">damage_flat</td><td className="p-3">Sát thương thuần từ Cổ </td></tr>
+                <tr><td className="p-3 font-bold text-amber-400">damage_mult</td><td className="p-3">Hệ số nhân sát thương </td></tr>
+                <tr><td className="p-3 font-bold text-cyan-400">shield_flat</td><td className="p-3">Giá trị khiên ảo gốc từ Cổ</td></tr>
+                <tr><td className="p-3 font-bold text-cyan-400">shield_mult</td><td className="p-3">Hệ số nhân khiên </td></tr>
+                <tr><td className="p-3 font-bold text-emerald-400">daoMult</td><td className="p-3">1.0 + (Đạo Ngân path / 100) — nhân damage, shield, heal</td></tr>
+                <tr><td className="p-3 font-bold text-violet-400">dmgMultiplier</td><td className="p-3">Buff/debuff tạm thời (Kiếm Long +50%, weaken -20%...)</td></tr>
+                <tr><td className="p-3 font-bold text-red-400">netDmg</td><td className="p-3">hitDmg − targetDef; floor = 1 (không bao giờ dưới 1)</td></tr>
+                <tr><td className="p-3 font-bold text-orange-400">targetDef</td><td className="p-3">BaseDef × DefenseMultiplier − ignore_defense</td></tr>
+                <tr><td className="p-3 font-bold text-blue-400">pathBonus</td><td className="p-3">Bonus từ đường tu đang mang (cộng thêm vào công thức)</td></tr>
+                <tr><td className="p-3 font-bold text-purple-400">pathResistance</td><td className="p-3">Kháng của mục tiêu theo đường tu tấn công (giảm netDmg)</td></tr>
+                <tr><td className="p-3 font-bold text-pink-400">LifeStealPct</td><td className="p-3">Tỉ lệ hồi HP từ sát thương gây ra (heal = totalDmg × LifeStealPct)</td></tr>
+                <tr><td className="p-3 font-bold text-green-400">critRateBonus</td><td className="p-3">Tỉ lệ chí mạng; nếu roll thành công → damage × 1.5</td></tr>
+                <tr><td className="p-3 font-bold text-yellow-400">MultiHit</td><td className="p-3">Số đòn đánh trong cùng lượt; đòn thứ 2+ × 0.7</td></tr>
+                <tr><td className="p-3 font-bold text-lime-400">BYPASS_SHIELD</td><td className="p-3">Cơ chế bỏ qua khiên; giảm targetDef đi 30 trước khi tính</td></tr>
+                <tr><td className="p-3 font-bold text-teal-400">VirtualShield</td><td className="p-3">Khiên ảo hiện tại — trừ trước HP, không hồi giữa lượt</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     ),
   },
@@ -1408,6 +1440,535 @@ export const wikiPages: WikiPage[] = [
     )
   },
   {
+    id: "combat-mechanics",
+    title: "Cơ Chế Chiến Thuật: Sát Thương, Khiên & Phòng Thủ",
+    category: "combat",
+    keywords: [
+      "sát thương",
+      "khiên",
+      "phòng thủ",
+      "công thức",
+      "hit",
+      "sát thương ròng",
+      "dao ngân",
+      "đạo nguyên",
+      "chí mạng",
+      "crit",
+      "hút máu",
+      "life steal",
+      "đóng băng",
+      "choáng",
+      "buff",
+      "debuff",
+    ],
+
+    content: (
+      <div className="space-y-6">
+        {/* Intro */}
+        <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 flex gap-3 items-start">
+          <Swords className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+
+          <div>
+            <h4 className="text-sm font-serif font-bold text-indigo-200">
+              Cách tính sát thương & phòng thủ
+            </h4>
+
+            <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+              Hiểu rõ công thức sát thương, khiên ảo, Đạo Ngân và chí mạng giúp
+              bạn tối ưu đội hình Cổ trùng và tối đa hóa hiệu quả chiến đấu.
+            </p>
+          </div>
+        </div>
+
+        {/* 1. Damage */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            1. Công Thức Sát Thương Cơ Bản
+          </h3>
+
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Mỗi đòn tấn công (BASIC_ATTACK hoặc GU_SKILL) gây sát thương theo
+            công thức:
+          </p>
+
+          <div className="bg-zinc-950/80 border border-[var(--border)] rounded-xl p-4 font-mono text-[11px] text-[var(--text-primary)] space-y-2 overflow-x-auto">
+            <p>
+              <span className="text-amber-400">hitDmg</span> ={" "}
+              <span className="text-emerald-400">a.Damage</span> ×{" "}
+              <span className="text-emerald-400">a.DamageMult</span> ×{" "}
+              <span className="text-emerald-400">dmgMultiplier</span> ×{" "}
+              <span className="text-emerald-400">daoMult</span> × (1 + pathBonus)
+            </p>
+
+            <p className="text-[var(--text-muted)]">
+              • <span className="text-amber-400">a.Damage</span>: Raw damage
+              (DamageFlat from Gu + baseAttack)
+            </p>
+
+            <p className="text-[var(--text-muted)]">
+              • <span className="text-amber-400">a.DamageMult</span>: Damage
+              multiplier (damage_mult from Gu)
+            </p>
+
+            <p className="text-[var(--text-muted)]">
+              • <span className="text-amber-400">dmgMultiplier</span>: Temporary
+              buff/debuff (Sword Dragon +50%, Borrow Past Power +40%, atk_up,
+              weak...)
+            </p>
+
+            <p className="text-[var(--text-muted)]">
+              • <span className="text-amber-400">daoMult</span>: Dao Mark
+              multiplier for the Gu&apos;s path
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-xs space-y-2">
+            <h4 className="font-bold text-emerald-300">📊 Ví dụ minh họa</h4>
+
+            <p>
+              <strong>Gu:</strong> damage_flat = 200, damage_mult = 1.2
+            </p>
+
+            <p>
+              <strong>Buff:</strong> Sword Dragon active → dmgMultiplier = 1.5
+            </p>
+
+            <p>
+              <strong>Dao Mark:</strong> 30 pts on path → daoMult = 1.3
+            </p>
+
+            <p>
+              <strong>pathBonus:</strong> +0.1
+            </p>
+
+            <div className="bg-black/40 rounded-lg p-2 font-mono text-[11px]">
+              hitDmg = 200 × 1.2 × 1.5 × 1.3 × 1.1 ={" "}
+              <span className="text-emerald-400 font-bold">514.8 damage</span>
+              <br />
+              Multi-hit 2nd: 514.8 × 0.7 = 360.4
+              <br />
+              Crit (if lands): 514.8 × 1.5 ={" "}
+              <span className="text-red-400 font-bold">772.2 damage</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Net Damage */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            2. Net Damage Calculation
+          </h3>
+
+          <div className="bg-zinc-950/80 border border-[var(--border)] rounded-xl p-4 font-mono text-[11px] text-[var(--text-primary)] space-y-2 overflow-x-auto">
+            <p>
+              <span className="text-amber-400">targetDef</span> = target.BaseDef ×
+              target.DefenseMultiplier
+            </p>
+
+            <p>
+              • Subtract IgnoreDefenseFlat and IgnoreDefensePct from attacker
+            </p>
+
+            <p className="mt-2">
+              <span className="text-amber-400">netDmg</span> = hitDmg - targetDef
+            </p>
+
+            <p>• netDmg × (1 - pathResistance) — target&apos;s resistance</p>
+            <p>
+              • Floor: netDmg minimum = <strong>1</strong>
+            </p>
+
+            <p className="mt-2">
+              • <strong>BYPASS_SHIELD</strong>: Reduce targetDef by 30, ignore
+              shield
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-red-950/20 border border-red-500/20 text-xs space-y-2">
+            <h4 className="font-bold text-red-300">📊 Ví dụ minh họa</h4>
+
+            <p>
+              <strong>Kẻ địch:</strong> BaseDef = 150, DefenseMultiplier = 1.1 →
+              phòng_ngự_mục_tiêu = 165
+            </p>
+
+            <p>
+              <strong>IgnoreDefense:</strong> attacker có ignore_defense = 20 →
+              phòng_ngự_mục_tiêu = 145
+            </p>
+
+            <p>
+              <strong>Sát thương:</strong> hitDmg = 514.8
+            </p>
+
+            <div className="bg-black/40 rounded-lg p-2 font-mono text-[11px]">
+              netDmg = 514.8 - 145 ={" "}
+              <span className="text-red-400 font-bold">369.8</span>
+              <br />
+              20% resistance → 369.8 × 0.8 ={" "}
+              <span className="text-red-400">295.8 damage</span>
+              <br />
+              If targetDef = 600 → netDmg = 514.8 - 600 ={" "}
+              <span className="text-emerald-400">
+                -85 → floor = 1
+              </span>{" "}
+              (near immune!)
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Shield */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            3. Khiên Ảo (Virtual Shield)
+          </h3>
+
+          <div className="bg-zinc-950/80 border border-[var(--border)] rounded-xl p-4 font-mono text-[11px] text-[var(--text-primary)] space-y-2 overflow-x-auto">
+            <p>
+              <span className="text-amber-400">baseShield</span> = a.Defense
+            </p>
+
+            <p>
+              • If <span className="text-amber-400">a.ShieldMult &gt; 1.0</span>:
+              baseShield = a.Defense × a.ShieldMult
+            </p>
+
+            <p>
+              • <span className="text-emerald-400">daoShield</span> = baseShield ×
+              (daoMult - 1.0)
+            </p>
+
+            <p className="mt-2">
+              actor.VirtualShield += baseShield + daoShield
+            </p>
+
+            <p className="text-[var(--text-muted)]">
+              • Damage subtracts from shield first; when shield = 0, HP takes
+              damage.
+            </p>
+
+            <p className="text-[var(--text-muted)]">
+              • <strong>Sword Dragon Transform:</strong> Convert HP to shield +50%
+              damage for 3 turns.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-cyan-950/20 border border-cyan-500/20 text-xs space-y-2">
+            <h4 className="font-bold text-cyan-300">📊 Ví dụ minh họa</h4>
+
+            <p>
+              <strong>Gu:</strong> shield_flat = 800, shield_mult = 1.25
+            </p>
+
+            <p>
+              <strong>Dao Mark:</strong> 40 pts on path → daoMult = 1.4
+            </p>
+
+            <div className="bg-black/40 rounded-lg p-2 font-mono text-[11px]">
+              baseShield = 800 × 1.25 ={" "}
+              <span className="text-cyan-400 font-bold">1000</span>
+              <br />
+              daoShield = 1000 × (1.4 - 1.0) ={" "}
+              <span className="text-cyan-400">400</span>
+              <br />
+              Total shield = 1000 + 400 ={" "}
+              <span className="text-emerald-400 font-bold">
+                1400 Virtual Shield
+              </span>
+              <br />
+              <br />
+              Enemy attacks 2000 → shield absorbs 1400 →{" "}
+              <span className="text-red-400">600 to HP</span>
+              <br />
+              Enemy attacks 1000 → shield absorbs all →{" "}
+              <span className="text-emerald-400">0 HP taken!</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Multipliers */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            4. Sự Khác Nhau: damage_mult vs shield_mult
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+              <h4 className="font-bold text-red-400">damage_mult</h4>
+
+              <p className="text-[var(--text-muted)] text-xs leading-relaxed">
+                Nhân vào sát thương thô trước khi trừ phòng thủ.
+                <br />
+                <strong>VD:</strong> damage_flat=100, damage_mult=1.5 → hitDmg =
+                150.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+              <h4 className="font-bold text-cyan-400">shield_mult</h4>
+
+              <p className="text-[var(--text-muted)] text-xs leading-relaxed">
+                Nhân vào giá trị khiên.
+                <br />
+                <strong>VD:</strong> shield_flat=1000, shield_mult=1.3 →
+                khiên_gốc = 1300.
+                <br />
+                Chỉ kích hoạt khi shield_mult &gt; 1.0.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Dao Marks */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            5. Đạo Ngân (Dao Marks) Trong Chiến Đấu
+          </h3>
+
+          <div className="bg-zinc-950/80 border border-[var(--border)] rounded-xl p-4 font-mono text-[11px] text-[var(--text-primary)] space-y-2 overflow-x-auto">
+            <p>
+              <span className="text-amber-400">daoMult</span> = 1.0 + (Dao Mark on
+              path / 100)
+            </p>
+
+            <p className="mt-2">
+              <strong>Damage:</strong> hitDmg × daoMult
+            </p>
+
+            <p>
+              <strong>Shield:</strong> daoShield = baseShield × (daoMult - 1.0)
+            </p>
+
+            <p>
+              <strong>Heal:</strong> heal = baseHeal × daoMult × (1 +
+              HealingReceived)
+            </p>
+          </div>
+        </div>
+
+        {/* 6. Speed */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            6. Turn Order & Speed
+          </h3>
+
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Gu act in descending <strong>Speed</strong> order each turn. Speed
+            from BaseSpeed, Growth, Passive, race, and status. Slow reduces Speed
+            while Haste increases it.
+          </p>
+
+          <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/20 text-xs space-y-2">
+            <h4 className="font-bold text-amber-300">📊 Example</h4>
+
+            <div className="bg-black/40 rounded-lg p-2 font-mono text-[11px] space-y-1">
+              <p>
+                <strong>Turn 1:</strong> Gu Speed 85 → acts first
+              </p>
+
+              <p>
+                <strong>Turn 2:</strong> Enemy Speed 60 → retaliates
+              </p>
+
+              <p>
+                <strong>Haste:</strong> Speed 85 + 20 → 105
+              </p>
+
+              <p>
+                <strong>With Slow:</strong> Speed 55 → enemy goes first
+              </p>
+            </div>
+
+            <p className="text-[var(--text-muted)]">
+              → <strong>Mẹo:</strong> Trong 1v1, Speed cao giúp giành quyền hành
+              động trước.
+            </p>
+          </div>
+        </div>
+
+        {/* 7. Status */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            7. Trạng Thái Trong Combat
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+              <h4 className="font-bold text-red-400">Gây hại</h4>
+
+              <ul className="list-disc list-inside text-xs text-[var(--text-muted)] space-y-1">
+                <li>
+                  <strong>Stun:</strong> Bỏ lượt
+                </li>
+                <li>
+                  <strong>Freeze:</strong> Bỏ lượt, 50% break khi nhận damage
+                </li>
+                <li>
+                  <strong>Sleep:</strong> Bỏ lượt
+                </li>
+                <li>
+                  <strong>Bleed/Poison/Burn:</strong> Mất HP mỗi lượt (DOT)
+                </li>
+                <li>
+                  <strong>Silence:</strong> Không dùng sát chiêu
+                </li>
+                <li>
+                  <strong>Charm:</strong> Đánh đồng đội
+                </li>
+                <li>
+                  <strong>Bind:</strong> Không di chuyển
+                </li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
+              <h4 className="font-bold text-emerald-400">Có ích</h4>
+
+              <ul className="list-disc list-inside text-xs text-[var(--text-muted)] space-y-1">
+                <li>
+                  <strong>Shield:</strong> Khiên ảo phụ
+                </li>
+                <li>
+                  <strong>Heal:</strong> Hồi HP
+                </li>
+                <li>
+                  <strong>Atk Up / Def Up:</strong> Tăng stat tạm thời
+                </li>
+                <li>
+                  <strong>Crit Up / Haste:</strong> Tăng chí mạng & tốc độ
+                </li>
+                <li>
+                  <strong>Taunt:</strong> Kẻ địch buộc đánh bạn
+                </li>
+                <li>
+                  <strong>Stealth:</strong> Tránh nhắm mục tiêu
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* 8. Life Steal */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            8. Hút Máu (Life Steal)
+          </h3>
+
+          <div className="bg-zinc-950/80 border border-[var(--border)] rounded-xl p-4 font-mono text-[11px] text-[var(--text-primary)] space-y-2 overflow-x-auto">
+            <p>
+              <strong>healFromLifesteal</strong> = totalDamage × a.LifeStealPct
+            </p>
+            <p>• Not capped by max HP</p>
+            <p>• Blood_drain gives +50% base Life Steal</p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-xs space-y-2">
+            <h4 className="font-bold text-emerald-300">📊 Example</h4>
+
+            <div className="bg-black/40 rounded-lg p-2 font-mono text-[11px]">
+              <p>
+                <strong>Gu:</strong> lifesteal_rate = 0.3 (30%)
+              </p>
+
+              <p>Normal attack → totalDamage = 500</p>
+
+              <p>
+                heal = 500 × 0.3 ={" "}
+                <span className="text-emerald-400 font-bold">150 HP healed</span>
+              </p>
+
+              <p className="mt-1">
+                Blood_drain +50% → heal = 500 × 0.8 ={" "}
+                <span className="text-emerald-400">400 HP healed!</span>
+              </p>
+
+              <p className="mt-1">
+                <strong>Note:</strong> Applies to crits and phantom damage. Can
+                heal above max HP.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 9. Tips */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">
+            9. Mẹo Tối Ưu
+          </h3>
+
+          <div className="space-y-3 text-xs text-[var(--text-secondary)]">
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+              <h4 className="font-bold text-amber-300">
+                Sát thương &gt; Phòng thủ
+              </h4>
+
+              <p className="text-[var(--text-muted)]">
+                Giết địch trước khi khiên bị phá. Khiên chỉ hữu ích khi HP không
+                đủ.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+              <h4 className="font-bold text-cyan-300">Đạo Ngân = Tất Cả</h4>
+
+              <p className="text-[var(--text-muted)]">
+                Mỗi điểm Đạo Ngân trên path = +1% sát thương, phòng thủ và hồi
+                phục. Đầu tư đúng path.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+              <h4 className="font-bold text-indigo-300">
+                Khiên + HP = Sống Sót
+              </h4>
+
+              <p className="text-[var(--text-muted)]">
+                Kết hợp shield_flat + shield_mult giúp chịu được đòn mạnh mà
+                không mất HP.
+                <br />
+                <strong>Gợi ý:</strong> Khiên ảo trước, HP sau. Luôn mang Cổ có
+                shield_flat!
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+              <h4 className="font-bold text-emerald-300">
+                Tốc Độ Quyết Định
+              </h4>
+
+              <p className="text-[var(--text-muted)]">
+                Ưu tiên speed cho Cổ hỗ trợ/heal để cứu đồng đội kịp thời.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    ),
+
+    cards: [
+      {
+        title: "Chiến đấu Lưới 3x3",
+        targetId: "combat",
+        description: "Bố trí đội hình và lượt đánh",
+      },
+      {
+        title: "Hướng dẫn Tân thủ",
+        targetId: "guide",
+        description: "Lộ trình hoạt động hằng ngày",
+      },
+      {
+        title: "Sát chiêu",
+        targetId: "killer-moves",
+        description: "Cơ chế và công thức phối hợp",
+      },
+      {
+        title: "Cổ trùng & Bọc đồ",
+        targetId: "gu",
+        description: "Danh sách Cổ và hiệu ứng",
+      },
+    ],
+  },
+  {
     id: "combat",
     title: "Chiến đấu Lưới 3x3",
     category: "combat",
@@ -1464,16 +2025,16 @@ export const wikiPages: WikiPage[] = [
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cơ chế Lò Luyện</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (không giới hạn, tăng chậm dần theo hàm căn bậc hai, nhân hệ số Chân Ý lưu phái đích và chia theo hệ số Rank P), Cảnh giới Luyện Đạo (lên tới +25%), Cảnh giới Lưu Phái của Cổ (max +10%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
-            <br/><br/>
+            <br /><br />
             <strong className="text-cyan-400">Tiêu hao Năng Lượng:</strong> Cổ sư luyện Cổ đồng cấp tốn 20 Chân Nguyên (hoặc 10 Tiên Nguyên nếu là Tiên Cổ). Chi phí này nhân lên hoặc giảm đi 10 lần (với Phàm) và 100 lần (với Tiên) cho mỗi bậc chênh lệch. Phàm nhân không thể luyện Tiên Cổ vì tiêu hao lập tức cạn kiệt khiếu.
-            <br/><br/>
+            <br /><br />
             <strong className="text-cyan-400">Tiên Cổ Giảm Trừ:</strong> Khi luyện Tiên Cổ (Rank 6 - 9), các chỉ số cộng thẳng ngoại vật (Chất lượng vật liệu, Cảnh giới, Khí vận, Phụ trợ, Môi trường) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100.
           </p>
 
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono mt-6">Suy Diễn Bí Phương</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Sử dụng <strong>Niệm Lực</strong> và Nguyên thạch để tăng % độ hoàn thiện của tàn phương. Độ khó của việc suy diễn phụ thuộc cực kỳ lớn vào Rank của Cổ, chia nhỏ tỷ lệ nhận được: Rank 5 (chia 100), Rank 6 (chia 1.000), tới Rank 9 (chia 10.000.000).
-            <br/><br/>
+            <br /><br />
             Để có thể suy diễn Tiên Cổ trong thời gian thực tế, đạo hữu bắt buộc phải dựa vào <strong>Cảnh Giới</strong> (Trí Đạo x3, Luyện Đạo x2, Lưu Phái Đích x1) và <strong>Đạo Ngân Trí Đạo</strong> (Gia tốc tư duy). Một Trí Đạo Vô Thượng sở hữu lượng lớn Đạo Ngân có thể suy diễn nhanh gấp hàng vạn lần phàm nhân. Cảnh giới Trí Đạo cũng tăng vọt cơ hội nhận <strong>Linh quang chớp lóe</strong> (lập tức hoàn thiện 100%).
           </p>
 

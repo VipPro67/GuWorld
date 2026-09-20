@@ -52,7 +52,7 @@ export interface SectSlice {
   }) => Promise<boolean>;
   stockSectVault: (itemType: 'gu' | 'material' | 'recipe', itemId: string, quantity: number) => Promise<boolean>;
   stockSectVaultBulk: (items: { item_type: 'gu' | 'material' | 'recipe'; item_id: string; quantity: number }[]) => Promise<boolean>;
-  upgradeSect: () => Promise<boolean>;
+  
   toggleSectApproval: (requireApproval: boolean) => Promise<boolean>;
   toggleSectPromotionApproval: (requirePromotionApproval: boolean) => Promise<boolean>;
   paySectSalary: () => Promise<boolean>;
@@ -672,28 +672,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     } finally { set({ actionLoading: false }); }
   },
 
-  upgradeSect: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/sects/upgrade`, {
-        method: "POST",
-      });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Nâng cấp tông môn thất bại.");
-      get().addToast(data.message || "Nâng cấp tông môn thành công!", "success");
-      get().addLog(`Nâng cấp tông môn: Cấp ${data.new_level}`);
-      await get().fetchMySectStatus();
-      return true;
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message, "error");
-      return false;
-    } finally { set({ actionLoading: false }); }
-  },
+  
 
   toggleSectApproval: async (requireApproval) => {
     const { token, actionLoading, logout } = get();

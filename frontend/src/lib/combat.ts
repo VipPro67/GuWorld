@@ -86,8 +86,9 @@ export const getCombatEffects = (spec: unknown): EffectBadge[] => {
     const val = num(a.damage_mult) > 0 ? `x${a.damage_mult}` : a.damage_flat;
     out.push({ key: "damage", label: `DMG ${val}`, className: EFFECT_STYLE.damage });
   }
-  if (num(a.shield_flat) > 0) {
-    out.push({ key: "shield", label: `Khiên ${a.shield_flat}`, className: EFFECT_STYLE.shield });
+  if (num(a.shield_flat) > 0 || num(a.shield_mult) > 0) {
+    const val = num(a.shield_mult) > 0 ? `x${a.shield_mult}` : a.shield_flat;
+    out.push({ key: "shield", label: `Khiên ${val}`, className: EFFECT_STYLE.shield });
   }
   if (num(a.heal_flat) > 0) {
     out.push({ key: "heal", label: `Chữa ${a.heal_flat}`, className: EFFECT_STYLE.heal });

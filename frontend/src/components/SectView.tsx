@@ -83,7 +83,6 @@ export const SectView: React.FC = () => {
     kickMember,
     createCustomMission,
     stockSectVaultBulk,
-    upgradeSect,
     setView,
     sectJoinRequests,
     sectPromotionRequests,
@@ -3685,60 +3684,6 @@ const rank = spec.rank || 1;
                 })()}
               </div>}
 
-              {/* Upgrade Sect Card */}
-              <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between gap-4">
-                <div>
-                  <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-yellow-500" />
-                    Thăng Cấp Tông Môn
-                  </h4>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Nâng cao vị thế và uy danh của thế lực tông môn trên tiên giới.
-                  </p>
-
-                  <div className="bg-zinc-950/40 border border-zinc-900 rounded-xl p-3.5 mt-4 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">Cấp độ hiện tại</span>
-                      <span className="text-xl font-serif font-bold text-zinc-200">Cấp {sect?.level || 1}</span>
-                    </div>
-                    <ArrowRight className="w-5 h-5 text-zinc-700" />
-                    <div className="text-right">
-                      <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">Cấp độ tiếp theo</span>
-                      <span className="text-xl font-serif font-bold text-yellow-500">Cấp {(sect?.level || 1) + 1}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {(() => {
-                  const currentLvl = sect?.level || 1;
-                  const cost = currentLvl * currentLvl * 5000;
-                  const canAfford = (sect?.funds || 0) >= cost;
-
-                  return (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-zinc-500 font-mono">Chi phí nâng cấp:</span>
-                        <span className={`font-mono font-bold ${canAfford ? "text-yellow-500" : "text-red-400"}`}>
-                          {cost.toLocaleString()} Quỹ
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!canAfford) return;
-                          await upgradeSectBuilding("main_hall");
-                        }}
-                        disabled={!canAfford || actionLoading}
-                        className="w-full py-2.5 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Tăng Cấp Thế Lực
-                      </button>
-                    </div>
-                  );
-                })()}
-              </div>
             </div>
           )}
         </div>

@@ -348,6 +348,7 @@ Các trường quan trọng trong dictionary:
 | `damage_flat` | 207 | number | Sát thương cố định (tính sau modifier, trước shield/HP) |
 | `damage_path` | 176 | enum | Hệ sát thương (`blood`, `Water Path`, `Sword Path`, `Fire Path`, `Ice Path`, … 20 giá trị) |
 | `shield_flat` | 96 | number | Tạo khiên hộ thể (nhận damage trước HP) |
+| `shield_mult` | 96 | number | Nhân khiên (×1.075 – ×1.35) |
 | `apply_status` | 97 | enum | Gắn status (phân bố xem mục Status chiến đấu) |
 | `status_duration_ticks` | 83 | integer | Số lượt status tồn tại |
 | `status_tick_damage` | 66 | number | Damage mỗi tick (chỉ DOT: bleed/poison/slow_damage; nơi khác là cường độ %) |

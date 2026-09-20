@@ -721,6 +721,9 @@ func Simulate(state *CombatState) []CombatLog {
 				// Apply shield to self
 				if a.Defense > 0 {
 					baseShield := a.Defense
+					if a.ShieldMult > 1.0 {
+						baseShield = a.Defense * a.ShieldMult
+					}
 					daoShield := 0.0
 					if hasDao && daoMult > 1.0 {
 						daoShield = baseShield * (daoMult - 1.0)
@@ -953,38 +956,38 @@ func Simulate(state *CombatState) []CombatLog {
 						hitCount = 1
 					}
 
-					for _, target := range resolved {
-						totalDmg := 0.0
+				for _, target := range resolved {
+					totalDmg := 0.0
 
-						// Blind: chance to miss the target entirely
-						if actor.IsBlinded && actor.AccuracyPenalty > 0 {
-							if rng.Float64() < actor.AccuracyPenalty {
-								turnLogs = append(turnLogs, CombatLog{
-									Turn:      turn,
-									ActorId:   actor.ID,
-									ActorName: actor.Name,
-									Action:    "BLIND_MISS",
-									TargetId:  target.ID,
-									Detail:    fmt.Sprintf("%s bị mù, đòn tấn công đánh trượt %s!", actor.Name, target.Name),
-								})
-								continue
-							}
+					// Blind: chance to miss the target entirely
+					if actor.IsBlinded && actor.AccuracyPenalty > 0 {
+						if rng.Float64() < actor.AccuracyPenalty {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "BLIND_MISS",
+								TargetId:  target.ID,
+								Detail:    fmt.Sprintf("%s bị mù, đòn tấn công đánh trượt %s!", actor.Name, target.Name),
+							})
+							continue
 						}
+					}
 
-						targetDef := target.BaseDef * target.DefenseMultiplier
-						if hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD") {
-							targetDef = math.Max(0, targetDef-30.0)
-						}
-						// Apply ignore_defense from attacker
-						if actor.IgnoreDefenseFlat > 0 {
-							targetDef = math.Max(0, targetDef-actor.IgnoreDefenseFlat)
-						}
-						if actor.IgnoreDefensePct > 0 {
-							targetDef = math.Max(0, targetDef*(1.0-actor.IgnoreDefensePct))
-						}
+					targetDef := target.BaseDef * target.DefenseMultiplier
+					if hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD") {
+						targetDef = math.Max(0, targetDef-30.0)
+					}
+					// Apply ignore_defense from attacker
+					if actor.IgnoreDefenseFlat > 0 {
+						targetDef = math.Max(0, targetDef-actor.IgnoreDefenseFlat)
+					}
+					if actor.IgnoreDefensePct > 0 {
+						targetDef = math.Max(0, targetDef*(1.0-actor.IgnoreDefensePct))
+					}
 
-						for h := 0; h < hitCount; h++ {
-							hitDmg := a.Damage * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
+					for h := 0; h < hitCount; h++ {
+						hitDmg := a.Damage * a.DamageMult * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
 							if h > 0 {
 								hitDmg *= 0.7
 							}

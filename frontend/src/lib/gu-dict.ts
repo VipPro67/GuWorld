@@ -2,6 +2,7 @@
 export interface ActiveEffect {
   damage_flat?: number;
   damage_mult?: number;
+  shield_mult?: number;
   shield_flat?: number;
   range?: number;
   mana_regen?: number;

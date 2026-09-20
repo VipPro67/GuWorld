@@ -440,6 +440,9 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.ShieldFlat > 0 {
 			act.Defense += active.ShieldFlat
 		}
+		if active.ShieldMult > 0 {
+			act.ShieldMult = active.ShieldMult
+		}
 		// Registry-driven statuses (BLEED/POISON/BURN/FEAR/CONFUSE/STEALTH/
 		// SLEEP/BLIND/CHARM/BIND + catalog). Resolved with real turns from
 		// status_duration_ticks instead of a hardcoded 3.
@@ -511,7 +514,7 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 		return false
 	}
 	active := spec.Effects.Active
-	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 ||
+	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 || active.ShieldMult > 0 ||
 		active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 ||
 		active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
 		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
@@ -541,26 +544,6 @@ func hasCombatEffects(spec *models.GuDictionaryItem) bool {
 		}
 	}
 	return false
-}
-
-func computeGlobalGuDamageMultiplier(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
-	multiplier := 1.0
-	seen := make(map[string]struct{}, len(selectedGuIDs))
-	for _, guID := range selectedGuIDs {
-		if _, ok := seen[guID]; ok {
-			continue
-		}
-		seen[guID] = struct{}{}
-
-		spec, ok := resolveSpec(guID)
-		if !ok || spec.Effects.Active == nil {
-			continue
-		}
-		if spec.Effects.Active.DamageMult > 1.0 {
-			multiplier *= spec.Effects.Active.DamageMult
-		}
-	}
-	return multiplier
 }
 
 // computeGlobalIgnoreDefense aggregates ignore_defense from all equipped active Gu (additive, capped at 0.8).

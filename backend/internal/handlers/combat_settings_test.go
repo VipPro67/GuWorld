@@ -89,27 +89,6 @@ func TestFilterGuLoadoutPicksHighestRank(t *testing.T) {
 	}
 }
 
-func TestComputeGlobalGuDamageMultiplierDedupesByGuID(t *testing.T) {
-	setupGuRegistry(t)
-	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
-		switch guID {
-		case "GU_A":
-			return models.GetGu("GU_A", 2)
-		case "GU_B":
-			return models.GetGu("GU_B", 1)
-		case "GU_C":
-			return models.GetGu("GU_C", 1)
-		default:
-			return models.GuDictionaryItem{}, false
-		}
-	}
-
-	mult := computeGlobalGuDamageMultiplier([]string{"GU_A", "GU_A", "GU_B", "GU_C", "GU_B"}, loadoutSpec)
-	if mult != 1.5*1.2*1.3 {
-		t.Fatalf("expected 1.5*1.2*1.3=2.34, got %.4f", mult)
-	}
-}
-
 func TestStartCombat_AllyFiltering(t *testing.T) {
 	playerID := "11111111-1111-1111-1111-111111111111"
 	partyMemberID := "22222222-2222-2222-2222-222222222222"
