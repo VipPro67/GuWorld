@@ -158,9 +158,6 @@ func InitSchema() error {
 	if err := seedQuestsFromCSV(); err != nil {
 		logger.S.Warnf("seedQuestsFromCSV: %v", err)
 	}
-	if err := backfillSectVaultTables(); err != nil {
-		logger.S.Warnf("backfillSectVaultTables: %v", err)
-	}
 
 	// Clean up any stale active_combat records for non-leader party members
 	_, _ = DB.Exec(`UPDATE players SET active_combat = NULL WHERE party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`)
@@ -2248,66 +2245,16 @@ func SeedInstanceTemplates() error {
 }
 
 func SeedSects() error {
-	if err := seedSectsFromCSV("Sect.csv"); err != nil {
-		return err
-	}
+	// Sect data is now managed entirely through the Admin panel.
+	// No CSV seeding is performed on startup.
 	if err := seedSectMissionsFromCSV("SectMission.csv"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func seedSectsFromCSV(filename string) error {
-	f, r, header, err := openCSV(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	col := func(name string) int { return colIndex(header, name) }
-	idIdx, nameIdx := col("id"), col("name")
-	descIdx, regionIdx := col("description"), col("region")
-	vaultGuIdx, vaultMatIdx, vaultRecIdx := col("vault_gu"), col("vault_materials"), col("vault_recipes")
-	if idIdx < 0 || nameIdx < 0 {
-		return fmt.Errorf("Sect.csv missing required columns (id, name)")
-	}
-	get := func(row []string, idx int) string {
-		if idx < 0 || idx >= len(row) {
-			return ""
-		}
-		return strings.TrimSpace(row[idx])
-	}
-	seeded := 0
-	for {
-		row, err := r.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil || len(row) == 0 {
-			continue
-		}
-		id := get(row, idIdx)
-		if id == "" {
-			continue
-		}
-		vaultGu := safeJSONArray(get(row, vaultGuIdx), "[]", "Sect.csv:"+id+":vault_gu")
-		vaultMat := safeJSONObject(get(row, vaultMatIdx), "{}", "Sect.csv:"+id+":vault_materials")
-		vaultRec := safeJSONArray(get(row, vaultRecIdx), "[]", "Sect.csv:"+id+":vault_recipes")
-		_, err = DB.Exec(`
-			INSERT INTO sects (id, name, description, region, vault_gu, vault_materials, vault_recipes)
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
-			ON CONFLICT (id) DO UPDATE SET
-				name=EXCLUDED.name, description=EXCLUDED.description, region=EXCLUDED.region,
-				vault_gu=EXCLUDED.vault_gu, vault_materials=EXCLUDED.vault_materials, vault_recipes=EXCLUDED.vault_recipes
-		`, id, get(row, nameIdx), get(row, descIdx), get(row, regionIdx), vaultGu, vaultMat, vaultRec)
-		if err != nil {
-			return fmt.Errorf("failed to seed sect %s: %w", id, err)
-		}
-		_ = syncSectVaultFromJSON(id, vaultGu, vaultMat, vaultRec)
-		seeded++
-	}
-	logger.S.Infof("Seeded %d sects from %s", seeded, filename)
-	return nil
-}
+// Function removed: Sect data is now managed through Admin panel only.
+// CSV seeding for sects has been discontinued.
 
 func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 	// 1. Materials
@@ -2609,15 +2556,6 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 			WHERE item_type = 'Gu' AND status = 'ACTIVE' AND COALESCE((elem->>'rank')::int, 0) >= 6
 		UNION
 		SELECT DISTINCT gu_id FROM sect_vault_gu WHERE rank >= 6 AND quantity > 0
-		UNION
-		SELECT DISTINCT elem->>'id' FROM sects,
-			jsonb_array_elements(
-				CASE 
-					WHEN jsonb_typeof(vault_gu) = 'array' THEN vault_gu 
-					ELSE '[]'::jsonb 
-				END
-			) AS elem
-			WHERE COALESCE((elem->>'rank')::int, 0) >= 6
 	`)
 	if err != nil {
 		return nil, err
@@ -2808,30 +2746,6 @@ func ExportToCSV() error {
 			query:    `SELECT region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text,'{}'), COALESCE(respawn_seconds,300), COALESCE(is_active,true) FROM map_cells ORDER BY x, y`,
 		},
 		{
-			filename: "Sect.csv",
-			columns:  []string{"id", "name", "description", "region", "vault_gu", "vault_materials", "vault_recipes"},
-			query: `SELECT 
-				s.id, 
-				s.name, 
-				COALESCE(s.description,''), 
-				COALESCE(s.region,''), 
-				COALESCE((
-					SELECT jsonb_agg(jsonb_build_object(
-						'id', vg.gu_id, 'rank', vg.rank, 'cost', vg.cost, 'quantity', vg.quantity, 'hunger', vg.hunger, 'instance_id', vg.instance_id
-					)) FROM sect_vault_gu vg WHERE vg.sect_id = s.id AND vg.quantity > 0
-				)::text, s.vault_gu::text, '[]'),
-				COALESCE((
-					SELECT jsonb_object_agg(vm.item_id, vm.quantity) 
-					FROM sect_vault_materials vm WHERE vm.sect_id = s.id AND vm.quantity > 0
-				)::text, s.vault_materials::text, '{}'),
-				COALESCE((
-					SELECT jsonb_agg(jsonb_build_object(
-						'recipe_id', vr.recipe_id, 'completion_rate', vr.completion_rate
-					)) FROM sect_vault_recipes vr WHERE vr.sect_id = s.id
-				)::text, s.vault_recipes::text, '[]')
-			FROM sects s ORDER BY s.id`,
-		},
-		{
 			filename: "SectMission.csv",
 			columns:  []string{"sect_id", "title", "description", "mission_type", "target_id", "target_amount", "reward_contribution", "required_member_rank"},
 			query:    `SELECT sect_id, title, COALESCE(description,''), COALESCE(mission_type,'GATHER'), COALESCE(target_id,''), COALESCE(target_amount,1), COALESCE(reward_contribution,0), COALESCE(required_member_rank,'NGOAI_MON') FROM sect_missions ORDER BY sect_id, title`,
@@ -2864,7 +2778,7 @@ func AvailableTables() []string {
 	return []string{
 		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
 		"region", "loot_table", "monster", "monster_spawn", "map_cell",
-		"sect", "sect_mission", "quest", "race", "dream_realm", "status", "node_output",
+		"sect_mission", "quest", "race", "dream_realm", "status", "node_output",
 	}
 }
 
@@ -2898,8 +2812,6 @@ func TableImport(table string) error {
 		return seedMonsterSpawnsFromCSV("MonsterSpawn.csv")
 	case "map_cell":
 		return seedMapCellsFromCSV("MapCell.csv")
-	case "sect":
-		return seedSectsFromCSV("Sect.csv")
 	case "sect_mission":
 		return seedSectMissionsFromCSV("SectMission.csv")
 	case "quest":

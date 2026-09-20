@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -642,18 +641,6 @@ func DonateBulk(c *gin.Context) {
 
 	// 1. Process Materials
 	if len(req.Materials) > 0 {
-		// Fetch sect vault materials
-		var vaultMaterialsRaw json.RawMessage
-		err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultMaterialsRaw)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault materials"})
-			return
-		}
-		vaultMats := make(map[string]int64)
-		if len(vaultMaterialsRaw) > 0 {
-			_ = json.Unmarshal(vaultMaterialsRaw, &vaultMats)
-		}
-
 		for _, matReq := range req.Materials {
 			rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, playerID.String(), matReq.MaterialID)
 			if err != nil {

@@ -136,8 +136,8 @@ func CreateSect(c *gin.Context) {
 
 	// Insert new sect at player's current location (region, map_x, map_y)
 	_, err = tx.Exec(`
-		INSERT INTO sects (id, name, description, region, map_x, map_y, vault_gu, vault_materials, vault_recipes)
-		VALUES ($1, $2, $3, $4, $5, $6, '[]'::jsonb, '{}'::jsonb, '[]'::jsonb)
+		INSERT INTO sects (id, name, description, region, map_x, map_y)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`, sectID, req.Name, req.Description, currentRegion, player.X, player.Y)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create sect record: " + err.Error()})

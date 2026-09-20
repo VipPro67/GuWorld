@@ -80,8 +80,8 @@ func UpgradeSectBuilding(c *gin.Context) {
 
 	var level int
 	var funds int64
-	var buildingsJSON, vaultMatsJSON []byte
-	err = tx.QueryRow(`SELECT level, funds, buildings, vault_materials FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&level, &funds, &buildingsJSON, &vaultMatsJSON)
+	var buildingsJSON []byte
+	err = tx.QueryRow(`SELECT level, funds, buildings FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&level, &funds, &buildingsJSON)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn!"})
 		return
@@ -117,20 +117,14 @@ func UpgradeSectBuilding(c *gin.Context) {
 		return
 	}
 
-	var vaultMats map[string]int
-	if err := json.Unmarshal(vaultMatsJSON, &vaultMats); err != nil {
-		vaultMats = make(map[string]int)
-	}
-
 	buildings[req.BuildingName] = targetLevel
 
 	newBuildings, _ := json.Marshal(buildings)
-	newVault, _ := json.Marshal(vaultMats)
 
 	if req.BuildingName == "main_hall" {
-		_, err = tx.Exec(`UPDATE sects SET level = $1, funds = funds - $2, buildings = $3, vault_materials = $4 WHERE id = $5`, targetLevel, reqFunds, newBuildings, newVault, sectID)
+		_, err = tx.Exec(`UPDATE sects SET level = $1, funds = funds - $2, buildings = $3 WHERE id = $4`, targetLevel, reqFunds, newBuildings, sectID)
 	} else {
-		_, err = tx.Exec(`UPDATE sects SET funds = funds - $1, buildings = $2, vault_materials = $3 WHERE id = $4`, reqFunds, newBuildings, newVault, sectID)
+		_, err = tx.Exec(`UPDATE sects SET funds = funds - $1, buildings = $2 WHERE id = $3`, reqFunds, newBuildings, sectID)
 	}
 
 	if err != nil {

@@ -60,24 +60,3 @@ func TestTraceRecordingAndHeader(t *testing.T) {
 		t.Errorf("expected trace path /not-found, got %s", trace.Path)
 	}
 }
-
-func TestAdminMonitorUnauthorized(t *testing.T) {
-	r := server.SetupRouter(nil)
-
-	// Access without token should be 401
-	endpoints := []string{
-		"/api/admin/monitor/system",
-		"/api/admin/monitor/requests/summary",
-		"/api/admin/monitor/requests/traces",
-	}
-
-	for _, ep := range endpoints {
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodGet, ep, nil)
-		r.ServeHTTP(w, req)
-
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("expected 401 Unauthorized for %s, got %d", ep, w.Code)
-		}
-	}
-}

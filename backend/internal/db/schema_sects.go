@@ -15,9 +15,6 @@ func schemaSects() error {
 		map_y INT NOT NULL DEFAULT 50,
 		shield_until TIMESTAMP WITH TIME ZONE,
 		buildings JSONB NOT NULL DEFAULT '{"main_hall": 1, "defensive_array": 1, "spirit_vein": 1, "treasury": 1, "training_ground": 1}',
-		vault_gu JSONB NOT NULL DEFAULT '[]',
-		vault_materials JSONB NOT NULL DEFAULT '{}',
-		vault_recipes JSONB NOT NULL DEFAULT '[]',
 		funds BIGINT NOT NULL DEFAULT 0,
 		level INTEGER NOT NULL DEFAULT 1,
 		require_approval BOOLEAN NOT NULL DEFAULT FALSE,
@@ -53,6 +50,24 @@ func schemaSects() error {
 	BEGIN
 		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='last_vault_decay_at') THEN
 			ALTER TABLE sects ADD COLUMN last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
+
+	// Drop legacy vault JSONB columns — vault data now lives in sect_vault_gu,
+	// sect_vault_materials, sect_vault_recipes.
+	if err := execSchema("drop_sects_vault_columns", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='vault_gu') THEN
+			ALTER TABLE sects DROP COLUMN vault_gu;
+		END IF;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='vault_materials') THEN
+			ALTER TABLE sects DROP COLUMN vault_materials;
+		END IF;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='vault_recipes') THEN
+			ALTER TABLE sects DROP COLUMN vault_recipes;
 		END IF;
 	END $$;`); err != nil {
 		return err

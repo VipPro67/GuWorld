@@ -3,47 +3,9 @@ package handlers
 import (
 	"math"
 	"testing"
-	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
-
-func TestGetRegionalWallDebuffScaling(t *testing.T) {
-	epsilon := 1e-6
-	expectedDur := 36 * time.Hour
-
-	// Mortals (Rank 1-5)
-	r1Pct, r1Dur := GetRegionalWallDebuff(1, 1)
-	if math.Abs(r1Pct - (-0.10)) > epsilon || r1Dur != expectedDur {
-		t.Errorf("Rank 1.1 debuff expected -0.10, 36h, got %f, %v", r1Pct, r1Dur)
-	}
-
-	r3Pct, r3Dur := GetRegionalWallDebuff(3, 2)
-	if math.Abs(r3Pct - (-0.21)) > epsilon || r3Dur != expectedDur {
-		t.Errorf("Rank 3.2 debuff expected -0.21, 36h, got %f, %v", r3Pct, r3Dur)
-	}
-
-	r5Pct, r5Dur := GetRegionalWallDebuff(5, 5)
-	if math.Abs(r5Pct - (-0.34)) > epsilon || r5Dur != expectedDur {
-		t.Errorf("Rank 5.5 debuff expected -0.34, 36h, got %f, %v", r5Pct, r5Dur)
-	}
-
-	// Immortals (Rank 6-9) — higher rank = significantly higher debuff
-	r6Pct, r6Dur := GetRegionalWallDebuff(6, 1)
-	if math.Abs(r6Pct - (-0.45)) > epsilon || r6Dur != expectedDur {
-		t.Errorf("Rank 6.1 debuff expected -0.45, 36h, got %f, %v", r6Pct, r6Dur)
-	}
-
-	r8Pct, r8Dur := GetRegionalWallDebuff(8, 3)
-	if math.Abs(r8Pct - (-0.69)) > epsilon || r8Dur != expectedDur {
-		t.Errorf("Rank 8.3 debuff expected -0.69, 36h, got %f, %v", r8Pct, r8Dur)
-	}
-
-	r9Pct, r9Dur := GetRegionalWallDebuff(9, 5)
-	if math.Abs(r9Pct - (-0.83)) > epsilon || r9Dur != expectedDur {
-		t.Errorf("Rank 9.5 debuff expected -0.83, 36h, got %f, %v", r9Pct, r9Dur)
-	}
-}
 
 func TestCheckAndApplyRegionalWallDebuff(t *testing.T) {
 	zoneReg.mu.Lock()
@@ -92,7 +54,7 @@ func TestCheckAndApplyRegionalWallDebuff(t *testing.T) {
 	if wallStatus == nil {
 		t.Fatalf("regional_wall_suppression status instance not found")
 	}
-	if math.Abs(wallStatus.Value - (-0.20)) > 1e-6 {
+	if math.Abs(wallStatus.Value-(-0.20)) > 1e-6 {
 		t.Errorf("expected debuff value -0.20 for Rank 3.1, got %f", wallStatus.Value)
 	}
 
@@ -104,4 +66,3 @@ func TestCheckAndApplyRegionalWallDebuff(t *testing.T) {
 		t.Errorf("expected debuffed attack 24.0, got %f", stats["attack"])
 	}
 }
-

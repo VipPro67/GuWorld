@@ -456,8 +456,7 @@ func AdminStockSectVault(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var vaultGuJSON, vaultMatsJSON, vaultRecipesJSON []byte
-	err = tx.QueryRow(`SELECT vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&vaultGuJSON, &vaultMatsJSON, &vaultRecipesJSON)
+	_, err = tx.Exec(`SELECT 1 FROM sects WHERE id = $1 FOR UPDATE`, sectID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn"})
 		return
