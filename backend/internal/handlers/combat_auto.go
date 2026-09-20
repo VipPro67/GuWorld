@@ -424,12 +424,21 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	if activeCombat != nil {
 		simEnemy.PathResistance = activeCombat.EnemyPathResistance
 		simEnemy.MentalResistance = activeCombat.EnemyMentalResistance
+		simEnemy.Tenacity = activeCombat.EnemyTenacity
+		simEnemy.CCResist = activeCombat.EnemyCCResist
 		simEnemy.DaoBonus = activeCombat.EnemyDaoBonus
 		simEnemy.PathDamageBonus = activeCombat.EnemyPathDamageBonus
 		simEnemy.HealingReceived = activeCombat.EnemyHealingReceived
 		simEnemy.SoulDefenseBonus = activeCombat.EnemySoulDefenseBonus
 		simEnemy.LuckBonus = activeCombat.EnemyLuckBonus
 	}
+
+	simEnemy.DaoProfile = gamefx.BuildDaoCombatProfile(
+		enemy.DaoMarks,
+		enemy.PathMasteries,
+		false,
+		simEnemy.DaoBonus,
+	)
 
 	// Highest-rank ACTIVE instance per GuID, used to resolve loadout specs.
 	instByGuID := make(map[string]models.GuInstance)
@@ -910,10 +919,19 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		PathResistance:       charFX.PathResistanceBonus,
 		HealingReceived:      charFX.HealingReceivedBonus,
 		MentalResistance:     charFX.MentalResistanceBonus,
+		Tenacity:             charFX.Tenacity,
+		CCResist:             charFX.CCResist,
 		SoulDefenseBonus:     charFX.SoulDefenseBonus,
 		LuckBonus:            charFX.LuckBonus,
-		Actions:              allActions,
-		CategoryPriorities:   player.CombatSettings.CategoryPriorities,
+		HasNonConflictingDao: charFX.NonConflictingDaoMarks,
+		DaoProfile: gamefx.BuildDaoCombatProfile(
+			player.DaoMarks,
+			player.PathMasteries,
+			charFX.NonConflictingDaoMarks,
+			charFX.DaoNganBonus,
+		),
+		Actions:            allActions,
+		CategoryPriorities: player.CombatSettings.CategoryPriorities,
 
 		AutoHealHP:        autoHealHP,
 		HealThreshold:     healThreshold,

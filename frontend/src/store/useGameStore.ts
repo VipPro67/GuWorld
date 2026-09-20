@@ -561,6 +561,33 @@ export interface DaoMark {
   updated_at: string;
 }
 
+export interface DaoNganPathDetail {
+  path: string;
+  amount: number;
+  multiplier: number;
+  power: number;
+  attainment_level: number;
+  attainment_name: string;
+  realm_control_pct: number;
+  realm_efficiency: number;
+  internal_conflict_penalty_pct: number;
+  natural_resistance_pct: number;
+  purity_pct: number;
+}
+
+export interface DaoNganResult {
+  total_dao_ngan: number;
+  total_marks: number;
+  unique_path_count: number;
+  average_multiplier: number;
+  max_multiplier: number;
+  max_path: string;
+  dominant_path: string;
+  grace_threshold: number;
+  has_non_conflicting_dao: boolean;
+  paths: DaoNganPathDetail[];
+}
+
 export interface ApertureResourceNode {
   id: string;
   aperture_id: string;

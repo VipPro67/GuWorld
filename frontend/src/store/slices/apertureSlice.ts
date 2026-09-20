@@ -5,6 +5,7 @@ import { createManaSnapshotFromPlayer } from "@/store/useGameStore";
 import type {
   ImmortalAperture,
   DaoMark,
+  DaoNganResult,
   ApertureResourceNode,
   ApertureVariantHuman,
   ApertureNodeWorker,
@@ -32,6 +33,10 @@ let lastDaoMarksPlayerId: string | null = null;
 let lastDaoMarksFetchTime = 0;
 const DAO_MARKS_TTL_MS = 30000;
 
+let fetchDaoNganPromise: Promise<void> | null = null;
+let lastDaoNganPlayerId: string | null = null;
+let lastDaoNganFetchTime = 0;
+
 let fetchActiveTribulationPromise: Promise<void> | null = null;
 let lastActiveTribulationPlayerId: string | null = null;
 let lastActiveTribulationFetchTime = 0;
@@ -40,11 +45,13 @@ const ACTIVE_TRIBULATION_TTL_MS = 15000;
 export interface ApertureSlice {
   aperture: ImmortalAperture | null;
   daoMarks: DaoMark[];
+  daoNgan: DaoNganResult | null;
   apertureNodes: ApertureResourceNode[];
   variantHumans: ApertureVariantHuman[];
   activeTribulation: { event: TribulationEvent; enemies: TribulationEnemy[] } | null;
   fetchAperture: (forceRefresh?: boolean) => Promise<void>;
   fetchDaoMarks: (forceRefresh?: boolean) => Promise<void>;
+  fetchDaoNgan: (forceRefresh?: boolean) => Promise<void>;
   fetchApertureNodes: (forceRefresh?: boolean) => Promise<void>;
   fetchVariantHumans: () => Promise<void>;
   placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => Promise<boolean>;
@@ -83,6 +90,7 @@ export interface ApertureSlice {
 export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ApertureSlice> = (set, get) => ({
   aperture: null,
   daoMarks: [],
+  daoNgan: null,
   apertureNodes: [],
   variantHumans: [],
   nodeWorkers: [],
@@ -139,6 +147,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   fetchDaoMarks: async (forceRefresh = false) => {
     const currentPlayerId = get().player?.id || "";
     const now = Date.now();
+    // Fire fetchDaoNgan in parallel
+    get().fetchDaoNgan(forceRefresh).catch(() => {});
     if (
       !forceRefresh &&
       lastDaoMarksPlayerId === currentPlayerId &&
@@ -172,6 +182,43 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     };
     fetchDaoMarksPromise = executeFetch();
     return fetchDaoMarksPromise;
+  },
+
+  fetchDaoNgan: async (forceRefresh = false) => {
+    const currentPlayerId = get().player?.id || "";
+    const now = Date.now();
+    if (
+      !forceRefresh &&
+      lastDaoNganPlayerId === currentPlayerId &&
+      now - lastDaoNganFetchTime < DAO_MARKS_TTL_MS &&
+      get().daoNgan !== null
+    ) {
+      return;
+    }
+    if (fetchDaoNganPromise) return fetchDaoNganPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/dao-marks/dao-ngan`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          lastDaoNganPlayerId = currentPlayerId;
+          lastDaoNganFetchTime = Date.now();
+          set({ daoNgan: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch Dao Ngan:", err);
+      } finally {
+        fetchDaoNganPromise = null;
+      }
+    };
+    fetchDaoNganPromise = executeFetch();
+    return fetchDaoNganPromise;
   },
 
   fetchApertureNodes: async (forceRefresh = false) => {

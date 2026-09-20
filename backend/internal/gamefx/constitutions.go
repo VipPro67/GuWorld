@@ -138,8 +138,13 @@ func addEffects(dst *Effects, src Effects) {
 	dst.HPRegenBonus += src.HPRegenBonus
 	dst.MentalResistanceBonus += src.MentalResistanceBonus
 	dst.SoulDefenseBonus += src.SoulDefenseBonus
+	dst.Tenacity += src.Tenacity
+	dst.CCResist += src.CCResist
 	dst.SoulRegenBonus += src.SoulRegenBonus
 	dst.ApertureStressBonus += src.ApertureStressBonus
+	if src.NonConflictingDaoMarks {
+		dst.NonConflictingDaoMarks = true
+	}
 	if src.Immortal {
 		dst.Immortal = true
 	}

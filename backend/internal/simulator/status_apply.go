@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -112,8 +113,9 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 }
 
 func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, turn int, rng *rand.Rand, logs *[]CombatLog) {
-	// Resist gate (control effects subject to MentalResistance) using advanced proc formula.
-	if spec.ResistGate && !statusfx.CanApplyStatus(rng, actor.Rank, target.Rank, actor.DaoMarks, target.DaoMarks, spec, target.MentalResistance) {
+	// Resist gate (control effects subject to MentalResistance + generic CCResist).
+	// Combined multiplicatively, capped at 0.75.
+	if spec.ResistGate && !statusfx.CanApplyStatus(rng, actor.Rank, target.Rank, actor.DaoMarks, target.DaoMarks, spec, gamefx.CombinedResist(target.MentalResistance, target.CCResist)) {
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   target.ID,
@@ -122,6 +124,17 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			Detail:    fmt.Sprintf("%s kháng lại %s bằng ý chí tinh thần!", target.Name, spec.Label),
 		})
 		return
+	}
+
+	// Tenacity shortens incoming CC duration (min 1 turn). Buffs bypass.
+	if !spec.SelfTarget && target.Tenacity > 0 {
+		if scale := 1.0 - gamefx.CappedTenacity(target.Tenacity); scale < 1.0 {
+			scaled := int(float64(op.Turns) * scale)
+			if scaled < 1 {
+				scaled = 1
+			}
+			op.Turns = scaled
+		}
 	}
 
 	switch spec.Behaviour {

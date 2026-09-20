@@ -88,6 +88,8 @@ type PassiveEffect struct {
 	TimeSpeedMultiplier   float64 `json:"time_speed_multiplier,omitempty"`
 	Accuracy              float64 `json:"accuracy,omitempty"` // accuracy bonus (reduces enemy dodge)
 	DisguiseLevel         float64 `json:"disguise_level,omitempty"`
+	Tenacity              float64 `json:"tenacity,omitempty"`  // self-dispel chance + CC duration reduction (0..1)
+	CCResist              float64 `json:"cc_resist,omitempty"` // generic proc resist vs all debuffs (0..1)
 }
 
 type SpecialMechanic struct {
@@ -409,6 +411,12 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		if gu.Effects.Passive.Accuracy > 0 {
 			res["accuracy"] = gu.Effects.Passive.Accuracy
+		}
+		if gu.Effects.Passive.Tenacity > 0 {
+			res["tenacity"] = gu.Effects.Passive.Tenacity
+		}
+		if gu.Effects.Passive.CCResist > 0 {
+			res["cc_resist"] = gu.Effects.Passive.CCResist
 		}
 	}
 	return res

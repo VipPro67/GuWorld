@@ -1,6 +1,9 @@
 package simulator
 
-import "github.com/vippro67/GuWorld/backend/internal/statusfx"
+import (
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
+)
 
 // CombatLoadout represents the input data from the player before the battle starts.
 type CombatLoadout struct {
@@ -230,13 +233,17 @@ type CombatantAuto struct {
 
 	// Character effects from race/constitution/statuses. Computed by the handler
 	// from gamefx.Get(player) and applied by the engine during battle.
-	DaoBonus         map[string]float64 // additive dao-path multiplier (path affinity)
-	PathDamageBonus  map[string]float64 // additive damage multiplier for a path
-	PathResistance   map[string]float64 // additive damage reduction taken for a path
-	HealingReceived  float64            // multiplier bonus on healing received
-	MentalResistance float64            // chance (0-1) to resist control effects
-	SoulDefenseBonus float64            // percentage reduction of soul damage taken
-	LuckBonus        float64            // flat increase of luck stat
+	DaoBonus             map[string]float64 // additive dao-path multiplier (path affinity)
+	PathDamageBonus      map[string]float64 // additive damage multiplier for a path
+	PathResistance       map[string]float64 // additive damage reduction taken for a path
+	HealingReceived      float64            // multiplier bonus on healing received
+	MentalResistance     float64            // chance (0-1) to resist control effects
+	Tenacity             float64            // generic self-dispel chance + CC duration reduction (0-1)
+	CCResist             float64            // generic proc resist vs all debuffs (0-1)
+	SoulDefenseBonus     float64            // percentage reduction of soul damage taken
+	LuckBonus            float64            // flat increase of luck stat
+	HasNonConflictingDao bool               // true if character possesses non-conflicting dao marks trait
+	DaoProfile           *gamefx.DaoCombatProfile // precomputed O(1) dao conflict and natural defense profile
 
 	// Equipment / Loadout
 	Loadout            *CombatLoadout

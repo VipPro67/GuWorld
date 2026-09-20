@@ -259,10 +259,85 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
   - Tích lũy năm nội bộ / sản xuất tiên khí
 - **Cổ ảnh hưởng `time_speed_multiplier`:** một số Cổ Trụ đạo có thể gia tốc vĩnh viễn (Cổ tiêu hao) hoặc khi trang bị (Cổ thụ động) dòng thời gian cá nhân — hồi phục nhanh hơn nhưng tuổi thọ trôi nhanh hơn.
 
-### Đạo ngân
+### Đạo ngân, Xung Đột Quy Tắc & Cân Bằng Lưu Phái (Dao Mark Conflict)
 
-- Đạo ngân lưu theo path và amount.
-- Tai kiếp thành công thưởng đạo ngân.
+Đạo Ngân là vết khắc cô đọng của quy luật tự nhiên tích lũy trên thân thể và Tiên Khiếu của Cổ Tiên qua **49 lưu phái** (tích lũy từ Độ Kiếp, Thăng Tiên, Nuốt Tiên Khiếu hoặc Luyện Cổ).
+
+#### 1. Bảng Phân Loại 10 Nhóm Đạo (Dao Groups)
+Các lưu phái trong cùng một nhóm hoàn toàn tương thích **100% (Xung đột = 0.0)**:
+- **ELEMENTAL (Nguyên Tố)**: Hỏa, Thủy, Băng, Phong, Lôi, Thổ, Vân, Ám, Quang, Nguyệt, Nhật, Tinh.
+- **SPACE_TIME (Thời Không)**: Vũ (Không gian), Trụ (Thời gian), Hư (Hư vô).
+- **RULE_ORDER (Quy Tắc & Hạn Chế)**: Luật, Giới (Giới hạn), Phong (Phong ấn), Trận.
+- **KINETIC_WEAPON (Vũ Khí & Động Năng)**: Kiếm, Đao, Binh, Thanh (Âm thanh), Chấn (Chấn động).
+- **BODY_LIFE (Sinh Mệnh & Thể Phách)**: Lực, Biến Hóa, Cốt, Cương (Thân thể/Cương thi).
+- **SOUL_MIND (Linh Hồn & Tâm Thức)**: Hồn, Trí, Nô (Nô dịch), Mộng, Mị (Mị hoặc), Ảo, Tình (Tình cảm).
+- **INFORMATION_STEALTH (Ẩn Thao & Tình Báo)**: Tín (Tin tức), Ẩn (Tàng hình), Huyễn (Biến ảo), Đạo (Trộm cắp).
+- **ORGANIC_CORRUPTION (Ăn Mòn & Huyết Độc)**: Huyết, Độc, Mộc, Thực (Ăn nuốt).
+- **CRAFT_ALCHEMY (Chế Tác & Vật Chất)**: Luyện, Đan, Kim (Kim loại).
+- **HEAVEN_HUMAN (Chí Cao Vận Mệnh)**: Thiên, Nhân, Vận, Họa (Tai họa/Vẽ), Hạn (Hạn hán).
+
+#### 2. Cặp Tương Khắc & Bổ Trợ Đặc Thù (Pair Overrides)
+- **Tương Khắc Cực Đoan (Xung đột = 1.0 - 1.2)**: Hỏa $\leftrightarrow$ Thủy/Băng; Quang $\leftrightarrow$ Ám; Độc $\leftrightarrow$ Mộc; Kiếm/Đao $\leftrightarrow$ Trận; Trí $\leftrightarrow$ Tình.
+- **Cộng Hưởng Bổ Trợ (Xung đột = 0.2 - 0.3)**: Lực $\leftrightarrow$ Biến Hóa; Hồn $\leftrightarrow$ Nô; Hư $\leftrightarrow$ Ẩn; Luyện $\leftrightarrow$ Lực/Hỏa; Vận $\leftrightarrow$ Thiên/Nhân.
+
+#### 3. Công Thức Tính Xung Đột & Điều Hòa Cảnh Giới
+- **Ngưỡng An Toàn (Grace Threshold)**: Đạo ngân ngoại hệ $\le \max(1.000, 2\% \text{ tổng Đạo Ngân})$ hoàn toàn không gây xung đột.
+- **Hiệu Quả Khuếch Đại Cảnh Giới (Attainment Efficiency)**: Cảnh giới Chân Ý giúp tăng cường uy lực Đạo Ngân đồng hệ:
+  - Phàm Thai: $\times 1.00$
+  - Đại Sư (Master): $\times 1.10$ (+10% uy lực)
+  - Tông Sư (Grandmaster): $\times 1.20$ (+20% uy lực)
+  - Đại Tông Sư (Great Grandmaster): $\times 1.30$ (+30% uy lực)
+  - Vô Thượng (Supreme Grandmaster): $\times 1.45$ (+45% uy lực)
+- **Hệ Số Điều Hòa Cảnh Giới (Realm Control Mitigation)**: Giảm trực tiếp lượng xung đột từ Đạo ngân ngoại hệ:
+  - Đại Sư: Giảm **20%** xung đột
+  - Tông Sư: Giảm **40%** xung đột
+  - Đại Tông Sư: Giảm **60%** xung đột
+  - Vô Thượng Đại Tông Sư: Giảm **80%** xung đột
+- **Hệ số Xung Đột Khi Tấn Công (`DaoConflictMultiplier`)**: Nằm trong khoảng `[0.10, 1.00]`. Nếu không có Cảnh giới điều hòa, mang lượng lớn Đạo ngân xung đột có thể làm mất tới **90% sát thương**.
+- **Màng Phòng Thủ Đạo Ngân Tự Nhiên (`NaturalDaoResistance`)**: Khi bị đòn tấn công dị hệ nhắm vào, Đạo ngân trên người Cổ Tiên phòng thủ tạo ra màng kháng tự nhiên:
+  $$\text{Resistance} = \frac{\text{DefenseConflictDao}}{\text{DefenseConflictDao} + 50.000} \times 30\% \quad (\text{Trần tối đa } 30\%)$$
+- **Đặc Tính Không Xung Đột (Non-Conflicting Body / Chí Tôn Tiên Thai)**: Bỏ qua 100% hình phạt xung đột khi tấn công (luôn gây 100% sát thương), đổi lại không có màng kháng tự nhiên khi phòng thủ.
+
+#### 4. Ví Dụ Tính Toán Chi Tiết (Step-by-Step)
+
+- **Ví dụ 1: Khuếch Đại Đạo Ngân & Hiệu Suất Cảnh Giới (Attainment Efficiency)**
+  - Cổ Tiên Hỏa Đạo có $2.000$ Đạo Ngân Hỏa $\rightarrow \text{daoAmp} = 1.0 + 2000 / 100.0 = 21.0$ ($+2.000\%$).
+  - Phàm Thai ($\text{Eff} = 1.00$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.00 = \mathbf{21.0\times}$.
+  - Đại Sư ($\text{Eff} = 1.05$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.05 = \mathbf{22.0\times}$ ($+100\%$ bonus Chân Ý).
+  - Tông Sư ($\text{Eff} = 1.12$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.12 = \mathbf{23.4\times}$.
+  - Vô Thượng ($\text{Eff} = 1.45$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.45 = \mathbf{30.0\times}$!
+
+- **Ví dụ 2: Xung Đột Đạo Ngân & Khả Năng Hóa Giải Của Cảnh Giới (Attainment Control)**
+  - Cổ Tiên Hỏa Đạo có $10.000$ Đạo Ngân Hỏa, nhưng tích lũy $20.000$ Đạo Ngân Thủy ($\text{compatibility} = 0.55 \rightarrow \text{xung đột} = 0.45$).
+  - $\text{rawConflict} = 20.000 \times 0.45 = 9.000$.
+  - *Trường hợp A: Phàm Thai ($\text{RealmControl} = 0\%$)*:
+    - $\text{effConflict} = 9.000 \times (1.0 - 0.0) = 9.000$.
+    - $\text{conflictRatio} = 9.000 / (10.000 + 50.000) = 0.15$.
+    - $\text{conflictMult} = 1.0 / (1.0 + 0.15 \times 1.6) = \mathbf{0.806}$ ($\rightarrow$ **Mất 19.4% sát thương** do xung đột Thủy Hỏa!).
+  - *Trường hợp B: Vô Thượng Đại Tông Sư ($\text{RealmControl} = 80\%$)*:
+    - $\text{effConflict} = 9.000 \times (1.0 - 0.80) = 1.800$.
+    - $\text{conflictRatio} = 1.800 / 60.000 = 0.03$.
+    - $\text{conflictMult} = 1.0 / (1.0 + 0.03 \times 1.6) = \mathbf{0.954}$ ($\rightarrow$ **Chỉ giảm 4.6% sát thương**, Chân Ý hóa giải 76% tổn thất!).
+
+- **Ví dụ 3: Màng Phòng Thủ Đạo Ngân Tự Nhiên (Natural Dao Resistance)**
+  - Cổ Tiên Thủy Đạo sở hữu $100.000$ Đạo Ngân Thủy bị tấn công bởi sát chiêu Hỏa Đạo ($\text{compatibility} = 0.55 \rightarrow \text{xung đột thủ} = 0.45$).
+  - $\text{defConflict} = 100.000 \times 0.45 = 45.000$.
+  - $\text{Resistance} = 0.30 \times [45.000 / (45.000 + 50.000)] = 0.30 \times (45.000 / 95.000) = \mathbf{14.21\%}$.
+  - $\rightarrow$ Đòn đánh Lửa của đối phương tự động bị triệt tiêu $14.21\%$ sát thương ngay khi chạm vào lớp màng Thủy Đạo tự nhiên.
+
+- **Ví dụ 4: Tính Sát Thương Thực Tế Toàn Diện (A $\rightarrow$ Z)**
+  - **Bên Công**: Sát thương gốc = $1.000$, DamageMult = $2.0$, Buff = $1.2$. Có $5.000$ Đạo Ngân Lực Đạo ($\text{daoAmp} = 51.0$), Tông Sư Lực Đạo ($\text{Eff} = 1.12, \text{Ctrl} = 25\%$), mang $10.000$ Đạo Ngân Hồn Đạo ngoại hệ ($\text{comp} = 0.88 \rightarrow \text{xung đột} = 0.12$).
+    - $\text{totalDaoMult} = 1.0 + (51.0 - 1.0) \times 1.12 = 57.0$.
+    - $\text{effConflict} = (10.000 \times 0.12) \times (1.0 - 0.25) = 900$.
+    - $\text{conflictRatio} = 900 / (5.000 + 50.000) = 0.01636 \rightarrow \text{conflictMult} = 0.974$.
+    - $\text{hitDmg} = 1.000 \times 2.0 \times 1.2 \times 57.0 \times 0.974 = \mathbf{133.243}$ sát thương.
+  - **Bên Thủ**: Phòng thủ $\text{BaseDef} = 2.000$, Màng kháng tự nhiên $\text{Resistance} = 10\%$.
+    - $\text{netDmg} = (133.243 - 2.000) \times (1.0 - 0.10) = 131.243 \times 0.90 = \mathbf{118.118}$ Sinh Lực mất thực tế!
+
+#### 5. Ba Hướng Xây Dựng Nhân Vật (Build Paths)
+1. **Chuyên Tu (Pure Focus)**: Dồn toàn lực vào 1 nhóm Đạo. Không lo xung đột, sát thương đồng hệ cực đại.
+2. **Song Tu / Phụ Tu (Dual Synergic)**: 1 phái Chính + 1 phái Phụ tương thích cao (như Lực + Biến Hóa, Hồn + Nô), nâng Chân Ý lên Tông Sư để xóa bỏ xung đột, công thủ toàn diện.
+3. **Đa Tu Toàn Năng (Omni Master)**: Luyện nhiều phái đối nghịch, bắt buộc phải cày Mộng Cảnh để đạt Đại Tông Sư / Vô Thượng ở các phái nhằm áp chế xung đột tối đa.
 
 ## 4. Cổ trùng và bọc đồ
 
@@ -450,6 +525,13 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu tại HUB và chịu hình phạt rơi đồ như trên. Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
 - Khi hệ thống quá tải (tranh chấp khoá dữ liệu do nhiều thao tác cùng lúc), các thao tác chiến đấu (bỏ chạy/rút lui/bắt sủng…) trả về thông báo **bận và yêu cầu thử lại** thay vì treo vô hạn.
 
+### Kháng hiệu ứng và Tenacity (đọc theo effect)
+
+- Mọi kháng đều là effect cộng dồn từ Cổ đang trang bị + Chủng tộc + Thể chất + Trạng thái — không có Cổ nào "miễn nhiễm đặc quyền" ngoài effect nó mang.
+- `mental_resistance` + `cc_resist`: giảm tỉ lệ dính hiệu ứng bất lợi (nhân với nhau, trần 75%).
+- `tenacity` (0..1): rút ngắn thời gian hiệu ứng bất lợi phải chịu, đồng thời mỗi đầu lượt roll để tự giải 1 hiệu ứng (ưu tiên khống chế cứng như Choáng/Trói/Đóng băng/Ngủ trước, rồi đến Khóa chiêu, gây rối, cuối cùng là rút máu theo lượt). Buff có lợi không bao giờ bị tự giải nhầm.
+- VD: Ngã Ý Cổ mang `tenacity: 0.35, cc_resist: 0.15` — chịu CC ngắn hơn và 35% tự giải 1 hiệu ứng mỗi lượt.
+
 ### Bộ Cổ Chiến Đấu (Cài đặt chiến thuật tự động)
 
 Trong tab **Cài đặt** của hồ sơ (Aperture), đạo hữu có thể chọn **Bộ Cổ Chiến Đấu** — danh sách Cổ mang theo khi xuất trận:
@@ -622,30 +704,28 @@ Hệ thống môn phái hiện có:
 - Cả bình chọn và góp ý đều yêu cầu Cổ sư đạt **Nhị Chuyển (Chuyển ≥ 2)** trở lên. Tác giả hoặc Admin có thể xóa góp ý.
 - Thưởng: khi topic được duyệt triển khai (`in_progress`/`completed`), tác giả nhận 5 Tiên Nguyên (Chuyển ≥ 6) hoặc 500 Nguyên Thạch (phàm nhân).
 
-## 17. Hiệu ứng Cổ trùng đặc sắc (Special Gu Effects)
+## 17. Hiệu ứng đặc sắc (Special Effects — đọc theo effect, không theo tên Cổ)
 
-Hệ thống tích hợp 18 Cổ trùng đặc biệt mang lại các hiệu ứng độc đáo cả trong và ngoài chiến đấu:
+Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `passive.*`), không đọc Gu ID. Cổ nào mang effect đó thì có hành vi đó — Cổ nêu bên dưới chỉ là ví dụ minh họa.
 
-### Trong chiến đấu (Combat Simulator)
-1. **Xuân Thu Thiền (GU_SPRING_AUTUMN_CICADA)**: Khi chết, có 15% cơ hội hồi sinh nghịch chuyển thời không quay về Lượt 1.
-2. **Định Tiên Du (GU_FIXED_IMMORTAL_TRAVEL)**: Né tránh hoàn toàn đòn đánh đầu tiên ở Lượt 1.
-3. **Ngự Lang Vương Cổ (GU_WOLF_ENSLAVEMENT_CORE)**: Triệu hồi Địa Lang Vương lên tiền tuyến gánh chịu sát thương cho Cổ sư.
-4. **Cổ Gan Dạ (GU_GUTS)**: Hồi 100% Sinh lực tâm linh lập tức nhưng tiêu tốn lượt hành động của lượt hiện tại.
-5. **Kiếm Long Biến Cổ (GU_SWORD_DRAGON_TRANSFORM)**: Chuyển hóa toàn bộ Sinh lực thành Giáp Ảo (giữ lại 1 Sinh lực) và tăng 50% sát thương cận chiến trong 3 lượt.
-6. **Cổ Phá Không (GU_BREAK_SPACE)**: Tấn công xuyên thẳng qua Chân Nguyên Giáp hộ thể và bỏ qua 30 phòng ngự vật lý.
-7. **Ngã Ý Cổ (GU_MY_WILL)**: Đề kháng khống chế tinh thần, 35% giải trừ trạng thái Choáng vào đầu mỗi lượt.
-8. **Giải Mê Cổ (GU_UNRAVEL_RIDDLE)**: Ngắt đòn tụ lực (channeling) của đối phương và hóa giải 2 buff lợi ích của kẻ địch.
-9. **Tự Tại Thiên Địa Tiền (GU_PRESENT_DAYS_PAST)**: Mượn sức mạnh quá khứ đỉnh phong tăng 40% sát thương trong 3 lượt.
-10. **Cổ Tình Yêu (GU_LOVE_GU)**: Sát chiêu nhân quả ngẫu nhiên đôi:
-    - *Hiệu ứng*: Crit 500%, Bất tử 1 lượt, hoặc giảm Sinh lực địch xuống còn 10%.
-    - *Cái giá*: Giảm vĩnh viễn 10% Tư chất, giảm vĩnh viễn 5 năm tuổi thọ, hoặc mất 50% Nguyên Thạch.
+### Cơ chế trong chiến đấu (Combat Simulator)
+1. `ON_DEATH / REBORN (params.chance)` — khi gục ngã, roll 1 lần duy nhất mỗi trận để hồi sinh; `REVIVE_LOCK` chặn hoàn toàn. VD: Xuân Thu Thiền (`chance: 0.5`).
+2. `ON_CAST / SUMMON_WOLF_FRONTLINE` — triệu hồi Địa Lang Vương (HP = 50% MaxHP chủ, công = 1/3, thủ = 1/2) lên tiền tuyến đỡ đòn, chủ lùi về tuyến giữa. VD: Ngự Lang Vương Cổ.
+3. `ON_CAST / FULL_SOUL_HEAL` — hồi đầy HP lập tức, đổi lại mất lượt hành động hiện tại. VD: Can Đảm Cổ.
+4. `ON_CAST / SWORD_DRAGON_TRANSFORM` — chuyển toàn bộ HP (giữ lại 1) thành Khiên Ảo, +50% sát thương trong 3 lượt. VD: Kiếm Long Biến Cổ.
+5. `ON_CAST / BORROW_PAST_POWER` — +40% công kích trong 3 lượt. VD: Tự Tại Thiên Địa Tiền.
+6. `ON_CAST / UNRAVEL_RIDDLE` — hóa giải tối đa 2 buff của mục tiêu (kèm log ngắt tụ lực). VD: Giải Mê Cổ (đồng thời gây `SILENCE` từ `active.apply_status`).
+7. `ON_CAST / CHAOS_GAMBLE` — gieo 1 lợi trong 3 (crit ×5 / bất tử 1 lượt / trừ 90% HP hiện tại của địch, giữ lại tối thiểu 1 HP) kèm 1 giá trong 3 (tư chất −10% / tuổi thọ −5 năm / nguyên thạch −50%). VD: Cổ Tình Yêu.
+8. `ON_HIT / BYPASS_SHIELD` — đòn đánh xuyên Khiên Ảo, trừ thẳng HP. VD: Cổ Phá Không.
+9. `BEFORE_HIT / FIRST_TURN_EVADE` — né hoàn toàn đòn đầu tiên ở Lượt 1 (chỉ Cổ nào mang mechanic này mới có; Định Tiên Du hiện tại mang `portal_create` + `movement`, không có evade).
+10. `PASSIVE / DOUBLE_DAMAGE_DEALT` — nhân đôi mọi sát thương gây ra. VD: Tiên Thai Chí Tôn (kèm `path_conflict_reduction: 100`).
+11. `active.cleansing_power` / `passive.tenacity` + `passive.cc_resist` — kháng và tự giải hiệu ứng bất lợi (xem mục Kháng hiệu ứng và Tenacity ở mục 9). VD: Ngã Ý Cổ (`tenacity: 0.35`, `cc_resist: 0.15`).
 
-### Ngoài chiến đấu (Handlers)
-1. **Trí Tuệ Cổ (GU_WISDOM)**: Tỏa ra vầng sáng trí tuệ, giảm 50% chi phí Chân Nguyên/Nguyên Thạch khi thôi diễn và luyện cổ, đồng thời tăng 30% tỷ lệ thành công.
-2. **Huyết Sọ Cổ (GU_BLOOD_SKULL)**: Cho phép hiến tế đệ tử môn phái để gia tăng vĩnh viễn tư chất Không khiếu của bản thân (+5% tư chất/lần, tối đa 99% - tư chất Giáp).
-3. **Cổ Thiên Cơ (GU_HEAVEN_SECRET)**: Tăng gấp đôi tầm nhìn khám phá bản đồ (Vision Radius) và hiển thị trực quan tỷ lệ rớt đồ của quái vật trên bản đồ.
-4. **Cổ Thọ Nguyên 100 Năm (GU_LIFESPAN_100)**: Tiêu hao để gia tăng vĩnh viễn 100 năm tuổi thọ cho Cổ sư.
-5. **Tiên Thai Chí Tôn (GU_SOVEREIGN_FETUS)**: Cơ thể Tiên Thai tối cao bỏ qua hoàn toàn bài xích/xung đột Đạo văn trong Tiên khiếu (Node) và khi thiết lập sát chiêu liên hoàn. Tăng 100% sát thương tất cả các hệ.
+### Cơ chế ngoài chiến đấu (Handlers)
+1. `ON_CONSUME / ADD_LIFESPAN_YEARS (params.value)` — tiêu hao để cộng vĩnh viễn N năm tuổi thọ. VD: Thọ Cổ 100 Năm (`value: 100`).
+2. `ON_CONSUME / SACRIFICE_NPC + CAPABILITY / SACRIFICE_APTITUDE` — hiến tế để tăng vĩnh viễn tư chất Không khiếu (mỗi lần +5, trần 99). VD: Huyết Sọ Cổ.
+3. `CAPABILITY / LOOT_PREVIEW` (+ `active.range`) — hiển thị tỉ lệ rớt đồ của quái trên bản đồ và mở rộng tầm khám phá. VD: Cổ Thiên Cơ (`range: 1000`).
+4. `ON_TICK / THOUGHT_REGEN_TICK (params.value)` — hồi Niệm lực mỗi giờ cho Cổ sư trang bị. VD: Trí Tuệ Cổ.
 
 ## 18. Bối cảnh & Cốt truyện nguyên tác (Cổ Chân Nhân)
 

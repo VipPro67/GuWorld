@@ -52,9 +52,18 @@ type Effects struct {
 	// SoulRegenBonus is a percentage increase of passive soul_hp regeneration
 	// (dưỡng hồn). E.g. 0.50 => +50% soul_hp recovered per hour.
 	SoulRegenBonus float64 `json:"soul_regen"`
+	// Tenacity is the generic self-dispel chance rolled at turn start (0..1)
+	// and the CC duration reduction. Aggregated from Gu passive, race,
+	// constitution and status effects — never hardcoded per Gu ID.
+	Tenacity float64 `json:"tenacity"`
+	// CCResist is the generic proc resist vs all debuffs (0..1). Stacks
+	// multiplicatively with MentalResistanceBonus in the proc formula.
+	CCResist float64 `json:"cc_resist"`
 	// ApertureStressBonus is an additive multiplier on the aperture stress
 	// (áp lực không khiếu) gained per trùng kích attempt. 1.0 => stress ×2.
 	ApertureStressBonus float64 `json:"aperture_stress_bonus"`
+	// NonConflictingDaoMarks indicates whether character has the non-conflicting dao marks trait.
+	NonConflictingDaoMarks bool `json:"non_conflicting_dao_marks,omitempty"`
 	// Immortal indicates if the character's lifespan never decreases.
 	Immortal bool `json:"immortal"`
 	// DisableHPRegen disables HP regeneration.
@@ -78,6 +87,8 @@ func (e Effects) ApplyToEnemyCombatState(combat *models.CombatState) {
 	}
 	combat.EnemyPathResistance = e.PathResistanceBonus
 	combat.EnemyMentalResistance = e.MentalResistanceBonus
+	combat.EnemyTenacity = e.Tenacity
+	combat.EnemyCCResist = e.CCResist
 	combat.EnemyDaoBonus = e.DaoNganBonus
 	combat.EnemyPathDamageBonus = e.PathDamageBonus
 	combat.EnemyHealingReceived = e.HealingReceivedBonus
@@ -161,7 +172,60 @@ func Get(p *models.Player) Effects {
 		addEffects(&fx, def.Effects)
 	}
 
+	// Gu passive effects (equipped ACTIVE only, best rank per GuID).
+	// Generic source for tenacity / cc_resist — no per-Gu-ID branching.
+	bestRank := map[string]int{}
+	for _, gu := range p.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		if r, ok := bestRank[gu.GuID]; !ok || gu.Rank > r {
+			bestRank[gu.GuID] = gu.Rank
+		}
+	}
+	applied := map[string]bool{}
+	for _, gu := range p.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		if gu.Rank != bestRank[gu.GuID] || applied[gu.GuID] {
+			continue
+		}
+		applied[gu.GuID] = true
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if !ok || spec.Effects.Passive == nil {
+			continue
+		}
+		addEffects(&fx, Effects{
+			Tenacity: spec.Effects.Passive.Tenacity,
+			CCResist: spec.Effects.Passive.CCResist,
+		})
+	}
+
 	return fx
+}
+
+// CombinedResist merges mental + generic CC resist multiplicatively, capped at 0.75.
+func CombinedResist(mental, cc float64) float64 {
+	r := 1.0 - (1.0-mental)*(1.0-cc)
+	if r > 0.75 {
+		r = 0.75
+	}
+	if r < 0 {
+		r = 0
+	}
+	return r
+}
+
+// CappedTenacity clamps tenacity to the 0..0.75 playable range.
+func CappedTenacity(t float64) float64 {
+	if t > 0.75 {
+		return 0.75
+	}
+	if t < 0 {
+		return 0
+	}
+	return t
 }
 
 // MaxManaBonus returns the constitution percentage bonus on max mana.
@@ -182,12 +246,14 @@ func EffectiveMaxMana(p *models.Player) float64 {
 }
 
 // PassiveHPBonus returns the total flat HP granted by equipped ACTIVE Gus
-// (passive.stat_base_hp), scaled by path mastery and dao marks. Mirrors the
+// (passive.stat_base_hp), scaled by the unified DaoCombatProfile. Mirrors the
 // "hp" key computed in GetPassiveStats.
 func PassiveHPBonus(p *models.Player) float64 {
 	if p == nil {
 		return 0
 	}
+	fx := Get(p)
+	profile := BuildDaoCombatProfile(p.DaoMarks, p.PathMasteries, fx.NonConflictingDaoMarks, fx.DaoNganBonus)
 	total := 0.0
 	bestRank := map[string]int{}
 	for _, gu := range p.GuInventory {
@@ -211,9 +277,13 @@ func PassiveHPBonus(p *models.Player) float64 {
 		if !ok || spec.Effects.Passive == nil || spec.Effects.Passive.StatBaseHP <= 0 {
 			continue
 		}
-		mult := PathMasteryMultiplier(p.PathMasteries, spec.Path)
-		daoMult := DaoMultiplierForPaths(p.DaoMarks, spec.Path, nil)
-		total += spec.Effects.Passive.StatBaseHP * mult * daoMult
+		pathKey := "strength"
+		if len(spec.Path) > 0 {
+			pathKey = spec.Path[0]
+		}
+		daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
+		daoMult := (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
+		total += spec.Effects.Passive.StatBaseHP * daoMult
 	}
 	return total
 }
@@ -280,41 +350,6 @@ func HasBlockedAction(p *models.Player, action string) bool {
 		return true
 	}
 	return Get(p).BlockedActions[action]
-}
-
-// DaoPathMultiplier computes the standard dao-marks multiplier for a single
-// path and applies an additive per-path bonus (e.g. from a constitution).
-// marks <= 0 means no dao marks for the path (base multiplier 1.0).
-func DaoPathMultiplier(marks int64, bonus float64) float64 {
-	if marks <= 0 {
-		return 1.0 + bonus
-	}
-	return 1.0 + float64(marks)/100.0 + bonus
-}
-
-// DaoMultiplierForPaths computes the maximum dao multiplier across the given
-// paths, including per-path bonuses from daoBonus (e.g. DaoNganBonus).
-func DaoMultiplierForPaths(daoMarks map[string]int64, paths []string, daoBonus map[string]float64) float64 {
-	if len(paths) == 0 {
-		paths = []string{"strength"}
-	}
-	maxMult := 1.0
-	for _, path := range paths {
-		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-		var amt int64
-		if daoMarks != nil {
-			amt = daoMarks[cleanPath]
-		}
-		bonus := 0.0
-		if daoBonus != nil {
-			bonus = daoBonus[cleanPath]
-		}
-		mult := DaoPathMultiplier(amt, bonus)
-		if mult > maxMult {
-			maxMult = mult
-		}
-	}
-	return maxMult
 }
 
 // PathDamageMultiplier returns the percentage damage multiplier for a path

@@ -55,7 +55,7 @@ func buildFieldDefinitions() map[string]map[string]Definition {
 	add("active", DispositionMigrate, "passive-stats", "stat_base_attack", "stat_base_defense", "stat_base_hp", "evasion")
 	add("active", DispositionMetadata, "content", "description")
 
-	add("passive", DispositionSupported, "player-stats", "stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", "movement", "investigation", "hearing", "evasion", "luck", "accuracy", "damage_multiplier_on_hit", "cleansing_power", "disguise_level")
+	add("passive", DispositionSupported, "player-stats", "stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", "movement", "investigation", "hearing", "evasion", "luck", "accuracy", "damage_multiplier_on_hit", "cleansing_power", "disguise_level", "tenacity", "cc_resist")
 	add("passive", DispositionSupported, "refinement", "success_rate_bonus", "refine_mana_tier", "soul_refinement")
 	add("passive", DispositionSupported, "inventory", "storage_capacity")
 	add("passive", DispositionSupported, "time", "time_speed_multiplier")

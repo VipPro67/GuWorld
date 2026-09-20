@@ -37,30 +37,20 @@ func mechanicFloat(mechanics []CombatMechanic, trigger, actionCode, key string, 
 }
 
 // DaoMultiplier returns the dao mark damage multiplier for a combatant's paths,
-// mirroring the formula in handlers/combat_effects.go. Returns 1.0 and false when
-// no matching dao mark is present.
+// using the unified DaoCombatProfile.
 func DaoMultiplier(dm DaoMarks, paths []string) (float64, bool) {
 	if dm == nil || len(paths) == 0 {
 		return 1.0, false
 	}
-	maxMult := 1.0
-	found := false
-	for _, path := range paths {
-		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-		amt, ok := dm[cleanPath]
-		if !ok || amt <= 0 {
-			continue
-		}
-		found = true
-		mult := 1.0 + float64(amt)/100.0
-		if mult > maxMult {
-			maxMult = mult
-		}
+	daoMarks := make(map[string]int64, len(dm))
+	for k, v := range dm {
+		daoMarks[k] = v
 	}
-	if !found {
-		return 1.0, false
-	}
-	return maxMult, true
+	profile := gamefx.BuildDaoCombatProfile(daoMarks, nil, false, nil)
+	pathKey := paths[0]
+	daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
+	mult := (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
+	return mult, true
 }
 
 // pathBonus returns the maximum additive bonus for any path in paths from a
@@ -83,14 +73,28 @@ func pathBonus(bonus map[string]float64, paths []string) float64 {
 }
 
 // actorDaoMultiplier returns the dao multiplier for an action's paths including
-// per-path bonuses from the combatant's character effects (race/constitution).
+// per-path bonuses, realm efficiency, and internal conflict from DaoProfile.
 func actorDaoMultiplier(c *CombatantAuto, paths []string) (float64, bool) {
-	mult, has := DaoMultiplier(c.DaoMarks, paths)
-	if bonus := pathBonus(c.DaoBonus, paths); bonus != 0 {
-		mult += bonus
-		has = true
+	if c == nil {
+		return 1.0, false
 	}
-	return mult, has
+	if c.DaoProfile == nil {
+		var daoMarks map[string]int64
+		if c.DaoMarks != nil {
+			daoMarks = make(map[string]int64, len(c.DaoMarks))
+			for k, v := range c.DaoMarks {
+				daoMarks[k] = v
+			}
+		}
+		c.DaoProfile = gamefx.BuildDaoCombatProfile(daoMarks, c.PathMasteries, c.HasNonConflictingDao, c.DaoBonus)
+	}
+	pathKey := "strength"
+	if len(paths) > 0 {
+		pathKey = paths[0]
+	}
+	daoAmp, realmEff, conflictMult := c.DaoProfile.GetOffensiveFactors(pathKey)
+	mult := (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
+	return mult, true
 }
 
 // resistControl returns true if the combatant's mental resistance causes a
@@ -160,6 +164,8 @@ func cloneCombatant(c *CombatantAuto) *CombatantAuto {
 	} else {
 		clone.CustomState = make(map[string]int)
 	}
+	clone.HasNonConflictingDao = c.HasNonConflictingDao
+	clone.DaoProfile = c.DaoProfile
 	return &clone
 }
 
@@ -454,6 +460,16 @@ func Simulate(state *CombatState) []CombatLog {
 					continue
 				}
 				turnLogs = append(turnLogs, tickResourceDrain(c, turn)...)
+			}
+		}
+
+		// ── Tenacity self-dispel (after DoT damage ticked, before durations tick) ──
+		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+			for _, c := range combatants {
+				if c.HP <= 0 {
+					continue
+				}
+				turnLogs = append(turnLogs, TryTenacityDispel(c, turn, rng)...)
 			}
 		}
 
@@ -1019,6 +1035,7 @@ func Simulate(state *CombatState) []CombatLog {
 							skillMult = 1.0
 						}
 
+						totalHitDmg := 0.0
 						for h := 0; h < hitCount; h++ {
 							hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
 							if h > 0 {
@@ -1038,17 +1055,21 @@ func Simulate(state *CombatState) []CombatLog {
 								})
 							}
 							netDmg := hitDmg - targetDef
+							if target.DaoProfile != nil && len(a.Path) > 0 {
+								natRes := target.DaoProfile.GetDefensiveResistance(a.Path[0])
+								netDmg *= (1.0 - natRes)
+							}
 							netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))
 							if netDmg < 1 {
 								netDmg = 1
 							}
+							totalHitDmg += netDmg
 							totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, !isAlly, rng)
 						}
 						totalDamageDealt += totalDmg
 
 						shieldAbsorbed := math.Max(0, initialShield-target.VirtualShield)
 						hpLost := math.Max(0, initialHP-target.HP)
-						finalDmg := shieldAbsorbed + hpLost
 						critMultVal := 1.0
 						if isCritHit {
 							critMultVal = 1.5
@@ -1066,17 +1087,17 @@ func Simulate(state *CombatState) []CombatLog {
 							DamageReduction: target.DamageTakenReduction,
 							ShieldAbsorbed:  shieldAbsorbed,
 							HPDamage:        hpLost,
-							FinalDamage:     finalDmg,
+							FinalDamage:     totalHitDmg,
 						}
 
-						if finalDmg > 0 {
+						if totalHitDmg > 0 {
 							var damageDetail string
 							if shieldAbsorbed > 0 && hpLost > 0 {
-								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (phá vỡ %.0f khiên, trừ %.0f HP, còn %.0f HP)", actor.Name, a.Name, target.Name, finalDmg, shieldAbsorbed, hpLost, target.HP)
+								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (phá vỡ %.0f khiên, trừ %.0f HP, còn %.0f HP)", actor.Name, a.Name, target.Name, totalHitDmg, shieldAbsorbed, hpLost, target.HP)
 							} else if shieldAbsorbed > 0 && hpLost == 0 {
-								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ %.0f sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, a.Name, target.Name, shieldAbsorbed, target.VirtualShield, target.HP)
+								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (bị Khiên Ảo cản %.0f, còn %.0f khiên, %.0f HP)", actor.Name, a.Name, target.Name, totalHitDmg, shieldAbsorbed, target.VirtualShield, target.HP)
 							} else {
-								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, a.Name, target.Name, finalDmg, target.HP)
+								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, a.Name, target.Name, totalHitDmg, target.HP)
 							}
 
 							turnLogs = append(turnLogs, CombatLog{
@@ -1085,7 +1106,7 @@ func Simulate(state *CombatState) []CombatLog {
 								ActorName: actor.Name,
 								Action:    a.ActionType,
 								TargetId:  target.ID,
-								Damage:    finalDmg,
+								Damage:    totalHitDmg,
 								IsCrit:    isCritHit,
 								Detail:    damageDetail,
 								Breakdown: breakdown,
@@ -1689,7 +1710,6 @@ func Simulate(state *CombatState) []CombatLog {
 					applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
 					shieldAbsorbed := math.Max(0, initialShield-target.VirtualShield)
 					hpLost := math.Max(0, initialHP-target.HP)
-					finalDmg := shieldAbsorbed + hpLost
 
 					// Filter out redundant shield logs created by applyDamageToTarget
 					var keptLogs []CombatLog
@@ -1712,17 +1732,17 @@ func Simulate(state *CombatState) []CombatLog {
 						DamageReduction: target.DamageTakenReduction,
 						ShieldAbsorbed:  shieldAbsorbed,
 						HPDamage:        hpLost,
-						FinalDamage:     finalDmg,
+						FinalDamage:     netDmg,
 					}
 
-					if finalDmg > 0 {
+					if netDmg > 0 {
 						var detailMsg string
 						if shieldAbsorbed > 0 && hpLost > 0 {
-							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (phá vỡ %.0f khiên, trừ %.0f HP, còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, finalDmg, shieldAbsorbed, hpLost, target.HP)
+							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (phá vỡ %.0f khiên, trừ %.0f HP, còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, netDmg, shieldAbsorbed, hpLost, target.HP)
 						} else if shieldAbsorbed > 0 && hpLost == 0 {
-							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ %.0f sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, fallbackAction.Name, target.Name, shieldAbsorbed, target.VirtualShield, target.HP)
+							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (bị Khiên Ảo cản %.0f, còn %.0f khiên, %.0f HP)", actor.Name, fallbackAction.Name, target.Name, netDmg, shieldAbsorbed, target.VirtualShield, target.HP)
 						} else {
-							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, finalDmg, target.HP)
+							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, netDmg, target.HP)
 						}
 
 						turnLogs = append(turnLogs, CombatLog{
@@ -1731,7 +1751,7 @@ func Simulate(state *CombatState) []CombatLog {
 							ActorName: actor.Name,
 							Action:    "BASIC_ATTACK",
 							TargetId:  target.ID,
-							Damage:    finalDmg,
+							Damage:    netDmg,
 							Detail:    detailMsg,
 							Breakdown: breakdown,
 						})

@@ -5,8 +5,96 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
+
+// tenacityPriority ranks which debuff gets dispelled first: hard lock (mất
+// lượt) → action lock → disrupt/dao → DoT. Lower is dispelled first.
+func tenacityPriority(id string) int {
+	switch id {
+	case statusfx.StatusStun, statusfx.StatusBind, statusfx.StatusFreeze, statusfx.StatusSleep,
+		EffectStun, EffectFreeze:
+		return 0
+	case statusfx.StatusSilence, statusfx.StatusFear,
+		EffectSilence:
+		return 1
+	default:
+		return 2
+	}
+}
+
+// isDispellableEffect reports whether an ActiveEffects entry is a debuff
+// (anything that is not a self buff). Unknown IDs default to dispellable so
+// new debuffs are covered without code changes.
+func isDispellableEffect(id string) bool {
+	if spec, ok := statusfx.Spec(id); ok {
+		return spec.Category != statusfx.CategoryBuff
+	}
+	switch id {
+	case EffectThorns, EffectRegen, EffectAtkUp, EffectDefUp, EffectTaunt:
+		return false
+	default:
+		return true
+	}
+}
+
+// TryTenacityDispel rolls the combatant's generic Tenacity at turn start and
+// removes at most one debuff (ActiveEffects first by priority, else one DoT).
+// Tenacity aggregates from Gu passive / race / constitution / status — the
+// engine never branches on a Gu ID. Returns log entries (nil when no roll win).
+func TryTenacityDispel(c *CombatantAuto, turn int, rng *rand.Rand) []CombatLog {
+	if c == nil || c.HP <= 0 || c.Tenacity <= 0 || rng == nil {
+		return nil
+	}
+	best := -1
+	for i, eff := range c.ActiveEffects {
+		if !isDispellableEffect(eff.ID) {
+			continue
+		}
+		if best == -1 || tenacityPriority(eff.ID) < tenacityPriority(c.ActiveEffects[best].ID) {
+			best = i
+		}
+	}
+	hasDoT := false
+	for _, dot := range c.ActiveDoT {
+		if dot.Type != "regen" && dot.Turns > 0 {
+			hasDoT = true
+			break
+		}
+	}
+	if best == -1 && !hasDoT {
+		return nil
+	}
+	if rng.Float64() >= gamefx.CappedTenacity(c.Tenacity) {
+		return nil
+	}
+	if best != -1 {
+		removed := c.ActiveEffects[best]
+		label := removed.ID
+		if spec, ok := statusfx.Spec(removed.ID); ok {
+			label = spec.Label
+		}
+		c.ActiveEffects = append(c.ActiveEffects[:best], c.ActiveEffects[best+1:]...)
+		return []CombatLog{{
+			Turn: turn, ActorId: c.ID, ActorName: c.Name,
+			Action: "TENACITY_DISPEL",
+			Detail: fmt.Sprintf("%s dùng ý chí (Tenacity) tự giải [%s]!", c.Name, label),
+		}}
+	}
+	for i, dot := range c.ActiveDoT {
+		if dot.Type != "regen" && dot.Turns > 0 {
+			label := dot.Type
+			c.ActiveDoT = append(c.ActiveDoT[:i], c.ActiveDoT[i+1:]...)
+			return []CombatLog{{
+				Turn: turn, ActorId: c.ID, ActorName: c.Name,
+				Action: "TENACITY_DISPEL",
+				Detail: fmt.Sprintf("%s dùng ý chí (Tenacity) tự giải [%s]!", c.Name, label),
+			}}
+		}
+	}
+	return nil
+}
 
 // tickDoTs applies damage-over-time effects and returns log entries.
 func tickDoTs(c *CombatantAuto, turn int) []CombatLog {

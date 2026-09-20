@@ -36,37 +36,41 @@ func GetPassiveStatsHandler(c *gin.Context) {
 
 // DaoNganPathDetail describes the contribution of one dao path to the đạo ngân score.
 type DaoNganPathDetail struct {
-	Path       string  `json:"path"`       // e.g. "strength", "fire", "sword"
-	Amount     int64   `json:"amount"`     // raw dao mark count
-	Multiplier float64 `json:"multiplier"` // combat multiplier from this path
-	Power      float64 `json:"power"`      // effective power contribution
+	Path                       string  `json:"path"`                          // e.g. "strength", "fire", "sword"
+	Amount                     int64   `json:"amount"`                        // raw dao mark count
+	Multiplier                 float64 `json:"multiplier"`                    // combat multiplier from this path
+	Power                      float64 `json:"power"`                         // effective power contribution
+	AttainmentLevel            int     `json:"attainment_level"`              // 0-4
+	AttainmentName             string  `json:"attainment_name"`               // e.g. "Đại Tông Sư"
+	RealmControlPct            float64 `json:"realm_control_pct"`             // e.g. 45.0 (%)
+	RealmEfficiency            float64 `json:"realm_efficiency"`              // e.g. 1.25 (×)
+	InternalConflictPenaltyPct float64 `json:"internal_conflict_penalty_pct"` // e.g. 16.5 (%)
+	NaturalResistancePct       float64 `json:"natural_resistance_pct"`        // e.g. 9.3 (%)
+	PurityPct                  float64 `json:"purity_pct"`                    // e.g. 71.4 (%)
 }
 
 // DaoNganResult is the full đạo ngân calculation response.
 type DaoNganResult struct {
-	TotalDaoNgan      float64             `json:"total_dao_ngan"`     // composite đạo ngân score
-	TotalMarks        int64               `json:"total_marks"`        // sum of all dao marks
-	UniquePathCount   int                 `json:"unique_path_count"`  // number of paths with marks
-	AverageMultiplier float64             `json:"average_multiplier"` // mean multiplier across paths
-	MaxMultiplier     float64             `json:"max_multiplier"`     // highest single-path multiplier
-	MaxPath           string              `json:"max_path"`           // path with highest multiplier
-	Paths             []DaoNganPathDetail `json:"paths"`              // per-path breakdown
+	TotalDaoNgan         float64             `json:"total_dao_ngan"`          // composite đạo ngân score
+	TotalMarks           int64               `json:"total_marks"`             // sum of all dao marks
+	UniquePathCount      int                 `json:"unique_path_count"`       // number of paths with marks
+	AverageMultiplier    float64             `json:"average_multiplier"`      // mean multiplier across paths
+	MaxMultiplier        float64             `json:"max_multiplier"`          // highest single-path multiplier
+	MaxPath              string              `json:"max_path"`                // path with highest multiplier
+	DominantPath         string              `json:"dominant_path"`           // path with most dao marks
+	GraceThreshold       int64               `json:"grace_threshold"`         // safe foreign mark threshold
+	HasNonConflictingDao bool                `json:"has_non_conflicting_dao"` // non-conflicting dao marks trait
+	Paths                []DaoNganPathDetail `json:"paths"`                   // per-path breakdown
 }
 
-// CalculateDaoNgan computes the composite "đạo ngân" (dao silver) score
-// from all of a player's dao marks.
-//
-// Đạo Ngân represents the cumulative cultivation attainment across all dao paths.
-// The formula sums each path's effective power:
-//
-//	power(marks) = marks * multiplier(marks)
-//
-// where multiplier follows the standard combat formula:
-//
-//	multiplier = 1.0 + marks/100
-//
-// TotalDaoNgan = Σ power(path) for all paths with marks > 0
-func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float64) DaoNganResult {
+// CalculateDaoNganDetailed computes the composite "đạo ngân" (dao silver) score
+// and detailed combat breakdown using DaoCombatProfile.
+func CalculateDaoNganDetailed(
+	daoMarks models.DaoMarksMap,
+	pathMasteries map[string]int,
+	hasNonConflicting bool,
+	daoBonus ...map[string]float64,
+) DaoNganResult {
 	result := DaoNganResult{
 		Paths: make([]DaoNganPathDetail, 0),
 	}
@@ -75,32 +79,52 @@ func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float6
 		return result
 	}
 
+	bonus := map[string]float64{}
+	if len(daoBonus) > 0 {
+		bonus = daoBonus[0]
+	}
+
+	profile := gamefx.BuildDaoCombatProfile(daoMarks, pathMasteries, hasNonConflicting, bonus)
+	result.DominantPath = profile.DominantPath
+	result.GraceThreshold = profile.GraceThreshold
+	result.HasNonConflictingDao = profile.HasNonConflictingDao
+
 	var totalPower float64
 	var totalMarks int64
 	var maxMult float64
 	var maxPath string
 	var sumMult float64
 
-	bonus := map[string]float64{}
-	if len(daoBonus) > 0 {
-		bonus = daoBonus[0]
-	}
-
 	for path, amount := range daoMarks {
 		if amount <= 0 {
 			continue
 		}
-
-		mult := gamefx.DaoPathMultiplier(amount, bonus[path])
+		clean := gamefx.CleanPath(path)
+		mod, ok := profile.Paths[clean]
+		mult := gamefx.DaoAmplification(amount) + bonus[clean]
+		if ok {
+			mult = mod.DaoAmplification
+		}
 
 		power := float64(amount) * mult
 
-		result.Paths = append(result.Paths, DaoNganPathDetail{
-			Path:       path,
+		detail := DaoNganPathDetail{
+			Path:       clean,
 			Amount:     amount,
 			Multiplier: mult,
 			Power:      power,
-		})
+		}
+		if ok {
+			detail.AttainmentLevel = mod.AttainmentLevel
+			detail.AttainmentName = mod.AttainmentName
+			detail.RealmControlPct = mod.RealmControl * 100.0
+			detail.RealmEfficiency = mod.RealmEfficiency
+			detail.InternalConflictPenaltyPct = (1.0 - mod.InternalConflictMult) * 100.0
+			detail.NaturalResistancePct = mod.NaturalResistance * 100.0
+			detail.PurityPct = mod.Purity * 100.0
+		}
+
+		result.Paths = append(result.Paths, detail)
 
 		totalPower += power
 		totalMarks += amount
@@ -109,7 +133,7 @@ func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float6
 
 		if mult > maxMult {
 			maxMult = mult
-			maxPath = path
+			maxPath = clean
 		}
 	}
 
@@ -127,6 +151,12 @@ func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float6
 	}
 
 	return result
+}
+
+// CalculateDaoNgan computes the composite "đạo ngân" (dao silver) score
+// from all of a player's dao marks (backward-compatible wrapper).
+func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float64) DaoNganResult {
+	return CalculateDaoNganDetailed(daoMarks, nil, false, daoBonus...)
 }
 
 // GetDaoNganHandler returns the đạo ngân calculation for the authenticated player.
@@ -154,16 +184,27 @@ func GetDaoNganHandler(c *gin.Context) {
 	}
 
 	var constitution string
+	var race string
+	var pathMasteriesJSON []byte
 	_ = db.DB.QueryRowContext(c.Request.Context(),
-		`SELECT COALESCE(constitution, '') FROM players WHERE id = $1`, playerID,
-	).Scan(&constitution)
+		`SELECT COALESCE(constitution, ''), COALESCE(race, 'human'), COALESCE(path_masteries, '{}'::jsonb) FROM players WHERE id = $1`, playerID,
+	).Scan(&constitution, &race, &pathMasteriesJSON)
 
-	daoBonus := map[string]float64{}
-	if constitution != "" {
-		daoBonus = gamefx.Get(&models.Player{CharacterState: models.CharacterState{Constitution: constitution}}).DaoNganBonus
+	pathMasteries := make(models.PathMasteriesMap)
+	if len(pathMasteriesJSON) > 0 {
+		_ = json.Unmarshal(pathMasteriesJSON, &pathMasteries)
 	}
 
-	result := CalculateDaoNgan(daoMap, daoBonus)
+	playerModel := &models.Player{
+		CharacterState: models.CharacterState{
+			Constitution: constitution,
+			Race:         race,
+		},
+	}
+	playerModel.PathMasteries = pathMasteries
+	charFX := gamefx.Get(playerModel)
+
+	result := CalculateDaoNganDetailed(daoMap, pathMasteries, charFX.NonConflictingDaoMarks, charFX.DaoNganBonus)
 	c.JSON(http.StatusOK, result)
 }
 

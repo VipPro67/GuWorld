@@ -261,6 +261,8 @@ type CombatState struct {
 	// Defender-side character effects for PVP enemies (race/constitution/status).
 	EnemyPathResistance    map[string]float64 `json:"enemy_path_resistance,omitempty"`
 	EnemyMentalResistance  float64            `json:"enemy_mental_resistance,omitempty"`
+	EnemyTenacity          float64            `json:"enemy_tenacity,omitempty"`
+	EnemyCCResist          float64            `json:"enemy_cc_resist,omitempty"`
 	EnemyDaoBonus          map[string]float64 `json:"enemy_dao_bonus,omitempty"`
 	EnemyPathDamageBonus   map[string]float64 `json:"enemy_path_damage_bonus,omitempty"`
 	EnemyHealingReceived   float64            `json:"enemy_healing_received,omitempty"`

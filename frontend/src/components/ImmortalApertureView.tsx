@@ -23,6 +23,13 @@ import {
   Users,
   Leaf,
   RefreshCw,
+  Info,
+  Search,
+  Star,
+  Award,
+  ShieldCheck,
+  ShieldAlert,
+  BookOpen,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
@@ -30,6 +37,65 @@ import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
 import { CountdownTimer } from "./CountdownTimer";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
+
+export interface DaoGroupDef {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  color: string;
+  badgeBg: string;
+}
+
+export const DAO_GROUPS: DaoGroupDef[] = [
+  { id: "ALL", name: "Tất Cả", icon: "🌌", desc: "Tất cả các lưu phái Đạo Ngân", color: "text-amber-300 border-amber-500/40 bg-amber-950/30", badgeBg: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
+  { id: "ELEMENTAL", name: "Nguyên Tố", icon: "🔥", desc: "Kim, Mộc, Thủy, Hỏa, Thổ, Phong, Lôi, Băng, Vân, Quang, Ám, Tinh, Âm", color: "text-red-300 border-red-500/40 bg-red-950/30", badgeBg: "bg-red-500/20 text-red-300 border-red-500/30" },
+  { id: "SPACE_TIME", name: "Không - Thời", icon: "⏳", desc: "Vũ Đạo (Không), Trụ Đạo (Thời)", color: "text-cyan-300 border-cyan-500/40 bg-cyan-950/30", badgeBg: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" },
+  { id: "RULE_ORDER", name: "Quy Luật & Trận", icon: "📜", desc: "Luật Đạo, Cấm Đạo, Trận Đạo", color: "text-emerald-300 border-emerald-500/40 bg-emerald-950/30", badgeBg: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
+  { id: "KINETIC_WEAPON", name: "Binh Khí & Sát", icon: "⚔️", desc: "Kiếm Đạo, Đao Đạo, Binh Đạo, Sát Đạo", color: "text-slate-200 border-slate-400/40 bg-slate-900/50", badgeBg: "bg-slate-500/20 text-slate-300 border-slate-400/30" },
+  { id: "BODY_LIFE", name: "Thể Phách & Sinh", icon: "💪", desc: "Lực Đạo, Cốt Đạo, Biến Hóa Đạo, Thực Đạo", color: "text-orange-300 border-orange-500/40 bg-orange-950/30", badgeBg: "bg-orange-500/20 text-orange-300 border-orange-500/30" },
+  { id: "SOUL_MIND", name: "Hồn Phách & Trí", icon: "🧠", desc: "Hồn Đạo, Trí Đạo, Tình Đạo, Nô Đạo, Mộng Đạo", color: "text-purple-300 border-purple-500/40 bg-purple-950/30", badgeBg: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
+  { id: "INFORMATION_STEALTH", name: "Tín Đạo & Vận", icon: "🕵️", desc: "Tín Đạo, Vận Đạo, Thâu Đạo, Huyễn Đạo, Họa Đạo", color: "text-pink-300 border-pink-500/40 bg-pink-950/30", badgeBg: "bg-pink-500/20 text-pink-300 border-pink-500/30" },
+  { id: "ORGANIC_CORRUPTION", name: "Huyết & Độc", icon: "🩸", desc: "Huyết Đạo, Độc Đạo", color: "text-rose-300 border-rose-500/40 bg-rose-950/30", badgeBg: "bg-rose-500/20 text-rose-300 border-rose-500/30" },
+  { id: "CRAFT_ALCHEMY", name: "Luyện & Đan", icon: "⚗️", desc: "Luyện Đạo, Đan Đạo", color: "text-yellow-300 border-yellow-500/40 bg-yellow-950/30", badgeBg: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" },
+  { id: "HEAVEN_HUMAN", name: "Thiên Nhân & Khí", icon: "☯️", desc: "Thiên Đạo, Nhân Đạo, Khí Đạo", color: "text-blue-300 border-blue-500/40 bg-blue-950/30", badgeBg: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+];
+
+export const PATH_TO_DAO_GROUP: Record<string, string> = {
+  metal: "ELEMENTAL", wood: "ELEMENTAL", water: "ELEMENTAL", fire: "ELEMENTAL", earth: "ELEMENTAL",
+  wind: "ELEMENTAL", lightning: "ELEMENTAL", ice: "ELEMENTAL", cloud: "ELEMENTAL", light: "ELEMENTAL",
+  dark: "ELEMENTAL", star: "ELEMENTAL", sound: "ELEMENTAL",
+  space: "SPACE_TIME", time: "SPACE_TIME",
+  rule: "RULE_ORDER", restriction: "RULE_ORDER", formation: "RULE_ORDER",
+  sword: "KINETIC_WEAPON", blade: "KINETIC_WEAPON", weapon: "KINETIC_WEAPON", killing: "KINETIC_WEAPON",
+  strength: "BODY_LIFE", bone: "BODY_LIFE", transformation: "BODY_LIFE", food: "BODY_LIFE",
+  soul: "SOUL_MIND", wisdom: "SOUL_MIND", emotion: "SOUL_MIND", enslavement: "SOUL_MIND", dream: "SOUL_MIND",
+  information: "INFORMATION_STEALTH", luck: "INFORMATION_STEALTH", theft: "INFORMATION_STEALTH", phantom: "INFORMATION_STEALTH", painting: "INFORMATION_STEALTH",
+  blood: "ORGANIC_CORRUPTION", poison: "ORGANIC_CORRUPTION",
+  refinement: "CRAFT_ALCHEMY", pill: "CRAFT_ALCHEMY",
+  heaven: "HEAVEN_HUMAN", human: "HEAVEN_HUMAN", qi: "HEAVEN_HUMAN",
+};
+
+export function getAttainmentBadge(name?: string, level?: number): { text: string; bg: string; textCol: string; border: string } {
+  const normName = (name || "").toLowerCase();
+  if (normName.includes("vô thượng") || level === 5) {
+    return { text: name || "Vô Thượng Đại Tông Sư", bg: "bg-rose-950/80", textCol: "text-rose-300", border: "border-rose-500/50" };
+  }
+  if (normName.includes("đại tông sư") || level === 4) {
+    return { text: name || "Đại Tông Sư", bg: "bg-amber-950/80", textCol: "text-amber-300", border: "border-amber-500/50" };
+  }
+  if (normName.includes("tông sư") || level === 3) {
+    return { text: name || "Tông Sư", bg: "bg-purple-950/80", textCol: "text-purple-300", border: "border-purple-500/50" };
+  }
+  if (normName.includes("đại sư") || level === 2) {
+    return { text: name || "Đại Sư", bg: "bg-emerald-950/80", textCol: "text-emerald-300", border: "border-emerald-500/50" };
+  }
+  if (normName.includes("chuẩn") || level === 1) {
+    return { text: name || "Chuẩn Đại Sư", bg: "bg-cyan-950/80", textCol: "text-cyan-300", border: "border-cyan-500/50" };
+  }
+  return { text: name || "Phổ Thông", bg: "bg-slate-800/80", textCol: "text-slate-400", border: "border-slate-700/50" };
+}
+
 export function getPathIconAndColor(path: string | undefined, nodeType: string | undefined): { icon: string; color: string } {
   if (nodeType === "WALL") return { icon: "🧱", color: "bg-orange-950/50 border-orange-500/40" };
   if (nodeType === "WATCHTOWER") return { icon: "🗼", color: "bg-blue-950/50 border-blue-500/40" };
@@ -166,6 +232,7 @@ export const ImmortalApertureView: React.FC = () => {
     player,
     aperture,
     daoMarks,
+    daoNgan,
     apertureNodes,
     variantHumans,
     settlements,
@@ -176,6 +243,7 @@ export const ImmortalApertureView: React.FC = () => {
     actionLoading,
     fetchAperture,
     fetchDaoMarks,
+    fetchDaoNgan,
     fetchApertureNodes,
     fetchVariantHumans,
     fetchSettlements,
@@ -213,6 +281,10 @@ export const ImmortalApertureView: React.FC = () => {
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [showHealMenu, setShowHealMenu] = useState(false);
+
+  const [daoGroupFilter, setDaoGroupFilter] = useState<string>("ALL");
+  const [daoSearch, setDaoSearch] = useState<string>("" );
+  const [showDaoGuide, setShowDaoGuide] = useState<boolean>(false);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
   const [variantSubTab, setVariantSubTab] = useState<"overview" | "settlements" | "npcs" | "refine" | "ecosystem">("overview");
@@ -271,12 +343,14 @@ export const ImmortalApertureView: React.FC = () => {
     }
     fetchAperture();
     fetchDaoMarks();
+    fetchDaoNgan();
     fetchActiveTribulation();
   }, []);
 
   useEffect(() => {
     if (activeTab === "dao") {
       fetchDaoMarks();
+      fetchDaoNgan();
     } else if (activeTab === "map") {
       fetchApertureNodes();
     } else if (activeTab === "tribulation") {
@@ -295,6 +369,7 @@ export const ImmortalApertureView: React.FC = () => {
     await Promise.all([
       fetchAperture(),
       fetchDaoMarks(),
+      fetchDaoNgan(),
       fetchApertureNodes(),
       fetchActiveTribulation(),
       fetchVariantHumans(),
@@ -2115,56 +2190,386 @@ return (
         </div>
       )}
 
-        {/* TAB 3: DAO MARKS */}
+        {/* TAB 3: DAO MARKS & DAO COMBAT PROFILE */}
         {activeTab === "dao" && (
-          <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
-            <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center gap-2">
-              <Layers className="w-5 h-5 text-amber-400" />
-              Thống Kê Đạo Ngân Tiên Khiếu
-            </h2>
+          <div className="space-y-6">
+            {/* Header & Controls Panel */}
+            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-amber-400" />
+                    Bảng Đạo Ngân & Uy Lực Tiên Khiếu
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Cơ chế tính toán toàn diện theo hệ thống Đạo Ngân, Xung Đột Lưu Phái, Cảnh Giới Chân Ý và Màng Kháng Bản Nguyên.
+                  </p>
+                </div>
 
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Đạo ngân là dấu vết quy tắc tiên thiên khắc sâu vào Tiên Khiếu khi vượt kiếp nạn. Đạo ngân tích lũy giúp tăng cường vĩnh viễn sát thương và phòng thủ của Cổ sư khi sử dụng thuộc tính tương ứng.
-            </p>
-
-            {daoMarks.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 border border-slate-850 rounded-xl">
-                Chưa sở hữu bất kỳ Đạo Ngân nào. Hãy phòng thủ và tiêu diệt các quái vật tai kiếp để thu được Đạo Ngân đầu tiên!
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowDaoGuide(!showDaoGuide)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold transition"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    {showDaoGuide ? "Ẩn Cơ Chế" : "Cơ Chế Đạo Ngân"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      fetchDaoMarks(true);
+                      fetchDaoNgan(true);
+                    }}
+                    disabled={actionLoading || isReloading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isReloading ? "animate-spin" : ""}`} />
+                    Làm Mới
+                  </button>
+                </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {daoMarks.map((mark) => {
-                  const multiplier = calculateDaoMarkMultiplier(mark.amount);
 
-                  return (
-                    <div
-                      key={mark.id}
-                      className="p-4 bg-slate-950/60 border border-slate-850 hover:border-slate-800 rounded-xl flex items-center justify-between transition"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Flame className="w-4 h-4 text-amber-400" />
-                          <span className="font-bold text-slate-200 uppercase">{mark.path} Path</span>
-                        </div>
-                        <div className="text-xs text-slate-400" title={`${mark.amount.toLocaleString("vi-VN")} Đạo Ngân`}>
-                          Tích lũy: <span className="text-amber-400 font-bold">{mark.amount >= 100000 ? formatNumber(mark.amount) : mark.amount.toLocaleString("vi-VN")}</span> Đạo Ngân
-                        </div>
+              {/* Explainer Box if showDaoGuide is open */}
+              {showDaoGuide && (
+                <div className="p-4 bg-slate-950/80 border border-amber-500/20 rounded-xl space-y-3 text-xs text-slate-300">
+                  <div className="font-bold text-amber-300 flex items-center gap-2 text-sm">
+                    <Info className="w-4 h-4 text-amber-400" />
+                    Quy Tắc Vận Hành Đạo Ngân (Dao Combat Mechanics)
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                    <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg space-y-1">
+                      <div className="font-bold text-slate-100 flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                        1. Tăng Phúc Uy Lực
                       </div>
-
-                      <div className="text-right">
-                        <div className="text-emerald-400 font-extrabold text-lg flex items-center gap-1 justify-end">
-                          <TrendingUp className="w-4 h-4" />
-                          x{multiplier.toFixed(1)}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          Hệ số cường hoá sát thương
-                        </div>
-                      </div>
+                      <p className="text-slate-400 leading-relaxed">
+                        Mỗi <strong className="text-amber-400">100 Đạo Ngân</strong> tăng +100% (+1.0x) sát thương và phòng thủ tương ứng khi thi triển cổ chiêu cùng hệ.
+                      </p>
                     </div>
-                  );
-                })}
+
+                    <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg space-y-1">
+                      <div className="font-bold text-slate-100 flex items-center gap-1.5">
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                        2. Xung Đột & Ngưỡng An Toàn
+                      </div>
+                      <p className="text-slate-400 leading-relaxed">
+                        Ngưỡng an toàn ngoại hệ là <strong className="text-cyan-400">{daoNgan?.grace_threshold ? daoNgan.grace_threshold.toLocaleString() : "1.000"} Đạo Ngân</strong>. Vượt qua ngưỡng này sẽ gây xung đột nội thể làm suy giảm bội số công kích.
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg space-y-1">
+                      <div className="font-bold text-slate-100 flex items-center gap-1.5">
+                        <Award className="w-3.5 h-3.5 text-purple-400" />
+                        3. Cảnh Giới Chân Ý
+                      </div>
+                      <p className="text-slate-400 leading-relaxed">
+                        Cảnh giới lưu phái (Đại Sư, Tông Sư, Đại Tông Sư) giúp <strong className="text-purple-300">điều hòa xung đột</strong> (+10%~50%) và <strong className="text-purple-300">nhân bội hiệu suất</strong> (1.05x ~ 1.30x).
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg space-y-1">
+                      <div className="font-bold text-slate-100 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                        4. Màng Kháng Tự Nhiên
+                      </div>
+                      <p className="text-slate-400 leading-relaxed">
+                        Đạo Ngân hình thành lớp màng bảo hộ tự nhiên, giúp <strong className="text-blue-300">giảm trực tiếp sát thương</strong> nhận vào khi bị kẻ địch tấn công bằng chiêu thức cùng hệ.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3 Top Summary KPI Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Total Marks & Power */}
+                <div className="p-4 bg-gradient-to-br from-amber-950/40 to-slate-950/80 border border-amber-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tổng Đạo Ngân Tích Lũy</span>
+                    <Layers className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-amber-400" title={`${(daoNgan?.total_marks ?? daoMarks.reduce((acc, m) => acc + m.amount, 0)).toLocaleString()} Đạo Ngân`}>
+                      {formatNumber(daoNgan?.total_marks ?? daoMarks.reduce((acc, m) => acc + m.amount, 0))}
+                    </span>
+                    <span className="text-xs text-slate-400">Đạo Ngân</span>
+                  </div>
+                  <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <span>Điểm Uy Lực Tổng:</span>
+                    <span className="font-bold text-amber-300">{formatNumber(daoNgan?.total_dao_ngan ?? 0)}</span>
+                  </div>
+                </div>
+
+                {/* Dominant Path */}
+                <div className="p-4 bg-gradient-to-br from-purple-950/40 to-slate-950/80 border border-purple-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Lưu Phái Chủ Tu</span>
+                    <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {daoNgan?.dominant_path ? (
+                      <>
+                        <span className="text-xl font-black text-purple-200">
+                          {translatePath(daoNgan.dominant_path)}
+                        </span>
+                        <span className="text-xs text-purple-400/80 font-mono">
+                          ({daoNgan.dominant_path})
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-sm font-semibold text-slate-500">Chưa xác định</span>
+                    )}
+                  </div>
+                  <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <span>Độ Tinh Thuần:</span>
+                    <span className="font-bold text-purple-300">
+                      {daoNgan?.paths?.find(p => p.path === daoNgan?.dominant_path)?.purity_pct.toFixed(1) ?? "0"}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dao Body & Grace Threshold */}
+                <div className="p-4 bg-gradient-to-br from-cyan-950/40 to-slate-950/80 border border-cyan-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Đặc Tính Đạo Thể</span>
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <div className="text-sm font-bold">
+                    {daoNgan?.has_non_conflicting_dao ? (
+                      <span className="text-cyan-300 flex items-center gap-1.5">
+                        ✨ Vô Xung Đột (Chí Tôn)
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">Đạo Thể Tương Khắc Bình Thường</span>
+                    )}
+                  </div>
+                  <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <span>Ngưỡng An Toàn Ngoại Hệ:</span>
+                    <span className="font-bold text-cyan-300">
+                      {daoNgan?.grace_threshold ? daoNgan.grace_threshold.toLocaleString() : "1.000"} Đạo
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
+
+              {/* Group Filter & Search */}
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full scrollbar-thin">
+                    {DAO_GROUPS.map((grp) => {
+                      const count = grp.id === "ALL"
+                        ? (daoNgan?.paths?.length ?? daoMarks.length)
+                        : (daoNgan?.paths ?? []).filter(p => (PATH_TO_DAO_GROUP[p.path.toLowerCase()] || "ELEMENTAL") === grp.id).length;
+                      
+                      const isSelected = daoGroupFilter === grp.id;
+                      return (
+                        <button
+                          key={grp.id}
+                          onClick={() => setDaoGroupFilter(grp.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition flex items-center gap-1.5 border ${
+                            isSelected
+                              ? `${grp.color} border-current shadow-lg shadow-black/40`
+                              : "bg-slate-950/50 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-200"
+                          }`}
+                        >
+                          <span>{grp.icon}</span>
+                          <span>{grp.name}</span>
+                          {count > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              isSelected ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"
+                            }`}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="relative shrink-0 w-full sm:w-56">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Tìm lưu phái..."
+                      value={daoSearch}
+                      onChange={(e) => setDaoSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-amber-500/50 rounded-lg text-xs text-slate-200 placeholder:text-slate-600 outline-none transition"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* List of Path Cards */}
+            {(() => {
+              const pathsList = daoNgan?.paths && daoNgan.paths.length > 0
+                ? daoNgan.paths
+                : daoMarks.map(m => ({
+                    path: m.path,
+                    amount: m.amount,
+                    multiplier: 1.0 + m.amount / 100.0,
+                    power: m.amount * (1.0 + m.amount / 100.0),
+                    attainment_level: 0,
+                    attainment_name: "Phổ Thông",
+                    realm_control_pct: 0,
+                    realm_efficiency: 1.0,
+                    internal_conflict_penalty_pct: 0,
+                    natural_resistance_pct: 0,
+                    purity_pct: daoMarks.length > 0 ? (m.amount / daoMarks.reduce((a, b) => a + b.amount, 0)) * 100 : 100,
+                  }));
+
+              const filteredPaths = pathsList.filter(p => {
+                const group = PATH_TO_DAO_GROUP[p.path.toLowerCase()] || "ELEMENTAL";
+                if (daoGroupFilter !== "ALL" && group !== daoGroupFilter) return false;
+                if (daoSearch.trim()) {
+                  const query = daoSearch.toLowerCase();
+                  const vnName = translatePath(p.path).toLowerCase();
+                  const enName = p.path.toLowerCase();
+                  if (!vnName.includes(query) && !enName.includes(query)) return false;
+                }
+                return true;
+              });
+
+              if (filteredPaths.length === 0) {
+                return (
+                  <div className="p-12 text-center text-slate-500 border border-slate-800/60 rounded-2xl bg-slate-900/30">
+                    <Layers className="w-10 h-10 mx-auto text-slate-600 mb-3 opacity-50" />
+                    <p className="text-sm font-medium text-slate-400">Không tìm thấy Đạo Ngân phù hợp bộ lọc.</p>
+                    <p className="text-xs text-slate-600 mt-1">Hãy thử đổi nhóm Đạo hoặc phòng thủ vượt qua kiếp nạn để nhận thêm Đạo Ngân!</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {filteredPaths.map((detail) => {
+                    const isDominant = (daoNgan?.dominant_path || "").toLowerCase() === detail.path.toLowerCase();
+                    const groupKey = PATH_TO_DAO_GROUP[detail.path.toLowerCase()] || "ELEMENTAL";
+                    const groupDef = DAO_GROUPS.find(g => g.id === groupKey) || DAO_GROUPS[1];
+                    const attainmentBadge = getAttainmentBadge(detail.attainment_name, detail.attainment_level);
+                    const pathIconColor = getPathIconAndColor(detail.path, undefined);
+
+                    return (
+                      <div
+                        key={detail.path}
+                        className={`p-5 bg-slate-950/70 border rounded-2xl transition hover:border-slate-700 space-y-4 relative overflow-hidden ${
+                          isDominant
+                            ? "border-amber-500/40 shadow-lg shadow-amber-500/5 ring-1 ring-amber-500/20"
+                            : "border-slate-800/80"
+                        }`}
+                      >
+                        {/* Background subtle accent */}
+                        <div className="absolute -top-12 -right-12 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+
+                        {/* Card Header */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl border ${pathIconColor.color}`}>
+                              {pathIconColor.icon}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-base text-slate-100">
+                                  {translatePath(detail.path)}
+                                </span>
+                                {isDominant && (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-gradient-to-r from-amber-500/30 to-yellow-500/30 text-amber-300 border border-amber-400/40 flex items-center gap-1 shadow-sm">
+                                    <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
+                                    CHỦ TU
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-slate-500 font-mono uppercase">{detail.path} Path</span>
+                                <span className="text-slate-700">•</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${groupDef.badgeBg}`}>
+                                  {groupDef.icon} {groupDef.name}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-bold border ${attainmentBadge.bg} ${attainmentBadge.textCol} ${attainmentBadge.border}`}>
+                              {attainmentBadge.text}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Marks & Purity Progress */}
+                        <div className="space-y-1.5 p-3 bg-slate-900/60 rounded-xl border border-slate-850">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400">Tích lũy Đạo Ngân:</span>
+                            <span className="font-bold text-amber-400" title={`${detail.amount.toLocaleString()} Đạo Ngân`}>
+                              {formatNumber(detail.amount)} Đạo Ngân
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span>Tỷ lệ tinh thuần:</span>
+                            <span className="text-purple-300 font-medium">{detail.purity_pct.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                            <div
+                              className="bg-gradient-to-r from-amber-500 to-purple-500 h-full rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(100, Math.max(0, detail.purity_pct))}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Combat Modifiers Grid (4 Tiles) */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                          {/* Multiplier */}
+                          <div className="p-2.5 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-1">
+                            <div className="text-[10px] text-slate-500 font-medium">Bội Số Khuếch Đại</div>
+                            <div className="text-sm font-black text-emerald-400 flex items-center gap-0.5">
+                              <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                              x{detail.multiplier >= 10000 ? formatNumber(detail.multiplier) : detail.multiplier.toFixed(2)}
+                            </div>
+                            <div className="text-[9px] text-slate-600">Sát thương & Thủ</div>
+                          </div>
+
+                          {/* Attainment Efficiency */}
+                          <div className="p-2.5 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-1">
+                            <div className="text-[10px] text-slate-500 font-medium">Hiệu Suất Chân Ý</div>
+                            <div className="text-sm font-black text-purple-300">
+                              x{(detail.realm_efficiency || 1.0).toFixed(2)}
+                            </div>
+                            <div className="text-[9px] text-slate-500">
+                              Điều hòa: +{(detail.realm_control_pct || 0).toFixed(0)}%
+                            </div>
+                          </div>
+
+                          {/* Conflict Penalty */}
+                          <div className="p-2.5 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-1">
+                            <div className="text-[10px] text-slate-500 font-medium">Phạt Xung Đột</div>
+                            <div className={`text-sm font-black ${detail.internal_conflict_penalty_pct > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                              {detail.internal_conflict_penalty_pct > 0 ? `-${detail.internal_conflict_penalty_pct.toFixed(1)}%` : "0%"}
+                            </div>
+                            <div className="text-[9px] text-slate-600">
+                              {detail.internal_conflict_penalty_pct > 0 ? "Suy giảm do ngoại hệ" : "Hoàn toàn an toàn"}
+                            </div>
+                          </div>
+
+                          {/* Natural Resistance */}
+                          <div className="p-2.5 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-1">
+                            <div className="text-[10px] text-slate-500 font-medium">Kháng Tự Nhiên</div>
+                            <div className="text-sm font-black text-cyan-400">
+                              +{(detail.natural_resistance_pct || 0).toFixed(1)}%
+                            </div>
+                            <div className="text-[9px] text-slate-600">Giảm sát thương nhận</div>
+                          </div>
+                        </div>
+
+                        {/* Power Contribution Footer */}
+                        <div className="pt-2 border-t border-slate-850 flex items-center justify-between text-xs text-slate-400">
+                          <span>Uy lực đóng góp:</span>
+                          <span className="font-bold text-amber-400">{formatNumber(detail.power)} Điểm</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -3003,10 +3408,4 @@ function canCollect(node: ApertureResourceNode, timeRate: number = 1.0): boolean
   const rate = timeRate <= 0 ? 1.0 : timeRate;
   const nextCollectTime = lastTime + (node.production_interval_hours * 60 * 60 * 1000) / rate;
   return Date.now() >= nextCollectTime;
-}
-
-// Calculate Dao Mark multipliers matching Go backend formula
-function calculateDaoMarkMultiplier(amount: number): number {
-  if (amount <= 0) return 1.0;
-  return 1.0 + amount / 100.0;
 }

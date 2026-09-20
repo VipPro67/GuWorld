@@ -222,6 +222,8 @@ Xác suất dính hiệu ứng bất lợi phụ thuộc vào Tỉ lệ gốc c�
 
 $$P_{\text{apply}} = P_{\text{base}} \times \left(1 + \frac{\text{DaoAttacker} - \text{DaoDefender}}{100}\right) \times \text{RankFactor} \times (1 - \text{Resist})$$
 
+Trong code (`statusfx.CanApplyStatus`, gọi ở `simulator/status_apply.go`): `(1-Resist)` = `(1-MentalResistance)×(1-CCResist)`, cap tổng 0.75; chênh lệch đạo ngân tính theo path của status (`casterDaoMarks[spec.Path]-targetDaoMarks[spec.Path]`), floor hệ số 0.2. Tenacity (`gamefx.Effects.tenacity`, cộng dồn từ Gu passive equipped + race + constitution + status, cap 0.75): rút ngắn duration CC nhận vào (`ceil(base×(1-tenacity))`, min 1) và roll đầu lượt tự giải 1 debuff (ưu tiên hard lock → action lock → disrupt → DoT, log `TENACITY_DISPEL`).
+
 **Bảng Hệ Số Cảnh Giới (`RankFactor`):**
 
 | Tương Quan Cảnh Giới | `RankFactor` | Ý Nghĩa Thực Chiến |

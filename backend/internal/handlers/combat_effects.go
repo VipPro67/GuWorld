@@ -93,7 +93,14 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		pathDamage = bonuses[1]
 	}
 	if applyDao {
-		daoMultiplier = gamefx.DaoMultiplierForPaths(actor.DaoMarks, guSpec.Path, daoBonus)
+		pathKey := "strength"
+		if len(guSpec.Path) > 0 {
+			pathKey = guSpec.Path[0]
+		}
+		profile := gamefx.BuildDaoCombatProfile(actor.DaoMarks, actor.PathMasteries, false, daoBonus)
+		daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
+		daoMultiplier = (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
+		masteryMultiplier = 1.0 // integrated in DaoCombatProfile
 	}
 
 	// Gu skill damage scales with player's base attack so it stays relevant vs basic attack

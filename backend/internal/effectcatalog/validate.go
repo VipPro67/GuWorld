@@ -85,7 +85,7 @@ var runtimeFields = map[string]map[string]bool{
 	"passive": set(
 		"stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", "path_conflict_reduction", "damage_multiplier_on_hit",
 		"soul_refinement", "storage_capacity", "movement", "investigation", "hearing", "evasion", "refine_mana_tier", "cleansing_power",
-		"luck", "success_rate_bonus", "time_speed_multiplier", "accuracy",
+		"luck", "success_rate_bonus", "time_speed_multiplier", "accuracy", "tenacity", "cc_resist",
 	),
 	"growth": set("max_attack", "max_defense", "max_hp", "max_speed", "hours_to_max"),
 }
@@ -94,7 +94,7 @@ var numberFields = set(
 	"damage_flat", "heal_flat", "shield_flat", "status_tick_damage", "range", "mana_regen", "lifesteal_rate", "refine_mana_tier",
 	"damage_mult", "shield_mult", "cleansing_power", "capture_bonus", "summon_count_per_tick", "phantom_damage_scale", "ignore_defense", "ignore_defense_pct",
 	"crit_rate_boost", "all_stats_buff_percent", "speed_boost_flat", "freeze", "slow", "slow1", "weak", "stun", "silence", "bleed",
-	"poison", "thorns", "regen", "atk_up", "def_up", "taunt", "stat_base_attack", "stat_base_defense", "stat_base_hp",
+	"poison", "thorns", "regen", "atk_up", "def_up", "taunt", "tenacity", "cc_resist", "stat_base_attack", "stat_base_defense", "stat_base_hp",
 	"stat_base_speed", "path_conflict_reduction", "damage_multiplier_on_hit", "soul_refinement", "storage_capacity", "movement",
 	"investigation", "hearing", "evasion", "luck", "success_rate_bonus", "time_speed_multiplier", "accuracy", "max_attack", "max_defense",
 	"max_hp", "max_speed", "hours_to_max",
@@ -107,7 +107,7 @@ var booleanFields = set(
 	"summon_growth_phantoms", "reveal_all_stealth", "reveal_weakness",
 )
 var stringFields = set("apply_status", "target_selector", "summon_monster_id")
-var ratioFields = set("lifesteal_rate", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent", "convert_damage_to_heal_percent", "kill_path_damage_buff")
+var ratioFields = set("lifesteal_rate", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent", "convert_damage_to_heal_percent", "kill_path_damage_buff", "tenacity", "cc_resist")
 var signedNumberFields = set("luck", "success_rate_bonus")
 var targetSelectors = set("SINGLE", "ROW", "COL", "COLUMN", "CROSS", "ALL")
 
