@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -500,6 +499,9 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 			continue
 		}
 		act.SourceID = guID
+		if inst, ok := instByGuID[guID]; ok {
+			act.InstanceID = inst.InstanceID
+		}
 		enemyActions = append(enemyActions, act)
 	}
 
@@ -624,6 +626,15 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	}
 	simEnemy.Mechanics = enemyMechanics
 
+	simEnemy.GuHunger = func() map[string]int {
+		gh := make(map[string]int)
+		for _, inst := range enemy.GuInventory {
+			if inst.Status == "ACTIVE" {
+				gh[inst.InstanceID] = inst.Hunger
+			}
+		}
+		return gh
+	}()
 	simEnemy.Actions = enemyActions
 	return simEnemy
 }
@@ -637,32 +648,61 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	var allActions []simulator.SimAction
 	var combatantMechanics []simulator.CombatMechanic
 
-	// Build owned equipped+ACTIVE Gu sets for validation
+	// Build owned equipped+ACTIVE Gu sets and lookup maps
 	ownedGuTypeSet := make(map[string]bool)                  // gu_id → true
 	ownedGuInstanceSet := make(map[string]bool)              // instance_id → true
+	equippedInstByID := make(map[string]models.GuInstance)   // instance_id → equipped ACTIVE instance
 	equippedInstByGuID := make(map[string]models.GuInstance) // gu_id → highest-rank equipped ACTIVE instance
+	var allEquippedActiveGus []models.GuInstance
+
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" && gu.Hunger > 0 {
 			ownedGuTypeSet[gu.GuID] = true
 			ownedGuInstanceSet[gu.InstanceID] = true
+			equippedInstByID[gu.InstanceID] = gu
+			allEquippedActiveGus = append(allEquippedActiveGus, gu)
 			if best, ok := equippedInstByGuID[gu.GuID]; !ok || gu.Rank > best.Rank {
 				equippedInstByGuID[gu.GuID] = gu
 			}
 		}
 	}
 
-	// Resolve a loadout GuID to its actual equipped instance spec (match ID + rank)
-	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
-		if inst, ok := equippedInstByGuID[guID]; ok {
-			if spec, found := models.GetGu(guID, inst.Rank); found {
-				return spec, true
-			}
-			return models.GetGuAny(guID)
+	resolveGuInstance := func(id string) (models.GuInstance, bool) {
+		if inst, ok := equippedInstByID[id]; ok {
+			return inst, true
+		}
+		if inst, ok := equippedInstByGuID[id]; ok {
+			return inst, true
+		}
+		return models.GuInstance{}, false
+	}
+
+	resolveGuSpec := func(inst models.GuInstance) (models.GuDictionaryItem, bool) {
+		if spec, found := models.GetGu(inst.GuID, inst.Rank); found {
+			return spec, true
+		}
+		return models.GetGuAny(inst.GuID)
+	}
+
+	loadoutSpec := func(id string) (models.GuDictionaryItem, bool) {
+		if inst, ok := resolveGuInstance(id); ok {
+			return resolveGuSpec(inst)
 		}
 		return models.GuDictionaryItem{}, false
 	}
 
+	var selectedGuInstances []models.GuInstance
 	var selectedGuIDs []string
+	seenSelectedInstIDs := make(map[string]bool)
+
+	addSelectedGuInstance := func(inst models.GuInstance) {
+		if !seenSelectedInstIDs[inst.InstanceID] {
+			seenSelectedInstIDs[inst.InstanceID] = true
+			selectedGuInstances = append(selectedGuInstances, inst)
+			selectedGuIDs = append(selectedGuIDs, inst.InstanceID)
+		}
+	}
+
 	var selectedKMIDs []string
 	var autoHealHP bool
 	var healThreshold float64
@@ -670,7 +710,11 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	var manaThreshold float64
 
 	if isInitiator && reqLoadout != nil && (len(reqLoadout.GuIds) > 0 || len(reqLoadout.KillerMoveIds) > 0) {
-		selectedGuIDs = reqLoadout.GuIds
+		for _, id := range reqLoadout.GuIds {
+			if inst, ok := resolveGuInstance(id); ok {
+				addSelectedGuInstance(inst)
+			}
+		}
 		selectedKMIDs = reqLoadout.KillerMoveIds
 		autoHealHP = reqLoadout.AutoHealHP
 		healThreshold = reqLoadout.HealThreshold
@@ -683,14 +727,14 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		settings := player.CombatSettings
 		if len(settings.GuPriorities) > 0 {
 			for _, t := range settings.GuPriorities {
-				if ownedGuTypeSet[t.GuID] {
-					selectedGuIDs = append(selectedGuIDs, t.GuID)
+				if inst, ok := resolveGuInstance(t.GuID); ok {
+					addSelectedGuInstance(inst)
 				}
 			}
 		}
-		if len(selectedGuIDs) == 0 {
-			for guID := range equippedInstByGuID {
-				selectedGuIDs = append(selectedGuIDs, guID)
+		if len(selectedGuInstances) == 0 {
+			for _, inst := range allEquippedActiveGus {
+				addSelectedGuInstance(inst)
 			}
 		}
 
@@ -731,14 +775,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 
 	// Passive mechanics come from every equipped, active, fed Gu, independent
 	// of whether that Gu is selected as an action.
-	equippedIDs := make([]string, 0, len(equippedInstByGuID))
-	for guID := range equippedInstByGuID {
-		equippedIDs = append(equippedIDs, guID)
-	}
-	sort.Strings(equippedIDs)
-	for _, guID := range equippedIDs {
-		instance := equippedInstByGuID[guID]
-		spec, ok := models.GetGu(instance.GuID, instance.Rank)
+	for _, instance := range allEquippedActiveGus {
+		spec, ok := resolveGuSpec(instance)
 		if !ok {
 			continue
 		}
@@ -750,17 +788,15 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	}
 
 	// Add selected Gus
-	for _, guID := range selectedGuIDs {
-		if !ownedGuTypeSet[guID] {
-			continue
-		}
-		if spec, ok := loadoutSpec(guID); ok {
+	for _, inst := range selectedGuInstances {
+		if spec, ok := resolveGuSpec(inst); ok {
 			if hasCombatActiveEffects(&spec) {
 				act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
 				if err != nil {
 					continue
 				}
-				act.SourceID = guID
+				act.SourceID = inst.GuID
+				act.InstanceID = inst.InstanceID
 				allActions = append(allActions, act)
 			}
 		}
@@ -799,7 +835,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		switch act.ActionType {
 		case "GU_SKILL":
 			for _, t := range settings.GuPriorities {
-				if t.GuID == act.SourceID {
+				if t.GuID == act.SourceID || (act.InstanceID != "" && t.GuID == act.InstanceID) {
 					act.Priority = t.Priority
 					act.UseCondition = t.UseCondition
 					act.ConditionValue = t.ConditionValue
@@ -828,8 +864,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			virtualShield += int(spec.Effects.Active.ShieldFlat)
 		}
 	}
-	for _, guID := range selectedGuIDs {
-		if spec, ok := loadoutSpec(guID); ok {
+	for _, inst := range selectedGuInstances {
+		if spec, ok := resolveGuSpec(inst); ok {
 			scanShield(spec)
 		}
 	}
@@ -948,8 +984,10 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		IgnoreDefensePct:  func() float64 { _, p := computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec); return p }(),
 		GuHunger: func() map[string]int {
 			gh := make(map[string]int)
-			for guID, inst := range equippedInstByGuID {
-				gh[guID] = inst.Hunger
+			for _, inst := range player.GuInventory {
+				if inst.Equipped && inst.Status == "ACTIVE" {
+					gh[inst.InstanceID] = inst.Hunger
+				}
 			}
 			return gh
 		}(),

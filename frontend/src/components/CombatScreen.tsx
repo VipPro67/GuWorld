@@ -151,7 +151,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const handleStartSimulation = async () => {
     const tribulationEventId = isPracticeMode ? undefined : player.active_combat?.tribulation_event_id;
     const loadout = {
-      GuIds: selectedGuIds.map(id => eligibleGus.find(g => g.instance_id === id)?.gu_id || id),
+      GuIds: selectedGuIds,
       KillerMoveIds: selectedKillerMoveIds,
       ImmortalGuId: null,
       AutoHealHP: autoHealHP,

@@ -2407,6 +2407,7 @@ return (
                     path: m.path,
                     amount: m.amount,
                     multiplier: 1.0 + m.amount / 100.0,
+                    base_multiplier: 1.0 + m.amount / 100.0,
                     power: m.amount * (1.0 + m.amount / 100.0),
                     attainment_level: 0,
                     attainment_name: "Phổ Thông",
@@ -2519,12 +2520,14 @@ return (
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                           {/* Multiplier */}
                           <div className="p-2.5 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-1">
-                            <div className="text-[10px] text-slate-500 font-medium">Bội Số Khuếch Đại</div>
+                            <div className="text-[10px] text-slate-500 font-medium">Khuếch Đại Thực Chiến</div>
                             <div className="text-sm font-black text-emerald-400 flex items-center gap-0.5">
                               <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                               x{detail.multiplier >= 10000 ? formatNumber(detail.multiplier) : detail.multiplier.toFixed(2)}
                             </div>
-                            <div className="text-[9px] text-slate-600">Sát thương & Thủ</div>
+                            <div className="text-[9px] text-slate-500" title={`Gốc: x${(detail.base_multiplier || (1 + detail.amount / 100)).toFixed(1)}`}>
+                              Gốc: x{formatNumber(detail.base_multiplier || (1 + detail.amount / 100))}
+                            </div>
                           </div>
 
                           {/* Attainment Efficiency */}

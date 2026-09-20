@@ -69,22 +69,26 @@ func filterCombatGuInventory(inv models.GuInventory, selectedGuIDs []string, cs 
 	}
 	if len(selectedGuIDs) > 0 {
 		byID := make(map[string]models.GuInstance, len(inv))
+		byInstID := make(map[string]models.GuInstance, len(inv))
 		for _, g := range inv {
 			if !g.Equipped || g.Status != "ACTIVE" {
 				continue
 			}
+			byInstID[g.InstanceID] = g
 			if best, exists := byID[g.GuID]; !exists || g.Rank > best.Rank {
 				byID[g.GuID] = g
 			}
 		}
 		seen := make(map[string]bool, len(selectedGuIDs))
 		result := make(models.GuInventory, 0, len(selectedGuIDs))
-		for _, guID := range selectedGuIDs {
-			if seen[guID] {
+		for _, id := range selectedGuIDs {
+			if seen[id] {
 				continue
 			}
-			seen[guID] = true
-			if g, ok := byID[guID]; ok {
+			seen[id] = true
+			if g, ok := byInstID[id]; ok {
+				result = append(result, g)
+			} else if g, ok := byID[id]; ok {
 				result = append(result, g)
 			}
 		}

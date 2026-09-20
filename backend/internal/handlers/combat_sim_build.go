@@ -272,7 +272,11 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 				if !g.Equipped {
 					continue
 				}
-				if count, used := simPlayer.GuUsedCounts[g.GuID]; used && count > 0 {
+				count, used := simPlayer.GuUsedCounts[g.InstanceID]
+				if !used && g.GuID != "" {
+					count, used = simPlayer.GuUsedCounts[g.GuID]
+				}
+				if used && count > 0 {
 					g.Hunger -= count
 					if g.Hunger < 0 {
 						g.Hunger = 0
@@ -280,7 +284,7 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 					hungerDeducted = true
 				}
 			}
-			if hungerDeducted {
+			if hungerDeducted && tx != nil {
 				if errSync := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); errSync != nil {
 					logger.S.Warnf("Failed to sync player Gu hunger after auto combat: %v", errSync)
 				}

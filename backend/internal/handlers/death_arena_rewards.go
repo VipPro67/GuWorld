@@ -103,6 +103,7 @@ func buildTeamCombatant(member *teamMemberCombatant) (*simulator.CombatantAuto, 
 						continue
 					}
 					act.SourceID = gu.GuID
+					act.InstanceID = gu.InstanceID
 					allActions = append(allActions, act)
 				}
 			}

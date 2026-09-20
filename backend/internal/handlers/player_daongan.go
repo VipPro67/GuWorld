@@ -38,7 +38,8 @@ func GetPassiveStatsHandler(c *gin.Context) {
 type DaoNganPathDetail struct {
 	Path                       string  `json:"path"`                          // e.g. "strength", "fire", "sword"
 	Amount                     int64   `json:"amount"`                        // raw dao mark count
-	Multiplier                 float64 `json:"multiplier"`                    // combat multiplier from this path
+	Multiplier                 float64 `json:"multiplier"`                    // effective combat multiplier: (1 + (amp-1)*eff)*conflict
+	BaseMultiplier             float64 `json:"base_multiplier"`               // base dao mark amplification: 1 + amount/100
 	Power                      float64 `json:"power"`                         // effective power contribution
 	AttainmentLevel            int     `json:"attainment_level"`              // 0-4
 	AttainmentName             string  `json:"attainment_name"`               // e.g. "Đại Tông Sư"
@@ -101,18 +102,22 @@ func CalculateDaoNganDetailed(
 		}
 		clean := gamefx.CleanPath(path)
 		mod, ok := profile.Paths[clean]
-		mult := gamefx.DaoAmplification(amount) + bonus[clean]
+		baseMult := gamefx.DaoAmplification(amount) + bonus[clean]
+		effectiveMult := baseMult
 		if ok {
-			mult = mod.DaoAmplification
+			baseMult = mod.DaoAmplification
+			daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(clean)
+			effectiveMult = (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
 		}
 
-		power := float64(amount) * mult
+		power := float64(amount) * effectiveMult
 
 		detail := DaoNganPathDetail{
-			Path:       clean,
-			Amount:     amount,
-			Multiplier: mult,
-			Power:      power,
+			Path:           clean,
+			Amount:         amount,
+			Multiplier:     effectiveMult,
+			BaseMultiplier: baseMult,
+			Power:          power,
 		}
 		if ok {
 			detail.AttainmentLevel = mod.AttainmentLevel
@@ -128,11 +133,11 @@ func CalculateDaoNganDetailed(
 
 		totalPower += power
 		totalMarks += amount
-		sumMult += mult
+		sumMult += effectiveMult
 		result.UniquePathCount++
 
-		if mult > maxMult {
-			maxMult = mult
+		if effectiveMult > maxMult {
+			maxMult = effectiveMult
 			maxPath = clean
 		}
 	}

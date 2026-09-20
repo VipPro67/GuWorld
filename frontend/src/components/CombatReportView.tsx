@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Swords, Trophy, Shield, Heart, ScrollText, Users, Play, ArrowLeft, ChevronDown, ChevronUp, Sparkles, Calculator } from "lucide-react";
+import { Swords, Trophy, Shield, Heart, ScrollText, Users, Play, ArrowLeft, ChevronDown, ChevronUp, Sparkles, Calculator, ArrowRight, Zap, TrendingUp, ShieldAlert } from "lucide-react";
 import { CombatReplayView, type CombatLogEntry } from "./CombatReplayView";
 import { FormattedText } from "./FormattedText";
 import { Num } from "./Num";
@@ -469,88 +469,227 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                   </div>
 
                   {/* Expandable Breakdown Card */}
-                  {isExpanded && entry.breakdown && (
-                    <div className="mt-2.5 p-3 rounded-xl bg-black/90 border border-zinc-800 text-xs font-mono space-y-2.5 shadow-xl animate-in fade-in duration-200">
-                      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                        <span className="font-bold text-amber-400 flex items-center gap-1.5 text-[11px]">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Chi tiết công thức tính sát thương:
-                        </span>
-                        {entry.breakdown.reason && (
-                          <span className="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/50 px-2 py-0.5 rounded-full">
-                            {entry.breakdown.reason}
+                  {isExpanded && entry.breakdown && (() => {
+                    const b = entry.breakdown;
+                    const baseDmg = b.base_damage || 0;
+                    const skillMult = b.skill_mult || 1;
+                    const daoMult = b.dao_mult || 1;
+                    const buffMult = b.buff_mult || 1;
+                    const critMult = b.crit_mult || 1;
+                    const pathBonus = b.path_bonus || 0;
+
+                    // 1. Raw Output Damage
+                    const rawOutputDmg = baseDmg * skillMult * daoMult * buffMult * critMult * (1 + pathBonus);
+
+                    // 2. Defense Reduction (Trừ giáp)
+                    const targetDef = b.target_def || 0;
+                    const afterDefDmg = Math.max(1, rawOutputDmg - targetDef);
+
+                    // 3. Path Resistance & Damage Reduction (Kháng hệ & Giảm ST)
+                    const pathResist = b.path_resist || 0;
+                    const dmgReduction = b.damage_reduction || 0;
+                    const finalDmg = b.final_damage || Math.max(1, afterDefDmg * (1 - pathResist) * (1 - dmgReduction));
+
+                    // 4. Shield Absorbed & HP Lost
+                    const shieldAbsorbed = b.shield_absorbed || 0;
+                    const hpLost = b.hp_damage || Math.max(0, finalDmg - shieldAbsorbed);
+
+                    return (
+                      <div className="mt-2.5 p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                          <span className="font-bold text-amber-400 flex items-center gap-1.5 text-xs">
+                            <Calculator className="w-4 h-4 text-amber-400" />
+                            Chi Tiết Công Thức Tính Sát Thương
                           </span>
-                        )}
+                          {b.reason && (
+                            <span className="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/50 px-2 py-0.5 rounded-full font-sans">
+                              {b.reason}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Pipeline Step Summary Bar */}
+                        <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                          {/* 1. Raw Output */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500">Đầu ra:</span>
+                            <span className="text-amber-300 font-bold" title={rawOutputDmg.toLocaleString()}>
+                              <Num value={rawOutputDmg} />
+                            </span>
+                          </div>
+
+                          <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+
+                          {/* 2. Minus Armor */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500">Trừ giáp:</span>
+                            <span className="text-cyan-400 font-bold" title={`-${targetDef.toLocaleString()} Giáp`}>
+                              -{formatNumber(targetDef)}
+                            </span>
+                            <span className="text-zinc-500">➔ Còn:</span>
+                            <span className="text-cyan-300 font-bold" title={afterDefDmg.toLocaleString()}>
+                              <Num value={afterDefDmg} />
+                            </span>
+                          </div>
+
+                          <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+
+                          {/* 3. Shield or Final */}
+                          <div className="flex items-center gap-1">
+                            {pathResist > 0 || dmgReduction > 0 ? (
+                              <>
+                                <span className="text-zinc-500">Kháng:</span>
+                                <span className="text-emerald-400 font-bold">
+                                  -{((pathResist + dmgReduction) * 100).toFixed(0)}%
+                                </span>
+                                <span className="text-zinc-500">➔</span>
+                              </>
+                            ) : null}
+                            {shieldAbsorbed > 0 && (
+                              <>
+                                <span className="text-zinc-500">Khiên cản:</span>
+                                <span className="text-cyan-400 font-bold">
+                                  <Num value={shieldAbsorbed} />
+                                </span>
+                                <span className="text-zinc-500">➔</span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* 4. HP Lost */}
+                          <div className="flex items-center gap-1 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded">
+                            <span className="text-rose-300 font-semibold">Trừ Máu:</span>
+                            <span className="text-rose-400 font-extrabold text-xs" title={hpLost.toLocaleString()}>
+                              -<Num value={hpLost} />
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Detailed 3-Stage Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
+                          {/* Stage 1: Xuất Chiêu & Khuếch Đại */}
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-amber-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Zap className="w-3 h-3 text-amber-400" />
+                                1. Sát Thương Đầu Ra
+                              </span>
+                              <span className="text-amber-300 font-extrabold text-xs">
+                                <Num value={rawOutputDmg} />
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>Dame Gốc:</span>
+                                <span className="text-amber-300 font-bold"><Num value={baseDmg} /></span>
+                              </div>
+                              <div className="flex justify-between items-start">
+                                <span>Hệ Số Chiêu:</span>
+                                <div className="text-right">
+                                  <span className="text-purple-300 font-bold">
+                                    x{(skillMult * buffMult).toFixed(2)}
+                                  </span>
+                                  {buffMult !== 1 && (
+                                    <div className="text-[10px] text-purple-400/80">
+                                      ({skillMult.toFixed(2)} chiêu × {buffMult.toFixed(2)} buff)
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Đạo Ngân:</span>
+                                <span className="text-indigo-300 font-bold">x{formatNumber(daoMult)}</span>
+                              </div>
+                              {critMult > 1 && (
+                                <div className="flex justify-between items-center">
+                                  <span>Bạo Kích (Crit):</span>
+                                  <span className="text-rose-300 font-bold">x{critMult.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {pathBonus > 0 && (
+                                <div className="flex justify-between items-center">
+                                  <span>Tăng ST Hệ:</span>
+                                  <span className="text-emerald-300 font-bold">+{(pathBonus * 100).toFixed(0)}%</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Stage 2: Phòng Thủ & Giảm Trừ */}
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Shield className="w-3 h-3 text-cyan-400" />
+                                2. Giảm Trừ Phòng Ngự
+                              </span>
+                              <span className="text-cyan-300 font-extrabold text-xs">
+                                <Num value={finalDmg} />
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>Thủ Mục Tiêu:</span>
+                                <span className="text-cyan-400 font-bold">-{formatNumber(targetDef)} Giáp</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>ST Sau Trừ Giáp:</span>
+                                <span className="text-cyan-200 font-bold"><Num value={afterDefDmg} /></span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Kháng Thuộc Tính:</span>
+                                <span className="text-emerald-300 font-bold">{(pathResist * 100).toFixed(0)}% Kháng</span>
+                              </div>
+                              {dmgReduction > 0 && (
+                                <div className="flex justify-between items-center">
+                                  <span>Giảm Sát Thương:</span>
+                                  <span className="text-emerald-300 font-bold">-{(dmgReduction * 100).toFixed(0)}% ST</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between items-center pt-1 border-t border-zinc-800/50">
+                                <span>ST Thực Gây Ra:</span>
+                                <span className="text-emerald-400 font-extrabold"><Num value={finalDmg} /></span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Stage 3: Phân Bổ Vào Mục Tiêu */}
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-rose-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Heart className="w-3 h-3 text-rose-400" />
+                                3. Tác Động Lên Mục Tiêu
+                              </span>
+                              <span className="text-rose-400 font-extrabold text-xs">
+                                -<Num value={hpLost} /> HP
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>ST Thực Nhận:</span>
+                                <span className="text-zinc-200 font-bold"><Num value={finalDmg} /></span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Khiên Hấp Thụ:</span>
+                                <span className={`font-bold ${shieldAbsorbed > 0 ? "text-cyan-400" : "text-zinc-500"}`}>
+                                  {shieldAbsorbed > 0 ? <Num value={shieldAbsorbed} /> : "0"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center pt-1 border-t border-zinc-800/50 text-rose-300">
+                                <span className="font-semibold">Trừ Thẳng Vào Máu:</span>
+                                <span className="text-rose-400 font-black text-sm">
+                                  <Num value={hpLost} />
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                        {/* 1. Base Dmg */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Dame Gốc</div>
-                          <div className="text-amber-300 font-bold mt-0.5">
-                            <Num value={entry.breakdown.base_damage || 0} />
-                          </div>
-                        </div>
-
-                        {/* 2. Skill Mult */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Hệ Số Chiêu</div>
-                          <div className="text-purple-300 font-bold mt-0.5">
-                            x{(entry.breakdown.skill_mult || 1).toFixed(2)}
-                          </div>
-                        </div>
-
-                        {/* 3. Dao Mult */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Đạo Ngân</div>
-                          <div className="text-indigo-300 font-bold mt-0.5">
-                            x{formatNumber(entry.breakdown.dao_mult || 1)}
-                          </div>
-                        </div>
-
-                        {/* 4. Buffs & Crit */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Buff / Bạo kích</div>
-                          <div className="text-rose-300 font-bold mt-0.5">
-                            x{((entry.breakdown.buff_mult || 1) * (entry.breakdown.crit_mult || 1)).toFixed(2)}
-                            {entry.breakdown.crit_mult && entry.breakdown.crit_mult > 1 ? " (Crit)" : ""}
-                          </div>
-                        </div>
-
-                        {/* 5. Target Def */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Thủ Mục Tiêu</div>
-                          <div className="text-cyan-300 font-bold mt-0.5">
-                            -{formatNumber(entry.breakdown.target_def || 0)} Giáp
-                          </div>
-                        </div>
-
-                        {/* 6. Path Resistance / Reduction */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Kháng / Giảm ST</div>
-                          <div className="text-emerald-300 font-bold mt-0.5">
-                            {((entry.breakdown.path_resist || 0) * 100).toFixed(0)}% Kháng
-                            {entry.breakdown.damage_reduction ? ` | -${((entry.breakdown.damage_reduction) * 100).toFixed(0)}% ST` : ""}
-                          </div>
-                        </div>
-
-                        {/* 7. Shield Absorbed */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Khiên Hấp Thụ</div>
-                          <div className="text-cyan-400 font-bold mt-0.5">
-                            {entry.breakdown.shield_absorbed ? <Num value={entry.breakdown.shield_absorbed} /> : "0"}
-                          </div>
-                        </div>
-
-                        {/* 8. Final HP Damage */}
-                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
-                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Trừ Thẳng Vào HP</div>
-                          <div className="text-rose-400 font-bold mt-0.5">
-                            {entry.breakdown.hp_damage ? <Num value={entry.breakdown.hp_damage} /> : "0"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })}

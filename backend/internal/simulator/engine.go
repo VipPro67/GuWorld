@@ -593,19 +593,31 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 
 			if a.ActionType == "GU_SKILL" && actor.Kind == "Player" {
+				guKey := a.InstanceID
+				if guKey == "" {
+					guKey = a.SourceID
+				}
 				if actor.GuHunger != nil {
-					h, exists := actor.GuHunger[a.SourceID]
+					h, exists := actor.GuHunger[guKey]
+					if !exists && a.SourceID != "" && guKey != a.SourceID {
+						h, exists = actor.GuHunger[a.SourceID]
+						if exists {
+							guKey = a.SourceID
+						}
+					}
 					if exists && h <= 0 {
 						return res
 					}
 					if exists {
-						actor.GuHunger[a.SourceID]--
+						actor.GuHunger[guKey]--
 					}
 				}
 				if actor.GuUsedCounts == nil {
 					actor.GuUsedCounts = make(map[string]int)
 				}
-				actor.GuUsedCounts[a.SourceID]++
+				if guKey != "" {
+					actor.GuUsedCounts[guKey]++
+				}
 			}
 
 			guRank := 1
@@ -1055,9 +1067,10 @@ func Simulate(state *CombatState) []CombatLog {
 								})
 							}
 							netDmg := hitDmg - targetDef
+							natResVal := 0.0
 							if target.DaoProfile != nil && len(a.Path) > 0 {
-								natRes := target.DaoProfile.GetDefensiveResistance(a.Path[0])
-								netDmg *= (1.0 - natRes)
+								natResVal = target.DaoProfile.GetDefensiveResistance(a.Path[0])
+								netDmg *= (1.0 - natResVal)
 							}
 							netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))
 							if netDmg < 1 {
@@ -1075,6 +1088,13 @@ func Simulate(state *CombatState) []CombatLog {
 							critMultVal = 1.5
 						}
 
+						rawDmg := a.Damage * skillMult * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * critMultVal
+
+						natResFinal := 0.0
+						if target.DaoProfile != nil && len(a.Path) > 0 {
+							natResFinal = target.DaoProfile.GetDefensiveResistance(a.Path[0])
+						}
+
 						breakdown := &DamageBreakdown{
 							BaseDamage:      a.Damage,
 							SkillMult:       skillMult,
@@ -1083,11 +1103,14 @@ func Simulate(state *CombatState) []CombatLog {
 							CritMult:        critMultVal,
 							PathBonus:       pathBonus(actor.PathDamageBonus, a.Path),
 							TargetDef:       targetDef,
+							NaturalResist:   natResFinal,
 							PathResist:      pathBonus(target.PathResistance, a.Path),
 							DamageReduction: target.DamageTakenReduction,
 							ShieldAbsorbed:  shieldAbsorbed,
 							HPDamage:        hpLost,
 							FinalDamage:     totalHitDmg,
+							RawDamage:       rawDmg,
+							HitCount:        hitCount,
 						}
 
 						if totalHitDmg > 0 {
@@ -1733,6 +1756,8 @@ func Simulate(state *CombatState) []CombatLog {
 						ShieldAbsorbed:  shieldAbsorbed,
 						HPDamage:        hpLost,
 						FinalDamage:     netDmg,
+						RawDamage:       actor.BaseDmg * daoMult * fallbackDmgMult,
+						HitCount:        1,
 					}
 
 					if netDmg > 0 {

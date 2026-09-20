@@ -116,6 +116,7 @@ type SimAction struct {
 	ActionType    string   // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
 	Name          string   // display name
 	SourceID      string   // GuID or KillerMoveID for tactic matching
+	InstanceID    string   // Gu instance ID (player_gu.id) when ActionType == "GU_SKILL"
 	Path          []string // dao paths used to compute the dao mark bonus in the engine
 	Rank          int      // rank of the Gu/Skill
 	Damage        float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
@@ -382,11 +383,14 @@ type DamageBreakdown struct {
 	CritMult        float64 `json:"crit_mult,omitempty"`
 	PathBonus       float64 `json:"path_bonus,omitempty"`
 	TargetDef       float64 `json:"target_def,omitempty"`
+	NaturalResist   float64 `json:"natural_resist,omitempty"`
 	PathResist      float64 `json:"path_resist,omitempty"`
 	DamageReduction float64 `json:"damage_reduction,omitempty"`
 	ShieldAbsorbed  float64 `json:"shield_absorbed,omitempty"`
 	HPDamage        float64 `json:"hp_damage,omitempty"`
 	FinalDamage     float64 `json:"final_damage,omitempty"`
+	RawDamage       float64 `json:"raw_damage,omitempty"`
+	HitCount        int     `json:"hit_count,omitempty"`
 	Reason          string  `json:"reason,omitempty"`
 }
 

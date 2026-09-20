@@ -801,5 +801,60 @@ func TestPureBuffMultipliersApplyToNextAction(t *testing.T) {
 	}
 }
 
+func TestGuHungerDeductionByInstanceID(t *testing.T) {
+	attacker := newTestCombatant("player1", "Player", 500, 100)
+	attacker.Speed = 20
+	attacker.GuHunger = map[string]int{
+		"inst_gu_1": 2,
+		"inst_gu_2": 10,
+	}
+	attacker.GuUsedCounts = make(map[string]int)
+	attacker.Actions = []SimAction{
+		{
+			ActionType: "GU_SKILL",
+			Name:       "Hỏa Cầu 1",
+			SourceID:   "GU_FIRE",
+			InstanceID: "inst_gu_1",
+			Damage:     50,
+			Priority:   1,
+		},
+		{
+			ActionType: "BASIC_ATTACK",
+			Name:       "Đánh thường",
+			Damage:     20,
+			Priority:   999,
+		},
+	}
+
+	defender := newTestCombatant("defender", "Enemy", 300, 0)
+	defender.Speed = 5
+	defender.Actions = []SimAction{
+		{ActionType: "BASIC_ATTACK", Name: "Đòn quái", Damage: 10, Priority: 999},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{attacker},
+		Enemies: []*CombatantAuto{defender},
+	}
+
+	Simulate(state)
+
+	// inst_gu_1 had 2 hunger and was used multiple turns until hunger reached 0
+	if attacker.GuHunger["inst_gu_1"] != 0 {
+		t.Fatalf("expected inst_gu_1 hunger to be 0, got %d", attacker.GuHunger["inst_gu_1"])
+	}
+	if attacker.GuUsedCounts["inst_gu_1"] != 2 {
+		t.Fatalf("expected inst_gu_1 to be used exactly 2 times, got %d", attacker.GuUsedCounts["inst_gu_1"])
+	}
+	// inst_gu_2 was not used, hunger must remain 10 and not present in GuUsedCounts
+	if attacker.GuHunger["inst_gu_2"] != 10 {
+		t.Fatalf("expected inst_gu_2 hunger to remain 10, got %d", attacker.GuHunger["inst_gu_2"])
+	}
+	if attacker.GuUsedCounts["inst_gu_2"] != 0 {
+		t.Fatalf("expected inst_gu_2 used count to be 0, got %d", attacker.GuUsedCounts["inst_gu_2"])
+	}
+}
+
 
 

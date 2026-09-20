@@ -565,6 +565,7 @@ export interface DaoNganPathDetail {
   path: string;
   amount: number;
   multiplier: number;
+  base_multiplier?: number;
   power: number;
   attainment_level: number;
   attainment_name: string;

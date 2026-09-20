@@ -21,11 +21,14 @@ export interface DamageBreakdown {
   crit_mult?: number;
   path_bonus?: number;
   target_def?: number;
+  natural_resist?: number;
   path_resist?: number;
   damage_reduction?: number;
   shield_absorbed?: number;
   hp_damage?: number;
   final_damage?: number;
+  raw_damage?: number;
+  hit_count?: number;
   reason?: string;
 }
 
