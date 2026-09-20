@@ -154,7 +154,15 @@ func EngageTribulation(c *gin.Context) {
 		return
 	}
 	if player.ActiveCombat != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang ở trong trạng thái chiến đấu!"})
+		if player.ActiveCombat.TribulationEventID == eventIDStr {
+			PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
+			respondActionOnly(c, http.StatusOK, player, gin.H{
+				"message":       "Tiếp tục trận chiến tai kiếp!",
+				"active_combat": player.ActiveCombat,
+			})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu khác! Hãy kết thúc trận chiến trước."})
 		return
 	}
 
@@ -299,7 +307,13 @@ func EngageTribulation(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Xuất trận nghênh chiến %d quái tai kiếp! Nhân Khí +3.", len(enemies))})
+	player.ActiveCombat = state
+	player.HumanQi = math.Min(float64(MaxHumanQi), player.HumanQi+3)
+	PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
+	respondActionOnly(c, http.StatusOK, player, gin.H{
+		"message":       fmt.Sprintf("Xuất trận nghênh chiến %d quái tai kiếp! Nhân Khí +3.", len(enemies)),
+		"active_combat": state,
+	})
 }
 
 // ResolveTribulation resolves the tribulation event manually if all enemies are dead, or auto-resolves with risk

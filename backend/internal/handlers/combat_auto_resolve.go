@@ -420,6 +420,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		Path:       spec.Path,
 		Rank:       spec.Rank,
 		Damage:     dmg,
+		DamageMult: 1.0,
 		Defense:    def,
 		ManaCost:   cost,
 	}
@@ -614,6 +615,7 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 		ActionType: "KILLER_MOVE",
 		Name:       km.Name,
 		Damage:     km.DamageValue,
+		DamageMult: 1.0,
 		Defense:    km.DefenseValue,
 		ManaCost:   km.TotalManaCost,
 		Path:       []string{km.Path},

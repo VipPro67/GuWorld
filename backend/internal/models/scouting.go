@@ -53,6 +53,7 @@ type DivinationRequest struct {
 	ItemClueID      string  `json:"item_clue_id"`
 	ResourceType    string  `json:"resource_type"` // "mana" or "immortal_stone"
 	ResourceAmount  float64 `json:"resource_amount"`
+	TargetSectName  string  `json:"-"` // populated server-side for clue validation
 }
 
 // Coordinates represents (X, Y) on the world map

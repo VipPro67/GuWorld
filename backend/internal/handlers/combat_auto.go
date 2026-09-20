@@ -538,6 +538,7 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		ActionType: "BASIC_ATTACK",
 		Name:       "Đánh thường",
 		Damage:     float64(enemy.BaseAttack),
+		DamageMult: 1.0,
 		ManaCost:   0,
 		Priority:   999,
 	})
@@ -778,6 +779,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		ActionType: "BASIC_ATTACK",
 		Name:       "Đánh thường",
 		Damage:     playerStats["attack"],
+		DamageMult: 1.0,
 		ManaCost:   0,
 	})
 

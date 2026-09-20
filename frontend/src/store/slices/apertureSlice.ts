@@ -881,6 +881,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       }
       get().addLog(data.message || "Xuất trận nghênh chiến quái tai kiếp.");
       get().applyInventoryFromResponse(data);
+      if (data.active_combat) {
+        const currentPlayer = get().player;
+        if (currentPlayer) {
+          set({
+            player: { ...currentPlayer, active_combat: data.active_combat },
+          });
+        }
+      }
       await get().fetchActiveTribulation(true);
       return true;
     } catch (caught: unknown) {

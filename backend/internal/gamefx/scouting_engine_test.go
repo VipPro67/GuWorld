@@ -54,7 +54,7 @@ func TestEvaluateDivinationOutcomes(t *testing.T) {
 		SuspectedRegion: "hub_nam_cuong",
 	}
 
-	status, delta, _ := EvaluateDivination(viewer, target, nil, nil, viewerDao, nil, clues, 20.0)
+	status, delta, _ := EvaluateDivination(viewer, target, nil, nil, viewerDao, nil, clues, 20.0, false)
 	if status != "full" || delta < 30.0 {
 		t.Errorf("expected full success with delta >= 30, got status=%s, delta=%f", status, delta)
 	}
@@ -76,7 +76,7 @@ func TestEvaluateDivinationOutcomes(t *testing.T) {
 		TargetUsername: "ImmortalVenerable",
 	}
 
-	weakStatus, weakDelta, backfireDamage := EvaluateDivination(weakViewer, supremeTarget, nil, nil, nil, targetDao, blindClues, 0.0)
+	weakStatus, weakDelta, backfireDamage := EvaluateDivination(weakViewer, supremeTarget, nil, nil, nil, targetDao, blindClues, 0.0, false)
 	if weakStatus != "backfire" || weakDelta >= -30.0 {
 		t.Errorf("expected backfire with delta < -30, got status=%s, delta=%f", weakStatus, weakDelta)
 	}

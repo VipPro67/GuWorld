@@ -364,18 +364,36 @@ type CombatantSnapshot struct {
 	IsDead  bool    `json:"is_dead"`
 }
 
+// DamageBreakdown contains the exact formula components for detailed player inspection.
+type DamageBreakdown struct {
+	BaseDamage      float64 `json:"base_damage,omitempty"`
+	SkillMult       float64 `json:"skill_mult,omitempty"`
+	DaoMult         float64 `json:"dao_mult,omitempty"`
+	BuffMult        float64 `json:"buff_mult,omitempty"`
+	CritMult        float64 `json:"crit_mult,omitempty"`
+	PathBonus       float64 `json:"path_bonus,omitempty"`
+	TargetDef       float64 `json:"target_def,omitempty"`
+	PathResist      float64 `json:"path_resist,omitempty"`
+	DamageReduction float64 `json:"damage_reduction,omitempty"`
+	ShieldAbsorbed  float64 `json:"shield_absorbed,omitempty"`
+	HPDamage        float64 `json:"hp_damage,omitempty"`
+	FinalDamage     float64 `json:"final_damage,omitempty"`
+	Reason          string  `json:"reason,omitempty"`
+}
+
 // CombatLog represents a granular event to be stringified as JSON.
 type CombatLog struct {
-	Turn      int             `json:"turn"`
-	ActorId   string          `json:"actor_id"`
-	ActorName string          `json:"actor_name"`
-	Action    string          `json:"action"` // e.g. "CAST_KILLER_MOVE", "BASIC_ATTACK", "TRIGGERED", "PHASE_TRANSITION"
-	TargetId  string          `json:"target_id,omitempty"`
-	Damage    float64         `json:"damage,omitempty"`
-	IsCrit    bool            `json:"is_crit,omitempty"`
-	Trigger   string          `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
-	Detail    string          `json:"detail,omitempty"`  // Human readable flavor text
-	Snapshot  *CombatSnapshot `json:"snapshot,omitempty"`
+	Turn      int              `json:"turn"`
+	ActorId   string           `json:"actor_id"`
+	ActorName string           `json:"actor_name"`
+	Action    string           `json:"action"` // e.g. "CAST_KILLER_MOVE", "BASIC_ATTACK", "TRIGGERED", "PHASE_TRANSITION"
+	TargetId  string           `json:"target_id,omitempty"`
+	Damage    float64          `json:"damage,omitempty"`
+	IsCrit    bool             `json:"is_crit,omitempty"`
+	Trigger   string           `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
+	Detail    string           `json:"detail,omitempty"`  // Human readable flavor text
+	Breakdown *DamageBreakdown `json:"breakdown,omitempty"`
+	Snapshot  *CombatSnapshot  `json:"snapshot,omitempty"`
 }
 
 func (c *CombatantAuto) GetManaName() string {

@@ -64,6 +64,7 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 					ActionType: "BASIC_ATTACK",
 					Name:       "Đánh thường",
 					Damage:     ally.BaseAttack,
+					DamageMult: 1.0,
 					ManaCost:   0,
 				}},
 			}

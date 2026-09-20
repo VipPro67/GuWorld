@@ -1,10 +1,9 @@
-"use client";
-
 import React, { useState, useMemo } from "react";
-import { Swords, Trophy, Shield, Heart, ScrollText, Users, Play, ArrowLeft } from "lucide-react";
+import { Swords, Trophy, Shield, Heart, ScrollText, Users, Play, ArrowLeft, ChevronDown, ChevronUp, Sparkles, Calculator } from "lucide-react";
 import { CombatReplayView, type CombatLogEntry } from "./CombatReplayView";
 import { FormattedText } from "./FormattedText";
 import { Num } from "./Num";
+import { formatNumber } from "@/lib/utils";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 export interface CombatantInfo {
@@ -147,6 +146,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
     logs.length > 0 ? "replay" : "summary"
   );
   const [selectedTurn, setSelectedTurn] = useState<number | "all">("all");
+  const [expandedLogIdx, setExpandedLogIdx] = useState<number | null>(null);
 
   const effectiveCombatants = useMemo(() => {
     if (combatants && combatants.length > 0) {
@@ -410,34 +410,147 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                 );
               }
 
+              const hasBreakdown = !!entry.breakdown;
+              const isExpanded = expandedLogIdx === idx;
+
               return (
                 <div
                   key={idx}
-                  className="flex gap-2 py-1.5 px-2 rounded-lg hover:bg-zinc-900/40 border-b border-zinc-900/60 last:border-b-0 items-start transition-colors"
+                  className={`rounded-lg transition-all border ${
+                    isExpanded
+                      ? "bg-zinc-900/80 border-amber-500/40 p-2 my-1"
+                      : "hover:bg-zinc-900/40 border-transparent border-b-zinc-900/60 last:border-b-0 py-1.5 px-2"
+                  }`}
                 >
-                  <span className="text-zinc-500 font-bold shrink-0 w-14">
-                    [H{entry.turn}]
-                  </span>
-                  {entry.actor_name && (
-                    <span className="font-semibold text-amber-400 shrink-0">
-                      {entry.actor_name}:
+                  <div
+                    className={`flex gap-2 items-start ${hasBreakdown ? "cursor-pointer select-none" : ""}`}
+                    onClick={() => {
+                      if (hasBreakdown) {
+                        setExpandedLogIdx(isExpanded ? null : idx);
+                      }
+                    }}
+                  >
+                    <span className="text-zinc-500 font-bold shrink-0 w-14">
+                      [H{entry.turn}]
                     </span>
-                  )}
-                  <span className="text-zinc-200 flex-1 leading-relaxed">
-                    <FormattedText
-                      text={entry.detail || `${entry.action} lên mục tiêu`}
-                    />
-                    {entry.damage && entry.damage > 0 ? (
-                      <span
-                        className={`ml-1.5 font-bold ${
-                          entry.is_crit ? "text-amber-400" : "text-rose-400"
-                        }`}
-                      >
-                        (-<Num value={Math.round(entry.damage)} />
-                        {entry.is_crit ? " BẠO KÍCH!" : ""})
+                    {entry.actor_name && (
+                      <span className="font-semibold text-amber-400 shrink-0">
+                        {entry.actor_name}:
                       </span>
-                    ) : null}
-                  </span>
+                    )}
+                    <span className="text-zinc-200 flex-1 leading-relaxed">
+                      <FormattedText
+                        text={entry.detail || `${entry.action} lên mục tiêu`}
+                      />
+                      {entry.damage && entry.damage > 0 && !entry.detail?.includes("gây ") ? (
+                        <span
+                          className={`ml-1.5 font-bold ${
+                            entry.is_crit ? "text-amber-400" : "text-rose-400"
+                          }`}
+                        >
+                          (-<Num value={Math.round(entry.damage)} />
+                          {entry.is_crit ? " BẠO KÍCH!" : ""})
+                        </span>
+                      ) : null}
+                    </span>
+                    {hasBreakdown && (
+                      <button
+                        type="button"
+                        className="text-zinc-500 hover:text-amber-400 shrink-0 p-0.5 rounded transition mt-0.5"
+                        title="Xem chi tiết tính toán sát thương"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Expandable Breakdown Card */}
+                  {isExpanded && entry.breakdown && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-black/90 border border-zinc-800 text-xs font-mono space-y-2.5 shadow-xl animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                        <span className="font-bold text-amber-400 flex items-center gap-1.5 text-[11px]">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Chi tiết công thức tính sát thương:
+                        </span>
+                        {entry.breakdown.reason && (
+                          <span className="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/50 px-2 py-0.5 rounded-full">
+                            {entry.breakdown.reason}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                        {/* 1. Base Dmg */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Dame Gốc</div>
+                          <div className="text-amber-300 font-bold mt-0.5">
+                            <Num value={entry.breakdown.base_damage || 0} />
+                          </div>
+                        </div>
+
+                        {/* 2. Skill Mult */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Hệ Số Chiêu</div>
+                          <div className="text-purple-300 font-bold mt-0.5">
+                            x{(entry.breakdown.skill_mult || 1).toFixed(2)}
+                          </div>
+                        </div>
+
+                        {/* 3. Dao Mult */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Đạo Ngân</div>
+                          <div className="text-indigo-300 font-bold mt-0.5">
+                            x{formatNumber(entry.breakdown.dao_mult || 1)}
+                          </div>
+                        </div>
+
+                        {/* 4. Buffs & Crit */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Buff / Bạo kích</div>
+                          <div className="text-rose-300 font-bold mt-0.5">
+                            x{((entry.breakdown.buff_mult || 1) * (entry.breakdown.crit_mult || 1)).toFixed(2)}
+                            {entry.breakdown.crit_mult && entry.breakdown.crit_mult > 1 ? " (Crit)" : ""}
+                          </div>
+                        </div>
+
+                        {/* 5. Target Def */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Thủ Mục Tiêu</div>
+                          <div className="text-cyan-300 font-bold mt-0.5">
+                            -{formatNumber(entry.breakdown.target_def || 0)} Giáp
+                          </div>
+                        </div>
+
+                        {/* 6. Path Resistance / Reduction */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Kháng / Giảm ST</div>
+                          <div className="text-emerald-300 font-bold mt-0.5">
+                            {((entry.breakdown.path_resist || 0) * 100).toFixed(0)}% Kháng
+                            {entry.breakdown.damage_reduction ? ` | -${((entry.breakdown.damage_reduction) * 100).toFixed(0)}% ST` : ""}
+                          </div>
+                        </div>
+
+                        {/* 7. Shield Absorbed */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Khiên Hấp Thụ</div>
+                          <div className="text-cyan-400 font-bold mt-0.5">
+                            {entry.breakdown.shield_absorbed ? <Num value={entry.breakdown.shield_absorbed} /> : "0"}
+                          </div>
+                        </div>
+
+                        {/* 8. Final HP Damage */}
+                        <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/50">
+                          <div className="text-zinc-500 text-[10px] uppercase font-semibold">Trừ Thẳng Vào HP</div>
+                          <div className="text-rose-400 font-bold mt-0.5">
+                            {entry.breakdown.hp_damage ? <Num value={entry.breakdown.hp_damage} /> : "0"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

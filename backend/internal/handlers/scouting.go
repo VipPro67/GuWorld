@@ -330,10 +330,13 @@ func ExecuteDivination(c *gin.Context) {
 		return
 	}
 
+	// Fetch target sect name for clue validation (server-side only)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id::text FROM sect_members WHERE player_id = (SELECT id FROM players WHERE username = $1)`, req.TargetUsername).Scan(&req.TargetSectName)
+
 	// 1. Fetch Viewer
 	var viewer models.Player
 	var viewerDaoMarks models.DaoMarksMap
-	err := db.DB.QueryRowContext(c.Request.Context(), `
+	err = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.immortal_stones,
 		       p.hp, p.base_hp, p.soul_hp, p.max_soul, p.current_region, p.x, p.y,
 		       `+db.GuInventoryAggregate("p.id")+`, p.path_masteries
@@ -411,6 +414,18 @@ func ExecuteDivination(c *gin.Context) {
 		_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, target.ID).Scan(&targetDaoMarks)
 	}
 
+	// Validate ItemClueID: check if target actually owns the Gu in player_gu
+	itemClueValid := false
+	if req.ItemClueID != "" {
+		var clueCount int
+		err := db.DB.QueryRowContext(c.Request.Context(),
+			`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND gu_id = $2`,
+			target.ID, req.ItemClueID).Scan(&clueCount)
+		if err == nil && clueCount > 0 {
+			itemClueValid = true
+		}
+	}
+
 	// 4. Evaluate Divination
 	statusType, delta, backfireDamage := gamefx.EvaluateDivination(
 		&viewer,
@@ -421,6 +436,7 @@ func ExecuteDivination(c *gin.Context) {
 		targetDaoMarks,
 		req,
 		resourceBonus,
+		itemClueValid,
 	)
 
 	// Deduct resources & apply damage in transaction

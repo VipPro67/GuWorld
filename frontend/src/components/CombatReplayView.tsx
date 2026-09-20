@@ -13,6 +13,22 @@ import { FormattedText } from "./FormattedText";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
+export interface DamageBreakdown {
+  base_damage?: number;
+  skill_mult?: number;
+  dao_mult?: number;
+  buff_mult?: number;
+  crit_mult?: number;
+  path_bonus?: number;
+  target_def?: number;
+  path_resist?: number;
+  damage_reduction?: number;
+  shield_absorbed?: number;
+  hp_damage?: number;
+  final_damage?: number;
+  reason?: string;
+}
+
 export interface CombatLogEntry {
   turn: number;
   actor_id: string;
@@ -24,6 +40,7 @@ export interface CombatLogEntry {
   is_crit?: boolean;
   trigger?: string;
   detail?: string;
+  breakdown?: DamageBreakdown;
 }
 
 interface CombatantReplayInfo {

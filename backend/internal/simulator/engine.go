@@ -976,6 +976,10 @@ func Simulate(state *CombatState) []CombatLog {
 									Action:    "BLIND_MISS",
 									TargetId:  target.ID,
 									Detail:    fmt.Sprintf("%s bị mù, đòn tấn công [%s] đánh trượt %s!", actor.Name, a.Name, target.Name),
+									Breakdown: &DamageBreakdown{
+										BaseDamage: a.Damage,
+										Reason:     "Đánh trượt do trạng thái Mù (Blind)",
+									},
 								})
 								continue
 							}
@@ -993,14 +997,24 @@ func Simulate(state *CombatState) []CombatLog {
 							targetDef = math.Max(0, targetDef*(1.0-actor.IgnoreDefensePct))
 						}
 
+						initialShield := target.VirtualShield
+						initialHP := target.HP
+						isCritHit := false
+
+						skillMult := a.DamageMult
+						if skillMult <= 0 {
+							skillMult = 1.0
+						}
+
 						for h := 0; h < hitCount; h++ {
-							hitDmg := a.Damage * a.DamageMult * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
+							hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
 							if h > 0 {
 								hitDmg *= 0.7
 							}
 							// Critical hit check
 							if actor.CritRateBonus > 0 && rng.Float64() < actor.CritRateBonus {
 								hitDmg *= 1.5
+								isCritHit = true
 								turnLogs = append(turnLogs, CombatLog{
 									Turn:      turn,
 									ActorId:   actor.ID,
@@ -1019,30 +1033,53 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 						totalDamageDealt += totalDmg
 
-						if totalDmg > 0 {
-							damageDetail := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, a.Name, target.Name, totalDmg, target.HP)
-							if hasDao && daoMult > 1.0 {
-								appliedTotal := totalDmg
-								baseShare := math.Max(1.0, math.Round(appliedTotal/daoMult))
-								if baseShare > appliedTotal {
-									baseShare = appliedTotal
-								}
-								daoShare := appliedTotal - baseShare
-								if daoShare > 0 {
-									damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %.0f HP)", actor.Name, a.Name, target.Name, baseShare, daoShare, target.HP)
-								}
+						shieldAbsorbed := math.Max(0, initialShield-target.VirtualShield)
+						hpLost := math.Max(0, initialHP-target.HP)
+						finalDmg := shieldAbsorbed + hpLost
+						critMultVal := 1.0
+						if isCritHit {
+							critMultVal = 1.5
+						}
+
+						breakdown := &DamageBreakdown{
+							BaseDamage:      a.Damage,
+							SkillMult:       skillMult,
+							DaoMult:         daoMult,
+							BuffMult:        dmgMultiplier,
+							CritMult:        critMultVal,
+							PathBonus:       pathBonus(actor.PathDamageBonus, a.Path),
+							TargetDef:       targetDef,
+							PathResist:      pathBonus(target.PathResistance, a.Path),
+							DamageReduction: target.DamageTakenReduction,
+							ShieldAbsorbed:  shieldAbsorbed,
+							HPDamage:        hpLost,
+							FinalDamage:     finalDmg,
+						}
+
+						if finalDmg > 0 {
+							var damageDetail string
+							if shieldAbsorbed > 0 && hpLost > 0 {
+								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (phá vỡ %.0f khiên, trừ %.0f HP, còn %.0f HP)", actor.Name, a.Name, target.Name, finalDmg, shieldAbsorbed, hpLost, target.HP)
+							} else if shieldAbsorbed > 0 && hpLost == 0 {
+								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ %.0f sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, a.Name, target.Name, shieldAbsorbed, target.VirtualShield, target.HP)
+							} else {
+								damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, a.Name, target.Name, finalDmg, target.HP)
 							}
+
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   actor.ID,
 								ActorName: actor.Name,
 								Action:    a.ActionType,
 								TargetId:  target.ID,
-								Damage:    totalDmg,
+								Damage:    finalDmg,
+								IsCrit:    isCritHit,
 								Detail:    damageDetail,
+								Breakdown: breakdown,
 							})
 						} else {
 							if target.VirtualShield > 0 {
+								breakdown.Reason = "Toàn bộ sát thương bị Khiên Ảo hấp thụ"
 								turnLogs = append(turnLogs, CombatLog{
 									Turn:      turn,
 									ActorId:   actor.ID,
@@ -1051,8 +1088,10 @@ func Simulate(state *CombatState) []CombatLog {
 									TargetId:  target.ID,
 									Damage:    0,
 									Detail:    fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, a.Name, target.Name, target.VirtualShield, target.HP),
+									Breakdown: breakdown,
 								})
 							} else if target.HP <= 0 {
+								breakdown.Reason = "Mục tiêu đã gục ngã từ trước"
 								turnLogs = append(turnLogs, CombatLog{
 									Turn:      turn,
 									ActorId:   actor.ID,
@@ -1061,8 +1100,10 @@ func Simulate(state *CombatState) []CombatLog {
 									TargetId:  target.ID,
 									Damage:    0,
 									Detail:    fmt.Sprintf("%s dùng [%s] lên %s (mục tiêu đã gục ngã từ trước)!", actor.Name, a.Name, target.Name),
+									Breakdown: breakdown,
 								})
 							} else {
+								breakdown.Reason = "Đối phương phòng thủ kiên cố hoặc miễn nhiễm toàn bộ sát thương"
 								turnLogs = append(turnLogs, CombatLog{
 									Turn:      turn,
 									ActorId:   actor.ID,
@@ -1071,6 +1112,7 @@ func Simulate(state *CombatState) []CombatLog {
 									TargetId:  target.ID,
 									Damage:    0,
 									Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây 0 sát thương do đối phương phòng thủ/miễn nhiễm (còn %.0f HP)!", actor.Name, a.Name, target.Name, target.HP),
+									Breakdown: breakdown,
 								})
 							}
 						}
@@ -1226,7 +1268,10 @@ func Simulate(state *CombatState) []CombatLog {
 							costLog = log
 						} else if log.Action == "PATH_MASTERY_GAIN" {
 							gainLog = log
-						} else if log.Action != "PATH_MASTERY_CAP" { // skip or merge cap if needed
+						} else if log.Action == "SHIELD_ABSORB" || log.Action == "SHIELD_BREAK" || log.Action == "SHIELD_BYPASS_ATTACK" || log.Action == "PATH_MASTERY_CAP" {
+							// Skip redundant damage outcome logs already detailed in useLog
+							continue
+						} else {
 							resultLogs = append(resultLogs, *log)
 						}
 					}
@@ -1575,7 +1620,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 			// Fallback: Basic attack if no attack / damage action was executed in this turn pass
 			if !executedDamageThisTurn {
-				daoMult, hasDao := actorDaoMultiplier(actor, []string{"strength"})
+				daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
 				fallbackDmgMult := actor.DamageMultiplier
 				fallbackAction := &SimAction{
 					ActionType: "BASIC_ATTACK",
@@ -1587,35 +1632,67 @@ func Simulate(state *CombatState) []CombatLog {
 				fallbackTargets := resolveTargets(enemyTargets, fallbackAction)
 				if len(fallbackTargets) > 0 {
 					target := fallbackTargets[0]
+					initialShield := target.VirtualShield
+					initialHP := target.HP
+
 					netDmg := fallbackAction.Damage - target.BaseDef
 					netDmg *= (1.0 - pathBonus(target.PathResistance, []string{"strength"}))
 					if netDmg < 1 {
 						netDmg = 1
 					}
-					applied := applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
-					if applied > 0 {
-						detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
-						if hasDao && daoMult > 1.0 {
-							baseDmgVal := math.Max(1.0, math.Round(applied/daoMult))
-							if baseDmgVal > applied {
-								baseDmgVal = applied
-							}
-							daoDmgVal := applied - baseDmgVal
-							if daoDmgVal > 0 {
-								detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, baseDmgVal, daoDmgVal, target.HP)
-							}
+					fallbackStartIndex := len(turnLogs)
+					applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
+					shieldAbsorbed := math.Max(0, initialShield-target.VirtualShield)
+					hpLost := math.Max(0, initialHP-target.HP)
+					finalDmg := shieldAbsorbed + hpLost
+
+					// Filter out redundant shield logs created by applyDamageToTarget
+					var keptLogs []CombatLog
+					for _, l := range turnLogs[fallbackStartIndex:] {
+						if l.Action != "SHIELD_ABSORB" && l.Action != "SHIELD_BREAK" && l.Action != "SHIELD_BYPASS_ATTACK" {
+							keptLogs = append(keptLogs, l)
 						}
+					}
+					turnLogs = append(turnLogs[:fallbackStartIndex], keptLogs...)
+
+					breakdown := &DamageBreakdown{
+						BaseDamage:      actor.BaseDmg,
+						SkillMult:       1.0,
+						DaoMult:         daoMult,
+						BuffMult:        fallbackDmgMult,
+						CritMult:        1.0,
+						PathBonus:       0,
+						TargetDef:       target.BaseDef,
+						PathResist:      pathBonus(target.PathResistance, []string{"strength"}),
+						DamageReduction: target.DamageTakenReduction,
+						ShieldAbsorbed:  shieldAbsorbed,
+						HPDamage:        hpLost,
+						FinalDamage:     finalDmg,
+					}
+
+					if finalDmg > 0 {
+						var detailMsg string
+						if shieldAbsorbed > 0 && hpLost > 0 {
+							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (phá vỡ %.0f khiên, trừ %.0f HP, còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, finalDmg, shieldAbsorbed, hpLost, target.HP)
+						} else if shieldAbsorbed > 0 && hpLost == 0 {
+							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ %.0f sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, fallbackAction.Name, target.Name, shieldAbsorbed, target.VirtualShield, target.HP)
+						} else {
+							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, finalDmg, target.HP)
+						}
+
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "BASIC_ATTACK",
 							TargetId:  target.ID,
-							Damage:    applied,
+							Damage:    finalDmg,
 							Detail:    detailMsg,
+							Breakdown: breakdown,
 						})
 					} else {
 						if target.VirtualShield > 0 {
+							breakdown.Reason = "Toàn bộ sát thương bị Khiên Ảo hấp thụ"
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   actor.ID,
@@ -1624,8 +1701,10 @@ func Simulate(state *CombatState) []CombatLog {
 								TargetId:  target.ID,
 								Damage:    0,
 								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, fallbackAction.Name, target.Name, target.VirtualShield, target.HP),
+								Breakdown: breakdown,
 							})
 						} else {
+							breakdown.Reason = "Đối phương phòng thủ kiên cố hoặc miễn nhiễm toàn bộ sát thương"
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   actor.ID,
@@ -1634,6 +1713,7 @@ func Simulate(state *CombatState) []CombatLog {
 								TargetId:  target.ID,
 								Damage:    0,
 								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây 0 sát thương do đối phương phòng thủ/miễn nhiễm (còn %.0f HP)!", actor.Name, fallbackAction.Name, target.Name, target.HP),
+								Breakdown: breakdown,
 							})
 						}
 					}

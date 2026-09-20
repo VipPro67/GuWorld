@@ -194,6 +194,7 @@ func EvaluateDivination(
 	targetDao models.DaoMarksMap,
 	clues models.DivinationRequest,
 	resourceBonus float64,
+	itemClueValid bool,
 ) (statusType string, delta float64, backfireDamage float64) {
 	pDiv := CalculateDeductionPower(viewer, viewerGus, viewerDao, clues, target, resourceBonus)
 	dCon := CalculateConcealmentDefense(target, targetGus, targetDao, viewer.CurrentRegion)
