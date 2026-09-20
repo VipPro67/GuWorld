@@ -57,7 +57,8 @@ import {
 } from "lucide-react";
 import { translateGuType, translateItemType, translatePath, translateMastery, masteryKeyForPoints } from "@/lib/translate";
 import { formatGameEffects } from "@/lib/effects";
-import { statusRemainLabel } from "@/lib/utils";
+import { statusRemainLabel, formatNumber } from "@/lib/utils";
+import { Num } from "./Num";
 import { TopupWalletAdminTab } from "./admin/TopupWalletAdminTab";
 import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
 import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
@@ -2212,7 +2213,7 @@ export const AdminView: React.FC = () => {
                                     className="text-xs px-3 py-1.5 rounded-xl border font-mono font-semibold flex items-center gap-1.5 bg-purple-950/20 text-purple-300 border-purple-900/40"
                                   >
                                     <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
-                                    {translatePath(path)}: +{Number(amount).toLocaleString()}
+                                    {translatePath(path)}: +<Num value={Number(amount)} />
                                   </span>
                                 );
                               })}

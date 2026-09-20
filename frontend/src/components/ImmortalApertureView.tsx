@@ -2288,14 +2288,16 @@ return (
                     <Layers className="w-4 h-4 text-amber-400" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-amber-400" title={`${(daoNgan?.total_marks ?? daoMarks.reduce((acc, m) => acc + m.amount, 0)).toLocaleString()} Đạo Ngân`}>
-                      {formatNumber(daoNgan?.total_marks ?? daoMarks.reduce((acc, m) => acc + m.amount, 0))}
+                    <span className="text-2xl font-black text-amber-400">
+                      <Num value={daoNgan?.total_marks ?? daoMarks.reduce((acc, m) => acc + m.amount, 0)} />
                     </span>
                     <span className="text-xs text-slate-400">Đạo Ngân</span>
                   </div>
                   <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
                     <span>Điểm Uy Lực Tổng:</span>
-                    <span className="font-bold text-amber-300">{formatNumber(daoNgan?.total_dao_ngan ?? 0)}</span>
+                    <span className="font-bold text-amber-300">
+                      <Num value={daoNgan?.total_dao_ngan ?? 0} />
+                    </span>
                   </div>
                 </div>
 
@@ -2500,8 +2502,8 @@ return (
                         <div className="space-y-1.5 p-3 bg-slate-900/60 rounded-xl border border-slate-850">
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-slate-400">Tích lũy Đạo Ngân:</span>
-                            <span className="font-bold text-amber-400" title={`${detail.amount.toLocaleString()} Đạo Ngân`}>
-                              {formatNumber(detail.amount)} Đạo Ngân
+                            <span className="font-bold text-amber-400">
+                              <Num value={detail.amount} /> Đạo Ngân
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-slate-500">
@@ -2565,7 +2567,9 @@ return (
                         {/* Power Contribution Footer */}
                         <div className="pt-2 border-t border-slate-850 flex items-center justify-between text-xs text-slate-400">
                           <span>Uy lực đóng góp:</span>
-                          <span className="font-bold text-amber-400">{formatNumber(detail.power)} Điểm</span>
+                          <span className="font-bold text-amber-400">
+                            <Num value={detail.power} /> Điểm
+                          </span>
                         </div>
                       </div>
                     );

@@ -5,7 +5,7 @@ import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
 import { formatGameEffects } from "@/lib/effects";
 import { statusRemainLabel } from "@/lib/utils";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
-
+import { Num } from "./Num";
 
 import { pathLabels } from "@/lib/translate";
 
@@ -467,7 +467,7 @@ export const PlayerProfileModal: React.FC = () => {
                         className="text-xs px-3 py-1.5 rounded-xl border font-mono font-semibold flex items-center gap-1.5 bg-purple-950/20 text-purple-400 border-purple-900/40 hover:border-purple-700/60 transition-colors"
                       >
                         <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
-                        {translatePath(path)}: +{amount.toLocaleString()}
+                        {translatePath(path)}: +<Num value={amount} />
                       </span>
                     );
                   })

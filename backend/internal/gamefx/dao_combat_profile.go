@@ -210,18 +210,14 @@ func GetCompatibility(pathA, pathB string) float64 {
 	return 0.85
 }
 
-// DaoAmplification computes the non-linear piecewise continuous multiplier for Dao Marks.
+// DaoAmplification computes the multiplier for Dao Marks.
 //
-// For marks <= 10,000: multiplier = 1.0 + marks / 100.0
-// For marks > 10,000:  multiplier = 101.0 + (marks - 10,000) / 250.0
+// Multiplier = 1.0 + marks / 100.0 (Mỗi 100 Đạo Ngân = +1.0x / +100% uy lực)
 func DaoAmplification(marks int64) float64 {
 	if marks <= 0 {
 		return 1.0
 	}
-	if marks <= 10000 {
-		return 1.0 + float64(marks)/100.0
-	}
-	return 101.0 + float64(marks-10000)/250.0
+	return 1.0 + float64(marks)/100.0
 }
 
 // RealmControlForLevel returns the conflict reduction percentage for an attainment level (0 to 4).

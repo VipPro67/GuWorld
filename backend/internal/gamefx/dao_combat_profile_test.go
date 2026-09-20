@@ -39,9 +39,9 @@ func TestDaoAmplification(t *testing.T) {
 		{100, 2.0},
 		{1000, 11.0},
 		{10000, 101.0},
-		{50000, 261.0},
-		{100000, 461.0},
-		{500000, 2061.0},
+		{50000, 501.0},
+		{100000, 1001.0},
+		{500000, 5001.0},
 	}
 
 	for _, tt := range tests {
@@ -69,8 +69,8 @@ func TestBuildDaoCombatProfile_PureSpecialist(t *testing.T) {
 	}
 
 	daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors("fire")
-	if daoAmp != 261.0 {
-		t.Errorf("expected daoAmp 261.0, got %f", daoAmp)
+	if daoAmp != 501.0 {
+		t.Errorf("expected daoAmp 501.0, got %f", daoAmp)
 	}
 	if realmEff != 1.25 {
 		t.Errorf("expected realmEff 1.25, got %f", realmEff)

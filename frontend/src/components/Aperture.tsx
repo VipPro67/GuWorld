@@ -35,6 +35,7 @@ import { formatGameEffects } from "@/lib/effects";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, GameSection } from "@/components/ui";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
+import { Num } from "./Num";
 // UI migrated to shared components
 
 function formatStat(val: number): string {
@@ -2301,7 +2302,7 @@ function BlessedLandControls() {
           <div className="flex flex-wrap gap-2 justify-center">
             {displayMarks.map((mark: ApiResponseData, idx: number) => (
               <div key={idx} className="px-2.5 py-1 bg-zinc-950/80 border border-zinc-900 rounded-xl text-[10px] font-mono">
-                <span className="text-amber-500 font-bold uppercase">{translatePath(mark.path)}</span>: <span className="text-zinc-200 font-bold">{mark.amount}</span>
+                <span className="text-amber-500 font-bold uppercase">{translatePath(mark.path)}</span>: <span className="text-zinc-200 font-bold"><Num value={Number(mark.amount) || 0} /></span>
               </div>
             ))}
             {displayMarks.length === 0 && (

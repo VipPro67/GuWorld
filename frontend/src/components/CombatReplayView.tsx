@@ -650,115 +650,160 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     const isTargeted = state.highlightedTarget === c?.id;
     const pct = c ? hpPct(c) : 0;
 
-    const borderGlow = isHighlighted ? "border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)]" :
-      isTargeted ? "border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.35)]" : "";
+    const borderGlow = isHighlighted
+      ? "border-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.45)] ring-1 ring-emerald-400/50"
+      : isTargeted
+      ? "border-rose-400 shadow-[0_0_16px_rgba(244,63,94,0.45)] ring-1 ring-rose-400/50"
+      : "";
 
     return (
       <div
         key={`${gridX}-${gridY}`}
         onClick={() => c && setDetailCombatant(detailCombatant?.id === c.id ? null : c)}
-        className={`rounded-lg border ${
+        className={`rounded-xl border ${
           isEmpty
-            ? 'border-zinc-800/30 bg-zinc-900/20'
+            ? 'border-zinc-800/40 bg-zinc-950/30'
             : c.hp <= 0
-              ? 'border-zinc-800/40 bg-zinc-950/40 opacity-50'
+              ? 'border-zinc-800/50 bg-zinc-950/70 opacity-40'
               : isAlly
-                ? `border-emerald-800/40 bg-emerald-950/20 ${borderGlow}`
-                : `border-rose-800/40 bg-rose-950/20 ${borderGlow}`
-        } flex flex-col items-center p-1.5 relative cursor-pointer transition-all hover:brightness-125 aspect-square`}
+                ? `border-emerald-800/50 bg-gradient-to-b from-emerald-950/30 to-zinc-950/90 shadow-sm ${borderGlow}`
+                : `border-rose-800/50 bg-gradient-to-b from-rose-950/30 to-zinc-950/90 shadow-sm ${borderGlow}`
+        } flex flex-col justify-between p-2 sm:p-2.5 relative cursor-pointer transition-all hover:brightness-125 hover:border-zinc-500/50 min-h-[145px] sm:min-h-[160px]`}
       >
         {c ? (
           <>
-            {/* Avatar */}
-            <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-zinc-500 border-2 border-white/10 mb-0.5">
-              {c.avatarUrl ? (
-                <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                c.name.slice(0, 2).toUpperCase()
-              )}
-            </div>
+            {/* Header: Avatar + Name + Badges */}
+            <div className="flex items-center gap-2 w-full min-w-0">
+              {/* Avatar */}
+              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-xs font-black text-zinc-300 border-2 ${
+                isAlly ? 'border-emerald-500/60 shadow-emerald-950/50' : 'border-rose-500/60 shadow-rose-950/50'
+              } shadow-md`}>
+                {c.avatarUrl ? (
+                  <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  c.name.slice(0, 2).toUpperCase()
+                )}
+              </div>
 
-            {/* Name + death marker */}
-            <div className="text-center min-w-0 w-full">
-              <span className={`text-[9px] font-bold truncate block leading-tight ${c.hp <= 0 ? 'text-zinc-700' : isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>
-                {c.name}
-                {c.hp <= 0 && '†'}
-              </span>
-            </div>
-
-            {/* Type badge */}
-            {!isAlly && c.kindDetail && c.kindDetail !== "" && (
-              <span className={`text-[6px] px-1 rounded border font-bold mt-0.5 ${
-                c.kindDetail === "Boss" ? 'bg-red-900/60 text-red-300 border-red-800' :
-                c.kindDetail === "Elite" ? 'bg-purple-900/60 text-purple-300 border-purple-800' :
-                'bg-zinc-800/60 text-zinc-400 border-zinc-700'
-              }`}>
-                {c.kindDetail.toUpperCase()}
-              </span>
-            )}
-
-            {/* HP Bar */}
-            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
-              <div
-                className={`h-full rounded-full transition-all ${c.hp <= 0 ? 'bg-zinc-700' : isAlly ? 'bg-emerald-500' : 'bg-rose-500'}`}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-
-            {/* HP number */}
-            <div className="text-[7px] font-mono mt-0.5">
-              <span className={c.hp <= 0 ? 'text-zinc-700' : 'text-zinc-400'}>
-                <Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} />
-              </span>
-            </div>
-
-            {/* Mana Bar */}
-            {c.maxMp > 0 && (isAlly || (c.kindDetail && c.kindDetail.toLowerCase() === "player")) && (
-              <>
-                <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
-                  <div
-                    className="h-full rounded-full bg-purple-500/70 transition-all"
-                    style={{ width: `${c.rank >= 6 ? 100 : c.maxMp > 0 ? Math.min(100, (c.mp / c.maxMp) * 100) : 0}%` }}
-                  />
+              {/* Name & Badges */}
+              <div className="min-w-0 flex-1 flex flex-col justify-center">
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className={`text-[11px] sm:text-xs font-bold truncate ${
+                    c.hp <= 0 ? 'text-zinc-600 line-through' : isAlly ? 'text-emerald-300' : 'text-rose-300'
+                  }`}>
+                    {c.name}
+                  </span>
+                  {c.hp <= 0 && <span className="text-xs text-rose-500 font-bold shrink-0">†</span>}
                 </div>
-                <div className="text-[6px] font-mono text-purple-400/70 mt-0.5">
-                  {c.rank >= 6 ? (
-                    <>Tiên Nguyên <Num value={Math.round(c.mp)} /></>
-                  ) : (
-                    <>MP <Num value={Math.round(c.mp)} /> / <Num value={Math.round(c.maxMp)} /></>
+
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                  {c.rank ? (
+                    <span className="text-[8px] sm:text-[9px] px-1 py-0.2 rounded bg-zinc-800/90 text-amber-300 font-mono font-bold border border-amber-500/30">
+                      {c.rank >= 6 ? `Chuyển ${c.rank}` : `H${c.rank}`}
+                    </span>
+                  ) : null}
+                  {!isAlly && c.kindDetail && c.kindDetail !== "" && (
+                    <span className={`text-[8px] sm:text-[9px] px-1 py-0.2 rounded border font-bold ${
+                      c.kindDetail === "Boss" ? 'bg-red-950/80 text-red-300 border-red-700' :
+                      c.kindDetail === "Elite" ? 'bg-purple-950/80 text-purple-300 border-purple-700' :
+                      'bg-zinc-800/80 text-zinc-400 border-zinc-700'
+                    }`}>
+                      {c.kindDetail.toUpperCase()}
+                    </span>
                   )}
                 </div>
-              </>
-            )}
+              </div>
+            </div>
 
-            {/* Combat Stats */}
-            <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 mt-1 w-full">
-              {c.damage > 0 && (
-                <div className="text-[6px] font-mono text-rose-400/90 flex items-center gap-[2px]">
-                  ⚔ <Num value={Math.round(c.damage)} />
+            {/* Vital Bars Section (HP, Shield, Mana) */}
+            <div className="w-full space-y-1.5 my-1.5">
+              {/* HP Bar & Value */}
+              <div>
+                <div className="flex justify-between items-center text-[10px] font-mono leading-tight mb-0.5">
+                  <span className="text-zinc-400 font-semibold flex items-center gap-0.5">
+                    <Heart className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                    HP
+                  </span>
+                  <span className={`font-bold ${c.hp <= 0 ? 'text-zinc-600' : 'text-zinc-200'}`}>
+                    <Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} />
+                  </span>
                 </div>
-              )}
-              {c.defense > 0 && (
-                <div className="text-[6px] font-mono text-blue-400/90 flex items-center gap-[2px]">
-                  🛡 <Num value={Math.round(c.defense)} />
+                <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      c.hp <= 0
+                        ? 'bg-zinc-700'
+                        : isAlly
+                        ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                        : 'bg-gradient-to-r from-rose-600 to-rose-400'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
                 </div>
-              )}
-              {c.speed > 0 && (
-                <div className="text-[6px] font-mono text-cyan-400/90 flex items-center gap-[2px]">
-                  ⚡ <Num value={Math.round(c.speed)} />
-                </div>
-              )}
+              </div>
+
+              {/* Shield Bar (if active) */}
               {c.shield > 0 && (
-                <div className="text-[6px] font-mono text-indigo-400/90 flex items-center gap-[2px]">
-                  🔮 <Num value={Math.round(c.shield)} />
+                <div className="flex items-center justify-between text-[9px] font-mono font-bold text-cyan-300 bg-cyan-950/50 border border-cyan-800/60 px-1.5 py-0.5 rounded">
+                  <span className="flex items-center gap-1">
+                    <Shield className="w-2.5 h-2.5 text-cyan-400" /> Khiên
+                  </span>
+                  <span>+<Num value={Math.round(c.shield)} /></span>
                 </div>
               )}
+
+              {/* Mana Bar */}
+              {c.maxMp > 0 && (isAlly || (c.kindDetail && c.kindDetail.toLowerCase() === "player")) && (
+                <div>
+                  <div className="flex justify-between items-center text-[9px] font-mono leading-tight mb-0.5">
+                    <span className="text-purple-400/90 font-medium flex items-center gap-0.5">
+                      <Zap className="w-2.5 h-2.5 text-purple-400 shrink-0" />
+                      {c.rank >= 6 ? "Tiên Nguyên" : "MP"}
+                    </span>
+                    <span className="text-purple-300 font-bold">
+                      {c.rank >= 6 ? (
+                        <Num value={Math.round(c.mp)} />
+                      ) : (
+                        <><Num value={Math.round(c.mp)} /> / <Num value={Math.round(c.maxMp)} /></>
+                      )}
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-400 transition-all duration-300"
+                      style={{ width: `${c.rank >= 6 ? 100 : c.maxMp > 0 ? Math.min(100, (c.mp / c.maxMp) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Combat Stats Footer (Công ⚔, Thủ 🛡, Tốc ⚡) */}
+            <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-zinc-800/60 w-full mt-auto text-center text-[9px] font-mono font-bold">
+              <div
+                className="bg-rose-950/40 border border-rose-900/40 text-rose-300 rounded py-0.5 px-0.5 truncate"
+                title={`Công kích: ${c.damage.toLocaleString()}`}
+              >
+                ⚔ <Num value={Math.round(c.damage)} />
+              </div>
+              <div
+                className="bg-blue-950/40 border border-blue-900/40 text-blue-300 rounded py-0.5 px-0.5 truncate"
+                title={`Phòng thủ: ${c.defense.toLocaleString()}`}
+              >
+                🛡 <Num value={Math.round(c.defense)} />
+              </div>
+              <div
+                className="bg-amber-950/40 border border-amber-900/40 text-amber-300 rounded py-0.5 px-0.5 truncate"
+                title={`Tốc độ: ${c.speed.toLocaleString()}`}
+              >
+                ⚡ <Num value={Math.round(c.speed)} />
+              </div>
             </div>
           </>
         ) : (
-          <span className="text-[8px] text-zinc-800 mx-auto mt-auto mb-auto">
-            {gridX},{gridY}
-          </span>
+          <div className="flex flex-col items-center justify-center h-full my-auto text-zinc-700/60 font-mono text-[10px]">
+            <span className="opacity-40">{gridX},{gridY}</span>
+          </div>
         )}
       </div>
     );
@@ -1169,7 +1214,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             Phe Ta
             <span className="text-[10px] text-zinc-600 ml-auto">{allies.length} chiến binh</span>
           </h3>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
             {[1, 2, 3].map((gridX) =>
               [3, 2, 1].map((gridY) => {
                 const list = Object.values(state.combatantStates).filter((c) => c.kind === "ally");
@@ -1193,7 +1238,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             Kẻ Địch
             <span className="text-[10px] text-zinc-600 ml-auto">{enemies.length} mục tiêu</span>
           </h3>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
             {[1, 2, 3].map((gridX) =>
               [1, 2, 3].map((gridY) => {
                 const list = Object.values(state.combatantStates).filter((c) => c.kind === "enemy");

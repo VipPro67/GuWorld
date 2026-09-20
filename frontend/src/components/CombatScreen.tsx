@@ -1011,7 +1011,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span className="text-sm font-bold text-amber-300">Máu Tiên Khiếu</span>
           </div>
-          <span className="text-xs font-mono text-amber-200">{Math.round(hp).toLocaleString()} / {Math.round(max).toLocaleString()}</span>
+          <span className="text-xs font-mono text-amber-200"><Num value={Math.round(hp)} /> / <Num value={Math.round(max)} /></span>
         </div>
         <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden">
           <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
@@ -1178,7 +1178,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 {playerBestPaths.slice(0, 5).map(p => (
                   <span key={p.path} className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${p.path === bestPath ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
                     }`}>
-                    {pathLabel(p.path)} · {p.daoMarks.toLocaleString()} Đạo
+                    {pathLabel(p.path)} · <Num value={p.daoMarks} /> Đạo
                   </span>
                 ))}
               </div>
@@ -1429,8 +1429,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             {player.materials_inventory && Object.keys(player.materials_inventory).length > 0
               ? `Dược liệu trong túi: ${Object.entries(player.materials_inventory).filter(([k]) => k !== "primeval_stone").length} loại`
               : "Không có dược liệu trong túi"}
-            · Nguyên Thạch: {player.primeval_stones?.toLocaleString() || 0}
-            · Tiên Nguyên Thạch: {player.immortal_stones?.toLocaleString() || 0}
+            · Nguyên Thạch: <Num value={player.primeval_stones || 0} />
+            · Tiên Nguyên Thạch: <Num value={player.immortal_stones || 0} />
           </div>
         </div>
       </div>

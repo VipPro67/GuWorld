@@ -524,8 +524,8 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                           {/* 2. Minus Armor */}
                           <div className="flex items-center gap-1">
                             <span className="text-zinc-500">Trừ giáp:</span>
-                            <span className="text-cyan-400 font-bold" title={`-${targetDef.toLocaleString()} Giáp`}>
-                              -{formatNumber(targetDef)}
+                            <span className="text-cyan-400 font-bold">
+                              -<Num value={targetDef} />
                             </span>
                             <span className="text-zinc-500">➔ Còn:</span>
                             <span className="text-cyan-300 font-bold" title={afterDefDmg.toLocaleString()}>
@@ -600,7 +600,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                               </div>
                               <div className="flex justify-between items-center">
                                 <span>Đạo Ngân:</span>
-                                <span className="text-indigo-300 font-bold">x{formatNumber(daoMult)}</span>
+                                <span className="text-indigo-300 font-bold">x<Num value={daoMult} /></span>
                               </div>
                               {critMult > 1 && (
                                 <div className="flex justify-between items-center">
@@ -632,7 +632,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                             <div className="space-y-1.5 text-zinc-400 text-[11px]">
                               <div className="flex justify-between items-center">
                                 <span>Thủ Mục Tiêu:</span>
-                                <span className="text-cyan-400 font-bold">-{formatNumber(targetDef)} Giáp</span>
+                                <span className="text-cyan-400 font-bold">-<Num value={targetDef} /> Giáp</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span>ST Sau Trừ Giáp:</span>
