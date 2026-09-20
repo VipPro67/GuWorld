@@ -289,7 +289,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 | Method | Path |
 | --- | --- |
-| GET | `/sects` |
+| GET | `/sects` | Danh sách các tông môn (ẩn tọa độ bản đồ cụ thể x, y để bảo mật phòng thủ tông môn). |
 | POST | `/sects/:id/join` |
 | POST | `/sects/join-request/cancel` |
 | POST | `/sects/leave` |

@@ -28,8 +28,8 @@ type Sect struct {
 	RequireApproval          bool            `json:"require_approval"`
 	RequirePromotionApproval bool            `json:"require_promotion_approval"`
 	LastVaultDecayAt         *time.Time      `json:"last_vault_decay_at,omitempty"`
-	MapX                     int             `json:"map_x"`
-	MapY                     int             `json:"map_y"`
+	MapX                     *int            `json:"map_x,omitempty"`
+	MapY                     *int            `json:"map_y,omitempty"`
 	ShieldUntil              *time.Time      `json:"shield_until,omitempty"`
 	Buildings                json.RawMessage `json:"buildings,omitempty"`
 }
@@ -284,10 +284,10 @@ type ExchangeVaultItemRequest struct {
 
 type VaultBuyRequest = ExchangeVaultItemRequest
 
-// GetSects lists all available sects with lightweight projection (omits heavy vault JSONB payloads)
+// GetSects lists all available sects with lightweight projection (omits heavy vault JSONB payloads and coordinates)
 func GetSects(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until 
+		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, shield_until 
 		FROM sects 
 		ORDER BY level DESC, funds DESC
 	`)
@@ -304,7 +304,7 @@ func GetSects(c *gin.Context) {
 		s.VaultMaterials = json.RawMessage("{}")
 		s.VaultRecipes = json.RawMessage("[]")
 		s.Buildings = json.RawMessage("{}")
-		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil); err == nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.ShieldUntil); err == nil {
 			sects = append(sects, s)
 		}
 	}
@@ -509,15 +509,18 @@ func GetMySectStatus(c *gin.Context) {
 	}
 
 	var s Sect
+	var mapX, mapY int
 	err = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings
 		FROM sects
 		WHERE id = $1
-	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.MapX, &s.MapY, &s.ShieldUntil, &s.Buildings)
+	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &mapX, &mapY, &s.ShieldUntil, &s.Buildings)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return
 	}
+	s.MapX = &mapX
+	s.MapY = &mapY
 	s.VaultGu, s.VaultMaterials, s.VaultRecipes, _ = LoadSectVaultJSON(c.Request.Context(), db.DB, s.ID)
 
 	// Active mission if any

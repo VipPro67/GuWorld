@@ -565,7 +565,7 @@ export const SectView: React.FC = () => {
                 <div>
                   <div className="flex justify-between items-start mb-4">
                     <div className="px-3 py-1 text-[10px] font-mono font-semibold uppercase tracking-wider rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800">
-                      {getRegionName(sect.region)} ({sect.map_x ?? 0}, {sect.map_y ?? 0})
+                      {getRegionName(sect.region)}
                     </div>
                     {sect.require_approval ? (
                       <span className="text-[9px] font-mono bg-amber-950/40 text-amber-400 border border-amber-500/20 rounded-md px-1.5 py-0.5">
@@ -658,7 +658,7 @@ export const SectView: React.FC = () => {
                       {sect.name}
                     </h3>
                     <p className="text-xs text-zinc-500 font-mono mt-1">
-                      Vực giới quản hạt: {getRegionName(sect.region)} · Tọa độ: ({sect.map_x ?? 0}, {sect.map_y ?? 0})
+                      Vực giới quản hạt: {getRegionName(sect.region)}
                     </p>
                   </div>
                   <button
@@ -896,7 +896,7 @@ export const SectView: React.FC = () => {
               )}
             </div>
             <p className="text-xs text-zinc-500 font-mono mt-0.5">
-              Địa Khu: {getRegionName(sect?.region || "")} ({sect?.map_x ?? 0}, {sect?.map_y ?? 0}) | {getRankName(member?.member_rank || "")}
+              Địa Khu: {getRegionName(sect?.region || "")}{sect?.map_x !== undefined && sect?.map_y !== undefined ? ` (${sect.map_x}, ${sect.map_y})` : ""} | {getRankName(member?.member_rank || "")}
             </p>
           </div>
         </div>
