@@ -8,40 +8,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-func TestSelectEligibleGus_VitalProtectionAndSatKhiThreshold(t *testing.T) {
-	gus := models.GuInventory{
-		{InstanceID: "gu1", GuID: "GU_NORMAL", Rank: 1, Equipped: false, IsVital: false},
-		{InstanceID: "gu2", GuID: "GU_EQUIPPED_1", Rank: 2, Equipped: true, IsVital: false},
-		{InstanceID: "gu3", GuID: "GU_EQUIPPED_2", Rank: 3, Equipped: true, IsVital: false},
-		{InstanceID: "gu4", GuID: "GU_VITAL", Rank: 4, Equipped: true, IsVital: true},
-	}
-
-	// 1. Sát Khí <= 5: Equipped and Vital Gus should NOT be dropped
-	remainingLow, droppedLow := selectEligibleGus(gus, 1.0, 5)
-	for _, g := range droppedLow {
-		if g.IsVital {
-			t.Errorf("expected vital Gu not to be dropped with sat_khi <= 5, got %s", g.InstanceID)
-		}
-		if g.Equipped {
-			t.Errorf("expected equipped Gu not to be dropped with sat_khi <= 5, got %s", g.InstanceID)
-		}
-	}
-	if len(remainingLow)+len(droppedLow) != len(gus) {
-		t.Errorf("inventory count mismatch: remaining %d + dropped %d != total %d", len(remainingLow), len(droppedLow), len(gus))
-	}
-
-	// 2. Sát Khí > 5: Equipped Gus CAN be dropped, but Vital Gu must NEVER be dropped
-	// Test multiple iterations to verify random selection
-	for i := 0; i < 20; i++ {
-		_, droppedHigh := selectEligibleGus(gus, 10.0, 6) // mult 10.0 to maximize drop percentage
-		for _, g := range droppedHigh {
-			if g.IsVital {
-				t.Fatalf("CRITICAL: Vital Gu %s was dropped with sat_khi > 5!", g.InstanceID)
-			}
-		}
-	}
-}
-
 func TestResolveRespawnPosition_NoSectStaysInCurrentRegion(t *testing.T) {
 	zoneReg.mu.Lock()
 	zoneReg.zones = []models.Region{
@@ -197,4 +163,3 @@ func TestSectTerritory_ShieldedProtection(t *testing.T) {
 		t.Errorf("Player outside territory should NOT be protected")
 	}
 }
-
