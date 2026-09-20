@@ -728,9 +728,16 @@ func Simulate(state *CombatState) []CombatLog {
 				// Apply shield to self
 				if a.Defense > 0 {
 					baseShield := a.Defense
-					if a.ShieldMult > 1.0 {
-						baseShield = a.Defense * a.ShieldMult
+					shieldMult := a.ShieldMult
+					if shieldMult <= 0 {
+						shieldMult = 1.0
 					}
+					pendingShield := getPendingShieldMult(actor)
+					if pendingShield > 1.0 {
+						shieldMult *= pendingShield
+						actor.PendingShieldBuffs = nil // consume all pending shield buffs
+					}
+					baseShield = a.Defense * shieldMult
 					daoShield := 0.0
 					if hasDao && daoMult > 1.0 {
 						daoShield = baseShield * (daoMult - 1.0)
@@ -955,6 +962,12 @@ func Simulate(state *CombatState) []CombatLog {
 
 					if hasMechanic(actor.Mechanics, "PASSIVE", "DOUBLE_DAMAGE_DEALT") {
 						dmgMultiplier *= 2.0
+					}
+
+					pendingDamage := getPendingDamageMult(actor)
+					if pendingDamage > 1.0 {
+						dmgMultiplier *= pendingDamage
+						actor.PendingDamageBuffs = nil // consume all pending damage buffs
 					}
 
 					shieldBypass := hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD")
@@ -1227,13 +1240,39 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 					}
 				} else {
+					detailMsg := fmt.Sprintf("%s dùng [%s]", actor.Name, a.Name)
+					hasBuff := false
+					buffKey := a.SourceID
+					if buffKey == "" {
+						buffKey = a.Name
+					}
+					if a.DamageMult > 1.0 {
+						if actor.PendingDamageBuffs == nil {
+							actor.PendingDamageBuffs = make(map[string]float64)
+						}
+						actor.PendingDamageBuffs[buffKey] = a.DamageMult
+						detailMsg = fmt.Sprintf("%s dùng [%s], tăng %.1fx sát thương cho đòn tấn công kế tiếp!", actor.Name, a.Name, a.DamageMult)
+						hasBuff = true
+					}
+					if a.ShieldMult > 1.0 {
+						if actor.PendingShieldBuffs == nil {
+							actor.PendingShieldBuffs = make(map[string]float64)
+						}
+						actor.PendingShieldBuffs[buffKey] = a.ShieldMult
+						if hasBuff {
+							detailMsg += fmt.Sprintf(" (và tăng %.1fx khiên kế tiếp)", a.ShieldMult)
+						} else {
+							detailMsg = fmt.Sprintf("%s dùng [%s], tăng %.1fx khiên cho kỹ năng tạo khiên kế tiếp!", actor.Name, a.Name, a.ShieldMult)
+						}
+					}
+
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    a.ActionType,
 						TargetId:  firstTarget.ID,
-						Detail:    fmt.Sprintf("%s dùng [%s]", actor.Name, a.Name),
+						Detail:    detailMsg,
 					})
 
 					if shieldLog != nil {
@@ -1622,10 +1661,16 @@ func Simulate(state *CombatState) []CombatLog {
 			if !executedDamageThisTurn {
 				daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
 				fallbackDmgMult := actor.DamageMultiplier
+				pendingDamage := getPendingDamageMult(actor)
+				if pendingDamage > 1.0 {
+					fallbackDmgMult *= pendingDamage
+					actor.PendingDamageBuffs = nil
+				}
 				fallbackAction := &SimAction{
 					ActionType: "BASIC_ATTACK",
 					Name:       "Đánh thường",
 					Damage:     actor.BaseDmg * daoMult * fallbackDmgMult,
+					DamageMult: 1.0,
 					ManaCost:   0,
 					TargetType: "SINGLE",
 				}
@@ -2133,7 +2178,7 @@ func checkActionCondition(action *SimAction, actor, target *CombatantAuto) bool 
 
 // GetSimActionCategory returns the primary category for a SimAction: "shield", "heal", "damage", or "other".
 func GetSimActionCategory(act SimAction) string {
-	if act.Defense > 0 || act.DefUpTier > 0 || act.ActionType == "SHIELD" {
+	if act.Defense > 0 || act.ShieldMult > 1.0 || act.DefUpTier > 0 || act.ActionType == "SHIELD" {
 		return "shield"
 	}
 	if act.Healing > 0 || act.RegenTier > 0 || act.LifeStealPct > 0 || act.ActionType == "HEAL" {
@@ -2155,4 +2200,30 @@ func getCategoryPriorityIndex(cat string, priorities []string) int {
 		}
 	}
 	return 999
+}
+
+func getPendingDamageMult(actor *CombatantAuto) float64 {
+	if len(actor.PendingDamageBuffs) == 0 {
+		return 1.0
+	}
+	mult := 1.0
+	for _, m := range actor.PendingDamageBuffs {
+		if m > 0 {
+			mult *= m
+		}
+	}
+	return mult
+}
+
+func getPendingShieldMult(actor *CombatantAuto) float64 {
+	if len(actor.PendingShieldBuffs) == 0 {
+		return 1.0
+	}
+	mult := 1.0
+	for _, m := range actor.PendingShieldBuffs {
+		if m > 0 {
+			mult *= m
+		}
+	}
+	return mult
 }

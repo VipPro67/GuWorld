@@ -417,6 +417,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 	act := simulator.SimAction{
 		ActionType: actionType,
 		Name:       spec.Name,
+		SourceID:   spec.ID,
 		Path:       spec.Path,
 		Rank:       spec.Rank,
 		Damage:     dmg,
@@ -486,7 +487,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.WoodTransformation {
 			act.Defense += 30.0
 		}
-		if active.DamageMult > 1.0 {
+		if active.DamageMult > 0 {
 			act.DamageMult = active.DamageMult
 		}
 		if active.TargetSelector != "" {

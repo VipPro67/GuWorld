@@ -698,4 +698,108 @@ func TestDirectHPDoTBypassesShield(t *testing.T) {
 	}
 }
 
+// TestPureBuffMultipliersApplyToNextAction verifies pure buff Gu (with DamageMult or ShieldMult but flat value 0) buff the next attack/shield.
+// Also verifies that duplicate Gu with the same ID only apply once.
+func TestPureBuffMultipliersApplyToNextAction(t *testing.T) {
+	attacker := newTestCombatant("attacker", "Player", 500, 0)
+	attacker.Speed = 20
+	attacker.Actions = []SimAction{
+		{
+			ActionType: "GU_SKILL",
+			SourceID:   "GU_MULTIPLIER",
+			Name:       "Công Bội Cổ #1",
+			Damage:     0,
+			DamageMult: 2.0,
+			Priority:   1,
+		},
+		{
+			ActionType: "GU_SKILL",
+			SourceID:   "GU_MULTIPLIER", // Duplicate Gu ID -> should only apply 2.0x once, NOT 4.0x
+			Name:       "Công Bội Cổ #2",
+			Damage:     0,
+			DamageMult: 2.0,
+			Priority:   2,
+		},
+		{
+			ActionType: "GU_SKILL",
+			SourceID:   "GU_OTHER_BUFF", // Different Gu ID -> should stack: 2.0 * 1.5 = 3.0x
+			Name:       "Tăng Uy Cổ",
+			Damage:     0,
+			DamageMult: 1.5,
+			Priority:   3,
+		},
+		{
+			ActionType: "GU_SKILL",
+			Name:       "Sát Chiêu Công Kích",
+			Damage:     100,
+			DamageMult: 1.0,
+			Priority:   4,
+		},
+		{
+			ActionType: "GU_SKILL",
+			SourceID:   "GU_SHIELD_BUFF",
+			Name:       "Hộ Thể Cổ #1",
+			Defense:    0,
+			ShieldMult: 2.0,
+			Priority:   5,
+		},
+		{
+			ActionType: "GU_SKILL",
+			SourceID:   "GU_SHIELD_BUFF", // Duplicate Gu ID -> only 2.0x
+			Name:       "Hộ Thể Cổ #2",
+			Defense:    0,
+			ShieldMult: 2.0,
+			Priority:   6,
+		},
+		{
+			ActionType: "GU_SKILL",
+			Name:       "Tạo Giáp Kỹ",
+			Defense:    100,
+			ShieldMult: 1.0,
+			Priority:   7,
+		},
+	}
+
+	defender := newTestCombatant("defender", "Enemy", 1000, 0)
+	defender.Speed = 5
+
+	state := &CombatState{
+		Seed:    12345,
+		Allies:  []*CombatantAuto{attacker},
+		Enemies: []*CombatantAuto{defender},
+	}
+
+	logs := Simulate(state)
+
+	var attackLog *CombatLog
+	for i := range logs {
+		if logs[i].Action == "GU_SKILL" && strings.Contains(logs[i].Detail, "Sát Chiêu Công Kích") {
+			attackLog = &logs[i]
+			break
+		}
+	}
+	if attackLog == nil {
+		t.Fatalf("expected attack log for Sát Chiêu Công Kích")
+	}
+
+	// Attack did 100 * (2.0 from GU_MULTIPLIER * 1.5 from GU_OTHER_BUFF) = 300 damage.
+	// If duplicate GU_MULTIPLIER had stacked, it would have been 100 * 2 * 2 * 1.5 = 600 damage.
+	if attackLog.Damage != 300 {
+		t.Fatalf("expected attack to deal exactly 300 damage, but got %.0f", attackLog.Damage)
+	}
+
+	// Attacker should have received 100 * 2.0 = 200 shield from 2.0x buffed shield (not 400 from 2x2)
+	var shieldActionLog *CombatLog
+	for i := range logs {
+		if logs[i].Action == "GU_SKILL" && strings.Contains(logs[i].Detail, "Tạo Giáp Kỹ") {
+			shieldActionLog = &logs[i]
+			break
+		}
+	}
+	if shieldActionLog == nil || !strings.Contains(shieldActionLog.Detail, "200 Khiên Ảo") {
+		t.Fatalf("expected shield action log mentioning 200 Khiên Ảo, but got %+v", shieldActionLog)
+	}
+}
+
+
 

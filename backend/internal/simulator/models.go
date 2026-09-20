@@ -282,6 +282,8 @@ type CombatantAuto struct {
 	CritRateBonus        float64 // extra crit chance (0..1) from Gu active effects
 	IgnoreDefenseFlat    float64 // flat defense ignored by attacker
 	IgnoreDefensePct     float64 // % defense ignored by attacker (0..1)
+	PendingDamageBuffs   map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on attack)
+	PendingShieldBuffs   map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on shield)
 
 	// Auto-use settings
 	AutoHealHP      bool
