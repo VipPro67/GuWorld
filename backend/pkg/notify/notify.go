@@ -120,8 +120,9 @@ func isRetryableDBError(err error) bool {
 		return false
 	}
 	msg := err.Error()
-	return contains(msg, "55P03") || contains(msg, "40P01") ||
-		contains(msg, "lock timeout") || contains(msg, "deadlock detected")
+	return contains(msg, "55P03") || contains(msg, "40P01") || contains(msg, "57014") ||
+		contains(msg, "lock timeout") || contains(msg, "deadlock detected") ||
+		contains(msg, "query canceled") || contains(msg, "statement timeout")
 }
 
 func contains(s, sub string) bool {
