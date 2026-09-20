@@ -336,21 +336,12 @@ export const GlobalChatOverlay: React.FC = () => {
                           >
                             💬 Nhắc tên
                           </button>
-                          <button
-                            onClick={() => {
-                              invitePlayer(msg.sender_username);
-                              setSelectedUserMenu(null);
-                            }}
-                            className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
-                          >
-                            ⚔️ Mời đội
-                          </button>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard?.writeText(msg.sender_username);
-                              addToast(`Đã sao chép: ${msg.sender_username}`, "info");
-                              setSelectedUserMenu(null);
-                            }}
+                           <button
+                             onClick={() => {
+                               navigator.clipboard?.writeText(msg.sender_username);
+                               addToast(`Đã sao chép: ${msg.sender_username}`, "info");
+                               setSelectedUserMenu(null);
+                             }}
                             className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
                           >
                             📋 Sao chép

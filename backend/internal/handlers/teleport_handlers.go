@@ -711,6 +711,25 @@ func TravelTeleport(c *gin.Context) {
 
 	playerSectID := getPlayerSectID(tx, authID)
 
+	// Check team rank gate for teleport
+	if player.PartyID != nil {
+		rows, err := tx.Query(`SELECT rank FROM players WHERE party_id = $1 AND id != $2`, player.PartyID, player.ID)
+		if err == nil {
+			var blocked bool
+			for rows.Next() {
+				var memberRank int
+				if err := rows.Scan(&memberRank); err == nil && memberRank > player.Rank {
+					blocked = true
+				}
+			}
+			rows.Close()
+			if blocked {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể truyền tống: có thành viên tổ đội có cấp bậc cao hơn bạn!"})
+				return
+			}
+		}
+	}
+
 	// 1. Load Source Array
 	var source models.TeleportArray
 	var sSectID sql.NullString
@@ -820,12 +839,26 @@ func TravelTeleport(c *gin.Context) {
 	player.X = dest.X
 	player.Y = dest.Y
 
-	logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, dest.X, dest.Y, dest.RegionID)
 	if oldRegion != dest.RegionID {
+		if newZone := FindLargeZoneAt(dest.X, dest.Y); newZone != nil && newZone.ZoneType == ZoneTypeLarge && newZone.EntryX != 0 && newZone.EntryY != 0 {
+			player.X = newZone.EntryX
+			player.Y = newZone.EntryY
+		}
 		if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, dest.X, dest.Y); debuffMsg != "" {
+			logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
 			logMsg += " " + debuffMsg
+			_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3, primeval_stones = $4, immortal_stones = $5, statuses = $6 WHERE id = $7`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses, player.ID)
+			SyncPartyMembersLocation(tx, &player)
+			if err := tx.Commit(); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận truyền tống"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"message": logMsg, "player": player})
+			return
 		}
 	}
+
+	logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
 
 	logger.S.Infof("[Pháp Trận] Người chơi %s (ID: %s) truyền tống qua pháp trận từ [%s] (%s: %d, %d) đến [%s] (%s: %d, %d) - Tiêu hao: %d %s", player.Username, player.ID, source.Name, source.RegionID, source.X, source.Y, dest.Name, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
 
@@ -862,6 +895,8 @@ func TravelTeleport(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu vị trí mới của nhân vật"})
 		return
 	}
+
+	SyncPartyMembersLocation(tx, &player)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận truyền tống"})

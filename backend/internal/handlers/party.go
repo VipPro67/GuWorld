@@ -116,6 +116,8 @@ type InviteRequest struct {
 	Username string `json:"username" binding:"required"`
 }
 
+const PartyInviteRange = 100
+
 func InvitePlayer(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -170,6 +172,19 @@ func InvitePlayer(c *gin.Context) {
 
 	if targetPartyID.Valid && targetPartyID.String != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Người chơi này đã có tổ đội rồi!"})
+		return
+	}
+
+	nearby := worldPosIndex.Nearby(player.CurrentRegion, player.X, player.Y, PartyInviteRange, player.ID.String())
+	targetFound := false
+	for _, n := range nearby {
+		if n.Username == req.Username {
+			targetFound = true
+			break
+		}
+	}
+	if !targetFound {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Người chơi này không đủ gần để mời vào tổ đội!"})
 		return
 	}
 
