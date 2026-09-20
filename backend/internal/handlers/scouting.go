@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // InspectLocalPlayer handles local map inspection with FOV and Party/Sect verification
@@ -671,7 +672,7 @@ func SeverClues(c *gin.Context) {
 	var player models.Player
 	err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT id, rank, current_mana, immortal_stones, current_region, x, y,
-		       `+db.GuInventoryAggregate("id")+`, path_masteries
+		       `+db.GuInventoryAggregate("players.id")+`, path_masteries
 		FROM players WHERE id = $1
 	`, playerID).Scan(
 		&player.ID, &player.Rank, &player.CurrentMana, &player.ImmortalStones,
@@ -1010,7 +1011,7 @@ func ExecuteDivineGu(c *gin.Context) {
 	queryPlayers := `
 		SELECT p.id, p.username, p.current_region, p.x, p.y, p.rank, p.sub_rank,
 		       COALESCE(pg.gu_rank, pg.rank, 1), pg.state, pg.equipped, pg.is_vital, pg.location,
-		       p.is_disguised, COALESCE(p.active_concealment, false),
+		       p.is_disguised, (p.active_concealment IS NOT NULL AND p.active_concealment != '{}'::jsonb),
 		       ` + db.GuInventoryAggregate("p.id") + `, p.path_masteries
 		FROM player_gu pg
 		JOIN players p ON pg.player_id = p.id
@@ -1018,7 +1019,11 @@ func ExecuteDivineGu(c *gin.Context) {
 		  AND ($2 = 0 OR pg.gu_rank = $2 OR pg.rank = $2)
 	`
 	pRows, err := db.DB.QueryContext(c.Request.Context(), queryPlayers, targetGu.ID, targetGu.Rank, matchIDs)
-	if err == nil {
+	if err != nil {
+		if logger.S != nil {
+			logger.S.Errorf("scouting: ExecuteDivineGu queryPlayers error: %v", err)
+		}
+	} else {
 		defer pRows.Close()
 		for pRows.Next() {
 			var pID uuid.UUID
@@ -1032,45 +1037,49 @@ func ExecuteDivineGu(c *gin.Context) {
 				&pID, &pUsername, &pRegion, &pX, &pY, &pRank, &pSubRank,
 				&pgRank, &pState, &pEquipped, &pIsVital, &pLocation,
 				&pDisguised, &pActiveConceal, &pGus, &pMasteries,
-			); err == nil {
-				targetPlayer := models.Player{
-					Account:          models.Account{ID: pID, Username: pUsername, IsDisguised: pDisguised},
-					CultivationState: models.CultivationState{Rank: pRank, SubRank: pSubRank},
-					WorldState:       models.WorldState{CurrentRegion: pRegion, X: pX, Y: pY},
-					DaoState:         models.DaoState{PathMasteries: pMasteries},
+			); err != nil {
+				if logger.S != nil {
+					logger.S.Errorf("scouting: ExecuteDivineGu player scan error: %v", err)
 				}
-				def := gamefx.CalculateConcealmentDefense(&targetPlayer, models.FilterEquippedActive(pGus), nil, viewer.CurrentRegion)
-				if pActiveConceal {
-					def += 50.0
-				}
-				if def > maxHolderDefense {
-					maxHolderDefense = def
-				}
-
-				locState := "inventory"
-				if pEquipped {
-					locState = "equipped"
-				} else if pState == "SLEEPING" {
-					locState = "sleeping"
-				}
-
-				allHolders = append(allHolders, holderData{
-					holderType:     "player",
-					holderName:     pUsername,
-					holderUsername: pUsername,
-					region:         pRegion,
-					x:              pX,
-					y:              pY,
-					hasCoords:      true,
-					isVital:        pIsVital,
-					equipped:       pEquipped,
-					state:          locState,
-					quantity:       1,
-					activeConceal:  pActiveConceal || pDisguised,
-					defense:        def,
-				})
-				playerCount++
+				continue
 			}
+			targetPlayer := models.Player{
+				Account:          models.Account{ID: pID, Username: pUsername, IsDisguised: pDisguised},
+				CultivationState: models.CultivationState{Rank: pRank, SubRank: pSubRank},
+				WorldState:       models.WorldState{CurrentRegion: pRegion, X: pX, Y: pY},
+				DaoState:         models.DaoState{PathMasteries: pMasteries},
+			}
+			def := gamefx.CalculateConcealmentDefense(&targetPlayer, models.FilterEquippedActive(pGus), nil, viewer.CurrentRegion)
+			if pActiveConceal {
+				def += 50.0
+			}
+			if def > maxHolderDefense {
+				maxHolderDefense = def
+			}
+
+			locState := "inventory"
+			if pEquipped {
+				locState = "equipped"
+			} else if pState == "SLEEPING" {
+				locState = "sleeping"
+			}
+
+			allHolders = append(allHolders, holderData{
+				holderType:     "player",
+				holderName:     pUsername,
+				holderUsername: pUsername,
+				region:         pRegion,
+				x:              pX,
+				y:              pY,
+				hasCoords:      true,
+				isVital:        pIsVital,
+				equipped:       pEquipped,
+				state:          locState,
+				quantity:       1,
+				activeConceal:  pActiveConceal || pDisguised,
+				defense:        def,
+			})
+			playerCount++
 		}
 	}
 
@@ -1085,32 +1094,40 @@ func ExecuteDivineGu(c *gin.Context) {
 		  AND vg.quantity > 0
 	`
 	sRows, err := db.DB.QueryContext(c.Request.Context(), querySects, targetGu.ID, targetGu.Rank, matchIDs)
-	if err == nil {
+	if err != nil {
+		if logger.S != nil {
+			logger.S.Errorf("scouting: ExecuteDivineGu querySects error: %v", err)
+		}
+	} else {
 		defer sRows.Close()
 		for sRows.Next() {
 			var sID, sName, sRegion, guID string
 			var sMapX, sMapY, sLevel, guRank, qty, cost int
-			if err := sRows.Scan(&sID, &sName, &sRegion, &sMapX, &sMapY, &sLevel, &guID, &guRank, &qty, &cost); err == nil {
-				sectDef := float64(sLevel * 10)
-				if sectDef > maxHolderDefense {
-					maxHolderDefense = sectDef
+			if err := sRows.Scan(&sID, &sName, &sRegion, &sMapX, &sMapY, &sLevel, &guID, &guRank, &qty, &cost); err != nil {
+				if logger.S != nil {
+					logger.S.Errorf("scouting: ExecuteDivineGu sect scan error: %v", err)
 				}
-
-				allHolders = append(allHolders, holderData{
-					holderType:    "sect_vault",
-					holderName:    fmt.Sprintf("Bảo Khố Tông Môn [%s]", sName),
-					region:        sRegion,
-					x:             sMapX,
-					y:             sMapY,
-					hasCoords:     sMapX != 0 || sMapY != 0,
-					state:         "sect_vault",
-					quantity:      qty,
-					priceInfo:     fmt.Sprintf("Cống hiến đổi: %d điểm", cost),
-					activeConceal: false,
-					defense:       sectDef,
-				})
-				sectVaultCount += qty
+				continue
 			}
+			sectDef := float64(sLevel * 10)
+			if sectDef > maxHolderDefense {
+				maxHolderDefense = sectDef
+			}
+
+			allHolders = append(allHolders, holderData{
+				holderType:    "sect_vault",
+				holderName:    fmt.Sprintf("Bảo Khố Tông Môn [%s]", sName),
+				region:        sRegion,
+				x:             sMapX,
+				y:             sMapY,
+				hasCoords:     sMapX != 0 || sMapY != 0,
+				state:         "sect_vault",
+				quantity:      qty,
+				priceInfo:     fmt.Sprintf("Cống hiến đổi: %d điểm", cost),
+				activeConceal: false,
+				defense:       sectDef,
+			})
+			sectVaultCount += qty
 		}
 	}
 
@@ -1127,13 +1144,17 @@ func ExecuteDivineGu(c *gin.Context) {
 				ELSE '[]'::jsonb 
 			END
 		) AS elem
-		WHERE a.item_type = 'Gu'
+		WHERE LOWER(a.item_type) = 'gu'
 		  AND a.status IN ('active', 'ACTIVE')
 		  AND (LOWER(elem->>'gu_id') = LOWER($1) OR LOWER(elem->>'id') = LOWER($1) OR elem->>'gu_id' = ANY($3) OR elem->>'id' = ANY($3))
 		  AND ($2 = 0 OR COALESCE((elem->>'rank')::int, 1) = $2)
 	`
 	aRows, err := db.DB.QueryContext(c.Request.Context(), queryAuctions, targetGu.ID, targetGu.Rank, matchIDs)
-	if err == nil {
+	if err != nil {
+		if logger.S != nil {
+			logger.S.Errorf("scouting: ExecuteDivineGu queryAuctions error: %v", err)
+		}
+	} else {
 		defer aRows.Close()
 		for aRows.Next() {
 			var aID uuid.UUID
@@ -1144,28 +1165,32 @@ func ExecuteDivineGu(c *gin.Context) {
 			if err := aRows.Scan(
 				&aID, &aSellerID, &sellerName, &sellerRegion, &sellerX, &sellerY,
 				&currency, &startPrice, &currentPrice, &listingType, &qty, &guRank,
-			); err == nil {
-				currLabel := "Nguyên Thạch"
-				if strings.EqualFold(currency, "immortal_stone") || strings.EqualFold(currency, "immortal_stones") {
-					currLabel = "Tiên Nguyên Thạch"
+			); err != nil {
+				if logger.S != nil {
+					logger.S.Errorf("scouting: ExecuteDivineGu auction scan error: %v", err)
 				}
-
-				allHolders = append(allHolders, holderData{
-					holderType:     "auction_listing",
-					holderName:     fmt.Sprintf("Sàn Đấu Giá (Người bán: %s)", sellerName),
-					holderUsername: sellerName,
-					region:         sellerRegion,
-					x:              sellerX,
-					y:              sellerY,
-					hasCoords:      false,
-					state:          "auction_listing",
-					quantity:       qty,
-					priceInfo:      fmt.Sprintf("%.0f %s (%s)", currentPrice, currLabel, listingType),
-					activeConceal:  false,
-					defense:        15.0,
-				})
-				marketCount += qty
+				continue
 			}
+			currLabel := "Nguyên Thạch"
+			if strings.EqualFold(currency, "immortal_stone") || strings.EqualFold(currency, "immortal_stones") {
+				currLabel = "Tiên Nguyên Thạch"
+			}
+
+			allHolders = append(allHolders, holderData{
+				holderType:     "auction_listing",
+				holderName:     fmt.Sprintf("Sàn Đấu Giá (Người bán: %s)", sellerName),
+				holderUsername: sellerName,
+				region:         sellerRegion,
+				x:              sellerX,
+				y:              sellerY,
+				hasCoords:      false,
+				state:          "auction_listing",
+				quantity:       qty,
+				priceInfo:      fmt.Sprintf("%.0f %s (%s)", currentPrice, currLabel, listingType),
+				activeConceal:  false,
+				defense:        15.0,
+			})
+			marketCount += qty
 		}
 	}
 

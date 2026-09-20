@@ -92,7 +92,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const lastCameraSyncRef = useRef(0);
   const isMovingRef = useRef(false);
   const walkVersionRef = useRef(0);
-  const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; active: boolean }>>(new Map());
+  const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
   const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk }>>(new Map());
   const monsterLabelRenderKeyRef = useRef("");
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
@@ -413,6 +413,20 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           if (np) {
             const animDist = Math.hypot(np.x + 0.5 - playerRef.current.position.x, np.y + 0.5 - playerRef.current.position.y);
             const duration = Math.max(0.25, animDist / movementSpeed);
+
+            if (Array.isArray(res.synced_party_members)) {
+              for (const sm of res.synced_party_members) {
+                upsertPlayerPosition({
+                  id: sm.id,
+                  username: sm.username,
+                  avatar_url: sm.avatar_url,
+                  region_id: sm.region,
+                  x: sm.x,
+                  y: sm.y,
+                });
+              }
+            }
+
             animateMove(np.x + 0.5, np.y + 0.5, duration, () => {
               if (walkVersionRef.current !== myVersion) return;
               setPlayerFromServer(np);
@@ -471,7 +485,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       walk(targetX, targetY);
     },
-    [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject],
+    [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject, upsertPlayerPosition],
   );
 
   useEffect(() => {
@@ -1069,17 +1083,22 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
           charContainer.position.set(nx, ny);
           container.addChild(charContainer);
-          markers.set(p.id, { container: charContainer, player: p, fromX: nx, fromY: ny, toX: nx, toY: ny, t0: now, active: false });
+          markers.set(p.id, { container: charContainer, player: p, fromX: nx, fromY: ny, toX: nx, toY: ny, t0: now, duration: 250, active: false });
         } else {
           existing.player = p;
           // Known marker: if the server-reported position differs, glide from
           // the current (possibly interpolated) spot to the new spot.
           if (existing.toX !== nx || existing.toY !== ny) {
-            existing.fromX = existing.container.position.x;
-            existing.fromY = existing.container.position.y;
+            const currentX = existing.container.position.x;
+            const currentY = existing.container.position.y;
+            const animDist = Math.hypot(nx - currentX, ny - currentY);
+            const durMs = Math.max(200, Math.min(2000, (animDist / Math.max(1, movementSpeed)) * 1000));
+            existing.fromX = currentX;
+            existing.fromY = currentY;
             existing.toX = nx;
             existing.toY = ny;
             existing.t0 = now;
+            existing.duration = durMs;
             existing.active = true;
             // Point this marker array no longer needs re-render; ticker tweens it.
           }
@@ -1098,7 +1117,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         }
       }
     },
-    [handleObjectClick]
+    [handleObjectClick, movementSpeed]
   );
 
   const drawMonsterChunk = useCallback((container: Container, cells: NearbyCell[]) => {
@@ -1568,7 +1587,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const markers = playerMarkersRef.current;
         for (const m of markers.values()) {
           if (!m.active) continue;
-          const t = Math.min((performance.now() - m.t0) / 2000, 1);
+          const duration = m.duration || 300;
+          const t = Math.min((performance.now() - m.t0) / duration, 1);
           const eased = 1 - Math.pow(1 - t, 3);
           m.container.position.set(m.fromX + (m.toX - m.fromX) * eased, m.fromY + (m.toY - m.fromY) * eased);
           if (t >= 1) {
@@ -1756,12 +1776,6 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   }, []);
 
   useEffect(() => {
-    if (!appReady || !appRef.current || !gamePlayer || isMovingRef.current) return;
-    playerRef.current.position.set(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
-    setLivePosition(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
-  }, [appReady, gamePlayer]);
-
-  useEffect(() => {
     if (!appReady || !appRef.current) return;
     drawObjects(displayObjects);
   }, [appReady, displayObjects, drawObjects]);
@@ -1929,14 +1943,33 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     // down this effect and immediately launch another group of map requests.
   }, [appReady, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, mergeWSCells, invalidateCell]);
 
-  // Keep the live X/Y position in sync with the game player when idle.
+  // Keep the live X/Y position in sync with the game player when idle or moved by party leader.
   useEffect(() => {
     if (!appReady || !gamePlayer || isMovingRef.current) return;
-    playerRef.current.position.set(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
-    if (modeRef.current === "select" && appRef.current) {
-      centerOnPlayer(appRef.current, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
+    const targetX = gamePlayer.x + 0.5;
+    const targetY = gamePlayer.y + 0.5;
+    const curX = playerRef.current.position.x;
+    const curY = playerRef.current.position.y;
+    const dist = Math.hypot(targetX - curX, targetY - curY);
+
+    if (dist > 0.05) {
+      if (dist <= 25) {
+        const duration = Math.max(0.25, dist / Math.max(1, movementSpeed));
+        animateMove(targetX, targetY, duration, () => {
+          fetchNearbyCells(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
+          fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
+        });
+      } else {
+        playerRef.current.position.set(targetX, targetY);
+        setLivePosition(targetX, targetY);
+        if (modeRef.current === "select" && appRef.current) {
+          centerOnPlayer(appRef.current, targetX, targetY);
+        }
+        fetchNearbyCells(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
+        fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
+      }
     }
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, centerOnPlayer]);
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, movementSpeed, animateMove, centerOnPlayer, setLivePosition, fetchNearbyCells, fetchNearbyPlayers]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;

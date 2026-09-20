@@ -62,7 +62,7 @@ type BuybackOrderResponse struct {
 
 func getPlayerMaterialsMap(q db.Queryer, playerID uuid.UUID) map[string]int64 {
 	m := make(map[string]int64)
-	rows, err := q.Query(`SELECT item_id, quantity FROM player_inventory_items WHERE player_id = $1`, playerID)
+	rows, err := q.Query(`SELECT item_id, quantity FROM player_inventory_items WHERE player_id = $1 AND category = 'materials'`, playerID)
 	if err != nil {
 		return m
 	}
@@ -477,7 +477,7 @@ func SellToBuybackOrder(c *gin.Context) {
 		_, _ = tx.Exec(`UPDATE buyback_orders SET quantity_filled = $1, status = $2 WHERE id = $3`, newFilled, newStatus, orderUUID)
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error: " + err.Error()})
 			return
 		}
 
@@ -570,7 +570,7 @@ func SellToBuybackOrder(c *gin.Context) {
 		_, _ = tx.Exec(`UPDATE buyback_orders SET quantity_filled = $1, status = $2 WHERE id = $3`, newFilled, newStatus, orderUUID)
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error: " + err.Error()})
 			return
 		}
 
@@ -692,12 +692,12 @@ func CancelBuybackOrder(c *gin.Context) {
 
 	_, err = tx.Exec(`UPDATE buyback_orders SET status = 'CANCELLED' WHERE id = $1`, orderUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái đơn"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái đơn: " + err.Error()})
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error: " + err.Error()})
 		return
 	}
 
@@ -721,23 +721,23 @@ func CancelBuybackOrder(c *gin.Context) {
 // Helpers for material deduction & addition in transactions
 func deductMaterialTx(tx *sql.Tx, playerID uuid.UUID, matID string, qty int64) error {
 	var currentQty int64
-	err := tx.QueryRow(`SELECT quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 FOR UPDATE`, playerID, matID).Scan(&currentQty)
+	err := tx.QueryRow(`SELECT quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = 'materials' FOR UPDATE`, playerID, matID).Scan(&currentQty)
 	if err != nil || currentQty < qty {
 		return fmt.Errorf("insufficient material %s", matID)
 	}
 	if currentQty == qty {
-		_, err = tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, playerID, matID)
+		_, err = tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = 'materials'`, playerID, matID)
 	} else {
-		_, err = tx.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1 WHERE player_id = $2 AND item_id = $3`, qty, playerID, matID)
+		_, err = tx.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1 WHERE player_id = $2 AND item_id = $3 AND category = 'materials'`, qty, playerID, matID)
 	}
 	return err
 }
 
 func addMaterialTx(tx *sql.Tx, playerID uuid.UUID, matID string, qty int64) error {
 	_, err := tx.Exec(`
-		INSERT INTO player_inventory_items (player_id, item_id, quantity)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (player_id, item_id) DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity`,
+		INSERT INTO player_inventory_items (player_id, item_id, category, quantity)
+		VALUES ($1, $2, 'materials', $3)
+		ON CONFLICT (player_id, item_id, category) DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity`,
 		playerID, matID, qty,
 	)
 	return err

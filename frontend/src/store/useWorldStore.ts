@@ -126,6 +126,7 @@ export interface NearbyPlayer {
   avatar_url: string;
   x: number;
   y: number;
+  region_id?: string;
 }
 
 export interface WorldPlayer {
@@ -202,8 +203,14 @@ interface WorldStoreState {
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
-  movePath: (x: number, y: number) => Promise<{ player: Partial<Player> & Pick<Player, "x" | "y">; log: string; combat_triggered: boolean; reached: boolean; skip_result?: unknown } | null>;
-  teleportToRegion: (regionId: string) => Promise<TeleportResponse | null>;
+  movePath: (x: number, y: number) => Promise<{
+    player: Partial<Player> & Pick<Player, "x" | "y">;
+    synced_party_members?: Array<{ id: string; username: string; avatar_url: string; region: string; x: number; y: number }>;
+    log: string;
+    combat_triggered: boolean;
+    reached: boolean;
+    skip_result?: unknown;
+  } | null>;
   useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number; damage_dealt?: number; target_defeated?: boolean; target_hp?: number; target_max_hp?: number } | null>;
   setTargetingGu: (gu: { guInstanceId: string; guId: string; name: string } | null) => void;
   selectTarget: (target: SelectedTarget | null) => void;
@@ -284,9 +291,14 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     set({ isMoving: true, error: null });
     try {
       if (wsManager.isConnected()) {
-        return await wsManager.request<{ player: Partial<Player> & Pick<Player, "x" | "y">; log: string; combat_triggered: boolean; reached: boolean; skip_result?: unknown }>(
-          "world.move_path", { x: Math.round(x), y: Math.round(y) }, 60000,
-        );
+        return await wsManager.request<{
+          player: Partial<Player> & Pick<Player, "x" | "y">;
+          synced_party_members?: Array<{ id: string; username: string; avatar_url: string; region: string; x: number; y: number }>;
+          log: string;
+          combat_triggered: boolean;
+          reached: boolean;
+          skip_result?: unknown;
+        }>("world.move_path", { x: Math.round(x), y: Math.round(y) }, 60000);
       }
       const res = await authFetch(`${BACKEND_URL}/api/explore/move-path`, {
         method: "POST",
@@ -582,23 +594,17 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   upsertPlayerPosition: (p) => {
     set((s) => {
       const now = Date.now();
-      const prev = s.playerPositions[p.id];
-      if (prev && prev.ts > now) return {};
       const updated = { ...s.playerPositions, [p.id]: { ...p, ts: now } };
       const w = s.nearbyWindow;
-      if (w) {
-        const inWindow = (pp: NearbyPlayer) => pp.x >= w.x - w.r && pp.x <= w.x + w.r && pp.y >= w.y - w.r && pp.y <= w.y + w.r;
-        let nearby: NearbyPlayer[];
-        if (s.nearbyPlayers.some((p2) => p2.id === p.id)) {
-          nearby = s.nearbyPlayers.map((p2) => (p2.id === p.id ? { ...p2, ...p } : p2));
-        } else if (inWindow(p)) {
-          nearby = [...s.nearbyPlayers, p];
-        } else {
-          nearby = s.nearbyPlayers;
-        }
-        return { playerPositions: updated, nearbyPlayers: nearby };
+      let nearby: NearbyPlayer[];
+      if (s.nearbyPlayers.some((p2) => p2.id === p.id)) {
+        nearby = s.nearbyPlayers.map((p2) => (p2.id === p.id ? { ...p2, ...p } : p2));
+      } else if (!w || (p.x >= w.x - w.r && p.x <= w.x + w.r && p.y >= w.y - w.r && p.y <= w.y + w.r)) {
+        nearby = [...s.nearbyPlayers, p];
+      } else {
+        nearby = s.nearbyPlayers;
       }
-      return { playerPositions: updated };
+      return { playerPositions: updated, nearbyPlayers: nearby };
     });
   },
 

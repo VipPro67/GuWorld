@@ -13,6 +13,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -256,9 +258,76 @@ func (c *Client) commandPump() {
 		case <-c.done:
 			return
 		case msg := <-c.commands:
+			start := time.Now()
 			status, data := handlers.HandleWorldWSCommand(c.playerID, msg.Channel, msg.Payload)
+			duration := time.Since(start)
+			c.logWSCommand(msg, status, data, duration)
 			c.sendCommandResponse(msg, status, data)
 		}
+	}
+}
+
+func (c *Client) logWSCommand(msg WSMessage, status int, data json.RawMessage, duration time.Duration) {
+	level := zapcore.InfoLevel
+	switch {
+	case status >= 500:
+		level = zapcore.ErrorLevel
+	case status >= 400:
+		level = zapcore.WarnLevel
+	}
+
+	var reqPayload interface{}
+	if len(msg.Payload) > 0 {
+		_ = json.Unmarshal(msg.Payload, &reqPayload)
+	}
+
+	var respData interface{}
+	var errMsg string
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &respData); err == nil {
+			if m, ok := respData.(map[string]interface{}); ok {
+				if e, ok := m["error"].(string); ok {
+					errMsg = e
+				}
+			}
+		} else {
+			respData = string(data)
+			errMsg = string(data)
+		}
+	}
+
+	durMs := float64(duration.Microseconds()) / 1000
+
+	if status >= 400 {
+		if checked := logger.L.Check(level, "ws_command_error"); checked != nil {
+			checked.Write(
+				zap.String("player_id", c.playerID.String()),
+				zap.String("client_ip", c.clientIP),
+				zap.String("command", msg.Channel),
+				zap.String("request_id", msg.RequestID),
+				zap.Int("status", status),
+				zap.Float64("duration_ms", durMs),
+				zap.Any("request_body", reqPayload),
+				zap.Any("response_body", respData),
+				zap.String("error", errMsg),
+			)
+		}
+	}
+
+	if checked := logger.L.Check(level, "ws_command_completed"); checked != nil {
+		fields := []zapcore.Field{
+			zap.String("player_id", c.playerID.String()),
+			zap.String("client_ip", c.clientIP),
+			zap.String("command", msg.Channel),
+			zap.String("request_id", msg.RequestID),
+			zap.Int("status", status),
+			zap.Float64("duration_ms", durMs),
+			zap.Any("request_body", reqPayload),
+		}
+		if status >= 400 {
+			fields = append(fields, zap.Any("response_body", respData), zap.String("error", errMsg))
+		}
+		checked.Write(fields...)
 	}
 }
 

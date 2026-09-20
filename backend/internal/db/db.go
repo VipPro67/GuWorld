@@ -57,7 +57,8 @@ func Connect() error {
 
 	DB.SetMaxOpenConns(50)
 	DB.SetMaxIdleConns(25)
-	DB.SetConnMaxLifetime(5 * time.Minute)
+	DB.SetConnMaxLifetime(10 * time.Minute)
+	DB.SetConnMaxIdleTime(1 * time.Minute)
 
 	logger.S.Info("Successfully connected to the database")
 	return nil

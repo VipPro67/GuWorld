@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
@@ -476,36 +477,71 @@ func checkPartyLeaderOrSolo(tx *sql.Tx, player *models.Player) error {
 	return nil
 }
 
-func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) {
+type SyncedPartyMember struct {
+	ID        uuid.UUID
+	Username  string
+	AvatarURL string
+	Region    string
+	X         int
+	Y         int
+}
+
+func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMember {
 	if leader.PartyID == nil {
-		return
+		return nil
 	}
 	var isLeader bool
 	err := tx.QueryRow("SELECT (leader_id = $1) FROM parties WHERE id = $2", leader.ID, leader.PartyID).Scan(&isLeader)
 	if err != nil || !isLeader {
-		return
+		return nil
 	}
 
-	rows, err := tx.Query("SELECT id, current_region, x, y, rank, sub_rank, statuses FROM players WHERE party_id = $1 AND id != $2", leader.PartyID, leader.ID)
+	rows, err := tx.Query("SELECT id, username, COALESCE(avatar_url, ''), current_region, rank, sub_rank, statuses FROM players WHERE party_id = $1 AND id != $2", leader.PartyID, leader.ID)
 	if err != nil {
-		return
+		return nil
 	}
-	defer rows.Close()
 
+	type memberLoc struct {
+		id        uuid.UUID
+		username  string
+		avatarURL string
+		region    string
+		rank      int
+		subRank   int
+		statuses  models.StatusList
+	}
+	var members []memberLoc
 	for rows.Next() {
-		var id string
-		var region string
-		var x, y, rank, subRank int
-		var statuses models.StatusList
-		if err := rows.Scan(&id, &region, &x, &y, &rank, &subRank, &statuses); err != nil {
-			continue
-		}
-		if region != leader.CurrentRegion {
-			debuffPct, duration := GetRegionalWallDebuff(rank, subRank)
-			statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
-			_, _ = tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5", leader.CurrentRegion, leader.X, leader.Y, statuses, id)
-		} else {
-			_, _ = tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3 WHERE id = $5", leader.CurrentRegion, leader.X, leader.Y, id)
+		var m memberLoc
+		if err := rows.Scan(&m.id, &m.username, &m.avatarURL, &m.region, &m.rank, &m.subRank, &m.statuses); err == nil {
+			members = append(members, m)
 		}
 	}
+	_ = rows.Close()
+
+	var synced []SyncedPartyMember
+	for _, m := range members {
+		if m.region != leader.CurrentRegion {
+			debuffPct, duration := GetRegionalWallDebuff(m.rank, m.subRank)
+			m.statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)
+			if _, errExec := tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5", leader.CurrentRegion, leader.X, leader.Y, m.statuses, m.id); errExec != nil {
+				logger.S.Errorf("SyncPartyMembersLocation: failed to update member %s with regional wall debuff: %v", m.id, errExec)
+				continue
+			}
+		} else {
+			if _, errExec := tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3 WHERE id = $4", leader.CurrentRegion, leader.X, leader.Y, m.id); errExec != nil {
+				logger.S.Errorf("SyncPartyMembersLocation: failed to update member %s location: %v", m.id, errExec)
+				continue
+			}
+		}
+		synced = append(synced, SyncedPartyMember{
+			ID:        m.id,
+			Username:  m.username,
+			AvatarURL: m.avatarURL,
+			Region:    leader.CurrentRegion,
+			X:         leader.X,
+			Y:         leader.Y,
+		})
+	}
+	return synced
 }

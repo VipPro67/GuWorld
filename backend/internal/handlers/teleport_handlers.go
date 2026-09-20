@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -848,10 +849,31 @@ func TravelTeleport(c *gin.Context) {
 			logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
 			logMsg += " " + debuffMsg
 			_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3, primeval_stones = $4, immortal_stones = $5, statuses = $6 WHERE id = $7`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses, player.ID)
-			SyncPartyMembersLocation(tx, &player)
+			syncedMembers := SyncPartyMembersLocation(tx, &player)
 			if err := tx.Commit(); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận truyền tống"})
 				return
+			}
+			broadcastWorldPos(WorldPosEvent{
+				ID:        player.ID.String(),
+				Username:  player.Username,
+				AvatarURL: player.AvatarURL,
+				X:         player.X,
+				Y:         player.Y,
+				Region:    player.CurrentRegion,
+				TS:        time.Now().UnixMilli(),
+			})
+			for _, sm := range syncedMembers {
+				broadcastWorldPos(WorldPosEvent{
+					ID:        sm.ID.String(),
+					Username:  sm.Username,
+					AvatarURL: sm.AvatarURL,
+					X:         sm.X,
+					Y:         sm.Y,
+					Region:    sm.Region,
+					TS:        time.Now().UnixMilli(),
+				})
+				PublishPlayerRealtimeEvent(sm.ID, PlayerEventUpdated)
 			}
 			c.JSON(http.StatusOK, gin.H{"message": logMsg, "player": player})
 			return
@@ -896,11 +918,33 @@ func TravelTeleport(c *gin.Context) {
 		return
 	}
 
-	SyncPartyMembersLocation(tx, &player)
+	syncedMembers := SyncPartyMembersLocation(tx, &player)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xác nhận truyền tống"})
 		return
+	}
+
+	broadcastWorldPos(WorldPosEvent{
+		ID:        player.ID.String(),
+		Username:  player.Username,
+		AvatarURL: player.AvatarURL,
+		X:         player.X,
+		Y:         player.Y,
+		Region:    player.CurrentRegion,
+		TS:        time.Now().UnixMilli(),
+	})
+	for _, sm := range syncedMembers {
+		broadcastWorldPos(WorldPosEvent{
+			ID:        sm.ID.String(),
+			Username:  sm.Username,
+			AvatarURL: sm.AvatarURL,
+			X:         sm.X,
+			Y:         sm.Y,
+			Region:    sm.Region,
+			TS:        time.Now().UnixMilli(),
+		})
+		PublishPlayerRealtimeEvent(sm.ID, PlayerEventUpdated)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

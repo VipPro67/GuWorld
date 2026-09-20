@@ -666,7 +666,8 @@ func MovePlayer(c *gin.Context) {
 				}
 			}
 			if err := tx.Commit(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+				logger.S.Errorf("MovePlayer: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
 				return
 			}
 			ClearPendingPlayerQueues(player.ID.String())
@@ -703,10 +704,11 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	SyncPartyMembersLocation(tx, &player)
+	syncedMembers := SyncPartyMembersLocation(tx, &player)
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		logger.S.Errorf("MovePlayer: tx.Commit failed for player=%s: %v", player.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()})
 		return
 	}
 
@@ -719,6 +721,18 @@ func MovePlayer(c *gin.Context) {
 		Region:    player.CurrentRegion,
 		TS:        time.Now().UnixMilli(),
 	})
+	for _, sm := range syncedMembers {
+		broadcastWorldPos(WorldPosEvent{
+			ID:        sm.ID.String(),
+			Username:  sm.Username,
+			AvatarURL: sm.AvatarURL,
+			X:         sm.X,
+			Y:         sm.Y,
+			Region:    sm.Region,
+			TS:        time.Now().UnixMilli(),
+		})
+		PublishPlayerPositionDelta(sm.ID, sm.X, sm.Y)
+	}
 
 	if combatTriggered {
 		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
@@ -728,9 +742,10 @@ func MovePlayer(c *gin.Context) {
 	newStats := CalculatePlayerStats(&player)
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
-		"log":              logMsg,
-		"combat_triggered": combatTriggered,
-		"stats":            newStats,
+		"log":                  logMsg,
+		"combat_triggered":     combatTriggered,
+		"stats":                newStats,
+		"synced_party_members": syncedMembers,
 	})
 }
 
@@ -898,12 +913,12 @@ func MovePlayerPath(c *gin.Context) {
 	// request so the client chains requests for very long journeys. A smaller
 	// chunk keeps server-side position commits fine-grained so other clients
 	// see near-real-time movement and walking can be redirected sooner.
-	const maxPathCells = 150
+	const maxPathCells = 5
 	path := lineCells(player.X, player.Y, req.X, req.Y)
 	if len(path) > maxPathCells {
 		path = path[:maxPathCells]
 	}
-	reached := len(path) < maxPathCells
+	reached := false
 	var eventLogs []string
 	combatTriggered := false
 	var lastStepLog string
@@ -920,9 +935,11 @@ func MovePlayerPath(c *gin.Context) {
 		}
 		if triggered {
 			combatTriggered = true
-			reached = false
 			break
 		}
+	}
+	if !combatTriggered && player.X == req.X && player.Y == req.Y {
+		reached = true
 	}
 
 	qiGained := 0.0
@@ -957,7 +974,8 @@ func MovePlayerPath(c *gin.Context) {
 			}
 			eventLogs = append(eventLogs, autoLog)
 			if err := tx.Commit(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+				logger.S.Errorf("MovePlayerPath: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
 				return
 			}
 			finalLog := strings.Join(eventLogs, "\n")
@@ -996,10 +1014,11 @@ func MovePlayerPath(c *gin.Context) {
 		return
 	}
 
-	SyncPartyMembersLocation(tx, &player)
+	syncedMembers := SyncPartyMembersLocation(tx, &player)
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		logger.S.Errorf("MovePlayerPath: tx.Commit failed for player=%s: %v", player.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()})
 		return
 	}
 
@@ -1012,6 +1031,18 @@ func MovePlayerPath(c *gin.Context) {
 		Region:    player.CurrentRegion,
 		TS:        time.Now().UnixMilli(),
 	})
+	for _, sm := range syncedMembers {
+		broadcastWorldPos(WorldPosEvent{
+			ID:        sm.ID.String(),
+			Username:  sm.Username,
+			AvatarURL: sm.AvatarURL,
+			X:         sm.X,
+			Y:         sm.Y,
+			Region:    sm.Region,
+			TS:        time.Now().UnixMilli(),
+		})
+		PublishPlayerPositionDelta(sm.ID, sm.X, sm.Y)
+	}
 
 	if combatTriggered {
 		PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
@@ -1037,9 +1068,10 @@ func MovePlayerPath(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"player":           buildMovePathPlayerUpdate(&player, before),
-		"log":              finalLog,
-		"combat_triggered": combatTriggered,
-		"reached":          reached,
+		"player":               buildMovePathPlayerUpdate(&player, before),
+		"synced_party_members": syncedMembers,
+		"log":                  finalLog,
+		"combat_triggered":     combatTriggered,
+		"reached":              reached,
 	})
 }
