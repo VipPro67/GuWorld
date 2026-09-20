@@ -35,6 +35,7 @@ export const GlobalChatOverlay: React.FC = () => {
     fetchPlayerProfile,
     openDivinationModal,
     invitePlayer,
+    initiateTrade,
     addToast,
     activeChannel,
     setActiveChannel,
@@ -47,7 +48,7 @@ export const GlobalChatOverlay: React.FC = () => {
 
   const [chatInput, setChatInput] = useState("");
   const [showTimeIds, setShowTimeIds] = useState<Record<string, boolean>>({});
-  const [selectedUserMenu, setSelectedUserMenu] = useState<{ username: string } | null>(null);
+  const [selectedUserMenu, setSelectedUserMenu] = useState<{ msgId: string; username: string } | null>(null);
 
   const toggleTimeVisibility = (id: string) => {
     setShowTimeIds((prev) => ({
@@ -291,7 +292,8 @@ export const GlobalChatOverlay: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!isSystem && !isMe) {
-                            setSelectedUserMenu(selectedUserMenu?.username === msg.sender_username ? null : { username: msg.sender_username });
+                            const msgId = msg.id || index.toString();
+                            setSelectedUserMenu(selectedUserMenu?.msgId === msgId ? null : { msgId, username: msg.sender_username });
                           }
                         }}
                         className={`${nameColorClass} mr-1.5`}
@@ -313,7 +315,7 @@ export const GlobalChatOverlay: React.FC = () => {
                       <span className={`${contentColorClass} ml-0.5`}>{msg.content}</span>
 
                       {/* User Context Actions Popup */}
-                      {selectedUserMenu?.username === msg.sender_username && (
+                      {selectedUserMenu?.msgId === (msg.id || index.toString()) && (
                         <div
                           className="mt-1.5 flex flex-wrap gap-1.5 rounded-lg border border-amber-500/40 bg-neutral-900/95 p-2 shadow-xl backdrop-blur-md"
                           onClick={(e) => e.stopPropagation()}
@@ -326,6 +328,15 @@ export const GlobalChatOverlay: React.FC = () => {
                             className="flex items-center gap-1 rounded bg-amber-700/80 px-2 py-1 text-[10px] font-bold text-white hover:bg-amber-600"
                           >
                             🔮 Suy Diễn Thiên Cơ
+                          </button>
+                          <button
+                            onClick={() => {
+                              initiateTrade(msg.sender_username);
+                              setSelectedUserMenu(null);
+                            }}
+                            className="flex items-center gap-1 rounded bg-emerald-700/80 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-600"
+                          >
+                            🤝 Giao dịch
                           </button>
                           <button
                             onClick={() => {

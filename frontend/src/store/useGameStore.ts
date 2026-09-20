@@ -1833,7 +1833,14 @@ export const useGameStore = create<GameState>((set, get) => {
       // Listen for trade updates
       const unsubscribeTrade = wsManager.subscribe("trade", (payload: ApiResponseData) => {
         try {
-          set({ activeTrade: payload?.trade ?? null });
+          const prevTrade = get().activeTrade;
+          const newTrade = payload?.trade ?? null;
+          set({ activeTrade: newTrade });
+          // When trade just completed (had active trade, now null),
+          // refresh session so inventory/stones are up-to-date.
+          if (prevTrade && !newTrade) {
+            get().initializeSession();
+          }
         } catch (err) {
           console.error("Failed to process trade event", err);
         }

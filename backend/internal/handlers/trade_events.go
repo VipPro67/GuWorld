@@ -21,9 +21,11 @@ func notifyTradeParticipants(playerIDs ...uuid.UUID) {
 	}
 	// Load trade once for the first participant
 	trade, err := LoadActiveTrade(playerIDs[0])
-	if err != nil || trade == nil {
+	if err != nil {
 		return
 	}
+	// When trade is nil (completed/not found), still notify both players
+	// with {trade: null} so their UI can close the trade modal.
 	payload := tradeEventPayload{Trade: trade}
 	for _, playerID := range playerIDs {
 		notifyTrade(playerID, payload)
