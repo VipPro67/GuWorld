@@ -171,6 +171,7 @@ func schemaTrade() error {
 	if err := execSchema("trade_offers", `
 	CREATE TABLE IF NOT EXISTS trade_offers (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		creator_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		offered_data JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
 		requested_data JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
@@ -181,8 +182,13 @@ func schemaTrade() error {
 	);`); err != nil {
 		return err
 	}
+	execSchema("trade_offers_player_id", `ALTER TABLE trade_offers ADD COLUMN IF NOT EXISTS player_id UUID REFERENCES players(id) ON DELETE CASCADE;`)
 	if err := execSchema("trade_offers_creator_idx", `
 	CREATE INDEX IF NOT EXISTS idx_trade_offers_creator ON trade_offers (creator_id);`); err != nil {
+		return err
+	}
+	if err := execSchema("trade_offers_player_idx", `
+	CREATE INDEX IF NOT EXISTS idx_trade_offers_player ON trade_offers (player_id);`); err != nil {
 		return err
 	}
 	if err := execSchema("trade_offers_status_idx", `

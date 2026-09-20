@@ -112,8 +112,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	r.Use(monitor.Middleware())
+	// Capture the response before requestLogging reads the values from the context.
 	r.Use(requestLogging())
+	r.Use(monitor.Middleware())
 
 	// CORS Middleware
 	r.Use(func(c *gin.Context) {
@@ -730,7 +731,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			shop.POST("/bao-hoang/trade-offers/accept", handlers.AcceptTradeOffer)
 			shop.POST("/bao-hoang/trade-offers/cancel", handlers.CancelTradeOffer)
 		}
-
 
 		// Trade — group: 25/min, per player: 8/min
 		trade := api.Group("/trade")

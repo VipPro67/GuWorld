@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,9 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -71,55 +68,26 @@ func LoginPlayer(c *gin.Context) {
 		return
 	}
 
-	var player models.Player
-	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregateEquipped("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, 		       party_id, arena_rank, COALESCE(email, ''), google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), 		COALESCE(avatar_url, ''), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses, growth_data
-		FROM players
-		WHERE id = $1
-	`
-	var activeCombatBytes []byte
-	err = db.DB.QueryRow(query, targetPlayerID).Scan(
-		&player.ID, &player.Username, &passwordHash, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
-		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
-		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
-		&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-		&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
-		&player.LastManaUpdate, &player.CreatedAt,
-		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
-		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.AvatarURL,
-		&player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
-		&player.GrowthData,
-	)
+	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
 		return
 	}
+	defer tx.Rollback()
 
-	if player.Rank >= 6 {
-		var daoMarks models.DaoMarksMap
-		errDb := db.DB.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&daoMarks)
-		if errDb == nil {
-			player.DaoMarks = daoMarks
+	player, err := evaluateManaTxEquipped(tx, targetPlayerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
 		} else {
-			player.DaoMarks = models.DaoMarksMap{"strength": 0}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
 		}
-	} else {
-		player.DaoMarks = models.DaoMarksMap{"strength": 0}
+		return
 	}
 
-	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
-		var cs models.CombatState
-		if errU := json.Unmarshal(activeCombatBytes, &cs); errU == nil {
-			if !cs.IsEmpty() {
-				player.ActiveCombat = &cs
-			}
-		} else {
-			logger.S.Warnf("Login: failed to unmarshal active_combat for player=%s: %v", player.ID, errU)
-		}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
+		return
 	}
 
 	// Enforce fingerprint multi-login rotation limit
@@ -186,16 +154,6 @@ func LoginPlayer(c *gin.Context) {
 		return
 	}
 
-	// Lazy evaluate mana regen upon login for accurate stats immediately
-	tx, err := db.DB.Begin()
-	if err == nil {
-		defer tx.Rollback()
-		if updatedPlayer, err := evaluateManaTx(tx, player.ID); err == nil {
-			if err := tx.Commit(); err == nil {
-				player = updatedPlayer
-			}
-		}
-	}
 
 	sessionID := uuid.New().String()
 	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)

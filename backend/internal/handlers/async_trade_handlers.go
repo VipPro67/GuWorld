@@ -167,10 +167,16 @@ func CreateTradeOffer(c *gin.Context) {
 
 	var offerID uuid.UUID
 	err = tx.QueryRow(`
-		INSERT INTO trade_offers (creator_id, offered_data, requested_data, status, duration_hours, end_time)
-		VALUES ($1, $2, $3, 'ACTIVE', $4, $5)
+		INSERT INTO trade_offers (creator_id, player_id, offered_data, requested_data, status, duration_hours, end_time)
+		VALUES ($1, $2, $3, $4, 'ACTIVE', $5, $6)
+		ON CONFLICT (creator_id, player_id) DO UPDATE SET
+			offered_data = EXCLUDED.offered_data,
+			requested_data = EXCLUDED.requested_data,
+			status = 'ACTIVE',
+			end_time = EXCLUDED.end_time,
+			duration_hours = EXCLUDED.duration_hours
 		RETURNING id`,
-		creator.ID, offeredJSON, requestedJSON, req.DurationHours, endTime,
+		creator.ID, authID, offeredJSON, requestedJSON, req.DurationHours, endTime,
 	).Scan(&offerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo đơn trao đổi"})
@@ -189,9 +195,11 @@ func CreateTradeOffer(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 
-	tx2, _ := db.DB.Begin()
-	updatedCreator, _ := evaluateManaTx(tx2, creator.ID)
-	_ = tx2.Commit()
+	updatedCreator := creator
+	if tx2, err2 := db.DB.Begin(); err2 == nil {
+		updatedCreator, _ = evaluateManaTx(tx2, creator.ID)
+		_ = tx2.Commit()
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Đăng đơn trao đổi tự động thành công!",
@@ -281,14 +289,15 @@ func AcceptTradeOffer(c *gin.Context) {
 	}
 
 	var creatorID uuid.UUID
+	var playerID uuid.UUID
 	var offJSON, reqJSON []byte
 	var status string
 	var endTime time.Time
 
 	err = tx.QueryRow(`
-		SELECT creator_id, offered_data, requested_data, status, end_time
+		SELECT creator_id, player_id, offered_data, requested_data, status, end_time
 		FROM trade_offers WHERE id = $1 FOR UPDATE`, offerUUID,
-	).Scan(&creatorID, &offJSON, &reqJSON, &status, &endTime)
+	).Scan(&creatorID, &playerID, &offJSON, &reqJSON, &status, &endTime)
 
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Đơn trao đổi không tồn tại"})
@@ -300,6 +309,11 @@ func AcceptTradeOffer(c *gin.Context) {
 	}
 	if creatorID == acceptor.ID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể tự chấp nhận đơn trao đổi của mình"})
+		return
+	}
+	// Only the creator can accept their own trade offer (1-sided exact match)
+	if playerID != acceptor.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không có quyền chấp nhận đơn trao đổi này"})
 		return
 	}
 
@@ -319,6 +333,18 @@ func AcceptTradeOffer(c *gin.Context) {
 	var offered, requested models.TradeOfferData
 	_ = json.Unmarshal(offJSON, &offered)
 	_ = json.Unmarshal(reqJSON, &requested)
+	if offered.Materials == nil {
+		offered.Materials = map[string]int64{}
+	}
+	if offered.Recipes == nil {
+		offered.Recipes = map[string]float64{}
+	}
+	if requested.Materials == nil {
+		requested.Materials = map[string]int64{}
+	}
+	if requested.Recipes == nil {
+		requested.Recipes = map[string]float64{}
+	}
 
 	// Validate Exact Match of Acceptor assets against requested
 	if requested.PrimevalStones > 0 {
@@ -471,9 +497,11 @@ func AcceptTradeOffer(c *gin.Context) {
 	notify.Send(db.DB, creatorID, "trade_offer_accepted", "Đơn Trao Đổi Đã Khớp",
 		fmt.Sprintf("Đạo hữu %s đã chấp nhận đơn trao đổi auto của bạn. Giao dịch hoàn tất!", acceptor.Username))
 
-	tx2, _ := db.DB.Begin()
-	updatedAcceptor, _ := evaluateManaTx(tx2, acceptor.ID)
-	_ = tx2.Commit()
+	updatedAcceptor := acceptor
+	if tx2, err2 := db.DB.Begin(); err2 == nil {
+		updatedAcceptor, _ = evaluateManaTx(tx2, acceptor.ID)
+		_ = tx2.Commit()
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Trao đổi tự động thành công!",

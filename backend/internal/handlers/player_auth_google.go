@@ -174,27 +174,10 @@ func GoogleCallback(c *gin.Context) {
 
 	var player models.Player
 	var hasPlayer bool
+	var existingPlayerID uuid.UUID
 
 	// 1. Try to search by google_id
-	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses
-		FROM players
-		WHERE google_id = $1
-	`, googleUser.ID).Scan(
-		&player.ID, &player.Username, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
-		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
-		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
-		&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-		&player.CurrentRegion, &player.PathMasteries,
-		&player.LastManaUpdate, &player.CreatedAt,
-		&player.Lifespan, &player.TimeSpeedMultiplier,
-		&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
-		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
-	)
-
+	err = tx.QueryRow(`SELECT id FROM players WHERE google_id = $1`, googleUser.ID).Scan(&existingPlayerID)
 	if err == nil {
 		hasPlayer = true
 	} else if err != sql.ErrNoRows {
@@ -204,34 +187,14 @@ func GoogleCallback(c *gin.Context) {
 
 	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
-		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses
-			FROM players
-			WHERE email = $1
-		`, googleUser.Email).Scan(
-			&player.ID, &player.Username, &player.Rank, &player.SubRank,
-			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
-			&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
-			&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
-			&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-			&player.CurrentRegion, &player.PathMasteries,
-			&player.LastManaUpdate, &player.CreatedAt,
-			&player.Lifespan, &player.TimeSpeedMultiplier,
-			&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
-			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
-		)
-
+		err = tx.QueryRow(`SELECT id FROM players WHERE email = $1`, googleUser.Email).Scan(&existingPlayerID)
 		if err == nil {
 			// Merge Account: update players table to link Google account ID
-			_, err = tx.Exec("UPDATE players SET google_id = $1 WHERE id = $2", googleUser.ID, player.ID)
+			_, err = tx.Exec("UPDATE players SET google_id = $1 WHERE id = $2", googleUser.ID, existingPlayerID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge account: " + err.Error()})
 				return
 			}
-			gID := googleUser.ID
-			player.GoogleID = &gID
 			hasPlayer = true
 		} else if err != sql.ErrNoRows {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking email: " + err.Error()})
@@ -240,16 +203,10 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	if hasPlayer {
-		if player.Rank >= 6 {
-			var daoMarks models.DaoMarksMap
-			errDb := tx.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&daoMarks)
-			if errDb == nil {
-				player.DaoMarks = daoMarks
-			} else {
-				player.DaoMarks = models.DaoMarksMap{"strength": 0}
-			}
-		} else {
-			player.DaoMarks = models.DaoMarksMap{"strength": 0}
+		player, err = evaluateManaTxEquipped(tx, existingPlayerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player: " + err.Error()})
+			return
 		}
 	}
 
