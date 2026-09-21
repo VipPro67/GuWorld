@@ -392,17 +392,17 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 			}
 
 			if _, err := tx.ExecContext(ctx, `
-				UPDATE sm SET
+				UPDATE sect_members AS sm SET
 					contribution_points = sm.contribution_points + v.delta,
 					territory_pending = v.pending,
 					territory_credited_today = v.credited_today,
 					territory_credited_at = v.credited_at::date
-				FROM sect_members sm
-				JOIN (SELECT unnest($1::uuid[]) AS player_id,
+				FROM (SELECT unnest($1::uuid[]) AS player_id,
 				             unnest($2::int[]) AS delta,
 				             unnest($3::float8[]) AS pending,
 				             unnest($4::int[]) AS credited_today,
-				             unnest($5::text[]) AS credited_at) v ON sm.player_id = v.player_id
+				             unnest($5::text[]) AS credited_at) v
+				WHERE sm.player_id = v.player_id
 			`, pq.Array(crIDs), pq.Array(crDeltas), pq.Array(crPendings),
 				pq.Array(crCreditedTodays), pq.Array(crCreditedAts)); err != nil {
 				logger.S.Errorf("Sect Territory Worker: batch update contributions failed: %v", err)

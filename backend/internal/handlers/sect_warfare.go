@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type SectDefender struct {
@@ -565,7 +566,11 @@ func AttackSect(c *gin.Context) {
 	// Initialize combat (this populates Allies from party + pets)
 	attacker.ActiveCombat = StartCombat(tx, &sectWarCombat, &attacker)
 
-	// Load defending members at sect location as additional enemies
+	// Load defending members at sect location as additional enemies.
+	// Collect all IDs and close the rows BEFORE running further queries on the
+	// same tx — a still-open *sql.Rows pins the tx's connection and every
+	// subsequent Exec/Query on the tx fails with conn-busy errors.
+	var defenderIDs []uuid.UUID
 	defRows, derr := tx.Query(`
 		SELECT sm.player_id FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
@@ -573,24 +578,32 @@ func AttackSect(c *gin.Context) {
 		  AND p.current_region = $2 AND p.x = $3 AND p.y = $4 AND p.hp > 0
 		LIMIT 8
 	`, req.TargetSectID, targetRegion, targetMapX, targetMapY)
-	if derr == nil {
-		defer defRows.Close()
+	if derr != nil {
+		logger.S.Errorf("AttackSect: failed to load defenders for sect %s: %v", req.TargetSectID, derr)
+	} else {
 		for defRows.Next() {
 			var defID uuid.UUID
 			if defRows.Scan(&defID) != nil {
 				continue
 			}
-			defPlayer, errDef := evaluateManaTxEquippedReadonly(tx, defID)
-			if errDef != nil || defPlayer.HP <= 0 {
-				continue
-			}
-			defStats := CalculatePlayerStats(&defPlayer)
-			defCombatant := models.CombatantFromPlayer(&defPlayer, defStats)
-			defCombatant.Kind = "Player"
-			defCombatant.CombatSettings = &defPlayer.CombatSettings
-			defCombatant.GuInventory = defPlayer.GuInventory
-			attacker.ActiveCombat.Enemies = append(attacker.ActiveCombat.Enemies, defCombatant)
+			defenderIDs = append(defenderIDs, defID)
 		}
+		if rowsErr := defRows.Err(); rowsErr != nil {
+			logger.S.Errorf("AttackSect: failed iterating defenders for sect %s: %v", req.TargetSectID, rowsErr)
+		}
+		defRows.Close()
+	}
+	for _, defID := range defenderIDs {
+		defPlayer, errDef := evaluateManaTxEquippedReadonly(tx, defID)
+		if errDef != nil || defPlayer.HP <= 0 {
+			continue
+		}
+		defStats := CalculatePlayerStats(&defPlayer)
+		defCombatant := models.CombatantFromPlayer(&defPlayer, defStats)
+		defCombatant.Kind = "Player"
+		defCombatant.CombatSettings = &defPlayer.CombatSettings
+		defCombatant.GuInventory = defPlayer.GuInventory
+		attacker.ActiveCombat.Enemies = append(attacker.ActiveCombat.Enemies, defCombatant)
 	}
 
 	// Re-assign grid positions for enemies
@@ -607,9 +620,17 @@ func AttackSect(c *gin.Context) {
 		}
 	}
 
-	combatBytes, _ := json.Marshal(attacker.ActiveCombat)
+	combatBytes, mErr := json.Marshal(attacker.ActiveCombat)
+	if mErr != nil {
+		// NaN/Inf in the combat state makes json.Marshal fail; an empty payload
+		// would poison the jsonb column, so fail the request cleanly instead.
+		logger.S.Errorf("AttackSect: failed to marshal combat state for player %s: %v", playerID, mErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
+		return
+	}
 	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 5, $2) WHERE id = $3", string(combatBytes), MaxHumanQi, playerID)
 	if err != nil {
+		logger.S.Errorf("AttackSect: failed to save combat state for player %s: %v", playerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
 		return
 	}

@@ -146,46 +146,78 @@ func (s *InventoryService) AddItemsBatch(tx *sql.Tx, playerID string, items []It
 	return err
 }
 
-func (s *InventoryService) AddItem(tx *sql.Tx, playerID, itemID, category string, quantity int64) error {
-	var err error
-	if tx != nil {
-		_, err = tx.Exec(`
-			INSERT INTO player_inventory_items (player_id, item_id, category, quantity, updated_at)
-			VALUES ($1, $2, $3, $4, NOW())
-			ON CONFLICT (player_id, item_id, category)
-			DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
-		`, playerID, itemID, category, quantity)
-	} else {
-		_, err = s.db.Exec(`
-			INSERT INTO player_inventory_items (player_id, item_id, category, quantity, updated_at)
-			VALUES ($1, $2, $3, $4, NOW())
-			ON CONFLICT (player_id, item_id, category)
-			DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
-		`, playerID, itemID, category, quantity)
+// execWithSavepoint runs fn on tx inside a PostgreSQL SAVEPOINT so a failed
+// statement rolls back only itself instead of poisoning the whole transaction
+// with "current transaction is aborted" (25P02) on the next statement. Many
+// callers treat inventory writes as best-effort (log and continue), so the
+// error is still returned but the tx remains usable. No-op when tx is nil.
+func execWithSavepoint(tx *sql.Tx, fn func() error) error {
+	if tx == nil {
+		return fn()
 	}
+	if _, err := tx.Exec("SAVEPOINT sp_inventory"); err != nil {
+		return err
+	}
+	if err := fn(); err != nil {
+		if _, rbErr := tx.Exec("ROLLBACK TO SAVEPOINT sp_inventory"); rbErr != nil {
+			return rbErr
+		}
+		if _, relErr := tx.Exec("RELEASE SAVEPOINT sp_inventory"); relErr != nil {
+			return relErr
+		}
+		return err
+	}
+	_, err := tx.Exec("RELEASE SAVEPOINT sp_inventory")
 	return err
+}
+
+func (s *InventoryService) AddItem(tx *sql.Tx, playerID, itemID, category string, quantity int64) error {
+	return execWithSavepoint(tx, func() error {
+		var err error
+		if tx != nil {
+			_, err = tx.Exec(`
+				INSERT INTO player_inventory_items (player_id, item_id, category, quantity, updated_at)
+				VALUES ($1, $2, $3, $4, NOW())
+				ON CONFLICT (player_id, item_id, category)
+				DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
+			`, playerID, itemID, category, quantity)
+		} else {
+			_, err = s.db.Exec(`
+				INSERT INTO player_inventory_items (player_id, item_id, category, quantity, updated_at)
+				VALUES ($1, $2, $3, $4, NOW())
+				ON CONFLICT (player_id, item_id, category)
+				DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
+			`, playerID, itemID, category, quantity)
+		}
+		return err
+	})
 }
 
 // RemoveItem decrements quantity and deletes the row if it reaches 0.
 func (s *InventoryService) RemoveItem(tx *sql.Tx, playerID, itemID, category string, quantity int64) error {
-	var current int64
-	err := tx.QueryRow(`
-		SELECT quantity FROM player_inventory_items
-		WHERE player_id = $1 AND item_id = $2 AND category = $3
-		FOR UPDATE
-	`, playerID, itemID, category).Scan(&current)
-	if err != nil {
+	if tx == nil {
+		return sql.ErrTxDone
+	}
+	return execWithSavepoint(tx, func() error {
+		var current int64
+		err := tx.QueryRow(`
+			SELECT quantity FROM player_inventory_items
+			WHERE player_id = $1 AND item_id = $2 AND category = $3
+			FOR UPDATE
+		`, playerID, itemID, category).Scan(&current)
+		if err != nil {
+			return err
+		}
+		if current < quantity {
+			return sql.ErrNoRows
+		}
+		if current == quantity {
+			_, err = tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = $3`, playerID, itemID, category)
+		} else {
+			_, err = tx.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1, updated_at = NOW() WHERE player_id = $2 AND item_id = $3 AND category = $4 AND quantity >= $1`, quantity, playerID, itemID, category)
+		}
 		return err
-	}
-	if current < quantity {
-		return sql.ErrNoRows
-	}
-	if current == quantity {
-		_, err = tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = $3`, playerID, itemID, category)
-	} else {
-		_, err = tx.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1, updated_at = NOW() WHERE player_id = $2 AND item_id = $3 AND category = $4 AND quantity >= $1`, quantity, playerID, itemID, category)
-	}
-	return err
+	})
 }
 
 // DeductItem decrements quantity across any inventory categories for a player in order of quantity descending.
