@@ -264,12 +264,12 @@ Node tài nguyên đặt trong Tiên Khiếu:
 ### Kinh tế và xã hội Dị Nhân trong Tiên Khiếu
 
 - `aperture_node_workers`: gán một phần dân số `aperture_variant_humans` vào node; cặp node/chủng tộc là duy nhất.
-- `aperture_refinement_queue`: hàng đợi luyện chế theo recipe, mode, mục tiêu, tiến độ, ưu tiên và trạng thái bật/tắt.
+- `aperture_refinement_queue`: hàng đợi luyện chế theo recipe, mode, mục tiêu, tiến độ, ưu tiên và trạng thái bật/tắt; `last_error` và `last_processed_at` cho biết lý do dừng/lần xử lý cuối.
 - `aperture_variant_settlements`: khu định cư theo chủng tộc, sức chứa, nhà ở, kho lương và an ninh.
 - `aperture_variant_events`: sự kiện xã hội (loại, mức độ, effects JSONB, thời điểm giải quyết).
 - `aperture_variant_npcs`: cá thể Cổ Sư/Cổ Tiên với rank, lưu phái, vai trò, trung thành, thiên phú và trạng thái.
 
-Các cột xã hội trên quần thể lưu kho lương, lương thực đầu người, tăng trưởng và tử vong. Worker production, society simulation và Gu Master spawning lần lượt chạy theo chu kỳ 10, 5 và 30 phút. API cho phép phân công lao động, quản lý hàng đợi, nâng khu định cư và đổi vai trò/giải tán NPC; xem route map trong `docs/API.md`.
+Các cột xã hội trên quần thể lưu kho lương, lương thực đầu người, tăng trưởng và tử vong. Xây khu định cư đưa 500 cư dân ban đầu và lượng lương thực bằng sức chứa kho; mô phỏng xã hội tăng/giảm dân số nhưng không vượt sức chứa khu định cư. Worker production, society simulation và Gu Master spawning lần lượt chạy theo chu kỳ 10, 5 và 30 phút. Mỗi tick production cũng thử một lần cho các lệnh tự luyện ưu tiên cao. Một lần thử cần `rank × 100` Mao Dân chưa được phân công (Nhất Chuyển 100, Ngũ Chuyển 500, Cửu Chuyển 900); worker giữ chỗ tổng lao động trong tick và bỏ qua lệnh chưa đủ người để lệnh cấp thấp hơn vẫn có thể chạy: cần Mao Dân, bí phương hoàn thiện, nguyên liệu thường và nguyên thạch; thất bại tiêu hao nguyên liệu, thành công tạo một Cổ và tăng tiến độ. Lệnh thiếu tài nguyên tạm chờ và tự thử lại ở tick sau. Bí phương dùng Cổ khác làm nguyên liệu chưa được nhận vào hàng đợi tự động. API cho phép phân công lao động (tổng phân công không vượt dân số), quản lý hàng đợi, nâng khu định cư và đổi vai trò/giải tán NPC; xem route map trong `docs/API.md`.
 
 ### Bảng `tribulation_events`
 

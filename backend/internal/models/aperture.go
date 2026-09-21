@@ -152,16 +152,18 @@ const (
 
 // ApertureRefinementQueue represents an auto-refinement job for variant humans.
 type ApertureRefinementQueue struct {
-	ID              string    `json:"id"`
-	ApertureID      string    `json:"aperture_id"`
-	RecipeID        string    `json:"recipe_id"`
-	Mode            string    `json:"mode"` // FIXED_COUNT, UNTIL_SUCCESS, UNTIL_MATERIAL_EMPTY, MAINTAIN_STOCK
-	TargetQuantity  int       `json:"target_quantity"`
-	CurrentQuantity int       `json:"current_quantity"`
-	Priority        int       `json:"priority"`
-	Enabled         bool      `json:"enabled"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              string     `json:"id"`
+	ApertureID      string     `json:"aperture_id"`
+	RecipeID        string     `json:"recipe_id"`
+	Mode            string     `json:"mode"` // FIXED_COUNT, UNTIL_SUCCESS, UNTIL_MATERIAL_EMPTY, MAINTAIN_STOCK
+	TargetQuantity  int        `json:"target_quantity"`
+	CurrentQuantity int        `json:"current_quantity"`
+	Priority        int        `json:"priority"`
+	Enabled         bool       `json:"enabled"`
+	LastError       string     `json:"last_error"`
+	LastProcessedAt *time.Time `json:"last_processed_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // ApertureVariantSettlement represents a settlement for a variant human race.

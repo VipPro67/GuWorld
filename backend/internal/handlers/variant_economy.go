@@ -137,7 +137,7 @@ func AssignWorkerToNode(c *gin.Context) {
 	var vhPop int
 	err = tx.QueryRow(`
 		SELECT race, population FROM aperture_variant_humans
-		WHERE id = $1 AND aperture_id = $2
+		WHERE id = $1 AND aperture_id = $2 FOR UPDATE
 	`, req.VariantHumanID, apertureID).Scan(&vhRace, &vhPop)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy dị nhân"})
@@ -148,8 +148,18 @@ func AssignWorkerToNode(c *gin.Context) {
 		return
 	}
 
-	// Validate assigned population doesn't exceed total population.
-	if req.AssignedPopulation > vhPop {
+	// A population can only work at one node at a time. Exclude this node so an
+	// existing assignment can be resized without counting itself twice.
+	var assignedElsewhere int
+	if err = tx.QueryRow(`
+		SELECT COALESCE(SUM(assigned_population), 0)
+		FROM aperture_node_workers
+		WHERE variant_human_id = $1 AND node_id <> $2
+	`, req.VariantHumanID, nodeID).Scan(&assignedElsewhere); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	if assignedElsewhere+req.AssignedPopulation > vhPop {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng lao động vượt quá dân số"})
 		return
 	}
@@ -228,7 +238,8 @@ func ListRefinementQueue(c *gin.Context) {
 
 	rows, err := db.DB.Query(`
 		SELECT rq.id, rq.aperture_id, rq.recipe_id, rq.mode, rq.target_quantity,
-		       rq.current_quantity, rq.priority, rq.enabled, rq.created_at, rq.updated_at
+		       rq.current_quantity, rq.priority, rq.enabled, rq.last_error,
+		       rq.last_processed_at, rq.created_at, rq.updated_at
 		FROM aperture_refinement_queue rq
 		JOIN immortal_apertures a ON a.id = rq.aperture_id
 		WHERE a.player_id = $1
@@ -244,7 +255,8 @@ func ListRefinementQueue(c *gin.Context) {
 	for rows.Next() {
 		var j models.ApertureRefinementQueue
 		if err := rows.Scan(&j.ID, &j.ApertureID, &j.RecipeID, &j.Mode, &j.TargetQuantity,
-			&j.CurrentQuantity, &j.Priority, &j.Enabled, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			&j.CurrentQuantity, &j.Priority, &j.Enabled, &j.LastError, &j.LastProcessedAt,
+			&j.CreatedAt, &j.UpdatedAt); err != nil {
 			continue
 		}
 		list = append(list, j)
@@ -279,6 +291,18 @@ func CreateRefinementJob(c *gin.Context) {
 		return
 	}
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	var hairyManPopulation int
+	if err := db.DB.QueryRow(`
+		SELECT COALESCE(population, 0) FROM aperture_variant_humans
+		WHERE aperture_id = $1 AND race = 'HAIRY_MAN'
+	`, apertureID).Scan(&hairyManPopulation); err == sql.ErrNoRows || hairyManPopulation <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần có Mao Dân trong Tiên Khiếu để tự động luyện Cổ"})
+		return
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
@@ -325,9 +349,11 @@ func CreateRefinementJob(c *gin.Context) {
 	}
 
 	// 2. Kiểm tra nguyên liệu tương ứng trong kho/hành trang người chơi
-	var reqMatsJSON sql.NullString
-	_ = db.DB.QueryRow(`
-		SELECT required_materials::text
+	var exactRecipeID string
+	var reqMatsJSON, reqGusJSON sql.NullString
+	err = db.DB.QueryRow(`
+		SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text),
+		       required_materials::text, required_gus::text
 		FROM refining_recipes
 		WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1
 		   OR target_gu_id = $1
@@ -335,12 +361,28 @@ func CreateRefinementJob(c *gin.Context) {
 		   OR ('recipe_' || target_gu_id || '_') LIKE $1 || '%'
 		   OR ($1 LIKE 'recipe_%' AND ('recipe_' || target_gu_id || '_') LIKE REPLACE($1, 'recipe_', '') || '%')
 		LIMIT 1
-	`, actualRecipeID).Scan(&reqMatsJSON)
+	`, actualRecipeID).Scan(&exactRecipeID, &reqMatsJSON, &reqGusJSON)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí phương không tồn tại"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	actualRecipeID = exactRecipeID
+	if reqGusJSON.Valid && reqGusJSON.String != "" && reqGusJSON.String != "{}" && reqGusJSON.String != "[]" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tự động luyện hiện chưa hỗ trợ bí phương cần Cổ trùng làm nguyên liệu"})
+		return
+	}
 
 	var matSummary string
 	if reqMatsJSON.Valid && reqMatsJSON.String != "" && reqMatsJSON.String != "{}" {
 		var reqMats map[string]int
-		if err := json.Unmarshal([]byte(reqMatsJSON.String), &reqMats); err == nil && len(reqMats) > 0 {
+		if err := json.Unmarshal([]byte(reqMatsJSON.String), &reqMats); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu bí phương không hợp lệ"})
+			return
+		} else if len(reqMats) > 0 {
 			var parts []string
 			for matID, reqQty := range reqMats {
 				var currentQty int
@@ -560,12 +602,15 @@ func BuildSettlement(c *gin.Context) {
 		return
 	}
 
-	// Ensure variant human record exists for this race
+	// Ensure the settlement always brings an initial group of settlers, including
+	// when an empty race row survived an earlier disaster.
 	_, err = tx.Exec(`
-		INSERT INTO aperture_variant_humans (aperture_id, race, population, happiness, oppression, labor_intensity, prosperity)
-		VALUES ($1, $2, 500, 70.0, 0.0, 'NORMAL', 50.0)
-		ON CONFLICT (aperture_id, race) DO NOTHING
-	`, apertureID, req.Race)
+		INSERT INTO aperture_variant_humans (aperture_id, race, population, happiness, oppression, labor_intensity, prosperity, food_stored)
+		VALUES ($1, $2, 500, 70.0, 0.0, 'NORMAL', 50.0, $3)
+		ON CONFLICT (aperture_id, race) DO UPDATE
+		SET population = GREATEST(aperture_variant_humans.population, 500),
+		    food_stored = GREATEST(aperture_variant_humans.food_stored, $3), updated_at = NOW()
+	`, apertureID, req.Race, foodStorage)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -588,11 +633,11 @@ func BuildSettlement(c *gin.Context) {
 }
 
 type UpgradeSettlementRequest struct {
-	Name               string `json:"name"`
-	SettlementType     string `json:"settlement_type"` // VILLAGE, TOWN, CITY, FORTRESS
-	PopulationCapacity int    `json:"population_capacity" binding:"omitempty,min=0"`
-	Housing            int    `json:"housing" binding:"omitempty,min=0"`
-	FoodStorage        int    `json:"food_storage" binding:"omitempty,min=0"`
+	Name               string  `json:"name"`
+	SettlementType     string  `json:"settlement_type"` // VILLAGE, TOWN, CITY, FORTRESS
+	PopulationCapacity int     `json:"population_capacity" binding:"omitempty,min=0"`
+	Housing            int     `json:"housing" binding:"omitempty,min=0"`
+	FoodStorage        int     `json:"food_storage" binding:"omitempty,min=0"`
 	Security           float64 `json:"security" binding:"omitempty,min=0"`
 }
 

@@ -808,7 +808,7 @@ Sau khi thành Tiên, Tiên Khiếu không chỉ là lưới đặt công trình
 1. Đặt node tài nguyên/phòng thủ, thu hoạch riêng hoặc tất cả, sửa tất cả node hỏng và nâng từng node. Node tối đa cấp 5; mỗi cấp tăng 500 HP tối đa. Node tài nguyên tăng 50% sản lượng/cấp, node phòng thủ tăng 25% chỉ số/cấp.
 2. Phân công dân số dị nhân còn khả dụng vào node tài nguyên. Sản lượng phụ thuộc dân số, cấp node, hiệu suất chủng tộc, mức lao động và trạng thái node; node bị phá hủy không sản xuất.
 3. Chọn cường độ **LOW / NORMAL / HIGH / EXPLOIT**. Mức cao cho sản lượng nhanh hơn nhưng làm giảm hạnh phúc, tăng áp bức/nguy cơ phản loạn; mức thấp giúp xã hội hồi phục.
-4. Tạo hàng đợi luyện chế theo bí phương, số lượng và ưu tiên để nền kinh tế Tiên Khiếu tự xử lý theo chu kỳ.
+4. Xây khu định cư sẽ đưa 500 cư dân ban đầu cùng kho lương; dân số sinh trưởng mỗi 5 phút và bị giới hạn bởi sức chứa. Có thể tạo hàng đợi luyện chế cho Mao Dân xử lý mỗi 10 phút, tối đa một lần thử/lệnh/tick. Cổ càng cao cấp càng cần nhiều lao động nhàn rỗi: **số Mao Dân = cấp Cổ × 100** (Nhất Chuyển 100, Ngũ Chuyển 500, Lục Chuyển 600, Cửu Chuyển 900). Lao động được giữ chỗ cho toàn tick nên không bị dùng trùng giữa các lệnh. Lần thử tiêu hao nguyên liệu và nguyên thạch dù thất bại; thành công tạo Cổ và tăng tiến độ. Lệnh thiếu tài nguyên sẽ chờ và tự thử lại; hiện chưa nhận bí phương cần Cổ khác làm nguyên liệu.
 5. Xem và nâng cấp khu định cư theo từng chủng tộc. Theo dõi dân số, sức chứa, lương thực, nhà ở, an ninh, hạnh phúc, thịnh vượng và phản loạn; thiếu lương thực hoặc hạnh phúc thấp làm tăng tử vong.
 6. Khi một chủng tộc đủ đông, xã hội có cơ hội sinh Cổ Sư dị nhân. Có thể giao vai trò hoặc giải tán từng NPC; thiên phú, trung thành, rank và lưu phái của họ khác nhau.
 

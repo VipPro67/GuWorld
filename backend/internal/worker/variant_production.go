@@ -112,6 +112,7 @@ func processVariantProductionTick(ctx context.Context, db *sql.DB) {
 		apertures[i].variants = variantMap[apertures[i].apertureID]
 		apertures[i].nodes = workerMap[apertures[i].apertureID]
 		processApertureProduction(ctx, db, &apertures[i])
+		processApertureRefinement(ctx, db, apertures[i].apertureID)
 	}
 }
 
@@ -191,28 +192,18 @@ func processApertureProduction(ctx context.Context, db *sql.DB, ap *apertureTick
 
 	for _, nw := range ap.nodes {
 		vh, ok := variantByRace[nw.race]
-		if !ok || vh.population == 0 {
+		if !ok || vh.population == 0 || nw.assignedPopulation <= 0 {
 			continue
 		}
 
 		laborMod := laborIntensityModifier(vh.laborIntensity)
-		workingPop := float64(nw.assignedPopulation) * laborMod
-
 		baseOutput := float64(nw.productionAmount)
 		popBonus := 1.0 + float64(vh.population)/1000.0
 		if popBonus > 5.0 {
 			popBonus = 5.0
 		}
 		levelBonus := 1.0 + float64(nw.nodeLevel-1)*0.1
-		workerEfficiency := 1.0
-		if nw.assignedPopulation > 0 {
-			workerEfficiency = workingPop / float64(nw.assignedPopulation)
-			if workerEfficiency > 1.0 {
-				workerEfficiency = 1.0
-			}
-		}
-
-		output := int64(baseOutput * popBonus * levelBonus * workerEfficiency * laborMod)
+		output := int64(baseOutput * popBonus * levelBonus * laborMod)
 		if output <= 0 {
 			continue
 		}
