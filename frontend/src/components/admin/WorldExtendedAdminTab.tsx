@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Plus, Trash2, Edit3, RefreshCw, X, MapPin, ListTodo, Shield } from "lucide-react";
+import { Plus, RefreshCw, X, MapPin, ListTodo, Shield } from "lucide-react";
+import { AdminDataGrid, AdminGridColumn } from "./AdminDataGrid";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -84,12 +85,12 @@ export const WorldExtendedAdminTab: React.FC<{
       const method = isNew ? "POST" : "PUT";
       const body = { ...editItem };
 
-      if (type === "quests" && typeof body.rewards === "string") {
-        try { body.rewards = JSON.parse(body.rewards); } catch {}
-      }
-      if (type === "dungeons") {
-        if (typeof body.rewards === "string") { try { body.rewards = JSON.parse(body.rewards); } catch {} }
-        if (typeof body.map_data === "string") { try { body.map_data = JSON.parse(body.map_data); } catch {} }
+      try {
+        if ((type === "quests" || type === "dungeons") && typeof body.rewards === "string") body.rewards = JSON.parse(body.rewards);
+        if (type === "dungeons" && typeof body.map_data === "string") body.map_data = JSON.parse(body.map_data);
+      } catch {
+        addToast("Phần thưởng hoặc dữ liệu bản đồ không phải JSON hợp lệ", "error");
+        return;
       }
 
       const res = await authFetch(url, {
@@ -135,6 +136,26 @@ export const WorldExtendedAdminTab: React.FC<{
   const title =
     type === "spawns" ? "Điểm Xuất Hiện Quái" : type === "quests" ? "Nhiệm Vụ Thế Giới" : "Phụ Bản / Dungeons";
 
+  const columns: AdminGridColumn<ApiResponseData>[] = [
+    { key: "id", label: "ID", value: (item) => item.id, className: "font-mono font-bold text-amber-400" },
+    ...(type === "spawns" ? [
+      { key: "region_id", label: "Khu vực", value: (item: ApiResponseData) => item.region_id },
+      { key: "monster_id", label: "Mẫu quái", value: (item: ApiResponseData) => item.monster_id, className: "font-mono text-emerald-400" },
+      { key: "position", label: "Tọa độ", value: (item: ApiResponseData) => `${item.x},${item.y}`, render: (item: ApiResponseData) => `(${item.x}, ${item.y})` },
+      { key: "spawn_mode", label: "Chế độ", value: (item: ApiResponseData) => item.spawn_mode },
+      { key: "active", label: "Trạng thái", value: (item: ApiResponseData) => item.is_active, render: (item: ApiResponseData) => item.is_active ? "Đang bật" : "Đã tắt" },
+    ] : [
+      { key: "name", label: "Tên", value: (item: ApiResponseData) => item.title || item.name, className: "font-semibold text-zinc-200" },
+      { key: "description", label: "Mô tả", value: (item: ApiResponseData) => item.description, className: "max-w-xs truncate text-zinc-400" },
+    ]),
+    ...(type === "dungeons" ? [{ key: "required_rank", label: "Cấp yêu cầu", value: (item: ApiResponseData) => item.required_rank }] : []),
+  ];
+
+  const copyItem = (item: ApiResponseData) => {
+    setIsNew(true);
+    setEditItem({ ...structuredClone(item), id: "" });
+  };
+
   return (
     <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-5 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -173,70 +194,9 @@ export const WorldExtendedAdminTab: React.FC<{
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
-              <th className="py-2.5 px-3">ID</th>
-              {type === "spawns" && <th className="py-2.5 px-3">Khu Vực</th>}
-              {type === "spawns" && <th className="py-2.5 px-3">Mẫu Quái</th>}
-              {type === "spawns" && <th className="py-2.5 px-3">Tọa độ (X, Y)</th>}
-              {type !== "spawns" && <th className="py-2.5 px-3">Tên / Tiêu đề</th>}
-              {type === "dungeons" && <th className="py-2.5 px-3">Cấp Yêu Cầu</th>}
-              <th className="py-2.5 px-3">Mô tả / Thưởng</th>
-              <th className="py-2.5 px-3 text-right">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-center py-6 text-zinc-500 italic">
-                  {loading ? "Đang tải dữ liệu..." : "Chưa có dữ liệu"}
-                </td>
-              </tr>
-            ) : (
-              data.map((item) => (
-                <tr key={item.id} className="hover:bg-zinc-900/50">
-                  <td className="py-2.5 px-3 font-mono font-bold text-amber-400">{item.id}</td>
-                  {type === "spawns" && <td className="py-2.5 px-3 font-mono text-zinc-300">{item.region_id}</td>}
-                  {type === "spawns" && <td className="py-2.5 px-3 font-mono text-emerald-400">{item.monster_id}</td>}
-                  {type === "spawns" && (
-                    <td className="py-2.5 px-3 font-mono text-sky-400">
-                      ({item.x}, {item.y})
-                    </td>
-                  )}
-                  {type !== "spawns" && <td className="py-2.5 px-3 font-semibold text-zinc-200">{item.title || item.name}</td>}
-                  {type === "dungeons" && <td className="py-2.5 px-3 font-mono text-emerald-400">Chuyển {item.required_rank}</td>}
-                  <td className="py-2.5 px-3 text-zinc-400 max-w-xs truncate">
-                    {type === "spawns"
-                      ? `Mode: ${item.spawn_mode}, Respawn: ${item.respawn_seconds}s`
-                      : item.description || JSON.stringify(item.rewards)}
-                  </td>
-                  <td className="py-2.5 px-3 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => {
-                          setIsNew(false);
-                          setEditItem({ ...item });
-                        }}
-                        className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-amber-400 cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-rose-400 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <AdminDataGrid rows={data} columns={columns} rowKey={(item) => item.id} loading={loading}
+        onEdit={(item) => { setIsNew(false); setEditItem(structuredClone(item)); }}
+        onCopy={copyItem} onDelete={(item) => handleDelete(item.id)} />
 
       {/* Edit Modal */}
       {editItem && (
@@ -327,6 +287,15 @@ export const WorldExtendedAdminTab: React.FC<{
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Chế độ</label><input value={editItem.spawn_mode ?? "normal"} onChange={(e) => setEditItem({ ...editItem, spawn_mode: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                    <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Rank tối thiểu</label><input type="number" min={1} value={editItem.min_rank ?? 1} onChange={(e) => setEditItem({ ...editItem, min_rank: Number(e.target.value) })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                    <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Rank tối đa</label><input type="number" min={1} value={editItem.max_rank ?? 9} onChange={(e) => setEditItem({ ...editItem, max_rank: Number(e.target.value) })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                  </div>
+                  <div className="flex gap-6 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+                    <label className="flex items-center gap-2 text-zinc-300"><input type="checkbox" checked={Boolean(editItem.is_boss_spawn)} onChange={(e) => setEditItem({ ...editItem, is_boss_spawn: e.target.checked })} /> Điểm boss</label>
+                    <label className="flex items-center gap-2 text-zinc-300"><input type="checkbox" checked={Boolean(editItem.is_active)} onChange={(e) => setEditItem({ ...editItem, is_active: e.target.checked })} /> Đang hoạt động</label>
+                  </div>
                 </>
               )}
 
@@ -350,6 +319,8 @@ export const WorldExtendedAdminTab: React.FC<{
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50"
                     />
                   </div>
+                  <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Điều kiện / yêu cầu</label><textarea value={editItem.req_desc ?? ""} onChange={(e) => setEditItem({ ...editItem, req_desc: e.target.value })} rows={2} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                  <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Thông điệp</label><textarea value={editItem.message ?? ""} onChange={(e) => setEditItem({ ...editItem, message: e.target.value })} rows={2} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
                   <div>
                     <label className="text-[11px] font-bold text-zinc-500 font-mono">Phần Thưởng (JSON)</label>
                     <textarea
@@ -395,6 +366,13 @@ export const WorldExtendedAdminTab: React.FC<{
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Loại</label><input value={editItem.type ?? "normal"} onChange={(e) => setEditItem({ ...editItem, type: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                    <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Vật phẩm vào cửa</label><input value={editItem.entry_item ?? ""} onChange={(e) => setEditItem({ ...editItem, entry_item: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                  </div>
+                  <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Mô tả</label><textarea value={editItem.description ?? ""} onChange={(e) => setEditItem({ ...editItem, description: e.target.value })} rows={2} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                  <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Phần thưởng (JSON)</label><textarea value={typeof editItem.rewards === "string" ? editItem.rewards : JSON.stringify(editItem.rewards ?? {}, null, 2)} onChange={(e) => setEditItem({ ...editItem, rewards: e.target.value })} rows={3} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 font-mono text-[11px] mt-1" /></div>
+                  <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Dữ liệu bản đồ (JSON)</label><textarea value={typeof editItem.map_data === "string" ? editItem.map_data : JSON.stringify(editItem.map_data ?? {}, null, 2)} onChange={(e) => setEditItem({ ...editItem, map_data: e.target.value })} rows={4} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 font-mono text-[11px] mt-1" /></div>
                 </>
               )}
             </div>

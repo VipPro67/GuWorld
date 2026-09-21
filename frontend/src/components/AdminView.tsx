@@ -65,6 +65,8 @@ import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
 import { SectMinesAdminTab } from "./admin/SectMinesAdminTab";
 import { GuHistoryAdminTab } from "./admin/GuHistoryAdminTab";
 import { MonitoringAdminTab } from "./admin/MonitoringAdminTab";
+import { CoreDataAdminTab } from "./admin/CoreDataAdminTab";
+import { AdminDataGrid } from "./admin/AdminDataGrid";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -3515,260 +3517,43 @@ export const AdminView: React.FC = () => {
           )}
 
           {dataTab === "gus" && (
-            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Bug className="w-4 h-4 text-amber-400" />Danh Sách Cổ Trùng</h3>
-                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Attack", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {}, other: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
-              </div>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                <input value={dictGuSearch} onChange={e => setDictGuSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
-              </div>
-              {gusLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : gus.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có cổ trùng nào.</div> : (
-                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
-                      {["ID", "Tên", "Rank", "Loại", "Giá"].map(col => {
-                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name", "Rank": "rank", "Loại": "gu_type", "Giá": "base_price" };
-                        const f = fieldMap[col];
-                        return <th key={col} onClick={() => { if (f) { if (guSortField === f) setGuSortDir(d => d === "asc" ? "desc" : "asc"); else { setGuSortField(f); setGuSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${guSortField === f ? "text-amber-400" : ""} ${col === "Giá" ? "text-right" : ""}`}>{col}{guSortField === f ? (guSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
-                      })}
-                      <th className="px-3 py-2.5"></th>
-                    </tr></thead>
-                    <tbody>{(() => {
-                      const q = dictGuSearch.toLowerCase();
-                      const filtered = q ? gus.filter((g: ApiResponseData) => (g.id?.toLowerCase() || "").includes(q) || (g.name?.toLowerCase() || "").includes(q)) : [...gus];
-                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
-                        let va = a[guSortField], vb = b[guSortField];
-                        if (typeof va === "string") va = va.toLowerCase();
-                        if (typeof vb === "string") vb = vb.toLowerCase();
-                        if (va < vb) return guSortDir === "asc" ? -1 : 1;
-                        if (va > vb) return guSortDir === "asc" ? 1 : -1;
-                        return 0;
-                      });
-                      return filtered.map((g: ApiResponseData) => (
-                        <tr key={g.id + g.rank} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{g.id}</td>
-                          <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-2">
-                            {g.image_url ? (
-                              <img src={g.image_url} alt="" className="w-7 h-7 rounded object-cover border border-zinc-700 flex-shrink-0" />
-                            ) : (
-                              <span className="text-base flex-shrink-0">{({Active: "⚡", Buff: "✨", Consumable: "💊", Control: "🌀", Defense: "🛡️", Healing: "💚", Investigation: "🔍", Movement: "💨", Passive: "🧘", Refinement: "🔧", Special: "⭐", Storage: "📦", Summon: "👻", Support: "🎯", Transformation: "🦋", Vital: "💎"} as Record<string, string>)[g.gu_type] || "🏠"}</span>
-                            )}
-                            {g.name}
-                          </td>
-                          <td className="px-3 py-2.5 text-zinc-400">{g.rank}</td>
-                          <td className="px-3 py-2.5 text-zinc-400">{translateGuType(g.gu_type)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{g.base_price?.toLocaleString() || 0}</td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => setGuEdit({ ...g, _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                            <button onClick={async () => { if (!confirm(`Xóa ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                          </td>
-                        </tr>
-                      ));
-                    })()}</tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <CoreDataAdminTab kind="gus" rows={gus} loading={gusLoading}
+              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {}, other: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
+              onEdit={(g) => setGuEdit({ ...structuredClone(g), _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
+              onCopy={(g) => setGuEdit({ ...structuredClone(g), id: "", _isNew: true, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
+              onDelete={async (g) => { if (!confirm(`Xóa toàn bộ các rank của ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} />
           )}
 
           {dataTab === "items" && (
-            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Package className="w-4 h-4 text-emerald-400" />Danh Sách Vật Phẩm</h3>
-                <button onClick={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0, image_url: "", _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
-              </div>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                <input value={dictItemSearch} onChange={e => setDictItemSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
-              </div>
-              {itemsLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : items.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có vật phẩm nào.</div> : (
-                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
-                      {["ID", "Tên", "Loại", "Rank", "Giá"].map(col => {
-                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name", "Loại": "item_type", "Rank": "rank", "Giá": "base_price" };
-                        const f = fieldMap[col];
-                        return <th key={col} onClick={() => { if (f) { if (itemSortField === f) setItemSortDir(d => d === "asc" ? "desc" : "asc"); else { setItemSortField(f); setItemSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${itemSortField === f ? "text-amber-400" : ""} ${col === "Giá" ? "text-right" : ""}`}>{col}{itemSortField === f ? (itemSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
-                      })}
-                      <th className="px-3 py-2.5"></th>
-                    </tr></thead>
-                    <tbody>{(() => {
-                      const q = dictItemSearch.toLowerCase();
-                      const filtered = q ? items.filter((it: ApiResponseData) => (it.id?.toLowerCase() || "").includes(q) || (it.name?.toLowerCase() || "").includes(q)) : [...items];
-                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
-                        let va = a[itemSortField], vb = b[itemSortField];
-                        if (typeof va === "string") va = va.toLowerCase();
-                        if (typeof vb === "string") vb = vb.toLowerCase();
-                        if (va < vb) return itemSortDir === "asc" ? -1 : 1;
-                        if (va > vb) return itemSortDir === "asc" ? 1 : -1;
-                        return 0;
-                      });
-                      return filtered.map((it: ApiResponseData) => (
-                        <tr key={it.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{it.id}</td>
-                          <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-2">
-                            {it.image_url ? (
-                              <img src={it.image_url} alt="" className="w-7 h-7 rounded object-cover border border-zinc-700 flex-shrink-0" />
-                            ) : (
-                              <Package className="w-4 h-4 text-zinc-500 flex-shrink-0" />
-                            )}
-                            {it.name}
-                          </td>
-                          <td className="px-3 py-2.5 text-zinc-400">{translateItemType(it.item_type)}</td>
-                          <td className="px-3 py-2.5 text-zinc-400">{it.rank}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{it.base_price?.toLocaleString() || 0}</td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => setItemEdit({ ...it, effects: typeof it.effects === "string" ? JSON.parse(it.effects) : it.effects })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                            <button onClick={async () => { if (!confirm(`Xóa ${it.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/item-dictionary/${it.id}`, "DELETE"); if (ok) fetchItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                          </td>
-                        </tr>
-                      ));
-                    })()}</tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <CoreDataAdminTab kind="items" rows={items} loading={itemsLoading}
+              onCreate={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0, image_url: "", _isNew: true })}
+              onEdit={(item) => setItemEdit({ ...structuredClone(item), effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
+              onCopy={(item) => setItemEdit({ ...structuredClone(item), id: "", _isNew: true, effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
+              onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/item-dictionary/${item.id}`, "DELETE"); if (ok) fetchItems(); }} />
           )}
 
           {dataTab === "recipes" && (
-            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><FlaskConical className="w-4 h-4 text-emerald-400" />Danh Sách Cổ Phương</h3>
-                <button onClick={() => setRecipeEdit({ id: "", target_gu_id: "", target_gu_name: "", required_gus: {}, required_materials: {}, success_rate: 0.5, primeval_stones_cost: 0, immortal_essence_stones_cost: 0, _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
-              </div>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                <input value={recipeSearch} onChange={e => setRecipeSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
-              </div>
-              {recipesLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : recipes.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có cổ phương nào.</div> : (
-                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0"><th className="px-3 py-2.5 font-semibold">ID</th><th className="px-3 py-2.5 font-semibold">Cổ trùng đích</th><th className="px-3 py-2.5 font-semibold text-right">Tỉ lệ</th><th className="px-3 py-2.5 font-semibold text-right">Nguyên Thạch</th><th className="px-3 py-2.5"></th></tr></thead>
-                    <tbody>{recipes.filter(r => r.id.toLowerCase().includes(recipeSearch.toLowerCase()) || (r.target_gu_name || r.target_gu_id || "").toLowerCase().includes(recipeSearch.toLowerCase())).map((r: ApiResponseData) => (
-                      <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                        <td className="px-3 py-2.5 text-zinc-500 font-mono">{r.id}</td>
-                        <td className="px-3 py-2.5 font-semibold text-zinc-200">{r.target_gu_name || r.target_gu_id}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{(r.success_rate * 100).toFixed(0)}%</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{r.primeval_stones_cost?.toLocaleString() || 0}</td>
-                        <td className="px-3 py-2.5 text-right">
-                          <button onClick={() => setRecipeEdit({ ...r, required_gus: typeof r.required_gus === "string" ? JSON.parse(r.required_gus) : r.required_gus, required_materials: typeof r.required_materials === "string" ? JSON.parse(r.required_materials) : r.required_materials })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                          <button onClick={async () => { if (!confirm(`Xóa ${r.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/recipes/${r.id}`, "DELETE"); if (ok) fetchRecipes(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                        </td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <CoreDataAdminTab kind="recipes" rows={recipes} loading={recipesLoading}
+              onCreate={() => setRecipeEdit({ id: "", target_gu_id: "", target_gu_name: "", required_gus: {}, required_materials: {}, success_rate: 0.5, primeval_stones_cost: 0, immortal_essence_stones_cost: 0, _isNew: true })}
+              onEdit={(recipe) => setRecipeEdit({ ...structuredClone(recipe), required_gus: typeof recipe.required_gus === "string" ? JSON.parse(recipe.required_gus) : recipe.required_gus, required_materials: typeof recipe.required_materials === "string" ? JSON.parse(recipe.required_materials) : recipe.required_materials })}
+              onCopy={(recipe) => setRecipeEdit({ ...structuredClone(recipe), id: "", _isNew: true, required_gus: typeof recipe.required_gus === "string" ? JSON.parse(recipe.required_gus) : recipe.required_gus, required_materials: typeof recipe.required_materials === "string" ? JSON.parse(recipe.required_materials) : recipe.required_materials })}
+              onDelete={async (recipe) => { if (!confirm(`Xóa ${recipe.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/recipes/${recipe.id}`, "DELETE"); if (ok) fetchRecipes(); }} />
           )}
 
           {dataTab === "monsters" && (
-            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><PawPrint className="w-4 h-4 text-amber-400" />Danh Sách Quái Vật</h3>
-                <button onClick={() => setMonsterEdit({ id: "", name: "", type: "beast", max_hp: 100, base_attack: 10, base_defense: 5, gu_inventory: [], item_inventory: {}, dao_marks: {}, path_masteries: {}, ai_profile: "beast_basic", loot_table_id: "", description: "", is_active: true, is_capturable: false, capture_chance: 0.20, pet_hunger_per_hour: 2.0, _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
-              </div>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                <input value={monsterSearch} onChange={e => setMonsterSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
-              </div>
-              {monstersLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : monsters.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có quái vật nào.</div> : (
-                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
-                      {["ID", "Tên", "Loại", "HP", "Tấn công", "Phòng thủ", "Loot"].map(col => {
-                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name", "Loại": "type", "HP": "max_hp", "Tấn công": "base_attack", "Phòng thủ": "base_defense", "Loot": "loot_table_id" };
-                        const f = fieldMap[col];
-                        return <th key={col} onClick={() => { if (f) { if (monsterSortField === f) setMonsterSortDir(d => d === "asc" ? "desc" : "asc"); else { setMonsterSortField(f); setMonsterSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${monsterSortField === f ? "text-amber-400" : ""}`}>{col}{monsterSortField === f ? (monsterSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
-                      })}
-                      <th className="px-3 py-2.5"></th>
-                    </tr></thead>
-                    <tbody>{(() => {
-                      const q = monsterSearch.toLowerCase();
-                      const filtered = q ? monsters.filter((m: ApiResponseData) => (m.id?.toLowerCase() || "").includes(q) || (m.name?.toLowerCase() || "").includes(q)) : [...monsters];
-                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
-                        let va = a[monsterSortField], vb = b[monsterSortField];
-                        if (typeof va === "string") va = va.toLowerCase();
-                        if (typeof vb === "string") vb = vb.toLowerCase();
-                        if (va < vb) return monsterSortDir === "asc" ? -1 : 1;
-                        if (va > vb) return monsterSortDir === "asc" ? 1 : -1;
-                        return 0;
-                      });
-                      return filtered.map((m: ApiResponseData) => (
-                        <tr key={m.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{m.id}</td>
-                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{m.name}</td>
-                          <td className="px-3 py-2.5 text-zinc-300">{m.type}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-red-400">{m.max_hp}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-orange-400">{m.base_attack}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-blue-400">{m.base_defense}</td>
-                          <td className="px-3 py-2.5 text-zinc-400 font-mono text-[10px]">{m.loot_table_id || "-"}</td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => setMonsterEdit({ ...m, gu_inventory: typeof m.gu_inventory === "string" ? JSON.parse(m.gu_inventory) : m.gu_inventory || [], item_inventory: typeof m.item_inventory === "string" ? JSON.parse(m.item_inventory) : m.item_inventory || {}, dao_marks: typeof m.dao_marks === "string" ? JSON.parse(m.dao_marks) : m.dao_marks || {}, path_masteries: typeof m.path_masteries === "string" ? JSON.parse(m.path_masteries) : m.path_masteries || {} })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                            <button onClick={async () => { if (!confirm(`Xóa quái vật ${m.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/monsters/${m.id}`, "DELETE"); if (ok) fetchMonsters(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                          </td>
-                        </tr>
-                      ));
-                    })()}</tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <CoreDataAdminTab kind="monsters" rows={monsters} loading={monstersLoading}
+              onCreate={() => setMonsterEdit({ id: "", name: "", type: "beast", max_hp: 100, base_attack: 10, base_defense: 5, gu_inventory: [], item_inventory: {}, dao_marks: {}, path_masteries: {}, ai_profile: "beast_basic", loot_table_id: "", description: "", is_active: true, is_capturable: false, capture_chance: 0.20, pet_hunger_per_hour: 2.0, _isNew: true })}
+              onEdit={(monster) => setMonsterEdit({ ...structuredClone(monster), gu_inventory: typeof monster.gu_inventory === "string" ? JSON.parse(monster.gu_inventory) : monster.gu_inventory || [], item_inventory: typeof monster.item_inventory === "string" ? JSON.parse(monster.item_inventory) : monster.item_inventory || {}, dao_marks: typeof monster.dao_marks === "string" ? JSON.parse(monster.dao_marks) : monster.dao_marks || {}, path_masteries: typeof monster.path_masteries === "string" ? JSON.parse(monster.path_masteries) : monster.path_masteries || {} })}
+              onCopy={(monster) => setMonsterEdit({ ...structuredClone(monster), id: "", _isNew: true, gu_inventory: typeof monster.gu_inventory === "string" ? JSON.parse(monster.gu_inventory) : monster.gu_inventory || [], item_inventory: typeof monster.item_inventory === "string" ? JSON.parse(monster.item_inventory) : monster.item_inventory || {}, dao_marks: typeof monster.dao_marks === "string" ? JSON.parse(monster.dao_marks) : monster.dao_marks || {}, path_masteries: typeof monster.path_masteries === "string" ? JSON.parse(monster.path_masteries) : monster.path_masteries || {} })}
+              onDelete={async (monster) => { if (!confirm(`Xóa quái vật ${monster.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/monsters/${monster.id}`, "DELETE"); if (ok) fetchMonsters(); }} />
           )}
 
           {dataTab === "loot_tables" && (
-            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Gift className="w-4 h-4 text-amber-400" />Danh Sách Bảng Loot</h3>
-                <button onClick={() => setLootTableEdit({ id: "", name: "", entries: [], _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
-              </div>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                <input value={lootTableSearch} onChange={e => setLootTableSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
-              </div>
-              {lootTablesLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : lootTables.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có bảng loot nào.</div> : (
-                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
-                      {["ID", "Tên", "Số loot"].map(col => {
-                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name" };
-                        const f = fieldMap[col];
-                        return <th key={col} onClick={() => { if (f) { if (lootTableSortField === f) setLootTableSortDir(d => d === "asc" ? "desc" : "asc"); else { setLootTableSortField(f); setLootTableSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${lootTableSortField === f ? "text-amber-400" : ""}`}>{col}{lootTableSortField === f ? (lootTableSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
-                      })}
-                      <th className="px-3 py-2.5"></th>
-                    </tr></thead>
-                    <tbody>{(() => {
-                      const q = lootTableSearch.toLowerCase();
-                      const filtered = q ? lootTables.filter((t: ApiResponseData) => (t.id?.toLowerCase() || "").includes(q) || (t.name?.toLowerCase() || "").includes(q)) : [...lootTables];
-                      filtered.sort((a: ApiResponseData, b: ApiResponseData) => {
-                        let va = a[lootTableSortField], vb = b[lootTableSortField];
-                        if (typeof va === "string") va = va.toLowerCase();
-                        if (typeof vb === "string") vb = vb.toLowerCase();
-                        if (va < vb) return lootTableSortDir === "asc" ? -1 : 1;
-                        if (va > vb) return lootTableSortDir === "asc" ? 1 : -1;
-                        return 0;
-                      });
-                      return filtered.map((t: ApiResponseData) => {
-                        const entries = typeof t.entries === "string" ? JSON.parse(t.entries) : (t.entries || []);
-                        return (
-                          <tr key={t.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                            <td className="px-3 py-2.5 text-zinc-500 font-mono">{t.id}</td>
-                            <td className="px-3 py-2.5 font-semibold text-zinc-200">{t.name}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{entries.length}</td>
-                            <td className="px-3 py-2.5 text-right">
-                              <button onClick={() => setLootTableEdit({ ...t, entries })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                              <button onClick={async () => { if (!confirm(`Xóa bảng loot ${t.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/loot-tables/${t.id}`, "DELETE"); if (ok) fetchLootTables(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}</tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <CoreDataAdminTab kind="loot_tables" rows={lootTables} loading={lootTablesLoading}
+              onCreate={() => setLootTableEdit({ id: "", name: "", entries: [], _isNew: true })}
+              onEdit={(table) => setLootTableEdit({ ...structuredClone(table), entries: typeof table.entries === "string" ? JSON.parse(table.entries) : table.entries || [] })}
+              onCopy={(table) => setLootTableEdit({ ...structuredClone(table), id: "", _isNew: true, entries: typeof table.entries === "string" ? JSON.parse(table.entries) : table.entries || [] })}
+              onDelete={async (table) => { if (!confirm(`Xóa bảng loot ${table.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/loot-tables/${table.id}`, "DELETE"); if (ok) fetchLootTables(); }} />
           )}
 
           {dataTab === "regions" && (
@@ -3805,39 +3590,9 @@ export const AdminView: React.FC = () => {
                 <div className="text-center py-8 text-zinc-500 text-xs">Không tìm thấy khu vực nào.</div>
               ) : (
                 <>
-                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                          <th className="px-3 py-2">ID</th>
-                          <th className="px-3 py-2">Tên</th>
-                          <th className="px-3 py-2">Mô tả</th>
-                          <th className="px-3 py-2">Loại</th>
-                          <th className="px-3 py-2">Kích thước</th>
-                          <th className="px-3 py-2">Tọa độ</th>
-                          <th className="px-3 py-2">Cảnh giới</th>
-                          <th className="px-3 py-2 text-right">Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {regions.map((r: ApiResponseData) => (
-                          <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                            <td className="px-3 py-2 font-mono text-zinc-400">{r.id}</td>
-                            <td className="px-3 py-2 font-semibold text-zinc-200">{r.name}</td>
-                            <td className="px-3 py-2 text-zinc-400 max-w-[150px] truncate" title={r.description}>{r.description || "–"}</td>
-                            <td className="px-3 py-2 text-amber-400">{r.zone_type}</td>
-                            <td className="px-3 py-2 text-zinc-400">{r.width}x{r.height}</td>
-                            <td className="px-3 py-2 text-zinc-500 font-mono text-[10px]">({r.min_x},{r.min_y}) to ({r.max_x},{r.max_y})</td>
-                            <td className="px-3 py-2 text-zinc-300">C{r.min_rank} - C{r.max_rank}</td>
-                            <td className="px-3 py-2 text-right flex justify-end gap-2">
-                              <button onClick={() => setRegionEdit(r)} className="text-amber-500 hover:text-amber-400 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5" /></button>
-                              <button onClick={async () => { if (!confirm(`Xóa khu vực "${r.name}" (${r.id})? Hành động này có thể ảnh hưởng đến dữ liệu liên kết.`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/regions/${r.id}`, "DELETE"); if (ok) fetchRegions(regionsPage, regionSearch); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <AdminDataGrid rows={regions} loading={regionsLoading} showSearch={false} showPagination={false} sortable={false} rowKey={(region) => region.id} columns={[
+                      { key: "id", label: "ID", value: (region) => region.id, className: "font-mono text-zinc-400" }, { key: "name", label: "Tên", value: (region) => region.name, className: "font-semibold text-zinc-200" }, { key: "description", label: "Mô tả", value: (region) => region.description, className: "max-w-[150px] truncate text-zinc-400" }, { key: "zone_type", label: "Loại", value: (region) => region.zone_type, className: "text-amber-400" }, { key: "size", label: "Kích thước", value: (region) => `${region.width}x${region.height}` }, { key: "coordinates", label: "Tọa độ", value: (region) => `${region.min_x},${region.min_y},${region.max_x},${region.max_y}`, render: (region) => `(${region.min_x},${region.min_y}) → (${region.max_x},${region.max_y})` }, { key: "rank", label: "Cảnh giới", value: (region) => `${region.min_rank}-${region.max_rank}`, render: (region) => `C${region.min_rank} - C${region.max_rank}` },
+                    ]} onEdit={(region) => setRegionEdit(structuredClone(region))} onCopy={(region) => setRegionEdit({ ...structuredClone(region), id: "", _isNew: true })} onDelete={async (region) => { if (!confirm(`Xóa khu vực "${region.name}" (${region.id})? Hành động này có thể ảnh hưởng đến dữ liệu liên kết.`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/regions/${region.id}`, "DELETE"); if (ok) fetchRegions(regionsPage, regionSearch); }} />
                   <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
                     <div>Tổng số: <span className="text-zinc-300">{regionsTotal}</span> khu vực</div>
                     <div className="flex items-center gap-2">
@@ -3915,46 +3670,9 @@ export const AdminView: React.FC = () => {
                 <div className="text-center py-8 text-zinc-500 text-xs">Không tìm thấy ô bản đồ nào.</div>
               ) : (
                 <>
-                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                          <th className="px-3 py-2">Khu vực</th>
-                          <th className="px-3 py-2">Tọa độ (X, Y)</th>
-                          <th className="px-3 py-2">Loại ô</th>
-                          <th className="px-3 py-2">Content ID</th>
-                          <th className="px-3 py-2">Respawn</th>
-                          <th className="px-3 py-2">Metadata</th>
-                          <th className="px-3 py-2">Active</th>
-                          <th className="px-3 py-2 text-right">Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mapCells.map((c: ApiResponseData) => (
-                          <tr key={c.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                            <td className="px-3 py-2 text-zinc-300 font-mono text-[10px]">{c.region_id}</td>
-                            <td className="px-3 py-2 font-mono text-amber-400">({c.x}, {c.y})</td>
-                            <td className="px-3 py-2">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                c.cell_type === "Safe" ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" :
-                                c.cell_type === "Monster" ? "bg-red-950/80 text-red-400 border border-red-500/30" :
-                                c.cell_type === "Portal" ? "bg-purple-950/80 text-purple-400 border border-purple-500/30" :
-                                "bg-amber-950/80 text-amber-400 border border-amber-500/30"
-                              }`}>{c.cell_type}</span>
-                            </td>
-                            <td className="px-3 py-2 font-mono text-zinc-400">{c.content_id || "–"}</td>
-                            <td className="px-3 py-2 text-zinc-400">{c.respawn_seconds}s</td>
-                            <td className="px-3 py-2 text-zinc-500 font-mono text-[10px] max-w-[120px] truncate" title={JSON.stringify(c.metadata)}>{JSON.stringify(c.metadata)}</td>
-                            <td className="px-3 py-2">{c.is_active ? <span className="text-emerald-400 font-bold">ON</span> : <span className="text-zinc-600">OFF</span>}</td>
-                            <td className="px-3 py-2 text-right flex justify-end gap-2">
-                              <button onClick={() => setMapCellEdit(c)} className="text-amber-500 hover:text-amber-400 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5" /></button>
-                              <button onClick={async () => { if (!confirm(`Xóa ô bản đồ tại (${c.x}, ${c.y})?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/map-cells/${c.id}`, "DELETE"); if (ok) fetchMapCells(mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <AdminDataGrid rows={mapCells} loading={mapCellsLoading} showSearch={false} showPagination={false} sortable={false} rowKey={(cell) => String(cell.id)} columns={[
+                      { key: "region_id", label: "Khu vực", value: (cell) => cell.region_id, className: "font-mono text-[10px]" }, { key: "coordinates", label: "Tọa độ", value: (cell) => `${cell.x},${cell.y}`, render: (cell) => `(${cell.x}, ${cell.y})`, className: "font-mono text-amber-400" }, { key: "cell_type", label: "Loại ô", value: (cell) => cell.cell_type }, { key: "content_id", label: "Content ID", value: (cell) => cell.content_id, className: "font-mono text-zinc-400" }, { key: "respawn_seconds", label: "Respawn", value: (cell) => cell.respawn_seconds, render: (cell) => `${cell.respawn_seconds}s` }, { key: "metadata", label: "Metadata", value: (cell) => cell.metadata, render: (cell) => <span className="block max-w-[120px] truncate font-mono text-[10px] text-zinc-500">{JSON.stringify(cell.metadata)}</span> }, { key: "is_active", label: "Active", value: (cell) => cell.is_active, render: (cell) => cell.is_active ? "ON" : "OFF" },
+                    ]} onEdit={(cell) => setMapCellEdit(structuredClone(cell))} onCopy={(cell) => setMapCellEdit({ ...structuredClone(cell), id: "", _isNew: true })} onDelete={async (cell) => { if (!confirm(`Xóa ô bản đồ tại (${cell.x}, ${cell.y})?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/map-cells/${cell.id}`, "DELETE"); if (ok) fetchMapCells(mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); }} />
                   <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
                     <div>Tổng số: <span className="text-zinc-300">{mapCellsTotal}</span> ô</div>
                     <div className="flex items-center gap-2">
@@ -4134,41 +3852,7 @@ export const AdminView: React.FC = () => {
                   <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                        <th className="px-3 py-2.5 font-semibold">ID</th>
-                        <th className="px-3 py-2.5 font-semibold">Rank</th>
-                        <th className="px-3 py-2.5 font-semibold">Tên</th>
-                        <th className="px-3 py-2.5 font-semibold">Loại</th>
-                        <th className="px-3 py-2.5 font-semibold text-right">Giá</th>
-                        <th className="px-3 py-2.5 font-semibold text-right">Tồn kho</th>
-                        <th className="px-3 py-2.5 font-semibold text-center">Mặc định</th>
-                        <th className="px-3 py-2.5 font-semibold text-right">Thứ tự</th>
-                        <th className="px-3 py-2.5"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {shopItems.map((item: ApiResponseData) => (
-                        <tr key={`${item.id}-${item.rank ?? 0}`} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
-                          <td className="px-3 py-2.5 text-violet-400 font-mono">{item.rank ?? 0}</td>
-                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
-                          <td className="px-3 py-2.5 text-zinc-400">{translateItemType(item.item_type) || "—"}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{item.price?.toLocaleString()}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.stock === -1 ? "∞" : item.stock}</td>
-                          <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-zinc-400">{item.sort_order}</td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => { setShopForm({ id: item.id, rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(`${item.id}/${item.rank ?? 0}`); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                            <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}/${item.rank ?? 0}`, "DELETE"); if (ok) fetchShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <AdminDataGrid rows={shopItems} loading={shopLoading} rowKey={(item) => `${item.id}:${item.rank ?? 0}`} columns={[{ key: "id", label: "ID", value: (item) => item.id }, { key: "rank", label: "Rank", value: (item) => item.rank ?? 0 }, { key: "name", label: "Tên", value: (item) => item.name || item.id }, { key: "item_type", label: "Loại", value: (item) => item.item_type }, { key: "price", label: "Giá", value: (item) => item.price }, { key: "stock", label: "Tồn kho", value: (item) => item.stock, render: (item) => item.stock === -1 ? "∞" : item.stock }, { key: "is_default", label: "Mặc định", value: (item) => item.is_default, render: (item) => item.is_default ? "✓" : "–" }, { key: "sort_order", label: "Thứ tự", value: (item) => item.sort_order }]} onEdit={(item) => { setShopForm({ id: item.id, rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(`${item.id}/${item.rank ?? 0}`); }} onCopy={(item) => { setShopForm({ id: "", rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopAdd(true); }} onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}/${item.rank ?? 0}`, "DELETE"); if (ok) fetchShopItems(); }} />
               )}
             </div>
           )}
@@ -4192,39 +3876,7 @@ export const AdminView: React.FC = () => {
                   <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                        <th className="px-3 py-2.5 font-semibold">ID</th>
-                        <th className="px-3 py-2.5 font-semibold">Tên</th>
-                        <th className="px-3 py-2.5 font-semibold text-right">Giá (Xu ĐT)</th>
-                        <th className="px-3 py-2.5 font-semibold text-right">SL nhận</th>
-                        <th className="px-3 py-2.5 font-semibold text-right">Tồn kho</th>
-                        <th className="px-3 py-2.5 font-semibold text-center">Mặc định</th>
-                        <th className="px-3 py-2.5 font-semibold text-right">Thứ tự</th>
-                        <th className="px-3 py-2.5"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {arenaShopItems.map((item: ApiResponseData) => (
-                        <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
-                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-amber-500">{item.price?.toLocaleString()}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.qty}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.stock === -1 ? "∞" : item.stock}</td>
-                          <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-zinc-400">{item.sort_order}</td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => { setArenaShopForm({ id: item.id, price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopEdit(item.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                            <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/arena-shop/${item.id}`, "DELETE"); if (ok) fetchArenaShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <AdminDataGrid rows={arenaShopItems} loading={arenaShopLoading} rowKey={(item) => item.id} columns={[{ key: "id", label: "ID", value: (item) => item.id }, { key: "name", label: "Tên", value: (item) => item.name || item.id }, { key: "price", label: "Giá (Xu ĐT)", value: (item) => item.price }, { key: "qty", label: "SL nhận", value: (item) => item.qty }, { key: "stock", label: "Tồn kho", value: (item) => item.stock, render: (item) => item.stock === -1 ? "∞" : item.stock }, { key: "is_default", label: "Mặc định", value: (item) => item.is_default, render: (item) => item.is_default ? "✓" : "–" }, { key: "sort_order", label: "Thứ tự", value: (item) => item.sort_order }]} onEdit={(item) => { setArenaShopForm({ id: item.id, price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopEdit(item.id); }} onCopy={(item) => { setArenaShopForm({ id: "", price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopAdd(true); }} onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/arena-shop/${item.id}`, "DELETE"); if (ok) fetchArenaShopItems(); }} />
               )}
             </div>
           )}
@@ -5437,6 +5089,10 @@ export const AdminView: React.FC = () => {
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">dao_marks (JSON)</label>
                 <textarea value={typeof monsterEdit.dao_marks === "string" ? monsterEdit.dao_marks : JSON.stringify(monsterEdit.dao_marks || {}, null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, dao_marks: JSON.parse(e.target.value)}); } catch {} }} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
               </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">path_masteries (JSON)</label>
+                <textarea value={typeof monsterEdit.path_masteries === "string" ? monsterEdit.path_masteries : JSON.stringify(monsterEdit.path_masteries || {}, null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, path_masteries: JSON.parse(e.target.value)}); } catch {} }} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
+              </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setMonsterEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
@@ -5575,6 +5231,10 @@ export const AdminView: React.FC = () => {
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Parent ID</label>
                   <input value={regionEdit.parent_id || ""} onChange={e => setRegionEdit({...regionEdit, parent_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" placeholder="e.g. central_continent" />
                 </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Pool weights (JSON)</label>
+                <textarea value={typeof regionEdit.pool_weights === "string" ? regionEdit.pool_weights : JSON.stringify(regionEdit.pool_weights || {}, null, 2)} onChange={e => { try { setRegionEdit({...regionEdit, pool_weights: JSON.parse(e.target.value)}); } catch {} }} rows={5} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2 mt-4">
