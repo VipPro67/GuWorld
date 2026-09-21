@@ -355,6 +355,8 @@ Mỗi Cổ instance có:
 - Status: `ACTIVE`, `SLEEPING`, `DEAD`.
 - `equipped` và `is_vital`.
 
+Khi Cổ chết đói, **Ký Sự Tu Hành** ghi bản rõ: độ no ngay trước khi chết, trạng thái lúc đó (`ACTIVE`/`SLEEPING`/`SEALED` — quyết định tốc độ hao hụt), lần cuối được cho ăn và tổng thời gian không được cho ăn của cá thể đó.
+
 Cổ sư có thể:
 
 - Cho ăn từng Cổ hoặc theo nhóm.

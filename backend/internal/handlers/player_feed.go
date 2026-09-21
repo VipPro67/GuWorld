@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -304,6 +305,10 @@ func FeedGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
+	if _, err := tx.Exec(`UPDATE player_gu SET last_fed_at = NOW() WHERE id = $1`, targetGu.InstanceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+		return
+	}
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7 WHERE id = $8`,
 		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.ID)
 	if err != nil {
@@ -448,7 +453,8 @@ func FeedGroup(c *gin.Context) {
 
 	fedCount := 0
 	foodConsumed := make(map[string]int)
-	consumedGuIDs := []string{} // Track Gu IDs consumed as food for explicit delete.
+	consumedGuIDs := []string{}  // Track Gu IDs consumed as food for explicit delete.
+	fedInstanceIDs := []string{} // Track instances actually fed, to stamp last_fed_at.
 
 	// 3. Iterate over the player's Gu inventory and feed hungry ones of matching type
 	for i := 0; i < len(player.GuInventory); i++ {
@@ -505,6 +511,7 @@ func FeedGroup(c *gin.Context) {
 					gu.Equipped = true
 				}
 				fedCount++
+				fedInstanceIDs = append(fedInstanceIDs, gu.InstanceID)
 			}
 		}
 	}
@@ -525,6 +532,12 @@ func FeedGroup(c *gin.Context) {
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
+	}
+	if len(fedInstanceIDs) > 0 {
+		if _, err := tx.Exec(`UPDATE player_gu SET last_fed_at = NOW() WHERE id = ANY($1::text[])`, pq.Array(fedInstanceIDs)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+			return
+		}
 	}
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
 		player.PrimevalStones, player.ImmortalStones, player.ID)
@@ -654,6 +667,7 @@ func FeedAll(c *gin.Context) {
 	}
 
 	consumedGuIDs := []string{} // Track Gu IDs consumed as food for explicit delete.
+	fedInstanceIDs := []string{} // Track instances actually fed, to stamp last_fed_at.
 
 	for i := 0; i < len(player.GuInventory); i++ {
 		gu := &player.GuInventory[i]
@@ -738,6 +752,7 @@ func FeedAll(c *gin.Context) {
 				gu.Equipped = true
 			}
 			fedCount++
+			fedInstanceIDs = append(fedInstanceIDs, gu.InstanceID)
 		}
 	}
 
@@ -762,6 +777,12 @@ func FeedAll(c *gin.Context) {
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
+	}
+	if len(fedInstanceIDs) > 0 {
+		if _, err := tx.Exec(`UPDATE player_gu SET last_fed_at = NOW() WHERE id = ANY($1::text[])`, pq.Array(fedInstanceIDs)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+			return
+		}
 	}
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
 		player.PrimevalStones, player.ImmortalStones, player.ID)

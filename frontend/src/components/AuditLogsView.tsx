@@ -12,8 +12,119 @@ import {
   Maximize2,
   Minimize2,
   Calendar,
-  Search
+  Search,
+  Skull
 } from "lucide-react";
+
+// Shape của một entry từ GET /player/audit-logs (AuditLogResponse backend).
+interface AuditLogEntry {
+  id: string;
+  action: string;
+  entity_type?: string;
+  entity_id?: string;
+  request_summary?: string;
+  metadata?: Record<string, unknown> | null;
+  success: boolean;
+  error_message?: string;
+  created_at: string;
+}
+
+// Các action kết liễu — hiển thị nổi bật hơn phần còn lại của ký sự.
+const DEATH_ACTIONS = new Set(["gu.starve_death", "gu.starve_vital_death", "combat.death_penalty"]);
+
+const isDeathAction = (action: string) => DEATH_ACTIONS.has(action);
+
+const formatRelativeTime = (timeStr: string): string => {
+  if (!timeStr) return "";
+  const d = new Date(timeStr);
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "vừa xong";
+  if (mins < 60) return `${mins} phút trước`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} giờ trước`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} ngày trước`;
+  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+};
+
+const dayKeyOf = (d: Date): string => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+const dayKeyFor = (timeStr: string): string => dayKeyOf(new Date(timeStr));
+
+const dayLabelFor = (timeStr: string): string => {
+  const d = new Date(timeStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (dayKeyFor(timeStr) === dayKeyOf(today)) return "Hôm nay";
+  if (dayKeyFor(timeStr) === dayKeyOf(yesterday)) return "Hôm qua";
+  return d.toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
+};
+
+const GU_STATE_LABELS: Record<string, string> = {
+  ACTIVE: "Hoạt động (hao hụt đầy đủ)",
+  SLEEPING: "Ngủ đông (hao hụt 25%)",
+  SEALED: "Niêm phong (hao hụt 10%)",
+};
+
+// Nhãn tiếng Việt cho các key metadata hay gặp; key lạ giữ nguyên.
+const METADATA_LABELS: Record<string, string> = {
+  gu_instance_id: "Mã thể Cổ",
+  gu_id: "Loại Cổ",
+  gu_name: "Tên Cổ",
+  is_vital: "Bản mệnh",
+  state_before: "Trạng thái trước đó",
+  hunger_before: "Độ no trước khi chết",
+  last_fed_at: "Lần cuối được cho ăn",
+  unfed_hours: "Thời gian không được cho ăn",
+  hunger: "Độ no",
+  max_hunger: "Độ no tối đa",
+  food_consumed: "Thức ăn đã tiêu hao",
+  rank: "Hạng",
+  item_id: "Vật phẩm",
+  material_id: "Nguyên liệu",
+  monster_id: "Yêu thú",
+};
+
+const formatMetadataLabel = (key: string): string => METADATA_LABELS[key] || key;
+
+const formatUnfedHours = (val: unknown): string => {
+  const h = Number(val);
+  if (!Number.isFinite(h)) return String(val);
+  if (h < 1 / 60) return "dưới 1 phút";
+  if (h < 1) return `${Math.round(h * 60)} phút`;
+  if (h < 24) {
+    const mins = Math.floor((h - Math.floor(h)) * 60);
+    return mins > 0 ? `${Math.floor(h)} giờ ${mins} phút` : `${Math.floor(h)} giờ`;
+  }
+  const days = Math.floor(h / 24);
+  const remH = Math.floor(h % 24);
+  return remH > 0 ? `${days} ngày ${remH} giờ` : `${days} ngày`;
+};
+
+const formatMetadataValue = (
+  key: string,
+  val: unknown,
+  dicts: { items: Record<string, { name?: string }>; gus: Record<string, { name?: string }>; monsters: Record<string, { name?: string }> }
+): string => {
+  if (val === null || val === undefined) return "—";
+  if (key === "last_fed_at") {
+    const d = new Date(String(val));
+    return Number.isNaN(d.getTime())
+      ? String(val)
+      : d.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+  if (key === "unfed_hours") return formatUnfedHours(val);
+  if (key === "state_before") return GU_STATE_LABELS[String(val)] || String(val);
+  if (typeof val === "boolean") return val ? "Có" : "Không";
+  if (typeof val === "object") return JSON.stringify(val);
+  const raw = String(val);
+  if (key === "item_id" || key === "material_id") return dicts.items[raw]?.name || raw;
+  if (key === "gu_id" || key === "gu_instance_id") return dicts.gus[raw]?.name || raw;
+  if (key === "monster_id") return dicts.monsters[raw]?.name || raw;
+  return raw;
+};
 
 export const AuditLogsView: React.FC = () => {
   const { auditLogs, auditLogsLoading, fetchAuditLogs, guDictionary, itemDictionary, monsterDictionary } = useGameStore();
@@ -107,10 +218,15 @@ export const AuditLogsView: React.FC = () => {
           </span>
         );
       case "gu.starve_death":
-      case "gu.starve_vital_death":
         return (
           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-950/80 border border-rose-500/30 text-rose-400 font-mono">
-            💀 TỊCH DIỆT
+            💀 ĐÓI CHẾT
+          </span>
+        );
+      case "gu.starve_vital_death":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-950/90 border border-rose-400/50 text-rose-300 font-mono">
+            💀 BẢN MỆNH ĐÓI CHẾT
           </span>
         );
       case "gu.drop":
@@ -200,6 +316,24 @@ export const AuditLogsView: React.FC = () => {
         return (
           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-lime-950/80 border border-lime-500/30 text-lime-400 font-mono">
             🐾 LINH THÚ
+          </span>
+        );
+      case "trade.confirm":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-orange-950/80 border border-orange-500/30 text-orange-300 font-mono">
+            🤝 GIAO DỊCH
+          </span>
+        );
+      case "marketplace.create_listing":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 font-mono">
+            🏷️ TREO BÁN
+          </span>
+        );
+      case "marketplace.buy_listing":
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 font-mono">
+            🏷️ MUA SÀN
           </span>
         );
       default:
@@ -349,90 +483,119 @@ export const AuditLogsView: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {auditLogs.map((log) => {
-            const isExpanded = expandedLogId === log.id;
-            return (
-              <div
-                key={log.id}
-                className={`bg-slate-900/30 border rounded-xl hover:border-slate-700/50 transition-all ${
-                  isExpanded ? "border-slate-700 bg-slate-900/50" : "border-slate-800/80"
-                }`}
-              >
-                {/* Simple row */}
-                <div
-                  onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none"
-                >
-                  <div className="flex items-start sm:items-center gap-3">
-                    {/* Status Icon */}
-                    {log.success ? (
-                      <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5 sm:mt-0" />
-                    )}
-
-                    {/* Action Badge & Summary */}
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {getActionBadge(log.action)}
-                        <span className="text-slate-500 text-[11px] font-mono flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {formatLogTime(log.created_at)}
-                        </span>
-                      </div>
-                      <p className="text-xs sm:text-sm font-semibold text-slate-200">
-                        {formatRequestSummary(log.request_summary) || "Hành động tu luyện không xác định"}
-                      </p>
+          {(() => {
+            const logs = (auditLogs || []) as unknown as AuditLogEntry[];
+            let lastDayKey = "";
+            return logs.map((log) => {
+              const isExpanded = expandedLogId === log.id;
+              const isDeath = isDeathAction(log.action);
+              const dayKey = dayKeyFor(log.created_at);
+              const showDayHeader = dayKey !== lastDayKey;
+              lastDayKey = dayKey;
+              const created = new Date(log.created_at);
+              const timeValid = !Number.isNaN(created.getTime());
+              const timeDisplay = timeValid
+                ? `${formatRelativeTime(log.created_at)} · ${created.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
+                : "";
+              return (
+                <React.Fragment key={log.id}>
+                  {showDayHeader && timeValid && (
+                    <div className="flex items-center gap-3 pt-2 first:pt-0">
+                      <div className="h-px flex-1 bg-slate-800/80" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+                        📅 {dayLabelFor(log.created_at)}
+                      </span>
+                      <div className="h-px flex-1 bg-slate-800/80" />
                     </div>
-                  </div>
+                  )}
+                  <div
+                    className={`border rounded-xl transition-all ${
+                      isDeath
+                        ? "border-rose-900/50 bg-rose-950/20 border-l-4 border-l-rose-500/80 hover:border-rose-700/60"
+                        : isExpanded
+                          ? "border-slate-700 bg-slate-900/50"
+                          : "border-slate-800/80 bg-slate-900/30 hover:border-slate-700/50"
+                    }`}
+                  >
+                    {/* Simple row */}
+                    <div
+                      onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none"
+                    >
+                      <div className="flex items-start sm:items-center gap-3">
+                        {/* Status Icon */}
+                        {isDeath ? (
+                          <Skull className="w-5 h-5 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+                        ) : log.success ? (
+                          <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5 sm:mt-0" />
+                        )}
 
-                  {/* Toggle inspect details */}
-                  <div className="flex items-center justify-end text-xs text-slate-400 font-semibold gap-1 font-mono hover:text-indigo-400 transition-colors shrink-0">
-                    {log.metadata && Object.keys(log.metadata).length > 0 && (
-                      <>
-                        {isExpanded ? "Đóng chi tiết" : "Xem chi tiết"}
-                        {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Expanded Details */}
-                {isExpanded && log.metadata && Object.keys(log.metadata).length > 0 && (
-                  <div className="px-4 pb-4 pt-1 border-t border-slate-800/80 space-y-3">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">
-                      📋 Thuộc tính chi tiết
-                    </div>
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 font-mono text-[11px] text-slate-350 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
-                      {Object.entries(log.metadata).map(([key, val]) => {
-                        let displayVal = typeof val === "object" ? JSON.stringify(val) : String(val);
-                        if (key === "item_id" || key === "material_id") {
-                          displayVal = itemDictionary[displayVal]?.name || displayVal;
-                        } else if (key === "gu_id" || key === "gu_instance_id") {
-                          displayVal = guDictionary[displayVal]?.name || displayVal;
-                        } else if (key === "monster_id") {
-                          displayVal = monsterDictionary[displayVal]?.name || displayVal;
-                        }
-                        return (
-                          <div key={key} className="flex justify-between border-b border-slate-900/60 pb-1">
-                            <span className="text-slate-500 font-semibold">{key}:</span>
-                            <span className="text-slate-200 text-right max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap" title={displayVal}>
-                              {displayVal}
+                        {/* Action Badge & Summary */}
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {getActionBadge(log.action)}
+                            <span
+                              className="text-slate-500 text-[11px] font-mono flex items-center gap-1"
+                              title={timeValid ? formatLogTime(log.created_at) : undefined}
+                            >
+                              <Calendar className="w-3 h-3" />
+                              {timeDisplay}
                             </span>
                           </div>
-                        );
-                      })}
+                          <p className={`text-xs sm:text-sm font-semibold ${isDeath ? "text-rose-200" : "text-slate-200"}`}>
+                            {formatRequestSummary(log.request_summary || "") || "Hành động tu luyện không xác định"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Toggle inspect details */}
+                      <div className="flex items-center justify-end text-xs text-slate-400 font-semibold gap-1 font-mono hover:text-indigo-400 transition-colors shrink-0">
+                        {log.metadata && Object.keys(log.metadata).length > 0 && (
+                          <>
+                            {isExpanded ? "Đóng chi tiết" : "Xem chi tiết"}
+                            {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                          </>
+                        )}
+                      </div>
                     </div>
-                    {log.error_message && (
-                      <div className="bg-rose-950/20 border border-rose-900/40 p-3 rounded-lg text-xs text-rose-350 font-mono">
-                        ⚠️ **Chi tiết lỗi:** {log.error_message}
+
+                    {/* Expanded Details */}
+                    {isExpanded && log.metadata && Object.keys(log.metadata).length > 0 && (
+                      <div className="px-4 pb-4 pt-1 border-t border-slate-800/80 space-y-3">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                          📋 Thuộc tính chi tiết
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 font-mono text-[11px] text-slate-350 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                          {Object.entries(log.metadata).map(([key, val]) => {
+                            const displayVal = formatMetadataValue(key, val, {
+                              items: itemDictionary || {},
+                              gus: guDictionary || {},
+                              monsters: monsterDictionary || {},
+                            });
+                            return (
+                              <div key={key} className="flex justify-between border-b border-slate-900/60 pb-1">
+                                <span className="text-slate-500 font-semibold">{formatMetadataLabel(key)}:</span>
+                                <span className="text-slate-200 text-right max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap" title={displayVal}>
+                                  {displayVal}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {log.error_message && (
+                          <div className="bg-rose-950/20 border border-rose-900/40 p-3 rounded-lg text-xs text-rose-350 font-mono">
+                            ⚠️ **Chi tiết lỗi:** {log.error_message}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                </React.Fragment>
+              );
+            });
+          })()}
         </div>
       )}
 

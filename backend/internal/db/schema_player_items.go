@@ -40,6 +40,22 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_gu_gu_id ON player_gu (gu_id);`); err != nil {
 		return err
 	}
+	// last_fed_at: mốc lần cuối cổ trùng được cho ăn, dùng để ghi vào audit log
+	// chết đói (độ no trước khi chết + thời gian không được cho ăn). Chỉ các
+	// handler cho ăn ghi trực tiếp cột này; không nằm trong đường sync bulk.
+	if err := execSchema("player_gu_last_fed_at", `
+	ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS last_fed_at TIMESTAMPTZ;`); err != nil {
+		return err
+	}
+	// Backfill dòng cũ: coi như được cho ăn lúc tạo (idempotent).
+	if err := execSchema("player_gu_last_fed_at_backfill", `
+	UPDATE player_gu SET last_fed_at = created_at WHERE last_fed_at IS NULL;`); err != nil {
+		return err
+	}
+	if err := execSchema("player_gu_last_fed_at_default", `
+	ALTER TABLE player_gu ALTER COLUMN last_fed_at SET DEFAULT CURRENT_TIMESTAMP;`); err != nil {
+		return err
+	}
 	// Tiên Cổ (rank>=6) duy nhất cross-rank toàn server: 1 gu_id chỉ 1 instance
 	// đang sống. Tạo index chỉ khi chưa có trùng (giữ row tạo sớm nhất), nếu
 	// trùng thì NOTICE để admin xử lý tay, không chặn startup, không xóa đồ user.

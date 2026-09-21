@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -227,6 +228,33 @@ type StarvedGuInfo struct {
 	ID, GuID, State, GuName string
 	Rank                    int
 	IsVital, Equipped       bool
+	// StateBefore là trạng thái (ACTIVE/SLEEPING/SEALED) trước khi chết, quyết
+	// định tốc độ hao hụt. HungerBefore là độ no ngay trước kỳ decay kết liễu.
+	// LastFedAt là mốc lần cuối được cho ăn (cột player_gu.last_fed_at).
+	StateBefore  string
+	HungerBefore float64
+	LastFedAt    *time.Time
+}
+
+// formatUnfedDuration renders how long a Gu has gone without feeding, in
+// Vietnamese. Returns "không rõ" when the last-fed timestamp is missing.
+func formatUnfedDuration(lastFed *time.Time, now time.Time) string {
+	if lastFed == nil {
+		return "không rõ"
+	}
+	d := now.Sub(*lastFed)
+	if d < 0 {
+		d = 0
+	}
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	if days := hours / 24; days > 0 {
+		return fmt.Sprintf("%d ngày %d giờ", days, hours%24)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%d giờ %d phút", hours, minutes)
+	}
+	return fmt.Sprintf("%d phút", minutes)
 }
 
 // FormatStarvedGuNotification formats a grouped notification for normal Gus that starved to death.
@@ -318,6 +346,7 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 	rows, err := tx.Query(`
 		WITH decayed AS (
 			SELECT pg.id AS gu_instance_id, pg.gu_id, pg.is_vital, pg.equipped,
+				pg.hunger AS hunger_before, pg.state AS state_before,
 				CASE WHEN pg.state='ACTIVE' THEN pg.hunger - ($2 * gd.hunger_rate)
 				     WHEN pg.state='SLEEPING' THEN pg.hunger - ($2 * 0.25 * gd.hunger_rate)
 				     WHEN pg.state='SEALED' THEN pg.hunger - ($2 * 0.1 * gd.hunger_rate)
@@ -334,9 +363,11 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 			    updated_at = NOW()
 			FROM decayed d
 			WHERE pg.id = d.gu_instance_id
-			RETURNING pg.id, pg.gu_id, pg.gu_rank, pg.state, pg.is_vital, pg.equipped, d.gu_name
+			RETURNING pg.id, pg.gu_id, pg.gu_rank, pg.state, pg.is_vital, pg.equipped, d.gu_name,
+				d.state_before, d.hunger_before, pg.last_fed_at
 		)
-		SELECT id, gu_id, gu_rank, state, is_vital, equipped, gu_name FROM upd`, playerID.String(), ticks)
+		SELECT id, gu_id, gu_rank, state, is_vital, equipped, gu_name,
+			state_before, hunger_before, last_fed_at FROM upd`, playerID.String(), ticks)
 	if err != nil {
 		return err
 	}
@@ -348,7 +379,8 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 
 	for rows.Next() {
 		var s StarvedGuInfo
-		if err := rows.Scan(&s.ID, &s.GuID, &s.Rank, &s.State, &s.IsVital, &s.Equipped, &s.GuName); err != nil {
+		if err := rows.Scan(&s.ID, &s.GuID, &s.Rank, &s.State, &s.IsVital, &s.Equipped, &s.GuName,
+			&s.StateBefore, &s.HungerBefore, &s.LastFedAt); err != nil {
 			rows.Close()
 			return err
 		}
@@ -422,28 +454,39 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 		}
 
 		action := "gu.starve_death"
-		content := fmt.Sprintf("%s đã chết vì đói!", s.GuName)
+		unfed := formatUnfedDuration(s.LastFedAt, now)
+		content := fmt.Sprintf("%s đã chết vì đói! Độ no trước khi chết: %.0f. Thời gian không được cho ăn: %s.", s.GuName, s.HungerBefore, unfed)
 		if s.IsVital {
 			action = "gu.starve_vital_death"
-			content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.GuName)
+			content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Độ no trước khi chết: %.0f. Thời gian không được cho ăn: %s. Bạn nhận 80 sát thương.", s.GuName, s.HungerBefore, unfed)
 		}
-		_ = db.LogGuHistory(tx, s.ID, s.GuID, s.Rank, "STARVED_DEATH", &playerID, nil, content, map[string]interface{}{
-			"gu_name":  s.GuName,
-			"is_vital": s.IsVital,
-		})
+		deathMeta := map[string]interface{}{
+			"gu_instance_id": s.ID,
+			"gu_id":          s.GuID,
+			"gu_name":        s.GuName,
+			"is_vital":       s.IsVital,
+			"state_before":   s.StateBefore,
+			"hunger_before":  s.HungerBefore,
+		}
+		if s.LastFedAt != nil {
+			unfedHours := now.Sub(*s.LastFedAt).Hours()
+			if unfedHours < 0 {
+				unfedHours = 0
+			}
+			deathMeta["last_fed_at"] = s.LastFedAt.UTC().Format(time.RFC3339)
+			deathMeta["unfed_hours"] = math.Round(unfedHours*10) / 10
+		} else {
+			deathMeta["last_fed_at"] = nil
+		}
+		_ = db.LogGuHistory(tx, s.ID, s.GuID, s.Rank, "STARVED_DEATH", &playerID, nil, content, deathMeta)
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID:       &playerID,
 			Action:         action,
 			EntityType:     "gu_instance",
 			EntityID:       s.ID,
 			RequestSummary: content,
-			Metadata: map[string]interface{}{
-				"gu_instance_id": s.ID,
-				"gu_id":          s.GuID,
-				"gu_name":        s.GuName,
-				"is_vital":       s.IsVital,
-			},
-			Success: true,
+			Metadata:       deathMeta,
+			Success:        true,
 		})
 	}
 

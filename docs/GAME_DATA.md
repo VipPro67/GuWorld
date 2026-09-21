@@ -236,6 +236,7 @@ Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** b�
 | `integration_time` | DOUBLE PRECISION | |
 | `equipped_at` | TIMESTAMPTZ | NULL nếu chưa trang bị |
 | `growth_hours` | DOUBLE PRECISION | |
+| `last_fed_at` | TIMESTAMPTZ | Lần cuối được cho ăn. Chỉ các feed handler (`gu.feed`/`feed_group`/`feed_all`) ghi trực tiếp; không nằm trong đường sync bulk. Dùng cho audit log chết đói (thời gian không được cho ăn). |
 | `created_at` / `updated_at` | TIMESTAMPTZ | |
 
 - Migration `migrate_player_gu_from_inventory` (chạy một lần khi còn cột `gu_inventory`) copy toàn bộ dữ liệu cũ sang `player_gu`, sau đó `DROP COLUMN IF EXISTS gu_inventory` loại bỏ cột. An toàn chạy lặp lại.
