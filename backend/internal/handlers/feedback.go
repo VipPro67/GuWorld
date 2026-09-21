@@ -551,6 +551,15 @@ func GetFeedbackComments(c *gin.Context) {
 		return
 	}
 
+	// Comments change rarely; serve from a short Redis cache and invalidate
+	// on add/delete (feedbackCommentsCacheKey).
+	commentsCacheKey := feedbackCommentsCacheKey(feedbackID)
+	var cached []models.FeedbackComment
+	if err := cache.GetJSON(commentsCacheKey, &cached); err == nil && cached != nil {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT c.id, c.feedback_id, c.user_id, p.username, c.content, c.created_at
 		FROM feedback_comments c
@@ -574,7 +583,13 @@ func GetFeedbackComments(c *gin.Context) {
 		comments = append(comments, cm)
 	}
 
+	_ = cache.SetJSON(commentsCacheKey, comments, 30*time.Second)
 	c.JSON(http.StatusOK, comments)
+}
+
+// feedbackCommentsCacheKey keys the short-lived comment list cache per feedback.
+func feedbackCommentsCacheKey(feedbackID uuid.UUID) string {
+	return "feedback_comments:" + feedbackID.String()
 }
 
 type AddFeedbackCommentRequest struct {
@@ -665,6 +680,8 @@ func AddFeedbackComment(c *gin.Context) {
 		return
 	}
 
+	_ = cache.Delete(feedbackCommentsCacheKey(feedbackID))
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":       "Đã góp ý lên sớ trình thành công!",
 		"comment_id":    commentID,
@@ -696,7 +713,8 @@ func DeleteFeedbackComment(c *gin.Context) {
 	defer tx.Rollback()
 
 	var authorID uuid.UUID
-	err = tx.QueryRow("SELECT user_id FROM feedback_comments WHERE id = $1 FOR UPDATE", commentID).Scan(&authorID)
+	var commentFeedbackID uuid.UUID
+	err = tx.QueryRow("SELECT user_id, feedback_id FROM feedback_comments WHERE id = $1 FOR UPDATE", commentID).Scan(&authorID, &commentFeedbackID)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Góp ý không tồn tại!"})
 		return
@@ -723,6 +741,8 @@ func DeleteFeedbackComment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failure: " + err.Error()})
 		return
 	}
+
+	_ = cache.Delete(feedbackCommentsCacheKey(commentFeedbackID))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa góp ý!"})
 }

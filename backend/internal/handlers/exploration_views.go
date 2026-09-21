@@ -63,63 +63,6 @@ type NearbyCell struct {
 	Region  string `json:"region_id,omitempty"`
 }
 
-// GetNearbyCells resolves the cells around the player (or an explicit
-// ?x=&y=&r= box) and returns the non-empty ones so the big map can draw
-// monster / boss / resource markers. Content is deterministic per zone cell,
-// matching the grid gameplay (ResolveCell).
-func GetNearbyCells(c *gin.Context) {
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	var x, y, r int
-	fmt.Sscanf(c.Query("x"), "%d", &x)
-	fmt.Sscanf(c.Query("y"), "%d", &y)
-	fmt.Sscanf(c.Query("r"), "%d", &r)
-
-	if r <= 0 {
-		r = 128
-	}
-	if r > 128 {
-		r = 128
-	}
-
-	if x == 0 && y == 0 {
-		player, err := loadPlayerForStatus(db.DB, authID, false)
-		if err == nil {
-			x, y = player.X, player.Y
-		}
-	}
-
-	// Resolve the full box of cells around the center and keep the non-empty
-	// ones. Box is at most (2r+1)^2 cells; with r capped at 128 this stays a
-	// bounded, symmetric area around the player so the canvas markers align.
-	candidates := []NearbyCell{}
-	for dy := -r; dy <= r; dy++ {
-		for dx := -r; dx <= r; dx++ {
-			cx := x + dx
-			cy := y + dy
-			if cx < 0 || cx >= WorldWidth || cy < 0 || cy >= WorldHeight {
-				continue
-			}
-			cell := ResolveCell(cx, cy)
-			if cell.Type == "Empty" {
-				continue
-			}
-			regionID := DeriveRegionAt(cx, cy)
-			candidates = append(candidates, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
-		}
-	}
-	out, err := filterClearedCells(candidates)
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Trạng thái bản đồ tạm thời không khả dụng."})
-		return
-	}
-	c.JSON(http.StatusOK, out)
-}
-
 // GetCellsRect resolves the non-empty cells inside an explicit rectangle
 // (min_x/min_y/max_x/max_y). Used by the world map to prefetch the exact
 // visible area or a band ahead of the player. Bounded to prevent abuse.

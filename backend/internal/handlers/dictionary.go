@@ -46,16 +46,56 @@ type WikiMonsterSpawn struct {
 	IsBossSpawn bool    `json:"is_boss_spawn"`
 }
 
+// DictionaryResponse is the unified catalog the game client hydrates its
+// IndexedDB from. Wiki-only sections (loot_tables, regions, monster_spawns)
+// are served by their dedicated /api/dictionary/* part endpoints instead.
 type DictionaryResponse struct {
 	Gu            interface{}              `json:"gu"`
 	Items         interface{}              `json:"items"`
-	Monsters      interface{}              `json:"monsters"`
+	Monsters      map[string]PublicMonsterView `json:"monsters"`
 	Constitutions []gamefx.ConstitutionDef `json:"constitutions"`
 	Races         []gamefx.RaceDef         `json:"races"`
 	Statuses      []gamefx.StatusDef       `json:"statuses"`
-	LootTables    []models.LootTable       `json:"loot_tables"`
-	Regions       []WikiRegion             `json:"regions"`
-	MonsterSpawns []WikiMonsterSpawn       `json:"monster_spawns"`
+}
+
+// PublicMonsterView is the client-facing projection of a MonsterTemplate.
+// Internal combat/loot data (gu_inventory, gu_pool, item_inventory, dao_marks,
+// path_masteries, ai_profile) stays server-side; the admin panel uses
+// /api/admin/monsters for full details.
+type PublicMonsterView struct {
+	ID               string  `json:"id"`
+	Name             string  `json:"name"`
+	Type             string  `json:"type"`
+	MaxHP            float64 `json:"max_hp"`
+	BaseAttack       float64 `json:"base_attack"`
+	BaseDefense      float64 `json:"base_defense"`
+	LootTableID      string  `json:"loot_table_id"`
+	Description      string  `json:"description"`
+	IsCapturable     bool    `json:"is_capturable"`
+	CaptureChance    float64 `json:"capture_chance"`
+	PetHungerPerHour float64 `json:"pet_hunger_per_hour"`
+}
+
+// publicMonsterDictionary projects the full monster registry down to the
+// fields the game client and wiki actually read.
+func publicMonsterDictionary() map[string]PublicMonsterView {
+	out := make(map[string]PublicMonsterView, len(models.MonsterRegistry))
+	for id, m := range models.MonsterRegistry {
+		out[id] = PublicMonsterView{
+			ID:               m.ID,
+			Name:             m.Name,
+			Type:             m.Type,
+			MaxHP:            m.MaxHP,
+			BaseAttack:       m.BaseAttack,
+			BaseDefense:      m.BaseDefense,
+			LootTableID:      m.LootTableID,
+			Description:      m.Description,
+			IsCapturable:     m.IsCapturable,
+			CaptureChance:    m.CaptureChance,
+			PetHungerPerHour: m.PetHungerPerHour,
+		}
+	}
+	return out
 }
 
 func flatGuDictionary() []models.GuDictionaryItem {
@@ -144,10 +184,11 @@ func GetItemDictionary(c *gin.Context) {
 	})
 }
 
-// GetMonsterDictionary returns only the monster catalog used by gameplay screens.
+// GetMonsterDictionary returns only the monster catalog used by gameplay screens
+// (projected to client-facing fields — no internal combat/loot loadouts).
 func GetMonsterDictionary(c *gin.Context) {
-	getCachedDictionaryPart(c, "game_dictionary_monsters", &map[string]models.MonsterTemplate{}, func() interface{} {
-		return models.MonsterRegistry
+	getCachedDictionaryPart(c, "game_dictionary_monsters", &map[string]PublicMonsterView{}, func() interface{} {
+		return publicMonsterDictionary()
 	})
 }
 
@@ -201,13 +242,10 @@ func GetDictionary(c *gin.Context) {
 		return DictionaryResponse{
 			Gu:            flatGu,
 			Items:         models.ItemRegistry,
-			Monsters:      models.MonsterRegistry,
+			Monsters:      publicMonsterDictionary(),
 			Constitutions: gamefx.AllConstitutions(),
 			Races:         gamefx.AllRaces(),
 			Statuses:      gamefx.AllStatuses(),
-			LootTables:    loadAllLootTables(c),
-			Regions:       buildWikiRegions(),
-			MonsterSpawns: buildWikiMonsterSpawns(),
 		}
 	})
 }

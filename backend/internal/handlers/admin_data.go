@@ -216,20 +216,55 @@ func AdminClearCache(c *gin.Context) {
 	if err := LoadQuestRegistry(); err != nil {
 		logger.S.Warnf("failed to reload Quest registry: %v", err)
 	}
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Zone registry: %v", err)
+	}
+	if err := InitInstanceCache(); err != nil {
+		logger.S.Warnf("failed to reload Instance cache: %v", err)
+	}
 
-	// Clear all known Redis cache keys
+	// Gacha pools are derived from the Gu/Item/recipe registries — force a rebuild.
+	gachaPoolsMu.Lock()
+	globalPrecomputedPools = nil
+	gachaPoolsMu.Unlock()
+
+	// Clear all known Redis cache keys (dictionary part keys included so
+	// /api/dictionary/* rebuild from the freshly loaded registries)
 	cache.Delete(
 		"game_dictionary_unified",
+		"game_dictionary_gus",
+		"game_dictionary_items",
+		"game_dictionary_monsters",
+		"game_dictionary_constitutions",
+		"game_dictionary_races",
+		"game_dictionary_statuses",
+		"game_dictionary_loot_tables",
+		"game_dictionary_regions",
+		"game_dictionary_monster_spawns",
 		"game_quests_list",
-		"caravan_shop_catalog",
+		"explore_regions",
+		"arena_shop_items",
+		"topup_packages",
+		"premium_shop_packages",
+		"mine_slots_list",
+		"beast_betting_current_round",
+		"sects_list",
 		"master_refining_recipes",
-		"market_listings_public",
 	)
-	// Also clear profile page cache keys (pattern-based, use a wildcard approach)
+	// Pattern-based keys: profile pages, day-scoped caravan catalog,
+	// feedback (list + per-feedback comments), user-scoped market listings.
 	if cache.Client != nil {
-		iter := cache.Client.Scan(cache.Ctx, 0, "profile_*", 100).Iterator()
-		for iter.Next(cache.Ctx) {
-			cache.Client.Del(cache.Ctx, iter.Val())
+		for _, pattern := range []string{
+			"profile_*",
+			"caravan_shop_catalog:*",
+			"feedback_comments:*",
+			"feedbacks_*",
+			"market_listings_user_*",
+		} {
+			iter := cache.Client.Scan(cache.Ctx, 0, pattern, 100).Iterator()
+			for iter.Next(cache.Ctx) {
+				cache.Client.Del(cache.Ctx, iter.Val())
+			}
 		}
 	}
 	InvalidateDictionaryMemoryCache()

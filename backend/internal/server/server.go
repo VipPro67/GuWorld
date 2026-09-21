@@ -689,7 +689,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
-		api.GET("/explore/cells", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyCells)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/explore/players", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyPlayers)
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)

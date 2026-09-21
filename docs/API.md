@@ -20,10 +20,10 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/dictionary` | Public Gu + item + monster + constitution + race + status + loot + region + spawn dictionary. Response: `{gu, items, monsters, constitutions, races, statuses, loot_tables, regions, monster_spawns}` — `constitutions`, `races` và `statuses` là mảng `{key, name, effects}` (effects là JSON theo format trong `docs/GAME_DATA.md`). `loot_tables` là mảng `{id, name, entries}` (entries chứa item_id/gu_id + chance + min/max qty). `regions` là mảng `WikiRegion {id, name, description, min_rank, max_rank, parent_id, zone_type, pool_weights}`. `monster_spawns` là mảng `{region_id, monster_id, chance, min_rank, max_rank, is_boss_spawn}`. |
+| GET | `/dictionary` | Unified catalog cho game client: `{gu, items, monsters, constitutions, races, statuses}` — `constitutions`, `races`, `statuses` là mảng `{key, name, effects}` (effects là JSON theo format trong `docs/GAME_DATA.md`). Payload đã được tinh gọn: các phần wiki-only (`loot_tables`, `regions`, `monster_spawns`) và field nội bộ của monster (gu_inventory, gu_pool, item_inventory, dao_marks, path_masteries, ai_profile) không còn được trả — dùng các endpoint `/dictionary/*` riêng cho wiki. |
 | GET | `/dictionary/gus` | Public Gu dictionary only. Returns a flat array containing every Gu rank. |
 | GET | `/dictionary/items` | Public item dictionary only. Returns the item map keyed by item ID. |
-| GET | `/dictionary/monsters` | Public monster dictionary only. Returns the monster map keyed by monster ID. |
+| GET | `/dictionary/monsters` | Public monster dictionary only. Returns the monster map keyed by monster ID, projected to client-facing fields `{id, name, type, max_hp, base_attack, base_defense, loot_table_id, description, is_capturable, capture_chance, pet_hunger_per_hour}` (internal combat/loot loadouts omitted). |
 | GET | `/dictionary/constitutions` | Public constitution dictionary only. Returns an array of `{key, name, effects}`. |
 | GET | `/dictionary/races` | Public race dictionary only. Returns an array of `{key, name, effects}`. |
 | GET | `/dictionary/statuses` | Public status dictionary only. Returns an array of `{key, name, effects, default_duration_minutes, blocked_actions, description}`. |
@@ -120,8 +120,8 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/combat/cast-killer-move` |
 | POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Như `/combat/start`. |
-| GET | `/combat/history` |
-| GET | `/combat/history/:id` |
+| GET | `/combat/history` | 20 entry gần nhất, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). |
+| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. |
 
 ## Exploration and combat
 
@@ -131,11 +131,10 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `hub_nam_cuong`). |
 | POST | `/explore/retreat/:id` | |
 | POST | `/explore/flee/:id` | Bỏ chạy khỏi trận đang chiến. **Mỏ & PvP: luôn thành công, không phạt.** Còn lại: 70% thành công (BOSS/Tribulation 40%). Thành công → trừ 20% Max HP nếu là PvE thường (có thể ngất + rơi đồ). Thất bại → địch phản công; trả `flee_success:false` kèm `defeat` / `victory` (địch tự chết → thắng tại chỗ + nhận loot + xoá địch khỏi map) và `logs`. |
-| GET | `/explore/grid` | Viewport 5×5 quanh player; trả thêm `world_width`, `world_height`. Bỏ `explored_cells`. |
+| GET | `/explore/grid` | Viewport 5×5 quanh player; trả `{x, y, vision_radius, cells, stats (chỉ movement + investigation), players_on_map, ground_drops, world_width, world_height}` — đã bỏ `teleport_arrays` (frontend không dùng) và phần stat dư thừa. |
 | GET | `/explore/regions` | Danh sách zone (id, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`). `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
 | GET | `/explore/objects` | Các ô persistent (map_cells): village/trạm nghỉ, boss, linh tài — cho bản đồ lớn. Trả `{region_id,x,y,cell_type,content_id,rank,respawn_seconds,cleared}`. |
-| GET | `/explore/cells` | Các ô non-empty (Monster/Boss/Resource/WildGu) quanh player (`?x=&y=&r=`, mặc định quanh player, r cap 128) để bản đồ lớn vẽ marker quái/tài nguyên. Trạng thái cleared được đọc theo batch; nội dung **ổn định theo ô** (không re-randomize theo thời gian), khớp đúng nội dung khi di chuyển. Trả `[{x,y,cell_type,content,rank,sub_rank,region_id}]`. |
 | GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / dải phía trước hướng đi. Client cache theo chunk 64×64 và namespace khu vực; trạng thái cleared được đọc theo batch. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id}]`. |
 | POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
 | POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, log, combat_triggered, reached, skip_result?}` (đã tối ưu: loại bỏ `logs` mảng và `stats` thừa, `player` là snapshot cập nhật vị trí/sinh lực/trạng thái tinh gọn, tránh query DB dư thừa); nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
@@ -281,7 +280,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/gacha/pools` | Danh sách gói mở. |
+| GET | `/gacha/pools` | Danh sách gói mở: `{id, name, description, cost_type, cost_amount}` (bảng reward + trọng số chỉ nằm server-side). |
 | POST | `/gacha/open` | Mở N lần. Body: `{"pool_id": "...", "quantity": 10}` (`quantity` mặc định 1, tối đa 100; ≥ 10 được giảm 10% chi phí). Trúng Tiên Cổ đã tồn tại → **409**. |
 | POST | `/gacha/open10` | Tương đương `/gacha/open` với `quantity: 10` (giữ để tương thích). |
 
@@ -289,7 +288,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 | Method | Path |
 | --- | --- |
-| GET | `/sects` | Danh sách các tông môn (ẩn tọa độ bản đồ cụ thể x, y để bảo mật phòng thủ tông môn). |
+| GET | `/sects` | Danh sách các tông môn (ẩn tọa độ bản đồ cụ thể x, y để bảo mật phòng thủ tông môn). Redis cache 15s (khớp Cache-Control 15s của response). |
 | POST | `/sects/:id/join` |
 | POST | `/sects/join-request/cancel` |
 | POST | `/sects/leave` |

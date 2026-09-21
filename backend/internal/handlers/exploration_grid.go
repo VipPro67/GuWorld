@@ -47,6 +47,9 @@ func GetGrid(c *gin.Context) {
 	if visionRadius < 1 {
 		visionRadius = 1
 	}
+	// The client only reads movement + investigation; skip shipping the rest
+	// of the stat block in every viewport fetch.
+	gridStats := gin.H{"movement": stats["movement"], "investigation": stats["investigation"]}
 
 	// Cap the visual vision radius to 2 (corresponding to a 5x5 grid) to prevent UI breakage
 	visualVisionRadius := visionRadius
@@ -184,61 +187,20 @@ func GetGrid(c *gin.Context) {
 		}
 	}
 
-	// Teleport arrays within visible radius
-	type GridTeleportArray struct {
-		ID                string `json:"id"`
-		Name              string `json:"name"`
-		X                 int    `json:"x"`
-		Y                 int    `json:"y"`
-		RegionID          string `json:"region_id"`
-		Tier              string `json:"tier"`
-		DirectionType     string `json:"direction_type"`
-		AccessPolicy      string `json:"access_policy"`
-		FeeEnabled        bool   `json:"fee_enabled"`
-		FeeAmount         int64  `json:"fee_amount"`
-		FeeCurrency       string `json:"fee_currency"`
-		CurrentDurability int    `json:"current_durability"`
-		MaxDurability     int    `json:"max_durability"`
-		IsActive          bool   `json:"is_active"`
-		OwnerID           string `json:"owner_id"`
-	}
-	gridTeleportArrays := []GridTeleportArray{}
-	teleRows, errTele := tx.Query(`
-		SELECT id, name, x, y, region_id, tier, direction_type, access_policy,
-		       fee_enabled, fee_amount, fee_currency, current_durability, max_durability, is_active, owner_id
-		FROM teleport_arrays
-		WHERE region_id = $1
-		  AND x BETWEEN $2 AND $3
-		  AND y BETWEEN $4 AND $5
-	`, player.CurrentRegion, minX, maxX, minY, maxY)
-	if errTele == nil {
-		defer teleRows.Close()
-		for teleRows.Next() {
-			var t GridTeleportArray
-			if errScan := teleRows.Scan(
-				&t.ID, &t.Name, &t.X, &t.Y, &t.RegionID, &t.Tier, &t.DirectionType, &t.AccessPolicy,
-				&t.FeeEnabled, &t.FeeAmount, &t.FeeCurrency, &t.CurrentDurability, &t.MaxDurability, &t.IsActive, &t.OwnerID,
-			); errScan == nil {
-				gridTeleportArrays = append(gridTeleportArrays, t)
-			}
-		}
-	}
-
 	if err := tx.Commit(); err != nil {
 		logger.S.Error("GetGrid commit warning:", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"x":               player.X,
-		"y":               player.Y,
-		"vision_radius":   visualVisionRadius,
-		"cells":           cells,
-		"stats":           stats,
-		"players_on_map":  nearbyPlayers,
-		"ground_drops":    groundDrops,
-		"teleport_arrays": gridTeleportArrays,
-		"world_width":     WorldWidth,
-		"world_height":    WorldHeight,
+		"x":             player.X,
+		"y":             player.Y,
+		"vision_radius": visualVisionRadius,
+		"cells":         cells,
+		"stats":         gridStats,
+		"players_on_map": nearbyPlayers,
+		"ground_drops":  groundDrops,
+		"world_width":   WorldWidth,
+		"world_height":  WorldHeight,
 	})
 }
 

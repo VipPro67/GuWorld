@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -40,7 +41,35 @@ func GetPlayerStatus(c *gin.Context) {
 
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
-	c.JSON(http.StatusOK, player)
+	writeTrimmedPlayerStatus(c, player)
+}
+
+// playerStatusTrimmedFields are fields the status client never reads: auth
+// identifiers (referral code comes from /player/referrals), internal tick /
+// damage bookkeeping, and disguise values only meaningful to other viewers.
+var playerStatusTrimmedFields = []string{
+	"email", "google_id", "ref_code",
+	"last_hunger_tick_at", "dao_mark_damage", "aperture_damage", "body_mods",
+	"fake_rank", "fake_sub_rank", "fake_vital_gu",
+}
+
+// writeTrimmedPlayerStatus serializes the player and strips fields the game
+// client never consumes, instead of shipping the full row (~107 fields).
+func writeTrimmedPlayerStatus(c *gin.Context, player models.Player) {
+	raw, err := json.Marshal(player)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize player status"})
+		return
+	}
+	var out map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &out); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize player status"})
+		return
+	}
+	for _, k := range playerStatusTrimmedFields {
+		delete(out, k)
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 // GetPlayerInventoryGus returns the full Gu inventory of the authenticated player.

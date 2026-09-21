@@ -132,11 +132,14 @@ export interface PlayerPet {
   updated_at: string;
 }
 
+// List responses omit logs/combatants (fetched per entry via /combat/history/:id);
+// only logs_count is included for the list view.
 export interface CombatHistoryEntry {
   id: string;
   player_id: string;
   winner: string;
-  logs: ApiResponseData[];
+  logs?: ApiResponseData[];
+  logs_count?: number;
   summary: {
     total_damage_dealt: number;
     total_damage_taken: number;
@@ -146,7 +149,7 @@ export interface CombatHistoryEntry {
     stones_used: number;
     loot_count: number;
   };
-  combatants: ApiResponseData[];
+  combatants?: ApiResponseData[];
   enemy_name: string;
   enemy_type: string;
   region: string;

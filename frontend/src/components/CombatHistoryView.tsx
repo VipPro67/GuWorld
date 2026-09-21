@@ -111,7 +111,7 @@ export const CombatHistoryView: React.FC = () => {
                   <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {entry.region}</span>
                   <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> HP còn: {summary.final_player_hp ?? "?"}</span>
                   <span className="flex items-center gap-1"><Swords className="w-3 h-3" /> DMG: <Num value={summary.total_damage_dealt || 0} /></span>
-                  <span><Eye className="w-3 h-3 inline" /> {entry.logs?.length || 0} bước</span>
+                  <span><Eye className="w-3 h-3 inline" /> {entry.logs_count ?? entry.logs?.length ?? 0} bước</span>
                 </div>
               </div>
             );

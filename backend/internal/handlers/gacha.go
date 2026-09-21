@@ -87,8 +87,24 @@ var gachaPools = []GachaPool{
 }
 
 func GetGachaPools(c *gin.Context) {
+	// Only the pool metadata the UI renders; reward tables (exact drop
+	// weights) stay server-side.
+	type gachaPoolView struct {
+		ID          string  `json:"id"`
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		CostType    string  `json:"cost_type"`
+		CostAmount  float64 `json:"cost_amount"`
+	}
+	pools := make([]gachaPoolView, 0, len(gachaPools))
+	for _, p := range gachaPools {
+		pools = append(pools, gachaPoolView{
+			ID: p.ID, Name: p.Name, Description: p.Description,
+			CostType: p.CostType, CostAmount: p.CostAmount,
+		})
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"pools": gachaPools,
+		"pools": pools,
 	})
 }
 

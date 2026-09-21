@@ -91,6 +91,20 @@ func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP float64, ite
 	}
 }
 
+// CombatHistoryListEntry is the list-view projection: the full logs and
+// combatants JSONB blobs are only fetched per entry via GET /combat/history/:id.
+type CombatHistoryListEntry struct {
+	ID        string    `json:"id"`
+	PlayerID  string    `json:"player_id"`
+	Winner    string    `json:"winner"`
+	Summary   json.RawMessage `json:"summary"`
+	EnemyName string    `json:"enemy_name"`
+	EnemyType string    `json:"enemy_type"`
+	Region    string    `json:"region"`
+	LogsCount int       `json:"logs_count"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // ListCombatHistory returns the player's last 20 combat history entries.
 func ListCombatHistory(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
@@ -100,7 +114,8 @@ func ListCombatHistory(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(),
-		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
+		`SELECT id, player_id, winner, summary, enemy_name, enemy_type, region,
+		        COALESCE(jsonb_array_length(logs), 0), created_at
 		 FROM combat_history WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`,
 		authID,
 	)
@@ -110,17 +125,13 @@ func ListCombatHistory(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var entries []CombatHistoryEntry
+	entries := []CombatHistoryListEntry{}
 	for rows.Next() {
-		var e CombatHistoryEntry
-		if err := rows.Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Logs, &e.Summary, &e.Combatants, &e.EnemyName, &e.EnemyType, &e.Region, &e.CreatedAt); err != nil {
+		var e CombatHistoryListEntry
+		if err := rows.Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Summary, &e.EnemyName, &e.EnemyType, &e.Region, &e.LogsCount, &e.CreatedAt); err != nil {
 			continue
 		}
 		entries = append(entries, e)
-	}
-
-	if entries == nil {
-		entries = []CombatHistoryEntry{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"entries": entries})

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -284,8 +285,17 @@ type ExchangeVaultItemRequest struct {
 
 type VaultBuyRequest = ExchangeVaultItemRequest
 
-// GetSects lists all available sects with lightweight projection (omits heavy vault JSONB payloads and coordinates)
+// GetSects lists all available sects with lightweight projection (omits heavy vault JSONB payloads and coordinates).
+// Served from a short Redis cache (sectsListCacheKey, 15s) matching the client
+// Cache-Control window; shield staleness of up to 15s is acceptable for a list view.
 func GetSects(c *gin.Context) {
+	var cached []Sect
+	if err := cache.GetJSON(sectsListCacheKey, &cached); err == nil && cached != nil {
+		c.Header("Cache-Control", "public, max-age=15, stale-while-revalidate=30")
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, shield_until 
 		FROM sects 
@@ -297,7 +307,7 @@ func GetSects(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var sects []Sect
+	sects := []Sect{}
 	for rows.Next() {
 		var s Sect
 		s.VaultGu = json.RawMessage("[]")
@@ -309,9 +319,14 @@ func GetSects(c *gin.Context) {
 		}
 	}
 
+	_ = cache.SetJSON(sectsListCacheKey, sects, 15*time.Second)
+
 	c.Header("Cache-Control", "public, max-age=15, stale-while-revalidate=30")
 	c.JSON(http.StatusOK, sects)
 }
+
+// sectsListCacheKey keys the 15s sect list cache.
+const sectsListCacheKey = "sects_list"
 
 // JoinSect joins a player to a sect
 func JoinSect(c *gin.Context) {
