@@ -196,6 +196,12 @@ func schemaAperture() error {
 	`); err != nil {
 		return err
 	}
+	if err := execSchema("aperture_refinement_queue_status_upgrade", `
+	ALTER TABLE aperture_refinement_queue ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '';
+	ALTER TABLE aperture_refinement_queue ADD COLUMN IF NOT EXISTS last_processed_at TIMESTAMP WITH TIME ZONE;
+	`); err != nil {
+		return err
+	}
 
 	// --- Phase 2: Society Simulation columns ---
 	if err := execSchema("variant_humans_society_upgrade", `
