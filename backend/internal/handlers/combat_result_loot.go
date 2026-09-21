@@ -152,9 +152,19 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 					} else {
 						var uname string
 						_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
-						_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
+						if err := db.AddPlayerGu(tx, winnerID.String(), newGu); err != nil {
+							if db.IsImmortalConflict(err) {
+								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Tiên Cổ %s đã tồn tại trong thiên hạ, không thể thu phục.", guName))
+								continue
+							}
+							logger.S.Errorf("Failed to distribute loot Gu %s to %s: %v", gID, winnerID, err)
+							continue
+						}
 						lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, guName))
 					}
+					_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &winnerID, nil,
+						fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guName, newGu.Rank),
+						map[string]interface{}{"gu_name": guName})
 				}
 			} else {
 				stoneQty := loot.Items["primeval_stone"]
@@ -171,6 +181,9 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 						InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
 					}
 					player.GuInventory = append(player.GuInventory, newGu)
+					_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &player.ID, nil,
+						fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guSpec.Name, newGu.Rank),
+						map[string]interface{}{"gu_name": guSpec.Name})
 				}
 
 				var lootParts []string

@@ -605,6 +605,7 @@ func DropGu(c *gin.Context) {
 	}
 
 	droppedInstanceID := player.GuInventory[idx].InstanceID
+	droppedGu := player.GuInventory[idx]
 	newInv := models.GuInventory{}
 	for i, gu := range player.GuInventory {
 		if i != idx {
@@ -619,6 +620,10 @@ func DropGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
 		return
 	}
+	// Terminal log cho Tiên Cổ: thả = end lifecycle instance_id này.
+	_ = db.LogGuHistory(tx, droppedGu.InstanceID, droppedGu.GuID, droppedGu.Rank, "DROPPED_RELEASED", &player.ID, nil,
+		fmt.Sprintf("Cổ Sư [%s] thả Cổ trùng [%s] R%d, kết thúc vòng đời instance %s.", player.Username, droppedGu.GuID, droppedGu.Rank, droppedInstanceID),
+		map[string]interface{}{"terminal": true, "reason": "drop"})
 	_, err = tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, player.EquippedGus, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
@@ -691,9 +696,12 @@ func DropGus(c *gin.Context) {
 	}
 
 	newInv := models.GuInventory{}
+	droppedGus := []models.GuInstance{}
 	for _, gu := range player.GuInventory {
 		if !dropMap[gu.InstanceID] {
 			newInv = append(newInv, gu)
+		} else {
+			droppedGus = append(droppedGus, gu)
 		}
 	}
 	player.GuInventory = newInv
@@ -703,6 +711,11 @@ func DropGus(c *gin.Context) {
 	if err := db.RemovePlayerGusForPlayer(tx, player.ID.String(), req.GuInstanceIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
 		return
+	}
+	for _, dg := range droppedGus {
+		_ = db.LogGuHistory(tx, dg.InstanceID, dg.GuID, dg.Rank, "DROPPED_RELEASED", &player.ID, nil,
+			fmt.Sprintf("Cổ Sư [%s] thả Cổ trùng [%s] R%d, kết thúc vòng đời instance %s.", player.Username, dg.GuID, dg.Rank, dg.InstanceID),
+			map[string]interface{}{"terminal": true, "reason": "drop_batch"})
 	}
 	_, err = tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, player.EquippedGus, player.ID)
 	if err != nil {

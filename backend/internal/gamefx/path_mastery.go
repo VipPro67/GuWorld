@@ -48,9 +48,9 @@ func CalculatePathMasteryGain(guRank int, pathLevel int, baseGain int) int {
 //
 //	Level 0: Ordinary        (Phàm Thai)            points <  100
 //	Level 1: Master          (Đại Sư)               points >= 100
-//	Level 2: Grandmaster     (Tông Sư)              points >= 500
-//	Level 3: Great Grandmaster (Đại Tông Sư)        points >= 2500
-//	Level 4: Supreme Grandmaster (Vô Thượng)        points >= 10000
+//	Level 2: Grandmaster     (Tông Sư)              points >= 1.000
+//	Level 3: Great Grandmaster (Đại Tông Sư)        points >= 10.000
+//	Level 4: Supreme Grandmaster (Vô Thượng)        points >= 100.000
 //
 // The realm is a requirement for rank advancement, not gated by rank: to
 // advance to Rank 7 a player must own at least one path at Grandmaster
@@ -195,5 +195,5 @@ func PathMasteryBattleGainLimit(rank int) int {
 	if rank < 1 {
 		rank = 1
 	}
-	return rank ^ rank*10
+	return rank * 10
 }

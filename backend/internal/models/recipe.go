@@ -54,9 +54,14 @@ func (ur *UnlockedRecipesList) Scan(value interface{}) error {
 		*ur = UnlockedRecipesList{}
 		return nil
 	}
-	b, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	var b []byte
+	switch v := value.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	return json.Unmarshal(b, ur)
 }
@@ -66,7 +71,11 @@ func (ur UnlockedRecipesList) Value() (driver.Value, error) {
 	if ur == nil {
 		return "[]", nil
 	}
-	return json.Marshal(ur)
+	b, err := json.Marshal(ur)
+	if err != nil {
+		return "[]", err
+	}
+	return string(b), nil
 }
 
 // Scan implements the sql.Scanner interface for RequiredGusMap
@@ -75,9 +84,14 @@ func (rg *RequiredGusMap) Scan(value interface{}) error {
 		*rg = RequiredGusMap{}
 		return nil
 	}
-	b, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	var b []byte
+	switch v := value.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	return rg.UnmarshalJSON(b)
 }
@@ -121,7 +135,11 @@ func (rg RequiredGusMap) Value() (driver.Value, error) {
 	if rg == nil {
 		return "{}", nil
 	}
-	return json.Marshal(rg)
+	b, err := json.Marshal(rg)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // Scan implements the sql.Scanner interface for RequiredMaterialsMap
@@ -130,9 +148,14 @@ func (rm *RequiredMaterialsMap) Scan(value interface{}) error {
 		*rm = RequiredMaterialsMap{}
 		return nil
 	}
-	b, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	var b []byte
+	switch v := value.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	return json.Unmarshal(b, rm)
 }
@@ -142,5 +165,9 @@ func (rm RequiredMaterialsMap) Value() (driver.Value, error) {
 	if rm == nil {
 		return "{}", nil
 	}
-	return json.Marshal(rm)
+	b, err := json.Marshal(rm)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }

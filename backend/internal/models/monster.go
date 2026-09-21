@@ -99,6 +99,11 @@ type Combatant struct {
 	AvatarURL      string            `json:"avatar_url,omitempty"`
 	FullyGrown     []FullyGrownInfo  `json:"fully_grown,omitempty"`
 	CombatSettings *AutoCombatConfig `json:"combat_settings,omitempty"`
+	// HasNonConflictingDao mirrors the character's "non-conflicting dao marks"
+	// trait (Chí Tôn body or Gu passive with path_conflict_reduction >= 100).
+	// When true, offensive conflict penalty is removed and natural defensive
+	// resistance is zeroed out in DaoCombatProfile.
+	HasNonConflictingDao bool `json:"has_non_conflicting_dao,omitempty"`
 }
 
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {

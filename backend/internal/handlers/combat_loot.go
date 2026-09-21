@@ -158,6 +158,10 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 
 		if tx != nil {
 			if err := db.AddPlayerGu(tx, player.ID.String(), newInstance); err != nil {
+				if db.IsImmortalConflict(err) {
+					logger.S.Warnf("Skipped looted immortal Gu %s: already exists in world", guID)
+					continue
+				}
 				logger.S.Errorf("Failed to persist looted Gu %s to DB for player %s: %v", guID, player.ID, err)
 				continue // Skip if DB insertion failed
 			}

@@ -25,9 +25,13 @@ type GuHistoryLog struct {
 	CreatedAt  time.Time              `json:"created_at"`
 }
 
-// LogGuHistory records a history entry for a Gu instance (especially Immortal Gu Rank >= 6).
+// LogGuHistory records a history entry for a high-rank Gu instance (Rank >= 6).
+// Lower-rank events are dropped: gu_history_logs chỉ theo vết Tiên Cổ.
 func LogGuHistory(exec Execer, instanceID, guID string, rank int, eventType string, actorID, targetID *uuid.UUID, summary string, metadata map[string]interface{}) error {
 	if instanceID == "" || guID == "" {
+		return nil
+	}
+	if rank < 6 {
 		return nil
 	}
 

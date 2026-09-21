@@ -189,13 +189,27 @@ type AutoCombatConfig struct {
 	SkipBattle         bool               `json:"skip_battle"`
 }
 
+func scanBytes(value interface{}) ([]byte, bool) {
+	if value == nil {
+		return nil, true
+	}
+	switch v := value.(type) {
+	case []byte:
+		return v, true
+	case string:
+		return []byte(v), true
+	default:
+		return nil, false
+	}
+}
+
 // Scan implements the sql.Scanner interface for AutoCombatConfig.
 func (c *AutoCombatConfig) Scan(value interface{}) error {
 	if value == nil {
 		*c = DefaultAutoCombatConfig()
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanBytes(value)
 	if !ok {
 		*c = DefaultAutoCombatConfig()
 		logger.S.Warnf("AutoCombatConfig.Scan: unexpected type %T", value)
@@ -214,7 +228,11 @@ func (c *AutoCombatConfig) Scan(value interface{}) error {
 
 // Value implements the driver.Valuer interface for AutoCombatConfig.
 func (c AutoCombatConfig) Value() (driver.Value, error) {
-	return json.Marshal(c)
+	b, err := json.Marshal(c)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // DefaultAutoCombatConfig returns sensible defaults.
@@ -304,7 +322,7 @@ func (s *ImmortalState) Scan(value interface{}) error {
 		*s = ImmortalState{}
 		return nil
 	}
-	b, ok := value.([]byte)
+	b, ok := scanBytes(value)
 	if !ok {
 		*s = ImmortalState{}
 		return nil
@@ -318,7 +336,11 @@ func (s *ImmortalState) Scan(value interface{}) error {
 
 // Value implements the driver.Valuer interface for ImmortalState.
 func (s ImmortalState) Value() (driver.Value, error) {
-	return json.Marshal(s)
+	b, err := json.Marshal(s)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // Player represents a cultivator in the Gu World.
@@ -378,7 +400,7 @@ func (g *GrowthData) Scan(value interface{}) error {
 		*g = GrowthData{Boosts: GrowthBoosts{}, FullyGrown: []FullyGrownInfo{}}
 		return nil
 	}
-	b, ok := value.([]byte)
+	b, ok := scanBytes(value)
 	if !ok {
 		*g = GrowthData{Boosts: GrowthBoosts{}, FullyGrown: []FullyGrownInfo{}}
 		return nil
@@ -407,7 +429,11 @@ func (g GrowthData) MarshalJSON() ([]byte, error) {
 }
 
 func (g GrowthData) Value() (driver.Value, error) {
-	return json.Marshal(g)
+	b, err := json.Marshal(g)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 type EquippedGusList []string
@@ -419,9 +445,9 @@ func (e *EquippedGusList) Scan(value interface{}) error {
 		*e = EquippedGusList{}
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	return json.Unmarshal(bytes, e)
 }
@@ -431,7 +457,11 @@ func (e EquippedGusList) Value() (driver.Value, error) {
 	if e == nil {
 		return "[]", nil
 	}
-	return json.Marshal(e)
+	b, err := json.Marshal(e)
+	if err != nil {
+		return "[]", err
+	}
+	return string(b), nil
 }
 
 // Scan implements the sql.Scanner interface for ClearedCellsMap
@@ -440,9 +470,9 @@ func (c *ClearedCellsMap) Scan(value interface{}) error {
 		*c = ClearedCellsMap{}
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(bytes) == 0 || string(bytes) == "null" {
 		*c = ClearedCellsMap{}
@@ -457,7 +487,11 @@ func (c ClearedCellsMap) Value() (driver.Value, error) {
 	if c == nil {
 		return "{}", nil
 	}
-	return json.Marshal(c)
+	b, err := json.Marshal(c)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // Scan implements the sql.Scanner interface for GuInventory
@@ -466,9 +500,9 @@ func (g *GuInventory) Scan(value interface{}) error {
 		*g = GuInventory{}
 		return nil
 	}
-	b, ok := value.([]byte)
+	b, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(b) == 0 || string(b) == "null" {
 		*g = GuInventory{}
@@ -483,7 +517,11 @@ func (g GuInventory) Value() (driver.Value, error) {
 	if g == nil {
 		return "[]", nil
 	}
-	return json.Marshal(g)
+	b, err := json.Marshal(g)
+	if err != nil {
+		return "[]", err
+	}
+	return string(b), nil
 }
 
 // UnmarshalJSON handles both integer and float numbers from JSON to prevent unmarshal errors.
@@ -506,9 +544,9 @@ func (m *MaterialsInventory) Scan(value interface{}) error {
 		*m = MaterialsInventory{}
 		return nil
 	}
-	b, ok := value.([]byte)
+	b, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(b) == 0 || string(b) == "null" {
 		*m = MaterialsInventory{}
@@ -523,7 +561,11 @@ func (m MaterialsInventory) Value() (driver.Value, error) {
 	if m == nil {
 		return "{}", nil
 	}
-	return json.Marshal(m)
+	b, err := json.Marshal(m)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // UnmarshalJSON handles both integer and float numbers from JSON to prevent unmarshal errors.
@@ -546,9 +588,9 @@ func (d *DaoMarksMap) Scan(value interface{}) error {
 		*d = DaoMarksMap{}
 		return nil
 	}
-	b, ok := value.([]byte)
+	b, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(b) == 0 || string(b) == "null" {
 		*d = DaoMarksMap{}
@@ -563,7 +605,11 @@ func (d DaoMarksMap) Value() (driver.Value, error) {
 	if d == nil {
 		return "{}", nil
 	}
-	return json.Marshal(d)
+	b, err := json.Marshal(d)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // IsEmpty returns true if the CombatState has no active combat content.
@@ -583,13 +629,9 @@ func (c *CombatState) Scan(value interface{}) error {
 		*c = CombatState{}
 		return nil
 	}
-	b, ok := value.([]byte)
+	b, ok := scanBytes(value)
 	if !ok {
-		if s, ok := value.(string); ok {
-			b = []byte(s)
-		} else {
-			return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
-		}
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(b) == 0 || string(b) == "null" || string(b) == "{}" {
 		*c = CombatState{}
@@ -631,9 +673,9 @@ func (p *PathMasteriesMap) Scan(value interface{}) error {
 		*p = PathMasteriesMap{}
 		return nil
 	}
-	b, ok := value.([]byte)
+	b, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(b) == 0 || string(b) == "null" {
 		*p = PathMasteriesMap{}
@@ -648,7 +690,11 @@ func (p PathMasteriesMap) Value() (driver.Value, error) {
 	if p == nil {
 		return "{}", nil
 	}
-	return json.Marshal(p)
+	b, err := json.Marshal(p)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // Scan implements the sql.Scanner interface for BodyModsList
@@ -657,9 +703,9 @@ func (b *BodyModsList) Scan(value interface{}) error {
 		*b = BodyModsList{}
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(bytes) == 0 || string(bytes) == "null" {
 		*b = BodyModsList{}
@@ -674,7 +720,11 @@ func (b BodyModsList) Value() (driver.Value, error) {
 	if b == nil {
 		return "[]", nil
 	}
-	return json.Marshal(b)
+	bJSON, err := json.Marshal(b)
+	if err != nil {
+		return "[]", err
+	}
+	return string(bJSON), nil
 }
 
 // Scan implements the sql.Scanner interface for StatusList
@@ -683,9 +733,9 @@ func (s *StatusList) Scan(value interface{}) error {
 		*s = StatusList{}
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(bytes) == 0 || string(bytes) == "null" {
 		*s = StatusList{}
@@ -700,7 +750,11 @@ func (s StatusList) Value() (driver.Value, error) {
 	if s == nil {
 		return "[]", nil
 	}
-	return json.Marshal(s)
+	b, err := json.Marshal(s)
+	if err != nil {
+		return "[]", err
+	}
+	return string(b), nil
 }
 
 // UnmarshalJSON accepts both the current array-of-objects form and the legacy
@@ -735,9 +789,9 @@ func (v *VisitedSubZonesList) Scan(value interface{}) error {
 		*v = VisitedSubZonesList{}
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(bytes) == 0 || string(bytes) == "null" {
 		*v = VisitedSubZonesList{}
@@ -752,7 +806,11 @@ func (v VisitedSubZonesList) Value() (driver.Value, error) {
 	if v == nil {
 		return "[]", nil
 	}
-	return json.Marshal(v)
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "[]", err
+	}
+	return string(b), nil
 }
 
 type CompletedQuestsList []string
@@ -763,9 +821,9 @@ func (q *CompletedQuestsList) Scan(value interface{}) error {
 		*q = CompletedQuestsList{}
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanBytes(value)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 	if len(bytes) == 0 || string(bytes) == "null" {
 		*q = CompletedQuestsList{}
@@ -780,7 +838,11 @@ func (q CompletedQuestsList) Value() (driver.Value, error) {
 	if q == nil {
 		return "[]", nil
 	}
-	return json.Marshal(q)
+	b, err := json.Marshal(q)
+	if err != nil {
+		return "[]", err
+	}
+	return string(b), nil
 }
 
 // truncateJSON finds the end of the top-level JSON value in b and returns a

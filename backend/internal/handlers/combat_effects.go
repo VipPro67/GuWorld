@@ -97,7 +97,20 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		if len(guSpec.Path) > 0 {
 			pathKey = guSpec.Path[0]
 		}
-		profile := gamefx.BuildDaoCombatProfile(actor.DaoMarks, actor.PathMasteries, false, daoBonus)
+		hasNonConf := actor.HasNonConflictingDao
+		if !hasNonConf {
+			for _, g := range actor.GuInventory {
+				if !g.Equipped || g.Status != "ACTIVE" {
+					continue
+				}
+				spec, ok := models.GetGu(g.GuID, g.Rank)
+				if ok && spec.Effects.Passive != nil && spec.Effects.Passive.PathConflictReduction >= 100 {
+					hasNonConf = true
+					break
+				}
+			}
+		}
+		profile := gamefx.BuildDaoCombatProfile(actor.DaoMarks, actor.PathMasteries, hasNonConf, daoBonus)
 		daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
 		daoMultiplier = (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
 		masteryMultiplier = 1.0 // integrated in DaoCombatProfile

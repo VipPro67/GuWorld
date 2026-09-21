@@ -3,17 +3,20 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"unicode"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -278,13 +281,25 @@ func UpdateProfileSettings(c *gin.Context) {
 		}
 		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6, password_hash = $7, primeval_stones = $8, immortal_stones = $9, sub_rank = $10, wall_progress = $11, aperture_stress = $12, path_masteries = $13 WHERE id = $14`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, string(hash), player.PrimevalStones, player.ImmortalStones, player.SubRank, player.WallProgress, player.ApertureStress, player.PathMasteries, player.ID)
 		if err != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+				c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
+				return
+			}
+			logger.S.Errorf("Failed to update profile settings for player %s: %v", player.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu cài đặt hồ sơ: " + err.Error()})
 			return
 		}
 	} else {
 		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6, primeval_stones = $7, immortal_stones = $8, sub_rank = $9, wall_progress = $10, aperture_stress = $11, path_masteries = $12 WHERE id = $13`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, player.PrimevalStones, player.ImmortalStones, player.SubRank, player.WallProgress, player.ApertureStress, player.PathMasteries, player.ID)
 		if err != nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+				c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
+				return
+			}
+			logger.S.Errorf("Failed to update profile settings for player %s: %v", player.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu cài đặt hồ sơ: " + err.Error()})
 			return
 		}
 	}

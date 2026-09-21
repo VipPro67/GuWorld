@@ -638,6 +638,10 @@ func RefineGu(c *gin.Context) {
 	}
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		logger.S.Error("DEBUG SyncPlayerGus failed:", err)
+		if db.IsImmortalConflict(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})
 		return
 	}

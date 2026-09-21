@@ -2,12 +2,25 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
+
+// IsImmortalConflict reports whether err is a unique-violation from the
+// Tiên Cổ cross-rank indexes (uq_player_gu_immortal / uq_sect_vault_gu_immortal):
+// hai bên cùng tạo/rút cùng gu_id rank>=6, bên thua nhận conflict thay vì 500.
+func IsImmortalConflict(err error) bool {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		return pqErr.Constraint == "uq_player_gu_immortal" ||
+			pqErr.Constraint == "uq_sect_vault_gu_immortal"
+	}
+	return false
+}
 
 // Queryer is satisfied by both *sql.DB and *sql.Tx for read queries.
 type Queryer interface {

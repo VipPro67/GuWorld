@@ -31,7 +31,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/dictionary/regions` | Public wiki region dictionary only. |
 | GET | `/dictionary/monster-spawns` | Public wiki monster spawn dictionary only. |
 | GET | `/recipes` | Public refining recipes. Thêm query param ?all=true để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. |
-| GET | `/gus/:instance_id/history` | Lịch sử sở hữu/thay đổi của một cá thể Cổ. |
+| GET | `/gus/:instance_id/history` | Lịch sử vòng đời một cá thể Cổ (chỉ Tiên Cổ rank ≥ 6 có log). `instance_id` bất biến qua trade/bán/kho; destroy (thả/đói/chết) đóng timeline. |
 | POST | `/auth/send-otp` | Send OTP via email to register. |
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |
 | POST | `/auth/login` | Rate limited. |
@@ -110,7 +110,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/inventory/use-support` |
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |
-| POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). |
+| POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |
 | POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/killer-moves/calculate` |
 | POST | `/killer-moves` |
@@ -282,7 +282,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | GET | `/gacha/pools` | Danh sách gói mở. |
-| POST | `/gacha/open` | Mở N lần. Body: `{"pool_id": "...", "quantity": 10}` (`quantity` mặc định 1, tối đa 100; ≥ 10 được giảm 10% chi phí). |
+| POST | `/gacha/open` | Mở N lần. Body: `{"pool_id": "...", "quantity": 10}` (`quantity` mặc định 1, tối đa 100; ≥ 10 được giảm 10% chi phí). Trúng Tiên Cổ đã tồn tại → **409**. |
 | POST | `/gacha/open10` | Tương đương `/gacha/open` với `quantity: 10` (giữ để tương thích). |
 
 ## Sects
@@ -297,7 +297,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/sects/promote` |
 | POST | `/sects/donate/stones` |
 | POST | `/sects/donate/materials` |
-| POST | `/sects/donate/gu` |
+| POST | `/sects/donate/gu` | Quyên góp Cổ (giữ nguyên `instance_id`). Tiên Cổ đã tồn tại ở nơi khác → **409**; rút Tiên Cổ mỗi lần 1 instance. |
 | POST | `/sects/donate/recipe` | Quyên góp một Bí phương đã học. Body: `{"recipe_id": "..."}`. Nhận điểm cống hiến theo hạng Cổ trùng mục tiêu.
 | POST | `/sects/donate/bulk` | Quyên góp hàng loạt linh tài, cổ trùng và bí phương. Body: `{"materials": [{"material_id": "...", "amount": 5}], "gus": [{"gu_instance_id": "..."}], "recipes": [{"recipe_id": "..."}]}`.
 | POST | `/sects/vault/buy` | Đổi vật phẩm từ bảo khố. Body: `{"item_type": "gu|material|recipe", "item_id": "...", "quantity": 5}` (`quantity` mặc định 1; recipe chỉ nhận 1).

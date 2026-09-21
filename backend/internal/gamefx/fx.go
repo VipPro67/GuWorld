@@ -197,8 +197,9 @@ func Get(p *models.Player) Effects {
 			continue
 		}
 		addEffects(&fx, Effects{
-			Tenacity: spec.Effects.Passive.Tenacity,
-			CCResist: spec.Effects.Passive.CCResist,
+			Tenacity:                 spec.Effects.Passive.Tenacity,
+			CCResist:                 spec.Effects.Passive.CCResist,
+			NonConflictingDaoMarks:   spec.Effects.Passive.PathConflictReduction >= 100,
 		})
 	}
 

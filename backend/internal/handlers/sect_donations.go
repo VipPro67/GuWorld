@@ -388,7 +388,26 @@ func DonateGu(c *gin.Context) {
 	rowID := fmt.Sprintf("%s:%s", m.SectID, itemInstID)
 	donatedHunger := normalizeVaultGuHunger(guInstance.GuID, guInstance.Rank, float64(guInstance.Hunger))
 
-	_, err = tx.Exec(`
+	// Tiên Cổ rank>=6 giữ instance_id, không gộp quantity: 1 gu_id chỉ 1 row.
+	// Kiểm tra cross-rank (loại trừ chính instance đang donate) trước khi nhập kho.
+	if guInstance.Rank >= 6 {
+		if exists, err := db.CheckImmortalGuExists(tx, guInstance.GuID, guInstance.Rank, []string{guInstance.InstanceID}); err == nil && exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại ở nơi khác (kho/đấu giá/túi đồ)"})
+			return
+		}
+		var dup int
+		_ = tx.QueryRow(`SELECT COUNT(*) FROM sect_vault_gu WHERE gu_id = $1 AND rank >= 6 AND quantity > 0 AND instance_id <> $2`, guInstance.GuID, guInstance.InstanceID).Scan(&dup)
+		if dup > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại trong kho tông môn"})
+			return
+		}
+		_, err = tx.Exec(`
+			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
+			VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+			ON CONFLICT (id) DO NOTHING
+		`, rowID, m.SectID, guInstance.GuID, guInstance.Rank, vaultItemCost, donatedHunger, itemInstID)
+	} else {
+		_, err = tx.Exec(`
 		INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
 		VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
 		ON CONFLICT (id) DO UPDATE SET
@@ -397,6 +416,7 @@ func DonateGu(c *gin.Context) {
 			hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 			updated_at = NOW()
 	`, rowID, m.SectID, guInstance.GuID, guInstance.Rank, vaultItemCost, donatedHunger, itemInstID)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu: " + err.Error()})
 		return

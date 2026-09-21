@@ -276,6 +276,26 @@ func schemaSects() error {
 	CREATE INDEX IF NOT EXISTS idx_sect_vault_gu_gu_id ON sect_vault_gu (gu_id, rank);`); err != nil {
 		return err
 	}
+	// Tiên Cổ (rank>=6) trong kho: quantity luôn 1, 1 gu_id chỉ 1 row toàn server.
+	if err := execSchema("sect_vault_gu_immortal_rules", `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_sect_vault_gu_immortal_qty') THEN
+			ALTER TABLE sect_vault_gu
+			ADD CONSTRAINT chk_sect_vault_gu_immortal_qty CHECK (rank < 6 OR quantity <= 1) NOT VALID;
+		END IF;
+		IF NOT EXISTS (
+			SELECT 1 FROM sect_vault_gu WHERE rank >= 6 AND quantity > 0
+			GROUP BY gu_id HAVING COUNT(*) > 1
+		) THEN
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_vault_gu_immortal
+			ON sect_vault_gu (gu_id) WHERE rank >= 6 AND quantity > 0;
+		ELSE
+			RAISE NOTICE 'uq_sect_vault_gu_immortal skipped: duplicate immortal Gu in vault';
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
 
 	if err := execSchema("sect_vault_recipes", `
 	CREATE TABLE IF NOT EXISTS sect_vault_recipes (

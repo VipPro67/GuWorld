@@ -40,6 +40,24 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_gu_gu_id ON player_gu (gu_id);`); err != nil {
 		return err
 	}
+	// Tiên Cổ (rank>=6) duy nhất cross-rank toàn server: 1 gu_id chỉ 1 instance
+	// đang sống. Tạo index chỉ khi chưa có trùng (giữ row tạo sớm nhất), nếu
+	// trùng thì NOTICE để admin xử lý tay, không chặn startup, không xóa đồ user.
+	if err := execSchema("uq_player_gu_immortal", `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (
+			SELECT 1 FROM player_gu WHERE gu_rank >= 6 OR rank >= 6
+			GROUP BY gu_id HAVING COUNT(*) > 1
+		) THEN
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_player_gu_immortal
+			ON player_gu (gu_id) WHERE gu_rank >= 6 OR rank >= 6;
+		ELSE
+			RAISE NOTICE 'uq_player_gu_immortal skipped: duplicate immortal Gu exists';
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
 	if err := execSchema("player_gu_vital_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_gu_vital ON player_gu (player_id) WHERE is_vital = true;`); err != nil {
 		return err

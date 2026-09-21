@@ -237,6 +237,15 @@ func CreateListing(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Một số Cổ trùng không tìm thấy hoặc không thuộc sở hữu của đạo hữu"})
 			return
 		}
+		// Tiên Cổ rank>=6: mỗi đơn chỉ 1 instance, giữ instance_id xuyên suốt.
+		if len(gusToSell) > 1 {
+			for _, gu := range gusToSell {
+				if gu.Rank >= 6 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cổ (rank>=6) mỗi đơn chỉ đăng bán 1 instance"})
+					return
+				}
+			}
+		}
 
 		player.GuInventory = newInventory
 		player.EquippedGus = []string{}

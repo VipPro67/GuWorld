@@ -183,6 +183,10 @@ func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemDat
 			for i := int64(0); i < qty; i++ {
 				gu := gus[i]
 				if gu.InstanceID == "" {
+					// Tiên Cổ không được regen id: snapshot thiếu id = dữ liệu hỏng.
+					if gu.Rank >= 6 {
+						return fmt.Errorf("auction Gu %s R%d thiếu instance_id", gu.GuID, gu.Rank)
+					}
 					gu.InstanceID = uuid.New().String()
 				}
 				gu.Status = "SLEEPING"

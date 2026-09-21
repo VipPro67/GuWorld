@@ -513,6 +513,11 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 		cost = vgCost * quantity
+		// Tiên Cổ rank>=6: 1 lần chỉ rút 1 instance, giữ nguyên instance_id kho.
+		if vgRank >= 6 && quantity > 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cổ (rank>=6) mỗi lần chỉ rút 1 instance"})
+			return
+		}
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return

@@ -19,9 +19,18 @@ func (e *ItemEffects) Scan(value interface{}) error {
 		*e = ItemEffects{}
 		return nil
 	}
-	b, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	var b []byte
+	switch v := value.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
+	}
+	if len(b) == 0 || string(b) == "null" {
+		*e = ItemEffects{}
+		return nil
 	}
 	return json.Unmarshal(b, e)
 }
@@ -31,7 +40,11 @@ func (e ItemEffects) Value() (driver.Value, error) {
 	if e == nil {
 		return "{}", nil
 	}
-	return json.Marshal(e)
+	b, err := json.Marshal(e)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 // ItemSpec defines the static attributes for a type of item.

@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"math"
+	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -123,5 +125,54 @@ func TestApplyImmortalRenamePenalty(t *testing.T) {
 	}
 	if math.Abs(stressGain-100.0) > 0.001 {
 		t.Errorf("Rank 9: Expected stressGain 100, got %v", stressGain)
+	}
+}
+
+func TestUpdateProfileSettingsValidation(t *testing.T) {
+	invalidUsernames := []string{
+		"",
+		"ab",
+		"this_name_is_way_too_long_and_exceeds_thirty_characters",
+		"user@name!",
+		"cổ#sư",
+	}
+
+	for _, u := range invalidUsernames {
+		trimmed := strings.TrimSpace(u)
+		valid := len(trimmed) >= 3 && len(trimmed) <= 30
+		if valid {
+			for _, r := range trimmed {
+				if !unicode.IsLetter(r) && !unicode.IsSpace(r) && !unicode.IsDigit(r) {
+					valid = false
+					break
+				}
+			}
+		}
+		if valid {
+			t.Errorf("expected username %q to be invalid, but validation passed", u)
+		}
+	}
+
+	validUsernames := []string{
+		"Phương Viên",
+		"Bạch Ngưng Băng",
+		"GuMaster123",
+		"Tổ Tiên",
+	}
+
+	for _, u := range validUsernames {
+		trimmed := strings.TrimSpace(u)
+		valid := len(trimmed) >= 3 && len(trimmed) <= 30
+		if valid {
+			for _, r := range trimmed {
+				if !unicode.IsLetter(r) && !unicode.IsSpace(r) && !unicode.IsDigit(r) {
+					valid = false
+					break
+				}
+			}
+		}
+		if !valid {
+			t.Errorf("expected username %q to be valid, but validation failed", u)
+		}
 	}
 }

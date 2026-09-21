@@ -452,6 +452,11 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+		if db.IsImmortalConflict(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại trong thiên hạ, quay thưởng thất bại"})
+			fmt.Println("Gacha immortal conflict:", err)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
 		fmt.Println("Error saving player Gu inventory:", err)
 		return

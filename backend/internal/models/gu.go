@@ -208,9 +208,14 @@ func (g *GuEffects) Scan(value interface{}) error {
 		*g = GuEffects{}
 		return nil
 	}
-	b, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	var b []byte
+	switch v := value.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 
 	normalized, _, err := effectcatalog.NormalizeAndValidate(b)
@@ -304,7 +309,11 @@ func (a *ActiveEffect) normalize() {
 }
 
 func (g GuEffects) Value() (driver.Value, error) {
-	return json.Marshal(g)
+	b, err := json.Marshal(g)
+	if err != nil {
+		return "{}", err
+	}
+	return string(b), nil
 }
 
 func GetFlatGuEffects(gu Gu) map[string]float64 {
