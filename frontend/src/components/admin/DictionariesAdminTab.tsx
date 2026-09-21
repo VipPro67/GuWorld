@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Plus, Trash2, Edit3, RefreshCw, X, Shield, Activity, Users } from "lucide-react";
+import { Plus, RefreshCw, X, Shield, Activity, Users } from "lucide-react";
+import { AdminDataGrid, AdminGridColumn } from "./AdminDataGrid";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -83,11 +84,12 @@ export const DictionariesAdminTab: React.FC<{
       const url = isNew ? `${BACKEND_URL}${endpoint}` : `${BACKEND_URL}${endpoint}/${editItem.key}`;
       const method = isNew ? "POST" : "PUT";
       const body = { ...editItem };
-      if (typeof body.effects === "string") {
-        try { body.effects = JSON.parse(body.effects); } catch {}
-      }
-      if (type === "status" && typeof body.blocked_actions === "string") {
-        try { body.blocked_actions = JSON.parse(body.blocked_actions); } catch {}
+      try {
+        if (typeof body.effects === "string") body.effects = JSON.parse(body.effects);
+        if (type === "status" && typeof body.blocked_actions === "string") body.blocked_actions = JSON.parse(body.blocked_actions);
+      } catch {
+        addToast("Effects hoặc danh sách hành động bị chặn không phải JSON hợp lệ", "error");
+        return;
       }
       const res = await authFetch(url, {
         method,
@@ -132,6 +134,20 @@ export const DictionariesAdminTab: React.FC<{
   const title =
     type === "constitution" ? "Từ điển Thể chất" : type === "race" ? "Từ điển Chủng tộc" : "Từ điển Trạng thái";
 
+  const columns: AdminGridColumn<ApiResponseData>[] = [
+    { key: "key", label: "Key", value: (item) => item.key, className: "font-mono font-bold text-amber-400" },
+    { key: "name", label: "Tên", value: (item) => item.name, className: "font-semibold text-zinc-200" },
+    ...(type === "constitution" ? [{ key: "tier", label: "Tầng", value: (item: ApiResponseData) => item.tier, className: "font-mono text-emerald-400" }] : []),
+    ...(type === "status" ? [{ key: "duration", label: "Thời gian", value: (item: ApiResponseData) => item.default_duration_minutes, render: (item: ApiResponseData) => `${item.default_duration_minutes ?? 0} phút` }] : []),
+    { key: "description", label: "Mô tả", value: (item) => item.description, className: "max-w-xs truncate text-zinc-400" },
+    { key: "effects", label: "Effects JSON", value: (item) => item.effects, render: (item) => <span className="block max-w-xs truncate font-mono text-[10px] text-zinc-500">{JSON.stringify(item.effects)}</span> },
+  ];
+
+  const copyItem = (item: ApiResponseData) => {
+    setIsNew(true);
+    setEditItem({ ...structuredClone(item), key: "" });
+  };
+
   return (
     <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-5 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -170,62 +186,9 @@ export const DictionariesAdminTab: React.FC<{
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
-              <th className="py-2.5 px-3">Key</th>
-              <th className="py-2.5 px-3">Tên</th>
-              {type === "constitution" && <th className="py-2.5 px-3">Tầng (Tier)</th>}
-              {type === "status" && <th className="py-2.5 px-3">Thời gian (Phút)</th>}
-              <th className="py-2.5 px-3">Mô tả</th>
-              <th className="py-2.5 px-3">Hiệu ứng (Effects JSON)</th>
-              <th className="py-2.5 px-3 text-right">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-center py-6 text-zinc-500 italic">
-                  {loading ? "Đang tải dữ liệu..." : "Chưa có dữ liệu"}
-                </td>
-              </tr>
-            ) : (
-              data.map((item) => (
-                <tr key={item.key} className="hover:bg-zinc-900/50">
-                  <td className="py-2.5 px-3 font-mono font-bold text-amber-400">{item.key}</td>
-                  <td className="py-2.5 px-3 font-semibold text-zinc-200">{item.name}</td>
-                  {type === "constitution" && <td className="py-2.5 px-3 font-mono text-emerald-400">{item.tier}</td>}
-                  {type === "status" && <td className="py-2.5 px-3 font-mono text-sky-400">{item.default_duration_minutes}</td>}
-                  <td className="py-2.5 px-3 text-zinc-400 max-w-xs truncate">{item.description || "-"}</td>
-                  <td className="py-2.5 px-3 font-mono text-[10px] text-zinc-500 max-w-xs truncate">
-                    {JSON.stringify(item.effects)}
-                  </td>
-                  <td className="py-2.5 px-3 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => {
-                          setIsNew(false);
-                          setEditItem({ ...item });
-                        }}
-                        className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-amber-400 cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.key)}
-                        className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-rose-400 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <AdminDataGrid rows={data} columns={columns} rowKey={(item) => item.key} loading={loading}
+        onEdit={(item) => { setIsNew(false); setEditItem(structuredClone(item)); }}
+        onCopy={copyItem} onDelete={(item) => handleDelete(item.key)} />
 
       {/* Edit / Create Modal */}
       {editItem && (
@@ -252,6 +215,13 @@ export const DictionariesAdminTab: React.FC<{
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 disabled:opacity-60"
                 />
               </div>
+
+              {type === "status" && (
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hành động bị chặn (JSON array)</label>
+                  <textarea value={typeof editItem.blocked_actions === "string" ? editItem.blocked_actions : JSON.stringify(editItem.blocked_actions ?? [], null, 2)} onChange={(e) => setEditItem({ ...editItem, blocked_actions: e.target.value })} rows={3} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 font-mono text-[11px] mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              )}
 
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Tên hiển thị</label>

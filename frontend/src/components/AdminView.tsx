@@ -3518,7 +3518,7 @@ export const AdminView: React.FC = () => {
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Bug className="w-4 h-4 text-amber-400" />Danh Sách Cổ Trùng</h3>
-                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Attack", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {}, other: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {}, other: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
               </div>
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
