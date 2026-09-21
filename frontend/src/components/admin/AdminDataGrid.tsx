@@ -21,6 +21,9 @@ type Props<T> = {
   emptyLabel?: string;
   pageSizeOptions?: number[];
   searchValue?: (row: T) => unknown;
+  showSearch?: boolean;
+  showPagination?: boolean;
+  sortable?: boolean;
   onEdit?: (row: T) => void;
   onCopy?: (row: T) => void;
   onDelete?: (row: T) => void;
@@ -48,6 +51,9 @@ export function AdminDataGrid<T>({
   emptyLabel = "Chưa có dữ liệu",
   pageSizeOptions = [10, 25, 50],
   searchValue = (row) => row,
+  showSearch = true,
+  showPagination = true,
+  sortable = true,
   onEdit,
   onCopy,
   onDelete,
@@ -64,15 +70,17 @@ export function AdminDataGrid<T>({
     const filtered = normalizedQuery
       ? rows.filter((row) => searchable(searchValue(row)).includes(normalizedQuery))
       : [...rows];
-    const sortColumn = columns.find((column) => column.key === sortKey);
+    const sortColumn = sortable ? columns.find((column) => column.key === sortKey) : undefined;
     if (sortColumn) {
       filtered.sort((left, right) => compareValues(sortColumn.value(left), sortColumn.value(right)) * (sortDirection === "asc" ? 1 : -1));
     }
     return filtered;
-  }, [columns, query, rows, searchValue, sortDirection, sortKey]);
+  }, [columns, query, rows, searchValue, sortable, sortDirection, sortKey]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const visibleRows = filteredRows.slice((Math.min(page, totalPages) - 1) * pageSize, Math.min(page, totalPages) * pageSize);
+  const visibleRows = showPagination
+    ? filteredRows.slice((Math.min(page, totalPages) - 1) * pageSize, Math.min(page, totalPages) * pageSize)
+    : filteredRows;
 
   useEffect(() => setPage(1), [query, pageSize]);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
@@ -90,10 +98,10 @@ export function AdminDataGrid<T>({
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 sm:max-w-md">
+        {showSearch && <div className="relative flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
           <input aria-label="Tìm kiếm dữ liệu" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-9 pr-3 text-xs text-zinc-200 placeholder:text-zinc-500" />
-        </div>
+        </div>}
         <div className="text-[11px] text-zinc-500">Đã chọn <span className="font-bold text-amber-400">{selected.size}</span> · {filteredRows.length}/{rows.length} dòng</div>
       </div>
       <div className="max-h-[560px] overflow-auto rounded-xl border border-zinc-800/80">
@@ -102,11 +110,11 @@ export function AdminDataGrid<T>({
             <tr>
               <th className="px-3 py-2.5"><input aria-label="Chọn tất cả dòng trên trang" type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} /></th>
               {columns.map((column) => <th key={column.key} onClick={() => {
-                if (column.sortable === false) return;
+                if (!sortable || column.sortable === false) return;
                 if (sortKey === column.key) setSortDirection((direction) => direction === "asc" ? "desc" : "asc");
                 else { setSortKey(column.key); setSortDirection("asc"); }
-              }} className={`px-3 py-2.5 font-semibold ${column.sortable === false ? "" : "cursor-pointer select-none hover:text-zinc-200"} ${sortKey === column.key ? "text-amber-400" : ""}`}>
-                {column.label}{sortKey === column.key ? (sortDirection === "asc" ? " ▲" : " ▼") : ""}
+              }} className={`px-3 py-2.5 font-semibold ${!sortable || column.sortable === false ? "" : "cursor-pointer select-none hover:text-zinc-200"} ${sortable && sortKey === column.key ? "text-amber-400" : ""}`}>
+                {column.label}{sortable && sortKey === column.key ? (sortDirection === "asc" ? " ▲" : " ▼") : ""}
               </th>)}
               {(onEdit || onCopy || onDelete) && <th className="px-3 py-2.5 text-right">Thao tác</th>}
             </tr>
@@ -128,10 +136,10 @@ export function AdminDataGrid<T>({
           </tbody>
         </table>
       </div>
-      <div className="flex flex-col gap-2 text-[11px] text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
+      {showPagination && <div className="flex flex-col gap-2 text-[11px] text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
         <label>Hiển thị <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="mx-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-zinc-200">{pageSizeOptions.map((size) => <option key={size}>{size}</option>)}</select> dòng/trang</label>
         <div className="flex items-center gap-2"><span>Trang {Math.min(page, totalPages)}/{totalPages}</span><button aria-label="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="rounded border border-zinc-700 bg-zinc-800 p-1 text-zinc-300 disabled:opacity-40"><ChevronLeft className="h-3.5 w-3.5" /></button><button aria-label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)} className="rounded border border-zinc-700 bg-zinc-800 p-1 text-zinc-300 disabled:opacity-40"><ChevronRight className="h-3.5 w-3.5" /></button></div>
-      </div>
+      </div>}
     </div>
   );
 }
