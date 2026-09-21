@@ -288,7 +288,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   },
 
   movePath: async (x: number, y: number) => {
-    set({ isMoving: true, error: null });
+    // WorldCanvas owns the complete visual walk lifecycle. A transport request
+    // finishing is not the same as the chained movement finishing.
+    set({ error: null });
     try {
       if (wsManager.isConnected()) {
         return await wsManager.request<{
@@ -316,7 +318,6 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         }
         useUIStore.getState().addToast(msg, "error");
         set((s) => ({
-          isMoving: false,
           error: null,
           worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
         }));
@@ -329,12 +330,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       useGameStore.getState().addToast(msg, "error");
       set((s) => ({
         error: null,
-        isMoving: false,
         worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
       }));
       return null;
-    } finally {
-      set({ isMoving: false });
     }
   },
 

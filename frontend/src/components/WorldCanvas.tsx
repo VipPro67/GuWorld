@@ -41,6 +41,32 @@ const MIN_CAMERA_SCALE = 4;
 const MAX_CAMERA_SCALE = 40;
 const LIVE_POSITION_SYNC_MS = 100;
 const CELL_AOI_DIAMETER = 254;
+// Must match MovePlayerPath's bounded server segment. Prediction only affects
+// presentation; every resulting position is still reconciled with the server.
+const MOVE_PATH_SEGMENT_CELLS = 5;
+
+function predictedSegmentEnd(x0: number, y0: number, x1: number, y1: number): { x: number; y: number } {
+  let x = x0;
+  let y = y0;
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let error = dx - dy;
+
+  for (let step = 0; step < MOVE_PATH_SEGMENT_CELLS && (x !== x1 || y !== y1); step++) {
+    const doubledError = 2 * error;
+    if (doubledError > -dy) {
+      error -= dy;
+      x += sx;
+    }
+    if (doubledError < dx) {
+      error += dx;
+      y += sy;
+    }
+  }
+  return { x, y };
+}
 
 function cameraMinScale(app: Application | null): number {
   if (!app) return MIN_CAMERA_SCALE;
@@ -92,13 +118,13 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const lastCameraSyncRef = useRef(0);
   const isMovingRef = useRef(false);
   const walkVersionRef = useRef(0);
+  const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
   const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk }>>(new Map());
   const monsterLabelRenderKeyRef = useRef("");
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
   const nextRenderObjectIdRef = useRef(1);
   const scheduleMonsterChunkSyncRef = useRef<() => void>(() => {});
-  const performMoveRef = useRef<(x: number, y: number) => void>(() => {});
   const loadedTilesRef = useRef<Set<string>>(new Set());
 
   const regions = useGameStore((s) => s.regions);
@@ -332,9 +358,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       const step = (now: number) => {
         const t = Math.min((now - start) / (duration * 1000), 1);
-        const eased = 1 - Math.pow(1 - t, 3);
-        const cx = startX + (targetX - startX) * eased;
-        const cy = startY + (targetY - startY) * eased;
+        // Constant velocity prevents a visible slow-down at every five-cell
+        // server segment and makes adjacent segments read as one continuous walk.
+        const cx = startX + (targetX - startX) * t;
+        const cy = startY + (targetY - startY) * t;
         playerRef.current.position.set(cx, cy);
         // Pixi owns the frame-by-frame position. Publishing to Zustand on every
         // animation frame caused WorldPage and every coordinate subscriber to
@@ -370,23 +397,24 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const startX = playerRef.current.position.x;
       const startY = playerRef.current.position.y;
       const dist = Math.hypot(targetX + 0.5 - startX, targetY + 0.5 - startY);
+      const confirmed = confirmedPositionRef.current;
+      const confirmedDist = confirmed
+        ? Math.hypot(targetX + 0.5 - confirmed.x, targetY + 0.5 - confirmed.y)
+        : dist;
 
-      // Clicking the cell the character is already on acts as "stop": cancel
-      // any in-flight move (including a pending server segment) and settle.
-      if (dist < 1) {
-        if (isMovingRef.current) {
-          walkVersionRef.current += 1;
-          cancelAnimationFrame(animIdRef.current);
-          isMovingRef.current = false;
-          setMoving(false);
-        }
+      // A server mutation cannot be cancelled once sent. While one is in
+      // flight, coalesce input into the latest desired destination instead of
+      // issuing overlapping requests and discarding an authoritative response.
+      if (isMovingRef.current) {
+        moveTargetRef.current = dist < 1 || confirmedDist < 1 ? null : { x: targetX, y: targetY };
         return;
       }
 
-      // Retargeting: always accept the new destination. Bumping the version
-      // invalidates any in-flight walk chain so it stops issuing segments to
-      // the old target. A fresh chain then walks from the last server-confirmed
-      // position toward the new goal.
+      // Clicking the cell the character is already on while idle is a no-op.
+      if (dist < 1) {
+        return;
+      }
+
       moveTargetRef.current = { x: targetX, y: targetY };
       walkVersionRef.current += 1;
       const myVersion = walkVersionRef.current;
@@ -395,24 +423,81 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         isMovingRef.current = true;
         setMoving(true);
       }
-      // Last server-confirmed position (used to reset the marker on failure).
-      const origin = { x: startX, y: startY };
+      const player = useGameStore.getState().player;
+      confirmedPositionRef.current = player
+        ? { x: player.x + 0.5, y: player.y + 0.5 }
+        : { x: startX, y: startY };
 
       const walk = (tx: number, ty: number) => {
         if (walkVersionRef.current !== myVersion) return;
+        const confirmed = confirmedPositionRef.current ?? {
+          x: playerRef.current.position.x,
+          y: playerRef.current.position.y,
+        };
+        const predicted = predictedSegmentEnd(
+          Math.round(confirmed.x - 0.5),
+          Math.round(confirmed.y - 0.5),
+          tx,
+          ty,
+        );
+        const predictedX = predicted.x + 0.5;
+        const predictedY = predicted.y + 0.5;
+        const predictedDistance = Math.hypot(
+          predictedX - playerRef.current.position.x,
+          predictedY - playerRef.current.position.y,
+        );
+        let response: Awaited<ReturnType<typeof movePath>> | undefined;
+        let predictionFinished = false;
+
+        // Start walking immediately along the same bounded Bresenham segment
+        // as the backend. Network latency is hidden behind this visual tween;
+        // the response below remains authoritative if an encounter stops early.
+        animateMove(predictedX, predictedY, Math.max(0.08, predictedDistance / movementSpeed), () => {
+          predictionFinished = true;
+          if (response !== undefined && response !== null) reconcile(response, predictedX, predictedY, tx, ty);
+        });
+
         movePath(tx, ty).then((res) => {
           if (walkVersionRef.current !== myVersion) return;
+          response = res;
           if (!res) {
             cancelAnimationFrame(animIdRef.current);
             isMovingRef.current = false;
             setMoving(false);
-            playerRef.current.position.set(origin.x, origin.y);
+            moveTargetRef.current = null;
+            const lastConfirmed = confirmedPositionRef.current;
+            if (lastConfirmed) {
+              animateMove(lastConfirmed.x, lastConfirmed.y, 0.15);
+            }
             return;
           }
+          const responseMatchedPrediction = res.player.x + 0.5 === predictedX && res.player.y + 0.5 === predictedY;
+          if (predictionFinished || !responseMatchedPrediction) {
+            reconcile(res, predictedX, predictedY, tx, ty);
+          }
+        });
+
+        const reconcile = (
+          res: NonNullable<Awaited<ReturnType<typeof movePath>>>,
+          expectedX: number,
+          expectedY: number,
+          requestedX: number,
+          requestedY: number,
+        ) => {
+          if (walkVersionRef.current !== myVersion) return;
           const np = res.player;
           if (np) {
-            const animDist = Math.hypot(np.x + 0.5 - playerRef.current.position.x, np.y + 0.5 - playerRef.current.position.y);
-            const duration = Math.max(0.25, animDist / movementSpeed);
+            const authoritativeX = np.x + 0.5;
+            const authoritativeY = np.y + 0.5;
+            confirmedPositionRef.current = { x: authoritativeX, y: authoritativeY };
+            const correctionDistance = Math.hypot(
+              authoritativeX - playerRef.current.position.x,
+              authoritativeY - playerRef.current.position.y,
+            );
+            const predictionMatched = authoritativeX === expectedX && authoritativeY === expectedY;
+            const duration = predictionMatched
+              ? 0
+              : Math.min(0.2, Math.max(0.08, correctionDistance / movementSpeed));
 
             if (Array.isArray(res.synced_party_members)) {
               for (const sm of res.synced_party_members) {
@@ -427,7 +512,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
               }
             }
 
-            animateMove(np.x + 0.5, np.y + 0.5, duration, () => {
+            const finishSegment = () => {
               if (walkVersionRef.current !== myVersion) return;
               setPlayerFromServer(np);
               setExploredSubZones(np.visited_subzones || []);
@@ -447,7 +532,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
                 }
               }
 
-              if (!res.reached && !res.combat_triggered) {
+              const desired = moveTargetRef.current;
+              const hasAnotherDestination = Boolean(
+                desired && (desired.x !== np.x || desired.y !== np.y),
+              );
+              if (!res.combat_triggered && hasAnotherDestination) {
                 const skipRes = res.skip_result as { winner?: string } | undefined;
                 if (skipRes && skipRes.winner !== "Phe Ta") {
                   isMovingRef.current = false;
@@ -455,42 +544,37 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
                   selectObject(null);
                   return;
                 }
-                const desired = moveTargetRef.current;
-                if (desired && (desired.x !== tx || desired.y !== ty)) {
-                  // The goal changed while this segment was in flight: begin a
-                  // fresh chain toward the new destination.
+                if (desired) walk(desired.x, desired.y);
+                else {
                   isMovingRef.current = false;
-                  performMoveRef.current(desired.x, desired.y);
-                } else {
-                  walk(tx, ty);
+                  setMoving(false);
                 }
               } else {
                 isMovingRef.current = false;
                 setMoving(false);
                 const currentDrops = useGameStore.getState().groundDrops;
-                const dropAtTarget = currentDrops.find((d) => d.x === tx && d.y === ty);
+                const dropAtTarget = currentDrops.find((d) => d.x === requestedX && d.y === requestedY);
                 if (dropAtTarget) {
                   useGameStore.getState().lootGroundDrop(dropAtTarget.id);
                 } else {
                   selectObject(null);
                 }
               }
-            });
+            };
+
+            if (duration === 0) finishSegment();
+            else animateMove(authoritativeX, authoritativeY, duration, finishSegment);
           } else {
             isMovingRef.current = false;
             setMoving(false);
           }
-        });
+        };
       };
 
       walk(targetX, targetY);
     },
     [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject, upsertPlayerPosition],
   );
-
-  useEffect(() => {
-    performMoveRef.current = performMove;
-  }, [performMove]);
 
   const handleObjectClick = useCallback(
     (obj: WorldObject) => {
@@ -661,8 +745,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const curPlayer = useGameStore.getState().player;
       if (!curPlayer) return;
 
-      const currentX = playerRef.current?.position.x ? Math.round(playerRef.current.position.x - 0.5) : curPlayer.x;
-      const currentY = playerRef.current?.position.y ? Math.round(playerRef.current.position.y - 0.5) : curPlayer.y;
+      const queuedTarget = moveTargetRef.current;
+      const confirmed = confirmedPositionRef.current;
+      const currentX = queuedTarget?.x ?? (confirmed ? Math.round(confirmed.x - 0.5) : curPlayer.x);
+      const currentY = queuedTarget?.y ?? (confirmed ? Math.round(confirmed.y - 0.5) : curPlayer.y);
 
       const targetX = Math.max(0, Math.min(WORLD_W - 1, currentX + dx));
       const targetY = Math.max(0, Math.min(WORLD_H - 1, currentY + dy));
