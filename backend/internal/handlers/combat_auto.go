@@ -639,6 +639,99 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	return simEnemy
 }
 
+// statusStatFactor returns the multiplicative factor the player's active
+// statuses apply to one stat ("attack"/"defense"/...): the product of
+// (1 + stat_mod) over every active status. Used to scale Gu skill / killer
+// move action output so suppression (e.g. Áp Chế Giới Vực −93% tấn công)
+// visibly weakens skills instead of being diluted inside the additive
+// (DamageFlat + attack) skill formula. Clamped at 0 (never negative).
+func statusStatFactor(player *models.Player, stat string) float64 {
+	if player == nil || len(player.Statuses) == 0 {
+		return 1
+	}
+	factor := 1.0
+	for _, st := range player.Statuses.Active() {
+		for _, def := range gamefx.AllStatuses() {
+			if def.Key != st.ID {
+				continue
+			}
+			if pct := def.EffectsForValue(st.Value).StatMods[stat]; pct != 0 {
+				factor *= (1.0 + pct)
+			}
+			break
+		}
+	}
+	if factor < 0 {
+		return 0
+	}
+	return factor
+}
+
+// buildStatProvenance itemizes how active statuses modified the player's
+// combat stats, by re-running the stat pipeline with the percentage stat_mods
+// statuses stripped. Attached to simulator combatants so the battle breakdown
+// can show e.g. "Trọng Thương −50%" provenance. Returns nil when no active
+// status modifies attack/defense/speed/healing_received.
+func buildStatProvenance(player *models.Player, finalStats map[string]float64, finalHealingReceived float64) map[string]*simulator.StatProvenance {
+	if player == nil || len(player.Statuses) == 0 {
+		return nil
+	}
+
+	// Flat buff statuses (buff_atk/def/speed/hp) are kept in the base snapshot
+	// so the base→final delta isolates exactly the percentage stat_mods.
+	basePlayer := *player
+	basePlayer.Statuses = nil
+	for _, st := range player.Statuses {
+		switch st.ID {
+		case "buff_atk", "buff_def", "buff_speed", "buff_hp":
+			basePlayer.Statuses = append(basePlayer.Statuses, st)
+		}
+	}
+	baseStats := CalculatePlayerStats(&basePlayer)
+	baseHealing := gamefx.Get(&basePlayer).HealingReceivedBonus
+
+	modsByStat := map[string][]simulator.StatModSource{}
+	for _, st := range player.Statuses.Active() {
+		for _, def := range gamefx.AllStatuses() {
+			if def.Key != st.ID {
+				continue
+			}
+			eff := def.EffectsForValue(st.Value)
+			add := func(stat string, pct float64) {
+				if pct == 0 {
+					return
+				}
+				modsByStat[stat] = append(modsByStat[stat], simulator.StatModSource{Key: def.Key, Name: def.Name, Pct: pct})
+			}
+			add("attack", eff.StatMods["attack"])
+			add("defense", eff.StatMods["defense"])
+			add("speed", eff.StatMods["speed"])
+			add("healing_received", eff.HealingReceivedBonus)
+			break
+		}
+	}
+
+	out := map[string]*simulator.StatProvenance{}
+	for stat, mods := range modsByStat {
+		if len(mods) == 0 {
+			continue
+		}
+		pv := &simulator.StatProvenance{Stat: stat, Mods: mods}
+		if stat == "healing_received" {
+			pv.BaseValue = baseHealing
+			pv.FinalValue = finalHealingReceived
+		} else {
+			pv.BaseValue = baseStats[stat]
+			pv.FinalValue = finalStats[stat]
+		}
+		out[stat] = pv
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // buildSimCombatant constructs a simulator.CombatantAuto from player + Gu loadout.
 // Shared by AutoCombatStart (combat_auto.go) and AutoResolveCombat (combat_auto_resolve.go).
 func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInitiator bool, reqLoadout *simulator.CombatLoadout) (*simulator.CombatantAuto, error) {
@@ -787,6 +880,12 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		}
 	}
 
+	// Status suppression/enhancement factors scale the whole action output of
+	// Gu skills and killer moves (not the basic attack, whose damage IS the
+	// suppressed attack stat).
+	attackFactor := statusStatFactor(player, "attack")
+	defenseFactor := statusStatFactor(player, "defense")
+
 	// Add selected Gus
 	for _, inst := range selectedGuInstances {
 		if spec, ok := resolveGuSpec(inst); ok {
@@ -797,6 +896,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 				}
 				act.SourceID = inst.GuID
 				act.InstanceID = inst.InstanceID
+				act.Damage *= attackFactor
+				act.Defense *= defenseFactor
 				allActions = append(allActions, act)
 			}
 		}
@@ -814,6 +915,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 				slots := slotsMap[kmID]
 				act := buildSimActionFromKillerMove(km, slots, player.DaoMarks)
 				act.SourceID = kmID
+				act.Damage *= attackFactor
+				act.Defense *= defenseFactor
 				allActions = append(allActions, act)
 			}
 		}
@@ -994,6 +1097,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		GuUsedCounts: make(map[string]int),
 		Mechanics:    combatantMechanics,
 	}
+	simCombatant.StatProvenance = buildStatProvenance(player, playerStats, charFX.HealingReceivedBonus)
 
 	if isInitiator && reqLoadout != nil {
 		simCombatant.Loadout = reqLoadout

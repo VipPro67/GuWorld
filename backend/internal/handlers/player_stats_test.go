@@ -3,6 +3,7 @@ package handlers
 import (
 	"testing"
 
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
@@ -126,5 +127,164 @@ func TestCombatSpeedNoDoubleCount(t *testing.T) {
 	if simCombatant.Speed != passiveSpeed {
 		t.Fatalf("expected combat speed %.2f to equal passive speed %.2f, got combat speed %.2f",
 			passiveSpeed, passiveSpeed, simCombatant.Speed)
+	}
+}
+
+// TestGetPassiveStats_StatusStatMods verifies that status stat_mods scale the
+// final stats (percentage on the accumulated total).
+func TestGetPassiveStats_StatusStatMods(t *testing.T) {
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 1, SubRank: 1},
+	}
+	player.Statuses = models.StatusList{{ID: "death_penalty"}}
+
+	result := GetPassiveStats(player)
+	// Base attack 10, defense 5, speed 10; death_penalty applies -50% to all.
+	if got := result.Stats["attack"]; got != 5 {
+		t.Fatalf("attack = %v, want 5 (10 * (1 - 0.5))", got)
+	}
+	if got := result.Stats["defense"]; got != 2.5 {
+		t.Fatalf("defense = %v, want 2.5", got)
+	}
+	if got := result.Stats["speed"]; got != 5 {
+		t.Fatalf("speed = %v, want 5", got)
+	}
+}
+
+// TestGetPassiveStats_StatFloorAtZero verifies a suppression stronger than
+// -100% floors the stat at zero instead of letting it go negative.
+func TestGetPassiveStats_StatFloorAtZero(t *testing.T) {
+	orig, hadOrig := gamefx.StatusRegistry["crush_test"]
+	gamefx.StatusRegistry["crush_test"] = gamefx.StatusDef{
+		Key:  "crush_test",
+		Name: "Áp Chế Thử Nghiệm",
+		Effects: gamefx.Effects{
+			StatMods: map[string]float64{"attack": -1.5, "defense": -1.5, "speed": -1.5},
+		},
+	}
+	defer func() {
+		if hadOrig {
+			gamefx.StatusRegistry["crush_test"] = orig
+		} else {
+			delete(gamefx.StatusRegistry, "crush_test")
+		}
+	}()
+
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 1, SubRank: 1},
+	}
+	player.Statuses = models.StatusList{{ID: "crush_test"}}
+
+	result := GetPassiveStats(player)
+	for _, key := range []string{"attack", "defense", "speed"} {
+		if got := result.Stats[key]; got != 0 {
+			t.Fatalf("%s = %v, want 0 (floored)", key, got)
+		}
+	}
+}
+
+// TestBuildStatProvenance verifies the status provenance snapshot: base stats
+// (statuses stripped) vs final stats, with the itemized status modifiers.
+func TestBuildStatProvenance(t *testing.T) {
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 1, SubRank: 1},
+	}
+	player.Statuses = models.StatusList{{ID: "death_penalty"}}
+
+	finalStats := CalculatePlayerStats(player)
+	pv := buildStatProvenance(player, finalStats, gamefx.Get(player).HealingReceivedBonus)
+	if pv == nil {
+		t.Fatal("expected provenance for death_penalty")
+	}
+
+	atk := pv["attack"]
+	if atk == nil {
+		t.Fatal("missing attack provenance")
+	}
+	if atk.BaseValue != 10 || atk.FinalValue != 5 {
+		t.Fatalf("attack provenance base/final = %v/%v, want 10/5", atk.BaseValue, atk.FinalValue)
+	}
+	if len(atk.Mods) != 1 || atk.Mods[0].Key != "death_penalty" || atk.Mods[0].Pct != -0.5 {
+		t.Fatalf("unexpected attack mods: %+v", atk.Mods)
+	}
+
+	if _, ok := pv["healing_received"]; ok {
+		t.Fatal("death_penalty has no healing_received, provenance must not include it")
+	}
+}
+
+// TestBuildSimCombatant_StatusFactorScalesSkillDamage verifies that status
+// stat_mods multiply the whole Gu skill output (not just the additive attack
+// component), so heavy suppression like Áp Chế visibly reduces skill damage.
+func TestBuildSimCombatant_StatusFactorScalesSkillDamage(t *testing.T) {
+	setupTestGuRegistry(t)
+	defer resetTestGuRegistry(t)
+
+	models.GuRegistry["GU_ACTIVE_DMG"] = map[int]models.GuDictionaryItem{
+		1: {
+			ID:   "GU_ACTIVE_DMG",
+			Name: "Sát Chủ Cổ",
+			Rank: 1,
+			Path: []string{"Fire Path"},
+			Effects: models.GuEffects{
+				Active: &models.ActiveEffect{DamageFlat: 100},
+			},
+		},
+	}
+
+	newPlayer := func() *models.Player {
+		return &models.Player{
+			CultivationState: models.CultivationState{Rank: 3, SubRank: 1},
+			GuInventory: models.GuInventory{
+				{InstanceID: "inst1", GuID: "GU_ACTIVE_DMG", Rank: 1, Status: "ACTIVE", Equipped: true, Hunger: 100},
+			},
+		}
+	}
+
+	clean, err := buildSimCombatant(nil, newPlayer(), true, true, nil)
+	if err != nil {
+		t.Fatalf("build clean combatant: %v", err)
+	}
+	wounded := newPlayer()
+	wounded.Statuses = models.StatusList{{ID: "death_penalty"}} // -50% attack/defense/speed
+	suppressed, err := buildSimCombatant(nil, wounded, true, true, nil)
+	if err != nil {
+		t.Fatalf("build suppressed combatant: %v", err)
+	}
+
+	var cleanSkill, supSkill, cleanBasic, supBasic float64
+	for _, a := range clean.Actions {
+		switch a.ActionType {
+		case "GU_SKILL":
+			cleanSkill = a.Damage
+		case "BASIC_ATTACK":
+			cleanBasic = a.Damage
+		}
+	}
+	for _, a := range suppressed.Actions {
+		switch a.ActionType {
+		case "GU_SKILL":
+			supSkill = a.Damage
+		case "BASIC_ATTACK":
+			supBasic = a.Damage
+		}
+	}
+
+	if cleanSkill <= 0 || supSkill <= 0 {
+		t.Fatalf("expected GU_SKILL damage on both builds, got clean=%v suppressed=%v", cleanSkill, supSkill)
+	}
+
+	// Rank 3 attack 30, suppressed to 15. Skill = (100 + atk) * 0.7 (no mastery) * factor.
+	// Clean: 130 * 0.7 = 91. Suppressed: (100 + 15) * 0.7 * 0.5 = 40.25.
+	if diff := supSkill - 40.25; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("suppressed skill damage = %v, want 40.25 (DamageFlat + suppressed attack, x status factor 0.5)", supSkill)
+	}
+	if diff := cleanSkill - 91.0; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("clean skill damage = %v, want 91", cleanSkill)
+	}
+
+	// Basic attack damage IS the suppressed attack stat — no extra factor.
+	if cleanBasic != 30 || supBasic != 15 {
+		t.Fatalf("basic attack = clean %v / suppressed %v, want 30 / 15", cleanBasic, supBasic)
 	}
 }

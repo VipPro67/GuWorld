@@ -858,3 +858,153 @@ func TestGuHungerDeductionByInstanceID(t *testing.T) {
 
 
 
+
+// TestItemHealAppliesHealingReceived verifies the auto item heal scales with
+// the healing_received modifier (e.g. Trọng Thương −50%) and records a
+// breakdown with the status provenance.
+func TestItemHealAppliesHealingReceived(t *testing.T) {
+	actor := newTestCombatant("ally", "Player", 1000, 100)
+	actor.HP = 100
+	actor.AutoHealHP = true
+	actor.HealThreshold = 50 // 100/1000 = 10% <= threshold -> heals
+	actor.HealCharges = 1
+	actor.HealPotency = 200
+	actor.HealingReceived = -0.5
+	actor.StatProvenance = map[string]*StatProvenance{
+		"healing_received": {
+			Stat:       "healing_received",
+			BaseValue:  0,
+			FinalValue: -0.5,
+			Mods:       []StatModSource{{Key: "severely_wounded", Name: "Trọng Thương", Pct: -0.5}},
+		},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{actor},
+		Enemies: []*CombatantAuto{newTestCombatant("enemy", "Enemy", 1000, 0)},
+	}
+	logs := Simulate(state)
+
+	var healLog *CombatLog
+	for i := range logs {
+		if logs[i].Action == "ITEM_HEAL" {
+			healLog = &logs[i]
+			break
+		}
+	}
+	if healLog == nil {
+		t.Fatal("expected an ITEM_HEAL log")
+	}
+	if healLog.Damage != 100 { // 200 * (1 - 0.5)
+		t.Fatalf("item heal = %v, want 100 after healing_received -0.5", healLog.Damage)
+	}
+	if healLog.Breakdown == nil || healLog.Breakdown.HealingBase != 200 || healLog.Breakdown.HealingFinal != 100 {
+		t.Fatalf("missing/incorrect healing breakdown: %+v", healLog.Breakdown)
+	}
+	if healLog.Breakdown.HealerHealing == nil || len(healLog.Breakdown.HealerHealing.Mods) == 0 {
+		t.Fatal("expected healing_received provenance on the breakdown")
+	}
+}
+
+// TestSkillHealBreakdown verifies a GU_SKILL heal records its formula
+// (base + dao bonus, scaled by healing_received) in the breakdown.
+func TestSkillHealBreakdown(t *testing.T) {
+	actor := newTestCombatant("ally", "Player", 1000, 0)
+	actor.HP = 100
+	actor.HealingReceived = -0.5
+	actor.StatProvenance = map[string]*StatProvenance{
+		"healing_received": {
+			Stat:       "healing_received",
+			BaseValue:  0,
+			FinalValue: -0.5,
+			Mods:       []StatModSource{{Key: "severely_wounded", Name: "Trọng Thương", Pct: -0.5}},
+		},
+	}
+	actor.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "Hồi Xuân", Healing: 200},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{actor},
+		Enemies: []*CombatantAuto{newTestCombatant("enemy", "Enemy", 1000, 0)},
+	}
+	logs := Simulate(state)
+
+	var healLog *CombatLog
+	for i := range logs {
+		// The HEAL log is folded into the consolidated GU_SKILL entry; find it
+		// via the healing breakdown the merge preserves.
+		if bd := logs[i].Breakdown; bd != nil && bd.HealingFinal > 0 {
+			healLog = &logs[i]
+			break
+		}
+	}
+	if healLog == nil {
+		t.Fatal("expected a heal log with breakdown")
+	}
+	// The consolidated entry keeps the cast log's Damage field (0); the heal
+	// amount lives in the breakdown.
+	if healLog.Breakdown == nil ||
+		healLog.Breakdown.HealingBase != 200 ||
+		healLog.Breakdown.HealingDaoBonus != 0 ||
+		healLog.Breakdown.HealingFinal != 100 {
+		t.Fatalf("missing/incorrect healing breakdown: %+v", healLog.Breakdown)
+	}
+	if healLog.Breakdown.HealerHealing == nil {
+		t.Fatal("expected healing_received provenance on the breakdown")
+	}
+}
+
+// TestDamageBreakdownCarriesStatProvenance verifies attack/defense status
+// provenance is attached to damage breakdowns from the combatants.
+func TestDamageBreakdownCarriesStatProvenance(t *testing.T) {
+	actor := newTestCombatant("ally", "Player", 1000, 100)
+	actor.StatProvenance = map[string]*StatProvenance{
+		"attack": {
+			Stat:       "attack",
+			BaseValue:  10,
+			FinalValue: 5,
+			Mods:       []StatModSource{{Key: "death_penalty", Name: "Hình Phạt Tử Vong", Pct: -0.5}},
+		},
+	}
+	target := newTestCombatant("enemy", "Enemy", 1000, 0)
+	target.StatProvenance = map[string]*StatProvenance{
+		"defense": {
+			Stat:       "defense",
+			BaseValue:  8,
+			FinalValue: 4,
+			Mods:       []StatModSource{{Key: "regional_wall_suppression", Name: "Áp Chế Giới Vực", Pct: -0.5}},
+		},
+	}
+	actor.Actions = []SimAction{
+		{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 100, DamageMult: 1.0, TargetType: "SINGLE"},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{actor},
+		Enemies: []*CombatantAuto{target},
+	}
+	logs := Simulate(state)
+
+	found := false
+	for i := range logs {
+		bd := logs[i].Breakdown
+		if bd == nil || bd.BaseDamage != 100 {
+			continue
+		}
+		found = true
+		if bd.AttackerAttack == nil || bd.AttackerAttack.FinalValue != 5 {
+			t.Fatalf("attacker attack provenance missing/wrong: %+v", bd.AttackerAttack)
+		}
+		if bd.DefenderDefense == nil || bd.DefenderDefense.FinalValue != 4 {
+			t.Fatalf("defender defense provenance missing/wrong: %+v", bd.DefenderDefense)
+		}
+		break
+	}
+	if !found {
+		t.Fatal("expected a damage log with breakdown")
+	}
+}

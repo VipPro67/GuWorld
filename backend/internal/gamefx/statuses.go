@@ -126,6 +126,22 @@ func defaultStatuses() []StatusDef {
 	}
 }
 
+// EffectsForValue returns the status effects adjusted for the instance's
+// severity Value. A negative Value (rank-scaled suppression statuses store
+// their intensity there, e.g. regional_wall_suppression) replaces every
+// stat_mod percentage with the Value itself.
+func (def StatusDef) EffectsForValue(value float64) Effects {
+	eff := def.Effects
+	if value < 0 && len(eff.StatMods) > 0 {
+		mods := make(map[string]float64, len(eff.StatMods))
+		for k := range eff.StatMods {
+			mods[k] = value
+		}
+		eff.StatMods = mods
+	}
+	return eff
+}
+
 // effectiveStatuses returns the registry, falling back to the built-in
 // defaults when it has not been loaded from the database yet.
 func effectiveStatuses() map[string]StatusDef {

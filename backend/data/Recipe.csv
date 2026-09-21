@@ -2656,7 +2656,6 @@ GU_BLOOD_TRACE,6,1,"{""GU_BLOOD_HEAVEN"": {""qty"": 5, ""rank"": 5}, ""GU_BLOOD_
 GU_BLOOD_WHEEL,6,1,"{""GU_BLOOD_BLAST"": {""qty"": 5, ""rank"": 5}, ""GU_BLOOD_HEAVEN"": {""qty"": 5, ""rank"": 5}}","{""iron_rank6"": 11, ""beast_blood_rank6"": 37}",0.05,600.000,100.000
 GU_COLD_BLOOD,6,1,"{""GU_BLOOD_ASSET"": {""qty"": 5, ""rank"": 5}, ""GU_BLOOD_HEAVEN"": {""qty"": 5, ""rank"": 5}}","{""beast_blood_rank6"": 69, ""tortoise_eye_blood"": 4}",0.05,600.000,100.000
 GU_JIA_DESTINY,8,1,"{""GU_HEAVEN_SECRET"": {""qty"": 1, ""rank"": 7}}","{""water_rank8"": 21, ""heaven_qi_rank8"": 42, ""heavenly_crystal"": 9, ""abundant_spring_light"": 8, ""immemorial_formation_spirit_jade"": 18}",0.0001,0.000,400.000
-GU_FIXED_IMMORTAL_TRAVEL,6,1,{},"{""water_rank6"": 1, ""heaven_qi_rank6"": 7, ""sound_stone_rank6"": 4, ""sword_leaf_grass_rank6"": 5, ""boundless_space_domain_stone"": 24}",0.05,900.000,150.000
 GU_BLOOD_HATRED,6,3,"{""GU_BLOOD_BLAST"": {""qty"": 4, ""rank"": 5}}","{""beast_blood_rank6"": 69, ""tortoise_eye_blood"": 4}",0.05,600.000,100.000
 GU_LITTLE_LIGHTNING,1,1,{},"{""electric_spark_stone"": 5}",0.81,20.000,0.000
 GU_BLOOD_HAND_SEAL,5,2,"{""GU_BLOOD_FIRE"": {""qty"": 1, ""rank"": 4}}","{""beast_blood_rank5"": 38}",0.5,300.000,0.000
@@ -4453,3 +4452,7 @@ GU_FORMAT_HEART_I,6,1,"{""GU_FORMAT_HEART_5"": {""qty"": 1, ""rank"": 5}}","{""f
 GU_FORMAT_HEART_I,7,1,"{""GU_FORMAT_HEART_I"": {""qty"": 1, ""rank"": 6}}","{""heaven_earth_formation_pillar"": 14, ""immortal_formation_core_pillar"": 12}",0.01,0.000,200.000
 GU_FORMAT_HEART_I,8,1,"{""GU_FORMAT_HEART_I"": {""qty"": 1, ""rank"": 7}}","{""sound_stone_rank8"": 15, ""immemorial_formation_spirit_jade"": 18}",0.0001,0.000,500.000
 GU_FORMAT_HEART_I,9,1,"{""GU_FORMAT_HEART_I"": {""qty"": 1, ""rank"": 8}}","{""formation_path_material"": 30, ""cosmic_boundless_formation_core"": 25}",0.00001,0.000,1600.000
+GU_FIXED_IMMORTAL_TRAVEL,6,1,{},"{""water_rank6"": 1, ""heaven_qi_rank6"": 7, ""sound_stone_rank6"": 4, ""sword_leaf_grass_rank6"": 5, ""boundless_space_domain_stone"": 24}",0.05,900.000,150.000
+GU_FIXED_IMMORTAL_TRAVEL,7,1,"{""GU_FIXED_IMMORTAL_TRAVEL"": {""qty"": 1, ""rank"": 6}}","{""water_rank7"": 1, ""heaven_qi_rank7"": 7, ""sound_stone_rank7"": 4, ""sword_leaf_grass_rank7"": 5, ""boundless_space_domain_stone"": 24}",0.05,900.000,150.000
+GU_FIXED_IMMORTAL_TRAVEL,8,1,"{""GU_FIXED_IMMORTAL_TRAVEL"": {""qty"": 1, ""rank"": 7}}","{""water_rank8"": 1, ""heaven_qi_rank8"": 7, ""sound_stone_rank8"": 4, ""sword_leaf_grass_rank8"": 5, ""boundless_space_domain_stone"": 24}",0.001,900.000,1500.000
+GU_FIXED_IMMORTAL_TRAVEL,9,1,"{""GU_FIXED_IMMORTAL_TRAVEL"": {""qty"": 1, ""rank"": 8}}","{""water_rank9"": 1, ""heaven_qi_rank9"": 7, ""sound_stone_rank9"": 4, ""sword_leaf_grass_rank9"": 5, ""boundless_space_domain_stone"": 24}",0.00001,900.000,9500.000

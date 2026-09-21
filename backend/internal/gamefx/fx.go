@@ -150,14 +150,7 @@ func Get(p *models.Player) Effects {
 
 	for _, status := range p.Statuses.Active() {
 		if def, ok := effectiveStatuses()[status.ID]; ok {
-			eff := def.Effects
-			if status.Value < 0 && len(eff.StatMods) > 0 {
-				mods := make(map[string]float64, len(eff.StatMods))
-				for k := range eff.StatMods {
-					mods[k] = status.Value
-				}
-				eff.StatMods = mods
-			}
+			eff := def.EffectsForValue(status.Value)
 			addEffects(&fx, eff)
 			if fx.BlockedActions == nil {
 				fx.BlockedActions = map[string]bool{}
@@ -246,15 +239,35 @@ func EffectiveMaxMana(p *models.Player) float64 {
 	return p.MaxMana * (1.0 + MaxManaBonus(p))
 }
 
+// GuStatMultipliers returns the two multipliers a Gu passive's stat values are
+// scaled by: the highest path-mastery attainment multiplier across the Gu's
+// paths, and the dao-mark amplification (1 + marks/100 of the best-marked
+// path). Shared by the handlers' stat pipeline and PassiveHPBonus so every Gu
+// stat source scales identically.
+func GuStatMultipliers(pathMasteries map[string]int, daoMarks map[string]int64, paths []string) (masteryMult, daoMult float64) {
+	masteryMult = PathMasteryMultiplier(pathMasteries, paths)
+	daoMult = 1.0
+	if daoMarks != nil {
+		for _, path := range paths {
+			clean := CleanPath(path)
+			if amt, ok := daoMarks[clean]; ok && amt > 0 {
+				if pm := DaoAmplification(amt); pm > daoMult {
+					daoMult = pm
+				}
+			}
+		}
+	}
+	return masteryMult, daoMult
+}
+
 // PassiveHPBonus returns the total flat HP granted by equipped ACTIVE Gus
-// (passive.stat_base_hp), scaled by the unified DaoCombatProfile. Mirrors the
-// "hp" key computed in GetPassiveStats.
+// (passive.stat_base_hp), scaled by path mastery and dao marks exactly like
+// the "hp" key of the handlers' stat pipeline (GetPassiveStats), so
+// EffectiveMaxHP always matches the MaxHP combat uses.
 func PassiveHPBonus(p *models.Player) float64 {
 	if p == nil {
 		return 0
 	}
-	fx := Get(p)
-	profile := BuildDaoCombatProfile(p.DaoMarks, p.PathMasteries, fx.NonConflictingDaoMarks, fx.DaoNganBonus)
 	total := 0.0
 	bestRank := map[string]int{}
 	for _, gu := range p.GuInventory {
@@ -278,13 +291,8 @@ func PassiveHPBonus(p *models.Player) float64 {
 		if !ok || spec.Effects.Passive == nil || spec.Effects.Passive.StatBaseHP <= 0 {
 			continue
 		}
-		pathKey := "strength"
-		if len(spec.Path) > 0 {
-			pathKey = spec.Path[0]
-		}
-		daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
-		daoMult := (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
-		total += spec.Effects.Passive.StatBaseHP * daoMult
+		masteryMult, daoMult := GuStatMultipliers(p.PathMasteries, p.DaoMarks, spec.Path)
+		total += spec.Effects.Passive.StatBaseHP * masteryMult * daoMult
 	}
 	return total
 }

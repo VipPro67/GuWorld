@@ -38,6 +38,27 @@ type ResidualTrace struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+// ScoreDetail is the attacker's own 3-pillar breakdown (stat / realm+dao / clue)
+// plus the Vận đạo luck roll. Returned to the client as `my_score`;
+// defender numbers are never exposed.
+type ScoreDetail struct {
+	Stat        float64 `json:"stat"`
+	RealmDao    float64 `json:"realm_dao"`
+	Clue        float64 `json:"clue"`
+	LuckRoll    float64 `json:"luck_roll"`
+	Total       float64 `json:"total"`
+	RankDivisor float64 `json:"rank_divisor,omitempty"`
+}
+
+// DefenseDetail is the defender's breakdown. Server-side only, never sent out.
+type DefenseDetail struct {
+	Stat     float64 `json:"-"`
+	RealmDao float64 `json:"-"`
+	Veil     float64 `json:"-"`
+	Distance float64 `json:"-"`
+	Total    float64 `json:"-"`
+}
+
 // InspectRequest is used for local Worldmap FOV inspection
 type InspectRequest struct {
 	TargetID       string `json:"target_id"`
@@ -51,7 +72,7 @@ type DivinationRequest struct {
 	SuspectedSect   string  `json:"suspected_sect"`
 	SuspectedGu     string  `json:"suspected_gu"`
 	ItemClueID      string  `json:"item_clue_id"`
-	ResourceType    string  `json:"resource_type"` // "mana" or "immortal_stone"
+	ResourceType    string  `json:"resource_type"` // "primeval_stone" ("mana" alias) or "immortal_stone"
 	ResourceAmount  float64 `json:"resource_amount"`
 	TargetSectName  string  `json:"-"` // populated server-side for clue validation
 }
@@ -80,6 +101,7 @@ type DivinationReport struct {
 type DivinationResponse struct {
 	StatusType         string            `json:"status_type"` // "full", "partial", "fogged", "backfire"
 	DeltaScore         float64           `json:"delta_score"`
+	MyScore            *ScoreDetail      `json:"my_score,omitempty"`
 	Report             *DivinationReport `json:"divination_report,omitempty"`
 	BackfireDamage     float64           `json:"backfire_damage,omitempty"`
 	BackfireSoulDamage float64           `json:"backfire_soul_damage,omitempty"`
@@ -143,7 +165,7 @@ type ResonanceScanResponse struct {
 type DivineGuRequest struct {
 	GuQuery        string  `json:"gu_query"` // GuID or Gu Name (e.g. "xuan_bing_gu", "Xuân Thu Thiền")
 	TargetRank     int     `json:"target_rank,omitempty"`
-	ResourceType   string  `json:"resource_type"` // "mana" or "immortal_stone"
+	ResourceType   string  `json:"resource_type"` // "primeval_stone" ("mana" alias) or "immortal_stone"
 	ResourceAmount float64 `json:"resource_amount"`
 }
 
@@ -185,6 +207,7 @@ type DivineGuReport struct {
 type DivineGuResponse struct {
 	StatusType         string          `json:"status_type"` // "full", "partial", "fogged", "backfire"
 	DeltaScore         float64         `json:"delta_score"`
+	MyScore            *ScoreDetail    `json:"my_score,omitempty"`
 	Report             *DivineGuReport `json:"report,omitempty"`
 	BackfireDamage     float64         `json:"backfire_damage,omitempty"`
 	BackfireSoulDamage float64         `json:"backfire_soul_damage,omitempty"`

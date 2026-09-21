@@ -30,9 +30,19 @@ export interface DivinationReport {
   is_disguised: boolean;
 }
 
+export interface ScoreDetail {
+  stat: number;
+  realm_dao: number;
+  clue: number;
+  luck_roll: number;
+  total: number;
+  rank_divisor?: number;
+}
+
 export interface DivinationResponse {
   status_type: "full" | "partial" | "fogged" | "backfire";
   delta_score: number;
+  my_score?: ScoreDetail;
   divination_report?: DivinationReport;
   backfire_damage?: number;
   backfire_soul_damage?: number;
@@ -63,14 +73,14 @@ export interface DivinationRequest {
   suspected_sect?: string;
   suspected_gu?: string;
   item_clue_id?: string;
-  resource_type: "mana" | "immortal_stone";
+  resource_type: "primeval_stone" | "immortal_stone";
   resource_amount: number;
 }
 
 export interface DivineGuRequest {
   gu_query: string;
   target_rank?: number;
-  resource_type: "mana" | "immortal_stone";
+  resource_type: "primeval_stone" | "immortal_stone";
   resource_amount: number;
 }
 
@@ -109,6 +119,7 @@ export interface DivineGuReport {
 export interface DivineGuResponse {
   status_type: "full" | "partial" | "fogged" | "backfire";
   delta_score: number;
+  my_score?: ScoreDetail;
   report?: DivineGuReport;
   backfire_damage?: number;
   backfire_soul_damage?: number;

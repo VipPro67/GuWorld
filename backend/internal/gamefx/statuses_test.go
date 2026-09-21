@@ -105,3 +105,25 @@ func TestRefineStatuses(t *testing.T) {
 	}
 }
 
+
+func TestEffectsForValueNegativeSeverity(t *testing.T) {
+	def, ok := effectiveStatuses()["regional_wall_suppression"]
+	if !ok {
+		t.Fatal("regional_wall_suppression missing from registry")
+	}
+
+	// Negative Value (rank-scaled suppression intensity) overrides every
+	// stat_mod percentage.
+	eff := def.EffectsForValue(-0.35)
+	for _, key := range []string{"attack", "defense", "speed"} {
+		if eff.StatMods[key] != -0.35 {
+			t.Fatalf("stat_mods[%s] = %v, want -0.35 (severity override)", key, eff.StatMods[key])
+		}
+	}
+
+	// Zero / positive Value keeps the dictionary percentages.
+	eff = def.EffectsForValue(0)
+	if eff.StatMods["attack"] != -0.20 {
+		t.Fatalf("stat_mods[attack] = %v, want dictionary value -0.20", eff.StatMods["attack"])
+	}
+}

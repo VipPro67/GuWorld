@@ -118,8 +118,8 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/killer-moves/:id` |
 | DELETE | `/killer-moves/:id` |
 | POST | `/combat/cast-killer-move` |
-| POST | `/combat/start` |
-| POST | `/combat/practice` |
+| POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
+| POST | `/combat/practice` | Như `/combat/start`. |
 | GET | `/combat/history` |
 | GET | `/combat/history/:id` |
 
@@ -459,11 +459,11 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 
 | Method | Endpoint | Mô tả |
 | --- | --- | --- |
-| POST | `/scouting/inspect` | Trinh sát cục bộ mục tiêu. Bắt buộc cùng vị trí/FOV (hoặc cùng Party/Sect). Body: `{"target_id", "target_username"}`. |
-| POST | `/scouting/divine` | Suy diễn thiên cơ từ xa bằng Đạo ngân & Chân ý Trí/Tín Đạo. Body: `{"target_username", "suspected_region", "suspected_sect", "suspected_gu", "item_clue_id", "resource_type", "resource_amount"}`. |
-| POST | `/scouting/divine-gu` | Suy tính cổ trùng (ai nắm giữ, đã luyện ra chưa, số lượng thiên hạ, bí phương & thức ăn). Body: `{"gu_query", "target_rank", "resource_type", "resource_amount"}`. |
+| POST | `/scouting/inspect` | Trinh sát cục bộ mục tiêu. Bắt buộc cùng vị trí/FOV (hoặc cùng Party/Sect). Body: `{"target_id", "target_username"}`. Response: `PlayerProfileResponse` + `delta_score` + `my_score{stat, realm_dao, clue, luck_roll, total}` (full ≥30, partial ≥−10). |
+| POST | `/scouting/divine` | Suy diễn thiên cơ từ xa bằng Đạo ngân & Chân ý Trí/Tín Đạo. Body: `{"target_username", "suspected_region", "suspected_sect", "suspected_gu", "item_clue_id", "resource_type", "resource_amount"}`. Mọi clue đều validate đúng-thật mới tính điểm (sai = 0). Response thêm `my_score` (điểm của người dò; điểm thủ không lộ). |
+| POST | `/scouting/divine-gu` | Suy tính cổ trùng (ai nắm giữ, đã luyện ra chưa, số lượng thiên hạ, bí phương & thức ăn). Body: `{"gu_query", "target_rank", "resource_type", "resource_amount"}`. Điểm thô chia cho divisor theo bậc Cổ (R1-5: 1/2/3/4/5, R6-9: 10/18/30/50); khó còn lại = che giấu chủ mạnh nhất ×0.5 (Cổ kho/ngủ ×0.5 nữa; tự sở hữu cộng hưởng +250, bỏ qua def chủ) + màn sương 15. Response thêm `my_score` (kèm `rank_divisor`). |
 | POST | `/scouting/apply-mark` | Gieo ấn ký truy tung lên mục tiêu (Trí Niệm / Huyết Mạch). Giới hạn 3 (phàm nhân) / 10 (tiên nhân). Body: `{"target_id", "mark_type"}`. |
 | GET | `/scouting/tracked-targets` | Lấy danh sách con mồi đang mang ấn ký kèm tọa độ thời gian thực `(region, x, y)`. |
-| POST | `/scouting/sever-clues` | Đoạn tuyệt thiên cơ, chém đứt toàn bộ ấn ký đang theo dõi và tàn dư ô bản đồ. |
-| POST | `/scouting/resonance-scan` | Cảm ứng Cổ trùng và xung kích Đạo ngân (Dao Pulses) trong khu vực. |
+| POST | `/scouting/sever-clues` | Đoạn tuyệt thiên cơ, chém đứt toàn bộ ấn ký đang theo dõi và tàn dư ô bản đồ. Tốn 20 Chân Nguyên (cố định). |
+| POST | `/scouting/resonance-scan` | Cảm ứng Cổ trùng và xung kích Đạo ngân (Dao Pulses) trong khu vực. Tốn 50 Chân Nguyên (cố định) + 200 Nguyên Thạch, hoặc TNT với Tiên nhân. |
 

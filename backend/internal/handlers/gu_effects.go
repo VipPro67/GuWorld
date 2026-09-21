@@ -28,10 +28,6 @@ type Action struct {
 
 // ── HELPERS ───────────────────────────────────────────────────────────
 
-func getPathMasteryMultiplier(player *models.Player, paths []string) float64 {
-	return gamefx.PathMasteryMultiplier(player.PathMasteries, paths)
-}
-
 func GetPortalManaCost(player *models.Player, spec *models.GuDictionaryItem) float64 {
 	baseCost := spec.BaseManaCost
 	if baseCost <= 0 {

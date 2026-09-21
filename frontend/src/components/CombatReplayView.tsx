@@ -13,6 +13,19 @@ import { FormattedText } from "./FormattedText";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
+export interface StatModSource {
+  key: string;
+  name: string;
+  pct: number;
+}
+
+export interface StatProvenance {
+  stat: string;
+  base_value?: number;
+  final_value?: number;
+  mods?: StatModSource[];
+}
+
 export interface DamageBreakdown {
   base_damage?: number;
   skill_mult?: number;
@@ -30,6 +43,12 @@ export interface DamageBreakdown {
   raw_damage?: number;
   hit_count?: number;
   reason?: string;
+  attacker_attack?: StatProvenance;
+  defender_defense?: StatProvenance;
+  healer_healing?: StatProvenance;
+  healing_base?: number;
+  healing_dao_bonus?: number;
+  healing_final?: number;
 }
 
 export interface CombatLogEntry {

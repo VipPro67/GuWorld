@@ -3,7 +3,6 @@ package handlers
 import (
 	"math"
 	"sort"
-	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -102,22 +101,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 				continue
 			}
 			passive := spec.Effects.Passive
-			mult := getPathMasteryMultiplier(player, spec.Path)
-
-			daoMult := 1.0
-			if player.DaoMarks != nil {
-				maxDaoMult := 1.0
-				for _, path := range spec.Path {
-					cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-					if amt, ok := player.DaoMarks[cleanPath]; ok && amt > 0 {
-						pm := 1.0 + float64(amt)/100.0
-						if pm > maxDaoMult {
-							maxDaoMult = pm
-						}
-					}
-				}
-				daoMult = maxDaoMult
-			}
+			mult, daoMult := gamefx.GuStatMultipliers(player.PathMasteries, player.DaoMarks, spec.Path)
 
 			srcID := "gu:" + gu.GuID
 			if passive.StatBaseAttack > 0 {
@@ -323,16 +307,35 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	for _, st := range player.Statuses.Active() {
 		for _, def := range gamefx.AllStatuses() {
 			if def.Key == st.ID {
-				statMods := def.Effects.StatMods
-				if st.Value < 0 && len(statMods) > 0 {
-					statMods = map[string]float64{}
-					for k := range def.Effects.StatMods {
-						statMods[k] = st.Value
-					}
-				}
-				applyCharEffect("status:"+def.Key, "Trạng thái: "+def.Name, statMods)
+				eff := def.EffectsForValue(st.Value)
+				applyCharEffect("status:"+def.Key, "Trạng thái: "+def.Name, eff.StatMods)
 				break
 			}
+		}
+	}
+
+	// Floor the physical stats at zero: heavy status suppression (stat_mods)
+	// must not drive them negative — a negative defense would amplify
+	// incoming damage and a negative speed would break turn order.
+	for _, key := range []string{"attack", "defense", "speed", "hp"} {
+		cur, ok := stats[key]
+		if !ok || cur >= 0 {
+			continue
+		}
+		delta := -cur
+		stats[key] = 0
+		clampSrc := PassiveStatSource{Source: "floor", Name: "Giới hạn dưới (0)", Value: -delta, Mult: 1, Dao: 1, Final: -delta}
+		found := false
+		for i := range details {
+			if details[i].Key == key {
+				details[i].Sources = append(details[i].Sources, clampSrc)
+				details[i].Total = 0
+				found = true
+				break
+			}
+		}
+		if !found {
+			details = append(details, PassiveStatDetail{Key: key, Total: 0, Sources: []PassiveStatSource{clampSrc}})
 		}
 	}
 

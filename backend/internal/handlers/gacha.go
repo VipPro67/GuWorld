@@ -70,7 +70,7 @@ var gachaPools = []GachaPool{
 		CostAmount:  1000,
 		Rewards: []GachaRewardItem{
 			{Type: "item", Min: 1, Max: 1, Weight: 25.0, Label: "Vật liệu cấp thấp"},
-			{Type: "immortal_stones", Min: 500, Max: 2000, Weight: 10.0, Label: "2.000~5.000 Tiên Nguyên Thạch"},
+			{Type: "immortal_stones", Min: 500, Max: 1500, Weight: 10.0, Label: "2.000~5.000 Tiên Nguyên Thạch"},
 			{Type: "gu_rank", ID: "3", Min: 1, Max: 1, Weight: 2.0, Label: "Cổ Trùng R3"},
 			{Type: "gu_rank", ID: "4", Min: 1, Max: 1, Weight: 3.0, Label: "Cổ Trùng R4"},
 			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R5"},

@@ -64,6 +64,11 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 | Tâm Thần Mệt Mỏi (`refine_fatigue`) | **-25%** tỉ lệ Luyện Cổ thành công (khi Luyện Tiên Cổ hoặc Cổ $\ge$ Rank bản thân) | 10 phút |
 | Luyện Cổ Phản Phệ (`refine_backfire`) | **-50%** tỉ lệ Luyện Cổ thành công (khi cố luyện lúc mệt mỏi hoặc bị nổ lò) | 20 phút |
 
+Quy tắc áp dụng trạng thái:
+
+- `stat_mods` là **phần trăm trên tổng chỉ số** (cộng dồn sau toàn bộ nguồn khác: cơ bản, Cổ, buff,	Hộ Sơn…). Nếu tổng chỉ số trước đó bằng 0 thì mod không có tác dụng; chỉ số vật lý (**tấn công / phòng thủ / tốc độ / HP**) luôn **sàn ở 0** — áp chế nặng không thể đẩy chỉ số xuống âm.
+- Trạng thái mang **giá trị cường độ âm** (`Value < 0`, VD Áp Chế Giới Vực tính theo rank) sẽ **thay toàn bộ** `%` trong `stat_mods` bằng cường độ đó; cột hiệu ứng trong CSV chỉ là giá trị mặc định hiển thị.
+
 **Thể chất (10 Thập Tuyệt Thể + Thuần Mộng Cầu Chân Thể):**
 
 | Thể chất | Hiệu ứng |
@@ -532,6 +537,12 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - `tenacity` (0..1): rút ngắn thời gian hiệu ứng bất lợi phải chịu, đồng thời mỗi đầu lượt roll để tự giải 1 hiệu ứng (ưu tiên khống chế cứng như Choáng/Trói/Đóng băng/Ngủ trước, rồi đến Khóa chiêu, gây rối, cuối cùng là rút máu theo lượt). Buff có lợi không bao giờ bị tự giải nhầm.
 - VD: Ngã Ý Cổ mang `tenacity: 0.35, cc_resist: 0.15` — chịu CC ngắn hơn và 35% tự giải 1 hiệu ứng mỗi lượt.
 
+### Stat_mods trạng thái trong chiến đấu & Chi tiết công thức
+
+- `stat_mods` của Trạng thái (Trọng Thương, Áp Chế Giới Vực…) tác động **trực tiếp tới kết quả chiến đấu**: hệ số trạng thái **nhân thẳng lên toàn bộ sát thương sát chiêu & tuyệt kỹ** (đòn đánh thường bằng chính chỉ số tấn công bị giảm), phòng thủ trừ thẳng sát thương nhận vào (kèm giảm cả Khiên Ảo tạo ra), tốc độ quyết định thứ tự hành động.
+- `healing_received` nhân lên **mọi nguồn hồi trong trận**: hồi của sát chiêu, hồi của Cổ hỗ trợ và **hồi bằng dược liệu tự động** (tối đa 3 lần/trận) — trước đây dược liệu bỏ qua hệ số này.
+- Panel **"Chi Tiết Công Thức Tính Sát Thương"** trong nhật ký chiến đấu hiện hiển thị tường minh phần trạng thái: bên gây sát thương có dòng **Tấn Công** (gốc → sau trạng thái kèm tên trạng thái và `%`), bên nhận có dòng **Phòng Ngự** tương tự. Các entry hồi phục mở rộng thành panel **"Chi Tiết Công Thức Hồi Phục"** (hồi gốc + Đạo Ngân + hệ số hưởng + trạng thái ảnh hưởng).
+
 ### Bộ Cổ Chiến Đấu (Cài đặt chiến thuật tự động)
 
 Trong tab **Cài đặt** của hồ sơ (Aperture), đạo hữu có thể chọn **Bộ Cổ Chiến Đấu** — danh sách Cổ mang theo khi xuất trận:
@@ -853,3 +864,42 @@ Hệ thống rút gọn hiển thị số lượng lớn (sát thương, khiên,
 | **Na Do Tha** | $10^{60}$ | $10^{60}$ | Vô lượng số (Nayuta) |
 | **Bất Khả Tư Nghị** | $10^{64}$ | $10^{64}$ | Vượt xa suy tư tư duy |
 | **Vô Lượng** | $10^{68}$ | $10^{68}$ | Cực hạn vô lượng |
+
+## 27. Trinh Sát & Phản Trinh Sát (Thiên Cơ)
+
+Không ai được xem trộm hồ sơ từ xa. Muốn biết địch ở đâu, mạnh cỡ nào, giữ Cổ gì — phải **trinh sát** (gần) hoặc **suy diễn thiên cơ** (xa). Và kẻ bị dò luôn có đường **phản trinh sát**.
+
+### Ba trụ điểm (áp cho cả hai phe)
+1. **Cổ trùng:** phe công lấy chỉ số Trinh Sát (Investigation) của Cổ đang trang bị; phe thủ lấy Ngụy Trang (DisguiseLevel) + năng lực đặc biệt (`PERFECT_DISGUISE` như Thái Độ Cổ, `CONCEAL_GU`).
+2. **Cảnh giới lưu phái + Đạo ngân:**
+   - **Trí đạo:** lực suy tính chính của phe công; đồng thời là lá chắn đối kháng trực tiếp của phe thủ.
+   - **Ám đạo (thủ):** che bản thân, vị trí, khí tức; tăng rào cản khoảng cách.
+   - **Tín đạo:** phe công khuếch đại giá trị manh mối; phe thủ phong tỏa, bóp méo manh mối (Tông Sư Tín đạo trừ tới 36%, tối đa một nửa).
+   - **Vận đạo:** gieo xúc xắc vận số mỗi lần suy diễn — phe công tu Vận cao thì kết quả ổn định, phe thủ Vận cao thì kết quả lệch xấu cho kẻ dò.
+   - **Thiên đạo (Tiên nhân):** che / bóp méo thiên cơ (màn Thiên Cơ), chỉ Trí/Thiên phe công mới xuyên được.
+   - **Biến hóa đạo (thủ):** đổi dấu vết, thân phận, đạo ngân biểu hiện — khiến kết quả trả về là hàng giả.
+3. **Manh mối (clue):** tên đúng +20, đúng vùng +15, đúng tông môn +10, Cổ nghi vấn đúng +10 (đều phải **đúng thật** mới tính), khí tức Cổ mục tiêu +30, dò mù không tên −40. Manh mối bị chặn trần, không thể thay tu vi.
+
+### Chi phí suy diễn
+
+- Mỗi lần suy diễn tốn **Nguyên Thạch** (tối thiểu 100, càng nhiều điểm cộng càng cao) hoặc **Tiên Nguyên Thạch** (chỉ Tiên nhân). Không tốn Chân Nguyên.
+
+### Bốn kết quả (chỉ so **điểm tổng cuối**)
+| Chênh lệch | Kết quả |
+| --- | --- |
+| ≥ +30 (người) / +20 (Cổ) | **Đại thành công:** tọa độ thật, tu vi thật, toàn bộ Cổ trang bị; được gieo ấn ký |
+| ≥ 0 / ≥ −10 (Cổ) | **Tiểu thành công:** vùng + tu vi ước lượng + 2 Cổ (tọa độ bị giấu) |
+| ≥ −30 / ≥ −40 (Cổ) | **Màn sương:** mất tài nguyên, trắng tay |
+| Thấp hơn | **Thiên cơ phản phệ:** trọng thương HP + Hồn, trừ 20 Chân Nguyên (cố định, không theo %), **lộ ngược tọa độ cho mục tiêu** |
+
+Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ / cảnh giới / manh mối / vận / tổng) hiện đầy đủ để biết mình thiếu ở đâu — điểm phòng ngự của địch không bao giờ lộ.
+
+### Suy tính Cổ trùng (ai giữ, ở đâu, luyện sao)
+- Phàm Cổ dễ dò; điểm suy tính bị **chia theo bậc Cổ** (bậc 1-5 chia 1/2/3/4/5, Tiên Cổ bậc 6-9 chia 10/18/30/50) — nên Cổ càng cao càng vượt tầm, cá voi cũng phải dốc sức mới dò được Tiên Cổ. Phàm nhân dò Tiên Cổ gần như chắc chắn phản phệ.
+- **Cổ trong tay người mang khí tức của chủ:** Cổ trang bị được chủ che full; Cổ nằm kho/ngủ được che một nửa. Muốn dò Cổ của Cổ Tiên ẩn danh, trước hết phải thắng được chính hắn.
+- Cổ trong bảo khố tông môn khó theo cấp tông môn; Cổ treo chợ công khai dễ dò nhất.
+- Tự sở hữu Cổ đó thì suy tính cộng hưởng trực tiếp, gần như luôn thấu triệt.
+
+### Ấn ký truy tung & chém đứt manh mối
+- Đại thành công suy diễn người cho phép **gieo ấn ký**: Trí Niệm Ấn (ngắn) hoặc Huyết Mạch Ấn (lâu). Giới hạn 3 mục tiêu (phàm) / 10 (tiên). Ấn ký cho tọa độ realtime trong radar.
+- **Đoạn Tuyệt Thiên Cơ:** tốn 20 Chân Nguyên (cố định), chém toàn bộ ấn ký người khác gieo lên mình + xóa tàn dư khí tức tại ô đang đứng. Bị theo dõi mà không biết chém — chết lúc nào không hay.

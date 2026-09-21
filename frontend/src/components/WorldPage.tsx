@@ -758,7 +758,6 @@ export function WorldPage() {
                   const sect = sectMap.find((s: ApiResponseData) => s.id === selectedObject.id || (s.map_x === selectedObject.x && s.map_y === selectedObject.y));
                   const isMySect = sect?.id === mySectStatus?.sect?.id;
                   const isShielded = !!sect?.shield_until && new Date(sect.shield_until).getTime() > Date.now();
-                  const canManage = mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP";
 
                   return (
                     <>
@@ -772,8 +771,8 @@ export function WorldPage() {
                         </button>
                       ) : (
                         <button
-                          disabled={actionLoading || isShielded || !canManage}
-                          title={isShielded ? "Tông môn đang trong thời gian bảo hộ" : !canManage ? "Chỉ Trưởng Lão / Hộ Pháp / Chưởng Môn mới có quyền khiêu chiến" : "Phát động công kích Tông môn"}
+                          disabled={actionLoading || isShielded}
+                          title={isShielded ? "Tông môn đang trong thời gian bảo hộ" : "Phát động công kích Tông môn"}
 onClick={() => {
                               setAttackTargetSect(sect || selectedObject);
                               fetchSectMembers();

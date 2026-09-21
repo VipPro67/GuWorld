@@ -38,6 +38,7 @@ export const gameplayPages: WikiPage[] = [
       { title: "Truyền Tống Trận & Trận Đạo", targetId: "gameplay-world-teleport", description: "Bố trí trận pháp, kết nối không gian và giảm giá Trận Đạo" },
       { title: "Chu kỳ hằng ngày", targetId: "gameplay-daily-loop", description: "Checklist phát triển nhân vật" },
       { title: "Tiên Khiếu & Dị Nhân", targetId: "gameplay-aperture-society", description: "Kinh tế dành cho Cổ Tiên" },
+      { title: "Trinh Sát & Phản Trinh Sát", targetId: "gameplay-scouting-divination", description: "Suy diễn thiên cơ, ấn ký và chém đứt manh mối" },
     ],
   },
   {
@@ -326,6 +327,44 @@ export const gameplayPages: WikiPage[] = [
             💡 <strong>Sử dụng Điểm cống hiến:</strong> Đổi lấy các công thức, Tiên Cổ từ kho tông môn, sách bí phương hoặc dùng để thăng cấp chức vụ.
           </div>
         </div>
+      </div>
+    ),
+  },
+  {
+    id: "gameplay-scouting-divination",
+    title: "Trinh Sát & Phản Trinh Sát",
+    category: "gameplay",
+    subCategory: "gameplay-ui-navigation",
+    keywords: ["trinh sát", "suy diễn", "thiên cơ", "ấn ký", "phản trinh sát", "scouting", "divination", "sever", "tracking"],
+    content: (
+      <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
+          <h3 className="font-bold text-amber-300 mb-2">Ba trụ điểm (cả công lẫn thủ)</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Cổ trùng:</strong> công lấy Trinh Sát của Cổ trang bị; thủ lấy Ngụy Trang + năng lực đặc biệt (Thái Độ Cổ, Cổ che giấu).</li>
+            <li><strong>Cảnh giới + Đạo ngân:</strong> Trí đạo là lực suy tính chính (cũng là lá chắn đối kháng); Ám che thân/vị/khí; Tín khuếch đại manh mối (công) hoặc bóp méo manh mối (thủ); Vận gieo xúc xắc mỗi lần dò; Thiên che thiên cơ (Tiên nhân); Biến hóa trả hàng giả.</li>
+            <li><strong>Manh mối:</strong> tên đúng +20, đúng vùng +15, đúng tông môn +10, Cổ nghi vấn đúng +10, khí tức +30, dò mù −40. Chỉ manh mối <strong>đúng thật</strong> mới tính, và bị chặn trần.</li>
+            <li><strong>Chi phí:</strong> mỗi lần dò tốn <strong>Nguyên Thạch</strong> (tối thiểu 100) hoặc <strong>Tiên Nguyên Thạch</strong> (Tiên nhân) — không tốn Chân Nguyên.</li>
+          </ul>
+        </section>
+        <section className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
+          <h3 className="font-bold text-emerald-300 mb-2">Bốn kết quả (so điểm tổng cuối)</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Đại thành công</strong> (≥+30 người / +20 Cổ): tọa độ thật, tu vi thật, toàn bộ Cổ trang bị; được gieo ấn ký.</li>
+            <li><strong>Tiểu thành công</strong>: vùng + tu vi ước lượng + 2 Cổ, tọa độ bị giấu.</li>
+            <li><strong>Màn sương</strong>: mất tài nguyên, trắng tay.</li>
+            <li><strong>Phản phệ</strong>: trọng thương HP + Hồn, trừ 20 Chân Nguyên (cố định), <strong>lộ ngược tọa độ cho mục tiêu</strong>.</li>
+          </ul>
+          <p className="mt-2">Sau mỗi lần dò, bảng <strong>điểm của chính đạo hữu</strong> hiện đầy đủ để biết thiếu ở đâu — điểm thủ của địch không bao giờ lộ.</p>
+        </section>
+        <section className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20">
+          <h3 className="font-bold text-purple-300 mb-2">Suy tính Cổ & Ấn ký</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li>Cổ trong tay người mang khí tức chủ: trang bị được che full, nằm kho/ngủ được che một nửa. Tự sở hữu Cổ đó thì gần như luôn thấu triệt.</li>
+            <li>Ấn ký truy tung: tối đa 3 mục tiêu (phàm) / 10 (tiên), cho tọa độ realtime trong radar.</li>
+            <li><strong>Đoạn Tuyệt Thiên Cơ:</strong> tốn 20 Chân Nguyên (cố định), chém ấn ký trên người + xóa tàn dư khí tức tại ô đang đứng.</li>
+          </ul>
+        </section>
       </div>
     ),
   },

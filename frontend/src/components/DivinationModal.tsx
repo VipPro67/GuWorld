@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
+import type { ScoreDetail } from "@/store/slices/scoutingSlice";
+import { formatNumber } from "@/lib/utils";
 import {
   Compass,
   Eye,
@@ -20,6 +22,39 @@ import {
   Store,
   User,
 } from "lucide-react";
+
+const MyScoreBreakdown: React.FC<{ score?: ScoreDetail }> = ({ score }) => {
+  if (!score) return null;
+  const rows: Array<[string, number]> = [
+    ["Cổ trinh sát", score.stat],
+    ["Cảnh giới + Đạo ngân", score.realm_dao],
+    ["Manh mối", score.clue],
+    ["Vận số", score.luck_roll],
+  ];
+  const divisor = score.rank_divisor && score.rank_divisor > 1 ? score.rank_divisor : 0;
+  return (
+    <div className="mb-3 grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-5">
+      {rows.map(([label, value]) => (
+        <div key={label} className="rounded bg-neutral-900/80 px-2 py-1.5">
+          <div className="text-neutral-500">{label}</div>
+          <div className={`font-mono font-semibold ${value < 0 ? "text-red-300" : "text-emerald-300"}`}>
+            {value < 0 ? "−" : "+"}
+            {formatNumber(Math.abs(value), 1)}
+          </div>
+        </div>
+      ))}
+      <div className="rounded bg-amber-950/40 px-2 py-1.5">
+        <div className="text-neutral-500">Tổng điểm ta</div>
+        <div className="font-mono font-semibold text-amber-300">{formatNumber(score.total, 1)}</div>
+      </div>
+      {divisor > 0 && (
+        <div className="col-span-2 rounded bg-neutral-900/80 px-2 py-1.5 text-neutral-400 sm:col-span-5">
+          Đã chia theo bậc Cổ: <span className="font-mono font-semibold text-cyan-300">÷{formatNumber(divisor, 1)}</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const DivinationModal: React.FC = () => {
   const {
@@ -47,15 +82,15 @@ export const DivinationModal: React.FC = () => {
   const [suspectedRegion, setSuspectedRegion] = useState("");
   const [suspectedSect, setSuspectedSect] = useState("");
   const [suspectedGu, setSuspectedGu] = useState("");
-  const [playerResourceType, setPlayerResourceType] = useState<"mana" | "immortal_stone">("mana");
-  const [playerResourceAmount, setPlayerResourceAmount] = useState(50);
+  const [playerResourceType, setPlayerResourceType] = useState<"primeval_stone" | "immortal_stone">("primeval_stone");
+  const [playerResourceAmount, setPlayerResourceAmount] = useState(200);
   const [applyingMark, setApplyingMark] = useState(false);
 
   // Gu Divination Form
   const [guQuery, setGuQuery] = useState("");
   const [targetRank, setTargetRank] = useState<number>(0);
-  const [guResourceType, setGuResourceType] = useState<"mana" | "immortal_stone">("mana");
-  const [guResourceAmount, setGuResourceAmount] = useState(50);
+  const [guResourceType, setGuResourceType] = useState<"primeval_stone" | "immortal_stone">("primeval_stone");
+  const [guResourceAmount, setGuResourceAmount] = useState(200);
 
   // Sever clues action
   const [severing, setSevering] = useState(false);
@@ -258,14 +293,14 @@ export const DivinationModal: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            setPlayerResourceType("mana");
-                            setPlayerResourceAmount(50);
+                            setPlayerResourceType("primeval_stone");
+                            setPlayerResourceAmount(200);
                           }}
                           className={`rounded px-2.5 py-1 ${
-                            playerResourceType === "mana" ? "bg-amber-600 text-white" : "bg-neutral-800 text-neutral-400"
+                            playerResourceType === "primeval_stone" ? "bg-amber-600 text-white" : "bg-neutral-800 text-neutral-400"
                           }`}
                         >
-                          Chân Nguyên
+                          Nguyên Thạch
                         </button>
                         <button
                           type="button"
@@ -285,14 +320,14 @@ export const DivinationModal: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <input
                       type="range"
-                      min={playerResourceType === "mana" ? 20 : 1}
-                      max={playerResourceType === "mana" ? Math.max(100, Math.floor(player?.current_mana || 100)) : 20}
+                      min={playerResourceType === "primeval_stone" ? 100 : 1}
+                      max={playerResourceType === "primeval_stone" ? Math.max(500, Math.floor(player?.primeval_stones || 500)) : 20}
                       value={playerResourceAmount}
                       onChange={(e) => setPlayerResourceAmount(Number(e.target.value))}
                       className="flex-1 accent-amber-500"
                     />
                     <span className="w-24 text-right font-mono text-xs text-amber-300">
-                      {playerResourceAmount} {playerResourceType === "mana" ? "Chân Nguyên" : "TNT"}
+                      {playerResourceAmount} {playerResourceType === "primeval_stone" ? "Nguyên Thạch" : "TNT"}
                     </span>
                   </div>
                 </div>
@@ -340,6 +375,8 @@ export const DivinationModal: React.FC = () => {
                   </div>
 
                   <p className="mb-4 text-xs text-neutral-300">{activeDivinationReport.message}</p>
+
+                  <MyScoreBreakdown score={activeDivinationReport.my_score} />
 
                   {pReport && (
                     <div className="grid grid-cols-2 gap-3 text-xs">
@@ -449,14 +486,14 @@ export const DivinationModal: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            setGuResourceType("mana");
-                            setGuResourceAmount(50);
+                            setGuResourceType("primeval_stone");
+                            setGuResourceAmount(200);
                           }}
                           className={`rounded px-2.5 py-1 ${
-                            guResourceType === "mana" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400"
+                            guResourceType === "primeval_stone" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400"
                           }`}
                         >
-                          Chân Nguyên
+                          Nguyên Thạch
                         </button>
                         <button
                           type="button"
@@ -476,14 +513,14 @@ export const DivinationModal: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <input
                       type="range"
-                      min={guResourceType === "mana" ? 20 : 1}
-                      max={guResourceType === "mana" ? Math.max(100, Math.floor(player?.current_mana || 100)) : 20}
+                      min={guResourceType === "primeval_stone" ? 100 : 1}
+                      max={guResourceType === "primeval_stone" ? Math.max(500, Math.floor(player?.primeval_stones || 500)) : 20}
                       value={guResourceAmount}
                       onChange={(e) => setGuResourceAmount(Number(e.target.value))}
                       className="flex-1 accent-purple-500"
                     />
                     <span className="w-24 text-right font-mono text-xs text-purple-300">
-                      {guResourceAmount} {guResourceType === "mana" ? "Chân Nguyên" : "TNT"}
+                      {guResourceAmount} {guResourceType === "primeval_stone" ? "Nguyên Thạch" : "TNT"}
                     </span>
                   </div>
                 </div>
@@ -531,6 +568,8 @@ export const DivinationModal: React.FC = () => {
                   </div>
 
                   <p className="mb-4 text-xs text-neutral-300">{activeGuDivinationReport.message}</p>
+
+                  <MyScoreBreakdown score={activeGuDivinationReport.my_score} />
 
                   {gReport && (
                     <div className="space-y-3 text-xs">

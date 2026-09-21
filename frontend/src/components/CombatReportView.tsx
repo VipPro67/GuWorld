@@ -1,10 +1,37 @@
 import React, { useState, useMemo } from "react";
 import { Swords, Trophy, Shield, Heart, ScrollText, Users, Play, ArrowLeft, ChevronDown, ChevronUp, Sparkles, Calculator, ArrowRight, Zap, TrendingUp, ShieldAlert } from "lucide-react";
-import { CombatReplayView, type CombatLogEntry } from "./CombatReplayView";
+import { CombatReplayView, type CombatLogEntry, type StatProvenance } from "./CombatReplayView";
 import { FormattedText } from "./FormattedText";
 import { Num } from "./Num";
 import { formatNumber } from "@/lib/utils";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
+
+// StatProvenanceRows renders one "base → final" stat row plus the itemized
+// status modifiers (e.g. Trọng Thương −50%) for attacker/defender provenance.
+function StatProvenanceRows({ prov, label }: { prov: StatProvenance; label: string }) {
+  const mods = prov.mods ?? [];
+  if (mods.length === 0) return null;
+  return (
+    <div className="pt-1.5 border-t border-zinc-800/50 space-y-1">
+      <div className="flex justify-between items-center">
+        <span>{label}:</span>
+        <span className="text-zinc-100 font-bold">
+          <Num value={prov.base_value ?? 0} />
+          <span className="text-zinc-500 mx-1">→</span>
+          <Num value={prov.final_value ?? 0} />
+        </span>
+      </div>
+      {mods.map((m) => (
+        <div key={m.key} className="flex justify-between items-center text-[10px]">
+          <span className="text-rose-300/90">{m.name}:</span>
+          <span className={`font-bold ${m.pct < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+            {m.pct > 0 ? "+" : ""}{(m.pct * 100).toFixed(0)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export interface CombatantInfo {
   id: string;
@@ -442,7 +469,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                       <FormattedText
                         text={entry.detail || `${entry.action} lên mục tiêu`}
                       />
-                      {entry.damage && entry.damage > 0 && !entry.detail?.includes("gây ") ? (
+                      {entry.damage && entry.damage > 0 && !entry.detail?.includes("gây ") && !entry.breakdown?.healing_base ? (
                         <span
                           className={`ml-1.5 font-bold ${
                             entry.is_crit ? "text-amber-400" : "text-rose-400"
@@ -493,6 +520,121 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                     // 4. Shield Absorbed & HP Lost
                     const shieldAbsorbed = b.shield_absorbed || 0;
                     const hpLost = b.hp_damage || Math.max(0, finalDmg - shieldAbsorbed);
+
+                    // Heal breakdown variant (skill heals / item heals)
+                    const healBase = b.healing_base ?? 0;
+                    const healDao = b.healing_dao_bonus ?? 0;
+                    const healFinal = b.healing_final ?? 0;
+                    const healPct = b.healer_healing?.final_value ?? 0;
+                    const isHeal = healFinal > 0 || healBase > 0;
+
+                    if (isHeal) {
+                      return (
+                        <div className="mt-2.5 p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
+                          {/* Header */}
+                          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                            <span className="font-bold text-emerald-400 flex items-center gap-1.5 text-xs">
+                              <Heart className="w-4 h-4 text-emerald-400" />
+                              Chi Tiết Công Thức Hồi Phục
+                            </span>
+                            {b.reason && (
+                              <span className="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/50 px-2 py-0.5 rounded-full font-sans">
+                                {b.reason}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Pipeline Step Summary Bar */}
+                          <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                            <div className="flex items-center gap-1">
+                              <span className="text-zinc-500">Hồi gốc:</span>
+                              <span className="text-emerald-300 font-bold"><Num value={healBase} /></span>
+                            </div>
+                            {healDao > 0 && (
+                              <>
+                                <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+                                <div className="flex items-center gap-1">
+                                  <span className="text-zinc-500">Đạo Ngân:</span>
+                                  <span className="text-indigo-300 font-bold">+<Num value={healDao} /></span>
+                                </div>
+                              </>
+                            )}
+                            <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+                            <div className="flex items-center gap-1">
+                              <span className="text-zinc-500">Hưởng:</span>
+                              <span className={`font-bold ${healPct < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                                {healPct > 0 ? "+" : ""}{(healPct * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded">
+                              <span className="text-emerald-300 font-semibold">Hồi Thực:</span>
+                              <span className="text-emerald-400 font-extrabold text-xs" title={healFinal.toLocaleString()}>
+                                +<Num value={healFinal} /> HP
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Detailed 2-Stage Cards Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                            <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                              <div className="text-[10px] text-emerald-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                                <span className="flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                                  1. Hồi Phục Đầu Ra
+                                </span>
+                                <span className="text-emerald-300 font-extrabold text-xs">
+                                  +<Num value={healBase + healDao} />
+                                </span>
+                              </div>
+                              <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                                <div className="flex justify-between items-center">
+                                  <span>Hồi Phục Gốc:</span>
+                                  <span className="text-emerald-300 font-bold"><Num value={healBase} /></span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span>Đạo Ngân Cộng Thêm:</span>
+                                  <span className="text-indigo-300 font-bold">+<Num value={healDao} /></span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                              <div className="text-[10px] text-emerald-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                                <span className="flex items-center gap-1">
+                                  <Heart className="w-3 h-3 text-emerald-400" />
+                                  2. Hệ Số Hưởng & Kết Quả
+                                </span>
+                                <span className="text-emerald-400 font-extrabold text-xs">
+                                  +<Num value={healFinal} /> HP
+                                </span>
+                              </div>
+                              <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                                <div className="flex justify-between items-center">
+                                  <span>Hưởng Hồi Phục:</span>
+                                  <span className={`font-bold ${healPct < 0 ? "text-rose-400" : "text-emerald-300"}`}>
+                                    {healPct > 0 ? "+" : ""}{(healPct * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                                {(b.healer_healing?.mods ?? []).map((m) => (
+                                  <div key={m.key} className="flex justify-between items-center text-[10px]">
+                                    <span className="text-rose-300/90">{m.name}:</span>
+                                    <span className={`font-bold ${m.pct < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                                      {m.pct > 0 ? "+" : ""}{(m.pct * 100).toFixed(0)}%
+                                    </span>
+                                  </div>
+                                ))}
+                                <div className="flex justify-between items-center pt-1 border-t border-zinc-800/50 text-emerald-300">
+                                  <span className="font-semibold">Tổng Hồi Phục:</span>
+                                  <span className="text-emerald-400 font-black text-sm">
+                                    +<Num value={healFinal} /> HP
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div className="mt-2.5 p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
@@ -614,6 +756,9 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                   <span className="text-emerald-300 font-bold">+{(pathBonus * 100).toFixed(0)}%</span>
                                 </div>
                               )}
+                              {b.attacker_attack && (b.attacker_attack.mods?.length ?? 0) > 0 && (
+                                <StatProvenanceRows prov={b.attacker_attack} label="Tấn Công" />
+                              )}
                             </div>
                           </div>
 
@@ -634,6 +779,9 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                 <span>Thủ Mục Tiêu:</span>
                                 <span className="text-cyan-400 font-bold">-<Num value={targetDef} /> Giáp</span>
                               </div>
+                              {b.defender_defense && (b.defender_defense.mods?.length ?? 0) > 0 && (
+                                <StatProvenanceRows prov={b.defender_defense} label="Phòng Ngự" />
+                              )}
                               <div className="flex justify-between items-center">
                                 <span>ST Sau Trừ Giáp:</span>
                                 <span className="text-cyan-200 font-bold"><Num value={afterDefDmg} /></span>

@@ -33,6 +33,8 @@ type PlayerProfileResponse struct {
 	EquippedGus     []string           `json:"equipped_gus"`
 	ScoutingStatus  string             `json:"scouting_status"`
 	StatusType      string             `json:"status_type"` // "success", "partial", "failure"
+	DeltaScore      float64            `json:"delta_score,omitempty"`
+	MyScore         *models.ScoreDetail `json:"my_score,omitempty"`
 	DominantPath    string             `json:"dominant_path"`
 	DaoMarks        models.DaoMarksMap `json:"dao_marks"`
 	PathMasteries   map[string]int     `json:"path_masteries"`

@@ -19,6 +19,17 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// Divination economy: mortals burn primeval stones, immortals may burn immortal
+// stones instead. Backfire drains a fixed mana amount, never a percentage.
+const (
+	divinationPrimevalMin    = 100.0
+	divinationBackfireMana   = 20.0
+	divineGuPrimevalFactor   = 0.1
+	divinationPrimevalFactor = 0.1
+	severCluesManaCost       = 20.0
+	resonanceScanManaCost    = 50.0
+)
+
 // InspectLocalPlayer handles local map inspection with FOV and Party/Sect verification
 func InspectLocalPlayer(c *gin.Context) {
 	viewerID, exists := middleware.GetPlayerID(c)
@@ -56,6 +67,11 @@ func InspectLocalPlayer(c *gin.Context) {
 	}
 
 	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id::text FROM sect_members WHERE player_id = $1`, viewerID).Scan(&viewerSectID)
+
+	var viewerDaoMarks models.DaoMarksMap
+	if viewer.Rank >= 6 {
+		_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, viewer.ID).Scan(&viewerDaoMarks)
+	}
 
 	// 2. Fetch target data
 	var target models.Player
@@ -138,52 +154,15 @@ func InspectLocalPlayer(c *gin.Context) {
 		}
 	}
 
-	// 4. Compute Scouting Level vs Disguise Level
-	scoutingLevel := float64(viewer.Rank)
-	for _, gu := range models.FilterEquippedActive(viewer.GuInventory) {
-		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-			scoutingLevel += spec.Effects.Passive.Investigation
-		}
-	}
-	for path, points := range viewer.PathMasteries {
-		cleanPath := strings.ToLower(path)
-		if strings.Contains(cleanPath, "wisdom") || strings.Contains(cleanPath, "information") {
-			switch gamefx.PathMasteryLevel(points) {
-			case 1:
-				scoutingLevel += 1.0
-			case 2:
-				scoutingLevel += 2.0
-			case 3:
-				scoutingLevel += 3.0
-			case 4:
-				scoutingLevel += 5.0
-			}
-		}
-	}
-
-	disguiseLevel := float64(target.Rank)
-	for _, gu := range models.FilterEquippedActive(target.GuInventory) {
-		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-			disguiseLevel += spec.Effects.Passive.DisguiseLevel
-		}
-	}
-	for path, points := range target.PathMasteries {
-		cleanPath := strings.ToLower(path)
-		if strings.Contains(cleanPath, "wisdom") || strings.Contains(cleanPath, "dark") {
-			switch gamefx.PathMasteryLevel(points) {
-			case 1:
-				disguiseLevel += 1.0
-			case 2:
-				disguiseLevel += 2.0
-			case 3:
-				disguiseLevel += 3.0
-			case 4:
-				disguiseLevel += 5.0
-			}
-		}
-	}
-
-	diff := scoutingLevel - disguiseLevel
+	// 4. Final score only: one engine delta decides everything.
+	delta, myScore := gamefx.EvaluateInspect(
+		&viewer,
+		&target,
+		models.FilterEquippedActive(viewer.GuInventory),
+		models.FilterEquippedActive(target.GuInventory),
+		viewerDaoMarks,
+		targetDaoMarks,
+	)
 	sectName := "Không tông môn"
 	if targetSectName.Valid {
 		sectName = targetSectName.String
@@ -191,8 +170,10 @@ func InspectLocalPlayer(c *gin.Context) {
 
 	var resp PlayerProfileResponse
 	resp.SectName = sectName
+	resp.DeltaScore = delta
+	resp.MyScore = &myScore
 
-	if isSameParty || isSameSect || diff >= 2 {
+	if isSameParty || isSameSect || delta >= 30 {
 		// Full inspection
 		resp.Username = target.Username
 		resp.Bio = target.Bio
@@ -223,7 +204,7 @@ func InspectLocalPlayer(c *gin.Context) {
 		}
 		resp.EquippedGus = equipped
 
-	} else if diff >= 0 {
+	} else if delta >= -10 {
 		// Partial inspection
 		resp.Username = target.Username
 		resp.Bio = target.Bio
@@ -339,13 +320,13 @@ func ExecuteDivination(c *gin.Context) {
 	var viewerDaoMarks models.DaoMarksMap
 	err = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.immortal_stones,
-		       p.hp, p.base_hp, p.soul_hp, p.max_soul, p.current_region, p.x, p.y,
+		       p.primeval_stones, p.hp, p.base_hp, p.soul_hp, p.max_soul, p.current_region, p.x, p.y,
 		       `+db.GuInventoryAggregate("p.id")+`, p.path_masteries
 		FROM players p
 		WHERE p.id = $1
 	`, viewerID).Scan(
 		&viewer.ID, &viewer.Username, &viewer.Rank, &viewer.SubRank, &viewer.CurrentMana, &viewer.MaxMana,
-		&viewer.ImmortalStones, &viewer.HP, &viewer.BaseHP, &viewer.SoulHP, &viewer.MaxSoul,
+		&viewer.ImmortalStones, &viewer.PrimevalStones, &viewer.HP, &viewer.BaseHP, &viewer.SoulHP, &viewer.MaxSoul,
 		&viewer.CurrentRegion, &viewer.X, &viewer.Y, &viewer.GuInventory, &viewer.PathMasteries,
 	)
 	if err != nil {
@@ -357,8 +338,8 @@ func ExecuteDivination(c *gin.Context) {
 		_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, viewer.ID).Scan(&viewerDaoMarks)
 	}
 
-	// 2. Resource Validation & Deduction
-	manaCost := 50.0
+	// 2. Resource Validation & Deduction (stones only, never mana)
+	primevalCost := 0.0
 	immortalStoneCost := 0.0
 	resourceBonus := 0.0
 
@@ -377,15 +358,16 @@ func ExecuteDivination(c *gin.Context) {
 		}
 		resourceBonus = immortalStoneCost * 5.0
 	} else {
-		manaCost = req.ResourceAmount
-		if manaCost < 20.0 {
-			manaCost = 20.0
+		// Primeval stones (legacy "mana" accepted as alias)
+		primevalCost = req.ResourceAmount
+		if primevalCost < divinationPrimevalMin {
+			primevalCost = divinationPrimevalMin
 		}
-		if viewer.CurrentMana < manaCost {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Chân nguyên không đủ để thi triển suy diễn!"})
+		if viewer.PrimevalStones < primevalCost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nguyên Thạch không đủ để thi triển suy diễn!"})
 			return
 		}
-		resourceBonus = manaCost * 0.2
+		resourceBonus = primevalCost * divinationPrimevalFactor
 	}
 
 	// 3. Fetch Target
@@ -427,8 +409,20 @@ func ExecuteDivination(c *gin.Context) {
 		}
 	}
 
-	// 4. Evaluate Divination
-	statusType, delta, backfireDamage := gamefx.EvaluateDivination(
+	// Validate SuspectedGu: check if target actually owns the Gu in player_gu
+	suspectedGuValid := false
+	if req.SuspectedGu != "" {
+		var guCount int
+		err := db.DB.QueryRowContext(c.Request.Context(),
+			`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND gu_id = $2`,
+			target.ID, req.SuspectedGu).Scan(&guCount)
+		if err == nil && guCount > 0 {
+			suspectedGuValid = true
+		}
+	}
+
+	// 4. Evaluate Divination (final delta only)
+	statusType, delta, backfireDamage, myScore := gamefx.EvaluateDivination(
 		&viewer,
 		&target,
 		models.FilterEquippedActive(viewer.GuInventory),
@@ -438,6 +432,7 @@ func ExecuteDivination(c *gin.Context) {
 		req,
 		resourceBonus,
 		itemClueValid,
+		suspectedGuValid,
 	)
 
 	// Deduct resources & apply damage in transaction
@@ -448,20 +443,25 @@ func ExecuteDivination(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	newMana := viewer.CurrentMana - manaCost
-	if newMana < 0 {
-		newMana = 0
+	newStones := viewer.PrimevalStones - primevalCost
+	if newStones < 0 {
+		newStones = 0
 	}
 	newImmortalStones := viewer.ImmortalStones - immortalStoneCost
 	if newImmortalStones < 0 {
 		newImmortalStones = 0
 	}
 
+	newMana := viewer.CurrentMana
 	newHP := viewer.HP
 	newSoulHP := viewer.SoulHP
 
 	if statusType == "backfire" {
-		newMana = 0
+		// Fixed mana drain, never a percentage.
+		newMana -= divinationBackfireMana
+		if newMana < 0 {
+			newMana = 0
+		}
 		newHP -= backfireDamage * 0.5
 		if newHP < 1.0 {
 			newHP = 1.0
@@ -480,9 +480,9 @@ func ExecuteDivination(c *gin.Context) {
 
 	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
-		SET current_mana = $1, immortal_stones = $2, hp = $3, soul_hp = $4
-		WHERE id = $5
-	`, newMana, newImmortalStones, newHP, newSoulHP, viewer.ID)
+		SET primeval_stones = $1, immortal_stones = $2, current_mana = $3, hp = $4, soul_hp = $5
+		WHERE id = $6
+	`, newStones, newImmortalStones, newMana, newHP, newSoulHP, viewer.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài nguyên: " + err.Error()})
 		return
@@ -497,6 +497,7 @@ func ExecuteDivination(c *gin.Context) {
 	resp := models.DivinationResponse{
 		StatusType:   statusType,
 		DeltaScore:   delta,
+		MyScore:      &myScore,
 		CanApplyMark: statusType == "full",
 	}
 
@@ -551,7 +552,7 @@ func ExecuteDivination(c *gin.Context) {
 	case "backfire":
 		resp.BackfireDamage = backfireDamage
 		resp.BackfireSoulDamage = backfireDamage * 0.5
-		resp.Message = "Thiên cơ phản phệ! Đối phương tu vi/phòng ngự trí đạo vượt trội, bạn bị trọng thương linh hồn và cạn kiệt chân nguyên!"
+		resp.Message = "Thiên cơ phản phệ! Đối phương tu vi/phòng ngự trí đạo vượt trội, bạn bị trọng thương linh hồn và tổn thất 20 Chân Nguyên!"
 	}
 
 	c.JSON(http.StatusOK, resp)
@@ -683,10 +684,8 @@ func SeverClues(c *gin.Context) {
 		return
 	}
 
-	manaCost := player.CurrentMana * 0.20
-	if manaCost < 10.0 {
-		manaCost = 10.0
-	}
+	// Fixed mana cost, never a percentage.
+	manaCost := severCluesManaCost
 	if player.CurrentMana < manaCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chân nguyên không đủ để thi triển Đoạn Tuyệt Thiên Cơ!"})
 		return
@@ -794,12 +793,10 @@ func ResonanceScan(c *gin.Context) {
 		}
 		_, _ = db.DB.ExecContext(c.Request.Context(), `UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, tntCost, viewer.ID)
 	} else {
-		manaCost := viewer.CurrentMana * 0.5
-		if manaCost < 20.0 {
-			manaCost = 20.0
-		}
+		// Fixed mana cost, never a percentage.
+		manaCost := resonanceScanManaCost
 		if viewer.CurrentMana < manaCost || viewer.PrimevalStones < 200 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cần ít nhất 50% Chân nguyên và 200 Nguyên Thạch để cảm ứng Cổ trùng!"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cần 50 Chân Nguyên và 200 Nguyên Thạch để cảm ứng Cổ trùng!"})
 			return
 		}
 		_, _ = db.DB.ExecContext(c.Request.Context(), `
@@ -927,13 +924,13 @@ func ExecuteDivineGu(c *gin.Context) {
 	var viewerDaoMarks models.DaoMarksMap
 	err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.immortal_stones,
-		       p.hp, p.base_hp, p.soul_hp, p.max_soul, p.current_region, p.x, p.y,
+		       p.primeval_stones, p.hp, p.base_hp, p.soul_hp, p.max_soul, p.current_region, p.x, p.y,
 		       `+db.GuInventoryAggregate("p.id")+`, p.path_masteries
 		FROM players p
 		WHERE p.id = $1
 	`, viewerID).Scan(
 		&viewer.ID, &viewer.Username, &viewer.Rank, &viewer.SubRank, &viewer.CurrentMana, &viewer.MaxMana,
-		&viewer.ImmortalStones, &viewer.HP, &viewer.BaseHP, &viewer.SoulHP, &viewer.MaxSoul,
+		&viewer.ImmortalStones, &viewer.PrimevalStones, &viewer.HP, &viewer.BaseHP, &viewer.SoulHP, &viewer.MaxSoul,
 		&viewer.CurrentRegion, &viewer.X, &viewer.Y, &viewer.GuInventory, &viewer.PathMasteries,
 	)
 	if err != nil {
@@ -945,8 +942,8 @@ func ExecuteDivineGu(c *gin.Context) {
 		_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, viewer.ID).Scan(&viewerDaoMarks)
 	}
 
-	// 2. Resource Validation & Deduction
-	manaCost := 40.0
+	// 2. Resource Validation & Deduction (stones only, never mana)
+	primevalCost := 0.0
 	immortalStoneCost := 0.0
 	resourceBonus := 0.0
 
@@ -965,15 +962,16 @@ func ExecuteDivineGu(c *gin.Context) {
 		}
 		resourceBonus = immortalStoneCost * 6.0
 	} else {
-		manaCost = req.ResourceAmount
-		if manaCost < 20.0 {
-			manaCost = 20.0
+		// Primeval stones (legacy "mana" accepted as alias)
+		primevalCost = req.ResourceAmount
+		if primevalCost < divinationPrimevalMin {
+			primevalCost = divinationPrimevalMin
 		}
-		if viewer.CurrentMana < manaCost {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Chân nguyên không đủ để thi triển suy diễn!"})
+		if viewer.PrimevalStones < primevalCost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nguyên Thạch không đủ để thi triển suy tính!"})
 			return
 		}
-		resourceBonus = manaCost * 0.25
+		resourceBonus = primevalCost * divineGuPrimevalFactor
 	}
 
 	// 3. Resolve Target Gu: Name / Query -> Gu ID & Spec from Dictionary
@@ -1053,8 +1051,13 @@ func ExecuteDivineGu(c *gin.Context) {
 			if pActiveConceal {
 				def += 50.0
 			}
-			if def > maxHolderDefense {
-				maxHolderDefense = def
+			// Cổ nằm kho/ngủ chỉ hưởng một nửa che giấu của chủ; Cổ trang bị hưởng full.
+			effDef := def
+			if !pEquipped {
+				effDef = def * 0.5
+			}
+			if effDef > maxHolderDefense {
+				maxHolderDefense = effDef
 			}
 
 			locState := "inventory"
@@ -1109,7 +1112,7 @@ func ExecuteDivineGu(c *gin.Context) {
 				}
 				continue
 			}
-			sectDef := float64(sLevel * 10)
+			sectDef := float64(sLevel*20 + 10)
 			if sectDef > maxHolderDefense {
 				maxHolderDefense = sectDef
 			}
@@ -1206,8 +1209,8 @@ func ExecuteDivineGu(c *gin.Context) {
 		LIMIT 1
 	`, targetGu.ID, targetGu.Rank).Scan(&reqGusJSON, &reqMatsJSON, &successRate)
 
-	// 6. Evaluate Divination
-	statusType, delta, backfireDamage, backfireSoulDamage := gamefx.EvaluateGuDivination(
+	// 6. Evaluate Divination (final delta only)
+	statusType, delta, backfireDamage, backfireSoulDamage, myScore := gamefx.EvaluateGuDivination(
 		&viewer,
 		models.FilterEquippedActive(viewer.GuInventory),
 		viewerDaoMarks,
@@ -1225,20 +1228,25 @@ func ExecuteDivineGu(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	newMana := viewer.CurrentMana - manaCost
-	if newMana < 0 {
-		newMana = 0
+	newStones := viewer.PrimevalStones - primevalCost
+	if newStones < 0 {
+		newStones = 0
 	}
 	newImmortalStones := viewer.ImmortalStones - immortalStoneCost
 	if newImmortalStones < 0 {
 		newImmortalStones = 0
 	}
 
+	newMana := viewer.CurrentMana
 	newHP := viewer.HP
 	newSoulHP := viewer.SoulHP
 
 	if statusType == "backfire" {
-		newMana = 0
+		// Fixed mana drain, never a percentage.
+		newMana -= divinationBackfireMana
+		if newMana < 0 {
+			newMana = 0
+		}
 		newHP -= backfireDamage * 0.5
 		if newHP < 1.0 {
 			newHP = 1.0
@@ -1251,9 +1259,9 @@ func ExecuteDivineGu(c *gin.Context) {
 
 	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
-		SET current_mana = $1, immortal_stones = $2, hp = $3, soul_hp = $4
-		WHERE id = $5
-	`, newMana, newImmortalStones, newHP, newSoulHP, viewer.ID)
+		SET primeval_stones = $1, immortal_stones = $2, current_mana = $3, hp = $4, soul_hp = $5
+		WHERE id = $6
+	`, newStones, newImmortalStones, newMana, newHP, newSoulHP, viewer.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài nguyên: " + err.Error()})
 		return
@@ -1388,6 +1396,7 @@ func ExecuteDivineGu(c *gin.Context) {
 	c.JSON(http.StatusOK, models.DivineGuResponse{
 		StatusType:         statusType,
 		DeltaScore:         delta,
+		MyScore:            &myScore,
 		Report:             report,
 		BackfireDamage:     backfireDamage,
 		BackfireSoulDamage: backfireSoulDamage,

@@ -803,10 +803,16 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorName: actor.Name,
 						Action:    "HEAL",
 						Damage:    heal,
-						Detail:    fmt.Sprintf("%s hồi phục %.0f HP!", actor.Name, baseHeal),
+						Detail:    fmt.Sprintf("%s hồi phục %.0f HP!", actor.Name, heal),
+						Breakdown: &DamageBreakdown{
+							HealingBase:     baseHeal,
+							HealingDaoBonus: daoHeal,
+							HealingFinal:    heal,
+							HealerHealing:   actor.StatProvenance["healing_received"],
+						},
 					}
 					if daoHeal > 0 {
-						hl.Detail = fmt.Sprintf("%s hồi phục %.0f + %.0f HP do Đạo Ngân!", actor.Name, baseHeal, daoHeal)
+						hl.Detail = fmt.Sprintf("%s hồi phục %.0f HP (gốc %.0f + Đạo Ngân %.0f)!", actor.Name, heal, baseHeal, daoHeal)
 					}
 					healLog = &hl
 				}
@@ -1017,10 +1023,11 @@ func Simulate(state *CombatState) []CombatLog {
 									Action:    "BLIND_MISS",
 									TargetId:  target.ID,
 									Detail:    fmt.Sprintf("%s bị mù, đòn tấn công [%s] đánh trượt %s!", actor.Name, a.Name, target.Name),
-									Breakdown: &DamageBreakdown{
-										BaseDamage: a.Damage,
-										Reason:     "Đánh trượt do trạng thái Mù (Blind)",
-									},
+						Breakdown: &DamageBreakdown{
+							BaseDamage:     a.Damage,
+							AttackerAttack: actor.StatProvenance["attack"],
+							Reason:         "Đánh trượt do trạng thái Mù (Blind)",
+						},
 								})
 								continue
 							}
@@ -1111,6 +1118,8 @@ func Simulate(state *CombatState) []CombatLog {
 							FinalDamage:     totalHitDmg,
 							RawDamage:       rawDmg,
 							HitCount:        hitCount,
+							AttackerAttack:  actor.StatProvenance["attack"],
+							DefenderDefense: target.StatProvenance["defense"],
 						}
 
 						if totalHitDmg > 0 {
@@ -1342,6 +1351,7 @@ func Simulate(state *CombatState) []CombatLog {
 					var costLog *CombatLog
 					var gainLog *CombatLog
 					var resultLogs []CombatLog
+					var extraBreakdown *DamageBreakdown
 
 					for i := range logs {
 						log := &logs[i]
@@ -1355,11 +1365,19 @@ func Simulate(state *CombatState) []CombatLog {
 							// Skip redundant damage outcome logs already detailed in useLog
 							continue
 						} else {
+							if log.Breakdown != nil && extraBreakdown == nil {
+								// Preserve formula breakdowns (heal, etc.) from
+								// logs folded into the consolidated entry.
+								extraBreakdown = log.Breakdown
+							}
 							resultLogs = append(resultLogs, *log)
 						}
 					}
 
 					if useLog != nil {
+						if useLog.Breakdown == nil && extraBreakdown != nil {
+							useLog.Breakdown = extraBreakdown
+						}
 						mergedDetail := useLog.Detail
 
 						cleanDetail := func(detail string, actorName string) string {
@@ -1529,7 +1547,8 @@ func Simulate(state *CombatState) []CombatLog {
 					if actor.AutoHealHP && actor.HP > 0 && actor.HealCharges > 0 && actor.ItemsUsedInBattle < 3 {
 						hpPct := actor.HP / actor.MaxHP * 100
 						if hpPct <= actor.HealThreshold {
-							healVal := actor.HealPotency
+							baseHeal := actor.HealPotency
+							healVal := baseHeal * (1.0 + actor.HealingReceived)
 							actor.HP += healVal
 							if actor.HP > actor.MaxHP {
 								actor.HP = actor.MaxHP
@@ -1543,6 +1562,11 @@ func Simulate(state *CombatState) []CombatLog {
 								Action:    "ITEM_HEAL",
 								Damage:    healVal,
 								Detail:    fmt.Sprintf("%s tự động dùng dược liệu hồi phục %.0f HP! (đã dùng %d/3)", actor.Name, healVal, actor.ItemsUsedInBattle),
+								Breakdown: &DamageBreakdown{
+									HealingBase:   baseHeal,
+									HealingFinal:  healVal,
+									HealerHealing: actor.StatProvenance["healing_received"],
+								},
 							})
 						}
 					}
@@ -1758,6 +1782,8 @@ func Simulate(state *CombatState) []CombatLog {
 						FinalDamage:     netDmg,
 						RawDamage:       actor.BaseDmg * daoMult * fallbackDmgMult,
 						HitCount:        1,
+						AttackerAttack:  actor.StatProvenance["attack"],
+						DefenderDefense: target.StatProvenance["defense"],
 					}
 
 					if netDmg > 0 {

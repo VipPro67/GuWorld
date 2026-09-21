@@ -246,6 +246,12 @@ type CombatantAuto struct {
 	HasNonConflictingDao bool               // true if character possesses non-conflicting dao marks trait
 	DaoProfile           *gamefx.DaoCombatProfile // precomputed O(1) dao conflict and natural defense profile
 
+	// StatProvenance maps stat key ("attack"/"defense"/"speed"/
+	// "healing_received") to the status-effect modification provenance computed
+	// by the handler at build time, for breakdown display. Nil for monsters and
+	// statusless combatants.
+	StatProvenance map[string]*StatProvenance `json:"stat_provenance,omitempty"`
+
 	// Equipment / Loadout
 	Loadout            *CombatLoadout
 	CategoryPriorities []string // Priority order of skill categories: "shield", "heal", "damage", "other"
@@ -374,6 +380,24 @@ type CombatantSnapshot struct {
 	IsDead  bool    `json:"is_dead"`
 }
 
+// StatModSource attributes one status-effect stat modification for the
+// breakdown UI (e.g. Trọng Thương: attack −20%).
+type StatModSource struct {
+	Key  string  `json:"key"`  // status dictionary key
+	Name string  `json:"name"` // display name (Vietnamese)
+	Pct  float64 `json:"pct"`  // applied percentage, e.g. -0.5 => -50%
+}
+
+// StatProvenance contrasts a stat's pre-status value with its final combat
+// value, itemizing the status modifications in between. Computed by the
+// handler at combatant build time.
+type StatProvenance struct {
+	Stat       string          `json:"stat"`
+	BaseValue  float64         `json:"base_value"`
+	FinalValue float64         `json:"final_value"`
+	Mods       []StatModSource `json:"mods,omitempty"`
+}
+
 // DamageBreakdown contains the exact formula components for detailed player inspection.
 type DamageBreakdown struct {
 	BaseDamage      float64 `json:"base_damage,omitempty"`
@@ -392,6 +416,17 @@ type DamageBreakdown struct {
 	RawDamage       float64 `json:"raw_damage,omitempty"`
 	HitCount        int     `json:"hit_count,omitempty"`
 	Reason          string  `json:"reason,omitempty"`
+
+	// Status-effect provenance attached by the engine from the combatants'
+	// StatProvenance maps, so the UI can show e.g. "Trọng Thương −50%".
+	AttackerAttack  *StatProvenance `json:"attacker_attack,omitempty"`
+	DefenderDefense *StatProvenance `json:"defender_defense,omitempty"`
+	HealerHealing   *StatProvenance `json:"healer_healing,omitempty"`
+
+	// Healing formula components (skill heals and item heals).
+	HealingBase     float64 `json:"healing_base,omitempty"`
+	HealingDaoBonus float64 `json:"healing_dao_bonus,omitempty"`
+	HealingFinal    float64 `json:"healing_final,omitempty"`
 }
 
 // CombatLog represents a granular event to be stringified as JSON.
