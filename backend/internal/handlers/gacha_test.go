@@ -31,6 +31,19 @@ func TestDeductGachaCostAmount(t *testing.T) {
 		t.Errorf("expected error for insufficient stones, got nil")
 	}
 
+	// Immortal stones success
+	if err := deductGachaCostAmount(p, "immortal_stones", 3); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.ImmortalStones != 7 {
+		t.Errorf("expected 7 immortal stones, got %.3f", p.ImmortalStones)
+	}
+
+	// Immortal stones insufficient
+	if err := deductGachaCostAmount(p, "immortal_stones", 100); err == nil {
+		t.Errorf("expected error for insufficient immortal stones, got nil")
+	}
+
 	// Lifespan success
 	if err := deductGachaCostAmount(p, "lifespan", 10); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -54,6 +67,7 @@ func TestApplyGachaRewardInMemory(t *testing.T) {
 	p := &models.Player{
 		ResourceState: models.ResourceState{
 			PrimevalStones: 1000,
+			ImmortalStones: 5,
 		},
 		CultivationState: models.CultivationState{
 			Lifespan: 50,
@@ -64,6 +78,11 @@ func TestApplyGachaRewardInMemory(t *testing.T) {
 	applyGachaRewardInMemory(p, GachaResultItem{Type: "primeval_stones", Amount: 500})
 	if p.PrimevalStones != 1500 {
 		t.Errorf("expected 1500 stones, got %.3f", p.PrimevalStones)
+	}
+
+	applyGachaRewardInMemory(p, GachaResultItem{Type: "immortal_stones", Amount: 20})
+	if p.ImmortalStones != 25 {
+		t.Errorf("expected 25 immortal stones, got %.3f", p.ImmortalStones)
 	}
 
 	applyGachaRewardInMemory(p, GachaResultItem{Type: "lifespan", Amount: 5})
@@ -77,16 +96,55 @@ func TestApplyGachaRewardInMemory(t *testing.T) {
 	}
 }
 
+func TestBuildGachaUpdateQuery(t *testing.T) {
+	p := &models.Player{
+		ResourceState: models.ResourceState{
+			PrimevalStones: 2000,
+			ImmortalStones: 50,
+		},
+		CultivationState: models.CultivationState{
+			Lifespan:     60,
+			HumanQi:      100,
+			WallProgress: 0.5,
+		},
+	}
+
+	query, args := buildGachaUpdateQuery(p)
+	if !strings.Contains(query, "immortal_stones") {
+		t.Fatalf("expected query to contain immortal_stones, got: %s", query)
+	}
+	if !strings.Contains(query, "primeval_stones") {
+		t.Fatalf("expected query to contain primeval_stones, got: %s", query)
+	}
+
+	// Verify args contain immortal_stones value
+	foundImmortal := false
+	for _, arg := range args {
+		if v, ok := arg.(float64); ok && v == 50 {
+			foundImmortal = true
+			break
+		}
+	}
+	if !foundImmortal {
+		t.Fatalf("expected args to contain immortal_stones value (50), got: %v", args)
+	}
+}
+
 func TestAggregateGachaRewards(t *testing.T) {
 	rewards := []GachaResultItem{
 		{Type: "primeval_stones", Amount: 2000},
 		{Type: "primeval_stones", Amount: 3000},
+		{Type: "immortal_stones", Amount: 100},
+		{Type: "immortal_stones", Amount: 50},
 		{Type: "item", ID: "mat_iron", Amount: 2},
 	}
 
 	result := aggregateGachaRewards(rewards)
 	if !strings.Contains(result, "5000 Nguyên Thạch") {
 		t.Errorf("expected aggregated primeval stones 5000 Nguyên Thạch, got: %s", result)
+	}
+	if !strings.Contains(result, "150 Tiên Nguyên Thạch") {
+		t.Errorf("expected aggregated immortal stones 150 Tiên Nguyên Thạch, got: %s", result)
 	}
 }
 

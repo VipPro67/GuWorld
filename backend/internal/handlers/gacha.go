@@ -598,6 +598,9 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc *precomputedPools, excludedI
 	case "primeval_stones":
 		return GachaResultItem{Type: "primeval_stones", Amount: amount, Label: fmt.Sprintf("%.0f Nguyên Thạch", amount), IsRare: isRare}
 
+	case "immortal_stones":
+		return GachaResultItem{Type: "immortal_stones", Amount: amount, Label: fmt.Sprintf("%.0f Tiên Nguyên Thạch", amount), IsRare: isRare}
+
 	case "lifespan":
 		return GachaResultItem{Type: "lifespan", Amount: amount, Label: fmt.Sprintf("+%.0f năm Thọ Nguyên", amount), IsRare: isRare}
 
@@ -723,6 +726,8 @@ func applyGachaRewardInMemory(player *models.Player, reward GachaResultItem) {
 	switch reward.Type {
 	case "primeval_stones":
 		player.PrimevalStones += float64(reward.Amount)
+	case "immortal_stones":
+		player.ImmortalStones += float64(reward.Amount)
 	case "lifespan":
 		player.Lifespan += reward.Amount
 	case "human_qi":
@@ -754,8 +759,8 @@ func applyGachaRewardInMemory(player *models.Player, reward GachaResultItem) {
 }
 
 func buildGachaUpdateQuery(player *models.Player) (string, []interface{}) {
-	baseFields := []string{"primeval_stones", "lifespan", "human_qi", "wall_progress"}
-	baseVals := []interface{}{player.PrimevalStones, player.Lifespan, player.HumanQi, player.WallProgress}
+	baseFields := []string{"primeval_stones", "immortal_stones", "lifespan", "human_qi", "wall_progress"}
+	baseVals := []interface{}{player.PrimevalStones, player.ImmortalStones, player.Lifespan, player.HumanQi, player.WallProgress}
 	extraFields := []string{}
 	extraVals := []interface{}{}
 
@@ -831,6 +836,9 @@ func aggregateGachaRewards(rewards []GachaResultItem) string {
 		case "primeval_stones":
 			key = "primeval_stones"
 			name = "Nguyên Thạch"
+		case "immortal_stones":
+			key = "immortal_stones"
+			name = "Tiên Nguyên Thạch"
 		case "lifespan":
 			key = "lifespan"
 			name = "năm Thọ Nguyên"
@@ -894,6 +902,8 @@ func aggregateGachaRewards(rewards []GachaResultItem) string {
 		} else if strings.HasPrefix(key, "recipe:") {
 			line = fmt.Sprintf("Bí phương: [%s] (Độ hoàn thiện: %.0f%%)", val.label, val.amount)
 		} else if key == "primeval_stones" {
+			line = fmt.Sprintf("%.0f %s", val.amount, val.label)
+		} else if key == "immortal_stones" {
 			line = fmt.Sprintf("%.0f %s", val.amount, val.label)
 		} else if key == "lifespan" {
 			line = fmt.Sprintf("+%.0f %s", val.amount, val.label)
