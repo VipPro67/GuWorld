@@ -17,6 +17,7 @@ export interface CultivationSlice {
   regionsLoaded: boolean;
   world: WorldConfig | null;
   fetchRecipes: () => Promise<void>;
+  refreshRecipeProgress: () => Promise<void>;
   fetchRegions: () => Promise<void>;
   fetchWorld: () => Promise<WorldConfig | null>;
   quests: ApiResponseData[];
@@ -32,6 +33,8 @@ export interface CultivationSlice {
   redeemGiftCode: (code: string) => Promise<{ success: boolean; message: string } | null>;
 }
 
+let refreshRecipeProgressPromise: Promise<void> | null = null;
+
 export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CultivationSlice> = (set, get) => ({
   recipes: [],
   recipesLoaded: false,
@@ -42,22 +45,47 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
 
   fetchRecipes: async () => {
     if (get().recipesLoaded) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/recipes`);
-      if (response.status === 401) {
-        set({ recipes: [], recipesLoaded: true });
-        return;
+    return get().refreshRecipeProgress();
+  },
+
+  refreshRecipeProgress: async () => {
+    if (refreshRecipeProgressPromise) return refreshRecipeProgressPromise;
+
+    const executeRefresh = async () => {
+      const token = get().token;
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/recipes`);
+        if (response.status === 401) {
+          set({ recipes: [], recipesLoaded: true });
+          return;
+        }
+        if (!response.ok) {
+          throw new Error("Failed to load recipes");
+        }
+        const data = await response.json();
+        if (get().token !== token) return;
+        const recipes: RefiningRecipe[] = data || [];
+        set({ recipes, recipesLoaded: true });
+        if (get().player) {
+          get().setPlayerFromServer({
+            unlocked_recipes: recipes.map((recipe) => ({
+              recipe_id: recipe.id,
+              completion_rate: recipe.completion_rate,
+            })),
+          });
+        }
+      } catch (caught: unknown) {
+        const err = caught instanceof Error ? caught : new Error(String(caught));
+        console.error("Recipes sync error:", err.message);
+        set({ recipesLoaded: true });
+      } finally {
+        refreshRecipeProgressPromise = null;
       }
-      if (!response.ok) {
-        throw new Error("Failed to load recipes");
-      }
-      const data = await response.json();
-      set({ recipes: data || [], recipesLoaded: true });
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("Recipes sync error:", err.message);
-      set({ recipesLoaded: true });
-    }
+    };
+
+    refreshRecipeProgressPromise = executeRefresh();
+    return refreshRecipeProgressPromise;
   },
 
   fetchQuests: async () => {
