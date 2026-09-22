@@ -36,9 +36,9 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   claimAchievement: async (achievementId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("achievements")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/achievements/claim`, {
         method: "POST",
@@ -58,7 +58,7 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Nhận thưởng thành tựu lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("achievements"); }
   },
 
   selectTitleFrame: async (title, frame) => {

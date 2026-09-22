@@ -142,10 +142,10 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   refineGu: async (recipeId, selectedInstanceIds) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/refine`, {
         method: "POST",
@@ -179,15 +179,15 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message, "error");
       return { status: "failed", message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:cultivation");
     }
   },
 
   deduceRecipe: async (recipeId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/refine/deduce`, {
         method: "POST",
@@ -227,20 +227,21 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message, "error");
       return { success: false, message: err.message, completion_rate: 0 };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:cultivation");
     }
   },
 
   breakWall: async (manaSpend) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token) return null;
     // Client-side validation to prevent unnecessary requests
     if (manaSpend < 0 || manaSpend > Math.floor(player.current_mana)) {
       set({ error: "Số lượng Chân Nguyên không hợp lệ." });
       return null;
     }
+    if (!get().beginAction("player:cultivation")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/break-wall`, {
         method: "POST",
@@ -261,13 +262,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Trùng kích lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   rechargeWithStones: async (stones) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/recharge`, {
         method: "POST",
@@ -288,14 +289,14 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addLog(`Nạp nguyên thạch lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:cultivation");
     }
   },
 
   useRelicGu: async (relicKey) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/use-relic-gu`, {
         method: "POST",
@@ -314,13 +315,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Dùng Cổ Xá Lợi lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   ascension: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension`, {
         method: "POST",
@@ -337,13 +338,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Thăng tiên lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   completeQuest: async (questId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/quest/complete`, {
         method: "POST",
@@ -361,13 +362,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(`Nhận thưởng nhiệm vụ lỗi: ${err.message}`, "error");
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   redeemGiftCode: async (code) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/redeem-gift-code`, {
         method: "POST",
@@ -386,14 +387,14 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đổi mã quà lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
 
   triggerTribulation: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/tribulation`, {
         method: "POST",
@@ -409,6 +410,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi độ kiếp: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 });

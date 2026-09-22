@@ -33,9 +33,9 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   feedPet: async (petId, itemId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("pets")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/pets/feed`, {
         method: "POST",
@@ -53,13 +53,13 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("pets"); }
   },
 
   setPetFormation: async (petIds) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("pets")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/pets/formation`, {
         method: "POST",
@@ -77,13 +77,13 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("pets"); }
   },
 
   setPetSleep: async (petId, sleeping) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("pets")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/pets/sleep`, {
         method: "POST",
@@ -100,13 +100,13 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("pets"); }
   },
 
   releasePet: async (petId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("pets")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/pets/release`, {
         method: "POST",
@@ -124,13 +124,13 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("pets"); }
   },
 
   mergePets: async (targetId, sourceIds) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("pets")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/pets/merge`, {
         method: "POST",
@@ -148,13 +148,13 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("pets"); }
   },
 
   captureMonster: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("pets")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/capture`, {
         method: "POST",
@@ -178,6 +178,6 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return null;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("pets"); }
   },
 });

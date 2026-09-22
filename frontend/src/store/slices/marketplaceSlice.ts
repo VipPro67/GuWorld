@@ -85,9 +85,9 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   createMarketplaceListing: async (payload) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, {
         method: "POST",
@@ -124,13 +124,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đăng bán thất bại: ${err.message}`);
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   placeMarketplaceBid: async (listingId, amount) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/bid`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId, amount }) });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
@@ -145,13 +145,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught)); set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); get().addToast(err.message || "Đặt giá thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
+      const err = caught instanceof Error ? caught : new Error(String(caught)); set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); get().addToast(err.message || "Đặt giá thất bại.", "error"); return false; } finally { get().endAction("player:inventory"); }
   },
 
   cancelMarketplaceListing: async (listingId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId }) });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
@@ -167,13 +167,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       await get().fetchMarketplaceListings();
       return true;
     } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught)); set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); get().addToast(err.message || "Hủy listing thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
+      const err = caught instanceof Error ? caught : new Error(String(caught)); set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); get().addToast(err.message || "Hủy listing thất bại.", "error"); return false; } finally { get().endAction("player:inventory"); }
   },
 
   buyMarketplaceListing: async (listingId, quantity) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buy`, {
         method: "POST",
@@ -193,7 +193,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mua hàng thất bại: ${err.message}`);
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   // Buyback Orders
@@ -211,9 +211,9 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   createBuybackOrder: async (payload) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback`, {
         method: "POST",
@@ -245,13 +245,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   sellToBuybackOrder: async (payload) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback/sell`, {
         method: "POST",
@@ -279,13 +279,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   cancelBuybackOrder: async (orderId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback/cancel`, {
         method: "POST",
@@ -307,7 +307,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   // Async Trade Offers
@@ -325,9 +325,9 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   createTradeOffer: async (payload) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers`, {
         method: "POST",
@@ -354,13 +354,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   acceptTradeOffer: async (offerId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers/accept`, {
         method: "POST",
@@ -383,13 +383,13 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   cancelTradeOffer: async (offerId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers/cancel`, {
         method: "POST",
@@ -412,6 +412,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 });
