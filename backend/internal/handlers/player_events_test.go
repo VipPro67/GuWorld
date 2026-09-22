@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 func TestDecodeActiveCombatTreatsDatabaseNullAsNoCombat(t *testing.T) {
@@ -13,6 +16,25 @@ func TestDecodeActiveCombatTreatsDatabaseNullAsNoCombat(t *testing.T) {
 		if combat != nil {
 			t.Fatalf("decodeActiveCombat(%q) = %#v, want nil", raw, combat)
 		}
+	}
+}
+
+func TestPlayerRealtimePayloadsCarryStateRevision(t *testing.T) {
+	snapshot := playerRealtimeSnapshot(models.Player{Account: models.Account{StateRevision: 42}})
+	if snapshot.StateRevision != 42 {
+		t.Fatalf("snapshot state revision = %d, want 42", snapshot.StateRevision)
+	}
+
+	raw, err := json.Marshal(PlayerDeltaEvent{Type: PositionEventUpdated, StateRevision: 43})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["state_revision"] != float64(43) {
+		t.Fatalf("delta state revision = %#v, want 43", payload["state_revision"])
 	}
 }
 

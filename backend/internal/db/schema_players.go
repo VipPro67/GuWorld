@@ -81,8 +81,32 @@ func schemaPlayers() error {
 		last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL,
 		active_session_id VARCHAR(64) NOT NULL DEFAULT '',
 		is_dead BOOLEAN NOT NULL DEFAULT false,
-		version INT NOT NULL DEFAULT 0
+		version INT NOT NULL DEFAULT 0,
+		state_revision BIGINT NOT NULL DEFAULT 0
 	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("players_state_revision_column", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS state_revision BIGINT NOT NULL DEFAULT 0;`); err != nil {
+		return err
+	}
+
+	// Every update of the player row advances its ordering token. Collection
+	// triggers installed after all schema steps update this row too, so their
+	// revision change is atomic with the owning transaction.
+	if err := execSchema("players_state_revision_trigger", `
+	CREATE OR REPLACE FUNCTION bump_player_row_state_revision()
+	RETURNS trigger LANGUAGE plpgsql AS $$
+	BEGIN
+		NEW.state_revision := OLD.state_revision + 1;
+		RETURN NEW;
+	END;
+	$$;
+	DROP TRIGGER IF EXISTS trg_players_state_revision ON players;
+	CREATE TRIGGER trg_players_state_revision
+		BEFORE UPDATE ON players
+		FOR EACH ROW EXECUTE FUNCTION bump_player_row_state_revision();`); err != nil {
 		return err
 	}
 
@@ -208,6 +232,69 @@ func schemaPlayers() error {
 	}
 
 	return nil
+}
+
+// installPlayerCollectionRevisionTriggers attaches an ownership trigger to
+// every table with a direct foreign key to players. Discovering the foreign
+// keys keeps new player-owned collections covered without duplicating their
+// schema here. Transfers bump both the former and new owner exactly inside the
+// collection mutation's transaction.
+func installPlayerCollectionRevisionTriggers() error {
+	return execSchema("player_collection_state_revision_triggers", `
+	CREATE OR REPLACE FUNCTION bump_player_collection_state_revision()
+	RETURNS trigger LANGUAGE plpgsql AS $$
+	DECLARE
+		owner_column text := TG_ARGV[0];
+		old_owner uuid;
+		new_owner uuid;
+	BEGIN
+		IF TG_OP <> 'INSERT' THEN
+			old_owner := NULLIF(to_jsonb(OLD)->>owner_column, '')::uuid;
+		END IF;
+		IF TG_OP <> 'DELETE' THEN
+			new_owner := NULLIF(to_jsonb(NEW)->>owner_column, '')::uuid;
+		END IF;
+
+		IF old_owner IS NOT NULL THEN
+			-- During ON DELETE CASCADE the owner is already being deleted. Avoid
+			-- touching that tuple from a child AFTER DELETE trigger.
+			IF EXISTS (SELECT 1 FROM players WHERE id = old_owner) THEN
+				UPDATE players SET state_revision = state_revision + 1 WHERE id = old_owner;
+			END IF;
+		END IF;
+		IF new_owner IS NOT NULL AND new_owner IS DISTINCT FROM old_owner THEN
+			UPDATE players SET state_revision = state_revision + 1 WHERE id = new_owner;
+		END IF;
+		IF TG_OP = 'DELETE' THEN
+			RETURN OLD;
+		END IF;
+		RETURN NEW;
+	END;
+	$$;
+
+	DO $$
+	DECLARE fk record;
+	BEGIN
+		FOR fk IN
+			SELECT c.conrelid::regclass AS table_name, a.attname AS column_name,
+			       'trg_state_revision_' || c.conrelid::oid || '_' || a.attnum AS trigger_name
+			FROM pg_constraint c
+			JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
+			JOIN unnest(c.confkey) WITH ORDINALITY AS rk(attnum, ord) USING (ord)
+			JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+			JOIN pg_attribute ra ON ra.attrelid = c.confrelid AND ra.attnum = rk.attnum
+			WHERE c.contype = 'f'
+			  AND c.confrelid = 'players'::regclass
+			  AND ra.attname = 'id'
+			  AND c.conrelid <> 'players'::regclass
+		LOOP
+			EXECUTE format('DROP TRIGGER IF EXISTS %I ON %s', fk.trigger_name, fk.table_name);
+			EXECUTE format(
+				'CREATE TRIGGER %I AFTER INSERT OR UPDATE OR DELETE ON %s FOR EACH ROW EXECUTE FUNCTION bump_player_collection_state_revision(%L)',
+				fk.trigger_name, fk.table_name, fk.column_name
+			);
+		END LOOP;
+	END $$;`)
 }
 
 func schemaPlayerExtras() error {

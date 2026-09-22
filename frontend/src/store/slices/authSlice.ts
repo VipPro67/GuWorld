@@ -221,6 +221,7 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
     set({
       player: null,
+      playerStateRevision: null,
       manaSnapshot: null,
       token: null,
       recipes: [],

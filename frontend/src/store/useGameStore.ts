@@ -33,6 +33,7 @@ import { createMiscSlice, type MiscSlice } from "@/store/slices/miscSlice";
 import { createCombatSlice, type CombatSlice } from "@/store/slices/combatSlice";
 import { createTeleportSlice, type TeleportSlice } from "@/store/slices/teleportSlice";
 import { createScoutingSlice, type ScoutingSlice } from "@/store/slices/scoutingSlice";
+import { shouldApplyPlayerRevision } from "@/store/playerRevision";
 
 export interface GuInstance {
   instance_id: string;
@@ -238,6 +239,7 @@ export interface DeathArenaReward {
 
 export interface Player {
   id: string;
+  state_revision: number;
   username: string;
   rank: number;
   sub_rank: number;
@@ -1125,6 +1127,7 @@ export interface WorldConfig {
 
 interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice {
   player: Player | null;
+  playerStateRevision: number | null;
   manaSnapshot: ManaSnapshot | null;
   token: string | null;
   isLoading: boolean;
@@ -1324,10 +1327,16 @@ export const useGameStore = create<GameState>((set, get) => {
 
   const setPlayerFromServer = (player: Player | Partial<Player> | null, extraState: Partial<GameState> = {}) => {
     if (!player) {
-      set({ ...extraState, player: null, manaSnapshot: null });
+      set({ ...extraState, player: null, playerStateRevision: null, manaSnapshot: null });
       return;
     }
     const currentPlayer = get().player;
+    const incomingRevision = player.state_revision;
+    const samePlayer = !currentPlayer || !player.id || currentPlayer.id === player.id;
+    if (samePlayer && !shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) {
+      set(extraState);
+      return;
+    }
     const fullPlayer: Player = currentPlayer ? {
       ...currentPlayer,
       ...player,
@@ -1357,6 +1366,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({
       ...extraState,
       player: normalizedPlayer,
+      playerStateRevision: incomingRevision ?? (currentPlayer?.id === normalizedPlayer?.id ? get().playerStateRevision : null),
       guInventoryLoaded: guComplete || (normalizedPlayer ? incomingInv.length > 0 : false),
       manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate) : null,
     });
@@ -1372,6 +1382,8 @@ export const useGameStore = create<GameState>((set, get) => {
   const applyInventoryFromResponse = (data: ApiResponseData) => {
     const currentPlayer = get().player;
     if (!currentPlayer) return;
+    const incomingRevision = typeof data.state_revision === "number" ? data.state_revision : undefined;
+    if (!shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) return;
     const updates: Partial<Player> = {};
     if (data.gu_inventory !== undefined) {
       // Re-use the same sparse/equipped logic from setPlayerFromServer
@@ -1402,6 +1414,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (merged) {
         set({
           player: merged,
+          playerStateRevision: incomingRevision ?? get().playerStateRevision,
           guInventoryLoaded: updates.gu_inventory !== undefined ? true : get().guInventoryLoaded,
           manaSnapshot: createManaSnapshotFromPlayer(merged, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate),
         });
@@ -1628,6 +1641,7 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createScoutingSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   applyInventoryFromResponse,
   player: null,
+  playerStateRevision: null,
   manaSnapshot: null,
   token: null,
   isLoading: false,
@@ -1713,6 +1727,12 @@ export const useGameStore = create<GameState>((set, get) => {
         try {
           const eventData = payload?.data || payload;
           const eventType = payload?.type;
+          const incomingRevision = typeof (payload?.state_revision ?? eventData?.state_revision) === "number"
+            ? (payload?.state_revision ?? eventData.state_revision)
+            : undefined;
+          if (eventType !== "session.kicked" && !shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) {
+            return;
+          }
 
           // Handle delta events (efficient updates)
           if (eventType === "player.position") {
@@ -1723,7 +1743,10 @@ export const useGameStore = create<GameState>((set, get) => {
             if (newX !== currentPlayer.x || newY !== currentPlayer.y) {
               set({
                 player: { ...currentPlayer, x: newX, y: newY },
+                playerStateRevision: incomingRevision ?? get().playerStateRevision,
               });
+            } else if (incomingRevision !== undefined) {
+              set({ playerStateRevision: incomingRevision });
             }
             return;
           }
@@ -1735,6 +1758,7 @@ export const useGameStore = create<GameState>((set, get) => {
             const newMaxHp = eventData?.max_hp ?? currentPlayer.base_hp;
             set({
               player: { ...currentPlayer, hp: newHp, base_hp: newMaxHp },
+        playerStateRevision: incomingRevision ?? get().playerStateRevision,
               manaSnapshot: createManaSnapshotFromPlayer(
                 { ...currentPlayer, hp: newHp, base_hp: newMaxHp },
                 get().guDictionary,
@@ -1752,6 +1776,7 @@ export const useGameStore = create<GameState>((set, get) => {
             const newMaxMana = eventData?.max_mana ?? currentPlayer.max_mana;
             set({
               player: { ...currentPlayer, current_mana: newCurrentMana, max_mana: newMaxMana },
+        playerStateRevision: incomingRevision ?? get().playerStateRevision,
               manaSnapshot: createManaSnapshotFromPlayer(
                 { ...currentPlayer, current_mana: newCurrentMana, max_mana: newMaxMana },
                 get().guDictionary,
@@ -1772,6 +1797,7 @@ export const useGameStore = create<GameState>((set, get) => {
             };
             set({
               player: updatedPlayer,
+        playerStateRevision: incomingRevision ?? get().playerStateRevision,
               ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
               manaSnapshot: updatedPlayer
                 ? createManaSnapshotFromPlayer(
@@ -1812,6 +1838,7 @@ export const useGameStore = create<GameState>((set, get) => {
           });
           set({
             player: updatedPlayer,
+      playerStateRevision: incomingRevision ?? get().playerStateRevision,
             ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
             manaSnapshot: updatedPlayer
               ? createManaSnapshotFromPlayer(
