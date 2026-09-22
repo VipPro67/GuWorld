@@ -44,10 +44,10 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   combatHistoryLoading: false,
 
   explore: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:combat")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/explore/${player.id}`, {
         method: "POST",
@@ -72,15 +72,15 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().addLog(`Khám phá thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:combat");
     }
   },
 
   exploreNode: async (nodeId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:combat")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore`, {
         method: "POST",
@@ -127,7 +127,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().addToast(err.message, "error");
       return null;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:combat");
     }
   },
 
@@ -171,8 +171,8 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
 
   saveCombatSettings: async (settings) => {
     const { token, logout } = get();
-    if (!token) return false;
-    set({ actionLoading: true, error: null });
+    if (!token || !get().beginAction("player:combat")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/combat-settings`, {
         method: "PUT",
@@ -185,14 +185,16 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lưu cài đặt thất bại.");
-      set({ combatSettings: data.combat_settings || settings, actionLoading: false });
+      set({ combatSettings: data.combat_settings || settings });
       get().addLog(data.message || "Đã lưu cài đặt chiến đấu.");
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Lưu cài đặt thất bại.";
-      set({ error: message, actionLoading: false });
+      set({ error: message });
       get().addLog(`Lưu cài đặt thất bại: ${message}`);
       return false;
+    } finally {
+      get().endAction("player:combat");
     }
   },
 
@@ -219,9 +221,9 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   },
 
   castKillerMove: async (id, targetId, usedExtraGuThisTurn = false) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:combat")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/cast-killer-move`, {
         method: "POST",
@@ -254,15 +256,15 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().addLog(`Thi triển sát chiêu thất bại: ${message}`);
       return null;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:combat");
     }
   },
 
   executeAutoCombat: async (loadout: ApiResponseData) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:combat")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/start`, {
         method: "POST",
@@ -285,10 +287,11 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
         if (response.status === 400 && (data.error?.includes("Không trong trạng thái chiến đấu") || data.error?.includes("Không có trận chiến nào"))) {
           const currentPlayer = get().player;
           if (currentPlayer && currentPlayer.active_combat) {
-            set({
+            set((state) => ({
               player: { ...currentPlayer, active_combat: null },
+              playerRevision: state.playerRevision + 1,
               activeCombatReplay: null,
-            });
+            }));
           }
         }
         throw new Error(data.error || "Bắt đầu mô phỏng thất bại.");
@@ -310,15 +313,15 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       }
       return null;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:combat");
     }
   },
 
   executePracticeCombat: async (loadout: ApiResponseData, dummyConfig: ApiResponseData) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:combat")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/practice`, {
         method: "POST",
@@ -353,7 +356,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().addLog(`Mô phỏng thất bại: ${err.message}`);
       return null;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:combat");
     }
   },
 
@@ -361,10 +364,10 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   setActiveCombatReplay: (replay) => set({ activeCombatReplay: replay }),
 
   retreat: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:combat")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/retreat/${player.id}`, {
         method: "POST",
@@ -390,13 +393,13 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Rút lui thất bại: ${err.message}`);
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:combat");
     }
   },
 
   fleeCombat: async () => {
-    const { player, token, actionLoading, logout, showConfirm } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout, showConfirm } = get();
+    if (!player || !token || !get().beginAction("player:combat")) return;
 
     // HP quá thấp (< 20% max): bỏ chạy trừ 20% Max HP — gần như chắc chắn ngất
     // xỉu, mất toàn bộ tài nguyên thu thập. Cảnh báo và chặn lại cho đạo hữu cân nhắc.
@@ -405,16 +408,18 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
     const isMine = !!player.active_combat?.mine_slot_id;
     const isPVP = player.active_combat?.enemy_type === "PVP";
     if (!isMine && !isPVP && player.hp <= 0.2 * maxHP) {
-      set({ actionLoading: true });
+
       const proceed = await showConfirm(
         "HP của đạo hữu đang rất thấp. Bỏ chạy khỏi chiến đấu sẽ khiến đạo hữu chịu thêm 20% sát thương theo HP tối đa — gần như chắc chắn sẽ ngất xỉu, làm rơi mất toàn bộ Nguyên Thạch, Cổ trùng và tài nguyên thu thập. Vẫn muốn bỏ chạy?",
         { confirmText: "Vẫn bỏ chạy", cancelText: "Hủy" },
       );
-      set({ actionLoading: false });
-      if (!proceed) return;
+      if (!proceed) {
+        get().endAction("player:combat");
+        return;
+      }
     }
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/flee/${player.id}`, {
         method: "POST",
@@ -431,10 +436,11 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
         if (response.status === 400 && data.error?.includes("Không có trận chiến nào")) {
           const currentPlayer = get().player;
           if (currentPlayer && currentPlayer.active_combat) {
-            set({
+            set((state) => ({
               player: { ...currentPlayer, active_combat: null },
+              playerRevision: state.playerRevision + 1,
               activeCombatReplay: null,
-            });
+            }));
           } else {
             set({ activeCombatReplay: null });
           }
@@ -479,7 +485,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bỏ chạy thất bại: ${err.message}`);
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:combat");
     }
   },
 

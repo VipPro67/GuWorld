@@ -7,6 +7,7 @@
     "dev": "next dev",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --experimental-strip-types --test src/store/pendingActions.test.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/store/playerRevision.test.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

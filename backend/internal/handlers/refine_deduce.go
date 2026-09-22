@@ -200,7 +200,7 @@ func DeduceRecipe(c *gin.Context) {
 	}
 
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, ItemInventoryDomain, RecipesDomain)
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,

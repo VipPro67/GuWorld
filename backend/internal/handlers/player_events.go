@@ -3,6 +3,8 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +15,18 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
+
+type PlayerEventDomain string
+
+const (
+	PlayerDomain        PlayerEventDomain = "player"
+	GuInventoryDomain   PlayerEventDomain = "gu_inventory"
+	ItemInventoryDomain PlayerEventDomain = "item_inventory"
+	RecipesDomain       PlayerEventDomain = "recipes"
+	CombatStatsDomain   PlayerEventDomain = "combat_stats"
+)
+
+var playerEventRevision atomic.Int64
 
 const (
 	PlayerEventUpdated   = "player.updated"
@@ -48,11 +62,14 @@ type PlayerRealtimeSnapshot struct {
 	Y                   int                 `json:"y"`
 	CurrentRegion       string              `json:"current_region"`
 	ApertureStressLevel string              `json:"aperture_stress_level,omitempty"`
+	Version             int                 `json:"version"`
 }
 
 type PlayerRealtimeEvent struct {
-	Type string                 `json:"type"`
-	Data PlayerRealtimeSnapshot `json:"data"`
+	Type           string                 `json:"type"`
+	Revision       int64                  `json:"revision"`
+	ChangedDomains []PlayerEventDomain    `json:"changed_domains"`
+	Data           PlayerRealtimeSnapshot `json:"data"`
 }
 
 // PlayerDeltaEvent sends only changed fields for efficient bandwidth usage.
@@ -60,6 +77,10 @@ type PlayerDeltaEvent struct {
 	Type          string          `json:"type"`
 	StateRevision int64           `json:"state_revision"`
 	Data          PlayerDeltaData `json:"data"`
+	Type           string              `json:"type"`
+	Revision       int64               `json:"revision"`
+	ChangedDomains []PlayerEventDomain `json:"changed_domains"`
+	Data           PlayerDeltaData     `json:"data"`
 }
 
 // PlayerDeltaData contains only the fields that changed.
@@ -88,7 +109,7 @@ func ClearPendingPlayerQueues(playerID string) {
 // PublishPlayerSnapshot publishes a pre-loaded player snapshot to Redis Pub/Sub.
 // The broad snapshot stays cheap, while active_combat is reconciled against its
 // PostgreSQL source of truth before it can affect client navigation.
-func PublishPlayerSnapshot(player *models.Player, eventType string) {
+func PublishPlayerSnapshot(player *models.Player, eventType string, domains ...PlayerEventDomain) {
 	if player == nil {
 		return
 	}
@@ -102,13 +123,14 @@ func PublishPlayerSnapshot(player *models.Player, eventType string) {
 	}
 	_ = cache.SetJSON("player_snapshot:"+player.ID.String(), snapshot, 5*time.Minute)
 	_ = cache.PublishEventQuick("player:"+player.ID.String(), PlayerRealtimeEvent{
-		Type: eventType,
-		Data: snapshot,
+		Type: eventType, Revision: nextPlayerEventRevision(),
+		ChangedDomains: normalizePlayerEventDomains(domains, PlayerDomain), Data: snapshot,
 	})
 }
 
 // PublishPlayerRealtimeEvent publishes a player realtime snapshot to Redis for WebSocket broadcast.
-func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string) {
+func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string, domains ...PlayerEventDomain) {
+	ClearPendingPlayerQueues(playerID.String())
 	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
 	if err != nil {
 		logger.S.Warnf("PublishPlayerRealtimeEvent: snapshot load failed for player=%s event=%s: %v", playerID, eventType, err)
@@ -116,8 +138,8 @@ func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string) {
 	}
 	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
 	_ = cache.PublishEventQuick("player:"+playerID.String(), PlayerRealtimeEvent{
-		Type: eventType,
-		Data: snapshot,
+		Type: eventType, Revision: nextPlayerEventRevision(),
+		ChangedDomains: normalizePlayerEventDomains(domains, PlayerDomain), Data: snapshot,
 	})
 }
 
@@ -129,8 +151,9 @@ func PublishPlayerPositionDelta(playerID uuid.UUID, _, _ int) {
 		return
 	}
 	delta := PlayerDeltaEvent{
-		Type:          PositionEventUpdated,
 		StateRevision: snapshot.StateRevision,
+		Type: PositionEventUpdated, Revision: nextPlayerEventRevision(),
+		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
 			X: snapshot.X,
 			Y: snapshot.Y,
@@ -151,8 +174,9 @@ func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, _ *models.Co
 	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
 
 	delta := PlayerDeltaEvent{
-		Type:          eventType,
 		StateRevision: snapshot.StateRevision,
+		Type: eventType, Revision: nextPlayerEventRevision(),
+		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
 			// PostgreSQL is authoritative. The caller's copy may have been built
 			// before the transaction committed (or may simply be stale), while the
@@ -170,8 +194,9 @@ func PublishPlayerHPDelta(playerID uuid.UUID, hp, maxHP float64) {
 		return
 	}
 	delta := PlayerDeltaEvent{
-		Type:          "player.hp",
 		StateRevision: revision,
+		Type: "player.hp", Revision: nextPlayerEventRevision(),
+		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
 			HP:    &hp,
 			MaxHP: &maxHP,
@@ -187,14 +212,49 @@ func PublishPlayerManaDelta(playerID uuid.UUID, currentMana, maxMana float64) {
 		return
 	}
 	delta := PlayerDeltaEvent{
-		Type:          "player.mana",
 		StateRevision: revision,
+		Type: "player.mana", Revision: nextPlayerEventRevision(),
+		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
 			CurrentMana: &currentMana,
 			MaxMana:     &maxMana,
 		},
 	}
 	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
+}
+
+func nextPlayerEventRevision() int64 {
+	floor := time.Now().UnixMilli() * 1000
+	for {
+		current := playerEventRevision.Load()
+		next := current + 1
+		if next < floor {
+			next = floor
+		}
+		if playerEventRevision.CompareAndSwap(current, next) {
+			return next
+		}
+	}
+}
+
+func normalizePlayerEventDomains(domains []PlayerEventDomain, fallback PlayerEventDomain) []PlayerEventDomain {
+	if len(domains) == 0 {
+		domains = []PlayerEventDomain{fallback}
+	}
+	seen := make(map[PlayerEventDomain]struct{}, len(domains))
+	result := make([]PlayerEventDomain, 0, len(domains))
+	for _, domain := range domains {
+		if domain == "" {
+			continue
+		}
+		if _, exists := seen[domain]; exists {
+			continue
+		}
+		seen[domain] = struct{}{}
+		result = append(result, domain)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result
 }
 
 func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, error) {
@@ -223,7 +283,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.last_mana_update,
 			p.time_speed_multiplier, p.active_combat, p.aperture_stress, p.hp, p.base_hp,
 			p.primeval_stones, p.immortal_stones, p.wall_progress, p.human_qi,
-			p.lifespan, p.x, p.y, p.current_region, p.path_masteries, p.state_revision,
+			p.lifespan, p.x, p.y, p.current_region, p.path_masteries, p.state_revision,COALESCE(p.version, 0),
 			`+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
 		FROM players p
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
@@ -234,7 +294,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		&player.TimeSpeedMultiplier, &activeCombatBytes, &player.ApertureStress,
 		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
 		&player.WallProgress, &player.HumanQi, &player.Lifespan,
-		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries, &player.StateRevision,
+		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries, &player.StateRevision, &player.Version,
 		&player.GuInventory, &player.DaoMarks,
 	)
 	if err != nil {
@@ -328,6 +388,7 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 		Y:                   player.Y,
 		CurrentRegion:       player.CurrentRegion,
 		ApertureStressLevel: apertureStressLevel(player.ApertureStress),
+		Version:             player.Version,
 	}
 }
 
@@ -335,7 +396,9 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 func SendSessionKickedEvent(playerID uuid.UUID) {
 	notify.Send(db.DB, playerID, "session.kicked", "Phiên đăng nhập đã hết hạn", "Tài khoản đã đăng nhập từ thiết bị khác")
 	_ = cache.PublishEventQuick("player:"+playerID.String(), PlayerRealtimeEvent{
-		Type: SessionEventKicked,
+		Type:           SessionEventKicked,
+		Revision:       nextPlayerEventRevision(),
+		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 	})
 }
 

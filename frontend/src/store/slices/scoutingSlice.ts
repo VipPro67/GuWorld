@@ -237,7 +237,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         addToast(data.message, "warning");
       }
 
-      await get().initializeSession();
+      await get().refreshPlayerSummary();
       return data;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -284,7 +284,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         addToast(data.message, "warning");
       }
 
-      await get().initializeSession();
+      await get().refreshPlayerSummary();
       return data;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -366,7 +366,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
 
       addToast(data.message || "Đã chém đứt manh mối!", "success");
       addLog(`🗡️ [Đoạn Tuyệt Thiên Cơ] ${data.message}`);
-      await get().initializeSession();
+      await get().refreshPlayerSummary();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -408,7 +408,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
       const pulseCount = (data.dao_pulses || []).length;
       addToast(`Cảm ứng phát hiện ${pingsCount} dao động Cổ trùng và ${pulseCount} xung kích Đạo ngân!`, "info");
       addLog(`📡 [Cảm Ứng Đạo Ngân] Đã quét thấy ${pingsCount} điểm dao động.`);
-      await get().initializeSession();
+      await get().refreshPlayerSummary();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

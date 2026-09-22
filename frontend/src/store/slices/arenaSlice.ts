@@ -96,9 +96,9 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   buyArenaItem: async (itemId, quantity) => {
-    const { token, actionLoading } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token } = get();
+    if (!token || !get().beginAction("arena")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/arena/shop/buy`, {
         method: "POST",
@@ -119,13 +119,13 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       set({ error: err.message });
       get().addToast("Lỗi kết nối", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("arena"); }
   },
 
   challengeArena: async (targetPlayerId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("arena")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/arena/challenge`, {
         method: "POST",
@@ -143,7 +143,7 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("arena"); }
   },
 
   fetchDeathArenaCurrent: async () => {
@@ -174,9 +174,9 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   registerDeathArena: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("arena")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/register`, { method: "POST" });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
@@ -191,13 +191,13 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       set({ error: err.message });
       get().addToast(err.message || "Đăng ký thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("arena"); }
   },
 
   unregisterDeathArena: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("arena")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/register`, { method: "DELETE" });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
@@ -212,7 +212,7 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       set({ error: err.message });
       get().addToast(err.message || "Hủy đăng ký thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("arena"); }
   },
 
   fetchDeathArenaBracket: async () => {
@@ -296,9 +296,9 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   claimDeathArenaReward: async (rewardId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("arena")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/claim-reward`, {
         method: "POST",
@@ -318,7 +318,7 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       set({ error: err.message });
       get().addToast(err.message || "Nhận thưởng thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("arena"); }
   },
 
   fetchDeathArenaMatchLog: async (matchId: string) => {

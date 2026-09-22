@@ -34,7 +34,7 @@ export const createReferralsSlice: StateCreator<ApiResponseData, ApiResponseData
   },
 
   claimReferralReward: async (refereeId: string, milestone: number) => {
-    set({ actionLoading: true });
+    if (!get().beginAction("referrals")) return { success: false };
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/referrals/claim`, {
         method: 'POST',
@@ -42,7 +42,6 @@ export const createReferralsSlice: StateCreator<ApiResponseData, ApiResponseData
         body: JSON.stringify({ referee_id: refereeId, milestone }),
       });
       const data = await response.json();
-      set({ actionLoading: false });
       if (response.ok) {
         get().addLog(`[Hệ thống] ${data.message}`);
         // Reload referrals to update status
@@ -55,13 +54,14 @@ export const createReferralsSlice: StateCreator<ApiResponseData, ApiResponseData
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Failed to claim referral reward", err);
-      set({ actionLoading: false });
       return { success: false, message: "Lỗi kết nối máy chủ." };
+    } finally {
+      get().endAction("referrals");
     }
   },
 
   bindReferralCode: async (refCode: string) => {
-    set({ actionLoading: true });
+    if (!get().beginAction("referrals")) return { success: false };
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/referrals/bind`, {
         method: 'POST',
@@ -69,7 +69,6 @@ export const createReferralsSlice: StateCreator<ApiResponseData, ApiResponseData
         body: JSON.stringify({ ref_code: refCode }),
       });
       const data = await response.json();
-      set({ actionLoading: false });
       if (response.ok) {
         get().addLog(`[Hệ thống] ${data.message}`);
         await get().fetchReferrals();
@@ -79,8 +78,9 @@ export const createReferralsSlice: StateCreator<ApiResponseData, ApiResponseData
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Failed to bind referral code", err);
-      set({ actionLoading: false });
       return { success: false, message: "Lỗi kết nối máy chủ." };
+    } finally {
+      get().endAction("referrals");
     }
   },
 

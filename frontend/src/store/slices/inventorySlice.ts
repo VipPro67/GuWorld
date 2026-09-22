@@ -2,12 +2,14 @@ import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import type { GuInstance, GroundDrop, Player, FeedResponse } from "@/store/useGameStore";
+import { LatestRequestGate } from "@/lib/player-reconciliation";
 
 let fetchGuInventoryPromise: Promise<void> | null = null;
+const guInventoryRequests = new LatestRequestGate();
 
 export interface InventorySlice {
   guInventoryLoaded: boolean;
-  fetchGuInventory: () => Promise<void>;
+  fetchGuInventory: (forceRefresh?: boolean, reconciliationRevision?: number) => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
   feedGuGroup: (guId: string, rank?: number) => Promise<void>;
   feedAllGu: (scope?: "all" | "equipped" | "rest" | "unequipped") => Promise<void>;
@@ -35,11 +37,13 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   guInventoryLoaded: false,
   groundDrops: [],
 
-  fetchGuInventory: async () => {
-    if (fetchGuInventoryPromise) return fetchGuInventoryPromise;
+  fetchGuInventory: async (forceRefresh = false, requestRevision) => {
+    if (fetchGuInventoryPromise && !forceRefresh) return fetchGuInventoryPromise;
+    const inventoryRequestRevision = guInventoryRequests.next();
     const executeFetch = async () => {
       const { token, logout } = get();
       if (!token) return;
+      const revision = get().playerRevision;
 
       try {
         const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
@@ -56,29 +60,32 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         const data: { gu_inventory: GuInstance[]; equipped_gus: string[] } = await response.json();
         const currentPlayer = get().player;
         if (!currentPlayer) return;
+        if (!guInventoryRequests.isCurrent(inventoryRequestRevision)) return;
+        if (requestRevision !== undefined && requestRevision !== get().reconciliationRevision) return;
 
-        get().setPlayerFromServer({
+        const applied = get().setPlayerFromServer({
           ...currentPlayer,
           gu_inventory: data.gu_inventory,
           equipped_gus: data.equipped_gus,
-        });
-        set({ guInventoryLoaded: true });
+        }, undefined, revision);
+        if (!applied) return;
       } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
         console.error("Gu inventory fetch failed:", err.message);
       } finally {
-        fetchGuInventoryPromise = null;
+        if (fetchGuInventoryPromise === promise) fetchGuInventoryPromise = null;
       }
     };
-    fetchGuInventoryPromise = executeFetch();
-    return fetchGuInventoryPromise;
+    const promise = executeFetch();
+    fetchGuInventoryPromise = promise;
+    return promise;
   },
 
   feedGu: async (guInstanceId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/feed`, {
         method: "POST",
@@ -108,15 +115,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Cho Cổ ăn thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   feedGuGroup: async (guId, rank) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-group`, {
         method: "POST",
@@ -146,15 +153,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Cho ăn hàng loạt thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   feedAllGu: async (scope?: "all" | "equipped" | "rest" | "unequipped") => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-all`, {
         method: "POST",
@@ -184,15 +191,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Cho tất cả Cổ trùng ăn thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   buyShopItem: async (itemId, quantity, rank = 0) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return false;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/buy`, {
         method: "POST",
@@ -227,15 +234,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Mua hàng thất bại: ${err.message}`);
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
 
   sellShopItem: async (itemId, quantity, itemType, rank = 0) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/sell`, {
         method: "POST",
@@ -254,13 +261,13 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bán hàng thất bại: ${err.message}`);
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   sellShopItemsBulk: async (items) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/sell-bulk`, {
         method: "POST",
@@ -279,13 +286,13 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bán hàng thất bại: ${err.message}`);
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 
   dropGu: async (instanceId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/drop`, {
         method: "POST",
@@ -304,12 +311,12 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Vứt Cổ thất bại: ${err.message}`);
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
   dropGus: async (instanceIds) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/drop-batch`, {
         method: "POST",
@@ -328,13 +335,13 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Vứt Cổ hàng loạt thất bại: ${err.message}`);
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
   equipGu: async (instanceId, equip) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/equip`, {
         method: "POST",
@@ -367,15 +374,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Thao tác trang bị thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   unequipAllGu: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/unequip-all`, {
         method: "POST",
@@ -405,15 +412,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Tháo cổ trùng thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   updateGuStatus: async (instanceId, status) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/status`, {
         method: "POST",
@@ -444,15 +451,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi cập nhật trạng thái: ${err.message}`);
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   setVitalGu: async (instanceId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/set-vital`, {
         method: "POST",
@@ -484,15 +491,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Lỗi thiết lập Bản Mệnh Cổ: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   useGu: async (instanceId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/inventory/use-gu`, {
         method: "POST",
@@ -524,15 +531,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Lỗi sử dụng Cổ trùng: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   useItem: async (itemId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/use-item`, {
         method: "POST",
@@ -564,15 +571,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Sử dụng vật phẩm thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   useItems: async (itemIds) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading || !itemIds?.length) return false;
+    const { player, token, logout } = get();
+    if (!player || !token || !itemIds?.length || !get().beginAction("player:inventory")) return false;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/use-items`, {
@@ -608,15 +615,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
   useGus: async (instanceIds) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading || !instanceIds?.length) return false;
+    const { player, token, logout } = get();
+    if (!player || !token || !instanceIds?.length || !get().beginAction("player:inventory")) return false;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     let successCount = 0;
     let failedCount = 0;
 
@@ -656,15 +663,15 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       }
     }
 
-    set({ actionLoading: false });
+    get().endAction("player:inventory");
     return successCount > 0 && failedCount === 0;
   },
 
   movePlayer: async (x, y, attackTargetId?) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/move`, {
         method: "POST",
@@ -712,7 +719,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       get().addLog(`Di chuyển thất bại: ${err.message}`);
       return null;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 

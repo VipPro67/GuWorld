@@ -125,7 +125,13 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
 		}
 	}
-	worker.PlayerEventPublisher = handlers.PublishPlayerRealtimeEvent
+	worker.PlayerEventPublisher = func(playerID uuid.UUID, eventType string, domains ...string) {
+		typedDomains := make([]handlers.PlayerEventDomain, 0, len(domains))
+		for _, domain := range domains {
+			typedDomains = append(typedDomains, handlers.PlayerEventDomain(domain))
+		}
+		handlers.PublishPlayerRealtimeEvent(playerID, eventType, typedDomains...)
+	}
 	gin.DefaultWriter = logger.GinWriter()
 	r := gin.New()
 	r.Use(gin.Recovery())

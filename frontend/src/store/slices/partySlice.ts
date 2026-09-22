@@ -18,9 +18,9 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   partyInvitations: [],
 
   createParty: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("party")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/create`, { method: "POST" });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
@@ -28,14 +28,14 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (!response.ok) throw new Error(data.error || "Tạo tổ đội thất bại");
       set({ party: data.party });
       get().addLog(data.message || "Đã lập tổ đội thành công!");
-      await get().initializeSession();
+      await get().refreshPlayerSummary();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("party"); }
   },
 
   fetchPartyStatus: async () => {
@@ -53,9 +53,9 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   invitePlayer: async (username) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("party")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/invite`, {
         method: "POST",
@@ -73,13 +73,13 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("party"); }
   },
 
   leaveParty: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("party")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/leave`, { method: "POST" });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
@@ -87,14 +87,14 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (!response.ok) throw new Error(data.error || "Rời tổ đội thất bại");
       set({ party: null });
       get().addLog(data.message || "Bạn đã rời khỏi tổ đội.");
-      await get().initializeSession();
+      await get().refreshPlayerSummary();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("party"); }
   },
 
   fetchPartyInvitations: async () => {
@@ -111,9 +111,9 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   respondPartyInvitation: async (id, action) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("party")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/invitations/${id}/respond`, {
         method: "POST",
@@ -125,7 +125,7 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
       if (action === "accept") {
         set({ party: data.party });
-        await get().initializeSession();
+        await get().refreshPlayerSummary();
       }
       set((state: ApiResponseData) => ({
         partyInvitations: state.partyInvitations.filter((inv: ApiResponseData) => inv.id !== id),
@@ -137,6 +137,6 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("party"); }
   },
 });

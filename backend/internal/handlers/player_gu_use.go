@@ -195,7 +195,7 @@ func UseConsumableGu(c *gin.Context) {
 	}
 
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, CombatStatsDomain)
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,

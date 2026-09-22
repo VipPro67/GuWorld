@@ -95,9 +95,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   joinSect: async (sectId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/${sectId}/join`, {
         method: "POST",
@@ -114,13 +114,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   leaveSect: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/leave`, {
         method: "POST",
@@ -137,13 +137,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   cancelSectJoinRequest: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/join-request/cancel`, {
         method: "POST",
@@ -160,7 +160,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   fetchMySectStatus: async (forceRefresh = false) => {
@@ -199,9 +199,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   promoteSectRank: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/promote`, {
         method: "POST",
@@ -219,13 +219,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   donateSectStones: async (amount: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/donate/stones`, {
         method: "POST",
@@ -245,13 +245,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   donateSectMaterials: async (materialId: string, amount: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/donate/materials`, {
         method: "POST",
@@ -271,13 +271,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   donateSectGu: async (guInstanceId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/donate/gu`, {
         method: "POST",
@@ -297,13 +297,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   donateSectRecipe: async (recipeId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/donate/recipe`, {
         method: "POST",
@@ -323,7 +323,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   donateSectBulk: async (payload: {
@@ -331,9 +331,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     gus: { gu_instance_id: string }[];
     recipes: { recipe_id: string }[];
   }) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/donate/bulk`, {
         method: "POST",
@@ -353,13 +353,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   buyFromSectVault: async (itemType: string, itemId: string, quantity = 1, rank?: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/vault/buy`, {
         method: "POST",
@@ -379,7 +379,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   fetchSectMissions: async () => {
@@ -399,9 +399,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   acceptSectMission: async (missionId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/accept`, {
         method: "POST",
@@ -418,13 +418,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   completeSectMission: async (missionId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/complete`, {
         method: "POST",
@@ -442,13 +442,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   deleteSectMission: async (missionId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}`, {
         method: "DELETE",
@@ -466,13 +466,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   abandonSectMission: async (missionId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/abandon`, {
         method: "DELETE",
@@ -490,13 +490,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   createSect: async (name: string, description: string, region: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/create`, {
         method: "POST",
@@ -516,7 +516,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   fetchSectMembers: async () => {
@@ -536,9 +536,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   setMemberRank: async (memberId: string, rank: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/members/${memberId}/rank`, {
         method: "POST",
@@ -557,13 +557,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   kickMember: async (memberId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/members/${memberId}/kick`, {
         method: "POST",
@@ -580,13 +580,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   createCustomMission: async (payload) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/create`, {
         method: "POST",
@@ -615,13 +615,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   stockSectVault: async (itemType, itemId, quantity) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/vault/stock`, {
         method: "POST",
@@ -644,13 +644,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   stockSectVaultBulk: async (items) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/vault/stock/bulk`, {
         method: "POST",
@@ -669,15 +669,15 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   
 
   toggleSectApproval: async (requireApproval) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/toggle-approval`, {
         method: "POST",
@@ -695,13 +695,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   toggleSectPromotionApproval: async (requirePromotionApproval) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/toggle-promotion-approval`, {
         method: "POST",
@@ -719,13 +719,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   paySectSalary: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/pay-salary`, {
         method: "POST",
@@ -744,7 +744,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   fetchJoinRequests: async () => {
@@ -764,9 +764,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   actionJoinRequest: async (requestId, action) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/join-requests/${requestId}/action`, {
         method: "POST",
@@ -785,7 +785,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   fetchPromotionRequests: async () => {
@@ -805,9 +805,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   actionPromotionRequest: async (requestId, action) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/promotion-requests/${requestId}/action`, {
         method: "POST",
@@ -826,7 +826,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("sect"); }
   },
 
   fetchSectsMap: async () => {
@@ -843,9 +843,9 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   attackSect: async (targetSectId: string, attackerId?: string) => {
-    const { token, actionLoading, logout, addToast, addLog } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true });
+    const { token, logout, addToast, addLog } = get();
+    if (!token || !get().beginAction("sect")) return false;
+
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/attack`, {
         method: "POST",
@@ -865,14 +865,14 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       addToast(err.message || "Lỗi khi tấn công", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("sect");
     }
   },
 
   toggleDefendSect: async () => {
-    const { token, actionLoading, logout, addToast, addLog, mySectStatus } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true });
+    const { token, logout, addToast, addLog, mySectStatus } = get();
+    if (!token || !get().beginAction("sect")) return false;
+
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/toggle-defend`, {
         method: "POST",
@@ -891,14 +891,14 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       addToast(err.message || "Lỗi cập nhật Trấn Thủ", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("sect");
     }
   },
 
   defendSect: async (defenderType: 'member' | 'beast', playerId?: string, monsterId?: string, monsterRank?: number) => {
-    const { token, actionLoading, logout, addToast, addLog } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true });
+    const { token, logout, addToast, addLog } = get();
+    if (!token || !get().beginAction("sect")) return false;
+
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/defend`, {
         method: "POST",
@@ -923,14 +923,14 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       addToast(err.message || "Lỗi bố trí phòng thủ", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("sect");
     }
   },
 
   undefendSect: async (defenderId: string) => {
-    const { token, actionLoading, logout, addToast, addLog } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true });
+    const { token, logout, addToast, addLog } = get();
+    if (!token || !get().beginAction("sect")) return false;
+
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/undefend`, {
         method: "POST",
@@ -950,14 +950,14 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       addToast(err.message || "Lỗi rút phòng thủ", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("sect");
     }
   },
 
   upgradeSectBuilding: async (buildingName: string) => {
-    const { token, actionLoading, logout, addToast, addLog } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true });
+    const { token, logout, addToast, addLog } = get();
+    if (!token || !get().beginAction("sect")) return false;
+
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/building/upgrade`, {
         method: "POST",
@@ -976,7 +976,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       addToast(err.message || "Lỗi nâng cấp", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("sect");
     }
   },
 });

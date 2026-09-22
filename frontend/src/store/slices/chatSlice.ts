@@ -65,9 +65,9 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   unsubscribeAllBaoHoangMessages: () => {},
 
   sendPrivateMail: async (receiverUsername, content) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("chat")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/chat/mail/send`, {
         method: "POST",
@@ -85,7 +85,7 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("chat"); }
   },
 
   fetchInbox: async () => {
@@ -103,9 +103,9 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   sendBaoHoangChat: async (content, channel) => {
-    const { token, actionLoading } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token } = get();
+    if (!token || !get().beginAction("chat")) return false;
+    set({ error: null });
     try {
       const data = await wsManager.request<{ message?: string }>("chat.send", { content, channel });
       get().addLog(data.message || "Đã phát truyền tin nhắn!");
@@ -115,7 +115,7 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("chat"); }
   },
 
   fetchBaoHoangMessages: async (channel) => {
