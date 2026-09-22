@@ -29,9 +29,9 @@ export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   openGacha: async (poolId, quantity = 1) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/gacha/open`, {
         method: "POST",
@@ -51,6 +51,6 @@ export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mở Đá  lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:inventory"); }
   },
 });

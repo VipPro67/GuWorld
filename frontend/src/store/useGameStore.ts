@@ -33,6 +33,7 @@ import { createMiscSlice, type MiscSlice } from "@/store/slices/miscSlice";
 import { createCombatSlice, type CombatSlice } from "@/store/slices/combatSlice";
 import { createTeleportSlice, type TeleportSlice } from "@/store/slices/teleportSlice";
 import { createScoutingSlice, type ScoutingSlice } from "@/store/slices/scoutingSlice";
+import { acquirePendingAction, releasePendingAction, type PendingActions } from "@/store/pendingActions";
 
 export interface GuInstance {
   instance_id: string;
@@ -1130,6 +1131,11 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
   token: string | null;
   isLoading: boolean;
   actionLoading: boolean;
+  pendingActions: PendingActions;
+  playerRevision: number;
+  beginAction: (key: string) => boolean;
+  endAction: (key: string) => void;
+  isActionPending: (key: string) => boolean;
   error: string | null;
   logs: string[];
   guDictionary: Record<string, GuSpec>;
@@ -1157,7 +1163,7 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
   fetchRaceDictionary: () => Promise<void>;
   fetchStatusDictionary: () => Promise<void>;
   updateManaSnapshot: (player: Player | null) => void;
-  setPlayerFromServer: (player: Player | Partial<Player> | null, extraState?: Partial<GameState>) => void;
+  setPlayerFromServer: (player: Player | Partial<Player> | null, extraState?: Partial<GameState>, expectedRevision?: number) => boolean;
   applyInventoryFromResponse: (data: ApiResponseData) => void;
   getEstimatedMana: () => number | null;
   subscribeEvents: () => void;
@@ -1325,10 +1331,11 @@ export const useGameStore = create<GameState>((set, get) => {
     };
   };
 
-  const setPlayerFromServer = (player: Player | Partial<Player> | null, extraState: Partial<GameState> = {}) => {
+  const setPlayerFromServer = (player: Player | Partial<Player> | null, extraState: Partial<GameState> = {}, expectedRevision?: number) => {
+    if (expectedRevision !== undefined && get().playerRevision !== expectedRevision) return false;
     if (!player) {
-      set({ ...extraState, player: null, manaSnapshot: null });
-      return;
+      set((state) => ({ ...extraState, player: null, manaSnapshot: null, playerRevision: state.playerRevision + 1 }));
+      return true;
     }
     const currentPlayer = get().player;
     const fullPlayer: Player = currentPlayer ? {
@@ -1357,15 +1364,17 @@ export const useGameStore = create<GameState>((set, get) => {
     if (normalizedPlayer) {
       normalizedPlayer.gu_inventory = guInventory;
     }
-    set({
+    set((state) => ({
       ...extraState,
       player: normalizedPlayer,
+      playerRevision: state.playerRevision + 1,
       guInventoryLoaded: guComplete || (normalizedPlayer ? incomingInv.length > 0 : false),
       manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate) : null,
-    });
+    }));
     if (normalizedPlayer) {
       get().subscribeAllBaoHoangMessages();
     }
+    return true;
   };
 
   // applyInventoryFromResponse updates only the inventory-related player fields
@@ -1403,11 +1412,12 @@ export const useGameStore = create<GameState>((set, get) => {
     if (Object.keys(updates).length > 0) {
       const merged = normalizePlayer({ ...currentPlayer, ...updates });
       if (merged) {
-        set({
+        set((state) => ({
           player: merged,
+          playerRevision: state.playerRevision + 1,
           guInventoryLoaded: updates.gu_inventory !== undefined ? true : get().guInventoryLoaded,
           manaSnapshot: createManaSnapshotFromPlayer(merged, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate),
-        });
+        }));
       }
     }
   };
@@ -1635,6 +1645,20 @@ export const useGameStore = create<GameState>((set, get) => {
   token: null,
   isLoading: false,
   actionLoading: false,
+  pendingActions: {},
+  playerRevision: 0,
+  beginAction: (key) => {
+    const pendingActions = acquirePendingAction(get().pendingActions, key);
+    if (!pendingActions) return false;
+    set({ pendingActions, actionLoading: true });
+    return true;
+  },
+  endAction: (key) => set((state) => {
+    const pendingActions = releasePendingAction(state.pendingActions, key);
+    if (pendingActions === state.pendingActions) return state;
+    return { pendingActions, actionLoading: Object.keys(pendingActions).length > 0 };
+  }),
+  isActionPending: (key) => !!get().pendingActions[key],
   error: null,
   playerEventsConnected: false,
   playerEventsRetries: 0,
@@ -1688,7 +1712,7 @@ export const useGameStore = create<GameState>((set, get) => {
       manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate) : null,
     });
   },
-  setPlayerFromServer: (player, extraState) => setPlayerFromServer(player, extraState),
+  setPlayerFromServer: (player, extraState, expectedRevision) => setPlayerFromServer(player, extraState, expectedRevision),
   getEstimatedMana: () => estimateManaFromSnapshot(get().manaSnapshot),
 
   subscribeEvents: () => {
@@ -1759,7 +1783,7 @@ export const useGameStore = create<GameState>((set, get) => {
                 get().constitutionDictionary,
                 get().aperture?.time_rate
               ),
-            });
+            }));
             return;
           }
 
@@ -1776,7 +1800,7 @@ export const useGameStore = create<GameState>((set, get) => {
                 get().constitutionDictionary,
                 get().aperture?.time_rate
               ),
-            });
+            }));
             return;
           }
 
@@ -1789,8 +1813,9 @@ export const useGameStore = create<GameState>((set, get) => {
               active_combat: nextCombat,
               ...(eventVersion !== undefined ? { version: eventVersion } : {}),
             };
-            set({
+            set((state) => ({
               player: updatedPlayer,
+              playerRevision: state.playerRevision + 1,
               ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
               manaSnapshot: updatedPlayer
                 ? createManaSnapshotFromPlayer(
@@ -1800,7 +1825,7 @@ export const useGameStore = create<GameState>((set, get) => {
                     get().aperture?.time_rate
                   )
                 : get().manaSnapshot,
-            });
+            }));
             if (eventType === "combat.started") {
               get().addLog("Chiến đấu realtime đã bắt đầu.");
             } else if (eventType === "combat.ended") {
@@ -1829,8 +1854,9 @@ export const useGameStore = create<GameState>((set, get) => {
             ...rest,
             active_combat: nextCombat,
           });
-          set({
+          set((state) => ({
             player: updatedPlayer,
+            playerRevision: state.playerRevision + 1,
             ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
             manaSnapshot: updatedPlayer
               ? createManaSnapshotFromPlayer(
@@ -1840,7 +1866,7 @@ export const useGameStore = create<GameState>((set, get) => {
                   get().aperture?.time_rate
                 )
               : get().manaSnapshot,
-          });
+          }));
 
           if (eventType === "combat.started") {
             get().addLog("Chiến đấu realtime đã bắt đầu.");
@@ -1859,9 +1885,13 @@ export const useGameStore = create<GameState>((set, get) => {
           const newTrade = payload?.trade ?? null;
           set({ activeTrade: newTrade });
           // When trade just completed (had active trade, now null),
-          // refresh session so inventory/stones are up-to-date.
+          // Refresh only the resources affected by the completed trade.
           if (prevTrade && !newTrade) {
-            get().initializeSession();
+            void Promise.all([
+              get().refreshPlayerSummary(),
+              get().fetchGuInventory(),
+              get().refreshRecipeProgress(),
+            ]);
           }
         } catch (err) {
           console.error("Failed to process trade event", err);
@@ -2108,6 +2138,14 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      const unsubscribeCatalog = wsManager.subscribe("catalog", (payload: ApiResponseData) => {
+        const event = payload?.data || payload;
+        if (event?.type === "catalog.updated" && event?.catalog === "recipes") {
+          // Keep the last valid recipes visible while revalidating the changed catalog.
+          void get().fetchRecipes(true);
+        }
+      });
+
       // Store cleanup functions in a global variable
       (window as ApiResponseData).__gu_ws_cleanup = () => {
         unsubscribePlayer();
@@ -2116,6 +2154,7 @@ export const useGameStore = create<GameState>((set, get) => {
         unsubscribeGeneralChat();
         unsubscribeSectChat();
         unsubscribeDeathArena();
+        unsubscribeCatalog();
         releaseConnection();
       };
 
@@ -2167,7 +2206,8 @@ export const useGameStore = create<GameState>((set, get) => {
 
 
   simulateDeposit: async (stones) => {
-    set({ actionLoading: true, error: null });
+    if (!get().beginAction("player:wallet")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/simulate-deposit`, {
         method: "POST",
@@ -2189,7 +2229,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addToast(err.message || "Giao dịch giả lập thất bại.", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:wallet");
     }
   },
 

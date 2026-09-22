@@ -2,6 +2,8 @@ import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { getDictionaryCache, setDictionaryCache } from "@/lib/db-cache";
+import { fetchWithDedupe } from "@/lib/fetch";
+import { syncRecipes } from "./recipeSync";
 import type {
   GuInstance,
   RefineRateBreakdown,
@@ -16,10 +18,14 @@ const recipeRequests = new LatestRequestGate();
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
+  recipesLoading: boolean;
+  recipesError: string | null;
+  recipesFetchedAt: number | null;
   regions: Region[];
   regionsLoaded: boolean;
   world: WorldConfig | null;
-  fetchRecipes: (forceRefresh?: boolean, reconciliationRevision?: number) => Promise<void>;
+  fetchRecipes: () => Promise<void>;
+  refreshRecipeProgress: () => Promise<void>;
   fetchRegions: () => Promise<void>;
   fetchWorld: () => Promise<WorldConfig | null>;
   quests: ApiResponseData[];
@@ -35,35 +41,62 @@ export interface CultivationSlice {
   redeemGiftCode: (code: string) => Promise<{ success: boolean; message: string } | null>;
 }
 
+let refreshRecipeProgressPromise: Promise<void> | null = null;
+
 export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CultivationSlice> = (set, get) => ({
   recipes: [],
   recipesLoaded: false,
+  recipesLoading: false,
+  recipesError: null,
+  recipesFetchedAt: null,
   quests: [],
   regions: [],
   regionsLoaded: false,
   world: null,
 
-  fetchRecipes: async (forceRefresh = false, requestRevision) => {
-    if (get().recipesLoaded && !forceRefresh) return;
-    const recipeRequestRevision = recipeRequests.next();
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/recipes`);
-      if (response.status === 401) {
-        set({ recipes: [], recipesLoaded: true });
-        return;
+  fetchRecipes: async () => {
+    if (get().recipesLoaded) return;
+    return get().refreshRecipeProgress();
+  },
+
+  refreshRecipeProgress: async () => {
+    if (refreshRecipeProgressPromise) return refreshRecipeProgressPromise;
+
+    const executeRefresh = async () => {
+      const token = get().token;
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/recipes`);
+        if (response.status === 401) {
+          set({ recipes: [], recipesLoaded: true });
+          return;
+        }
+        if (!response.ok) {
+          throw new Error("Failed to load recipes");
+        }
+        const data = await response.json();
+        if (get().token !== token) return;
+        const recipes: RefiningRecipe[] = data || [];
+        set({ recipes, recipesLoaded: true });
+        if (get().player) {
+          get().setPlayerFromServer({
+            unlocked_recipes: recipes.map((recipe) => ({
+              recipe_id: recipe.id,
+              completion_rate: recipe.completion_rate,
+            })),
+          });
+        }
+      } catch (caught: unknown) {
+        const err = caught instanceof Error ? caught : new Error(String(caught));
+        console.error("Recipes sync error:", err.message);
+        set({ recipesLoaded: true });
+      } finally {
+        refreshRecipeProgressPromise = null;
       }
-      if (!response.ok) {
-        throw new Error("Failed to load recipes");
-      }
-      const data = await response.json();
-      if (!recipeRequests.isCurrent(recipeRequestRevision)) return;
-      if (requestRevision !== undefined && requestRevision !== get().reconciliationRevision) return;
-      set({ recipes: data || [], recipesLoaded: true });
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("Recipes sync error:", err.message);
-      set({ recipesLoaded: true });
-    }
+    };
+
+    refreshRecipeProgressPromise = executeRefresh();
+    return refreshRecipeProgressPromise;
   },
 
   fetchQuests: async () => {
@@ -148,10 +181,10 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   refineGu: async (recipeId, selectedInstanceIds) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/refine`, {
         method: "POST",
@@ -185,15 +218,15 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message, "error");
       return { status: "failed", message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:cultivation");
     }
   },
 
   deduceRecipe: async (recipeId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/refine/deduce`, {
         method: "POST",
@@ -233,20 +266,21 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message, "error");
       return { success: false, message: err.message, completion_rate: 0 };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:cultivation");
     }
   },
 
   breakWall: async (manaSpend) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
+    const { player, token, logout } = get();
+    if (!player || !token) return null;
     // Client-side validation to prevent unnecessary requests
     if (manaSpend < 0 || manaSpend > Math.floor(player.current_mana)) {
       set({ error: "Số lượng Chân Nguyên không hợp lệ." });
       return null;
     }
+    if (!get().beginAction("player:cultivation")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/break-wall`, {
         method: "POST",
@@ -267,13 +301,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Trùng kích lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   rechargeWithStones: async (stones) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/recharge`, {
         method: "POST",
@@ -294,14 +328,14 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addLog(`Nạp nguyên thạch lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:cultivation");
     }
   },
 
   useRelicGu: async (relicKey) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/use-relic-gu`, {
         method: "POST",
@@ -320,13 +354,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Dùng Cổ Xá Lợi lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   ascension: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension`, {
         method: "POST",
@@ -343,13 +377,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Thăng tiên lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   completeQuest: async (questId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/quest/complete`, {
         method: "POST",
@@ -367,13 +401,13 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       set({ error: err.message });
       get().addToast(`Nhận thưởng nhiệm vụ lỗi: ${err.message}`, "error");
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
   redeemGiftCode: async (code) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/redeem-gift-code`, {
         method: "POST",
@@ -392,14 +426,14 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đổi mã quà lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 
 
   triggerTribulation: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:cultivation")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/tribulation`, {
         method: "POST",
@@ -415,6 +449,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi độ kiếp: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("player:cultivation"); }
   },
 });

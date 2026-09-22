@@ -45,9 +45,9 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   occupyMineSlot: async (slotId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("mine")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/mine/occupy`, {
         method: "POST",
@@ -67,13 +67,13 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addLog(`Chiếm mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("mine"); }
   },
 
   claimMineRewards: async (slotId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("mine")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/mine/claim`, {
         method: "POST",
@@ -93,13 +93,13 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addLog(`Nhận thưởng mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("mine"); }
   },
 
   abandonMineSlot: async (slotId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("mine")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/mine/abandon`, {
         method: "POST",
@@ -119,13 +119,13 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addLog(`Rời mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("mine"); }
   },
 
   attackMineSlot: async (slotId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("mine")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/mine/attack`, {
         method: "POST",
@@ -144,6 +144,6 @@ export const createMineSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addLog(`Tấn công mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("mine"); }
   },
 });

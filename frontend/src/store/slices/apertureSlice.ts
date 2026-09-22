@@ -260,9 +260,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   placeApertureNode: async (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`, {
         method: "POST",
@@ -290,14 +290,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   collectResourceNode: async (nodeId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/collect`, {
         method: "POST",
@@ -321,14 +321,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   collectAllResourceNodes: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/collect-all`, {
         method: "POST",
@@ -352,14 +352,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   uninstallApertureNode: async (nodeId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/uninstall`, {
         method: "POST",
@@ -384,14 +384,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   deleteApertureNode: async (nodeId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}`, {
         method: "DELETE",
@@ -416,7 +416,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
@@ -463,9 +463,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   assignWorkerToNode: async (nodeId: string, variantHumanId: string, population: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`, {
         method: "POST",
@@ -485,14 +485,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   removeWorkerFromNode: async (nodeId: string, workerId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers/${workerId}`, {
         method: "DELETE",
@@ -508,7 +508,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
@@ -529,9 +529,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   createRefinementJob: async (recipeId: string, mode: string, targetQuantity: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue`, {
         method: "POST",
@@ -551,14 +551,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   deleteRefinementJob: async (jobId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue/${jobId}`, {
         method: "DELETE",
@@ -574,7 +574,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
@@ -595,9 +595,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   buildSettlement: async (race: string, name?: string, settlementType?: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements`, {
         method: "POST",
@@ -618,14 +618,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   upgradeSettlement: async (settlementId: string, data: { name?: string; population_capacity?: number; housing?: number; food_storage?: number }) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements/${settlementId}/upgrade`, {
         method: "POST",
@@ -645,7 +645,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
@@ -666,9 +666,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   assignNPCRole: async (npcId: string, role: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/role`, {
         method: "POST",
@@ -686,14 +686,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   dismissNPC: async (npcId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}`, {
         method: "DELETE",
@@ -709,14 +709,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast("Lỗi hệ thống", "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   setApertureTimeRate: async (rate: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/time-rate`, {
         method: "POST",
@@ -741,14 +741,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   setApertureLabor: async (race: string, intensity: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/labor`, {
         method: "POST",
@@ -773,14 +773,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   repairApertureNode: async (nodeId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/repair`, {
         method: "POST",
@@ -805,14 +805,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   repairAllApertureNodes: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/repair-all`, {
         method: "POST",
@@ -837,14 +837,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   upgradeApertureNode: async (nodeId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/upgrade`, {
         method: "POST",
@@ -868,7 +868,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
@@ -910,9 +910,9 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   engageTribulationCombat: async (eventId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/engage`, {
         method: "POST",
@@ -931,9 +931,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       if (data.active_combat) {
         const currentPlayer = get().player;
         if (currentPlayer) {
-          set({
+          set((state) => ({
             player: { ...currentPlayer, active_combat: data.active_combat },
-          });
+            playerRevision: state.playerRevision + 1,
+          }));
         }
       }
       await get().fetchActiveTribulation(true);
@@ -944,14 +945,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   resolveTribulation: async (eventId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/resolve`, {
         method: "POST",
@@ -981,14 +982,14 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("aperture");
     }
   },
 
   useGutsGu: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/soul/use-guts`, { method: "POST" });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
@@ -1003,13 +1004,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("aperture"); }
   },
 
   refineSoul: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/soul/refine`, { method: "POST" });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
@@ -1024,6 +1025,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("aperture"); }
   },
 });

@@ -15,6 +15,8 @@ export interface InstanceSlice {
   actionInstance: (optionIndex: number) => Promise<boolean>;
 }
 
+let fetchInstancesPromise: Promise<void> | null = null;
+
 export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, InstanceSlice> = (set, get) => ({
   activeInstanceSession: null,
   activeInstanceTemplate: null,
@@ -23,22 +25,29 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
   instanceDailyEntriesMax: 2,
 
   fetchInstances: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/instance/list`);
-      if (response.status === 401) { logout(); return; }
-      if (response.ok) {
-        const data = await response.json();
-        set({
-          availableInstances: data.instances || [],
-          instanceDailyEntriesUsed: data.daily_entries_used ?? 0,
-          instanceDailyEntriesMax: data.daily_entries_max ?? 2,
-        });
+    if (fetchInstancesPromise) return fetchInstancesPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/instance/list`);
+        if (response.status === 401) { logout(); return; }
+        if (response.ok) {
+          const data = await response.json();
+          set({
+            availableInstances: data.instances || [],
+            instanceDailyEntriesUsed: data.daily_entries_used ?? 0,
+            instanceDailyEntriesMax: data.daily_entries_max ?? 2,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch instances:", err);
+      } finally {
+        fetchInstancesPromise = null;
       }
-    } catch (err) {
-      console.error("Failed to fetch instances:", err);
-    }
+    };
+    fetchInstancesPromise = executeFetch();
+    return fetchInstancesPromise;
   },
 
   fetchActiveInstance: async () => {
@@ -68,9 +77,9 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   enterInstance: async (instanceId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("instance")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/instance/enter`, {
         method: "POST",
@@ -86,21 +95,20 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       });
       get().addToast(data.message || "Tiến vào phó bản thành công!", "success");
       get().addLog(data.message || `Tiến vào phó bản: ${instanceId}`);
-      await get().initializeSession();
-      await get().fetchInstances();
+      await Promise.all([get().refreshPlayerSummary(), get().fetchInstances()]);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("instance"); }
   },
 
   actionInstance: async (optionIndex: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("instance")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/instance/action`, {
         method: "POST",
@@ -120,9 +128,10 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
           });
         }
       }
+      get().applyInventoryFromResponse(data);
       get().addToast(data.message || "Thực hiện hành động thành công!", "success");
       get().addLog(data.message || "Đã hành động trong phó bản.");
-      await get().initializeSession();
+      await get().refreshPlayerSummary();
       if (data.session?.status !== "ACTIVE") {
         await get().fetchInstances();
       }
@@ -132,6 +141,6 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("instance"); }
   },
 });

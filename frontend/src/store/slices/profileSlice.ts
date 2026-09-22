@@ -9,6 +9,7 @@ import { shouldApplyReconciliation, shouldRefreshCollections } from "@/lib/playe
 const lastStatusFetchTimes = new Map<string, number>();
 const pendingStatusFetches = new Map<string, Promise<void>>();
 const STATUS_FETCH_TTL_MS = 3000;
+let refreshPlayerSummaryPromise: Promise<void> | null = null;
 
 export interface ProfileSlice {
   inspectedProfile: ApiResponseData | null;
@@ -30,6 +31,7 @@ export interface ProfileSlice {
   fetchPlayerStatus: (id: string, forceRefresh?: boolean) => Promise<void>;
   reconcilePlayer: (forceCollections?: boolean) => Promise<void>;
   initializeSession: () => Promise<void>;
+  refreshPlayerSummary: () => Promise<void>;
 }
 
 export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ProfileSlice> = (set, get) => ({
@@ -58,7 +60,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
       if (response.status === 401) {
-        set({ player: null, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
+        set((state) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
         return;
       }
       if (!response.ok) {
@@ -89,13 +91,51 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Session restore failed:", err.message);
-      set({ player: null, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
+      set((state) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
     }
   },
 
+  refreshPlayerSummary: async () => {
+    if (refreshPlayerSummaryPromise) return refreshPlayerSummaryPromise;
+
+    const executeRefresh = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (!response.ok) throw new Error("Failed to refresh player summary");
+
+        const player: Player = await response.json();
+        if (get().token !== token) return;
+        const currentPlayer = get().player;
+        get().setPlayerFromServer({
+          ...player,
+          // This endpoint carries a sparse Gu projection and also happens to
+          // include recipe progress. Those resources have dedicated refreshes.
+          gu_inventory: currentPlayer?.gu_inventory ?? player.gu_inventory,
+          equipped_gus: currentPlayer?.equipped_gus ?? player.equipped_gus,
+          unlocked_recipes: currentPlayer?.unlocked_recipes ?? player.unlocked_recipes,
+        });
+      } catch (caught: unknown) {
+        const err = caught instanceof Error ? caught : new Error(String(caught));
+        console.error("Player summary refresh failed:", err.message);
+      } finally {
+        refreshPlayerSummaryPromise = null;
+      }
+    };
+
+    refreshPlayerSummaryPromise = executeRefresh();
+    return refreshPlayerSummaryPromise;
+  },
+
   fetchPlayerStatus: async (id, forceRefresh = false) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return;
+    const { token, logout } = get();
+    if (!token) return;
 
     const now = Date.now();
     const lastFetch = lastStatusFetchTimes.get(id) || 0;
@@ -105,6 +145,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
 
     const inFlight = pendingStatusFetches.get(id);
     if (inFlight) return inFlight;
+    const revision = get().playerRevision;
 
     const executeFetch = async () => {
       try {
@@ -130,7 +171,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
             ...player,
             gu_inventory: currentPlayer.gu_inventory?.length ? currentPlayer.gu_inventory : player.gu_inventory,
             equipped_gus: currentPlayer.gu_inventory?.length ? currentPlayer.equipped_gus : player.equipped_gus,
-          });
+          }, undefined, revision);
         }
       } catch (caught: unknown) {
         const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -225,10 +266,10 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
   clearInspectedProfile: () => set({ inspectedProfile: null, inspectedUsernameQuery: null }),
 
   updateProfileSettings: async (settings) => {
-    const { token, actionLoading, addToast } = get();
-    if (!token || actionLoading) return false;
+    const { token, addToast } = get();
+    if (!token || !get().beginAction("player:profile")) return false;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/profile/settings`, {
         method: "PUT",
@@ -254,15 +295,15 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       addToast(`Cập nhật thất bại: ${err.message}`, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:profile");
     }
   },
 
   uploadAvatar: async (file: File) => {
-    const { token, actionLoading, addToast } = get();
-    if (!token || actionLoading) return null;
+    const { token, addToast } = get();
+    if (!token || !get().beginAction("player:profile")) return null;
 
-    set({ actionLoading: true, error: null });
+    set({ error: null });
     try {
       const formData = new FormData();
       formData.append("avatar", file);
@@ -280,7 +321,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       // Update player avatar_url in store
       const { player } = get();
       if (player) {
-        set({ player: { ...player, avatar_url: data.avatar_url } });
+        get().setPlayerFromServer({ avatar_url: data.avatar_url });
       }
       addToast(data.message || "Cập nhật ảnh đại diện thành công!", "success");
       return data.avatar_url as string;
@@ -292,7 +333,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       addToast(`Upload thất bại: ${err.message}`, "error");
       return null;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:profile");
     }
   },
 });
