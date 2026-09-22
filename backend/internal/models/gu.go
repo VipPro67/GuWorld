@@ -1,6 +1,7 @@
 package models
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -10,17 +11,147 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// StatusApplication is one entry of active.apply_status: a statusfx status to
+// inflict, with optional explicit intensity and duration. Omitted value/turns
+// inherit the legacy top-level status_tick_damage / status_duration_ticks, so
+// a bare string entry keeps its exact historical semantics.
+type StatusApplication struct {
+	ID    string  `json:"id"`
+	Value float64 `json:"value,omitempty"` // intensity (DoT damage, percent); 0 = inherit
+	Turns int     `json:"turns,omitempty"` // duration in combat ticks; 0 = inherit
+}
+
+// StatusApplications accepts three authoring forms for the active.apply_status
+// key so one action can assemble several statuses:
+//
+//	"BIND"                                legacy single string
+//	{"id": "BIND", "turns": 3}            single object
+//	[{"id": "BLEED"}, {"id": "BIND"}]     array (the preferred form)
+type StatusApplications []StatusApplication
+
+func (s *StatusApplications) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		*s = nil
+		return nil
+	}
+	switch trimmed[0] {
+	case '"':
+		var id string
+		if err := json.Unmarshal(trimmed, &id); err != nil {
+			return err
+		}
+		id = strings.ToUpper(strings.TrimSpace(id))
+		if id == "" {
+			*s = nil
+			return nil
+		}
+		*s = StatusApplications{{ID: id}}
+	case '{':
+		var one StatusApplication
+		if err := json.Unmarshal(trimmed, &one); err != nil {
+			return err
+		}
+		one.ID = strings.ToUpper(strings.TrimSpace(one.ID))
+		*s = StatusApplications{one}
+	case '[':
+		var list []StatusApplication
+		if err := json.Unmarshal(trimmed, &list); err != nil {
+			return err
+		}
+		for i := range list {
+			list[i].ID = strings.ToUpper(strings.TrimSpace(list[i].ID))
+		}
+		*s = list
+	default:
+		return fmt.Errorf("apply_status phải là chuỗi, object hoặc mảng")
+	}
+	return nil
+}
+
+// HasStatus reports whether the action applies the given canonical status ID.
+func (a *ActiveEffect) HasStatus(id string) bool {
+	for _, entry := range a.ApplyStatus {
+		if entry.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// StatusOp returns the resolved statusfx op for the first apply_status entry
+// matching id (e.g. overworld skill handling of REGEN/ATK_UP buffs).
+func (a *ActiveEffect) StatusOp(id string) (statusfx.StatusOp, bool) {
+	for _, op := range a.ResolveStatusApplications() {
+		if op.ID == id {
+			return op, true
+		}
+	}
+	return statusfx.StatusOp{}, false
+}
+
+// effectiveStatusValue returns the intensity for an entry, falling back to the
+// legacy top-level status_tick_damage.
+func (a *ActiveEffect) effectiveStatusValue(entry StatusApplication) float64 {
+	if entry.Value > 0 {
+		return entry.Value
+	}
+	return a.StatusTickDamage
+}
+
+// effectiveStatusTurns returns the duration for an entry, falling back to the
+// legacy top-level status_duration_ticks.
+func (a *ActiveEffect) effectiveStatusTurns(entry StatusApplication) int {
+	if entry.Turns > 0 {
+		return entry.Turns
+	}
+	return a.StatusDurationTicks
+}
+
+// ResolveStatusApplications resolves every apply_status entry through the
+// statusfx registry into combat StatusOps, preserving the legacy single-status
+// resolution rules (explicit value → direct, bare duration ≤ 5 → tier).
+func (a *ActiveEffect) ResolveStatusApplications() []statusfx.StatusOp {
+	ops := make([]statusfx.StatusOp, 0, len(a.ApplyStatus))
+	for _, entry := range a.ApplyStatus {
+		value := a.effectiveStatusValue(entry)
+		turns := a.effectiveStatusTurns(entry)
+		var op statusfx.StatusOp
+		var err error
+		switch {
+		case value > 0:
+			op, err = statusfx.ResolveStatus(entry.ID, value, turns)
+		case turns > 5:
+			op, err = statusfx.ResolveStatus(entry.ID, 0, turns)
+		case turns > 0:
+			op, err = statusfx.ResolveStatusWithTier(entry.ID, turns)
+		default:
+			op, err = statusfx.ResolveStatus(entry.ID, 0, 0)
+		}
+		if err != nil {
+			continue
+		}
+		// FORGET_REALITY intensity comes from target_damage_reduce_percent.
+		if op.ID == statusfx.StatusForgetReality && a.TargetDamageReducePct > 0 {
+			op.Value = a.TargetDamageReducePct * 100
+		}
+		ops = append(ops, op)
+	}
+	return ops
+}
+
 type ActiveEffect struct {
-	DamageFlat          float64 `json:"damage_flat,omitempty"`
-	HealFlat            float64 `json:"heal_flat,omitempty"`
-	ShieldFlat          float64 `json:"shield_flat,omitempty"`
-	ApplyStatus         string  `json:"apply_status,omitempty"`
-	StatusTickDamage    float64 `json:"status_tick_damage,omitempty"`
-	StatusDurationTicks int     `json:"status_duration_ticks,omitempty"`
-	TargetSelector      string  `json:"target_selector,omitempty"`
+	DamageFlat          float64            `json:"damage_flat,omitempty"`
+	HealFlat            float64            `json:"heal_flat,omitempty"`
+	ShieldFlat          float64            `json:"shield_flat,omitempty"`
+	ApplyStatus         StatusApplications `json:"apply_status,omitempty"`
+	StatusTickDamage    float64            `json:"status_tick_damage,omitempty"`
+	StatusDurationTicks int                `json:"status_duration_ticks,omitempty"`
+	TargetSelector      string             `json:"target_selector,omitempty"`
 
 	Range              float64 `json:"range,omitempty"`
 	CurveAttack        bool    `json:"curve_attack,omitempty"`
@@ -253,76 +384,69 @@ func (g *GuEffects) Scan(value interface{}) error {
 	return nil
 }
 
-// normalize converts shorthand status keys (freeze:1) to ApplyStatus format.
+// normalize converts legacy shorthand status keys (freeze:1) into apply_status
+// entries. Deprecated for authoring (CSV now writes apply_status directly);
+// kept so existing database rows loaded before re-import keep working.
 func (a *ActiveEffect) normalize() {
-	if a.Freeze > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "FREEZE"
-		a.StatusDurationTicks = int(a.Freeze)
+	if len(a.ApplyStatus) > 0 {
+		return
+	}
+	addDuration := func(id string, shorthand float64) {
+		a.ApplyStatus = append(a.ApplyStatus, StatusApplication{ID: id, Turns: int(shorthand)})
+	}
+	addTick := func(id string, shorthand float64) {
+		a.ApplyStatus = append(a.ApplyStatus, StatusApplication{ID: id, Value: shorthand, Turns: int(shorthand)})
+	}
+	if a.Freeze > 0 {
+		addDuration("FREEZE", a.Freeze)
 		a.Freeze = 0
 	}
-	if a.Slow > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "SLOW"
-		a.StatusTickDamage = a.Slow
-		a.StatusDurationTicks = int(a.Slow)
+	if a.Slow > 0 {
+		addTick("SLOW", a.Slow)
 		a.Slow = 0
 	}
-	if a.Slow1 > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "SLOW1"
-		a.StatusTickDamage = a.Slow1
-		a.StatusDurationTicks = int(a.Slow1)
+	if a.Slow1 > 0 {
+		addTick("SLOW1", a.Slow1)
 		a.Slow1 = 0
 	}
-	if a.Weak > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "WEAK"
-		a.StatusTickDamage = a.Weak
-		a.StatusDurationTicks = int(a.Weak)
+	if a.Weak > 0 {
+		addTick("WEAK", a.Weak)
 		a.Weak = 0
 	}
-	if a.Stun > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "STUN"
-		a.StatusDurationTicks = int(a.Stun)
+	if a.Stun > 0 {
+		addDuration("STUN", a.Stun)
 		a.Stun = 0
 	}
-	if a.Silence > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "SILENCE"
-		a.StatusDurationTicks = int(a.Silence)
+	if a.Silence > 0 {
+		addDuration("SILENCE", a.Silence)
 		a.Silence = 0
 	}
-	if a.Bleed > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "BLEED"
-		a.StatusTickDamage = a.Bleed
-		a.StatusDurationTicks = int(a.Bleed)
+	if a.Bleed > 0 {
+		addTick("BLEED", a.Bleed)
 		a.Bleed = 0
 	}
-	if a.Poison > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "POISON"
-		a.StatusTickDamage = a.Poison
-		a.StatusDurationTicks = int(a.Poison)
+	if a.Poison > 0 {
+		addTick("POISON", a.Poison)
 		a.Poison = 0
 	}
-	if a.Thorns > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "THORNS"
-		a.StatusDurationTicks = int(a.Thorns)
+	if a.Thorns > 0 {
+		addDuration("THORNS", a.Thorns)
 		a.Thorns = 0
 	}
-	if a.Regen > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "REGEN"
-		a.StatusDurationTicks = int(a.Regen)
+	if a.Regen > 0 {
+		addDuration("REGEN", a.Regen)
 		a.Regen = 0
 	}
-	if a.AtkUp > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "ATK_UP"
-		a.StatusDurationTicks = int(a.AtkUp)
+	if a.AtkUp > 0 {
+		addDuration("ATK_UP", a.AtkUp)
 		a.AtkUp = 0
 	}
-	if a.DefUp > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "DEF_UP"
-		a.StatusDurationTicks = int(a.DefUp)
+	if a.DefUp > 0 {
+		addDuration("DEF_UP", a.DefUp)
 		a.DefUp = 0
 	}
-	if a.Taunt > 0 && a.ApplyStatus == "" {
-		a.ApplyStatus = "TAUNT"
-		a.StatusDurationTicks = int(a.Taunt)
+	if a.Taunt > 0 {
+		addDuration("TAUNT", a.Taunt)
 		a.Taunt = 0
 	}
 }
@@ -350,44 +474,39 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		if gu.Effects.Active.ShieldMult > 0 {
 			res["shield_multiplier"] = gu.Effects.Active.ShieldMult
 		}
-		if gu.Effects.Active.ApplyStatus == "BLEED" {
-			res["bleed"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "POISON" {
-			res["poison"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "STUN" {
-			res["stun"] = float64(gu.Effects.Active.StatusDurationTicks)
-		}
-		if gu.Effects.Active.ApplyStatus == "SLOW" {
-			res["slow"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "SLOW1" {
-			res["slow1"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "WEAK" {
-			res["weak"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "FREEZE" {
-			res["freeze"] = float64(gu.Effects.Active.StatusDurationTicks)
-		}
-		if gu.Effects.Active.ApplyStatus == "SILENCE" {
-			res["silence"] = float64(gu.Effects.Active.StatusDurationTicks)
-		}
-		if gu.Effects.Active.ApplyStatus == "THORNS" {
-			res["thorns_buff"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "REGEN" {
-			res["regen"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "ATK_UP" {
-			res["atk_up"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "DEF_UP" {
-			res["def_up"] = gu.Effects.Active.StatusTickDamage
-		}
-		if gu.Effects.Active.ApplyStatus == "TAUNT" {
-			res["taunt"] = float64(gu.Effects.Active.StatusDurationTicks)
+		// Apply_status entries → legacy flat keys (consumed by killer-move
+		// compounding checks: damage+bleed, damage+stun).
+		for _, entry := range gu.Effects.Active.ApplyStatus {
+			value := gu.Effects.Active.effectiveStatusValue(entry)
+			turns := gu.Effects.Active.effectiveStatusTurns(entry)
+			switch entry.ID {
+			case "BLEED":
+				res["bleed"] = value
+			case "POISON":
+				res["poison"] = value
+			case "STUN":
+				res["stun"] = float64(turns)
+			case "SLOW":
+				res["slow"] = value
+			case "SLOW1":
+				res["slow1"] = value
+			case "WEAK":
+				res["weak"] = value
+			case "FREEZE":
+				res["freeze"] = float64(turns)
+			case "SILENCE":
+				res["silence"] = float64(turns)
+			case "THORNS":
+				res["thorns_buff"] = value
+			case "REGEN":
+				res["regen"] = value
+			case "ATK_UP":
+				res["atk_up"] = value
+			case "DEF_UP":
+				res["def_up"] = value
+			case "TAUNT":
+				res["taunt"] = float64(turns)
+			}
 		}
 		if gu.Effects.Active.LifeStealRate > 0 {
 			res["lifesteal"] = gu.Effects.Active.LifeStealRate
@@ -754,9 +873,15 @@ func ManaRegenTickFactor(playerRank, guRank int) float64 {
 	return ManaRegenScale[guRank-1] / ManaRegenScale[playerRank-1]
 }
 
-// ManaRegenTickPerHour sums the per-hour mana contribution of every equipped
-// ACTIVE Gu that carries an ON_TICK MANA_REGEN_TICK effect.
-func ManaRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
+// resourceRegenTickPerHour sums the per-hour contribution of every equipped
+// ACTIVE Gu carrying an ON_TICK action in the given set. It is the shared
+// engine behind mana/thought/soul regen; defaultValue applies when a mechanic
+// omits params.value.
+func resourceRegenTickPerHour(inventory []GuInstance, playerRank int, defaultValue float64, actions ...string) float64 {
+	wanted := make(map[string]bool, len(actions))
+	for _, action := range actions {
+		wanted[action] = true
+	}
 	var total float64
 	for _, gu := range inventory {
 		if !gu.Equipped || gu.Status != "ACTIVE" {
@@ -767,7 +892,7 @@ func ManaRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
 			continue
 		}
 		for _, mech := range spec.Effects.Other {
-			if mech.EventTrigger != "ON_TICK" || mech.ActionCode != "MANA_REGEN_TICK" {
+			if mech.EventTrigger != "ON_TICK" || !wanted[mech.ActionCode] {
 				continue
 			}
 			var params map[string]interface{}
@@ -776,12 +901,18 @@ func ManaRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
 			}
 			val, _ := params["value"].(float64)
 			if val <= 0 {
-				val = 0.5
+				val = defaultValue
 			}
 			total += val * ManaRegenTickFactor(playerRank, gu.Rank)
 		}
 	}
 	return total
+}
+
+// ManaRegenTickPerHour sums the per-hour mana contribution of every equipped
+// ACTIVE Gu that carries an ON_TICK MANA_REGEN_TICK effect.
+func ManaRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
+	return resourceRegenTickPerHour(inventory, playerRank, 0.5, "MANA_REGEN_TICK")
 }
 
 // ThoughtRegenTickPerHour sums the per-hour thought (Niệm Lực) contribution of
@@ -789,31 +920,7 @@ func ManaRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
 // It reuses the ManaRegenTickFactor rank scaling so a Gu gives its full value
 // only when its rank matches the player's.
 func ThoughtRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
-	var total float64
-	for _, gu := range inventory {
-		if !gu.Equipped || gu.Status != "ACTIVE" {
-			continue
-		}
-		spec, ok := GetGu(gu.GuID, gu.Rank)
-		if !ok {
-			continue
-		}
-		for _, mech := range spec.Effects.Other {
-			if mech.EventTrigger != "ON_TICK" || mech.ActionCode != "THOUGHT_REGEN_TICK" {
-				continue
-			}
-			var params map[string]interface{}
-			if len(mech.Params) > 0 {
-				json.Unmarshal(mech.Params, &params)
-			}
-			val, _ := params["value"].(float64)
-			if val <= 0 {
-				val = 1.0
-			}
-			total += val * ManaRegenTickFactor(playerRank, gu.Rank)
-		}
-	}
-	return total
+	return resourceRegenTickPerHour(inventory, playerRank, 1.0, "THOUGHT_REGEN_TICK")
 }
 
 // SoulRegenTickPerHour sums the per-hour soul_hp contribution of every equipped
@@ -821,29 +928,5 @@ func ThoughtRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
 // ManaRegenTickFactor rank scaling so a Gu gives its full value only when its
 // rank matches the player's.
 func SoulRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
-	var total float64
-	for _, gu := range inventory {
-		if !gu.Equipped || gu.Status != "ACTIVE" {
-			continue
-		}
-		spec, ok := GetGu(gu.GuID, gu.Rank)
-		if !ok {
-			continue
-		}
-		for _, mech := range spec.Effects.Other {
-			if mech.EventTrigger != "ON_TICK" || mech.ActionCode != "SOUL_REGEN_TICK" {
-				continue
-			}
-			var params map[string]interface{}
-			if len(mech.Params) > 0 {
-				json.Unmarshal(mech.Params, &params)
-			}
-			val, _ := params["value"].(float64)
-			if val <= 0 {
-				val = 1.0
-			}
-			total += val * ManaRegenTickFactor(playerRank, gu.Rank)
-		}
-	}
-	return total
+	return resourceRegenTickPerHour(inventory, playerRank, 1.0, "SOUL_REGEN_TICK")
 }

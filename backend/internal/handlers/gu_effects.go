@@ -8,6 +8,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
 // Action represents a dynamic combat action compiled from Gu effects
@@ -97,6 +98,66 @@ func RebuildEquippedGus(player *models.Player) {
 	}
 }
 
+// legacyCombatStatusType maps canonical statusfx IDs to the StatusEffect.Type
+// keys ticked by the turn-based combat path. Adding a new status only needs a
+// row here plus its statusfx registry spec.
+var legacyCombatStatusType = map[string]string{
+	statusfx.StatusBleed:         "bleed",
+	statusfx.StatusPoison:        "poison",
+	statusfx.StatusStun:          "stun",
+	statusfx.StatusSlow:          "slow",
+	statusfx.StatusSlow1:         "slow1",
+	statusfx.StatusSlowDamage:    "slow_damage",
+	statusfx.StatusWeak:          "weak",
+	statusfx.StatusFreeze:        "freeze",
+	statusfx.StatusSilence:       "silence",
+	statusfx.StatusThorns:        "thorns_buff",
+	statusfx.StatusRegen:         "regen",
+	statusfx.StatusAtkUp:         "atk_up",
+	statusfx.StatusDefUp:         "def_up",
+	statusfx.StatusTaunt:         "taunt",
+	statusfx.StatusForgetEgo:     "gu_seal",
+	statusfx.StatusForgetReality: "weak",
+}
+
+func combatStatusLogLine(name string, op statusfx.StatusOp, value float64) string {
+	switch op.ID {
+	case statusfx.StatusBleed:
+		return fmt.Sprintf("%s gây trạng thái xuất huyết (trừ %.1f HP mỗi lượt).", name, value)
+	case statusfx.StatusPoison:
+		return fmt.Sprintf("%s gây trạng thái trúng độc (trừ %.1f HP mỗi lượt).", name, value)
+	case statusfx.StatusStun:
+		return fmt.Sprintf("%s gây choáng (%d lượt).", name, op.Turns)
+	case statusfx.StatusSlow:
+		return fmt.Sprintf("%s gây chậm (%.0f%% speed, %d lượt).", name, value, op.Turns)
+	case statusfx.StatusSlow1:
+		return fmt.Sprintf("%s gây chậm (%.0f%% speed, %d lượt, không thể kháng).", name, value, op.Turns)
+	case statusfx.StatusSlowDamage:
+		return fmt.Sprintf("%s gây chậm sát thương (%.0f%% speed và trừ %.1f HP mỗi lượt, %d lượt).", name, value, value, op.Turns)
+	case statusfx.StatusWeak:
+		return fmt.Sprintf("%s gây yếu (%.0f%% giảm dmg, %d lượt).", name, value, op.Turns)
+	case statusfx.StatusFreeze:
+		return fmt.Sprintf("%s gây đóng băng (%d lượt).", name, op.Turns)
+	case statusfx.StatusSilence:
+		return fmt.Sprintf("%s gây im lặng (%d lượt).", name, op.Turns)
+	case statusfx.StatusThorns:
+		return fmt.Sprintf("%s nhận Khiên Gai (phản %.0f%% sát thương, %d lượt).", name, value, op.Turns)
+	case statusfx.StatusRegen:
+		return fmt.Sprintf("%s nhận Hồi Sinh (%.0f%% HP max/lượt, %d lượt).", name, value, op.Turns)
+	case statusfx.StatusAtkUp:
+		return fmt.Sprintf("%s nhận +%.0f%% Công Kích (%d lượt).", name, value, op.Turns)
+	case statusfx.StatusDefUp:
+		return fmt.Sprintf("%s nhận +%.0f%% Phòng Thủ (%d lượt).", name, value, op.Turns)
+	case statusfx.StatusTaunt:
+		return fmt.Sprintf("%s khiêu khích (%d lượt).", name, op.Turns)
+	case statusfx.StatusForgetEgo:
+		return fmt.Sprintf("%s khiến địch quên bản ngã, phong ấn Cổ (%d lượt).", name, op.Turns)
+	case statusfx.StatusForgetReality:
+		return fmt.Sprintf("%s gây lãng quên thực tại (giảm %.0f%% sát thương địch, %d lượt).", name, value, op.Turns)
+	}
+	return ""
+}
+
 func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action, error) {
 	dmg, def, cost, err := CalculateGuEffectForCombatant(ctx.Attacker, &spec, true)
 	if err != nil {
@@ -146,117 +207,26 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 	if active.Replicate {
 		action.Logs = append(action.Logs, fmt.Sprintf("%s sinh sản nhân bản ma cổ.", spec.Name))
 	}
-	if active.ApplyStatus == "BLEED" {
+	// Registry-driven statuses: every apply_status entry resolves through
+	// statusfx and maps to the StatusEffect types this combat path ticks.
+	for _, op := range active.ResolveStatusApplications() {
+		legacyType, known := legacyCombatStatusType[op.ID]
+		if !known {
+			continue
+		}
+		value := op.Value
+		switch op.ID {
+		case statusfx.StatusStun, statusfx.StatusFreeze, statusfx.StatusSilence, statusfx.StatusTaunt, statusfx.StatusForgetEgo:
+			value = 1
+		}
 		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "bleed",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
+			Type:  legacyType,
+			Value: value,
+			Turns: op.Turns,
 		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây trạng thái xuất huyết (trừ %.1f HP mỗi lượt).", spec.Name, active.StatusTickDamage))
-	}
-	if active.ApplyStatus == "POISON" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "poison",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây trạng thái trúng độc (trừ %.1f HP mỗi lượt).", spec.Name, active.StatusTickDamage))
-	}
-	if active.ApplyStatus == "STUN" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "stun",
-			Value: 1,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây choáng (%d lượt).", spec.Name, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "SLOW" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "slow",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây chậm (%.0f%% speed, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "SLOW1" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "slow1",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây chậm (%.0f%% speed, %d lượt, không thể kháng).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "SLOW_DAMAGE" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "slow_damage",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây chậm sát thương (%.0f%% speed và trừ %.1f HP mỗi lượt, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "WEAK" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "weak",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây yếu (%.0f%% giảm dmg, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "FREEZE" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "freeze",
-			Value: 1,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây đóng băng (%d lượt).", spec.Name, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "SILENCE" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "silence",
-			Value: 1,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây im lặng (%d lượt).", spec.Name, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "THORNS" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "thorns_buff",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận Khiên Gai (phản %.0f%% sát thương, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "REGEN" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "regen",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận Hồi Sinh (%.0f%% HP max/lượt, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "ATK_UP" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "atk_up",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận +%.0f%% Công Kích (%d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "DEF_UP" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "def_up",
-			Value: active.StatusTickDamage,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận +%.0f%% Phòng Thủ (%d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "TAUNT" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "taunt",
-			Value: 1,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s khiêu khích (%d lượt).", spec.Name, active.StatusDurationTicks))
+		if line := combatStatusLogLine(spec.Name, op, value); line != "" {
+			action.Logs = append(action.Logs, line)
+		}
 	}
 	if active.LifeStealRate > 0 {
 		action.LifeStealRate += active.LifeStealRate
@@ -325,26 +295,6 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 			Turns: 1,
 		})
 		action.Logs = append(action.Logs, fmt.Sprintf("%s phong ấn Cổ của địch (không thể dùng Cổ lượt sau).", spec.Name))
-	}
-	if active.ApplyStatus == "FORGET_EGO" {
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "gu_seal",
-			Value: 1,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s khiến địch quên bản ngã, phong ấn Cổ (%d lượt).", spec.Name, active.StatusDurationTicks))
-	}
-	if active.ApplyStatus == "FORGET_REALITY" {
-		weakVal := active.StatusTickDamage
-		if weakVal <= 0 && active.TargetDamageReducePct > 0 {
-			weakVal = active.TargetDamageReducePct * 100
-		}
-		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-			Type:  "weak",
-			Value: weakVal,
-			Turns: active.StatusDurationTicks,
-		})
-		action.Logs = append(action.Logs, fmt.Sprintf("%s gây lãng quên thực tại (giảm %.0f%% sát thương địch, %d lượt).", spec.Name, weakVal, active.StatusDurationTicks))
 	}
 	if active.SelfEvasionBoostPercent > 0 {
 		action.IsUtility = true

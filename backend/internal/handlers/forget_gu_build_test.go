@@ -13,7 +13,7 @@ func TestBuildSimActionForgetEgo(t *testing.T) {
 		ID: "GU_FORGET_EGO", Name: "Bản Ngã", Rank: 7, Path: []string{"Wisdom Path"},
 		Effects: models.GuEffects{Active: &models.ActiveEffect{
 			DamageHPPercent: 0.4, ShieldFlatReducePercent: 0.4, DisableGuNextTurn: true,
-			ApplyStatus: "FORGET_EGO", StatusDurationTicks: 1,
+			ApplyStatus: models.StatusApplications{{ID: "FORGET_EGO", Turns: 1}},
 		}},
 	}
 	act, err := buildSimActionFromGu(actor, spec, "GU_SKILL")
@@ -34,7 +34,7 @@ func TestBuildSimActionForgetReality(t *testing.T) {
 		ID: "GU_FORGET_REALITY", Name: "Thực Tại", Rank: 7, Path: []string{"Wisdom Path"},
 		Effects: models.GuEffects{Active: &models.ActiveEffect{
 			ForgetRealityChance: 0.4, SelfEvasionBoostPercent: 0.5, TargetDamageReducePct: 0.4,
-			ApplyStatus: "FORGET_REALITY", StatusDurationTicks: 2,
+			ApplyStatus: models.StatusApplications{{ID: "FORGET_REALITY", Turns: 2}},
 		}},
 	}
 	act, err := buildSimActionFromGu(actor, spec, "GU_SKILL")
@@ -54,7 +54,7 @@ func TestBuildSimActionImmersionDamagePath(t *testing.T) {
 	spec := &models.GuDictionaryItem{
 		ID: "GU_IMMERSION", Name: "Trầm Luân", Rank: 9, Path: []string{"Dream Path"},
 		Effects: models.GuEffects{Active: &models.ActiveEffect{
-			DamageFlat: 250000000, ApplyStatus: "SLEEP", StatusDurationTicks: 5,
+			DamageFlat: 250000000, ApplyStatus: models.StatusApplications{{ID: "SLEEP", Turns: 5}},
 			StatBaseAttackFlat: 10000000, DamagePath: "Dream Path",
 		}},
 	}

@@ -1,6 +1,7 @@
 package effectcatalog
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -185,9 +186,7 @@ func collectObjectCoverage(section string, values map[string]json.RawMessage, co
 		}
 		incrementCoverage(coverage, item)
 		if section == "active" && key == "apply_status" {
-			var status string
-			if json.Unmarshal(raw, &status) == nil {
-				status = strings.ToUpper(strings.TrimSpace(status))
+			for _, status := range appliedStatuses(raw) {
 				statusItem := Coverage{Section: "status", Key: status}
 				if definition, ok := StatusDefinitionFor(status); ok {
 					statusItem.Disposition = definition.Disposition
@@ -197,6 +196,36 @@ func collectObjectCoverage(section string, values map[string]json.RawMessage, co
 			}
 		}
 	}
+}
+
+// appliedStatuses extracts every status ID referenced by an apply_status value
+// in any authoring form (legacy string, single object, or array).
+func appliedStatuses(raw json.RawMessage) []string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	switch trimmed[0] {
+	case '"':
+		var status string
+		if json.Unmarshal(trimmed, &status) == nil {
+			return []string{strings.ToUpper(strings.TrimSpace(status))}
+		}
+	case '{', '[':
+		var entries []struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(raw, &entries) == nil {
+			result := make([]string, 0, len(entries))
+			for _, entry := range entries {
+				if id := strings.ToUpper(strings.TrimSpace(entry.ID)); id != "" {
+					result = append(result, id)
+				}
+			}
+			return result
+		}
+	}
+	return nil
 }
 
 func collectMechanicCoverage(raw json.RawMessage, coverage map[string]*Coverage) {

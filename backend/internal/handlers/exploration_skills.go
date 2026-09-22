@@ -183,8 +183,8 @@ func UseGuOnMap(c *gin.Context) {
 			logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 		}
 		// HOT tick -> heal
-		if active.ApplyStatus == "REGEN" {
-			healVal := active.StatusTickDamage * float64(active.StatusDurationTicks)
+		if op, ok := active.StatusOp("REGEN"); ok {
+			healVal := op.Value * float64(op.Turns)
 			if healVal <= 0 {
 				healVal = 100.0
 			}
@@ -208,12 +208,12 @@ func UseGuOnMap(c *gin.Context) {
 			effectValue = active.ShieldFlat
 		}
 		// Stat Buffs
-		if active.ApplyStatus == "ATK_UP" {
-			buffValue := active.StatusTickDamage
+		if op, ok := active.StatusOp("ATK_UP"); ok {
+			buffValue := op.Value
 			if buffValue == 0 {
 				buffValue = 50 // fallback
 			}
-			duration := time.Duration(active.StatusDurationTicks) * time.Minute
+			duration := time.Duration(op.Turns) * time.Minute
 			if duration == 0 {
 				duration = 5 * time.Minute
 			}
@@ -224,12 +224,12 @@ func UseGuOnMap(c *gin.Context) {
 			effectType = "buff_atk"
 			effectValue = buffValue
 		}
-		if active.ApplyStatus == "DEF_UP" {
-			buffValue := active.StatusTickDamage
+		if op, ok := active.StatusOp("DEF_UP"); ok {
+			buffValue := op.Value
 			if buffValue == 0 {
 				buffValue = 50 // fallback
 			}
-			duration := time.Duration(active.StatusDurationTicks) * time.Minute
+			duration := time.Duration(op.Turns) * time.Minute
 			if duration == 0 {
 				duration = 5 * time.Minute
 			}
@@ -240,12 +240,12 @@ func UseGuOnMap(c *gin.Context) {
 			effectType = "buff_def"
 			effectValue = buffValue
 		}
-		if active.ApplyStatus == "SPEED_UP" {
-			buffValue := active.StatusTickDamage
+		if op, ok := active.StatusOp("SPEED_UP"); ok {
+			buffValue := op.Value
 			if buffValue == 0 {
 				buffValue = 20
 			}
-			duration := time.Duration(active.StatusDurationTicks) * time.Minute
+			duration := time.Duration(op.Turns) * time.Minute
 			if duration == 0 {
 				duration = 5 * time.Minute
 			}

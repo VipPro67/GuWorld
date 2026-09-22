@@ -114,7 +114,7 @@ var booleanFields = set(
 	"summon_growth_phantoms", "reveal_all_stealth", "reveal_weakness",
 	"disable_gu_next_turn", "immune_dream_status", "forget_heaven_protection", "forget_earth_protection",
 )
-var stringFields = set("apply_status", "target_selector", "summon_monster_id", "damage_path")
+var stringFields = set("target_selector", "summon_monster_id", "damage_path")
 	var ratioFields = set("lifesteal_rate", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent", "convert_damage_to_heal_percent", "kill_path_damage_buff", "tenacity", "cc_resist",
 		"damage_hp_percent", "shield_flat_reduce_percent", "forget_reality_chance", "self_evasion_boost_percent", "target_damage_reduce_percent",
 		"anti_heaven_damage_reduction_percent", "anti_earth_damage_reduction_percent", "anti_dream_damage_reduction_percent")
@@ -224,23 +224,7 @@ func validateObjectSection(section string, raw json.RawMessage, report *Report) 
 		}
 		validateFieldValue(section, key, value, path, report)
 		if section == "active" && key == "apply_status" {
-			var status string
-			if err := json.Unmarshal(value, &status); err != nil || strings.TrimSpace(status) == "" {
-				report.add(SeverityError, "invalid_status", path, "apply_status phải là chuỗi không rỗng")
-			} else {
-				upper := strings.ToUpper(strings.TrimSpace(status))
-				if status != upper {
-					report.add(SeverityError, "noncanonical_status", path, "status phải viết hoa canonical")
-				}
-				definition, ok := StatusDefinitionFor(upper)
-				if !ok {
-					report.add(SeverityError, "unknown_status", path, "status chưa có owner và disposition trong manifest")
-				} else if definition.Disposition != DispositionSupported {
-					report.add(SeverityWarning, "status_"+string(definition.Disposition), path, "owner="+definition.Owner)
-				} else if _, ok := statusfx.Spec(status); !ok {
-					report.add(SeverityError, "status_owner_mismatch", path, "status được đánh dấu supported nhưng statusfx không nhận diện")
-				}
-			}
+			validateApplyStatus(value, path, report)
 		}
 		if (section == "active" && key == "status_duration_ticks") || (section == "growth" && key == "hours_to_max") {
 			var number float64
@@ -300,6 +284,83 @@ func validateFieldValue(section, key string, raw json.RawMessage, path string, r
 		}
 	}
 	_ = section
+}
+
+// statusEntry mirrors one apply_status entry in any of its authoring forms.
+type statusEntry struct {
+	ID    string          `json:"id"`
+	Value json.RawMessage `json:"value"`
+	Turns json.RawMessage `json:"turns"`
+}
+
+// validateApplyStatus accepts the three authoring forms — a legacy status
+// string, a single {id,value,turns} object, or an array of such objects —
+// and validates every referenced status against the manifest + statusfx.
+func validateApplyStatus(raw json.RawMessage, path string, report *Report) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return
+	}
+	var entries []statusEntry
+	switch trimmed[0] {
+	case '"':
+		var id string
+		if err := json.Unmarshal(trimmed, &id); err != nil {
+			report.add(SeverityError, "invalid_status", path, "apply_status phải là chuỗi, object {id,value,turns} hoặc mảng")
+			return
+		}
+		entries = []statusEntry{{ID: id}}
+	case '{':
+		var one statusEntry
+		if err := json.Unmarshal(trimmed, &one); err != nil {
+			report.add(SeverityError, "invalid_status", path, "apply_status object phải có dạng {id,value,turns}")
+			return
+		}
+		entries = []statusEntry{one}
+	case '[':
+		if err := json.Unmarshal(trimmed, &entries); err != nil {
+			report.add(SeverityError, "invalid_status", path, "apply_status mảng phải chứa các object {id,value,turns}")
+			return
+		}
+	default:
+		report.add(SeverityError, "invalid_status", path, "apply_status phải là chuỗi, object {id,value,turns} hoặc mảng")
+		return
+	}
+	if len(entries) == 0 {
+		report.add(SeverityError, "invalid_status", path, "apply_status không được rỗng")
+		return
+	}
+	for i, entry := range entries {
+		entryPath := fmt.Sprintf("%s[%d]", path, i)
+		if len(entries) == 1 && trimmed[0] == '{' {
+			entryPath = path
+		}
+		id := strings.ToUpper(strings.TrimSpace(entry.ID))
+		if entry.ID == "" || id == "" {
+			report.add(SeverityError, "invalid_status", entryPath+".id", "id phải là chuỗi không rỗng")
+			continue
+		}
+		if entry.ID != id {
+			report.add(SeverityError, "noncanonical_status", entryPath+".id", "status phải viết hoa canonical")
+		}
+		definition, ok := StatusDefinitionFor(id)
+		if !ok {
+			report.add(SeverityError, "unknown_status", entryPath+".id", "status chưa có owner và disposition trong manifest")
+		} else if definition.Disposition != DispositionSupported {
+			report.add(SeverityWarning, "status_"+string(definition.Disposition), entryPath+".id", "owner="+definition.Owner)
+		} else if _, ok := statusfx.Spec(id); !ok {
+			report.add(SeverityError, "status_owner_mismatch", entryPath+".id", "status được đánh dấu supported nhưng statusfx không nhận diện")
+		}
+		for field, rawValue := range map[string]json.RawMessage{"value": entry.Value, "turns": entry.Turns} {
+			if len(rawValue) == 0 {
+				continue
+			}
+			var number float64
+			if err := json.Unmarshal(rawValue, &number); err != nil || number < 0 {
+				report.add(SeverityError, "invalid_status_field", entryPath+"."+field, field+" phải là số không âm")
+			}
+		}
+	}
 }
 
 func validateOther(raw json.RawMessage, report *Report) {

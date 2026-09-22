@@ -487,9 +487,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const { equippedGroups, restGroups, equippedBugCount, restBugCount } = useMemo(() => {
     const equipped = guGroups.filter(g => g.equippedCount > 0);
-    const rest = guGroups.filter(g => g.equippedCount === 0);
-    const eqCount = equipped.reduce((sum, g) => sum + g.equippedCount, 0);
-    const rCount = rest.reduce((sum, g) => sum + g.instances.length, 0);
+    const rest = guGroups.filter(g => g.instances.length > g.equippedCount);
+    const eqCount = guGroups.reduce((sum, g) => sum + g.equippedCount, 0);
+    const rCount = guGroups.reduce((sum, g) => sum + (g.instances.length - g.equippedCount), 0);
     return {
       equippedGroups: equipped,
       restGroups: rest,

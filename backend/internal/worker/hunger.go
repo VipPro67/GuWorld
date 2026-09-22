@@ -316,6 +316,27 @@ func FormatVitalGuNotification(vitalDead []StarvedGuInfo) (title string, content
 	return
 }
 
+// playerLiveGuIDs returns the ids of a player's ACTIVE/SLEEPING/SEALED Gu,
+// i.e. every instance EvaluatePlayerHungerTx needs to decay.
+func playerLiveGuIDs(tx *sql.Tx, playerID uuid.UUID) ([]string, error) {
+	rows, err := tx.Query(`
+		SELECT id FROM player_gu
+		WHERE player_id = $1 AND state IN ('ACTIVE','SLEEPING','SEALED')`, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // EvaluatePlayerHungerTx performs lazy on-demand decay of a player's Gus.
 // It checks the player's last_hunger_tick_at timestamp, and if one or more
 // 3-hour intervals have passed, decays the player's Gus according to their state.
@@ -342,42 +363,13 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 		return nil
 	}
 
-	// Apply decay + capture every Gu that starved in one pass.
-	// Only DEAD rows are returned: survivors need no Go-side handling, which
-	// keeps large inventories (10k+ Gus) from shipping every row per login.
-	rows, err := tx.Query(`
-		WITH decayed AS (
-			SELECT pg.id AS gu_instance_id, pg.gu_id, pg.is_vital, pg.equipped,
-				pg.hunger AS hunger_before, pg.state AS state_before,
-				CASE WHEN pg.state='ACTIVE' THEN pg.hunger - ($2 * gd.hunger_rate)
-				     WHEN pg.state='SLEEPING' THEN pg.hunger - ($2 * 0.25 * gd.hunger_rate)
-				     WHEN pg.state='SEALED' THEN pg.hunger - ($2 * 0.1 * gd.hunger_rate)
-				     ELSE pg.hunger END AS new_hunger,
-				gd.name AS gu_name
-			FROM player_gu pg
-			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-			WHERE pg.player_id = $1 AND pg.state IN ('ACTIVE','SLEEPING','SEALED')
-		),
-		upd AS (
-			UPDATE player_gu pg
-			SET hunger = GREATEST(d.new_hunger, 0),
-			    state = CASE WHEN d.new_hunger <= 0 THEN 'DEAD' ELSE pg.state END,
-			    updated_at = NOW()
-			FROM decayed d
-			WHERE pg.id = d.gu_instance_id
-			RETURNING pg.id, pg.gu_id, pg.gu_rank, pg.state, pg.is_vital, pg.equipped, d.gu_name,
-				d.state_before, d.hunger_before, pg.last_fed_at
-		)
-		SELECT id, gu_id, gu_rank, state, is_vital, equipped, gu_name,
-			state_before, hunger_before, last_fed_at FROM upd WHERE state = 'DEAD'`, playerID.String(), ticks)
+	// Apply decay + capture every Gu that starved. Processed in bounded chunks
+	// so a large inventory (10k+ Gu) cannot blow the statement timeout; the
+	// whole loop runs inside the caller's tx, so any failure rolls back
+	// atomically and the tick is not advanced.
+	const decayChunkSize = 500
+	liveIDs, err := playerLiveGuIDs(tx, playerID)
 	if err != nil {
-		if isHungerTransientErr(err) {
-			// Statement/lock timeout or deadlock: serve stale hunger so
-			// login (and combat) doesn't 500; the tick is NOT advanced so
-			// the next request retries the decay.
-			logger.S.Warnf("Hunger decay skipped for player %s (transient, retry later): %v", playerID, err)
-			return nil
-		}
 		return err
 	}
 
@@ -386,27 +378,67 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 	vitalDeaths := 0
 	equippedDeath := false
 
-	for rows.Next() {
-		var s StarvedGuInfo
-		if err := rows.Scan(&s.ID, &s.GuID, &s.Rank, &s.State, &s.IsVital, &s.Equipped, &s.GuName,
-			&s.StateBefore, &s.HungerBefore, &s.LastFedAt); err != nil {
-			rows.Close()
+	for start := 0; start < len(liveIDs); start += decayChunkSize {
+		end := start + decayChunkSize
+		if end > len(liveIDs) {
+			end = len(liveIDs)
+		}
+		rows, err := tx.Query(`
+			WITH decayed AS (
+				SELECT pg.id AS gu_instance_id, pg.gu_id, pg.is_vital, pg.equipped,
+					pg.hunger AS hunger_before, pg.state AS state_before,
+					CASE WHEN pg.state='ACTIVE' THEN pg.hunger - ($1 * gd.hunger_rate)
+					     WHEN pg.state='SLEEPING' THEN pg.hunger - ($1 * 0.25 * gd.hunger_rate)
+					     WHEN pg.state='SEALED' THEN pg.hunger - ($1 * 0.1 * gd.hunger_rate)
+					     ELSE pg.hunger END AS new_hunger,
+					gd.name AS gu_name
+				FROM player_gu pg
+				JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
+				WHERE pg.id = ANY($2::text[])
+			),
+			upd AS (
+				UPDATE player_gu pg
+				SET hunger = GREATEST(d.new_hunger, 0),
+				    state = CASE WHEN d.new_hunger <= 0 THEN 'DEAD' ELSE pg.state END
+				FROM decayed d
+				WHERE pg.id = d.gu_instance_id
+				RETURNING pg.id, pg.gu_id, pg.gu_rank, pg.state, pg.is_vital, pg.equipped, d.gu_name,
+					d.state_before, d.hunger_before, pg.last_fed_at
+			)
+			SELECT id, gu_id, gu_rank, state, is_vital, equipped, gu_name,
+				state_before, hunger_before, last_fed_at FROM upd WHERE state = 'DEAD'`, ticks, pq.Array(liveIDs[start:end]))
+		if err != nil {
+			if isHungerTransientErr(err) {
+				// Statement/lock timeout or deadlock: serve stale hunger so
+				// login (and combat) doesn't 500; the tick is NOT advanced so
+				// the next request retries the decay.
+				logger.S.Warnf("Hunger decay skipped for player %s (transient, retry later): %v", playerID, err)
+				return nil
+			}
 			return err
 		}
-		if s.State == "DEAD" {
-			dead = append(dead, s)
-			deadIDs = append(deadIDs, s.ID)
-			if s.IsVital {
-				vitalDeaths++
+		for rows.Next() {
+			var s StarvedGuInfo
+			if err := rows.Scan(&s.ID, &s.GuID, &s.Rank, &s.State, &s.IsVital, &s.Equipped, &s.GuName,
+				&s.StateBefore, &s.HungerBefore, &s.LastFedAt); err != nil {
+				rows.Close()
+				return err
 			}
-			if s.Equipped {
-				equippedDeath = true
+			if s.State == "DEAD" {
+				dead = append(dead, s)
+				deadIDs = append(deadIDs, s.ID)
+				if s.IsVital {
+					vitalDeaths++
+				}
+				if s.Equipped {
+					equippedDeath = true
+				}
 			}
 		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
 	}
 
 	// Advance last_hunger_tick_at preserving remainder

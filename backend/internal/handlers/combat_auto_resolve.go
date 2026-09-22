@@ -476,31 +476,11 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			act.ShieldMult = active.ShieldMult
 		}
 		// Registry-driven statuses (BLEED/POISON/BURN/FEAR/CONFUSE/STEALTH/
-		// SLEEP/BLIND/CHARM/BIND + catalog). Resolved with real turns from
-		// status_duration_ticks instead of a hardcoded 3.
-		if active.ApplyStatus != "" {
-			var op statusfx.StatusOp
-			var err error
-			if active.StatusTickDamage > 0 {
-				op, err = statusfx.ResolveStatus(active.ApplyStatus, active.StatusTickDamage, active.StatusDurationTicks)
-			} else if active.StatusDurationTicks > 0 {
-				if active.StatusDurationTicks <= 5 {
-					op, err = statusfx.ResolveStatusWithTier(active.ApplyStatus, active.StatusDurationTicks)
-				} else {
-					op, err = statusfx.ResolveStatus(active.ApplyStatus, 0, active.StatusDurationTicks)
-				}
-			} else {
-				op, err = statusfx.ResolveStatus(active.ApplyStatus, 0, 0)
-			}
-			if err == nil {
-				// FORGET_REALITY intensity comes from target_damage_reduce_percent.
-				if op.ID == statusfx.StatusForgetReality && active.TargetDamageReducePct > 0 {
-					op.Value = active.TargetDamageReducePct * 100
-				}
-				act.StatusOps = append(act.StatusOps, op)
-			} else {
-				logger.S.Warnf("Gu %s: %v", spec.ID, err)
-			}
+		// SLEEP/BLIND/CHARM/BIND + catalog). apply_status accepts a legacy
+		// string, a single object, or an array so one action can assemble
+		// several statuses; each entry resolves through the statusfx registry.
+		for _, op := range active.ResolveStatusApplications() {
+			act.StatusOps = append(act.StatusOps, op)
 		}
 		if active.LifeStealRate > 0 {
 			act.LifeStealPct += active.LifeStealRate
@@ -551,7 +531,7 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 	}
 	active := spec.Effects.Active
 	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 || active.ShieldMult > 0 ||
-		active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 ||
+		len(active.ApplyStatus) > 0 || active.LifeStealRate > 0 || active.HealFlat > 0 ||
 		active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
 		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
 		active.SummonGrowthPhantoms || active.DamageHPPercent > 0 || active.ShieldFlatReducePercent > 0 ||

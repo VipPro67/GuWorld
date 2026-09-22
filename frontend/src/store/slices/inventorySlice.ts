@@ -43,7 +43,6 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     const executeFetch = async () => {
       const { token, logout } = get();
       if (!token) return;
-      const revision = get().playerRevision;
 
       try {
         const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
@@ -63,12 +62,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         if (!guInventoryRequests.isCurrent(inventoryRequestRevision)) return;
         if (requestRevision !== undefined && requestRevision !== get().reconciliationRevision) return;
 
-        const applied = get().setPlayerFromServer({
-          ...currentPlayer,
-          gu_inventory: data.gu_inventory,
-          equipped_gus: data.equipped_gus,
-        }, undefined, revision);
-        if (!applied) return;
+        get().applyInventoryFromResponse(data);
       } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
         console.error("Gu inventory fetch failed:", err.message);

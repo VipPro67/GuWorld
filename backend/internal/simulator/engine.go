@@ -1195,7 +1195,7 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    "CHAOS_GAMBLE",
-						Detail:    fmt.Sprintf("Cổ Tình Yêu kích hoạt! %s Cái giá phải trả: %s", effectMsg, costMsg),
+						Detail:    fmt.Sprintf("[%s] kích hoạt Thần Thông Cổ Nhiệm Ý! %s Cái giá phải trả: %s", a.Name, effectMsg, costMsg),
 					})
 
 					if chosenEffect == "crit_500" {
@@ -2357,10 +2357,10 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		return 0
 	}
 
-	// Cổ Tình Yêu invulnerable check
+	// Invulnerable check (INVINCIBLE status or mechanic-granted "invulnerable")
 	isInvulnerable := false
 	for _, eff := range target.ActiveEffects {
-		if eff.ID == "invulnerable" && eff.Duration >= 0 { // remains active
+		if strings.EqualFold(eff.ID, "invulnerable") && eff.Duration >= 0 { // remains active
 			isInvulnerable = true
 			break
 		}
@@ -2371,7 +2371,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 			ActorId:   actor.ID,
 			ActorName: actor.Name,
 			Action:    "BLOCKED",
-			Detail:    fmt.Sprintf("%s miễn nhiễm mọi sát thương nhờ sức mạnh bất tử của Cổ Tình Yêu!", target.Name),
+			Detail:    fmt.Sprintf("%s miễn nhiễm mọi sát thương nhờ trạng thái Bất Tử!", target.Name),
 		})
 		return 0
 	}

@@ -1333,10 +1333,16 @@ export function formatRecipeName(recipeId: string): string {
 export const useGameStore = create<GameState>((set, get) => {
   const normalizePlayer = (player: Player | null): Player | null => {
     if (!player) return null;
-    const guInventory = (player.gu_inventory || []).map((g) => ({ ...g, equipped: !!g.equipped || !!g.is_vital }));
     const equippedSet = new Set<string>(player.equipped_gus || []);
-    const vital = guInventory.find((g) => g.is_vital);
+    const vital = player.gu_inventory?.find((g) => g.is_vital);
     if (vital && vital.status !== "DEAD") equippedSet.add(vital.instance_id);
+    const guInventory = (player.gu_inventory || []).map((g) => {
+      const isEquipped = !!g.equipped || !!g.is_vital || equippedSet.has(g.instance_id);
+      if (isEquipped && g.status !== "DEAD") {
+        equippedSet.add(g.instance_id);
+      }
+      return { ...g, equipped: isEquipped };
+    });
     return {
       ...player,
       current_thought: player.current_thought ?? 100,
@@ -1385,13 +1391,16 @@ export const useGameStore = create<GameState>((set, get) => {
     }
     if (normalizedPlayer) {
       normalizedPlayer.gu_inventory = guInventory;
+      if (guComplete) {
+        normalizedPlayer.is_sparse_gu_inventory = false;
+      }
     }
     set((state) => ({
       ...extraState,
       player: normalizedPlayer,
       playerStateRevision: incomingRevision ?? (currentPlayer?.id === normalizedPlayer?.id ? get().playerStateRevision : null),
       playerRevision: state.playerRevision + 1,
-      guInventoryLoaded: guComplete || (normalizedPlayer ? incomingInv.length > 0 : false),
+      guInventoryLoaded: guComplete || (normalizedPlayer ? !normalizedPlayer.is_sparse_gu_inventory : false),
       manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate) : null,
     }));
     if (normalizedPlayer) {
@@ -1414,10 +1423,14 @@ export const useGameStore = create<GameState>((set, get) => {
       // Re-use the same sparse/equipped logic from setPlayerFromServer
       const incomingInv: GuInstance[] = data.gu_inventory || [];
       updates.gu_inventory = incomingInv;
-      // Recompute equipped_gus from the incoming inventory
-      const equippedSet = new Set<string>();
-      incomingInv.forEach((g) => { if (g.equipped) equippedSet.add(g.instance_id); });
-      updates.equipped_gus = Array.from(equippedSet);
+      updates.is_sparse_gu_inventory = false;
+      if (Array.isArray(data.equipped_gus)) {
+        updates.equipped_gus = data.equipped_gus;
+      } else {
+        const equippedSet = new Set<string>();
+        incomingInv.forEach((g) => { if (g.equipped) equippedSet.add(g.instance_id); });
+        updates.equipped_gus = Array.from(equippedSet);
+      }
     }
     if (data.materials_inventory !== undefined) {
       updates.materials_inventory = data.materials_inventory ?? {};
