@@ -15,9 +15,9 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   auditLogsLoading: false,
 
   clearStress: async () => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:misc")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/clear-stress`, {
         method: "POST",
@@ -41,14 +41,14 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addLog(`Tịnh hóa lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:misc");
     }
   },
 
   sacrificeNPC: async (npcId: string) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:misc")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/sacrifice`, {
         method: "POST",
@@ -68,7 +68,7 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         updatedPlayer.aptitude_percent = data.new_aptitude;
         updatedPlayer.aptitude_type = data.aptitude_type;
         updatedPlayer.aperture_stress = data.aperture_stress;
-        set({ player: updatedPlayer as ApiResponseData });
+        get().setPlayerFromServer(updatedPlayer as ApiResponseData);
       }
 
       get().addLog(data.message || "Hiến tế hoàn tất.");
@@ -80,7 +80,7 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addLog(`Hiến tế lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:misc");
     }
   },
 

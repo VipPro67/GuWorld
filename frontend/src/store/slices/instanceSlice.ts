@@ -77,9 +77,9 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   enterInstance: async (instanceId: string) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("instance")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/instance/enter`, {
         method: "POST",
@@ -102,13 +102,13 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("instance"); }
   },
 
   actionInstance: async (optionIndex: number) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("instance")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/instance/action`, {
         method: "POST",
@@ -141,6 +141,6 @@ export const createInstanceSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("instance"); }
   },
 });

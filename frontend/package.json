@@ -7,7 +7,7 @@
     "dev": "next dev",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types src/store/slices/*.test.mjs",
+    "test": "node --experimental-strip-types --test src/store/pendingActions.test.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",

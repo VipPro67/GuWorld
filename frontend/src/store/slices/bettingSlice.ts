@@ -55,9 +55,9 @@ export const createBettingSlice: StateCreator<ApiResponseData, ApiResponseData, 
   },
 
   placeBeastBet: async (team, amount) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("betting")) return null;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/beast-betting/bet`, {
         method: "POST",
@@ -91,6 +91,6 @@ export const createBettingSlice: StateCreator<ApiResponseData, ApiResponseData, 
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đặt cược lỗi: ${err.message}`);
       return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("betting"); }
   },
 });

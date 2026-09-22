@@ -43,9 +43,9 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   submitFeedback: async (title, description, category) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("feedback")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/feedback`, {
         method: "POST",
@@ -63,13 +63,13 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("feedback"); }
   },
 
   voteFeedback: async (feedbackId, voteType) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("feedback")) return false;
+    set({ error: null });
 
     // Optimistic UI update
     const prevFeedbacks = [...get().feedbacks];
@@ -117,13 +117,13 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ feedbacks: prevFeedbacks, error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("feedback"); }
   },
 
   updateFeedbackStatus: async (feedbackId, status, developerResponse) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("feedback")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/status`, {
         method: "PUT",
@@ -145,7 +145,7 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("feedback"); }
   },
 
   fetchFeedbackComments: async (feedbackId) => {
@@ -167,9 +167,9 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   addFeedbackComment: async (feedbackId, content) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("feedback")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments`, {
         method: "POST",
@@ -192,13 +192,13 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("feedback"); }
   },
 
   deleteFeedbackComment: async (feedbackId, commentId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("feedback")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments/${commentId}`, {
         method: "DELETE",
@@ -219,6 +219,6 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
       set({ error: err.message });
       get().addToast(err.message, "error");
       return false;
-    } finally { set({ actionLoading: false }); }
+    } finally { get().endAction("feedback"); }
   },
 });
