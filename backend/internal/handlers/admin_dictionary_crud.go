@@ -632,8 +632,9 @@ func AdminCreateRecipe(c *gin.Context) {
 		return
 	}
 	generatedID := fmt.Sprintf("recipe_%s_%d_%d", req.TargetGuID, targetRank, variant)
+	revision := invalidateRecipeCatalog()
 	auditlog.Logf(db.DB, &adminID, "admin.create_recipe", "id=%s target=%s", generatedID, req.TargetGuID)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ phương", "recipe_id": generatedID})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ phương", "recipe_id": generatedID, "catalog_revision": revision})
 }
 
 func AdminUpdateRecipe(c *gin.Context) {
@@ -702,8 +703,9 @@ func AdminUpdateRecipe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	revision := invalidateRecipeCatalog()
 	auditlog.Logf(db.DB, &adminID, "admin.update_recipe", "id=%s", recipeID)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ phương"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ phương", "catalog_revision": revision})
 }
 
 func AdminDeleteRecipe(c *gin.Context) {
@@ -722,6 +724,7 @@ func AdminDeleteRecipe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	revision := invalidateRecipeCatalog()
 	auditlog.Logf(db.DB, &adminID, "admin.delete_recipe", "id=%s", recipeID)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ phương"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ phương", "catalog_revision": revision})
 }

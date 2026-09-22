@@ -8,6 +8,7 @@ import type { Player } from "@/store/useGameStore";
 const lastStatusFetchTimes = new Map<string, number>();
 const pendingStatusFetches = new Map<string, Promise<void>>();
 const STATUS_FETCH_TTL_MS = 3000;
+let refreshPlayerSummaryPromise: Promise<void> | null = null;
 
 export interface ProfileSlice {
   inspectedProfile: ApiResponseData | null;
@@ -28,6 +29,7 @@ export interface ProfileSlice {
   uploadAvatar: (file: File) => Promise<string | null>;
   fetchPlayerStatus: (id: string, forceRefresh?: boolean) => Promise<void>;
   initializeSession: () => Promise<void>;
+  refreshPlayerSummary: () => Promise<void>;
 }
 
 export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ProfileSlice> = (set, get) => ({
@@ -89,6 +91,44 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       console.error("Session restore failed:", err.message);
       set((state) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
     }
+  },
+
+  refreshPlayerSummary: async () => {
+    if (refreshPlayerSummaryPromise) return refreshPlayerSummaryPromise;
+
+    const executeRefresh = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
+        if (response.status === 401) {
+          logout();
+          return;
+        }
+        if (!response.ok) throw new Error("Failed to refresh player summary");
+
+        const player: Player = await response.json();
+        if (get().token !== token) return;
+        const currentPlayer = get().player;
+        get().setPlayerFromServer({
+          ...player,
+          // This endpoint carries a sparse Gu projection and also happens to
+          // include recipe progress. Those resources have dedicated refreshes.
+          gu_inventory: currentPlayer?.gu_inventory ?? player.gu_inventory,
+          equipped_gus: currentPlayer?.equipped_gus ?? player.equipped_gus,
+          unlocked_recipes: currentPlayer?.unlocked_recipes ?? player.unlocked_recipes,
+        });
+      } catch (caught: unknown) {
+        const err = caught instanceof Error ? caught : new Error(String(caught));
+        console.error("Player summary refresh failed:", err.message);
+      } finally {
+        refreshPlayerSummaryPromise = null;
+      }
+    };
+
+    refreshPlayerSummaryPromise = executeRefresh();
+    return refreshPlayerSummaryPromise;
   },
 
   fetchPlayerStatus: async (id, forceRefresh = false) => {
