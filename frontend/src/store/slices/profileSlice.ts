@@ -4,6 +4,7 @@ import { BACKEND_URL } from "@/lib/config";
 import { useUIStore } from "@/store/useUIStore";
 import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { Player } from "@/store/useGameStore";
+import { shouldApplyReconciliation, shouldRefreshCollections } from "@/lib/player-reconciliation";
 
 const lastStatusFetchTimes = new Map<string, number>();
 const pendingStatusFetches = new Map<string, Promise<void>>();
@@ -27,6 +28,7 @@ export interface ProfileSlice {
   }) => Promise<boolean>;
   uploadAvatar: (file: File) => Promise<string | null>;
   fetchPlayerStatus: (id: string, forceRefresh?: boolean) => Promise<void>;
+  reconcilePlayer: (forceCollections?: boolean) => Promise<void>;
   initializeSession: () => Promise<void>;
 }
 
@@ -141,6 +143,52 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     const promise = executeFetch();
     pendingStatusFetches.set(id, promise);
     return promise;
+  },
+
+  reconcilePlayer: async (forceCollections = false) => {
+    const { player, token } = get();
+    if (!player || !token) return;
+
+    const requestRevision = (get().reconciliationRevision ?? 0) + 1;
+    set({ reconciliationRevision: requestRevision, reconciliationInFlight: true });
+    const clientVersion = player.version ?? 0;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/status/${player.id}`);
+      if (response.status === 401) {
+        if (requestRevision === get().reconciliationRevision) get().logout();
+        return;
+      }
+      if (!response.ok) throw new Error("Failed to reconcile player");
+
+      const serverPlayer: Player = await response.json();
+      const currentPlayer = get().player;
+      if (!currentPlayer || currentPlayer.id !== player.id) return;
+      const serverVersion = serverPlayer.version ?? 0;
+      if (!shouldApplyReconciliation(requestRevision, get().reconciliationRevision, serverVersion, currentPlayer.version ?? 0)) return;
+
+      get().setPlayerFromServer({
+        ...serverPlayer,
+        gu_inventory: currentPlayer.gu_inventory,
+        equipped_gus: currentPlayer.equipped_gus,
+      });
+
+      // Lifecycle refreshes are deliberately authoritative because several
+      // collection tables are updated independently from the player row. A
+      // version advance is also sufficient to identify a missed event burst.
+      if (shouldRefreshCollections(forceCollections, clientVersion, serverVersion)) {
+        await Promise.all([
+          get().fetchGuInventory(true, requestRevision),
+          get().fetchRecipes(true, requestRevision),
+        ]);
+      }
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      console.error("Player reconciliation failed:", err.message);
+    } finally {
+      if (requestRevision === get().reconciliationRevision) {
+        set({ reconciliationInFlight: false });
+      }
+    }
   },
 
 

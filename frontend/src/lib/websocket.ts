@@ -11,6 +11,10 @@ export interface WSMessage {
   status?: number;
 }
 
+export interface WebSocketOpenEvent {
+  reconnected: boolean;
+}
+
 export class WebSocketRequestError extends Error {
   constructor(message: string, public readonly status = 0) {
     super(message);
@@ -37,6 +41,8 @@ export class WebSocketManager {
   private subscriptionRefCounts = new Map<string, number>();
   private connectionRefCounts = 0;
   private pendingRequests = new Map<string, { resolve: (data: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private openListeners = new Set<(event: WebSocketOpenEvent) => void>();
+  private hasOpened = false;
 
   constructor(url: string = DEFAULT_WS_URL) {
     this.url = url;
@@ -52,6 +58,11 @@ export class WebSocketManager {
 
   public setOnTokenRefresh(callback: () => void) {
     this.onTokenRefresh = callback;
+  }
+
+  public onOpen(callback: (event: WebSocketOpenEvent) => void): () => void {
+    this.openListeners.add(callback);
+    return () => this.openListeners.delete(callback);
   }
 
   // Get the current connection reference count
@@ -123,11 +134,21 @@ export class WebSocketManager {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
+          const event = { reconnected: this.hasOpened };
+          this.hasOpened = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();
 
           // Re-subscribe any channels already registered in subscriptions map
           this.resubscribeChannels();
+
+          for (const listener of this.openListeners) {
+            try {
+              listener(event);
+            } catch (error) {
+              console.error("[WebSocket] OPEN lifecycle callback failed:", error);
+            }
+          }
 
           this.connectPromise = null;
           resolve();
@@ -176,6 +197,7 @@ export class WebSocketManager {
       this.ws = null;
     }
     this.connectPromise = null;
+    this.hasOpened = false;
     // Clear all subscriptions
     this.subscriptions.clear();
     this.subscriptionRefCounts.clear();

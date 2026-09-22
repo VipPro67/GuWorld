@@ -308,6 +308,7 @@ export interface Player {
   gender: string;
   constitution: string;
   statuses: PlayerStatusInstance[];
+  version?: number;
 }
 
 export interface PlayerStatusInstance {
@@ -1165,6 +1166,8 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
   unsubscribePlayerEvents: () => void;
   playerEventsConnected: boolean;
   playerEventsRetries: number;
+  reconciliationRevision: number;
+  reconciliationInFlight: boolean;
   subscribeTradeEvents: () => void;
   unsubscribeTradeEvents: () => void;
   subscribeBaoHoangMessages: (channel: string) => void;
@@ -1635,6 +1638,8 @@ export const useGameStore = create<GameState>((set, get) => {
   error: null,
   playerEventsConnected: false,
   playerEventsRetries: 0,
+  reconciliationRevision: 0,
+  reconciliationInFlight: false,
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
   guDictionary: {},
   guByRank: {},
@@ -1708,11 +1713,24 @@ export const useGameStore = create<GameState>((set, get) => {
         releaseConnection();
       });
 
+      const unsubscribeOpen = wsManager.onOpen(({ reconnected }) => {
+        if (reconnected) void get().reconcilePlayer(true);
+      });
+
       // Listen for player updates
       const unsubscribePlayer = wsManager.subscribe("player", (payload: ApiResponseData) => {
         try {
           const eventData = payload?.data || payload;
           const eventType = payload?.type;
+          const eventVersion = typeof eventData?.version === "number" ? eventData.version : undefined;
+          if (typeof eventData?.version === "number") {
+            const currentVersion = get().player?.version ?? 0;
+            if (eventData.version < currentVersion) return;
+            if (eventData.version > currentVersion && get().reconciliationInFlight) {
+              set((state) => ({ reconciliationRevision: state.reconciliationRevision + 1 }));
+              queueMicrotask(() => void get().reconcilePlayer(true));
+            }
+          }
 
           // Handle delta events (efficient updates)
           if (eventType === "player.position") {
@@ -1720,9 +1738,9 @@ export const useGameStore = create<GameState>((set, get) => {
             if (!currentPlayer) return;
             const newX = eventData?.x ?? currentPlayer.x;
             const newY = eventData?.y ?? currentPlayer.y;
-            if (newX !== currentPlayer.x || newY !== currentPlayer.y) {
+            if (newX !== currentPlayer.x || newY !== currentPlayer.y || eventVersion !== undefined) {
               set({
-                player: { ...currentPlayer, x: newX, y: newY },
+                player: { ...currentPlayer, x: newX, y: newY, ...(eventVersion !== undefined ? { version: eventVersion } : {}) },
               });
             }
             return;
@@ -1734,7 +1752,7 @@ export const useGameStore = create<GameState>((set, get) => {
             const newHp = eventData?.hp ?? currentPlayer.hp;
             const newMaxHp = eventData?.max_hp ?? currentPlayer.base_hp;
             set({
-              player: { ...currentPlayer, hp: newHp, base_hp: newMaxHp },
+              player: { ...currentPlayer, hp: newHp, base_hp: newMaxHp, ...(eventVersion !== undefined ? { version: eventVersion } : {}) },
               manaSnapshot: createManaSnapshotFromPlayer(
                 { ...currentPlayer, hp: newHp, base_hp: newMaxHp },
                 get().guDictionary,
@@ -1751,7 +1769,7 @@ export const useGameStore = create<GameState>((set, get) => {
             const newCurrentMana = eventData?.current_mana ?? currentPlayer.current_mana;
             const newMaxMana = eventData?.max_mana ?? currentPlayer.max_mana;
             set({
-              player: { ...currentPlayer, current_mana: newCurrentMana, max_mana: newMaxMana },
+              player: { ...currentPlayer, current_mana: newCurrentMana, max_mana: newMaxMana, ...(eventVersion !== undefined ? { version: eventVersion } : {}) },
               manaSnapshot: createManaSnapshotFromPlayer(
                 { ...currentPlayer, current_mana: newCurrentMana, max_mana: newMaxMana },
                 get().guDictionary,
@@ -1769,6 +1787,7 @@ export const useGameStore = create<GameState>((set, get) => {
             const updatedPlayer = {
               ...currentPlayer,
               active_combat: nextCombat,
+              ...(eventVersion !== undefined ? { version: eventVersion } : {}),
             };
             set({
               player: updatedPlayer,
@@ -2092,6 +2111,7 @@ export const useGameStore = create<GameState>((set, get) => {
       // Store cleanup functions in a global variable
       (window as ApiResponseData).__gu_ws_cleanup = () => {
         unsubscribePlayer();
+        unsubscribeOpen();
         unsubscribeTrade();
         unsubscribeGeneralChat();
         unsubscribeSectChat();

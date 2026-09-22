@@ -9,6 +9,9 @@ import type {
   Region,
   WorldConfig,
 } from "@/store/useGameStore";
+import { LatestRequestGate } from "@/lib/player-reconciliation";
+
+const recipeRequests = new LatestRequestGate();
 
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
@@ -16,7 +19,7 @@ export interface CultivationSlice {
   regions: Region[];
   regionsLoaded: boolean;
   world: WorldConfig | null;
-  fetchRecipes: () => Promise<void>;
+  fetchRecipes: (forceRefresh?: boolean, reconciliationRevision?: number) => Promise<void>;
   fetchRegions: () => Promise<void>;
   fetchWorld: () => Promise<WorldConfig | null>;
   quests: ApiResponseData[];
@@ -40,8 +43,9 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   regionsLoaded: false,
   world: null,
 
-  fetchRecipes: async () => {
-    if (get().recipesLoaded) return;
+  fetchRecipes: async (forceRefresh = false, requestRevision) => {
+    if (get().recipesLoaded && !forceRefresh) return;
+    const recipeRequestRevision = recipeRequests.next();
     try {
       const response = await authFetch(`${BACKEND_URL}/api/recipes`);
       if (response.status === 401) {
@@ -52,6 +56,8 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
         throw new Error("Failed to load recipes");
       }
       const data = await response.json();
+      if (!recipeRequests.isCurrent(recipeRequestRevision)) return;
+      if (requestRevision !== undefined && requestRevision !== get().reconciliationRevision) return;
       set({ recipes: data || [], recipesLoaded: true });
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
