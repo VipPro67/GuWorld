@@ -209,7 +209,7 @@ func processRefinementJob(ctx context.Context, database *sql.DB, jobID string, r
 			return err
 		}
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE players SET primeval_stones=primeval_stones-$2,immortal_stones=immortal_stones-$3,updated_at=NOW() WHERE id=$1 AND primeval_stones >= $2 AND immortal_stones >= $3`, playerID, recipe.primevalCost, recipe.immortalCost)
+	result, err := tx.ExecContext(ctx, `UPDATE players SET primeval_stones=primeval_stones-$2,immortal_stones=immortal_stones-$3 WHERE id=$1 AND primeval_stones >= $2 AND immortal_stones >= $3`, playerID, recipe.primevalCost, recipe.immortalCost)
 	if err != nil {
 		return err
 	}
