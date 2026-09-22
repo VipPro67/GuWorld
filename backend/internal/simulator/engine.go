@@ -94,6 +94,75 @@ func mechanicBool(mechanics []CombatMechanic, trigger, actionCode, key string, f
 	return fallback
 }
 
+// lifespanByRank approximates an enemy's thọ nguyên from its rank. Players use
+// their tracked Lifespan; monsters have none, so this is the calibration knob
+// for ON_BATTLE_START/SEIZE_INITIATIVE. Tune here, not per-Gu.
+func lifespanByRank(rank, subRank int) float64 {
+	table := [...]float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000}
+	if rank < 1 {
+		rank = 1
+	}
+	if rank > len(table) {
+		rank = len(table)
+	}
+	return table[rank-1] + float64(subRank)*10
+}
+
+// combatantLifespan returns the tracked lifespan, falling back to the rank
+// approximation for combatants (monsters) that have none.
+func combatantLifespan(c *CombatantAuto) float64 {
+	if c == nil {
+		return 0
+	}
+	if c.Lifespan > 0 {
+		return c.Lifespan
+	}
+	return lifespanByRank(c.Rank, c.SubRank)
+}
+
+// opponentPrimary returns the first combatant on the opposing side, used as the
+// reference for lifespan-gated battle-start mechanics.
+func opponentPrimary(state *CombatState, isAlly bool) *CombatantAuto {
+	if isAlly {
+		if len(state.Enemies) > 0 {
+			return state.Enemies[0]
+		}
+		return nil
+	}
+	if len(state.Allies) > 0 {
+		return state.Allies[0]
+	}
+	return nil
+}
+
+// seizeInitiative scans for a combatant that, on turn 1, may act before everyone
+// else via ON_BATTLE_START/SEIZE_INITIATIVE when the opposing primary's lifespan
+// does not exceed lifespan_ratio × its own. Returns the winner (or nil).
+func seizeInitiative(state *CombatState, allActors []*CombatantAuto) *CombatantAuto {
+	for _, actor := range allActors {
+		if !hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SEIZE_INITIATIVE") {
+			continue
+		}
+		isAlly := false
+		for _, a := range state.Allies {
+			if a.ID == actor.ID {
+				isAlly = true
+				break
+			}
+		}
+		opp := opponentPrimary(state, isAlly)
+		selfLife := combatantLifespan(actor)
+		if opp == nil || selfLife <= 0 {
+			continue
+		}
+		ratio := mechanicFloat(actor.Mechanics, "ON_BATTLE_START", "SEIZE_INITIATIVE", "lifespan_ratio", 3)
+		if combatantLifespan(opp) <= ratio*selfLife {
+			return actor
+		}
+	}
+	return nil
+}
+
 // sealGuTurns seals a combatant's Gu for n full turns. Duration is n+1
 // because durations tick at the next turn start before acting.
 func sealGuTurns(c *CombatantAuto, turns int) {
@@ -663,6 +732,29 @@ func Simulate(state *CombatState) []CombatLog {
 		sort.SliceStable(allActors, func(i, j int) bool {
 			return allActors[i].EffectiveSpeed > allActors[j].EffectiveSpeed
 		})
+
+		// ── Thỉnh Đạo Hữu Tiên Hành Cổ: seize the opening turn ──
+		// Once, on turn 1, the seizer moves ahead of everyone else (enemies act
+		// after it, in normal speed order). Not a lockout.
+		if turn == 1 {
+			if seizer := seizeInitiative(state, allActors); seizer != nil {
+				reordered := make([]*CombatantAuto, 0, len(allActors))
+				reordered = append(reordered, seizer)
+				for _, a := range allActors {
+					if a != seizer {
+						reordered = append(reordered, a)
+					}
+				}
+				allActors = reordered
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   seizer.ID,
+					ActorName: seizer.Name,
+					Action:    "SEIZE_INITIATIVE",
+					Detail:    fmt.Sprintf("[Thỉnh Đạo Hữu Tiên Hành] Thọ nguyên đối thủ chưa gấp ba lần đạo hữu — %s nắm quyền tiên thủ!", seizer.Name),
+				})
+			}
+		}
 
 		// Pre-compute confuse results once per turn to avoid RNG drift.
 		confusedResult := make(map[*CombatantAuto]bool)

@@ -230,6 +230,10 @@ type CombatantAuto struct {
 	BaseDef float64
 	Speed   float64
 
+	// Lifespan (thọ nguyên). Set from the player on build; monsters leave 0 and
+	// the engine falls back to lifespanByRank. Used by ON_BATTLE_START/SEIZE_INITIATIVE.
+	Lifespan float64
+
 	// Pre-combat Auto-Barrier
 	VirtualShield float64
 

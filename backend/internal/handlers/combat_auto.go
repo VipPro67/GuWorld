@@ -1077,6 +1077,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		BaseDmg:              playerStats["attack"],
 		BaseDef:              playerStats["defense"],
 		Speed:                playerStats["speed"],
+		Lifespan:             player.Lifespan,
 		VirtualShield:        float64(virtualShield),
 		DaoMarks:             simulator.DaoMarks(player.DaoMarks),
 		PathMasteries:        player.PathMasteries,

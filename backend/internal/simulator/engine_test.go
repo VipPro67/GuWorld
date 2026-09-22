@@ -147,6 +147,55 @@ func TestSpecialBehaviorComesFromEffectMechanicNotSourceID(t *testing.T) {
 
 // TestStatusDurationNotDoubleDecremented verifies effects decrement once per turn
 // (the double-decrement bug would remove a 2-turn effect after a single turn).
+
+// TestSeizeInitiativeMovesSeizerFirst verifies ON_BATTLE_START/SEIZE_INITIATIVE:
+// the owner jumps ahead of a faster enemy on turn 1 only when the primary
+// enemy's lifespan does not exceed lifespan_ratio times its own.
+func TestSeizeInitiativeMovesSeizerFirst(t *testing.T) {
+	firstActorTurn1 := func(logs []CombatLog) string {
+		for _, l := range logs {
+			if l.Turn == 1 && l.Action != "TURN_START" && l.ActorId != "" {
+				return l.ActorId
+			}
+		}
+		return ""
+	}
+	seized := func(logs []CombatLog) bool {
+		for _, l := range logs {
+			if l.Action == "SEIZE_INITIATIVE" {
+				return true
+			}
+		}
+		return false
+	}
+	run := func(enemyRank int) (string, bool) {
+		ally := newTestCombatant("ally", "Player", 100000, 1)
+		ally.Speed = 1
+		ally.Lifespan = 100
+		ally.Mechanics = []CombatMechanic{{
+			Trigger:    "ON_BATTLE_START",
+			ActionCode: "SEIZE_INITIATIVE",
+			Params:     []byte(`{"lifespan_ratio":3}`),
+		}}
+		ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 1}}
+		enemy := newTestCombatant("enemy", "Enemy", 100000, 1)
+		enemy.Rank = enemyRank
+		enemy.Speed = 50
+		enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 1}}
+		state := &CombatState{Seed: 3, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+		logs := Simulate(state)
+		return firstActorTurn1(logs), seized(logs)
+	}
+
+	// Enemy rank 1 -> lifespan ~100 <= 3*100: seizes opening turn despite lower speed.
+	if first, ok := run(1); !ok || first != "ally" {
+		t.Fatalf("expected ally to seize turn 1: first=%q seized=%v", first, ok)
+	}
+	// Enemy rank 9 -> lifespan ~50000 > 3*100: no seizure, faster enemy acts first.
+	if first, ok := run(9); ok || first != "enemy" {
+		t.Fatalf("expected no seizure vs high-lifespan enemy: first=%q seized=%v", first, ok)
+	}
+}
 func TestStatusDurationNotDoubleDecremented(t *testing.T) {
 	c := newTestCombatant("unit", "Enemy", 1000, 0)
 	c.ActiveEffects = []Effect{
