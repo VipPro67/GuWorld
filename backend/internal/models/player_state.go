@@ -24,6 +24,7 @@ type Account struct {
 	FakeVitalGu     string    `json:"fake_vital_gu"`
 	NeedsOnboarding bool      `json:"needs_onboarding"`
 	Version         int       `json:"version"`
+	StateRevision   int64     `json:"state_revision"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 
@@ -46,6 +47,7 @@ func NewAccount(p *Player) Account {
 		FakeVitalGu:     p.FakeVitalGu,
 		NeedsOnboarding: p.NeedsOnboarding,
 		Version:         p.Version,
+		StateRevision:   p.StateRevision,
 		CreatedAt:       p.CreatedAt,
 	}
 }
@@ -68,6 +70,7 @@ func (s Account) Apply(p *Player) {
 	p.FakeVitalGu = s.FakeVitalGu
 	p.NeedsOnboarding = s.NeedsOnboarding
 	p.Version = s.Version
+	p.StateRevision = s.StateRevision
 	p.CreatedAt = s.CreatedAt
 }
 

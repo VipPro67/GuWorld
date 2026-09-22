@@ -46,7 +46,9 @@ func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models
 	if err != nil {
 		return player, err
 	}
-	s.cleanExpiredStatuses(q, &player)
+	if s.cleanExpiredStatuses(q, &player) {
+		_ = q.QueryRow(`SELECT state_revision FROM players WHERE id = $1`, id).Scan(&player.StateRevision)
+	}
 
 	if s.db != nil {
 		var qy db.Queryer
@@ -75,7 +77,9 @@ func (s *PlayerService) LoadForUpdateEquipped(tx *sql.Tx, id uuid.UUID) (models.
 	if err != nil {
 		return player, err
 	}
-	s.cleanExpiredStatuses(tx, &player)
+	if s.cleanExpiredStatuses(tx, &player) {
+		_ = tx.QueryRow(`SELECT state_revision FROM players WHERE id = $1`, id).Scan(&player.StateRevision)
+	}
 	if s.db != nil {
 		if inv, errR := db.LoadPlayerGus(tx, id.String(), true); errR == nil {
 			player.GuInventory = inv
@@ -92,7 +96,9 @@ func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player,
 	if err != nil {
 		return player, err
 	}
-	s.cleanExpiredStatuses(q, &player)
+	if s.cleanExpiredStatuses(q, &player) {
+		_ = q.QueryRow(`SELECT state_revision FROM players WHERE id = $1`, id).Scan(&player.StateRevision)
+	}
 	if s.db != nil {
 		var qy db.Queryer
 		if tx, ok := q.(db.Queryer); ok {
@@ -110,20 +116,20 @@ func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player,
 // cleanExpiredStatuses lazily persists status cleanup for players that are
 // actually loaded by a request. The original JSON condition prevents a stale
 // read from overwriting a status granted concurrently.
-func (s *PlayerService) cleanExpiredStatuses(q QueryRower, player *models.Player) {
+func (s *PlayerService) cleanExpiredStatuses(q QueryRower, player *models.Player) bool {
 	exec, ok := q.(execer)
 	if !ok {
-		return
+		return false
 	}
 	original, err := player.Statuses.Value()
 	if err != nil || !player.Statuses.Expire(time.Now()) {
-		return
+		return false
 	}
 
 	cleaned, err := player.Statuses.Value()
 	if err != nil {
 		logger.S.Warnf("Failed to serialize expired statuses for player %s: %v", player.ID, err)
-		return
+		return false
 	}
 	_, err = exec.Exec(`
 		UPDATE players
@@ -132,7 +138,9 @@ func (s *PlayerService) cleanExpiredStatuses(q QueryRower, player *models.Player
 	`, cleaned, player.ID, original)
 	if err != nil {
 		logger.S.Warnf("Failed to lazily clean expired statuses for player %s: %v", player.ID, err)
+		return false
 	}
+	return true
 }
 
 // loadRow loads the player row, active combat state and materials inventory,
@@ -158,7 +166,7 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
    COALESCE(immortal_state, '{}'), growth_data,
 		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses,
-		       COALESCE(version, 0)
+		       COALESCE(version, 0), COALESCE(state_revision, 0)
 FROM players
 		WHERE id = $1
 	`
@@ -187,7 +195,7 @@ FROM players
 		&player.ImmortalState,
 		&player.GrowthData,
 		&player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
-		&player.Version,
+		&player.Version, &player.StateRevision,
 	)
 	if err != nil {
 		return player, err
@@ -254,7 +262,6 @@ FROM players
 			player.MaterialsInventory = mi
 		}
 	}
-
 	return player, nil
 }
 

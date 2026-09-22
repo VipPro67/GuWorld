@@ -42,6 +42,7 @@ const (
 
 type PlayerRealtimeSnapshot struct {
 	ID                  string              `json:"id"`
+	StateRevision       int64               `json:"state_revision"`
 	CurrentMana         float64             `json:"current_mana"`
 	MaxMana             float64             `json:"max_mana"`
 	LastManaUpdate      time.Time           `json:"last_mana_update"`
@@ -73,6 +74,9 @@ type PlayerRealtimeEvent struct {
 
 // PlayerDeltaEvent sends only changed fields for efficient bandwidth usage.
 type PlayerDeltaEvent struct {
+	Type          string          `json:"type"`
+	StateRevision int64           `json:"state_revision"`
+	Data          PlayerDeltaData `json:"data"`
 	Type           string              `json:"type"`
 	Revision       int64               `json:"revision"`
 	ChangedDomains []PlayerEventDomain `json:"changed_domains"`
@@ -109,14 +113,14 @@ func PublishPlayerSnapshot(player *models.Player, eventType string, domains ...P
 	if player == nil {
 		return
 	}
-	snapshot := playerRealtimeSnapshot(*player)
-	activeCombat, err := loadAuthoritativeActiveCombat(db.DB, player.ID)
+	// The caller commonly holds the pre-commit model. Reload after invalidating
+	// the cache so a fresh revision is never paired with stale fields.
+	_ = cache.Delete("player_snapshot:" + player.ID.String())
+	snapshot, err := LoadPlayerRealtimeSnapshot(player.ID)
 	if err != nil {
-		logger.S.Warnf("PublishPlayerSnapshot: active_combat reconciliation failed for player=%s event=%s: %v", player.ID, eventType, err)
+		logger.S.Warnf("PublishPlayerSnapshot: snapshot reload failed for player=%s event=%s: %v", player.ID, eventType, err)
 		return
 	}
-	snapshot.ActiveCombat = activeCombat
-	syncCombatCache(player.ID, activeCombat)
 	_ = cache.SetJSON("player_snapshot:"+player.ID.String(), snapshot, 5*time.Minute)
 	_ = cache.PublishEventQuick("player:"+player.ID.String(), PlayerRealtimeEvent{
 		Type: eventType, Revision: nextPlayerEventRevision(),
@@ -140,13 +144,19 @@ func PublishPlayerRealtimeEvent(playerID uuid.UUID, eventType string, domains ..
 }
 
 // PublishPlayerPositionDelta publishes only position changes (minimal payload).
-func PublishPlayerPositionDelta(playerID uuid.UUID, x, y int) {
+func PublishPlayerPositionDelta(playerID uuid.UUID, _, _ int) {
+	snapshot, err := LoadPlayerRealtimeSnapshot(playerID)
+	if err != nil {
+		logger.S.Warnf("PublishPlayerPositionDelta: snapshot load failed for player=%s: %v", playerID, err)
+		return
+	}
 	delta := PlayerDeltaEvent{
+		StateRevision: snapshot.StateRevision,
 		Type: PositionEventUpdated, Revision: nextPlayerEventRevision(),
 		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
-			X: x,
-			Y: y,
+			X: snapshot.X,
+			Y: snapshot.Y,
 		},
 	}
 	_ = cache.PublishEventQuick("player:"+playerID.String(), delta)
@@ -164,6 +174,7 @@ func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, _ *models.Co
 	_ = cache.SetJSON("player_snapshot:"+playerID.String(), snapshot, 5*time.Minute)
 
 	delta := PlayerDeltaEvent{
+		StateRevision: snapshot.StateRevision,
 		Type: eventType, Revision: nextPlayerEventRevision(),
 		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
@@ -178,7 +189,12 @@ func PublishPlayerCombatDelta(playerID uuid.UUID, eventType string, _ *models.Co
 
 // PublishPlayerHPDelta publishes HP changes (common during combat ticks).
 func PublishPlayerHPDelta(playerID uuid.UUID, hp, maxHP float64) {
+	revision, err := loadPlayerStateRevision(db.DB, playerID)
+	if err != nil {
+		return
+	}
 	delta := PlayerDeltaEvent{
+		StateRevision: revision,
 		Type: "player.hp", Revision: nextPlayerEventRevision(),
 		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
@@ -191,7 +207,12 @@ func PublishPlayerHPDelta(playerID uuid.UUID, hp, maxHP float64) {
 
 // PublishPlayerManaDelta publishes mana changes (common during regen ticks).
 func PublishPlayerManaDelta(playerID uuid.UUID, currentMana, maxMana float64) {
+	revision, err := loadPlayerStateRevision(db.DB, playerID)
+	if err != nil {
+		return
+	}
 	delta := PlayerDeltaEvent{
+		StateRevision: revision,
 		Type: "player.mana", Revision: nextPlayerEventRevision(),
 		ChangedDomains: []PlayerEventDomain{PlayerDomain},
 		Data: PlayerDeltaData{
@@ -242,14 +263,18 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		// Redis accelerates the broad realtime snapshot, but active_combat drives
 		// navigation and must never outlive the database value. A narrow query
 		// prevents a stale cached combat from forcing the UI back into combat.
-		activeCombat, err := loadAuthoritativeActiveCombat(db.DB, playerID)
+		activeCombat, revision, err := loadAuthoritativePlayerMarker(db.DB, playerID)
 		if err != nil {
 			return PlayerRealtimeSnapshot{}, err
 		}
-		cached.ActiveCombat = activeCombat
-		syncCombatCache(playerID, activeCombat)
-		_ = cache.SetJSON("player_snapshot:"+playerID.String(), cached, 5*time.Minute)
-		return cached, nil
+		if cached.StateRevision != revision {
+			_ = cache.Delete("player_snapshot:" + playerID.String())
+		} else {
+			cached.ActiveCombat = activeCombat
+			syncCombatCache(playerID, activeCombat)
+			_ = cache.SetJSON("player_snapshot:"+playerID.String(), cached, 5*time.Minute)
+			return cached, nil
+		}
 	}
 
 	var player models.Player
@@ -258,7 +283,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.last_mana_update,
 			p.time_speed_multiplier, p.active_combat, p.aperture_stress, p.hp, p.base_hp,
 			p.primeval_stones, p.immortal_stones, p.wall_progress, p.human_qi,
-			p.lifespan, p.x, p.y, p.current_region, p.path_masteries, COALESCE(p.version, 0),
+			p.lifespan, p.x, p.y, p.current_region, p.path_masteries, p.state_revision,COALESCE(p.version, 0),
 			`+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
 		FROM players p
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
@@ -269,7 +294,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		&player.TimeSpeedMultiplier, &activeCombatBytes, &player.ApertureStress,
 		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
 		&player.WallProgress, &player.HumanQi, &player.Lifespan,
-		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries, &player.Version,
+		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries, &player.StateRevision, &player.Version,
 		&player.GuInventory, &player.DaoMarks,
 	)
 	if err != nil {
@@ -306,6 +331,26 @@ func loadAuthoritativeActiveCombat(q interface {
 	return decodeActiveCombat(raw)
 }
 
+func loadAuthoritativePlayerMarker(q interface {
+	QueryRow(query string, args ...any) *sql.Row
+}, playerID uuid.UUID) (*models.CombatState, int64, error) {
+	var raw []byte
+	var revision int64
+	if err := q.QueryRow(`SELECT active_combat, state_revision FROM players WHERE id = $1`, playerID).Scan(&raw, &revision); err != nil {
+		return nil, 0, err
+	}
+	combat, err := decodeActiveCombat(raw)
+	return combat, revision, err
+}
+
+func loadPlayerStateRevision(q interface {
+	QueryRow(query string, args ...any) *sql.Row
+}, playerID uuid.UUID) (int64, error) {
+	var revision int64
+	err := q.QueryRow(`SELECT state_revision FROM players WHERE id = $1`, playerID).Scan(&revision)
+	return revision, err
+}
+
 func decodeActiveCombat(raw []byte) (*models.CombatState, error) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil, nil
@@ -323,6 +368,7 @@ func decodeActiveCombat(raw []byte) (*models.CombatState, error) {
 func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 	return PlayerRealtimeSnapshot{
 		ID:                  player.ID.String(),
+		StateRevision:       player.StateRevision,
 		CurrentMana:         player.CurrentMana,
 		MaxMana:             player.MaxMana,
 		LastManaUpdate:      player.LastManaUpdate,

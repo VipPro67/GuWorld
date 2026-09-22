@@ -60,6 +60,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
       if (response.status === 401) {
+		    get().setPlayerFromServer(null, { token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
         set((state) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
         return;
       }
@@ -91,6 +92,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Session restore failed:", err.message);
+  	  get().setPlayerFromServer(null, { token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
       set((state) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
     }
   },
@@ -148,6 +150,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     const revision = get().playerRevision;
 
     const executeFetch = async () => {
+      const revisionAtStart = get().playerStateRevision as number | null;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/player/status/${id}`);
 
@@ -164,6 +167,10 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
         const player: Player = await response.json();
         const currentPlayer = get().player;
         if (currentPlayer && currentPlayer.id === id) {
+          const appliedRevision = get().playerStateRevision as number | null;
+          // A status request may have started before a mutation. Never let that
+          // older projection overwrite the mutation response or realtime event.
+          if (player.state_revision < (appliedRevision ?? revisionAtStart ?? -1)) return;
           // The status endpoint only projects equipped/vital Gus. Preserve the
           // full inventory already in state so it is not clobbered by the sparse
           // snapshot.

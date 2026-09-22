@@ -127,6 +127,9 @@ func InitSchema() error {
 			return fmt.Errorf("schema step %q: %w", s.name, err)
 		}
 	}
+	if err := installPlayerCollectionRevisionTriggers(); err != nil {
+		return fmt.Errorf("install player collection revision triggers: %w", err)
+	}
 
 	// Static runtime seeds (independent of CSV imports).
 	if err := seedDefaultRaceConstitutionRows(); err != nil {

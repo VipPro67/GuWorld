@@ -2,9 +2,26 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
+
+func refreshActionPlayerState(player *models.Player) {
+	if player == nil || player.ID == uuid.Nil {
+		return
+	}
+	// Read the response fields and their revision from one MVCC snapshot. Never
+	// attach a newer revision to values retained in a pre-commit Go model.
+	_ = db.DB.QueryRow(`
+		SELECT state_revision, primeval_stones, immortal_stones, human_qi
+		FROM players WHERE id = $1
+	`, player.ID).Scan(
+		&player.StateRevision, &player.PrimevalStones,
+		&player.ImmortalStones, &player.HumanQi,
+	)
+}
 
 // responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory and CompletedQuests are populated.
 // Use only for GET/session endpoints (auth/me, player/status) where full player initialization is required.
@@ -32,6 +49,7 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 // realtime updates) and returns a slim payload with only inventory data + extra fields.
 // This eliminates the completed_quests and unlocked_recipes DB queries from every action response.
 func respondActionWithInventory(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	refreshActionPlayerState(&player)
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
@@ -44,6 +62,7 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 		"primeval_stones":     player.PrimevalStones,
 		"immortal_stones":     player.ImmortalStones,
 		"human_qi":            player.HumanQi,
+		"state_revision":      player.StateRevision,
 	}
 	for _, e := range extra {
 		for k, v := range e {
@@ -56,6 +75,7 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 // respondActionGuOnly replaces responseWithPlayer for action endpoints that only modify
 // gu_inventory (feed, equip, drop, status changes). No materials DB query is made.
 func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	refreshActionPlayerState(&player)
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
@@ -67,6 +87,7 @@ func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra
 		"primeval_stones": player.PrimevalStones,
 		"immortal_stones": player.ImmortalStones,
 		"human_qi":        player.HumanQi,
+		"state_revision":  player.StateRevision,
 	}
 	for _, e := range extra {
 		for k, v := range e {
@@ -80,12 +101,13 @@ func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra
 // are fully covered by the WS snapshot (hp, mana, stones, position, combat, rank, wall_progress).
 // No inventory data is returned — the frontend relies on the WS player.updated event.
 func respondActionOnly(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	refreshActionPlayerState(&player)
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain)
-	resp := gin.H{"success": true}
+	resp := gin.H{"success": true, "state_revision": player.StateRevision}
 	for _, e := range extra {
 		for k, v := range e {
 			resp[k] = v
