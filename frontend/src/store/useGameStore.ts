@@ -2093,6 +2093,14 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      const unsubscribeCatalog = wsManager.subscribe("catalog", (payload: ApiResponseData) => {
+        const event = payload?.data || payload;
+        if (event?.type === "catalog.updated" && event?.catalog === "recipes") {
+          // Keep the last valid recipes visible while revalidating the changed catalog.
+          void get().fetchRecipes(true);
+        }
+      });
+
       // Store cleanup functions in a global variable
       (window as ApiResponseData).__gu_ws_cleanup = () => {
         unsubscribePlayer();
@@ -2100,6 +2108,7 @@ export const useGameStore = create<GameState>((set, get) => {
         unsubscribeGeneralChat();
         unsubscribeSectChat();
         unsubscribeDeathArena();
+        unsubscribeCatalog();
         releaseConnection();
       };
 

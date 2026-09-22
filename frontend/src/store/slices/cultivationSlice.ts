@@ -2,6 +2,8 @@ import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { getDictionaryCache, setDictionaryCache } from "@/lib/db-cache";
+import { fetchWithDedupe } from "@/lib/fetch";
+import { syncRecipes } from "./recipeSync";
 import type {
   GuInstance,
   RefineRateBreakdown,
@@ -13,6 +15,9 @@ import type {
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
+  recipesLoading: boolean;
+  recipesError: string | null;
+  recipesFetchedAt: number | null;
   regions: Region[];
   regionsLoaded: boolean;
   world: WorldConfig | null;
@@ -38,6 +43,9 @@ let refreshRecipeProgressPromise: Promise<void> | null = null;
 export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CultivationSlice> = (set, get) => ({
   recipes: [],
   recipesLoaded: false,
+  recipesLoading: false,
+  recipesError: null,
+  recipesFetchedAt: null,
   quests: [],
   regions: [],
   regionsLoaded: false,

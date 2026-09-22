@@ -5,13 +5,10 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
-	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -128,33 +125,12 @@ type RefineRequest struct {
 // GetRecipes returns list of all seeded refining formulas unlocked by the player
 func GetRecipes(c *gin.Context) {
 	if c.Query("all") == "true" {
-		var masterRecipes []models.RefiningRecipe
-		if err := cache.GetJSON("master_refining_recipes", &masterRecipes); err != nil {
-			rows, err := db.DB.QueryContext(c.Request.Context(), `
-				SELECT target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
-				FROM refining_recipes
-			`)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
-				return
-			}
-			defer rows.Close()
-
-			for rows.Next() {
-				var recipe models.RefiningRecipe
-				err = rows.Scan(
-					&recipe.TargetGuID, &recipe.TargetRank, &recipe.Variant, &recipe.RequiredGus,
-					&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
-					&recipe.ImmortalEssenceStonesCost,
-				)
-				if err == nil {
-					recipe.ID = fmt.Sprintf("recipe_%s_%d_%d", recipe.TargetGuID, recipe.TargetRank, recipe.Variant)
-					masterRecipes = append(masterRecipes, recipe)
-				}
-			}
-			_ = cache.SetJSON("master_refining_recipes", masterRecipes, 1*time.Hour)
+		masterRecipes, err := loadMasterRecipes()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
+			return
 		}
-		c.JSON(http.StatusOK, masterRecipes)
+		writeRecipeCatalogResponse(c, masterRecipes)
 		return
 	}
 
@@ -187,7 +163,7 @@ func GetRecipes(c *gin.Context) {
 
 	if !exists {
 		// Return empty list of recipes for unauthenticated users, preventing 401
-		c.JSON(http.StatusOK, []models.RefiningRecipe{})
+		writeRecipeCatalogResponse(c, []models.RefiningRecipe{})
 		return
 	}
 
@@ -221,31 +197,10 @@ func GetRecipes(c *gin.Context) {
 	}
 
 	// 2. Query global database or cache
-	var masterRecipes []models.RefiningRecipe
-	if err := cache.GetJSON("master_refining_recipes", &masterRecipes); err != nil {
-		rows, err := db.DB.QueryContext(c.Request.Context(), `
-			SELECT target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
-			FROM refining_recipes
-		`)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
-			return
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var recipe models.RefiningRecipe
-			err = rows.Scan(
-				&recipe.TargetGuID, &recipe.TargetRank, &recipe.Variant, &recipe.RequiredGus,
-				&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
-				&recipe.ImmortalEssenceStonesCost,
-			)
-			if err == nil {
-				recipe.ID = fmt.Sprintf("recipe_%s_%d_%d", recipe.TargetGuID, recipe.TargetRank, recipe.Variant)
-				masterRecipes = append(masterRecipes, recipe)
-			}
-		}
-		_ = cache.SetJSON("master_refining_recipes", masterRecipes, 1*time.Hour)
+	masterRecipes, err := loadMasterRecipes()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
+		return
 	}
 
 	recipes := []models.RefiningRecipe{}
@@ -257,6 +212,23 @@ func GetRecipes(c *gin.Context) {
 		}
 	}
 
+	writeRecipeCatalogResponse(c, recipes)
+}
+
+func writeRecipeCatalogResponse(c *gin.Context, recipes []models.RefiningRecipe) {
+	revision := currentRecipeCatalogRevision()
+	writeRecipeCatalogResponseAtRevision(c, recipes, revision)
+}
+
+func writeRecipeCatalogResponseAtRevision(c *gin.Context, recipes []models.RefiningRecipe, revision uint64) {
+	etag := recipeResponseETag(recipes, revision)
+	c.Header("ETag", etag)
+	c.Header("X-Catalog-Revision", fmt.Sprint(revision))
+	c.Header("Cache-Control", "private, no-cache")
+	if c.GetHeader("If-None-Match") == etag {
+		c.Status(http.StatusNotModified)
+		return
+	}
 	c.JSON(http.StatusOK, recipes)
 }
 
