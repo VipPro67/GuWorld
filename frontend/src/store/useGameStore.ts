@@ -1276,14 +1276,26 @@ const PLAYER_EVENT_TYPES = [
   "combat.ended",
   "trade.updated",
   "player.heartbeat",
+  "player.position",
+  "player.hp",
+  "player.mana",
+  "player.combat_state",
+  "session.kicked",
 ] as const;
 
 type PlayerEventType = (typeof PLAYER_EVENT_TYPES)[number];
 
+type PlayerEventDomain = "player" | "gu_inventory" | "item_inventory" | "recipes" | "combat_stats";
+
 type PlayerRealtimeEvent = {
   type: PlayerEventType;
-  data: Partial<Player> & { id: string; aperture_stress_level?: string };
+  revision?: number;
+  changed_domains?: PlayerEventDomain[];
+  data?: Partial<Player> & { id?: string; aperture_stress_level?: string };
+  patch?: Partial<Player> & { id?: string; aperture_stress_level?: string };
 };
+
+const lastPlayerEventRevision = new Map<string, number>();
 
 export function guSpecFor(guId?: string, rank?: number): GuSpec | undefined {
   if (!guId) return undefined;
@@ -1742,23 +1754,48 @@ export const useGameStore = create<GameState>((set, get) => {
       });
 
       // Listen for player updates
-      const unsubscribePlayer = wsManager.subscribe("player", (payload: ApiResponseData) => {
+      const unsubscribePlayer = wsManager.subscribe("player", (rawPayload: ApiResponseData) => {
         try {
-          const eventData = payload?.data || payload;
+          const payload = rawPayload as PlayerRealtimeEvent;
+          const eventData = payload?.patch || payload?.data || rawPayload;
           const eventType = payload?.type;
-          const eventVersion = typeof eventData?.version === "number" ? eventData.version : undefined;
-          if (typeof eventData?.version === "number") {
-            const currentVersion = get().player?.version ?? 0;
-            if (eventData.version < currentVersion) return;
-            if (eventData.version > currentVersion && get().reconciliationInFlight) {
-              set((state) => ({ reconciliationRevision: state.reconciliationRevision + 1 }));
-              queueMicrotask(() => void get().reconcilePlayer(true));
-            }
+          const currentPlayer = get().player;
+
+          if (eventType === "session.kicked") {
+            const state = get();
+            state.addToast("Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
+            state.logout();
+            return;
+          }
+
+          if (currentPlayer && payload.revision !== undefined) {
+            const previousRevision = lastPlayerEventRevision.get(currentPlayer.id) || 0;
+            if (payload.revision <= previousRevision) return;
+            lastPlayerEventRevision.set(currentPlayer.id, payload.revision);
+          }
+
+          const changedDomains = new Set(payload.changed_domains || []);
+          const hasAuthoritativePatch = payload.patch !== undefined || payload.data !== undefined;
+          const invalidatesStatus =
+            changedDomains.has("combat_stats") ||
+            (!hasAuthoritativePatch && changedDomains.has("player")) ||
+            (changedDomains.has("item_inventory") && eventData?.materials_inventory === undefined);
+          if (currentPlayer && invalidatesStatus) {
+            void get().fetchPlayerStatus(currentPlayer.id, true);
+          }
+          if (changedDomains.has("gu_inventory") && eventData?.gu_inventory === undefined) {
+            void get().fetchGuInventory();
+          }
+          if (
+            changedDomains.has("recipes") &&
+            eventData?.unlocked_recipes === undefined &&
+            (eventData as ApiResponseData)?.recipes === undefined
+          ) {
+            void get().fetchRecipes(true);
           }
 
           // Handle delta events (efficient updates)
           if (eventType === "player.position") {
-            const currentPlayer = get().player;
             if (!currentPlayer) return;
             const newX = eventData?.x ?? currentPlayer.x;
             const newY = eventData?.y ?? currentPlayer.y;
@@ -1771,7 +1808,6 @@ export const useGameStore = create<GameState>((set, get) => {
           }
 
           if (eventType === "player.hp") {
-            const currentPlayer = get().player;
             if (!currentPlayer) return;
             const newHp = eventData?.hp ?? currentPlayer.hp;
             const newMaxHp = eventData?.max_hp ?? currentPlayer.base_hp;
@@ -1788,7 +1824,6 @@ export const useGameStore = create<GameState>((set, get) => {
           }
 
           if (eventType === "player.mana") {
-            const currentPlayer = get().player;
             if (!currentPlayer) return;
             const newCurrentMana = eventData?.current_mana ?? currentPlayer.current_mana;
             const newMaxMana = eventData?.max_mana ?? currentPlayer.max_mana;
@@ -1805,7 +1840,6 @@ export const useGameStore = create<GameState>((set, get) => {
           }
 
           if (eventType === "player.combat_state" || eventType === "combat.started" || eventType === "combat.ended") {
-            const currentPlayer = get().player;
             if (!currentPlayer) return;
             const nextCombat = eventData?.active_combat || null;
             const updatedPlayer = {
@@ -1835,23 +1869,16 @@ export const useGameStore = create<GameState>((set, get) => {
           }
 
           // Full snapshot fallback (for initial connection and other events)
-          if (!eventData?.id) return;
+          if (!eventData?.id && !payload.patch) return;
 
-          const currentPlayer = get().player;
-          if (!currentPlayer || currentPlayer.id !== eventData.id) return;
-
-          if (eventType === "session.kicked") {
-            const state = get();
-            state.addToast("Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
-            state.logout();
-            return;
-          }
+          if (!currentPlayer || (eventData.id && currentPlayer.id !== eventData.id)) return;
 
           const { active_combat, ...rest } = eventData;
           const nextCombat = active_combat !== undefined ? active_combat : currentPlayer.active_combat;
           const updatedPlayer = normalizePlayer({
             ...currentPlayer,
             ...rest,
+            id: currentPlayer.id,
             active_combat: nextCombat,
           });
           set((state) => ({

@@ -15,6 +15,8 @@ import { LatestRequestGate } from "@/lib/player-reconciliation";
 
 const recipeRequests = new LatestRequestGate();
 
+const fetchRecipesPromises = new Map<string, Promise<void>>();
+
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;

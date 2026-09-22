@@ -662,7 +662,7 @@ func RefineGu(c *gin.Context) {
 	}
 
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, ItemInventoryDomain, CombatStatsDomain)
 
 	targetName := recipe.TargetGuID
 	if targetSpec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank); ok {

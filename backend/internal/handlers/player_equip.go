@@ -241,7 +241,7 @@ func EquipGu(c *gin.Context) {
 	}
 
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, CombatStatsDomain)
 
 	auditlog.Logf(db.DB, &authID, action, "gu=%s instance=%s", guName, req.InstanceID)
 	if len(cleaned) > 0 {
