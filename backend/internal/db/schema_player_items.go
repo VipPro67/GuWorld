@@ -36,6 +36,13 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_gu_player_equipped ON player_gu (player_id, equipped);`); err != nil {
 		return err
 	}
+	// Hunger decay scans one player's live Gus by state on every login
+	// (EvaluatePlayerHungerTx). This partial index keeps that scan off the
+	// wider (player_id, gu_id) / (player_id, equipped) indexes.
+	if err := execSchema("player_gu_player_state_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_player_state ON player_gu (player_id, state) WHERE state IN ('ACTIVE', 'SLEEPING', 'SEALED');`); err != nil {
+		return err
+	}
 	if err := execSchema("player_gu_gu_id_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_gu_gu_id ON player_gu (gu_id);`); err != nil {
 		return err

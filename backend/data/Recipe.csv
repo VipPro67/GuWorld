@@ -3797,6 +3797,9 @@ GU_BLOOD_BONE,4,3,"{""GU_BLOOD_COCOON"": {""qty"": 1, ""rank"": 3}}","{""beast_b
 GU_BLOOD_SWEAT,5,1,"{""GU_BLOOD_MOUNTAIN"": {""qty"": 1, ""rank"": 4}, ""GU_BLOOD_REGENERATION"": {""qty"": 1, ""rank"": 4}}","{""beast_blood_rank5"": 25}",0.5,300.000,0.000
 GU_THEFT_EMPTY_HAND_4,4,1,"{""GU_THEFT_HAND_3"": {""qty"": 1, ""rank"": 3}}","{""heaven_qi_rank4"": 6}",0.6,150.000,0.000
 GU_SPRING_AUTUMN_CICADA,6,2,"{""GU_TIME_SANDGLASS_5"": {""qty"": 5, ""rank"": 5}}","{""gu_master_blood"": 100, ""time_river_water"": 10, ""fresh_blood_relatives"": 10}",0.05,600.000,100.000
+GU_SPRING_AUTUMN_CICADA,7,1,"{""GU_SPRING_AUTUMN_CICADA"": {""qty"": 1, ""rank"": 6}}","{""gu_master_blood"": 100, ""time_river_water"": 10, ""fresh_blood_relatives"": 10}",0.0005,600.000,100.000
+GU_SPRING_AUTUMN_CICADA,8,1,"{""GU_SPRING_AUTUMN_CICADA"": {""qty"": 1, ""rank"": 7}}","{""gu_master_blood"": 100, ""time_river_water"": 10, ""fresh_blood_relatives"": 10}",0.000005,600.000,100.000
+GU_SPRING_AUTUMN_CICADA,9,1,"{""GU_SPRING_AUTUMN_CICADA"": {""qty"": 1, ""rank"": 8}}","{""gu_master_blood"": 100, ""time_river_water"": 10, ""fresh_blood_relatives"": 10}",0.0000005,600.000,100.000
 GU_THEFT_HAND_1,1,1,{},"{""shadow_pickpocket_silk"": 5}",0.81,20.000,0.000
 GU_THEFT_HAND_I,6,1,"{""GU_THEFT_HAND_5"": {""qty"": 1, ""rank"": 5}}","{""water_rank6"": 10, ""immortal_essence"": 1}",0.05,600.000,100.000
 GU_PHANTOM_MIRAGE_1,1,1,{},"{""phantom_smoke_trace"": 5}",0.81,20.000,0.000

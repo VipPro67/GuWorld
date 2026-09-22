@@ -343,6 +343,8 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 	}
 
 	// Apply decay + capture every Gu that starved in one pass.
+	// Only DEAD rows are returned: survivors need no Go-side handling, which
+	// keeps large inventories (10k+ Gus) from shipping every row per login.
 	rows, err := tx.Query(`
 		WITH decayed AS (
 			SELECT pg.id AS gu_instance_id, pg.gu_id, pg.is_vital, pg.equipped,
@@ -367,8 +369,15 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 				d.state_before, d.hunger_before, pg.last_fed_at
 		)
 		SELECT id, gu_id, gu_rank, state, is_vital, equipped, gu_name,
-			state_before, hunger_before, last_fed_at FROM upd`, playerID.String(), ticks)
+			state_before, hunger_before, last_fed_at FROM upd WHERE state = 'DEAD'`, playerID.String(), ticks)
 	if err != nil {
+		if isHungerTransientErr(err) {
+			// Statement/lock timeout or deadlock: serve stale hunger so
+			// login (and combat) doesn't 500; the tick is NOT advanced so
+			// the next request retries the decay.
+			logger.S.Warnf("Hunger decay skipped for player %s (transient, retry later): %v", playerID, err)
+			return nil
+		}
 		return err
 	}
 
@@ -542,6 +551,20 @@ type vaultGuItem struct {
 // Gu in the sect vault does not decay or starve. When withdrawn, its hunger is set to 1.
 func EvaluateSectVaultHungerTx(tx *sql.Tx, sectID string) error {
 	return nil
+}
+
+// isHungerTransientErr reports whether err is a transient Postgres condition
+// (statement timeout 57014, deadlock 40P01, lock timeout 55P03) that the
+// hunger path may absorb by serving stale hunger and retrying next request.
+func isHungerTransientErr(err error) bool {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		switch pqErr.Code {
+		case "57014", "40P01", "55P03":
+			return true
+		}
+	}
+	return false
 }
 
 // isDeadlockOrLockTimeout reports whether err is a Postgres deadlock (40P01) or

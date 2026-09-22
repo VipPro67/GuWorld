@@ -50,6 +50,16 @@ type ActiveEffect struct {
 	AllStatsBuffPct  float64 `json:"all_stats_buff_percent,omitempty"` // % buff to all stats (0..1)
 	SpeedBoostFlat   float64 `json:"speed_boost_flat,omitempty"`       // flat speed bonus
 
+	// Percent-based direct effects (0..1). Generic: any Gu may set them.
+	DamageHPPercent          float64 `json:"damage_hp_percent,omitempty"`          // % target MaxHP as direct HP damage (bypasses shield)
+	ShieldFlatReducePercent  float64 `json:"shield_flat_reduce_percent,omitempty"` // % target current shield stripped
+	DisableGuNextTurn        bool    `json:"disable_gu_next_turn,omitempty"`       // seal target Gu for 1 turn (GU_SEAL)
+	ForgetRealityChance      float64 `json:"forget_reality_chance,omitempty"`      // proc gate (0..1) for the action's status + bonus effects
+	SelfEvasionBoostPercent  float64 `json:"self_evasion_boost_percent,omitempty"` // self evasion buff (0..1)
+	TargetDamageReducePct    float64 `json:"target_damage_reduce_percent,omitempty"`
+	DamagePath               string  `json:"damage_path,omitempty"`      // overrides action dao path (e.g. "Dream Path")
+	StatBaseAttackFlat       float64 `json:"stat_base_attack,omitempty"` // flat bonus added to action damage
+
 	// Shorthand status effect fields — tier value (e.g. "freeze": 1 = speed T1)
 	// Normalized to ApplyStatus + StatusDurationTicks during loading.
 	Freeze  float64 `json:"freeze,omitempty"`
@@ -90,6 +100,15 @@ type PassiveEffect struct {
 	DisguiseLevel         float64 `json:"disguise_level,omitempty"`
 	Tenacity              float64 `json:"tenacity,omitempty"`  // self-dispel chance + CC duration reduction (0..1)
 	CCResist              float64 `json:"cc_resist,omitempty"` // generic proc resist vs all debuffs (0..1)
+
+	// Conditional path counters (0..1 damage reduction when the attacker's
+	// Gu path matches; resolved by Gu path, e.g. "Heaven Path" → "heaven").
+	AntiHeavenPct            float64 `json:"anti_heaven_damage_reduction_percent,omitempty"`
+	AntiEarthPct             float64 `json:"anti_earth_damage_reduction_percent,omitempty"`
+	AntiDreamPct             float64 `json:"anti_dream_damage_reduction_percent,omitempty"`
+	ImmuneDreamStatus        bool    `json:"immune_dream_status,omitempty"` // immune to dream-path statuses
+	ForgetHeavenProtection   bool    `json:"forget_heaven_protection,omitempty"`
+	ForgetEarthProtection    bool    `json:"forget_earth_protection,omitempty"`
 }
 
 type SpecialMechanic struct {

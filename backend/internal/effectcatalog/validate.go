@@ -81,11 +81,15 @@ var runtimeFields = map[string]map[string]bool{
 		"summon_growth_phantoms", "summon_count_per_tick", "phantom_damage_scale", "ignore_defense", "ignore_defense_pct", "crit_rate_boost",
 		"all_stats_buff_percent", "speed_boost_flat", "freeze", "slow", "slow1", "weak", "stun", "silence", "bleed", "poison",
 		"thorns", "regen", "atk_up", "def_up", "taunt",
+		"damage_hp_percent", "shield_flat_reduce_percent", "disable_gu_next_turn", "forget_reality_chance",
+		"self_evasion_boost_percent", "target_damage_reduce_percent", "damage_path", "stat_base_attack",
 	),
 	"passive": set(
 		"stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", "path_conflict_reduction", "damage_multiplier_on_hit",
 		"soul_refinement", "storage_capacity", "movement", "investigation", "hearing", "evasion", "refine_mana_tier", "cleansing_power",
 		"luck", "success_rate_bonus", "time_speed_multiplier", "accuracy", "tenacity", "cc_resist",
+		"anti_heaven_damage_reduction_percent", "anti_earth_damage_reduction_percent", "anti_dream_damage_reduction_percent",
+		"immune_dream_status", "forget_heaven_protection", "forget_earth_protection", "disguise_level",
 	),
 	"growth": set("max_attack", "max_defense", "max_hp", "max_speed", "hours_to_max"),
 }
@@ -94,10 +98,13 @@ var numberFields = set(
 	"damage_flat", "heal_flat", "shield_flat", "status_tick_damage", "range", "mana_regen", "lifesteal_rate", "refine_mana_tier",
 	"damage_mult", "shield_mult", "cleansing_power", "capture_bonus", "summon_count_per_tick", "phantom_damage_scale", "ignore_defense", "ignore_defense_pct",
 	"crit_rate_boost", "all_stats_buff_percent", "speed_boost_flat", "freeze", "slow", "slow1", "weak", "stun", "silence", "bleed",
-	"poison", "thorns", "regen", "atk_up", "def_up", "taunt", "tenacity", "cc_resist", "stat_base_attack", "stat_base_defense", "stat_base_hp",
+	"poison", "thorns", "regen", "atk_up", "def_up", 	"taunt", "tenacity", "cc_resist", "stat_base_attack", "stat_base_defense", "stat_base_hp",
 	"stat_base_speed", "path_conflict_reduction", "damage_multiplier_on_hit", "soul_refinement", "storage_capacity", "movement",
 	"investigation", "hearing", "evasion", "luck", "success_rate_bonus", "time_speed_multiplier", "accuracy", "max_attack", "max_defense",
 	"max_hp", "max_speed", "hours_to_max",
+	"damage_hp_percent", "shield_flat_reduce_percent", "forget_reality_chance", "self_evasion_boost_percent", "target_damage_reduce_percent",
+	"anti_heaven_damage_reduction_percent", "anti_earth_damage_reduction_percent", "anti_dream_damage_reduction_percent",
+	"disguise_level",
 	"absorb_damage_flat", "convert_damage_to_heal_percent", "decoy_count", "invulnerable_ticks", "evasion", "stat_base_luck",
 	"dao_mark_multiplier", "kill_path_damage_buff", "luck_flat", "storage_slots", "kill_path_dao_marks_mult",
 )
@@ -105,9 +112,12 @@ var integerFields = set("status_duration_ticks", "decoy_count", "invulnerable_ti
 var booleanFields = set(
 	"curve_attack", "wood_transformation", "blood_drain", "replicate", "summon_phantom", "generate_gu", "portal_create", "random_portal",
 	"summon_growth_phantoms", "reveal_all_stealth", "reveal_weakness",
+	"disable_gu_next_turn", "immune_dream_status", "forget_heaven_protection", "forget_earth_protection",
 )
-var stringFields = set("apply_status", "target_selector", "summon_monster_id")
-var ratioFields = set("lifesteal_rate", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent", "convert_damage_to_heal_percent", "kill_path_damage_buff", "tenacity", "cc_resist")
+var stringFields = set("apply_status", "target_selector", "summon_monster_id", "damage_path")
+	var ratioFields = set("lifesteal_rate", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent", "convert_damage_to_heal_percent", "kill_path_damage_buff", "tenacity", "cc_resist",
+		"damage_hp_percent", "shield_flat_reduce_percent", "forget_reality_chance", "self_evasion_boost_percent", "target_damage_reduce_percent",
+		"anti_heaven_damage_reduction_percent", "anti_earth_damage_reduction_percent", "anti_dream_damage_reduction_percent")
 var signedNumberFields = set("luck", "success_rate_bonus")
 var targetSelectors = set("SINGLE", "ROW", "COL", "COLUMN", "CROSS", "ALL")
 
@@ -349,9 +359,45 @@ func validateMechanicParams(action string, raw json.RawMessage, path string, rep
 			report.add(SeverityError, "invalid_mechanic_param", path+"."+key, fmt.Sprintf("%s phải trong khoảng %g..%g", key, min, max))
 		}
 	}
+	requireOptionalRange := func(key string, min, max float64) {
+		valueRaw, ok := params[key]
+		if !ok {
+			return
+		}
+		var value float64
+		if json.Unmarshal(valueRaw, &value) != nil || value < min || value > max {
+			report.add(SeverityError, "invalid_mechanic_param", path+"."+key, fmt.Sprintf("%s phải trong khoảng %g..%g", key, min, max))
+		}
+	}
 	switch action {
 	case "REBORN":
 		requireRange("chance", 0, 1)
+		// mode: rewind (reset battle to turn 1) or in_place (stand up at current HP).
+		if modeRaw, ok := params["mode"]; ok {
+			var mode string
+			if json.Unmarshal(modeRaw, &mode) != nil || strings.TrimSpace(mode) == "" {
+				report.add(SeverityError, "invalid_mechanic_param", path+".mode", "mode phải là chuỗi không rỗng")
+			} else if m := strings.ToLower(strings.TrimSpace(mode)); m != "rewind" && m != "in_place" {
+				report.add(SeverityError, "invalid_mechanic_param", path+".mode", "mode phải là rewind hoặc in_place")
+			}
+		}
+		requireOptionalRange("max_uses", 1, 10)
+		requireOptionalRange("revive_hp_percent", 0, 1)
+		requireOptionalRange("empower_attack_percent", 0, 5)
+		requireOptionalRange("empower_speed_percent", 0, 5)
+		requireOptionalRange("empower_shield_percent", 0, 5)
+		requireOptionalRange("empower_turns", 1, 100)
+	case "FORGET_INTENT_INTERRUPT":
+		requireRange("chance", 0, 1)
+		requireOptionalRange("disable_target_gu_turns", 0, 10)
+		requireOptionalRange("max_successful_activations", 1, 100)
+	case "FORGET_WILL_CONFUSE":
+		requireOptionalRange("activation_chance", 0, 1)
+		requireOptionalRange("hit_user_chance", 0, 1)
+		requireOptionalRange("hit_self_chance", 0, 1)
+		requireOptionalRange("miss_chance", 0, 1)
+		requireOptionalRange("backfire_chance", 0, 1)
+		requireOptionalRange("backfire_disable_turns", 0, 10)
 	case "SACRIFICE_NPC":
 		requireRange("aptitude_gain", 1, 99)
 		requireRange("aptitude_cap", 1, 100)

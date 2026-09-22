@@ -113,6 +113,18 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 }
 
 func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, turn int, rng *rand.Rand, logs *[]CombatLog) {
+	// Dream immunity (FORGET_DREAM): dream-path statuses never land.
+	// Checked before the resist gate — immunity is absolute, not a roll.
+	if !spec.SelfTarget && target.ImmuneDreamStatus && spec.Path == "dream" {
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   target.ID,
+			ActorName: target.Name,
+			Action:    "STATUS_IMMUNE",
+			Detail:    fmt.Sprintf("%s hoàn toàn miễn nhiễm hiệu ứng Mộng đạo [%s]!", target.Name, spec.Label),
+		})
+		return
+	}
 	// Resist gate (control effects subject to MentalResistance + generic CCResist).
 	// Combined multiplicatively, capped at 0.75.
 	if spec.ResistGate && !statusfx.CanApplyStatus(rng, actor.Rank, target.Rank, actor.DaoMarks, target.DaoMarks, spec, gamefx.CombinedResist(target.MentalResistance, target.CCResist)) {

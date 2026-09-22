@@ -308,6 +308,52 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 	if active.GenerateGu {
 		action.Logs = append(action.Logs, fmt.Sprintf("%s bắt đầu ngưng tụ Sinh Cơ Diệp.", spec.Name))
 	}
+	if active.DamageHPPercent > 0 {
+		direct := ctx.Defender.MaxHP * active.DamageHPPercent
+		action.Dmg += direct
+		action.Logs = append(action.Logs, fmt.Sprintf("%s đánh thẳng vào bản ngã, gây thêm %.1f sát thương trực tiếp.", spec.Name, direct))
+	}
+	if active.ShieldFlatReducePercent > 0 && ctx.Defender.VirtualShield > 0 {
+		strip := ctx.Defender.VirtualShield * active.ShieldFlatReducePercent
+		ctx.Defender.VirtualShield -= strip
+		action.Logs = append(action.Logs, fmt.Sprintf("%s tước %.1f khiên của địch (còn %.1f).", spec.Name, strip, ctx.Defender.VirtualShield))
+	}
+	if active.DisableGuNextTurn {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "gu_seal",
+			Value: 1,
+			Turns: 1,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s phong ấn Cổ của địch (không thể dùng Cổ lượt sau).", spec.Name))
+	}
+	if active.ApplyStatus == "FORGET_EGO" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "gu_seal",
+			Value: 1,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s khiến địch quên bản ngã, phong ấn Cổ (%d lượt).", spec.Name, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "FORGET_REALITY" {
+		weakVal := active.StatusTickDamage
+		if weakVal <= 0 && active.TargetDamageReducePct > 0 {
+			weakVal = active.TargetDamageReducePct * 100
+		}
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "weak",
+			Value: weakVal,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây lãng quên thực tại (giảm %.0f%% sát thương địch, %d lượt).", spec.Name, weakVal, active.StatusDurationTicks))
+	}
+	if active.SelfEvasionBoostPercent > 0 {
+		action.IsUtility = true
+		action.Logs = append(action.Logs, fmt.Sprintf("%s tăng %.0f%% né tránh cho người dùng.", spec.Name, active.SelfEvasionBoostPercent*100))
+	}
+	if active.StatBaseAttackFlat > 0 {
+		action.Dmg += active.StatBaseAttackFlat
+		action.Logs = append(action.Logs, fmt.Sprintf("%s cộng thêm %.1f sát thương.", spec.Name, active.StatBaseAttackFlat))
+	}
 
 	return action, nil
 }

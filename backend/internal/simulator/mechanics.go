@@ -243,6 +243,7 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	c.IsBound = false
 	c.IsReviveLocked = false
 	c.AccuracyPenalty = 0.0
+	c.EvasionChance = 0.0
 	c.DamageTakenReduction = 0.0
 
 	// Reset new flags
@@ -334,6 +335,13 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			case EffectTaunt:
 				c.HasTaunt = true
 				c.TaunterID = c.ID
+			case "EVASION":
+				if r := float64(eff.Value) / 100.0; r > c.EvasionChance {
+					c.EvasionChance = r
+				}
+				if c.EvasionChance > 0.75 {
+					c.EvasionChance = 0.75
+				}
 			}
 		}
 	}

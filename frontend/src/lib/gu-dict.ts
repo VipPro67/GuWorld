@@ -22,6 +22,14 @@ export interface ActiveEffect {
   summon_growth_phantoms?: boolean;
   summon_count_per_tick?: number;
   phantom_damage_scale?: number;
+  damage_hp_percent?: number;
+  shield_flat_reduce_percent?: number;
+  disable_gu_next_turn?: boolean;
+  forget_reality_chance?: number;
+  self_evasion_boost_percent?: number;
+  target_damage_reduce_percent?: number;
+  damage_path?: string;
+  stat_base_attack?: number;
   [key: string]: ApiResponseData;
 }
 
@@ -38,6 +46,12 @@ export interface PassiveEffect {
   cleansing_power?: number;
   damage_multiplier_on_hit?: number;
   path_conflict_reduction?: number;
+  anti_heaven_damage_reduction_percent?: number;
+  anti_earth_damage_reduction_percent?: number;
+  anti_dream_damage_reduction_percent?: number;
+  immune_dream_status?: boolean;
+  forget_heaven_protection?: boolean;
+  forget_earth_protection?: boolean;
   [key: string]: ApiResponseData;
 }
 

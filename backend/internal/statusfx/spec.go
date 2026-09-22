@@ -212,6 +212,21 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryImmortal, Path: "rules", BaseChance: 1.0,
 		ResistGate: false, DefaultTurns: 1,
 	},
+
+	// Lãng Quên statuses (Wisdom Path). FORGET_EGO seals the victim's Gu
+	// (BehaviourGuSeal, cant use Gu skills); FORGET_REALITY weakens all
+	// damage they deal (BehaviourWeak, intensity from
+	// active.target_damage_reduce_percent).
+	StatusForgetEgo: {
+		ID: StatusForgetEgo, Behaviour: BehaviourGuSeal, Label: "Lãng Quên Bản Ngã",
+		Category: CategoryMentalCC, Path: "wisdom", BaseChance: 0.6,
+		ResistGate: true, DefaultTurns: 1,
+	},
+	StatusForgetReality: {
+		ID: StatusForgetReality, Behaviour: BehaviourWeak, Label: "Lãng Quên Thực Tại",
+		Category: CategoryMentalCC, Path: "wisdom", BaseChance: 0.6,
+		ResistGate: true, DefaultTurns: 2,
+	},
 }
 
 // Spec returns the spec for a status ID (case-insensitive) and whether it is

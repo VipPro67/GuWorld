@@ -722,7 +722,7 @@ Hệ thống môn phái hiện có:
 Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `passive.*`), không đọc Gu ID. Cổ nào mang effect đó thì có hành vi đó — Cổ nêu bên dưới chỉ là ví dụ minh họa.
 
 ### Cơ chế trong chiến đấu (Combat Simulator)
-1. `ON_DEATH / REBORN (params.chance)` — khi gục ngã, roll 1 lần duy nhất mỗi trận để hồi sinh; `REVIVE_LOCK` chặn hoàn toàn. VD: Xuân Thu Thiền (`chance: 0.5`).
+1. `ON_DEATH / REBORN` — hồi sinh thống nhất 2 mode: `rewind` (reset cả trận về Lượt 1, VD Xuân Thu Thiền) và `in_place` (đứng dậy tại chỗ với `revive_hp_percent` HP, VD Lãng Quên Bại Cổ: lượt 1 auto sống, sau roll 50%, tối đa 5 lần). Params: `chance`, `mode`, `max_uses` (1–10), `turn1_guaranteed`, `revive_hp_percent`, `clear_debuffs`, `empower_attack/speed/shield_percent` (+10% công/tốc/khiên mỗi lần sống dậy, cộng dồn hết trận), `empower_turns`. `REVIVE_LOCK` chặn hoàn toàn.
 2. `ON_CAST / SUMMON_WOLF_FRONTLINE` — triệu hồi Địa Lang Vương (HP = 50% MaxHP chủ, công = 1/3, thủ = 1/2) lên tiền tuyến đỡ đòn, chủ lùi về tuyến giữa. VD: Ngự Lang Vương Cổ.
 3. `ON_CAST / FULL_SOUL_HEAL` — hồi đầy HP lập tức, đổi lại mất lượt hành động hiện tại. VD: Can Đảm Cổ.
 4. `ON_CAST / SWORD_DRAGON_TRANSFORM` — chuyển toàn bộ HP (giữ lại 1) thành Khiên Ảo, +50% sát thương trong 3 lượt. VD: Kiếm Long Biến Cổ.
@@ -733,6 +733,12 @@ Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `pas
 9. `BEFORE_HIT / FIRST_TURN_EVADE` — né hoàn toàn đòn đầu tiên ở Lượt 1 (chỉ Cổ nào mang mechanic này mới có; Định Tiên Du hiện tại mang `portal_create` + `movement`, không có evade).
 10. `PASSIVE / DOUBLE_DAMAGE_DEALT` — nhân đôi mọi sát thương gây ra. VD: Tiên Thai Chí Tôn (kèm `path_conflict_reduction: 100`).
 11. `active.cleansing_power` / `passive.tenacity` + `passive.cc_resist` — kháng và tự giải hiệu ứng bất lợi (xem mục Kháng hiệu ứng và Tenacity ở mục 9). VD: Ngã Ý Cổ (`tenacity: 0.35`, `cc_resist: 0.15`).
+12. `active.damage_hp_percent` + `shield_flat_reduce_percent` + `disable_gu_next_turn` — trừ thẳng % MaxHP (xuyên khiên), tước % khiên hiện tại, phong ấn Cổ mục tiêu lượt sau (`GU_SEAL`, Tenacity có thể tự giải). VD: Lãng Quên Bản Ngã Cổ (40%/40%/1 lượt + status `FORGET_EGO`).
+13. `active.forget_reality_chance` + `self_evasion_boost_percent` + `target_damage_reduce_percent` + status `FORGET_REALITY` — 40% proc: bản thân +50% né tránh, địch dính suy yếu 40% sát thương (2 lượt). VD: Lãng Quên Thực Tại Cổ.
+14. `passive.anti_heaven/earth/dream_damage_reduction_percent` (+ `immune_dream_status`) — giảm sát thương khi đòn đánh mang Gu path tương ứng (nhận diện theo `Gu.path`); miễn nhiễm mọi status Mộng đạo (`SLEEP`, `CONFUSE`...). VD: Lãng Quên Thiên/Địa/Mộng Cổ (65%/65%/50%).
+15. `BEFORE_ENEMY_ATTACK / FORGET_INTENT_INTERRUPT` — khi địch tấn công, 40% phong ấn Cổ địch lượt sau (tối đa 8 lần thành công, sau đó phản phệ phong ấn chính mình). VD: Lãng Quên Ý Niệm Cổ.
+16. `BEFORE_ENEMY_ATTACK / FORGET_WILL_CONFUSE` — khi địch tấn công, 35% quên mục tiêu (15% trúng chủ Cổ, 35% tự đánh mình, 50% hụt) + 20% phản phệ phong ấn Cổ mình 2 lượt. VD: Lãng Quên Chí Cổ.
+17. `active.damage_path` + `stat_base_attack` trong active — ghi đè hệ đòn đánh + cộng flat vào sát thương (VD Trầm Luân Tiên Cổ: 250M + `SLEEP` + hệ Dream). Lưu ý: `status_duration_ticks` ≤ 5 đi qua pipeline tier legacy.
 
 ### Cơ chế ngoài chiến đấu (Handlers)
 1. `ON_CONSUME / ADD_LIFESPAN_YEARS (params.value)` — tiêu hao để cộng vĩnh viễn N năm tuổi thọ. VD: Thọ Cổ 100 Năm (`value: 100`).

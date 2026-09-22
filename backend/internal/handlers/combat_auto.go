@@ -980,6 +980,34 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 
 	charFX := gamefx.Get(player)
 
+	// Aggregate Gu passive path counters (anti_heaven/earth/dream) into
+	// PathResistance, keyed by normalized path ("heaven", "earth", "dream").
+	// Copy the map: charFX may be shared/cached per player.
+	pathResistance := make(map[string]float64, len(charFX.PathResistanceBonus)+3)
+	for k, v := range charFX.PathResistanceBonus {
+		pathResistance[k] = v
+	}
+	immuneDream := false
+	for _, inst := range allEquippedActiveGus {
+		spec, ok := resolveGuSpec(inst)
+		if !ok || spec.Effects.Passive == nil {
+			continue
+		}
+		p := spec.Effects.Passive
+		if p.AntiHeavenPct > 0 {
+			pathResistance["heaven"] += p.AntiHeavenPct
+		}
+		if p.AntiEarthPct > 0 {
+			pathResistance["earth"] += p.AntiEarthPct
+		}
+		if p.AntiDreamPct > 0 {
+			pathResistance["dream"] += p.AntiDreamPct
+		}
+		if p.ImmuneDreamStatus {
+			immuneDream = true
+		}
+	}
+
 	// Scan inventory for healing items
 	healPotency := 0.0
 	healCharges := 0
@@ -1055,11 +1083,12 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		PathMasteryGainLimit: gamefx.PathMasteryBattleGainLimit(player.Rank),
 		DaoBonus:             charFX.DaoNganBonus,
 		PathDamageBonus:      charFX.PathDamageBonus,
-		PathResistance:       charFX.PathResistanceBonus,
+		PathResistance:       pathResistance,
 		HealingReceived:      charFX.HealingReceivedBonus,
 		MentalResistance:     charFX.MentalResistanceBonus,
 		Tenacity:             charFX.Tenacity,
 		CCResist:             charFX.CCResist,
+		ImmuneDreamStatus:    immuneDream,
 		SoulDefenseBonus:     charFX.SoulDefenseBonus,
 		LuckBonus:            charFX.LuckBonus,
 		HasNonConflictingDao: charFX.NonConflictingDaoMarks,

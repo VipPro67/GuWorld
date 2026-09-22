@@ -42,6 +42,12 @@ const (
 	StatusInvincible      = "INVINCIBLE"
 	StatusReviveLock      = "REVIVE_LOCK"
 
+	// Lãng Quên statuses (Wisdom Path). FORGET_EGO seals the victim's Gu
+	// (BehaviourGuSeal); FORGET_REALITY weakens all damage they deal
+	// (BehaviourWeak, intensity from target_damage_reduce_percent).
+	StatusForgetEgo     = "FORGET_EGO"
+	StatusForgetReality = "FORGET_REALITY"
+
 	// Gu World Dao Mechanics - New Status Effects
 	StatusEssenceLeak  = "ESSENCE_LEAK"
 	StatusGuSeal       = "GU_SEAL"

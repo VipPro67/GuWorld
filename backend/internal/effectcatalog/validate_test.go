@@ -126,3 +126,37 @@ func TestValidateRejectsInvalidSupportedMechanicParams(t *testing.T) {
 		t.Fatalf("expected out-of-range REBORN chance to fail, err=%v report=%+v", err, report)
 	}
 }
+
+func TestValidateAcceptsExtendedRebornParams(t *testing.T) {
+	raw := []byte(`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":0.5,"mode":"in_place","max_uses":5,"turn1_guaranteed":true,"revive_hp_percent":0.5,"clear_debuffs":true,"empower_attack_percent":0.1,"empower_speed_percent":0.1,"empower_shield_percent":0.1,"empower_turns":100}}]}`)
+	if _, _, err := NormalizeAndValidate(raw); err != nil {
+		t.Fatalf("extended REBORN params rejected: %v", err)
+	}
+	// Legacy minimal form keeps working (defaults at runtime).
+	if _, _, err := NormalizeAndValidate([]byte(`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":0.7}}]}`)); err != nil {
+		t.Fatalf("legacy REBORN params rejected: %v", err)
+	}
+	for _, bad := range []string{
+		`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":0.5,"mode":"rewind_too_far"}}]}`,
+		`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":0.5,"max_uses":99}}]}`,
+	} {
+		if _, report, err := NormalizeAndValidate([]byte(bad)); err == nil || !report.HasErrors() {
+			t.Fatalf("invalid REBORN params accepted: %s", bad)
+		}
+	}
+}
+
+func TestValidateAcceptsForgetInterruptConfuse(t *testing.T) {
+	good := []string{
+		`{"other":[{"event_trigger":"BEFORE_ENEMY_ATTACK","action_code":"FORGET_INTENT_INTERRUPT","params":{"chance":0.4,"disable_target_gu_turns":1,"max_successful_activations":8,"backfire_after_max":true}}]}`,
+		`{"other":[{"event_trigger":"BEFORE_ENEMY_ATTACK","action_code":"FORGET_WILL_CONFUSE","params":{"activation_chance":0.35,"hit_user_chance":0.15,"hit_self_chance":0.35,"miss_chance":0.5,"backfire_chance":0.2,"backfire_disable_turns":2}}]}`,
+		`{"active":{"damage_hp_percent":0.4,"shield_flat_reduce_percent":0.4,"disable_gu_next_turn":true,"apply_status":"FORGET_EGO","status_duration_ticks":1}}`,
+		`{"passive":{"anti_heaven_damage_reduction_percent":0.65,"forget_heaven_protection":true}}`,
+		`{"passive":{"anti_dream_damage_reduction_percent":0.5,"immune_dream_status":true}}`,
+	}
+	for _, raw := range good {
+		if _, _, err := NormalizeAndValidate([]byte(raw)); err != nil {
+			t.Fatalf("forget effect rejected: %s: %v", raw, err)
+		}
+	}
+}

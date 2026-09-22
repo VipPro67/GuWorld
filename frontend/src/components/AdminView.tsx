@@ -98,7 +98,13 @@ const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "st
     { key: "wood_transformation", label: "Wood Transformation (Biến đổi gỗ)", type: "boolean" },
     { key: "curve_attack", label: "Curve Attack (Tấn công cong)", type: "boolean" },
     { key: "replicate", label: "Replicate (Nhân bản)", type: "boolean" },
-    { key: "summon_growth_phantoms", label: "Summon Growth Phantoms", type: "boolean" }
+    { key: "summon_growth_phantoms", label: "Summon Growth Phantoms", type: "boolean" },
+    { key: "damage_hp_percent", label: "% MaxHP trực tiếp (0..1)", type: "number" },
+    { key: "shield_flat_reduce_percent", label: "Tước % khiên (0..1)", type: "number" },
+    { key: "disable_gu_next_turn", label: "Phong ấn Cổ lượt sau", type: "boolean" },
+    { key: "forget_reality_chance", label: "Tỉ lệ proc bonus (0..1)", type: "number" },
+    { key: "self_evasion_boost_percent", label: "Né tránh bản thân (0..1)", type: "number" },
+    { key: "target_damage_reduce_percent", label: "Giảm ST địch (0..1)", type: "number" }
   ],
   passive: [
     { key: "stat_base_attack", label: "Base Attack (Tấn công cơ bản)", type: "number" },
@@ -116,7 +122,13 @@ const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "st
     { key: "damage_multiplier_on_hit", label: "Damage Mult On Hit (Hệ số ST khi đánh)", type: "number" },
     { key: "refine_mana_tier", label: "Refine Mana Tier", type: "number" },
     { key: "cleansing_power", label: "Cleansing Power", type: "number" },
-    { key: "luck", label: "Luck (May mắn)", type: "number" }
+    { key: "luck", label: "Luck (May mắn)", type: "number" },
+    { key: "anti_heaven_damage_reduction_percent", label: "Kháng Thiên đạo (0..1)", type: "number" },
+    { key: "anti_earth_damage_reduction_percent", label: "Kháng Thổ đạo (0..1)", type: "number" },
+    { key: "anti_dream_damage_reduction_percent", label: "Kháng Mộng đạo (0..1)", type: "number" },
+    { key: "immune_dream_status", label: "Miễn nhiễm Mộng đạo", type: "boolean" },
+    { key: "forget_heaven_protection", label: "Lãng Quên Thiên (cờ)", type: "boolean" },
+    { key: "forget_earth_protection", label: "Lãng Quên Địa (cờ)", type: "boolean" }
   ],
   growth: [
     { key: "max_attack", label: "Max Attack (Tấn công tối đa)", type: "number" },

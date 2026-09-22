@@ -45,6 +45,9 @@ export const EFFECT_STYLE: Record<string, string> = {
   ATK_UP: "bg-amber-900/50 text-amber-300 border-amber-500/30",
   DEF_UP: "bg-teal-900/50 text-teal-300 border-teal-500/30",
   TAUNT: "bg-indigo-900/50 text-indigo-300 border-indigo-500/30",
+  FORGET_EGO: "bg-violet-900/50 text-violet-300 border-violet-500/30",
+  FORGET_REALITY: "bg-fuchsia-900/50 text-fuchsia-300 border-fuchsia-500/30",
+  SLEEP: "bg-indigo-900/50 text-indigo-300 border-indigo-500/30",
   lifesteal: "bg-rose-900/50 text-rose-300 border-rose-500/30",
   heal: "bg-green-900/50 text-green-300 border-green-500/30",
   mana: "bg-purple-900/50 text-purple-300 border-purple-500/30",
@@ -67,6 +70,9 @@ export const EFFECT_LABEL: Record<string, string> = {
   ATK_UP: "Tăng Công",
   DEF_UP: "Tăng Thủ",
   TAUNT: "Khiêu khích",
+  FORGET_EGO: "Quên Bản Ngã",
+  FORGET_REALITY: "Quên Thực Tại",
+  SLEEP: "Ngủ",
   lifesteal: "Hút HP",
   heal: "Chữa lành",
   mana: "Hồi Nguyên",
@@ -85,6 +91,12 @@ export const getCombatEffects = (spec: unknown): EffectBadge[] => {
   if ((num(a.damage_flat) > 0) || (num(a.damage_mult) > 0)) {
     const val = num(a.damage_mult) > 0 ? `x${a.damage_mult}` : a.damage_flat;
     out.push({ key: "damage", label: `DMG ${val}`, className: EFFECT_STYLE.damage });
+  }
+  if (num(a.damage_hp_percent) > 0) {
+    out.push({ key: "damage_hp", label: `-${(num(a.damage_hp_percent) * 100).toFixed(0)}% HP`, className: EFFECT_STYLE.damage });
+  }
+  if (num(a.shield_flat_reduce_percent) > 0) {
+    out.push({ key: "strip", label: `-${(num(a.shield_flat_reduce_percent) * 100).toFixed(0)}% Khiên`, className: EFFECT_STYLE.shield });
   }
   if (num(a.shield_flat) > 0 || num(a.shield_mult) > 0) {
     const val = num(a.shield_mult) > 0 ? `x${a.shield_mult}` : a.shield_flat;

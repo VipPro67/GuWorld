@@ -439,6 +439,36 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 
 	if spec.Effects.Active != nil {
 		active := spec.Effects.Active
+		if active.DamagePath != "" {
+			act.Path = []string{active.DamagePath}
+		}
+		if active.StatBaseAttackFlat > 0 {
+			act.Damage += active.StatBaseAttackFlat
+		}
+		if active.DamageHPPercent > 0 {
+			act.DamageHPPercent = active.DamageHPPercent
+		}
+		if active.ShieldFlatReducePercent > 0 {
+			act.ShieldStripPercent = active.ShieldFlatReducePercent
+		}
+		if active.ForgetRealityChance > 0 {
+			act.ProcChance = active.ForgetRealityChance
+		}
+		if active.SelfEvasionBoostPercent > 0 {
+			act.SelfEvasionPct = active.SelfEvasionBoostPercent
+		}
+		if active.TargetDamageReducePct > 0 {
+			act.TargetWeakPct = active.TargetDamageReducePct
+		}
+		if active.DisableGuNextTurn {
+			act.DisableGuTurns = 1
+		}
+		if active.SelfEvasionBoostPercent > 0 || active.TargetDamageReducePct > 0 || active.DisableGuNextTurn {
+			act.BonusTurns = active.StatusDurationTicks
+			if act.BonusTurns <= 0 {
+				act.BonusTurns = 2
+			}
+		}
 		if active.ShieldFlat > 0 {
 			act.Defense += active.ShieldFlat
 		}
@@ -463,6 +493,10 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 				op, err = statusfx.ResolveStatus(active.ApplyStatus, 0, 0)
 			}
 			if err == nil {
+				// FORGET_REALITY intensity comes from target_damage_reduce_percent.
+				if op.ID == statusfx.StatusForgetReality && active.TargetDamageReducePct > 0 {
+					op.Value = active.TargetDamageReducePct * 100
+				}
 				act.StatusOps = append(act.StatusOps, op)
 			} else {
 				logger.S.Warnf("Gu %s: %v", spec.ID, err)
@@ -520,7 +554,9 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 		active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 ||
 		active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
 		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
-		active.SummonGrowthPhantoms
+		active.SummonGrowthPhantoms || active.DamageHPPercent > 0 || active.ShieldFlatReducePercent > 0 ||
+		active.DisableGuNextTurn || active.ForgetRealityChance > 0 || active.SelfEvasionBoostPercent > 0 ||
+		active.TargetDamageReducePct > 0 || active.StatBaseAttackFlat > 0 || active.DamagePath != ""
 }
 
 // hasCombatEffects returns true if the Gu has any active action, passive mechanic, or combat-relevant passive stat.
@@ -541,7 +577,8 @@ func hasCombatEffects(spec *models.GuDictionaryItem) bool {
 	}
 	if spec.Effects.Passive != nil {
 		p := spec.Effects.Passive
-		if p.StatBaseAttack > 0 || p.StatBaseDefense > 0 || p.StatBaseHP > 0 || p.StatBaseSpeed > 0 || p.DamageMultiplierOnHit > 0 || p.Evasion > 0 || p.PathConflictReduction > 0 {
+		if p.StatBaseAttack > 0 || p.StatBaseDefense > 0 || p.StatBaseHP > 0 || p.StatBaseSpeed > 0 || p.DamageMultiplierOnHit > 0 || p.Evasion > 0 || p.PathConflictReduction > 0 ||
+			p.AntiHeavenPct > 0 || p.AntiEarthPct > 0 || p.AntiDreamPct > 0 || p.ImmuneDreamStatus {
 			return true
 		}
 	}
