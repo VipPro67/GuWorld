@@ -10,13 +10,15 @@ import type {
   WorldConfig,
 } from "@/store/useGameStore";
 
+const fetchRecipesPromises = new Map<string, Promise<void>>();
+
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
   regions: Region[];
   regionsLoaded: boolean;
   world: WorldConfig | null;
-  fetchRecipes: () => Promise<void>;
+  fetchRecipes: (forceRefresh?: boolean) => Promise<void>;
   fetchRegions: () => Promise<void>;
   fetchWorld: () => Promise<WorldConfig | null>;
   quests: ApiResponseData[];
@@ -40,24 +42,33 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   regionsLoaded: false,
   world: null,
 
-  fetchRecipes: async () => {
-    if (get().recipesLoaded) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/recipes`);
-      if (response.status === 401) {
-        set({ recipes: [], recipesLoaded: true });
-        return;
+  fetchRecipes: async (forceRefresh = false) => {
+    if (!forceRefresh && get().recipesLoaded) return;
+    const sessionKey = `${get().player?.id || "anonymous"}:${get().token || ""}`;
+    const pending = fetchRecipesPromises.get(sessionKey);
+    if (pending) return pending;
+    const executeFetch = async () => {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/recipes`);
+        if (response.status === 401) {
+          set({ recipes: [], recipesLoaded: true });
+          return;
+        }
+        if (!response.ok) throw new Error("Failed to load recipes");
+        const data = await response.json();
+        const currentSessionKey = `${get().player?.id || "anonymous"}:${get().token || ""}`;
+        if (currentSessionKey === sessionKey) set({ recipes: data || [], recipesLoaded: true });
+      } catch (caught: unknown) {
+        const err = caught instanceof Error ? caught : new Error(String(caught));
+        console.error("Recipes sync error:", err.message);
+        set({ recipesLoaded: true });
+      } finally {
+        fetchRecipesPromises.delete(sessionKey);
       }
-      if (!response.ok) {
-        throw new Error("Failed to load recipes");
-      }
-      const data = await response.json();
-      set({ recipes: data || [], recipesLoaded: true });
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("Recipes sync error:", err.message);
-      set({ recipesLoaded: true });
-    }
+    };
+    const promise = executeFetch();
+    fetchRecipesPromises.set(sessionKey, promise);
+    return promise;
   },
 
   fetchQuests: async () => {

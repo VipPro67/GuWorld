@@ -93,7 +93,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
 
   fetchPlayerStatus: async (id, forceRefresh = false) => {
     const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return;
+    if (!token || (actionLoading && !forceRefresh)) return;
 
     const now = Date.now();
     const lastFetch = lastStatusFetchTimes.get(id) || 0;

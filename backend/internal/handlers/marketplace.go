@@ -323,6 +323,8 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, marketplaceItemDomains(req.ItemType)...)
 
 	itemName := GetItemName(req.ItemType, itemDataJSON)
 
@@ -545,8 +547,9 @@ func PlaceBid(c *gin.Context) {
 	}
 
 	// Refund the previous bidder — atomic increment, no full player load needed
+	var prevBidderID uuid.UUID
 	if bidder.Valid && bidder.String != player.ID.String() {
-		prevBidderID, _ := uuid.Parse(bidder.String)
+		prevBidderID, _ = uuid.Parse(bidder.String)
 		refundCol := "primeval_stones"
 		if currency == "immortal" {
 			refundCol = "immortal_stones"
@@ -582,6 +585,12 @@ func PlaceBid(c *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
+	}
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, PlayerDomain)
+	if prevBidderID != uuid.Nil && prevBidderID != player.ID {
+		ClearPendingPlayerQueues(prevBidderID.String())
+		PublishPlayerRealtimeEvent(prevBidderID, PlayerEventUpdated, PlayerDomain)
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
@@ -800,7 +809,7 @@ func BuyListing(c *gin.Context) {
 	}
 	if sellerID != authID {
 		ClearPendingPlayerQueues(sellerID.String())
-		PublishPlayerRealtimeEvent(sellerID, PlayerEventUpdated)
+		PublishPlayerRealtimeEvent(sellerID, PlayerEventUpdated, PlayerDomain)
 	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -909,6 +918,8 @@ func CancelListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	ClearPendingPlayerQueues(player.ID.String())
+	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, marketplaceItemDomains(itemType)...)
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.cancel_listing", EntityType: "auction",
 		EntityID:       req.ListingID,
@@ -916,4 +927,12 @@ func CancelListing(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy listing và hoàn trả vật phẩm"})
+}
+
+func marketplaceItemDomains(itemType string) []PlayerEventDomain {
+	domains := []PlayerEventDomain{PlayerDomain}
+	if itemType == "Gu" {
+		return append(domains, GuInventoryDomain, CombatStatsDomain)
+	}
+	return append(domains, ItemInventoryDomain)
 }

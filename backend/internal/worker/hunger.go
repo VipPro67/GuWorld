@@ -25,7 +25,7 @@ var (
 	hungerWorkerMutex   sync.Mutex
 
 	// PlayerEventPublisher is an optional callback to broadcast player updates over WebSocket.
-	PlayerEventPublisher func(playerID uuid.UUID, eventType string)
+	PlayerEventPublisher func(playerID uuid.UUID, eventType string, changedDomains ...string)
 )
 
 // StartHungerWorker begins the background process for depleting Gu bug hunger.
@@ -500,10 +500,6 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 		notify.Send(tx, playerID, "vital_gu_death", title, content)
 	}
 
-	if len(dead) > 0 && PlayerEventPublisher != nil {
-		PlayerEventPublisher(playerID, "player.updated")
-	}
-
 	return nil
 }
 
@@ -522,7 +518,13 @@ func processPlayerHungerDecay(db *sql.DB, playerID string) error {
 	if err := EvaluatePlayerHungerTx(tx, parsedPID); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if PlayerEventPublisher != nil {
+		PlayerEventPublisher(parsedPID, "player.updated", "player", "gu_inventory", "combat_stats")
+	}
+	return nil
 }
 
 // ── Sect vault hunger decay (batch) ────────────────────────────────────────

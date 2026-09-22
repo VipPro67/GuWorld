@@ -17,7 +17,7 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 	player.CompletedQuests = loadCompletedQuests(player.ID.String())
 	player.UnlockedRecipes = loadUnlockedRecipes(player.ID.String())
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain)
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -36,7 +36,7 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, ItemInventoryDomain, CombatStatsDomain)
 	resp := gin.H{
 		"success":             true,
 		"gu_inventory":        player.GuInventory,
@@ -60,7 +60,7 @@ func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, CombatStatsDomain)
 	resp := gin.H{
 		"success":         true,
 		"gu_inventory":    player.GuInventory,
@@ -84,7 +84,7 @@ func respondActionOnly(c *gin.Context, status int, player models.Player, extra .
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	ClearPendingPlayerQueues(player.ID.String())
-	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain)
 	resp := gin.H{"success": true}
 	for _, e := range extra {
 		for k, v := range e {
