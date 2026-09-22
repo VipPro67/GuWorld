@@ -319,11 +319,12 @@ Các trường quan trọng trong dictionary:
   - Field đã phân loại nhưng chưa được runtime xử lý đầy đủ vẫn được giữ nguyên và phát warning theo disposition (`effect_migrate`, `effect_partial`, `effect_known_bug`); warning không đồng nghĩa effect đã hoạt động. Cách warning-first này tránh mất dữ liệu trong giai đoạn migrate. Namespace lạ, JSON/kiểu container sai, status hoàn toàn không biết và mechanic thiếu trường bắt buộc là lỗi chặn ghi/import.
   - Manifest `effectcatalog` gán mỗi key/status/cặp `(event_trigger, action_code)` một `owner` và `disposition`: `supported`, `partial`, `metadata`, `migrate` hoặc `known_bug`. Key hoặc mechanic chưa có manifest bị chặn bằng lỗi `unclassified_*`; test coverage toàn `Gu.csv` buộc dữ liệu mới phải được phân loại trước khi merge.
   - Admin có preview read-only `POST /api/admin/gu-effects/validate` và audit database `GET /api/admin/gu-effects/audit`. Audit không thực thi effect; nó cho biết coverage và những effect đang chờ migrate/sửa lỗi.
-  - **Khối `active`:** effect chủ động dùng trong combat — `damage_flat`, `damage_mult`, `damage_path`, `heal_flat`, `shield_flat`, `apply_status` + `status_tick_damage`/`status_duration_ticks`, `target_selector`, `summon_*`, `curve_attack`, `lifesteal`, … Danh sách đầy đủ + catalog chuẩn xem mục **"Hiệu ứng Cổ (effects)"** bên dưới.
+  - **Khối `active`:** effect chủ động dùng trong combat — `damage_flat`, `damage_mult`, `damage_path`, `heal_flat`, `shield_flat`, `apply_status`, `target_selector`, `summon_*`, `curve_attack`, `lifesteal`, … Danh sách đầy đủ + catalog chuẩn xem mục **"Hiệu ứng Cổ (effects)"** bên dưới.
+    - **`apply_status` là khối lắp ráp được:** một action có thể gắn **nhiều status cùng lúc** dưới dạng mảng `[{"id":"BLEED","value":10,"turns":3},{"id":"BIND","turns":2}]`. Ba dạng authoring đều hợp lệ: chuỗi legacy (`"BIND"`), object đơn (`{"id":"BIND","turns":6}`), mảng (khuyến nghị). Entry thiếu `value`/`turns` sẽ kế thừa `status_tick_damage`/`status_duration_ticks` cấp action (chỉ dùng cho dữ liệu cũ; dữ liệu mới khai báo trọn trong từng entry). Resolve qua `statusfx` registry (`models.ActiveEffect.ResolveStatusApplications`).
     - Key phần trăm trực tiếp (0..1, áp sau sát thương thường): `damage_hp_percent` (% MaxHP mục tiêu, xuyên khiên), `shield_flat_reduce_percent` (% khiên hiện tại bị tước), `disable_gu_next_turn` (bool: `GU_SEAL` mục tiêu — xem enforcement trong simulator), `forget_reality_chance` (cổng proc cho cả gói bonus), `self_evasion_boost_percent` (buff `EVASION` bản thân), `target_damage_reduce_percent` (cường độ `WEAK`/`FORGET_REALITY` lên mục tiêu). `damage_path` ghi đè hệ đòn đánh; `stat_base_attack` trong active cộng flat vào sát thương đòn.
   - **Khối `passive`:** chỉ số vĩnh viễn cộng dồn (`stat_base_*`), `damage_reduction`, `movement`, `evasion`, `luck`, `storage_capacity`, `tenacity` (0..1: rút ngắn duration CC + tỉ lệ tự giải 1 debuff đầu lượt), `cc_resist` (0..1: kháng proc mọi debuff, nhân với mental resist, cap tổng 0.75), …
     - Khắc hệ theo Gu path: `anti_heaven/earth/dream_damage_reduction_percent` (0..1, merge vào `CombatantAuto.PathResistance`, nhận diện theo `Gu.path` của đòn đánh), `immune_dream_status` (miễn nhiễm status có `spec.Path == "dream"`), `forget_heaven/earth_protection` (cờ metadata).
-  - **Shorthand status:** một số key viết tắt trong struct `ActiveEffect` (`freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`, `bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt`) được `ActiveEffect.normalize()` tự đổi về `apply_status` + `status_duration_ticks` khi load. Dữ liệu mới nên viết thẳng `apply_status` để thống nhất (xem mục Status chiến đấu).
+  - **Shorthand status (đã loại khỏi dữ liệu):** key viết tắt (`freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`, `bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt`) không còn xuất hiện trong `Gu.csv` — toàn bộ đã migrate sang `apply_status` dạng mảng. `ActiveEffect.normalize()` vẫn giữ làm fallback cho DB rows cũ chưa re-import; **không dùng cho dữ liệu mới**.
   - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Ngoài các trigger thế giới (`ON_TICK`, `ON_CONSUME`, `ON_USE`), combat hỗ trợ `ON_CAST`, `ON_HIT`, `BEFORE_HIT`, `BEFORE_ENEMY_ATTACK`, `ON_TURN_START`, `ON_DEATH` và `PASSIVE`.
     - Simulator nhận một snapshot mechanic bất biến được biên dịch khi bắt đầu trận. `gu_id`/`SourceID` chỉ còn dùng cho định danh, log, ưu tiên và trừ độ đói; thay ID nhưng giữ nguyên effect phải cho cùng hành vi.
     - Các mechanic đặc thù hiện đã data-driven gồm: `POEM_INTENT`, `SUMMON_WOLF_FRONTLINE`, `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE`, `BYPASS_SHIELD`, `FIRST_TURN_EVADE`, `DOUBLE_DAMAGE_DEALT`, `REBORN`, `FORGET_INTENT_INTERRUPT`, `FORGET_WILL_CONFUSE`.
@@ -363,9 +364,9 @@ Các trường quan trọng trong dictionary:
 | `damage_path` | 176 | enum | Hệ sát thương (`blood`, `Water Path`, `Sword Path`, `Fire Path`, `Ice Path`, … 20 giá trị) |
 | `shield_flat` | 96 | number | Tạo khiên hộ thể (nhận damage trước HP) |
 | `shield_mult` | 96 | number | Nhân khiên (×1.075 – ×1.35) |
-| `apply_status` | 97 | enum | Gắn status (phân bố xem mục Status chiến đấu) |
-| `status_duration_ticks` | 83 | integer | Số lượt status tồn tại |
-| `status_tick_damage` | 66 | number | Damage mỗi tick (chỉ DOT: bleed/poison/slow_damage; nơi khác là cường độ %) |
+| `apply_status` | 450 | enum / object / **mảng** | Gắn status — mảng `[{"id","value","turns"}]` cho phép nhiều status mỗi action (phân bố xem mục Status chiến đấu) |
+| `status_duration_ticks` | 4 | integer | (Legacy) Số lượt status; dữ liệu mới dùng `turns` trong entry |
+| `status_tick_damage` | 1 | number | (Legacy) Damage mỗi tick; dữ liệu mới dùng `value` trong entry |
 | `target_selector` | 55 | enum | Quy tắc chọn mục tiêu: `COL`(38), `ALL`(17), `ROW`(1) |
 | `heal_flat` | 33 | number | Hồi HP cố định (cap max_hp) |
 | `damage_mult` | 18 | number | Nhân sát thương (×1.075 – ×1.35) |
@@ -468,7 +469,7 @@ Các trường quan trọng trong dictionary:
 | `stat_base_attack` | `stat_base_attack` | Chỉ số vĩnh viễn, không dùng làm buff tạm |
 | `lifesteal` | `life_steal` | Hồi HP theo damage cuối |
 | `damage_reflect` | `reflect_damage` | Phản damage nhận vào |
-| `slow`/`freeze`/`sleep`/… | `apply_status: SLOW/FREEZE/SLEEP` | Bỏ shorthand key |
+| `slow`/`freeze`/`sleep`/… | `apply_status: [{id:"SLOW",...}]` | **Đã migrate xong** (Gu.csv + keys chết `invulnerable_ticks`→`INVINCIBLE`, `absorb_damage_flat`→`shield_flat`, `speed_boost_flat`→`HASTE`) |
 
 ### Status chiến đấu (combat)
 

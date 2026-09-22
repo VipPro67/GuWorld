@@ -2,6 +2,7 @@
 
 import { useMemo, useEffect } from "react";
 import { guSpecFor, useGameStore, type GuInstance, type GuSpec } from "@/store/useGameStore";
+import { statusIds, statusValue } from "@/lib/gu-dict";
 import { useWorldStore } from "@/store/useWorldStore";
 import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair } from "lucide-react";
 
@@ -40,24 +41,25 @@ export function GuQuickBar() {
       let isTargeted = false;
 
       if (active) {
+        const ids = statusIds(active.apply_status);
         if (active.heal_flat && active.heal_flat > 0) {
           type = "heal";
           label = `Hồi ${active.heal_flat} HP`;
-        } else if (active.apply_status === "REGEN") {
+        } else if (ids.includes("REGEN")) {
           type = "heal";
           label = "Phục Sinh";
         } else if (active.mana_regen && active.mana_regen > 0) {
           type = "mana_regen";
           label = `+${active.mana_regen} Mana`;
-        } else if (active.apply_status === "ATK_UP") {
+        } else if (ids.includes("ATK_UP")) {
           type = "buff_atk";
-          label = `+${active.status_tick_damage || 50} ATK`;
-        } else if (active.apply_status === "DEF_UP") {
+          label = `+${statusValue(active.apply_status, "ATK_UP", active.status_tick_damage || 50)} ATK`;
+        } else if (ids.includes("DEF_UP")) {
           type = "buff_def";
-          label = `+${active.status_tick_damage || 50} DEF`;
-        } else if (active.apply_status === "SPEED_UP") {
+          label = `+${statusValue(active.apply_status, "DEF_UP", active.status_tick_damage || 50)} DEF`;
+        } else if (ids.includes("SPEED_UP") || ids.includes("HASTE")) {
           type = "buff_speed";
-          label = `+${active.status_tick_damage || 20} Tốc`;
+          label = `+${statusValue(active.apply_status, "SPEED_UP", statusValue(active.apply_status, "HASTE", active.status_tick_damage || 20))} Tốc`;
         } else if (active.shield_flat && active.shield_flat > 0) {
           type = "shield";
           label = `+${active.shield_flat} Khiên`;

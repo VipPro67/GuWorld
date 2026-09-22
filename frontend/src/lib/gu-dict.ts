@@ -1,4 +1,43 @@
 
+// One apply_status entry: a statusfx status with optional intensity/duration.
+// The backend accepts a legacy string, a single object, or an array of these.
+export interface StatusApplication {
+  id: string;
+  value?: number;
+  turns?: number;
+}
+
+export type ApplyStatus = string | StatusApplication | StatusApplication[];
+
+// statusIds normalizes any apply_status authoring form into canonical IDs.
+// Accepts unknown: raw JSON from the API/admin editor may be loosely typed.
+export function statusIds(applyStatus?: unknown): string[] {
+  if (!applyStatus) return [];
+  const list = Array.isArray(applyStatus) ? applyStatus : [applyStatus];
+  const ids: string[] = [];
+  for (const entry of list) {
+    const id = (typeof entry === "string" ? entry : (entry as StatusApplication)?.id ?? "").toUpperCase();
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+// statusValue returns the intensity declared for a status entry, or fallback
+// when the entry relies on the legacy top-level status_tick_damage.
+export function statusValue(applyStatus: unknown, id: string, fallback: number): number {
+  if (!applyStatus) return fallback;
+  const list = Array.isArray(applyStatus) ? applyStatus : [applyStatus];
+  for (const entry of list) {
+    if (typeof entry === "string") {
+      if (entry.toUpperCase() === id) return fallback;
+    } else if (entry && (entry as StatusApplication).id?.toUpperCase() === id) {
+      const value = (entry as StatusApplication).value;
+      return value && value > 0 ? value : fallback;
+    }
+  }
+  return fallback;
+}
+
 export interface ActiveEffect {
   damage_flat?: number;
   damage_mult?: number;
@@ -9,7 +48,7 @@ export interface ActiveEffect {
   wood_transformation?: boolean;
   blood_drain?: boolean;
   replicate?: boolean;
-  apply_status?: string;
+  apply_status?: ApplyStatus;
   status_tick_damage?: number;
   status_duration_ticks?: number;
   lifesteal_rate?: number;

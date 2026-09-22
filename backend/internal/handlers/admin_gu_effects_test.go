@@ -29,7 +29,7 @@ func TestValidateAndNormalizeAdminGuEffectsRejectsInvalidData(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Error == "" || len(response.Issues) != 1 || response.Issues[0].Path != "$.active.apply_status" {
+	if response.Error == "" || len(response.Issues) != 1 || response.Issues[0].Path != "$.active.apply_status[0].id" {
 		t.Fatalf("unexpected response: %s", recorder.Body.String())
 	}
 }

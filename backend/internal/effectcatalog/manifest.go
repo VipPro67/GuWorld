@@ -160,7 +160,8 @@ var statusDefinitions = func() map[string]Definition {
 		}
 	}
 	add(DispositionSupported, "statusfx", "BLEED", "POISON", "BURN", "FEAR", "CONFUSE", "STEALTH", "SLEEP", "BLIND", "CHARM", "BIND", "FORGET_EGO", "FORGET_REALITY",
-		"SLOW_DAMAGE", "HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "REVIVE_LOCK",
+		"SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "REGEN", "ATK_UP", "DEF_UP", "THORNS", "TAUNT",
+		"HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "REVIVE_LOCK",
 		"ESSENCE_LEAK", "GU_SEAL", "SOUL_WOUND", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH")
 	add(DispositionPartial, "combat-legacy", "STUN", "FREEZE", "SILENCE")
 	add(DispositionMigrate, "effect-runtime-v2", "ROOT", "CONFUSION", "DECAY")

@@ -42,7 +42,7 @@ func TestValidateRejectsInvalidShapesAndStatuses(t *testing.T) {
 		{"unknown section", `{"combat":{}}`, "$.combat"},
 		{"active not object", `{"active":[]}`, "$.active"},
 		{"other not array", `{"other":{}}`, "$.other"},
-		{"unknown status", `{"active":{"apply_status":"NOPE"}}`, "$.active.apply_status"},
+		{"unknown status", `{"active":{"apply_status":"NOPE"}}`, "$.active.apply_status[0].id"},
 		{"negative duration", `{"active":{"status_duration_ticks":-1}}`, "$.active.status_duration_ticks"},
 	}
 
@@ -82,6 +82,39 @@ func TestValidateOtherMechanicShape(t *testing.T) {
 	_, report, err := NormalizeAndValidate(invalid)
 	if err == nil || !report.HasErrors() {
 		t.Fatalf("invalid mechanic accepted: report=%+v", report)
+	}
+}
+
+func TestValidateApplyStatusAuthoringForms(t *testing.T) {
+	valid := []string{
+		`{"active":{"apply_status":"BIND","status_duration_ticks":6}}`,                  // legacy string
+		`{"active":{"apply_status":{"id":"BIND","turns":6}}}`,                            // single object
+		`{"active":{"apply_status":[{"id":"BLEED","value":10,"turns":3}]}}`,              // array of one
+		`{"active":{"apply_status":[{"id":"BLEED","value":10,"turns":3},{"id":"BIND","turns":2}]}}`, // assembled
+	}
+	for _, raw := range valid {
+		if _, report, err := NormalizeAndValidate([]byte(raw)); err != nil || report.HasErrors() {
+			t.Fatalf("valid apply_status rejected: %s: err=%v report=%+v", raw, err, report.Issues)
+		}
+	}
+
+	invalid := []struct{ raw, path string }{
+		{`{"active":{"apply_status":42}}`, "$.active.apply_status"},
+		{`{"active":{"apply_status":{}}}`, "$.active.apply_status.id"},
+		{`{"active":{"apply_status":[]}}`, "$.active.apply_status"},
+		{`{"active":{"apply_status":[{"id":"NOPE"}]}}`, "$.active.apply_status[0].id"},
+		{`{"active":{"apply_status":[{"id":"bind"}]}}`, "$.active.apply_status[0].id"},
+		{`{"active":{"apply_status":[{"id":"BLEED","value":-1}]}}`, "$.active.apply_status[0].value"},
+		{`{"active":{"apply_status":[{"id":"BLEED","turns":"many"}]}}`, "$.active.apply_status[0].turns"},
+	}
+	for _, tt := range invalid {
+		_, report, err := NormalizeAndValidate([]byte(tt.raw))
+		if err == nil || !report.HasErrors() {
+			t.Fatalf("invalid apply_status accepted: %s", tt.raw)
+		}
+		if report.Issues[0].Path != tt.path {
+			t.Fatalf("first issue path = %q, want %q (raw %s)", report.Issues[0].Path, tt.path, tt.raw)
+		}
 	}
 }
 

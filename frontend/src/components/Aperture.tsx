@@ -33,6 +33,7 @@ import {
 import { formatNumber, statusRemainLabel, calculateTribulationProgress } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
+import { statusIds } from "@/lib/gu-dict";
 import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, GameSection } from "@/components/ui";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 import { Num } from "./Num";
@@ -1739,10 +1740,11 @@ export const Aperture: React.FC<ApertureProps> = ({
                             const spec = guSpecFor(gu.gu_id, gu.rank);
                             if (!spec || !spec.effects || !spec.effects.active) return combatCategoryTab === "other";
                             const act = spec.effects.active;
-                            if ((act.shield_flat && act.shield_flat > 0) || act.apply_status === "DEF_UP" || act.wood_transformation) {
+                            const ids = statusIds(act.apply_status);
+                            if ((act.shield_flat && act.shield_flat > 0) || ids.includes("DEF_UP") || act.wood_transformation) {
                               return combatCategoryTab === "shield";
                             }
-                            if ((act.heal_flat && act.heal_flat > 0) || act.apply_status === "REGEN" || (act.life_steal_rate && act.life_steal_rate > 0)) {
+                            if ((act.heal_flat && act.heal_flat > 0) || ids.includes("REGEN") || (act.life_steal_rate && act.life_steal_rate > 0)) {
                               return combatCategoryTab === "heal";
                             }
                             if ((act.damage_flat && act.damage_flat > 0) || (act.damage_mult && act.damage_mult > 1.0)) {

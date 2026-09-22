@@ -113,8 +113,9 @@ func (a *ActiveEffect) effectiveStatusTurns(entry StatusApplication) int {
 }
 
 // ResolveStatusApplications resolves every apply_status entry through the
-// statusfx registry into combat StatusOps, preserving the legacy single-status
-// resolution rules (explicit value → direct, bare duration ≤ 5 → tier).
+// statusfx registry into combat StatusOps. Explicit entry values/turns are
+// direct; the legacy tier pipeline (top-level status_duration_ticks ≤ 5 read
+// as a tier) only applies to entries inheriting the old top-level fields.
 func (a *ActiveEffect) ResolveStatusApplications() []statusfx.StatusOp {
 	ops := make([]statusfx.StatusOp, 0, len(a.ApplyStatus))
 	for _, entry := range a.ApplyStatus {
@@ -125,6 +126,8 @@ func (a *ActiveEffect) ResolveStatusApplications() []statusfx.StatusOp {
 		switch {
 		case value > 0:
 			op, err = statusfx.ResolveStatus(entry.ID, value, turns)
+		case entry.Turns > 0:
+			op, err = statusfx.ResolveStatus(entry.ID, 0, entry.Turns)
 		case turns > 5:
 			op, err = statusfx.ResolveStatus(entry.ID, 0, turns)
 		case turns > 0:

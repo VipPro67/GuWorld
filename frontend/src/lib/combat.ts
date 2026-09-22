@@ -1,3 +1,5 @@
+import { statusIds } from "@/lib/gu-dict";
+
 export type EffectBadge = { key: string; label: string; className: string };
 
 export const rankLabel = (r: number) => {
@@ -115,13 +117,11 @@ export const getCombatEffects = (spec: unknown): EffectBadge[] => {
     out.push({ key: "capture", label: `+${a.capture_bonus}% Bắt`, className: EFFECT_STYLE.capture });
   }
   if (a.apply_status) {
-    const statuses = Array.isArray(a.apply_status) ? a.apply_status as string[] : [a.apply_status as string];
-    statuses.forEach((s: string) => {
-      const upper = s.toUpperCase();
+    for (const upper of statusIds(a.apply_status)) {
       if (EFFECT_STYLE[upper]) {
         out.push({ key: upper, label: EFFECT_LABEL[upper] || upper, className: EFFECT_STYLE[upper] });
       }
-    });
+    }
   }
   return out.slice(0, 4);
 };

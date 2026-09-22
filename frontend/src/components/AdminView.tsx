@@ -79,7 +79,7 @@ const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "st
     { key: "shield_flat", label: "Shield Flat (Hộ thuẫn)", type: "number" },
     { key: "mana_regen", label: "Mana Regen (Hồi mana)", type: "number" },
     { key: "lifesteal_rate", label: "Life Steal Rate (Tỉ lệ hút máu)", type: "number" },
-    { key: "apply_status", label: "Apply Status (Áp dụng trạng thái)", type: "string" },
+    { key: "apply_status", label: "Apply Status — mảng [{\"id\":\"BLEED\",\"value\":10,\"turns\":3}] hoặc chuỗi (Áp dụng trạng thái)", type: "string" },
     { key: "status_tick_damage", label: "Status Tick Dmg (ST trạng thái/tick)", type: "number" },
     { key: "status_duration_ticks", label: "Status Duration Ticks (Thời gian trạng thái)", type: "number" },
     { key: "refine_mana_tier", label: "Refine Mana Tier", type: "number" },
