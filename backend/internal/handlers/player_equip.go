@@ -19,6 +19,11 @@ type EquipGuRequest struct {
 	Equip      bool   `json:"equip"`
 }
 
+var (
+	getPlayerStatsEvaluate = evaluateManaTx
+	getPlayerStatsRespond  = responseWithPlayer
+)
+
 // CalculatePlayerStats computes dynamic stats based on equipped active Gu bugs and passive mods
 
 func flushGrowthOnUnequip(player *models.Player, gu *models.GuInstance, spec *models.GuDictionaryItem) {
@@ -528,14 +533,19 @@ func GetPlayerStatsHandler(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := evaluateManaTx(tx, authID)
+	player, err := getPlayerStatsEvaluate(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
 
 	stats := CalculatePlayerStats(&player)
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	getPlayerStatsRespond(c, http.StatusOK, player, gin.H{
 		"stats": stats,
 	})
 }

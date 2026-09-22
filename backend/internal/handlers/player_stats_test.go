@@ -1,12 +1,160 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
+
+var registerStatsTxDriver sync.Once
+var statsTxDriverState = &statsTxState{}
+
+type statsTxState struct {
+	sync.Mutex
+	failCommit bool
+	committed  map[uuid.UUID]statsTimeDerivedFields
+}
+
+type statsTimeDerivedFields struct {
+	currentMana    float64
+	lastManaUpdate time.Time
+	lifespan       float64
+}
+
+type statsTxDriver struct{}
+type statsTxConn struct {
+	pending map[uuid.UUID]statsTimeDerivedFields
+}
+type statsTx struct{ conn *statsTxConn }
+
+func (statsTxDriver) Open(string) (driver.Conn, error)     { return &statsTxConn{}, nil }
+func (c *statsTxConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("not implemented") }
+func (c *statsTxConn) Close() error                        { return nil }
+func (c *statsTxConn) Begin() (driver.Tx, error) {
+	c.pending = make(map[uuid.UUID]statsTimeDerivedFields)
+	return &statsTx{conn: c}, nil
+}
+func (c *statsTxConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) { return c.Begin() }
+func (c *statsTxConn) ExecContext(_ context.Context, _ string, args []driver.NamedValue) (driver.Result, error) {
+	idText, ok := args[3].Value.(string)
+	if !ok {
+		return nil, errors.New("unexpected player id")
+	}
+	id, err := uuid.Parse(idText)
+	if err != nil {
+		return nil, err
+	}
+	c.pending[id] = statsTimeDerivedFields{
+		currentMana: args[0].Value.(float64), lastManaUpdate: args[1].Value.(time.Time), lifespan: args[2].Value.(float64),
+	}
+	return driver.RowsAffected(1), nil
+}
+func (tx *statsTx) Commit() error {
+	statsTxDriverState.Lock()
+	defer statsTxDriverState.Unlock()
+	if statsTxDriverState.failCommit {
+		return errors.New("forced commit failure")
+	}
+	for id, fields := range tx.conn.pending {
+		statsTxDriverState.committed[id] = fields
+	}
+	return nil
+}
+func (tx *statsTx) Rollback() error { tx.conn.pending = nil; return nil }
+
+func setupStatsHandlerTransactionTest(t *testing.T, failCommit bool) (*gin.Context, *httptest.ResponseRecorder, uuid.UUID) {
+	t.Helper()
+	registerStatsTxDriver.Do(func() { sql.Register("stats-handler-tx", statsTxDriver{}) })
+	testDB, err := sql.Open("stats-handler-tx", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalDB := db.DB
+	db.DB = testDB
+	statsTxDriverState.Lock()
+	statsTxDriverState.failCommit = failCommit
+	statsTxDriverState.committed = make(map[uuid.UUID]statsTimeDerivedFields)
+	statsTxDriverState.Unlock()
+	t.Cleanup(func() { db.DB = originalDB; testDB.Close() })
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest("GET", "/api/player/stats", nil)
+	playerID := uuid.New()
+	ctx.Set("player_id", playerID)
+	return ctx, recorder, playerID
+}
+
+func TestGetPlayerStatsHandlerCommitsTimeDerivedFieldsBeforePublishing(t *testing.T) {
+	ctx, recorder, playerID := setupStatsHandlerTransactionTest(t, false)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	originalEvaluate, originalRespond := getPlayerStatsEvaluate, getPlayerStatsRespond
+	t.Cleanup(func() { getPlayerStatsEvaluate, getPlayerStatsRespond = originalEvaluate, originalRespond })
+	getPlayerStatsEvaluate = func(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+		_, err := tx.Exec("UPDATE players SET current_mana=$1,last_mana_update=$2,lifespan=$3 WHERE id=$4", 42.5, now, 88.25, id)
+		return models.Player{
+			Account:          models.Account{ID: id},
+			ResourceState:    models.ResourceState{CurrentMana: 42.5, LastManaUpdate: now},
+			CultivationState: models.CultivationState{Lifespan: 88.25},
+		}, err
+	}
+	published := 0
+	getPlayerStatsRespond = func(_ *gin.Context, _ int, _ models.Player, _ ...gin.H) {
+		statsTxDriverState.Lock()
+		persisted, ok := statsTxDriverState.committed[playerID]
+		statsTxDriverState.Unlock()
+		if !ok || persisted.currentMana != 42.5 || !persisted.lastManaUpdate.Equal(now) || persisted.lifespan != 88.25 {
+			t.Fatalf("response/publish ran before time-derived fields were committed: %+v", persisted)
+		}
+		published++
+	}
+
+	GetPlayerStatsHandler(ctx)
+	if recorder.Code != 200 {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	if published != 1 {
+		t.Fatalf("published = %d, want 1", published)
+	}
+}
+
+func TestGetPlayerStatsHandlerCommitFailureDoesNotPublishRolledBackState(t *testing.T) {
+	ctx, recorder, playerID := setupStatsHandlerTransactionTest(t, true)
+	originalEvaluate, originalRespond := getPlayerStatsEvaluate, getPlayerStatsRespond
+	t.Cleanup(func() { getPlayerStatsEvaluate, getPlayerStatsRespond = originalEvaluate, originalRespond })
+	getPlayerStatsEvaluate = func(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+		_, err := tx.Exec("UPDATE players SET current_mana=$1,last_mana_update=$2,lifespan=$3 WHERE id=$4", 75.0, time.Now(), 50.0, id)
+		return models.Player{Account: models.Account{ID: id}}, err
+	}
+	published := 0
+	getPlayerStatsRespond = func(_ *gin.Context, _ int, _ models.Player, _ ...gin.H) { published++ }
+
+	GetPlayerStatsHandler(ctx)
+	if recorder.Code != 500 {
+		t.Fatalf("status = %d, want 500", recorder.Code)
+	}
+	if published != 0 {
+		t.Fatalf("published rolled-back snapshot %d time(s)", published)
+	}
+	statsTxDriverState.Lock()
+	_, persisted := statsTxDriverState.committed[playerID]
+	statsTxDriverState.Unlock()
+	if persisted {
+		t.Fatal("time-derived fields persisted despite failed commit")
+	}
+}
 
 func TestGetPassiveStats_SpeedIsolation(t *testing.T) {
 	setupTestGuRegistry(t)
