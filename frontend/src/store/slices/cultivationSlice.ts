@@ -2,6 +2,8 @@ import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { getDictionaryCache, setDictionaryCache } from "@/lib/db-cache";
+import { fetchWithDedupe } from "@/lib/fetch";
+import { syncRecipes } from "./recipeSync";
 import type {
   GuInstance,
   RefineRateBreakdown,
@@ -13,10 +15,13 @@ import type {
 export interface CultivationSlice {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
+  recipesLoading: boolean;
+  recipesError: string | null;
+  recipesFetchedAt: number | null;
   regions: Region[];
   regionsLoaded: boolean;
   world: WorldConfig | null;
-  fetchRecipes: () => Promise<void>;
+  fetchRecipes: (forceFresh?: boolean) => Promise<void>;
   fetchRegions: () => Promise<void>;
   fetchWorld: () => Promise<WorldConfig | null>;
   quests: ApiResponseData[];
@@ -35,29 +40,31 @@ export interface CultivationSlice {
 export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CultivationSlice> = (set, get) => ({
   recipes: [],
   recipesLoaded: false,
+  recipesLoading: false,
+  recipesError: null,
+  recipesFetchedAt: null,
   quests: [],
   regions: [],
   regionsLoaded: false,
   world: null,
 
-  fetchRecipes: async () => {
-    if (get().recipesLoaded) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/recipes`);
-      if (response.status === 401) {
-        set({ recipes: [], recipesLoaded: true });
-        return;
-      }
-      if (!response.ok) {
-        throw new Error("Failed to load recipes");
-      }
-      const data = await response.json();
-      set({ recipes: data || [], recipesLoaded: true });
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      console.error("Recipes sync error:", err.message);
-      set({ recipesLoaded: true });
-    }
+  fetchRecipes: async (forceFresh = false) => {
+    if (get().recipesLoaded && !forceFresh) return;
+    const playerID = get().player?.id || "anonymous";
+
+    await fetchWithDedupe(`fetchRecipes:${playerID}`, async () => {
+      const cacheKey = `game_recipes_${playerID}`;
+      await syncRecipes<RefiningRecipe>({
+        cacheKey,
+        initialLoaded: get().recipesLoaded,
+        readCache: getDictionaryCache,
+        writeCache: setDictionaryCache,
+        request: (etag) => authFetch(`${BACKEND_URL}/api/recipes`, {
+          headers: etag ? { "If-None-Match": etag } : {},
+        }),
+        setState: (state) => set(state),
+      });
+    });
   },
 
   fetchQuests: async () => {
