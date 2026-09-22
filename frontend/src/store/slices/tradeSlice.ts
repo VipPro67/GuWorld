@@ -33,9 +33,9 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   initiateTrade: async (receiverUsername) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/initiate`, {
         method: "POST",
@@ -56,7 +56,7 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       get().addLog(`Giao dịch thất bại: ${err.message}`);
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:inventory");
     }
   },
 
@@ -171,7 +171,11 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         get().addLog("Giao dịch thành công!");
         get().addToast("Giao dịch thành công!", "success");
         set({ activeTrade: null });
-        await get().initializeSession();
+        await Promise.all([
+          get().refreshPlayerSummary(),
+          get().fetchGuInventory(),
+          get().refreshRecipeProgress(),
+        ]);
       } else {
         get().addLog("Đã xác nhận giao dịch. Chờ đối phương xác nhận...");
         get().addToast("Đã xác nhận giao dịch. Chờ đối phương xác nhận...", "info");

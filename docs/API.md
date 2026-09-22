@@ -30,7 +30,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/dictionary/loot-tables` | Public loot table dictionary only. |
 | GET | `/dictionary/regions` | Public wiki region dictionary only. |
 | GET | `/dictionary/monster-spawns` | Public wiki monster spawn dictionary only. |
-| GET | `/recipes` | Public refining recipes. Thêm query param ?all=true để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. |
+| GET | `/recipes` | Public refining recipes. Thêm query param `?all=true` để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. Hỗ trợ `If-None-Match`; response trả `ETag` và `X-Catalog-Revision`, còn `304` giữ nguyên cache hiện tại của client. |
 | GET | `/gus/:instance_id/history` | Lịch sử vòng đời một cá thể Cổ (chỉ Tiên Cổ rank ≥ 6 có log). `instance_id` bất biến qua trade/bán/kho; destroy (thả/đói/chết) đóng timeline. |
 | POST | `/auth/send-otp` | Send OTP via email to register. |
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |
@@ -398,7 +398,7 @@ WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa p
 ### Các kênh hỗ trợ (Channels):
 | Channel | Direction | Mục đích |
 | --- | --- | --- |
-| `player` | S→C | Snapshot & cập nhật chỉ số người chơi thời gian thực |
+| `player` | S→C | Snapshot & cập nhật chỉ số người chơi thời gian thực; payload snapshot có `version` để client loại bỏ event/response cũ |
 | `chat:world` | Hai chiều | Chat thế giới |
 | `chat:general` | Hai chiều | Chat Bảo Hoàng Thiên (yêu cầu Thông Thiên Cổ & Thần Niệm Cổ) |
 | `chat:sect` | Hai chiều | Chat tông môn |
@@ -465,4 +465,3 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 | GET | `/scouting/tracked-targets` | Lấy danh sách con mồi đang mang ấn ký kèm tọa độ thời gian thực `(region, x, y)`. |
 | POST | `/scouting/sever-clues` | Đoạn tuyệt thiên cơ, chém đứt toàn bộ ấn ký đang theo dõi và tàn dư ô bản đồ. Tốn 20 Chân Nguyên (cố định). |
 | POST | `/scouting/resonance-scan` | Cảm ứng Cổ trùng và xung kích Đạo ngân (Dao Pulses) trong khu vực. Tốn 50 Chân Nguyên (cố định) + 200 Nguyên Thạch, hoặc TNT với Tiên nhân. |
-

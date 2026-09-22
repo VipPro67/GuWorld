@@ -156,9 +156,9 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   buildTeleportArray: async (req) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return { success: false, message: "Đang bận" };
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:position")) return { success: false, message: "Đang bận" };
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/build`, {
         method: "POST",
@@ -187,14 +187,14 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addLog(`Thất bại: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:position");
     }
   },
 
   travelTeleport: async (targetArrayId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return { success: false, message: "Đang bận" };
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:position")) return { success: false, message: "Đang bận" };
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/travel`, {
         method: "POST",
@@ -225,14 +225,14 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addLog(`Truyền tống thất bại: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:position");
     }
   },
 
   manageTeleportArray: async (req) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:position")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/manage`, {
         method: "POST",
@@ -254,14 +254,14 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:position");
     }
   },
 
   repairTeleportArray: async (arrayId, amount = 0) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:position")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/repair`, {
         method: "POST",
@@ -286,14 +286,14 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:position");
     }
   },
 
   withdrawTeleportVault: async (arrayId, amount = 0) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:position")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/withdraw`, {
         method: "POST",
@@ -317,14 +317,14 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:position");
     }
   },
 
   dismantleTeleportArray: async (arrayId) => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
+    const { token, logout } = get();
+    if (!token || !get().beginAction("player:position")) return false;
+    set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/dismantle`, {
         method: "POST",
@@ -349,7 +349,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addToast(err.message, "error");
       return false;
     } finally {
-      set({ actionLoading: false });
+      get().endAction("player:position");
     }
   },
 });
