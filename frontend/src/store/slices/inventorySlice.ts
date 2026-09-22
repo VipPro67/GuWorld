@@ -2,12 +2,14 @@ import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import type { GuInstance, GroundDrop, Player, FeedResponse } from "@/store/useGameStore";
+import { LatestRequestGate } from "@/lib/player-reconciliation";
 
 let fetchGuInventoryPromise: Promise<void> | null = null;
+const guInventoryRequests = new LatestRequestGate();
 
 export interface InventorySlice {
   guInventoryLoaded: boolean;
-  fetchGuInventory: () => Promise<void>;
+  fetchGuInventory: (forceRefresh?: boolean, reconciliationRevision?: number) => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
   feedGuGroup: (guId: string, rank?: number) => Promise<void>;
   feedAllGu: (scope?: "all" | "equipped" | "rest" | "unequipped") => Promise<void>;
@@ -35,8 +37,9 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   guInventoryLoaded: false,
   groundDrops: [],
 
-  fetchGuInventory: async () => {
-    if (fetchGuInventoryPromise) return fetchGuInventoryPromise;
+  fetchGuInventory: async (forceRefresh = false, requestRevision) => {
+    if (fetchGuInventoryPromise && !forceRefresh) return fetchGuInventoryPromise;
+    const inventoryRequestRevision = guInventoryRequests.next();
     const executeFetch = async () => {
       const { token, logout } = get();
       if (!token) return;
@@ -57,6 +60,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         const data: { gu_inventory: GuInstance[]; equipped_gus: string[] } = await response.json();
         const currentPlayer = get().player;
         if (!currentPlayer) return;
+        if (!guInventoryRequests.isCurrent(inventoryRequestRevision)) return;
+        if (requestRevision !== undefined && requestRevision !== get().reconciliationRevision) return;
 
         const applied = get().setPlayerFromServer({
           ...currentPlayer,
@@ -68,11 +73,12 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       const err = caught instanceof Error ? caught : new Error(String(caught));
         console.error("Gu inventory fetch failed:", err.message);
       } finally {
-        fetchGuInventoryPromise = null;
+        if (fetchGuInventoryPromise === promise) fetchGuInventoryPromise = null;
       }
     };
-    fetchGuInventoryPromise = executeFetch();
-    return fetchGuInventoryPromise;
+    const promise = executeFetch();
+    fetchGuInventoryPromise = promise;
+    return promise;
   },
 
   feedGu: async (guInstanceId) => {

@@ -47,6 +47,7 @@ type PlayerRealtimeSnapshot struct {
 	Y                   int                 `json:"y"`
 	CurrentRegion       string              `json:"current_region"`
 	ApertureStressLevel string              `json:"aperture_stress_level,omitempty"`
+	Version             int                 `json:"version"`
 }
 
 type PlayerRealtimeEvent struct {
@@ -200,7 +201,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.last_mana_update,
 			p.time_speed_multiplier, p.active_combat, p.aperture_stress, p.hp, p.base_hp,
 			p.primeval_stones, p.immortal_stones, p.wall_progress, p.human_qi,
-			p.lifespan, p.x, p.y, p.current_region, p.path_masteries,
+			p.lifespan, p.x, p.y, p.current_region, p.path_masteries, COALESCE(p.version, 0),
 			`+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
 		FROM players p
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
@@ -211,7 +212,7 @@ func LoadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		&player.TimeSpeedMultiplier, &activeCombatBytes, &player.ApertureStress,
 		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
 		&player.WallProgress, &player.HumanQi, &player.Lifespan,
-		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries,
+		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries, &player.Version,
 		&player.GuInventory, &player.DaoMarks,
 	)
 	if err != nil {
@@ -284,6 +285,7 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 		Y:                   player.Y,
 		CurrentRegion:       player.CurrentRegion,
 		ApertureStressLevel: apertureStressLevel(player.ApertureStress),
+		Version:             player.Version,
 	}
 }
 

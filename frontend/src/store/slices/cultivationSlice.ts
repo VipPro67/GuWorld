@@ -11,6 +11,9 @@ import type {
   Region,
   WorldConfig,
 } from "@/store/useGameStore";
+import { LatestRequestGate } from "@/lib/player-reconciliation";
+
+const recipeRequests = new LatestRequestGate();
 
 export interface CultivationSlice {
   recipes: RefiningRecipe[];

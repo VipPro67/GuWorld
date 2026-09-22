@@ -19,6 +19,7 @@ import { DivinationModal } from "@/components/DivinationModal";
 import { TrackingRadarDrawer } from "@/components/TrackingRadarDrawer";
 import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { GameLoadingScreen } from "@/components/GameLoadingScreen";
+import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliation";
 
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
 const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
@@ -59,6 +60,7 @@ export default function Home() {
     completeOnboarding,
     fetchPlayerStatus,
     initializeSession,
+    reconcilePlayer,
     logout,
     feedGu,
     feedGuGroup,
@@ -113,6 +115,7 @@ export default function Home() {
       state.completeOnboarding,
       state.fetchPlayerStatus,
       state.initializeSession,
+      state.reconcilePlayer,
       state.logout,
       state.feedGu,
       state.feedGuGroup,
@@ -182,10 +185,15 @@ export default function Home() {
     initializeSession();
   }, [initializeSession, fetchDictionary]);
 
+  const playerId = player?.id;
+  useEffect(() => {
+    if (!playerId) return;
+    return installPlayerLifecycleReconciliation(window, document, () => void reconcilePlayer(true));
+  }, [playerId, reconcilePlayer]);
+
   // 2. Sparse authoritative status sync. PostgreSQL (via /player/status) is the
   // source of truth for active_combat; keep reconciling while the combat UI is
   // open so a missed/stale realtime event cannot trap the player there.
-  const playerId = player?.id;
   const hasActiveCombat = Boolean(player?.active_combat);
   useEffect(() => {
     if (!playerId) return;
