@@ -1,7 +1,7 @@
 package handlers
 
 import (
-==	"encoding/json"
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -36,7 +36,6 @@ func TestPlayerRealtimePayloadsCarryStateRevision(t *testing.T) {
 	}
 	if payload["state_revision"] != float64(43) {
 		t.Fatalf("delta state revision = %#v, want 43", payload["state_revision"])
-func TestNormalizePlayerEventDomainsDefaultsDeduplicatesAndSorts(t *testing.T) {
 	got := normalizePlayerEventDomains([]PlayerEventDomain{
 		RecipesDomain, PlayerDomain, RecipesDomain, "",
 	}, PlayerDomain)
@@ -49,8 +48,8 @@ func TestNormalizePlayerEventDomainsDefaultsDeduplicatesAndSorts(t *testing.T) {
 	if !reflect.DeepEqual(got, []PlayerEventDomain{GuInventoryDomain}) {
 		t.Fatalf("fallback domains = %v", got)
 	}
+	}
 }
-
 func TestPlayerEventRevisionIsMonotonic(t *testing.T) {
 	first := nextPlayerEventRevision()
 	second := nextPlayerEventRevision()

@@ -76,8 +76,6 @@ type PlayerRealtimeEvent struct {
 type PlayerDeltaEvent struct {
 	Type          string          `json:"type"`
 	StateRevision int64           `json:"state_revision"`
-	Data          PlayerDeltaData `json:"data"`
-	Type           string              `json:"type"`
 	Revision       int64               `json:"revision"`
 	ChangedDomains []PlayerEventDomain `json:"changed_domains"`
 	Data           PlayerDeltaData     `json:"data"`
