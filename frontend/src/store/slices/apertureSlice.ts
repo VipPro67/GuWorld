@@ -931,7 +931,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       if (data.active_combat) {
         const currentPlayer = get().player;
         if (currentPlayer) {
-          set((state) => ({
+          set((state: ApiResponseData) => ({
             player: { ...currentPlayer, active_combat: data.active_combat },
             playerRevision: state.playerRevision + 1,
           }));

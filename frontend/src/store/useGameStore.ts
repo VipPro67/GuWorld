@@ -1293,6 +1293,7 @@ type PlayerEventDomain = "player" | "gu_inventory" | "item_inventory" | "recipes
 type PlayerRealtimeEvent = {
   type: PlayerEventType;
   revision?: number;
+  state_revision?: number;
   changed_domains?: PlayerEventDomain[];
   data?: Partial<Player> & { id?: string; aperture_stress_level?: string };
   patch?: Partial<Player> & { id?: string; aperture_stress_level?: string };
@@ -1357,7 +1358,7 @@ export const useGameStore = create<GameState>((set, get) => {
     const samePlayer = !currentPlayer || !player.id || currentPlayer.id === player.id;
     if (samePlayer && !shouldApplyPlayerRevision(get().playerStateRevision, incomingRevision)) {
       set(extraState);
-      return;
+      return false;
     }
     const fullPlayer: Player = currentPlayer ? {
       ...currentPlayer,
@@ -1773,6 +1774,7 @@ export const useGameStore = create<GameState>((set, get) => {
           const payload = rawPayload as PlayerRealtimeEvent;
           const eventData = payload?.patch || payload?.data || rawPayload;
           const eventType = payload?.type;
+          const eventVersion = typeof eventData?.version === "number" ? eventData.version : undefined;
           const incomingRevision = typeof (payload?.state_revision ?? eventData?.state_revision) === "number"
             ? (payload?.state_revision ?? eventData.state_revision)
             : undefined;
@@ -1843,7 +1845,7 @@ export const useGameStore = create<GameState>((set, get) => {
                 get().constitutionDictionary,
                 get().aperture?.time_rate
               ),
-            }));
+            });
             return;
           }
 
@@ -1860,7 +1862,7 @@ export const useGameStore = create<GameState>((set, get) => {
                 get().constitutionDictionary,
                 get().aperture?.time_rate
               ),
-            }));
+            });
             return;
           }
 
@@ -1911,7 +1913,7 @@ export const useGameStore = create<GameState>((set, get) => {
             player: updatedPlayer,
             playerStateRevision: incomingRevision ?? get().playerStateRevision,
             playerRevision: state.playerRevision + 1,
-            ...(nextCombat === null || eventType === "combat.ended" ? { activeCombatReplay: null } : {}),
+            ...(nextCombat === null ? { activeCombatReplay: null } : {}),
             manaSnapshot: updatedPlayer
               ? createManaSnapshotFromPlayer(
                   updatedPlayer,
@@ -1921,12 +1923,6 @@ export const useGameStore = create<GameState>((set, get) => {
                 )
               : get().manaSnapshot,
           }));
-
-          if (eventType === "combat.started") {
-            get().addLog("Chiến đấu realtime đã bắt đầu.");
-          } else if (eventType === "combat.ended") {
-            get().addLog("Chiến đấu realtime đã kết thúc.");
-          }
         } catch (err) {
           console.error("Failed to process player websocket event", err);
         }

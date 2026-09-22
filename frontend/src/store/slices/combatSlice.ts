@@ -287,7 +287,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
         if (response.status === 400 && (data.error?.includes("Không trong trạng thái chiến đấu") || data.error?.includes("Không có trận chiến nào"))) {
           const currentPlayer = get().player;
           if (currentPlayer && currentPlayer.active_combat) {
-            set((state) => ({
+            set((state: ApiResponseData) => ({
               player: { ...currentPlayer, active_combat: null },
               playerRevision: state.playerRevision + 1,
               activeCombatReplay: null,
@@ -436,7 +436,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
         if (response.status === 400 && data.error?.includes("Không có trận chiến nào")) {
           const currentPlayer = get().player;
           if (currentPlayer && currentPlayer.active_combat) {
-            set((state) => ({
+            set((state: ApiResponseData) => ({
               player: { ...currentPlayer, active_combat: null },
               playerRevision: state.playerRevision + 1,
               activeCombatReplay: null,

@@ -26,7 +26,7 @@ export interface CultivationSlice {
   regions: Region[];
   regionsLoaded: boolean;
   world: WorldConfig | null;
-  fetchRecipes: () => Promise<void>;
+  fetchRecipes: (forceFresh?: boolean) => Promise<void>;
   refreshRecipeProgress: () => Promise<void>;
   fetchRegions: () => Promise<void>;
   fetchWorld: () => Promise<WorldConfig | null>;
@@ -56,8 +56,8 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   regionsLoaded: false,
   world: null,
 
-  fetchRecipes: async () => {
-    if (get().recipesLoaded) return;
+  fetchRecipes: async (forceFresh = false) => {
+    if (get().recipesLoaded && !forceFresh) return;
     return get().refreshRecipeProgress();
   },
 

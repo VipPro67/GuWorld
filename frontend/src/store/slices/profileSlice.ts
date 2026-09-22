@@ -61,7 +61,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
       if (response.status === 401) {
 		    get().setPlayerFromServer(null, { token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
-        set((state) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
+        set((state: ApiResponseData) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
         return;
       }
       if (!response.ok) {
@@ -93,7 +93,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Session restore failed:", err.message);
   	  get().setPlayerFromServer(null, { token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
-      set((state) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
+      set((state: ApiResponseData) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
     }
   },
 
@@ -226,7 +226,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       if (shouldRefreshCollections(forceCollections, clientVersion, serverVersion)) {
         await Promise.all([
           get().fetchGuInventory(true, requestRevision),
-          get().fetchRecipes(true, requestRevision),
+          get().fetchRecipes(true),
         ]);
       }
     } catch (caught: unknown) {
