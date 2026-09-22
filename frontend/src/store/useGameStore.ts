@@ -1840,9 +1840,13 @@ export const useGameStore = create<GameState>((set, get) => {
           const newTrade = payload?.trade ?? null;
           set({ activeTrade: newTrade });
           // When trade just completed (had active trade, now null),
-          // refresh session so inventory/stones are up-to-date.
+          // Refresh only the resources affected by the completed trade.
           if (prevTrade && !newTrade) {
-            get().initializeSession();
+            void Promise.all([
+              get().refreshPlayerSummary(),
+              get().fetchGuInventory(),
+              get().refreshRecipeProgress(),
+            ]);
           }
         } catch (err) {
           console.error("Failed to process trade event", err);

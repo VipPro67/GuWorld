@@ -171,7 +171,11 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         get().addLog("Giao dịch thành công!");
         get().addToast("Giao dịch thành công!", "success");
         set({ activeTrade: null });
-        await get().initializeSession();
+        await Promise.all([
+          get().refreshPlayerSummary(),
+          get().fetchGuInventory(),
+          get().refreshRecipeProgress(),
+        ]);
       } else {
         get().addLog("Đã xác nhận giao dịch. Chờ đối phương xác nhận...");
         get().addToast("Đã xác nhận giao dịch. Chờ đối phương xác nhận...", "info");
