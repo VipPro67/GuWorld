@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Sparkles, RefreshCw, AlertTriangle } from "@/lib/icons";
+import { Sparkles, RefreshCw, AlertTriangle, Trash2 } from "@/lib/icons";
+import { clearLocalGameCache } from "@/lib/cache-utils";
 
 interface GameLoadingScreenProps {
   error?: string | null;
@@ -65,6 +66,14 @@ export const GameLoadingScreen: React.FC<GameLoadingScreenProps> = ({
               <RefreshCw className="w-4 h-4" />
               Thử tải lại dữ liệu
             </button>
+
+            <button
+              onClick={() => void clearLocalGameCache({ preserveAuth: true, reloadAfterClear: true })}
+              className="w-full py-2 px-4 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 text-amber-400 hover:text-amber-300 font-medium text-xs flex items-center justify-center gap-2 border border-amber-500/30 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Xóa bộ nhớ đệm (Clear Cache) & Thử lại
+            </button>
           </div>
         ) : (
           <div className="w-full flex flex-col items-center space-y-4">
@@ -85,7 +94,14 @@ export const GameLoadingScreen: React.FC<GameLoadingScreenProps> = ({
 
         {/* Footer info */}
         <div className="mt-8 pt-4 border-t border-zinc-800/60 w-full flex justify-between items-center text-[11px] text-zinc-500 font-mono">
-          <span>Khởi tạo linh trận</span>
+          <button
+            onClick={() => void clearLocalGameCache({ preserveAuth: true, reloadAfterClear: true })}
+            className="hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1"
+            title="Xóa cache và tải lại trang"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span>Xóa cache cục bộ</span>
+          </button>
           <span>v2.0 • WebGL/IDB Ready</span>
         </div>
       </div>

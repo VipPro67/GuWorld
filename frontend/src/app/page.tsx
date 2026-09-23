@@ -19,6 +19,7 @@ import { DivinationModal } from "@/components/DivinationModal";
 import { TrackingRadarDrawer } from "@/components/TrackingRadarDrawer";
 import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { GameLoadingScreen } from "@/components/GameLoadingScreen";
+import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliation";
 
 const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
@@ -270,6 +271,7 @@ export default function Home() {
               </svg>
               Nhóm Discord
             </a>
+            <ClearCacheButton showLabel={true} className="!text-amber-500 dark:!text-amber-400 !bg-amber-500/10 hover:!bg-amber-500/20 !border-amber-500/20" />
           </div>
           <p className="text-xs text-zinc-600 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
         </footer>
@@ -334,6 +336,7 @@ export default function Home() {
               Đăng Xuất
             </button>
           )}
+          <ClearCacheButton />
           <ThemeToggle />
         </div>
       </header>
@@ -544,6 +547,7 @@ export default function Home() {
               </svg>
               Nhóm Discord
             </a>
+            <ClearCacheButton showLabel={true} className="!text-amber-500 dark:!text-amber-400 !bg-amber-500/10 hover:!bg-amber-500/20 !border-amber-500/20" />
           </div>
           <p className="text-xs text-zinc-600 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
         </footer>

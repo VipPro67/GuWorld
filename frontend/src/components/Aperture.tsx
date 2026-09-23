@@ -29,7 +29,9 @@ import {
   RefreshCw,
   UserPlus,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
+import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { formatNumber, statusRemainLabel, calculateTribulationProgress } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
@@ -1927,6 +1929,22 @@ export const Aperture: React.FC<ApertureProps> = ({
                   )}
                 </button>
               </form>
+
+              {/* Dọn dẹp bộ nhớ đệm cục bộ */}
+              <div className="bg-zinc-950/40 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-2.5">
+                  <Trash2 className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-mono font-bold text-zinc-200 uppercase tracking-wider">
+                    Bộ Nhớ Đệm & Dữ Liệu Cục Bộ
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Nếu bạn gặp tình trạng kẹt tải dữ liệu, hiển thị sai thông số, hoặc không nhìn thấy cập nhật mới, hãy dọn dẹp bộ nhớ đệm cục bộ (IndexedDB, Cache Storage, LocalStorage).
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <ClearCacheButton showLabel={true} className="!w-full !py-2.5 !justify-center !text-amber-400 !bg-amber-500/10 hover:!bg-amber-500/20 !border-amber-500/30 font-bold" />
+                </div>
+              </div>
             </div>
           </div>
         )}
