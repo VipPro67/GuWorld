@@ -231,6 +231,7 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	c.DefenseMultiplier = 1.0
 	c.ThornsDamage = 0.0
 	c.IsSilenced = false
+	c.IsStunned = false
 	c.IsFrozen = false
 	c.HasTaunt = false
 	c.TaunterID = ""
@@ -282,6 +283,8 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			}
 		case statusfx.BehaviourInvincible:
 			c.DamageTakenReduction = 1.0
+		case statusfx.BehaviourStun:
+			c.IsStunned = true
 		case statusfx.BehaviourFreeze:
 			c.IsFrozen = true
 		case statusfx.BehaviourSilence:
@@ -322,6 +325,8 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 				speedMult *= (1.0 - float64(eff.Value)/100.0)
 			case EffectWeak:
 				c.DamageMultiplier *= (1.0 - float64(eff.Value)/100.0)
+			case EffectStun, statusfx.StatusStun:
+				c.IsStunned = true
 			case EffectFreeze:
 				c.IsFrozen = true
 			case EffectSilence:

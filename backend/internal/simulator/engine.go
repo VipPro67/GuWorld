@@ -1862,12 +1862,12 @@ func Simulate(state *CombatState) []CombatLog {
 			// Skip if CC'd
 			isDisabled := false
 			for _, eff := range actor.ActiveEffects {
-				if eff.ID == EffectStun && eff.Duration >= 0 {
+				if (strings.EqualFold(eff.ID, EffectStun) || strings.EqualFold(eff.ID, statusfx.StatusStun)) && eff.Duration >= 0 {
 					isDisabled = true
 					break
 				}
 			}
-			if actor.IsFrozen || actor.IsSleeping || actor.IsBound || actor.IsSilenced || actor.IsFeared {
+			if actor.IsStunned || actor.IsFrozen || actor.IsSleeping || actor.IsBound || actor.IsSilenced || actor.IsFeared {
 				isDisabled = true
 			}
 			if isDisabled {
@@ -1935,11 +1935,13 @@ func Simulate(state *CombatState) []CombatLog {
 				ccCheckedThisTurn[actor] = true
 
 				// Check stun
-				isStunned := false
-				for _, eff := range actor.ActiveEffects {
-					if eff.ID == EffectStun && eff.Duration >= 0 {
-						isStunned = true
-						break
+				isStunned := actor.IsStunned
+				if !isStunned {
+					for _, eff := range actor.ActiveEffects {
+						if (strings.EqualFold(eff.ID, EffectStun) || strings.EqualFold(eff.ID, statusfx.StatusStun)) && eff.Duration >= 0 {
+							isStunned = true
+							break
+						}
 					}
 				}
 				if isStunned {
@@ -2450,11 +2452,13 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	}
 
 	// Invulnerable check (INVINCIBLE status or mechanic-granted "invulnerable")
-	isInvulnerable := false
-	for _, eff := range target.ActiveEffects {
-		if strings.EqualFold(eff.ID, "invulnerable") && eff.Duration >= 0 { // remains active
-			isInvulnerable = true
-			break
+	isInvulnerable := target.DamageTakenReduction >= 1.0
+	if !isInvulnerable {
+		for _, eff := range target.ActiveEffects {
+			if (strings.EqualFold(eff.ID, "invulnerable") || strings.EqualFold(eff.ID, statusfx.StatusInvincible)) && eff.Duration >= 0 { // remains active
+				isInvulnerable = true
+				break
+			}
 		}
 	}
 	if isInvulnerable {

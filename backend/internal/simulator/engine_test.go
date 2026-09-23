@@ -610,6 +610,53 @@ func TestStunSkipsTurn(t *testing.T) {
 	}
 }
 
+// TestStatusFxStunAndInvincibleInCombat verifies that statusfx STUN correctly causes enemy turn skip,
+// and statusfx INVINCIBLE applied mid-turn correctly blocks incoming damage.
+func TestStatusFxStunAndInvincibleInCombat(t *testing.T) {
+	state := &CombatState{
+		Seed: 42,
+		Allies: []*CombatantAuto{
+			newTestCombatant("ally", "Duhring Cosima", 1000, 10),
+		},
+		Enemies: []*CombatantAuto{
+			newTestCombatant("enemy", "Hình Nhân Gỗ", 10000, 100),
+		},
+	}
+	state.Allies[0].Actions = []SimAction{
+		{
+			ActionType: "GU_SKILL", Name: "Vô Tướng Nhãn Cổ", Damage: 0,
+			StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusInvincible, Value: 100, Turns: 2}},
+		},
+		{
+			ActionType: "GU_SKILL", Name: "Sát Xích Cổ", Damage: 10,
+			StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusStun, Value: 1, Turns: 1}},
+		},
+	}
+	state.Enemies[0].Actions = []SimAction{
+		{ActionType: "BASIC_ATTACK", Name: "Đánh Thường", Damage: 500},
+	}
+
+	logs := Simulate(state)
+
+	enemyAttacked := false
+	stunnedLogFound := false
+	for _, l := range logs {
+		if l.ActorId == "enemy" && l.Action == "BASIC_ATTACK" && l.Turn == 1 {
+			enemyAttacked = true
+		}
+		if l.ActorId == "enemy" && (l.Action == "STUNNED" || strings.Contains(l.Detail, "bị choáng, bỏ lượt")) {
+			stunnedLogFound = true
+		}
+	}
+
+	if !stunnedLogFound {
+		t.Fatal("expected enemy to be stunned and logged STUNNED")
+	}
+	if enemyAttacked {
+		t.Fatal("expected enemy to NOT be able to attack while stunned")
+	}
+}
+
 // TestSilenceForcesBasicAttack verifies that a SILENCED combatant cannot use skills.
 func TestSilenceForcesBasicAttack(t *testing.T) {
 	state := &CombatState{

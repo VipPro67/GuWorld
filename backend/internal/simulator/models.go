@@ -285,6 +285,7 @@ type CombatantAuto struct {
 	DefenseMultiplier float64 // multiplier from def_up buff (default 1.0)
 	ThornsDamage      float64 // % of damage reflected back (from thorns buff)
 	IsSilenced        bool    // cannot use skills, only basic attack
+	IsStunned         bool    // loses turn (STUN)
 	IsFrozen          bool    // loses turn like stun, can break on damage
 	HasTaunt          bool    // forces enemies to attack this unit
 	TaunterID         string  // ID of the taunter (for target redirection)

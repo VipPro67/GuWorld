@@ -110,6 +110,13 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 			applyStatusOpTo(actor, target, spec, op, turn, rng, logs)
 		}
 	}
+	// Re-compute multipliers after applying status ops so active effects (e.g. INVINCIBLE, STUN, ATK_UP, etc.) take effect immediately.
+	ComputeEffectMultipliers(actor)
+	for _, target := range targets {
+		if target != nil {
+			ComputeEffectMultipliers(target)
+		}
+	}
 }
 
 func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, turn int, rng *rand.Rand, logs *[]CombatLog) {
