@@ -48,18 +48,18 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 				logger.S.Info("Hunger Worker stopped")
 				return
 			case <-ticker.C:
-				processHungerDecay(ctx, db)
+				processScheduledTicks(ctx, db)
 			}
 		}
 	}()
 }
 
-// processHungerDecay handles background tasks for Gu ticks.
+// processScheduledTicks handles background SCHEDULED-timing effects.
 // Note: Gu hunger decay for players is handled lazily on-demand
 // (EvaluatePlayerHungerTx). Sect vault Gu hunger decay has been eliminated
 // to save CPU/DB overhead; withdrawn Gus start at hunger 1 instead.
 // This worker only processes lightweight ON_TICK effects.
-func processHungerDecay(ctx context.Context, db *sql.DB) {
+func processScheduledTicks(ctx context.Context, db *sql.DB) {
 	// 1. Batch ON_TICK effects (generating stones from special Gus)
 	batchApplyOnTickEffects(db)
 }

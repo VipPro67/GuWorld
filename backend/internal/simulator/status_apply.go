@@ -93,21 +93,30 @@ func collectAllStatusOps(a *SimAction) []statusfx.StatusOp {
 // applyStatusOps applies a normalized list of status operations to the actor
 // (self-target buffs) and/or each resolved target (debuffs/DoTs). It consults
 // the statusfx registry so adding a status needs no new if-chains here.
-func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []statusfx.StatusOp, turn int, rng *rand.Rand, logs *[]CombatLog) {
+func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []statusfx.StatusOp, guRank int, turn int, rng *rand.Rand, logs *[]CombatLog) {
+	if rng == nil {
+		rng = rand.New(rand.NewSource(1))
+	}
+	if guRank <= 0 && actor != nil {
+		guRank = actor.Rank
+	}
+	if guRank <= 0 {
+		guRank = 1
+	}
 	for _, op := range ops {
 		spec, ok := statusfx.Spec(op.ID)
 		if !ok {
 			continue
 		}
 		if spec.SelfTarget {
-			applyStatusOpTo(actor, actor, spec, op, turn, rng, logs)
+			applyStatusOpTo(actor, actor, spec, op, guRank, turn, rng, logs)
 			continue
 		}
 		for _, target := range targets {
 			if target == nil || target.HP <= 0 {
 				continue
 			}
-			applyStatusOpTo(actor, target, spec, op, turn, rng, logs)
+			applyStatusOpTo(actor, target, spec, op, guRank, turn, rng, logs)
 		}
 	}
 	// Re-compute multipliers after applying status ops so active effects (e.g. INVINCIBLE, STUN, ATK_UP, etc.) take effect immediately.
@@ -119,30 +128,85 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 	}
 }
 
-func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, turn int, rng *rand.Rand, logs *[]CombatLog) {
-	// Dream immunity (FORGET_DREAM): dream-path statuses never land.
-	// Checked before the resist gate — immunity is absolute, not a roll.
-	if !spec.SelfTarget && target.ImmuneDreamStatus && spec.Path == "dream" {
-		*logs = append(*logs, CombatLog{
-			Turn:      turn,
-			ActorId:   target.ID,
-			ActorName: target.Name,
-			Action:    "STATUS_IMMUNE",
-			Detail:    fmt.Sprintf("%s hoàn toàn miễn nhiễm hiệu ứng Mộng đạo [%s]!", target.Name, spec.Label),
-		})
-		return
-	}
-	// Resist gate (control effects subject to MentalResistance + generic CCResist).
-	// Combined multiplicatively, capped at 0.75.
-	if spec.ResistGate && !statusfx.CanApplyStatus(rng, actor.Rank, target.Rank, actor.DaoMarks, target.DaoMarks, spec, gamefx.CombinedResist(target.MentalResistance, target.CCResist)) {
-		*logs = append(*logs, CombatLog{
-			Turn:      turn,
-			ActorId:   target.ID,
-			ActorName: target.Name,
-			Action:    "STATUS_RESIST",
-			Detail:    fmt.Sprintf("%s kháng lại %s bằng ý chí tinh thần!", target.Name, spec.Label),
-		})
-		return
+func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, guRank int, turn int, rng *rand.Rand, logs *[]CombatLog) {
+	if spec.SelfTarget {
+		// Self-target proc gate based on Player Rank and Gu Rank (includes Caster Attenuation)
+		if !statusfx.CanApplySelfStatus(rng, actor.Rank, guRank, spec, op.Chance) {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   actor.ID,
+				ActorName: actor.Name,
+				Action:    "STATUS_MISS",
+				TargetId:  actor.ID,
+				Detail:    fmt.Sprintf("[%s] không kích hoạt thành công hiệu ứng [%s] lên bản thân (suy hao cảnh giới)!", actor.Name, spec.Label),
+			})
+			return
+		}
+		// Caster Attenuation: when casterRank > guRank, scale down numerical values (shield, heal, stat buffs)
+		if actor.Rank > guRank && op.Value > 0 {
+			attenuation := statusfx.CasterAttenuationFactor(guRank, actor.Rank)
+			op.Value *= attenuation
+		}
+	} else {
+		// Target suppression check based on GuRank vs TargetRank
+		suppFactor, durationPenalty := statusfx.TargetSuppressionFactor(guRank, target.Rank)
+		if suppFactor <= 0 {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "STATUS_IMMUNE",
+				Detail:    fmt.Sprintf("%s cảnh giới vượt trội, hoàn toàn miễn nhiễm hiệu ứng [%s] từ Cổ Rank %d!", target.Name, spec.Label, guRank),
+			})
+			return
+		}
+		if durationPenalty > 0 {
+			op.Turns -= durationPenalty
+			if op.Turns < 1 {
+				op.Turns = 1
+			}
+		}
+
+		// Opt-in proc gate (apply_status entry chance, rank-scaled at resolve).
+		// Rolls before immunity/resist: an untriggered effect leaves no trace.
+		if op.Chance > 0 {
+			effChance := op.Chance * suppFactor
+			if rng.Float64() >= effChance {
+				*logs = append(*logs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "STATUS_MISS",
+					TargetId:  target.ID,
+					Detail:    fmt.Sprintf("[%s] không kích hoạt hiệu ứng [%s] (tỉ lệ %.0f%% bị áp chế)!", actor.Name, spec.Label, effChance*100),
+				})
+				return
+			}
+		}
+		// Dream immunity (FORGET_DREAM): dream-path statuses never land.
+		// Checked before the resist gate — immunity is absolute, not a roll.
+		if target.ImmuneDreamStatus && spec.Path == "dream" {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "STATUS_IMMUNE",
+				Detail:    fmt.Sprintf("%s hoàn toàn miễn nhiễm hiệu ứng Mộng đạo [%s]!", target.Name, spec.Label),
+			})
+			return
+		}
+		// Resist gate (control effects subject to MentalResistance + generic CCResist + Rank scaling).
+		// Combined multiplicatively, capped at 0.75.
+		if spec.ResistGate && !statusfx.CanApplyStatusWithGuRank(rng, actor.Rank, target.Rank, guRank, actor.DaoMarks, target.DaoMarks, spec, gamefx.CombinedResist(target.MentalResistance, target.CCResist), op.Chance) {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "STATUS_RESIST",
+				Detail:    fmt.Sprintf("%s kháng lại %s bằng ý chí tinh thần!", target.Name, spec.Label),
+			})
+			return
+		}
 	}
 
 	// Tenacity shortens incoming CC duration (min 1 turn). Buffs bypass.
@@ -591,11 +655,18 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		})
 
 	default:
+		effType := "debuff"
+		if spec.SelfTarget {
+			effType = "buff"
+		}
+		target.ActiveEffects = append(target.ActiveEffects, Effect{
+			ID: spec.ID, Type: effType, Value: int(op.Value), Duration: op.Turns, SourcePath: spec.Path,
+		})
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   target.ID,
 			ActorName: target.Name,
-			Action:    "STATUS_APPLIED",
+			Action:    op.ID + "_APPLIED",
 			Detail:    fmt.Sprintf("%s nhận hiệu ứng [%s] (%d lượt).", target.Name, spec.Label, op.Turns),
 		})
 	}

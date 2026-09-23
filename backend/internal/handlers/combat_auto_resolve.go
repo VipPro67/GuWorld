@@ -476,10 +476,9 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			act.ShieldMult = active.ShieldMult
 		}
 		// Registry-driven statuses (BLEED/POISON/BURN/FEAR/CONFUSE/STEALTH/
-		// SLEEP/BLIND/CHARM/BIND + catalog). apply_status accepts a legacy
-		// string, a single object, or an array so one action can assemble
-		// several statuses; each entry resolves through the statusfx registry.
-		for _, op := range active.ResolveStatusApplications() {
+		// SLEEP/BLIND/CHARM/BIND + catalog). Entries with chance opt into the
+		// rank-scaled proc (chance +0.05/rank, +(rank-1)/3 turns).
+		for _, op := range active.ResolveStatusApplicationsForRank(spec.Rank) {
 			act.StatusOps = append(act.StatusOps, op)
 		}
 		if active.LifeStealRate > 0 {

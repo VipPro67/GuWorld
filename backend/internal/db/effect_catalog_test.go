@@ -62,7 +62,7 @@ func TestGuCSVEffectCatalogCoverage(t *testing.T) {
 		t.Fatalf("Gu.csv effect coverage failed: summary=%+v first issues=%+v", report.Summary, firstCatalogIssues(report.Issues, 10))
 	}
 
-	wantKeys := map[string]int{"active": 36, "passive": 34, "growth": 5, "support": 2, "status": 22, "other": 45}
+	wantKeys := map[string]int{"active": 36, "passive": 34, "growth": 5, "status": 22, "other": 45} // support section deleted; healing lives in active.heal_flat
 	gotKeys := map[string]int{}
 	for _, coverage := range report.Coverage {
 		gotKeys[coverage.Section]++

@@ -356,7 +356,7 @@ func AutoCombatStart(c *gin.Context) {
 func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *models.CombatState) *simulator.CombatantAuto {
 	var enemyShield float64
 	for _, guInst := range enemy.GuInventory {
-		if guInst.Status != "ACTIVE" {
+		if !guInst.Equipped || guInst.Status != "ACTIVE" {
 			continue
 		}
 		spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
@@ -439,10 +439,13 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		simEnemy.DaoBonus,
 	)
 
-	// Highest-rank ACTIVE instance per GuID, used to resolve loadout specs.
+	// Highest-rank equipped ACTIVE instance per GuID, used to resolve loadout specs.
+	// Unequipped Gus never count (mirrors buildSimCombatant); hunger is
+	// intentionally ignored — monster Gus run at Hunger 0 by design and the
+	// engine hunger-gate is Player-only.
 	instByGuID := make(map[string]models.GuInstance)
 	for _, g := range enemy.GuInventory {
-		if g.Status != "ACTIVE" {
+		if !g.Equipped || g.Status != "ACTIVE" {
 			continue
 		}
 		if best, ok := instByGuID[g.GuID]; !ok || g.Rank > best.Rank {
@@ -479,7 +482,7 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	if len(selectedGuIDs) == 0 {
 		seen := make(map[string]bool, len(enemy.GuInventory))
 		for _, g := range enemy.GuInventory {
-			if g.Status != "ACTIVE" || seen[g.GuID] {
+			if !g.Equipped || g.Status != "ACTIVE" || seen[g.GuID] {
 				continue
 			}
 			seen[g.GuID] = true
@@ -519,9 +522,10 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 			if errKM == nil {
 				ownedGuInstMap := make(map[string]bool)
 				for _, g := range enemy.GuInventory {
-					if g.Status == "ACTIVE" {
-						ownedGuInstMap[g.InstanceID] = true
+					if !g.Equipped || g.Status != "ACTIVE" {
+						continue
 					}
+					ownedGuInstMap[g.InstanceID] = true
 				}
 				for kmID, km := range kmMap {
 					slots := slotsMap[kmID]
@@ -602,9 +606,11 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	}
 
 	// Passive mechanics come from every equipped, active Gu in enemy inventory.
+	// Hunger is not required here: monster Gus fight at Hunger 0 by design and
+	// the engine hunger-gate applies to players only.
 	var enemyMechanics []simulator.CombatMechanic
 	for _, guInst := range enemy.GuInventory {
-		if guInst.Status != "ACTIVE" {
+		if !guInst.Equipped || guInst.Status != "ACTIVE" {
 			continue
 		}
 		spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
@@ -629,9 +635,10 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	simEnemy.GuHunger = func() map[string]int {
 		gh := make(map[string]int)
 		for _, inst := range enemy.GuInventory {
-			if inst.Status == "ACTIVE" {
-				gh[inst.InstanceID] = inst.Hunger
+			if !inst.Equipped || inst.Status != "ACTIVE" {
+				continue
 			}
+			gh[inst.InstanceID] = inst.Hunger
 		}
 		return gh
 	}()

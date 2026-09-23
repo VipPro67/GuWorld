@@ -540,6 +540,17 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - `tenacity` (0..1): rút ngắn thời gian hiệu ứng bất lợi phải chịu, đồng thời mỗi đầu lượt roll để tự giải 1 hiệu ứng (ưu tiên khống chế cứng như Choáng/Trói/Đóng băng/Ngủ trước, rồi đến Khóa chiêu, gây rối, cuối cùng là rút máu theo lượt). Buff có lợi không bao giờ bị tự giải nhầm.
 - VD: Ngã Ý Cổ mang `tenacity: 0.35, cc_resist: 0.15` — chịu CC ngắn hơn và 35% tự giải 1 hiệu ứng mỗi lượt.
 
+### Quy luật Áp Chế Cảnh Giới 2 Chiều & Tỉ Lệ Kích Hoạt Động (Dynamic Proc Chance)
+
+- **Suy Hao Cảnh Giới Tự Thân (Caster Attenuation)**: Khi Cổ sư sử dụng Cổ trùng có đẳng cấp thấp hơn cảnh giới hiện tại của mình (`GuRank < CasterRank`) để buff cho bản thân hoặc đồng đội, hiệu lực sẽ bị suy giảm mạnh theo tỷ trọng sức mạnh cảnh giới $K_{\text{caster}} = W(\text{GuRank}) / W(\text{CasterRank})$ (Bảng trọng số: Phàm giới $1, 2, 5, 20, 100$; Tiên giới $1.000, 10.000, 100.000, 1.000.000$).
+  - Các hiệu ứng đặc biệt như **Bất Tử (INVINCIBLE)** hay **Khóa Cổ (GU_SEAL)** sẽ bị nhân tỉ lệ kích hoạt với $K_{\text{caster}}$ (ví dụ: Tiên nhân Bát Chuyển/Cửu Chuyển dùng Cổ Bất Tử Tứ Chuyển thì tỉ lệ kích hoạt rơi về $\approx 0.002\%$).
+  - Trị số khiên ảo, hồi máu và các chỉ số cộng thêm cũng bị điều chỉnh tương ứng theo $K_{\text{caster}}$.
+- **Áp Chế Cảnh Giới Mục Tiêu (Target Realm Suppression)**: Khi xuất chiêu khống chế hoặc nguyền rủa lên đối thủ có cảnh giới cao hơn (`TargetRank > GuRank`):
+  - Mỗi bậc chênh lệch cảnh giới $\Delta R$ làm giảm $20\%$ tỉ lệ dính hiệu ứng: $\text{SuppressionFactor} = \max(0, 1.0 - 0.20 \times \Delta R)$.
+  - Nếu chênh lệch $\Delta R \ge 5$ (ví dụ Cổ Tứ Chuyển đánh lên Tiên Tôn Cửu Chuyển), mục tiêu **miễn dịch tuyệt đối** với mọi hiệu ứng khống chế từ Cổ này.
+  - Thời lượng khống chế (nếu trúng) bị cắt ngắn $\lfloor \Delta R / 2 \rfloor$ lượt (tối thiểu giữ 1 lượt).
+  - Sát thương theo % Máu (`DamageHPPercent`), phá khiên (`ShieldStripPercent`) và tước quyền dùng Cổ (`DisableGuTurns`) cũng chịu chung quy luật suy giảm này.
+
 ### Stat_mods trạng thái trong chiến đấu & Chi tiết công thức
 
 - `stat_mods` của Trạng thái (Trọng Thương, Áp Chế Giới Vực…) tác động **trực tiếp tới kết quả chiến đấu**: hệ số trạng thái **nhân thẳng lên toàn bộ sát thương sát chiêu & tuyệt kỹ** (đòn đánh thường bằng chính chỉ số tấn công bị giảm), phòng thủ trừ thẳng sát thương nhận vào (kèm giảm cả Khiên Ảo tạo ra), tốc độ quyết định thứ tự hành động.
@@ -723,16 +734,17 @@ Hệ thống môn phái hiện có:
 Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `passive.*`), không đọc Gu ID. Cổ nào mang effect đó thì có hành vi đó — Cổ nêu bên dưới chỉ là ví dụ minh họa.
 
 ### Cơ chế trong chiến đấu (Combat Simulator)
-1. `ON_DEATH / REBORN` — hồi sinh thống nhất 2 mode: `rewind` (reset cả trận về Lượt 1, VD Xuân Thu Thiền) và `in_place` (đứng dậy tại chỗ với `revive_hp_percent` HP, VD Lãng Quên Bại Cổ: lượt 1 auto sống, sau roll 50%, tối đa 5 lần). Params: `chance`, `mode`, `max_uses` (1–10), `turn1_guaranteed`, `revive_hp_percent`, `clear_debuffs`, `empower_attack/speed/shield_percent` (+10% công/tốc/khiên mỗi lần sống dậy, cộng dồn hết trận), `empower_turns`. `REVIVE_LOCK` chặn hoàn toàn.
+1. `ON_DEATH / REBORN` — hồi sinh thống nhất 2 mode: `rewind` (reset cả trận về Lượt 1, VD Xuân Thu Thiền) và `in_place` (đứng dậy tại chỗ với `revive_hp_percent` HP, VD Lãng Quên Bại Cổ: lượt 1 auto sống, sau roll 50%, tối đa 5 lần). Params: `chance`, `mode`, `max_uses` (1–10), `turn1_guaranteed`, `revive_hp_percent`, `clear_debuffs`, `empower_attack/speed/shield_percent` (+10% công/tốc/khiên mỗi lần sống dậy, cộng dồn hết trận), `empower_turns`. `REVIVE_LOCK` chặn hoàn toàn. **Phe địch cũng hồi sinh được nhưng chỉ `in_place`.**
 2. `ON_CAST / SUMMON_WOLF_FRONTLINE` — triệu hồi Địa Lang Vương (HP = 50% MaxHP chủ, công = 1/3, thủ = 1/2) lên tiền tuyến đỡ đòn, chủ lùi về tuyến giữa. VD: Ngự Lang Vương Cổ.
 3. `ON_CAST / FULL_SOUL_HEAL` — hồi đầy HP lập tức, đổi lại mất lượt hành động hiện tại. VD: Can Đảm Cổ.
 4. `ON_CAST / SWORD_DRAGON_TRANSFORM` — chuyển toàn bộ HP (giữ lại 1) thành Khiên Ảo, +50% sát thương trong 3 lượt. VD: Kiếm Long Biến Cổ.
 5. `ON_CAST / BORROW_PAST_POWER` — +40% công kích trong 3 lượt. VD: Tự Tại Thiên Địa Tiền.
 6. `ON_CAST / UNRAVEL_RIDDLE` — hóa giải tối đa 2 buff của mục tiêu (kèm log ngắt tụ lực). VD: Giải Mê Cổ (đồng thời gây `SILENCE` từ `active.apply_status`).
 7. `ON_CAST / CHAOS_GAMBLE` — gieo 1 lợi trong 3 (crit ×5 / bất tử 1 lượt / trừ 90% HP hiện tại của địch, giữ lại tối thiểu 1 HP) kèm 1 giá trong 3 (tư chất −10% / tuổi thọ −5 năm / nguyên thạch −50%). VD: Cổ Tình Yêu.
-8. `ON_HIT / BYPASS_SHIELD` — đòn đánh xuyên Khiên Ảo, trừ thẳng HP. VD: Cổ Phá Không.
-9. `BEFORE_HIT / FIRST_TURN_EVADE` — né hoàn toàn đòn đầu tiên ở Lượt 1 (chỉ Cổ nào mang mechanic này mới có; Định Tiên Du hiện tại mang `portal_create` + `movement`, không có evade).
-10. `PASSIVE / DOUBLE_DAMAGE_DEALT` — nhân đôi mọi sát thương gây ra. VD: Tiên Thai Chí Tôn (kèm `path_conflict_reduction: 100`).
+8. `ON_HIT / BYPASS_SHIELD` — đòn đánh xuyên Khiên Ảo, trừ thẳng HP (không trừ thủ). VD: Cổ Phá Không.
+9. `BEFORE_HIT / FIRST_TURN_EVADE` — né đòn đánh đầu tiên ở Lượt 1, đòn multi-hit/AoE tiếp theo vẫn trúng (chỉ Cổ nào mang mechanic này mới có; Định Tiên Du hiện tại mang `portal_create` + `movement`, không có evade).
+9b. `apply_status / INVINCIBLE` có `chance` — miễn nhiễm theo tỉ lệ mỗi lần dùng, tỉ lệ và số lượt tăng theo rank (`chance + 0.05×(rank−1)`, `turns + (rank−1)/3`). VD: Hoang Mộ Cổ rank 4 (`chance: 0.35, turns: 1`) → 50%/2 lượt + khiên 600. Trượt hiện log `STATUS_MISS`.
+10. `COMBAT_PASSIVE / DOUBLE_DAMAGE_DEALT` (`PASSIVE` cũ vẫn dùng được) — nhân đôi mọi sát thương gây ra. VD: Tiên Thai Chí Tôn (kèm `path_conflict_reduction: 100`).
 11. `active.cleansing_power` / `passive.tenacity` + `passive.cc_resist` — kháng và tự giải hiệu ứng bất lợi (xem mục Kháng hiệu ứng và Tenacity ở mục 9). VD: Ngã Ý Cổ (`tenacity: 0.35`, `cc_resist: 0.15`).
 12. `active.damage_hp_percent` + `shield_flat_reduce_percent` + `disable_gu_next_turn` — trừ thẳng % MaxHP (xuyên khiên), tước % khiên hiện tại, phong ấn Cổ mục tiêu lượt sau (`GU_SEAL`, Tenacity có thể tự giải). VD: Lãng Quên Bản Ngã Cổ (40%/40%/1 lượt + status `FORGET_EGO`).
 13. `active.forget_reality_chance` + `self_evasion_boost_percent` + `target_damage_reduce_percent` + status `FORGET_REALITY` — 40% proc: bản thân +50% né tránh, địch dính suy yếu 40% sát thương (2 lượt). VD: Lãng Quên Thực Tại Cổ.

@@ -87,19 +87,18 @@ func UseConsumableGu(c *gin.Context) {
 	cost := gamefx.EnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
+	// Single dispatcher: every ON_CONSUME mechanic shares HandleGuEvent.
+	// ON_USE is also accepted so info/record consumables (RECORD_MESSAGE)
+	// work through this endpoint instead of 400ing.
 	var logs []string
-	if specs.Effects.Other != nil {
-		for _, mechanic := range specs.Effects.Other {
-			if mechanic.EventTrigger == "ON_CONSUME" {
-				msg, err := HandleConsumeEvent(&player, targetGuCopy, specs, mechanic)
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-				if msg != "" {
-					logs = append(logs, msg)
-				}
-			}
+	for _, trigger := range []string{"ON_CONSUME", "ON_USE"} {
+		consumeMsg, err := HandleGuEvent(&player, specs, targetGuCopy, trigger)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if consumeMsg != "" {
+			logs = append(logs, consumeMsg)
 		}
 	}
 
@@ -126,7 +125,8 @@ func UseConsumableGu(c *gin.Context) {
 		newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
 		logMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
 	}
-	// Check if this gu should reduce hunger instead of disappearing
+	// SACRIFICE_APTITUDE doubles as the keep-the-Gu flag: a sacrifice drains
+	// hunger instead of consuming the instance. Any other ON_CONSUME deletes it.
 	var reduceHunger bool
 	var hungerCost int = 20
 	if specs.Effects.Other != nil {
@@ -290,19 +290,29 @@ func UseSupportGu(c *gin.Context) {
 	cost := gamefx.EnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
+	// Support endpoint dispatches ON_CONSUME and ON_USE (e.g. RECORD_MESSAGE);
+	// ON_TICK Gus must not be used here — they accrue via workers/lazy regen.
 	var logs []string
-	if specs.Effects.Other != nil {
-		for _, mechanic := range specs.Effects.Other {
-			if mechanic.EventTrigger == "ON_CONSUME" {
-				msg, err := HandleConsumeEvent(&player, targetGuCopy, specs, mechanic)
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-				if msg != "" {
-					logs = append(logs, msg)
-				}
-			}
+	for _, trigger := range []string{"ON_CONSUME", "ON_USE"} {
+		supportMsg, err := HandleGuEvent(&player, specs, targetGuCopy, trigger)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if supportMsg != "" {
+			logs = append(logs, supportMsg)
+		}
+	}
+	// support.heal_flat is gone: out-of-combat healing reads the same
+	// active.heal_flat the combat engine uses, capped at EffectiveMaxHP.
+	if specs.Effects.Active != nil && specs.Effects.Active.HealFlat > 0 {
+		before := player.HP
+		player.HP += specs.Effects.Active.HealFlat
+		if maxHP := gamefx.EffectiveMaxHP(&player); player.HP > maxHP {
+			player.HP = maxHP
+		}
+		if healed := player.HP - before; healed > 0 {
+			logs = append(logs, fmt.Sprintf("%s tấu lên khúc nhạc chữa lành, hồi phục %.0f HP!", specs.Name, healed))
 		}
 	}
 
@@ -325,13 +335,13 @@ func UseSupportGu(c *gin.Context) {
 	qiGained := 0.0
 
 	logMsg := strings.Join(logs, " ")
-	// Save to DB — support Gu stays in inventory, no need to rewrite inventory
+	// Save to DB — support Gu stays in inventory, no need to rewrite inventory.
+	// Column list mirrors UseConsumableGu so no effect write is silently lost.
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET max_mana = $1, current_mana = $2, aptitude_percent = $3, hp = $4, aperture_stress = $5, human_qi = $6, current_thought = $7, time_speed_multiplier = $8, soul_hp = $9, max_soul = $10, lifespan = $11
-		WHERE id = $12`,
-		player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi, player.CurrentThought, player.TimeSpeedMultiplier, player.SoulHP, player.MaxSoul, player.Lifespan,
-		player.ID,
+		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15, path_masteries = $16, time_speed_multiplier = $17, aptitude_type = $18, soul_hp = $19, max_thought = $20
+		WHERE id = $21`,
+		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.PathMasteries, player.TimeSpeedMultiplier, player.AptitudeType, player.SoulHP, player.MaxThought, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using support Gu"})

@@ -47,7 +47,7 @@ func TestValidateRejectsUnclassifiedEffectKey(t *testing.T) {
 func TestValidateGuCatalogAggregatesCoverageAndIssues(t *testing.T) {
 	entries := []GuEntry{
 		{ID: "GU_OK", Rank: 1, Effects: json.RawMessage(`{"active":{"damage_flat":10}}`)},
-		{ID: "GU_MIGRATE", Rank: 2, Effects: json.RawMessage(`{"support":{"heal_flat":5}}`)},
+		{ID: "GU_MIGRATE", Rank: 2, Effects: json.RawMessage(`{"active":{"replicate":true}}`)},
 		{ID: "GU_BAD", Rank: 3, Effects: json.RawMessage(`{"active":{"typo":1}}`)},
 	}
 
@@ -85,5 +85,21 @@ func TestValidateGuCatalogCapsExpandedIssues(t *testing.T) {
 	}
 	if report.Summary.Errors != maxCatalogIssues+1 {
 		t.Fatalf("summary errors = %d, want %d", report.Summary.Errors, maxCatalogIssues+1)
+	}
+}
+
+// The support section is deleted: healing lives in active.heal_flat only.
+// Rows imported before the migration fail loudly to force re-import.
+func TestSupportSectionRejected(t *testing.T) {
+	_, report, err := NormalizeAndValidate([]byte(`{"support":{"heal_flat":5}}`))
+	if err == nil || !report.HasErrors() {
+		t.Fatalf("support.heal_flat accepted: %+v", report)
+	}
+	if report.Issues[0].Code != "unclassified_effect_key" {
+		t.Fatalf("issue = %+v", report.Issues[0])
+	}
+	// Empty envelope sections stay valid so all existing rows parse.
+	if _, _, err := NormalizeAndValidate([]byte(`{"active":{"heal_flat":5},"support":{}}`)); err != nil {
+		t.Fatalf("empty support envelope rejected: %v", err)
 	}
 }

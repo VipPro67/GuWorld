@@ -320,16 +320,21 @@ Các trường quan trọng trong dictionary:
   - Manifest `effectcatalog` gán mỗi key/status/cặp `(event_trigger, action_code)` một `owner` và `disposition`: `supported`, `partial`, `metadata`, `migrate` hoặc `known_bug`. Key hoặc mechanic chưa có manifest bị chặn bằng lỗi `unclassified_*`; test coverage toàn `Gu.csv` buộc dữ liệu mới phải được phân loại trước khi merge.
   - Admin có preview read-only `POST /api/admin/gu-effects/validate` và audit database `GET /api/admin/gu-effects/audit`. Audit không thực thi effect; nó cho biết coverage và những effect đang chờ migrate/sửa lỗi.
   - **Khối `active`:** effect chủ động dùng trong combat — `damage_flat`, `damage_mult`, `damage_path`, `heal_flat`, `shield_flat`, `apply_status`, `target_selector`, `summon_*`, `curve_attack`, `lifesteal`, … Danh sách đầy đủ + catalog chuẩn xem mục **"Hiệu ứng Cổ (effects)"** bên dưới.
-    - **`apply_status` là khối lắp ráp được:** một action có thể gắn **nhiều status cùng lúc** dưới dạng mảng `[{"id":"BLEED","value":10,"turns":3},{"id":"BIND","turns":2}]`. Ba dạng authoring đều hợp lệ: chuỗi legacy (`"BIND"`), object đơn (`{"id":"BIND","turns":6}`), mảng (khuyến nghị). Entry thiếu `value`/`turns` sẽ kế thừa `status_tick_damage`/`status_duration_ticks` cấp action (chỉ dùng cho dữ liệu cũ; dữ liệu mới khai báo trọn trong từng entry). Resolve qua `statusfx` registry (`models.ActiveEffect.ResolveStatusApplications`).
+    - **`apply_status` là khối lắp ráp được:** một action có thể gắn **nhiều status cùng lúc** dưới dạng mảng `[{"id":"BLEED","value":10,"turns":3},{"id":"BIND","turns":2}]`. Ba dạng authoring đều hợp lệ: chuỗi legacy (`"BIND"`), object đơn (`{"id":"BIND","turns":6}`), mảng (khuyến nghị). Entry thiếu `value`/`turns` sẽ kế thừa `status_tick_damage`/`status_duration_ticks` cấp action (chỉ dùng cho dữ liệu cũ; dữ liệu mới khai báo trọn trong từng entry). Entry có thêm **`chance` (0..1, optional)** — tỉ lệ kích hoạt mỗi lần dùng, **0 = luôn trúng** (mọi row cũ không có `chance` giữ nguyên hành vi). Resolve qua `statusfx` registry (`models.ActiveEffect.ResolveStatusApplications`, bản rank-scale `...ForRank` dùng ở simulator build).
+    - **Rank-scale cho entry có `chance`:** `chance_thực = min(0.95, chance + 0.05×(rank−1))`, `turns_thực = turns + (rank−1)/3` (rank 1–3: +0, 4–6: +1, 7–9: +2). VD Hoang Mộ Cổ (`GU_DEATH_DESOLATE_TOMB_4`, `chance: 0.35, turns: 1`): rank 4 → 50%/2 lượt; cùng entry ở rank 9 → 75%/3 lượt. Miss log `STATUS_MISS`, roll trước miễn nhiễm/kháng.
     - Key phần trăm trực tiếp (0..1, áp sau sát thương thường): `damage_hp_percent` (% MaxHP mục tiêu, xuyên khiên), `shield_flat_reduce_percent` (% khiên hiện tại bị tước), `disable_gu_next_turn` (bool: `GU_SEAL` mục tiêu — xem enforcement trong simulator), `forget_reality_chance` (cổng proc cho cả gói bonus), `self_evasion_boost_percent` (buff `EVASION` bản thân), `target_damage_reduce_percent` (cường độ `WEAK`/`FORGET_REALITY` lên mục tiêu). `damage_path` ghi đè hệ đòn đánh; `stat_base_attack` trong active cộng flat vào sát thương đòn.
   - **Khối `passive`:** chỉ số vĩnh viễn cộng dồn (`stat_base_*`), `damage_reduction`, `movement`, `evasion`, `luck`, `storage_capacity`, `tenacity` (0..1: rút ngắn duration CC + tỉ lệ tự giải 1 debuff đầu lượt), `cc_resist` (0..1: kháng proc mọi debuff, nhân với mental resist, cap tổng 0.75), …
     - Khắc hệ theo Gu path: `anti_heaven/earth/dream_damage_reduction_percent` (0..1, merge vào `CombatantAuto.PathResistance`, nhận diện theo `Gu.path` của đòn đánh), `immune_dream_status` (miễn nhiễm status có `spec.Path == "dream"`), `forget_heaven/earth_protection` (cờ metadata).
   - **Shorthand status (đã loại khỏi dữ liệu):** key viết tắt (`freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`, `bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt`) không còn xuất hiện trong `Gu.csv` — toàn bộ đã migrate sang `apply_status` dạng mảng. `ActiveEffect.normalize()` vẫn giữ làm fallback cho DB rows cũ chưa re-import; **không dùng cho dữ liệu mới**.
-  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Ngoài các trigger thế giới (`ON_TICK`, `ON_CONSUME`, `ON_USE`), combat hỗ trợ `ON_CAST`, `ON_HIT`, `BEFORE_HIT`, `BEFORE_ENEMY_ATTACK`, `ON_TURN_START`, `ON_DEATH`, `ON_BATTLE_START` và `PASSIVE`.
+  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Ngoài các trigger thế giới (`ON_TICK`, `ON_CONSUME`, `ON_USE`), combat hỗ trợ `ON_CAST`, `ON_HIT`, `BEFORE_HIT`, `BEFORE_ENEMY_ATTACK`, `ON_TURN_START`, `ON_DEATH`, `ON_BATTLE_START` và `COMBAT_PASSIVE` (`PASSIVE` cũ vẫn hợp lệ, cùng nghĩa).
+    - **Timing kích hoạt (xem `effectcatalog/timing.go`):** `ALWAYS_ON` (race/constitution/status còn hạn/Cổ equipped-ACTIVE, resolve qua `gamefx.Get` mỗi lần đọc) / `ON_ACTION` (`active.*` khi ra đòn, `ON_CONSUME`/`ON_USE` khi dùng Cổ) / `ON_EVENT` (hook combat + status trận) / `SCHEDULED` (`growth`, `ON_TICK`, hết hạn status) / `CAPABILITY` (cổng quyền, không tự chạy) / `META` (`description`).
     - Simulator nhận một snapshot mechanic bất biến được biên dịch khi bắt đầu trận. `gu_id`/`SourceID` chỉ còn dùng cho định danh, log, ưu tiên và trừ độ đói; thay ID nhưng giữ nguyên effect phải cho cùng hành vi.
     - Các mechanic đặc thù hiện đã data-driven gồm: `POEM_INTENT`, `SUMMON_WOLF_FRONTLINE`, `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE`, `BYPASS_SHIELD`, `FIRST_TURN_EVADE`, `SEIZE_INITIATIVE`, `DOUBLE_DAMAGE_DEALT`, `REBORN`, `FORGET_INTENT_INTERRUPT`, `FORGET_WILL_CONFUSE`.
     - `SEIZE_INITIATIVE` (`event_trigger: ON_BATTLE_START`, Thỉnh Đạo Hữu Tiên Hành Cổ): trên lượt 1, nếu thọ nguyên đối thủ chính (`Enemies[0]`; quái dùng bảng quy đổi theo rank, Cổ sư dùng `players.lifespan`) không hơn `lifespan_ratio` (default 3) lần thọ nguyên chủ Cổ thì chủ Cổ nhảy lên đầu thứ tự hành động, địch vẫn đánh sau theo tốc độ thường (không bỏ lượt).
-    - `REBORN` thống nhất (`mode: rewind` reset cả trận / `in_place` đứng dậy tại chỗ): `chance` (0..1, required), `mode`, `max_uses` (1–10, default 1), `turn1_guaranteed`, `revive_hp_percent` (default 0.5), `clear_debuffs` (default true), `empower_attack/speed/shield_percent` + `empower_turns` (default 100; stack `ATK_UP`/`HASTE` + khiên mỗi lần sống dậy). Counter `rebornUses` sống qua rewind; `REVIVE_LOCK` chặn cả 2 mode; mode `rewind` ưu tiên khi cùng lượt có cả 2.
+    - `REBORN` thống nhất (`mode: rewind` reset cả trận / `in_place` đứng dậy tại chỗ): `chance` (0..1, required), `mode`, `max_uses` (1–10, default 1), `turn1_guaranteed`, `revive_hp_percent` (default 0.5), `clear_debuffs` (default true), `empower_attack/speed/shield_percent` + `empower_turns` (default 100; stack `ATK_UP`/`HASTE` + khiên mỗi lần sống dậy). Counter `rebornUses` sống qua rewind; `REVIVE_LOCK` chặn cả 2 mode; mode `rewind` ưu tiên khi cùng lượt có cả 2. **Phe địch chỉ hồi sinh `in_place`** (không rewind); mode bỏ trống ở phe ta = `rewind` như cũ.
+    - `BYPASS_SHIELD` (`ON_HIT`) chỉ xuyên Khiên Ảo — không trừ thủ (muốn trừ thủ dùng `ignore_defense*`). `FIRST_TURN_EVADE` chỉ né đòn đánh đầu tiên Lượt 1 (multi-hit/AoE sau đó vẫn trúng, rider `damage_hp_percent`/strip của đòn bị né cũng bị bỏ). Đòn đánh thường fallback chạy qua `runOne` nên chịu `FORGET_INTENT/WILL`, backlash, mana, hunger và ngộ đạo như đòn thường.
+    - Alias consume đã chạy (không còn 400): `STONE_APERTURE`→`APERTURE_PETRIFICATION`, `POISON_VOW`→`CONTRACT_OATH`, `THIRD_WATCH`→`TIME_ACCELERATION`, `RECORD_MESSAGE`→`RECORD` (dùng qua endpoint Support, trigger `ON_USE`). `MAN_BEAST_BURIAL`/`SPRING_EGG_HATCH` vẫn chưa hỗ trợ. Endpoint Support persist đủ cột như Consumable.
+    - Build phe địch chỉ nhận Cổ **đã trang bị + ACTIVE** (khớp phe ta; hunger vẫn miễn cho quái vì quái đánh ở Hunger 0 theo thiết kế, hunger-gate của engine chỉ áp dụng Kind Player).
     - `GU_SEAL` (`disable_gu_next_turn`, `FORGET_EGO`, `FORGET_INTENT_INTERRUPT`, backfire): engine enforce trong `runOne` — combatant `HasGuSeal` không thể dùng `GU_SKILL` (đánh thường vẫn được, như `SILENCE`); seal N lượt = `Duration N+1` vì duration tick đầu lượt; Tenacity có thể tự giải.
     - `BEFORE_ENEMY_ATTACK` chạy trong `runOne` trước khi đòn đánh resolve: `FORGET_INTENT_INTERRUPT` (`chance`, `disable_target_gu_turns`, `max_successful_activations`, `backfire_after_max`) seal đòn hiện tại vẫn trúng, lượt sau bị cấm; `FORGET_WILL_CONFUSE` (`activation_chance`, `hit_user/self/miss_chance`, `backfire_chance`, `backfire_disable_turns`) override target đã resolve (đánh chủ Cổ / tự đánh mình / hụt hẳn).
     - Status mới: `FORGET_EGO` (behaviour `gu_seal`), `FORGET_REALITY` (behaviour `weak`, cường độ từ `target_damage_reduce_percent`).
@@ -355,7 +360,23 @@ Các trường quan trọng trong dictionary:
 
 > Hai bảng dưới đây đối chiếu **key effect hiện có trong game** (quét `data/Gu.csv`, 596 Cổ) với **catalog chuẩn đề xuất** (nguồn `Turnbase_Combat_Schema_Co_Gioi.xlsx`, sheet `CORE_SCHEMA` + `ALL_EFFECTS`). Cột **Trạng thái trong game** phân loại: `CÓ` (đã có data + code xử lý), `CÓ data / chưa code` (key xuất hiện trong CSV nhưng combat không xử lý), `Đổi tên` (tồn tại nhưng key khác), `Cần thêm` (chưa có). Số trong ngoặc ở cột số Cổ = số Cổ đang dùng key đó.
 
-**Bảng A — 82 key đang có trong dữ liệu** (struct chuẩn: `models.ActiveEffect` / `models.PassiveEffect` / `models.GrowthEffect` / `models.SpecialMechanic`).
+**Bảng A — Cấu trúc dữ liệu Effect Cổ trùng** (struct chuẩn: `models.GuEffects` bao gồm `Blocks []ComposableEffectBlock`, `Active`, `Passive`, `Growth`, `Other`).
+
+*Khối `blocks` (Composable Effect Blocks — ECA Model):*
+Toàn bộ Cổ trùng trong `backend/data/Gu.csv` đã được chuẩn hóa bổ sung khối `blocks`. Mỗi block tuân thủ cấu trúc Event-Condition-Action:
+- `trigger`: thời điểm kích hoạt (`ALWAYS_ON`, `ON_ACTION`, `ON_HIT`, `BEFORE_HIT`, `ON_TURN_START`, `ON_DEATH`, `ON_TICK`, `CAPABILITY`, `COMBAT_PASSIVE`, `ON_BATTLE_START`, `BEFORE_ENEMY_ATTACK`, `ON_CAST`, `ON_CONSUME`, `ON_USE`).
+- `target`: mục tiêu thi triển (`selector`: `SELF`, `TARGET`, `ROW`, `COL`, `ALL_ENEMIES`, `ALL_ALLIES`, `ALL`; `bypass_frontline`: boolean).
+- `conditions`: điều kiện kích hoạt bổ trợ (mảng `{field, operator, value}`).
+- `operations`: mảng các thao tác nguyên tử (Atomic Operations) thuộc 9 nhóm:
+  1. `DAMAGE`: sát thương phẳng (`FLAT`), hệ số (`MULTIPLIER`), lưu phái (`path`).
+  2. `SHIELD`: khiên ảo Chân Nguyên Giáp (`FLAT`, `MULTIPLIER`).
+  3. `HEAL`: hồi máu (`FLAT`), chân nguyên (`MANA`), hút máu (`LIFESTEAL`).
+  4. `DIRECT_HP`: sát thương trừ máu trực tiếp xuyên khiên (`MAX_HP_PERCENT`, `DIRECT_HP_DAMAGE`), hủy khiên (`SHIELD_STRIP`).
+  5. `STAT_MOD`: biến đổi chỉ số nhân vật (`ATTACK`, `DEFENSE`, `SPEED`, `EVASION`, `CRIT_RATE`, `ALL`...) dạng `ADD_FLAT` hoặc `MULTIPLY_PERCENT`.
+  6. `STATUS`: gắn hiệu ứng trạng thái quản lý bởi `statusfx` (`status_id`, `value`, `turns`, `chance`).
+  7. `BARRIER`: bảo hộ tuyệt đối (`INVINCIBLE`, `STATUS_IMMUNITY`).
+  8. `CLEANSE`: thanh tẩy hiệu ứng (`DISPEL_DEBUFF`, `DISPEL_BUFF`).
+  9. `UNIQUE`: cơ chế phi tuyến tính đặc thù (`code`, `params`).
 
 *Khối `active` (44 key):*
 
@@ -407,7 +428,7 @@ Các trường quan trọng trong dictionary:
 
 *Khối `growth` (5 key, 18 Cổ):* `max_attack`, `max_defense`, `max_hp`, `hours_to_max`, `max_speed`(4) — chỉ số tăng trưởng khi nuôi.
 
-*Khối `support` (2 key):* `description`(2), `heal_flat`(4).
+*Khối `support` đã xóa:* heal ngoài combat dùng chung `active.heal_flat` (endpoint Support áp `active.heal_flat`, cap `EffectiveMaxHP`; combat dùng như đòn heal thường). Envelope `support:{}` rỗng vẫn parse được; key nào trong `support` đều reject `unclassified_effect_key`.
 
 **Bảng B — Catalog chuẩn đề xuất (CORE_SCHEMA 30 key)** — dùng làm key chuẩn khi thêm Cổ mới:
 
@@ -500,6 +521,16 @@ Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không
 **Status có trong data, đã wire qua registry `statusfx`** (xem `docs/STATUS_EFFECTS.md` → "Registry status"): `BURN` (DoT hỏa), `FEAR` (force basic), `CONFUSE` (40% mis-target), `STEALTH` (untargetable), `SLEEP` (skip turn + break on damage), `BLIND` (35% miss), `CHARM` (điều khiển), `BIND` (mất lượt).
 
 **Status catalog đã wire qua registry**: `HASTE` (tăng tốc), `ARMOR_BREAK` (giảm thủ), `DAMAGE_REDUCTION_UP` (giảm sát thương nhận), `INVINCIBLE` (miễn nhiễm sát thương), `REVIVE_LOCK` (chặn hồi sinh).
+
+**Quy tắc gộp hiệu ứng (Consolidation)**:
+- `disable_gu_next_turn` và `FORGET_EGO` được quy về trạng thái chuẩn `GU_SEAL` (`StatusGuSeal`).
+- `target_damage_reduce_percent` được quy về trạng thái suy yếu sát thương `WEAK` / `FORGET_REALITY`.
+- `SLOW1` được quy về trạng thái làm chậm chuẩn `SLOW` (hỗ trợ điều chỉnh độ mạnh qua value/tier).
+
+**Tỉ lệ áp dụng hiệu ứng (Rank Scaling for Self & Enemy)**:
+- **Tỉ lệ theo Rank Gu**: Mỗi cấp Rank Gu trên Rank 1 tăng $+5\%$ xác suất proc: $\text{chance}_{\text{gu}} = \text{baseChance} + 0.05 \times (\text{guRank} - 1)$ (tối đa $95\%$).
+- **Hiệu ứng Bản thân (Self-Target)**: Tỉ lệ thành công tỉ lệ thuận với Cảnh giới người dùng (Player Rank): $\text{factor}_{\text{self}} = 1.0 + 0.05 \times (\text{casterPlayerRank} - 1)$.
+- **Hiệu ứng Đối phương (Enemy-Target)**: Xác suất chịu ảnh hưởng của chênh lệch Cảnh giới ($\text{casterRank} - \text{targetRank}$): Chênh lệch $\ge +2$ ($\times 1.5$), $+1$ ($\times 1.2$), $0$ ($\times 1.0$), $-1$ ($\times 0.6$), $\le -2$ ($\times 0.1$). Tiên Cổ đánh Phàm Cổ áp dụng hệ số tối thiểu $1.0\times$ (tự động nâng lên $1.5\times$).
 
 Thêm status mới: 1 entry `statusfx.Registry` + tùy chọn 1 behaviour hook `simulator/status_apply.go`.
 

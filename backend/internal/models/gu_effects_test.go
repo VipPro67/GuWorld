@@ -27,10 +27,10 @@ func TestGuEffectsScanRejectsStructurallyInvalidCatalogData(t *testing.T) {
 	}
 }
 
-func TestGuEffectsScanAcceptsLegacyUnwiredSections(t *testing.T) {
+func TestGuEffectsScanRejectsDeletedSupportSection(t *testing.T) {
 	var effects GuEffects
-	if err := effects.Scan([]byte(`{"support":{"heal_flat":10}}`)); err != nil {
-		t.Fatalf("legacy support section rejected: %v", err)
+	if err := effects.Scan([]byte(`{"support":{"heal_flat":10}}`)); err == nil {
+		t.Fatal("deleted support section was accepted; healing lives in active.heal_flat")
 	}
 }
 
@@ -119,5 +119,37 @@ func TestNormalizeLegacyShorthandBecomesEntries(t *testing.T) {
 	ops := effects.Active.ResolveStatusApplications()
 	if len(ops) != 1 || ops[0].Value != 3 || ops[0].Turns != 3 {
 		t.Fatalf("normalized shorthand resolves wrong: %+v", ops)
+	}
+}
+
+func TestResolveStatusRankScaling(t *testing.T) {
+	mk := func() *ActiveEffect {
+		return &ActiveEffect{ApplyStatus: StatusApplications{
+			{ID: "INVINCIBLE", Turns: 1, Chance: 0.35},
+			{ID: "BLEED", Value: 10, Turns: 2},
+		}}
+	}
+	// Rank 1: base values untouched.
+	ops := mk().ResolveStatusApplicationsForRank(1)
+	if ops[0].Chance != 0.35 || ops[0].Turns != 1 {
+		t.Fatalf("rank1 = %+v, want chance 0.35 turns 1", ops[0])
+	}
+	// Rank 4: +0.15 chance, +1 turn. No-chance entry untouched.
+	ops = mk().ResolveStatusApplicationsForRank(4)
+	if ops[0].Chance != 0.50 || ops[0].Turns != 2 {
+		t.Fatalf("rank4 = %+v, want chance 0.50 turns 2", ops[0])
+	}
+	if ops[1].Chance != 0 || ops[1].Turns != 2 {
+		t.Fatalf("no-chance entry changed at rank4: %+v", ops[1])
+	}
+	// Rank 9: +0.40 chance, +2 turns.
+	ops = mk().ResolveStatusApplicationsForRank(9)
+	if ops[0].Chance != 0.75 || ops[0].Turns != 3 {
+		t.Fatalf("rank9 = %+v, want chance 0.75 turns 3", ops[0])
+	}
+	// Legacy path carries chance raw without scaling.
+	ops = mk().ResolveStatusApplications()
+	if ops[0].Chance != 0.35 || ops[0].Turns != 1 {
+		t.Fatalf("unranked = %+v, want chance 0.35 turns 1", ops[0])
 	}
 }

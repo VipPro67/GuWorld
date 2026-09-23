@@ -193,3 +193,60 @@ func TestValidateAcceptsForgetInterruptConfuse(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyStatusChanceRange(t *testing.T) {
+	if _, _, err := NormalizeAndValidate([]byte(`{"active":{"apply_status":[{"id":"BLEED","turns":2,"chance":0.5}]}}`)); err != nil {
+		t.Fatalf("valid chance rejected: %v", err)
+	}
+	if _, report, err := NormalizeAndValidate([]byte(`{"active":{"apply_status":[{"id":"BLEED","turns":2,"chance":1.5}]}}`)); err == nil || !report.HasErrors() {
+		t.Fatal("chance > 1 accepted")
+	}
+}
+
+func TestValidateBlocks(t *testing.T) {
+	valid := []byte(`{
+		"blocks": [
+			{
+				"trigger": "ON_ACTION",
+				"target": { "selector": "TARGET", "bypass_frontline": true },
+				"operations": [
+					{ "op": "DAMAGE", "sub_type": "FLAT", "value": 150.0 },
+					{ "op": "STATUS", "status_id": "BLEED", "value": 25.0, "turns": 3, "chance": 0.6 }
+				]
+			}
+		]
+	}`)
+	if _, _, err := NormalizeAndValidate(valid); err != nil {
+		t.Fatalf("valid blocks rejected: %v", err)
+	}
+
+	invalidCases := []struct {
+		name string
+		raw  string
+		path string
+	}{
+		{"blocks not array", `{"blocks": {}}`, "$.blocks"},
+		{"missing trigger", `{"blocks": [{"target": {}, "operations": [{"op": "DAMAGE"}]}]}`, "$.blocks[0].trigger"},
+		{"invalid trigger", `{"blocks": [{"trigger": "FOOBAR", "target": {}, "operations": [{"op": "DAMAGE"}]}]}`, "$.blocks[0].trigger"},
+		{"invalid target", `{"blocks": [{"trigger": "ON_ACTION", "target": [], "operations": [{"op": "DAMAGE"}]}]}`, "$.blocks[0].target"},
+		{"empty operations", `{"blocks": [{"trigger": "ON_ACTION", "target": {}, "operations": []}]}`, "$.blocks[0].operations"},
+		{"missing op type", `{"blocks": [{"trigger": "ON_ACTION", "target": {}, "operations": [{}]}]}`, "$.blocks[0].operations[0].op"},
+		{"invalid op type", `{"blocks": [{"trigger": "ON_ACTION", "target": {}, "operations": [{"op": "MAGIC"}]}]}`, "$.blocks[0].operations[0].op"},
+		{"status missing id", `{"blocks": [{"trigger": "ON_ACTION", "target": {}, "operations": [{"op": "STATUS"}]}]}`, "$.blocks[0].operations[0].status_id"},
+		{"unknown status id", `{"blocks": [{"trigger": "ON_ACTION", "target": {}, "operations": [{"op": "STATUS", "status_id": "NOT_A_STATUS"}]}]}`, "$.blocks[0].operations[0].status_id"},
+		{"negative op value", `{"blocks": [{"trigger": "ON_ACTION", "target": {}, "operations": [{"op": "DAMAGE", "value": -10}]}]}`, "$.blocks[0].operations[0].value"},
+		{"chance out of range", `{"blocks": [{"trigger": "ON_ACTION", "target": {}, "operations": [{"op": "STATUS", "status_id": "BLEED", "chance": 1.5}]}]}`, "$.blocks[0].operations[0].chance"},
+	}
+
+	for _, tt := range invalidCases {
+		t.Run(tt.name, func(t *testing.T) {
+			_, report, err := NormalizeAndValidate([]byte(tt.raw))
+			if err == nil || !report.HasErrors() {
+				t.Fatalf("expected error for %s, got none", tt.name)
+			}
+			if report.Issues[0].Path != tt.path {
+				t.Fatalf("%s: expected path %q, got %q (issue: %+v)", tt.name, tt.path, report.Issues[0].Path, report.Issues[0])
+			}
+		})
+	}
+}

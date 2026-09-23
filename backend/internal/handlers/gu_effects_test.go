@@ -292,3 +292,50 @@ func TestSetVitalGuBacklashSeverelyWounded(t *testing.T) {
 		t.Errorf("expected player to have severely_wounded status")
 	}
 }
+
+func TestSoulRegenTickAndMigrateAliases(t *testing.T) {
+	newPlayer := func() *models.Player {
+		return &models.Player{
+			SoulState: models.SoulState{SoulHP: 10, MaxSoul: 100},
+		}
+	}
+	spec := models.GuDictionaryItem{ID: "GU_X", Name: "X Cổ", Rank: 3}
+	guInst := models.GuInstance{InstanceID: "inst_1", GuID: "GU_X"}
+	run := func(p *models.Player, trigger, code, params string) (string, error) {
+		s := spec
+		s.Effects.Other = []models.SpecialMechanic{{EventTrigger: trigger, ActionCode: code, Params: []byte(params)}}
+		return HandleGuEvent(p, s, guInst, trigger)
+	}
+
+	// SOUL_REGEN_TICK accrues soul_hp capped at max_soul, default value 1.0.
+	p := newPlayer()
+	if _, err := run(p, "ON_TICK", "SOUL_REGEN_TICK", `{"value": 5}`); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.SoulHP != 15 {
+		t.Errorf("SoulHP = %d, want 15", p.SoulHP)
+	}
+	if _, err := run(p, "ON_TICK", "SOUL_REGEN_TICK", `{}`); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.SoulHP != 16 {
+		t.Errorf("SoulHP = %d, want 16 (default value 1.0)", p.SoulHP)
+	}
+
+	// Migrate aliases resolve instead of 400.
+	for _, tc := range []struct{ trigger, code, params string }{
+		{"ON_CONSUME", "STONE_APERTURE", `{}`},
+		{"ON_CONSUME", "POISON_VOW", `{}`},
+		{"ON_CONSUME", "THIRD_WATCH", `{}`},
+		{"ON_USE", "RECORD_MESSAGE", `{}`},
+	} {
+		if _, err := run(newPlayer(), tc.trigger, tc.code, tc.params); err != nil {
+			t.Errorf("%s/%s: unexpected error: %v", tc.trigger, tc.code, err)
+		}
+	}
+
+	// Unknown codes still fail loudly.
+	if _, err := run(newPlayer(), "ON_CONSUME", "MAN_BEAST_BURIAL", `{}`); err == nil {
+		t.Error("MAN_BEAST_BURIAL should still be unsupported")
+	}
+}

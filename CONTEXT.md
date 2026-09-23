@@ -22,3 +22,18 @@ Hành vi chủ động thanh tẩy ấn ký truy tung, chém đứt tàn dư kh�
 
 ### Thiên Cơ Phản Phệ (Backfire / Retaliation)
 Hiệu ứng trừng phạt xảy ra khi Cổ sư cố gắng suy diễn một mục tiêu có năng lực che giấu / phòng ngự trí đạo vượt trội hoặc có bố trí Sát Chiêu Phản Suy Diễn. Kẻ suy diễn chịu tổn thương linh hồn, thất thoát chân/tiên nguyên và bị lộ ngược lại vị trí cho mục tiêu.
+
+## Modular Effect System & Realm Scaling (Hệ Thống Hiệu Ứng Lắp Ráp & Thang Đo Cảnh Giới)
+
+### Khối Hiệu Ứng Lắp Ráp (Composable Effect Block)
+Cấu trúc nguyên tử hóa mô tả một hiệu ứng hoàn chỉnh theo mô hình ECA (Event-Condition-Action): gồm `Trigger` (thời điểm xảy ra sự kiện), `Conditions` (điều kiện lọc ngữ cảnh), `Target` (mục tiêu thụ hưởng/chịu đòn), `Operations` (hành động/hiệu ứng thành phần như Damage, Shield, Status, StatMod) và `Scaling` (quy tắc co giãn theo Rank Cổ/Đạo Ngân). Cho phép kết hợp linh hoạt nhiều khối effect mà không cần sửa code engine mỗi khi có Cổ trùng mới.
+
+### Suy Hao Cảnh Giới Tự Thân (Caster Rank Attenuation)
+Cơ chế suy giảm uy lực và thời lượng của hiệu ứng buff/bảo hộ khi Cổ sư cấp cao sử dụng Cổ trùng có Rank thấp hơn cảnh giới của bản thân áp lên chính mình (ví dụ Cổ Rank 4 tạo hiệu ứng Bất Tử cho Cổ Tiên Rank 9). Hiệu quả bảo vệ suy giảm mạnh theo hàm mũ hoặc chuyển đổi thành giá trị hữu hạn để tránh phá vỡ cân bằng cảnh giới.
+
+### Áp Chế Cảnh Giới Mục Tiêu (Target Realm Suppression)
+Cơ chế bảo hộ và kháng cự tự nhiên của mục tiêu cấp cao trước các hiệu ứng bất lợi (debuff, khống chế, sát thương theo % máu) từ Cổ trùng cấp thấp. Tỉ lệ kích hoạt thành công (Proc Chance) và thời gian duy trì (Duration) của debuff bị suy giảm theo độ chênh lệch giữa Rank Cổ và Rank Mục Tiêu (`TargetRank - GuRank`).
+
+### Xác Suất Kích Hoạt Động (Dynamic Proc Chance)
+Tỉ lệ kích hoạt thực tế của một hiệu ứng trong chiến đấu, được suy ra từ Xác suất cơ bản (`BaseChance` theo phân loại độ mạnh của hiệu ứng), cộng dồn tăng tiến theo Rank Cổ trùng (`+delta * (GuRank - 1)`), và điều chỉnh sau cùng thông qua Áp Chế Cảnh Giới, Kháng Tính Tâm Thần (Mental Resistance) và Vận Số (Luck).
+

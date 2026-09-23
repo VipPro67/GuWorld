@@ -12,6 +12,9 @@ import (
 
 // Canonical blocked-action keys used by status definitions. Handlers consult
 // them via HasBlockedAction before executing the corresponding gameplay flow.
+// Only explore and cultivate are currently enforced by handlers; combat,
+// refine and trade keys are accepted in data but no handler gates on them yet
+// (adding enforcement is a gameplay change, not a data fix).
 const (
 	ActionExplore   = "explore"
 	ActionCultivate = "cultivate"

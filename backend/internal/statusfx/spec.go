@@ -11,9 +11,10 @@ import (
 // Value and Turns carry the catalog semantics: Value is the intensity (DoT
 // damage per tick, or percent), Turns is the real duration in turns.
 type StatusOp struct {
-	ID    string
-	Value float64
-	Turns int
+	ID     string
+	Value  float64
+	Turns  int
+	Chance float64 // proc chance per application (0..1); 0 = always applies
 }
 
 // StatusSpec declares how a status behaves. It is the single source of truth
@@ -331,10 +332,122 @@ func (e *UnknownStatusError) Error() string {
 	return "statusfx: unknown status " + e.ID
 }
 
-// CanApplyStatus tính toán xác suất thành công dựa trên Cảnh Giới (Rank) và Đạo Ngân.
-// Trả về true nếu hiệu ứng được áp dụng thành công.
-func CanApplyStatus(rng *rand.Rand, casterRank, targetRank int, casterDaoMarks, targetDaoMarks map[string]int64, spec StatusSpec, targetStatusResist float64) bool {
-	// 1. Hệ số chênh lệch Chuyển (Rank)
+// RankPowerWeight returns the relative power scaling weight for a given rank
+// based on the canonical power scale:
+// Mortal: Rank 1..5 = {1, 2, 5, 20, 100}
+// Immortal: Rank 6..9 = {1000, 10000, 100000, 1000000} (10x step from mortal peak)
+func RankPowerWeight(rank int) float64 {
+	weights := [...]float64{
+		1: 1,
+		2: 2,
+		3: 5,
+		4: 20,
+		5: 100,
+		6: 1000,
+		7: 10000,
+		8: 100000,
+		9: 1000000,
+	}
+	if rank < 1 {
+		return 1
+	}
+	if rank >= len(weights) {
+		return weights[len(weights)-1]
+	}
+	return weights[rank]
+}
+
+// CasterAttenuationFactor calculates the attenuation coefficient when a high-rank
+// caster uses a lower-rank Gu to buff/heal/protect themselves or allies.
+// Returns a factor between 0.0001 and 1.0.
+func CasterAttenuationFactor(guRank, casterRank int) float64 {
+	if casterRank <= guRank {
+		return 1.0
+	}
+	wGu := RankPowerWeight(guRank)
+	wCaster := RankPowerWeight(casterRank)
+	factor := wGu / wCaster
+	if factor < 0.0001 {
+		return 0.0001
+	}
+	return factor
+}
+
+// TargetSuppressionFactor calculates the realm suppression when a lower-rank Gu
+// targets a higher-rank opponent with hostile effects (debuffs, CC, DoTs, direct HP).
+// Returns chanceFactor (0.0 to 1.0) and durationPenalty (turns reduced).
+// When targetRank - guRank >= 5, chanceFactor is 0.0 (immune).
+func TargetSuppressionFactor(guRank, targetRank int) (chanceFactor float64, durationPenalty int) {
+	if targetRank <= guRank {
+		return 1.0, 0
+	}
+	gap := targetRank - guRank
+	durationPenalty = gap / 2
+	if gap >= 5 {
+		return 0.0, durationPenalty
+	}
+	factor := 1.0 - 0.20*float64(gap)
+	if factor < 0 {
+		factor = 0
+	}
+	return factor, durationPenalty
+}
+
+// CanApplySelfStatus tính toán xác suất kích hoạt hiệu ứng lên bản thân (Self-Target Buff/Heal)
+// dựa trên Cảnh Giới Nhân Vật (Player Rank) và Rank Gu, có tính đến Caster Attenuation khi casterRank > guRank.
+func CanApplySelfStatus(rng *rand.Rand, casterPlayerRank, guRank int, spec StatusSpec, baseChance float64) bool {
+	chance := baseChance
+	if chance <= 0 {
+		chance = spec.BaseChance
+	}
+	if chance <= 0 {
+		chance = 1.0
+	}
+	// Tăng 5% xác suất với mỗi cấp Gu Rank trên Rank 1
+	if guRank > 1 {
+		chance += 0.05 * float64(guRank-1)
+	}
+	// Áp dụng Caster Attenuation khi casterPlayerRank > guRank:
+	if casterPlayerRank > guRank {
+		attenuation := CasterAttenuationFactor(guRank, casterPlayerRank)
+		chance *= attenuation
+	}
+	if chance >= 1.0 {
+		return true
+	}
+	if chance <= 0.0 {
+		return false
+	}
+	if rng == nil {
+		rng = rand.New(rand.NewSource(1))
+	}
+	return rng.Float64() < chance
+}
+
+// CanApplyStatusWithGuRank tính toán xác suất tác động debuff/CC lên đối phương dựa trên
+// Cảnh Giới người dùng (casterRank), Cảnh Giới đối phương (targetRank), Rank Gu (guRank) và Đạo Ngân.
+func CanApplyStatusWithGuRank(rng *rand.Rand, casterRank, targetRank, guRank int, casterDaoMarks, targetDaoMarks map[string]int64, spec StatusSpec, targetStatusResist float64, opChance float64) bool {
+	if rng == nil {
+		rng = rand.New(rand.NewSource(1))
+	}
+	baseChance := spec.BaseChance
+	if opChance > 0 {
+		baseChance = opChance
+	}
+	if guRank > 1 {
+		baseChance += 0.05 * float64(guRank-1)
+	}
+	if baseChance > 0.95 {
+		baseChance = 0.95
+	}
+
+	// 1. Áp chế cảnh giới từ chênh lệch TargetRank vs GuRank
+	suppressionFactor, _ := TargetSuppressionFactor(guRank, targetRank)
+	if suppressionFactor <= 0 {
+		return false // Miễn dịch hoàn toàn
+	}
+
+	// 2. Hệ số chênh lệch Chuyển (CasterRank vs TargetRank)
 	rankDiff := casterRank - targetRank
 	rankFactor := 1.0
 	switch {
@@ -357,23 +470,39 @@ func CanApplyStatus(rng *rand.Rand, casterRank, targetRank int, casterDaoMarks, 
 		rankFactor = 1.5
 	}
 
-	// 2. Chênh lệch Đạo Ngân theo Lưu Phái
-	daoDiff := casterDaoMarks[spec.Path] - targetDaoMarks[spec.Path]
-	daoMultiplier := 1.0 + (float64(daoDiff) / 100.0)
-	if daoMultiplier < 0.2 {
-		daoMultiplier = 0.2
+	// 3. Chênh lệch Đạo Ngân theo Lưu Phái
+	daoMultiplier := 1.0
+	if casterDaoMarks != nil || targetDaoMarks != nil {
+		cMark := int64(0)
+		tMark := int64(0)
+		if casterDaoMarks != nil {
+			cMark = casterDaoMarks[spec.Path]
+		}
+		if targetDaoMarks != nil {
+			tMark = targetDaoMarks[spec.Path]
+		}
+		daoDiff := cMark - tMark
+		daoMultiplier = 1.0 + (float64(daoDiff) / 100.0)
+		if daoMultiplier < 0.2 {
+			daoMultiplier = 0.2
+		}
 	}
 
-	// 3. Tính toán xác suất cuối cùng
-	finalProcChance := spec.BaseChance * daoMultiplier * rankFactor * (1.0 - targetStatusResist)
-
-	// Clamp to [0, 1]
-	if finalProcChance > 1.0 {
-		finalProcChance = 1.0
+	// 4. Tính toán xác suất cuối cùng
+	finalProcChance := baseChance * suppressionFactor * daoMultiplier * rankFactor * (1.0 - targetStatusResist)
+	if finalProcChance >= 1.0 {
+		return true
 	}
-	if finalProcChance < 0.0 {
-		finalProcChance = 0.0
+	if finalProcChance <= 0.0 {
+		return false
 	}
-
 	return rng.Float64() < finalProcChance
 }
+
+// CanApplyStatus tính toán xác suất thành công dựa trên Cảnh Giới (Rank) và Đạo Ngân.
+// Trả về true nếu hiệu ứng được áp dụng thành công.
+func CanApplyStatus(rng *rand.Rand, casterRank, targetRank int, casterDaoMarks, targetDaoMarks map[string]int64, spec StatusSpec, targetStatusResist float64) bool {
+	return CanApplyStatusWithGuRank(rng, casterRank, targetRank, 1, casterDaoMarks, targetDaoMarks, spec, targetStatusResist, 0)
+}
+
+

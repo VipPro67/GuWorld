@@ -169,6 +169,9 @@ func collectCoverage(raw json.RawMessage, coverage map[string]*Coverage) {
 			collectMechanicCoverage(sectionRaw, coverage)
 			continue
 		}
+		if section == "blocks" {
+			continue
+		}
 		var values map[string]json.RawMessage
 		if json.Unmarshal(sectionRaw, &values) == nil {
 			collectObjectCoverage(section, values, coverage)

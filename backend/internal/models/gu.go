@@ -16,13 +16,15 @@ import (
 )
 
 // StatusApplication is one entry of active.apply_status: a statusfx status to
-// inflict, with optional explicit intensity and duration. Omitted value/turns
-// inherit the legacy top-level status_tick_damage / status_duration_ticks, so
-// a bare string entry keeps its exact historical semantics.
+// inflict, with optional explicit intensity, duration and proc chance.
+// Omitted value/turns inherit the legacy top-level status_tick_damage /
+// status_duration_ticks, so a bare string entry keeps its exact historical
+// semantics. Omitted chance (0) means the status always applies.
 type StatusApplication struct {
-	ID    string  `json:"id"`
-	Value float64 `json:"value,omitempty"` // intensity (DoT damage, percent); 0 = inherit
-	Turns int     `json:"turns,omitempty"` // duration in combat ticks; 0 = inherit
+	ID     string  `json:"id"`
+	Value  float64 `json:"value,omitempty"`  // intensity (DoT damage, percent); 0 = inherit
+	Turns  int     `json:"turns,omitempty"`  // duration in combat ticks; 0 = inherit
+	Chance float64 `json:"chance,omitempty"` // proc chance per application (0..1); 0 = always
 }
 
 // StatusApplications accepts three authoring forms for the active.apply_status
@@ -116,7 +118,22 @@ func (a *ActiveEffect) effectiveStatusTurns(entry StatusApplication) int {
 // statusfx registry into combat StatusOps. Explicit entry values/turns are
 // direct; the legacy tier pipeline (top-level status_duration_ticks ≤ 5 read
 // as a tier) only applies to entries inheriting the old top-level fields.
+// Entry chance is carried raw; use ResolveStatusApplicationsForRank for the
+// rank-scaled proc chance + duration.
 func (a *ActiveEffect) ResolveStatusApplications() []statusfx.StatusOp {
+	return a.resolveStatusApplications(0)
+}
+
+// ResolveStatusApplicationsForRank resolves like ResolveStatusApplications,
+// then scales opt-in proc entries by Gu rank: entries with chance > 0 roll
+// chance + 0.05 per rank above 1 (capped at 0.95) and last +(rank-1)/3 extra
+// turns (rank 1–3: +0, 4–6: +1, 7–9: +2). Entries without chance are
+// untouched, so existing data behaves exactly as before.
+func (a *ActiveEffect) ResolveStatusApplicationsForRank(rank int) []statusfx.StatusOp {
+	return a.resolveStatusApplications(rank)
+}
+
+func (a *ActiveEffect) resolveStatusApplications(rank int) []statusfx.StatusOp {
 	ops := make([]statusfx.StatusOp, 0, len(a.ApplyStatus))
 	for _, entry := range a.ApplyStatus {
 		value := a.effectiveStatusValue(entry)
@@ -142,7 +159,25 @@ func (a *ActiveEffect) ResolveStatusApplications() []statusfx.StatusOp {
 		if op.ID == statusfx.StatusForgetReality && a.TargetDamageReducePct > 0 {
 			op.Value = a.TargetDamageReducePct * 100
 		}
+		if entry.Chance > 0 && rank > 0 {
+			op.Chance = entry.Chance + 0.05*float64(rank-1)
+			if op.Chance > 0.95 {
+				op.Chance = 0.95
+			}
+			op.Turns += (rank - 1) / 3
+		} else {
+			op.Chance = entry.Chance
+		}
 		ops = append(ops, op)
+	}
+	if a.DisableGuNextTurn && !a.HasStatus(statusfx.StatusGuSeal) && !a.HasStatus(statusfx.StatusForgetEgo) {
+		op, err := statusfx.ResolveStatus(statusfx.StatusGuSeal, 0, 1)
+		if err == nil {
+			if rank > 0 {
+				op.Turns += (rank - 1) / 3
+			}
+			ops = append(ops, op)
+		}
 	}
 	return ops
 }
@@ -260,10 +295,19 @@ type GrowthEffect struct {
 }
 
 type GuEffects struct {
-	Active  *ActiveEffect     `json:"active"`
-	Passive *PassiveEffect    `json:"passive"`
-	Growth  *GrowthEffect     `json:"growth,omitempty"`
-	Other   []SpecialMechanic `json:"other"`
+	Blocks  []ComposableEffectBlock `json:"blocks,omitempty"`
+	Active  *ActiveEffect           `json:"active"`
+	Passive *PassiveEffect          `json:"passive"`
+	Growth  *GrowthEffect           `json:"growth,omitempty"`
+	Other   []SpecialMechanic       `json:"other"`
+}
+
+// GetBlocks returns the explicit Blocks if present, or compiles them on the fly from legacy fields.
+func (g *GuEffects) GetBlocks() []ComposableEffectBlock {
+	if len(g.Blocks) > 0 {
+		return g.Blocks
+	}
+	return CompileLegacyToBlocks(g.Active, g.Passive, g.Other)
 }
 
 type GuDictionaryItem struct {

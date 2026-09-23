@@ -458,7 +458,7 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		player.SubRank++
 		stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
 		return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, models.GetRankName(player.Rank), stageNames[player.SubRank]), nil
-	case "APERTURE_PETRIFICATION":
+	case "APERTURE_PETRIFICATION", "STONE_APERTURE":
 		player.SubRank = 4
 		player.MaxMana -= 15
 		if player.MaxMana < 20 {
@@ -531,7 +531,8 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		restored := player.SoulHP - before
 		return fmt.Sprintf("Hồn phách được dưỡng hồi (+%d Hồn Phách).", restored), nil
 	// ── New action codes ──────────────────────────────────────────────
-	case "TIME_ACCELERATION":
+	// TIME_ACCELERATION also serves THIRD_WATCH (Tam Canh Cổ: time flow ×3).
+	case "TIME_ACCELERATION", "THIRD_WATCH":
 		val, _ := params["value"].(float64)
 		if val <= 0 {
 			val = 3.0
@@ -542,9 +543,9 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			player.CurrentMana = player.MaxMana
 		}
 		return fmt.Sprintf("%s gia tốc dòng chảy thời gian, hồi phục %.0f Chân Nguyên!", spec.Name, boost), nil
-	case "RECORD":
+	case "RECORD", "RECORD_MESSAGE":
 		return fmt.Sprintf("%s ghi lại toàn bộ hình ảnh và âm thanh trong khu vực.", spec.Name), nil
-	case "CONTRACT_OATH":
+	case "CONTRACT_OATH", "POISON_VOW":
 		return fmt.Sprintf("%s kết khế ước — hai bên không thể phản bội.", spec.Name), nil
 	case "PORTAL_CREATE":
 		return fmt.Sprintf("%s khắc ấn tọa độ không gian tại vị trí hiện tại.", spec.Name), nil
@@ -585,6 +586,19 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		player.CurrentThought += val
 		if player.CurrentThought > player.MaxThought {
 			player.CurrentThought = player.MaxThought
+		}
+		return "", nil
+	case "SOUL_REGEN_TICK":
+		val, _ := params["value"].(float64)
+		if val <= 0 {
+			val = 1.0
+		}
+		if player.MaxSoul <= 0 {
+			player.MaxSoul = 100
+		}
+		player.SoulHP += int(val)
+		if player.SoulHP > player.MaxSoul {
+			player.SoulHP = player.MaxSoul
 		}
 		return "", nil
 	case "GENERATE_IMMORTAL_STONES_TICK":
@@ -673,9 +687,13 @@ func ApplyGrowthProgress(gu *models.GuInstance, spec *models.GuDictionaryItem, e
 	return
 }
 
-// HandleConsumeEvent is kept for backward compatibility, delegates to handleActionCode
+// HandleConsumeEvent routes a single consume mechanic through the generic
+// dispatcher so every ON_CONSUME path shares one loop. Kept for backward
+// compatibility with existing callers/tests.
 func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem, mechanic models.SpecialMechanic) (string, error) {
-	return handleActionCode(player, spec, gu, mechanic)
+	single := spec
+	single.Effects.Other = []models.SpecialMechanic{mechanic}
+	return HandleGuEvent(player, single, gu, mechanic.EventTrigger)
 }
 
 func tickStatusEffects(player *models.Player, ctx *CombatContext) {

@@ -8,6 +8,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
 func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) float64 {
@@ -125,6 +126,10 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	effectiveDamage *= gamefx.PathDamageMultiplierForPaths(guSpec.Path, pathDamage)
 	if baseDef > 0 {
 		effectiveDefense += actor.BaseDefense * powerScale * masteryMultiplier * daoMultiplier
+		if actor.Rank > guSpec.Rank {
+			attenuation := statusfx.CasterAttenuationFactor(guSpec.Rank, actor.Rank)
+			effectiveDefense *= attenuation
+		}
 	}
 	cost := gamefx.EnergyCostForCombatant(actor, guSpec)
 

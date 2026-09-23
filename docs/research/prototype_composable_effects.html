@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>PoC Prototype: Composable Effect Block & Realm Scaling Engine</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --accent: #2ea043;
+      --accent-hover: #3fb950;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --heading: #58a6ff;
+      --danger: #f85149;
+      --warning: #d29922;
+      --gold: #f1e05a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { color: #58a6ff; font-size: 24px; margin-bottom: 8px; }
+    .intro {
+      background: #1c2128;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--heading);
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 16px;
+      color: #f0f6fc;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px; }
+    select, input, button {
+      background: #21262d;
+      color: #f0f6fc;
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    select:focus, input:focus { outline: none; border-color: var(--heading); }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+    button.btn-primary {
+      background: var(--accent);
+      border-color: #238636;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.btn-primary:hover { background: var(--accent-hover); }
+    button.btn-sec {
+      background: #21262d;
+      cursor: pointer;
+    }
+    button.btn-sec:hover { background: #30363d; }
+    button.btn-danger {
+      background: #da3633;
+      border-color: #b62324;
+      cursor: pointer;
+      color: white;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #30363d;
+      color: #8b949e;
+    }
+    .tag.green { background: #1b4729; color: #3fb950; }
+    .tag.red { background: #491719; color: #f85149; }
+    .tag.gold { background: #4a3f12; color: #f1e05a; }
+    .block-item {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .op-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #1f242c;
+      color: #58a6ff;
+      border: 1px solid #388bfd33;
+      margin-right: 4px;
+    }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-bottom: -1px;
+      width: auto;
+    }
+    .tab-btn.active { color: #58a6ff; border-bottom-color: #58a6ff; font-weight: 600; }
+    .log-box {
+      background: #090d13;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      height: 280px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
+      font-size: 12px;
+      color: #e6edf3;
+    }
+    .log-line { margin-bottom: 4px; }
+    .log-success { color: #3fb950; }
+    .log-warn { color: #d29922; }
+    .log-danger { color: #f85149; }
+    .log-info { color: #58a6ff; }
+  </style>
+</head>
+<body>
+
+  <h1>PoC Prototype: Composable Effect Block & Realm Scaling (Ticket #69)</h1>
+  <div class="intro">
+    <strong>Câu hỏi cốt lõi (Question):</strong> Làm thế nào để mô hình <code>ComposableEffectBlock</code> lắp ghép linh hoạt nhiều hành động nguyên tử (Atomic Operations) trong khi tự động suy giảm uy lực theo <strong>Caster Attenuation</strong> (buff bản thân giảm mạnh khi dùng Cổ hạ cấp) và <strong>Target Suppression</strong> (debuff giảm xác suất khi đánh vào mục tiêu cảnh giới cao hơn)?
+  </div>
+
+  <div class="grid">
+    <!-- PANEL TRÁI: THIẾT LẬP THỰC THỂ & BỘ LẮP RÁP -->
+    <div>
+      <div class="card">
+        <h2>1. Thiết Lập Cảnh Giới</h2>
+        <div class="row">
+          <div>
+            <label>Caster (Người ra chiêu)</label>
+            <select id="casterRank" onchange="renderAll()">
+              <option value="1">Rank 1 (Phàm nhân)</option>
+              <option value="2">Rank 2</option>
+              <option value="3">Rank 3</option>
+              <option value="4">Rank 4</option>
+              <option value="5">Rank 5 (Đỉnh Phàm)</option>
+              <option value="6">Rank 6 (Hạ Tiên)</option>
+              <option value="7">Rank 7 (Trung Tiên)</option>
+              <option value="8">Rank 8 (Thượng Tiên)</option>
+              <option value="9" selected>Rank 9 (Tôn Giả Tiên)</option>
+            </select>
+          </div>
+          <div>
+            <label>Cổ Trùng (Gu Rank)</label>
+            <select id="guRank" onchange="renderAll()">
+              <option value="1">Cổ Rank 1</option>
+              <option value="2">Cổ Rank 2</option>
+              <option value="3">Cổ Rank 3</option>
+              <option value="4" selected>Cổ Rank 4</option>
+              <option value="5">Cổ Rank 5</option>
+              <option value="6">Tiên Cổ Rank 6</option>
+              <option value="7">Tiên Cổ Rank 7</option>
+              <option value="8">Tiên Cổ Rank 8</option>
+              <option value="9">Tiên Cổ Rank 9</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Target (Đối thủ)</label>
+            <select id="targetRank" onchange="renderAll()">
+              <option value="1">Rank 1</option>
+              <option value="4">Rank 4</option>
+              <option value="6">Rank 6 (Tiên Nhân)</option>
+              <option value="8" selected>Rank 8 (Đại Boss)</option>
+              <option value="9">Rank 9 (Cổ Tôn)</option>
+            </select>
+          </div>
+          <div>
+            <label>Khiên ảo địch (Shield)</label>
+            <input type="number" id="targetShield" value="200" onchange="renderAll()" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2. Lắp Ráp Khối Hiệu Ứng (Blocks)</h2>
+        <label>Thêm nhanh Atomic Operation vào Action:</label>
+        <div class="row" style="margin-bottom: 6px;">
+          <button class="btn-sec" onclick="addOp('DAMAGE')">+ Sát Thương (100)</button>
+          <button class="btn-sec" onclick="addOp('SHIELD')">+ Hộ Thể (80)</button>
+        </div>
+        <div class="row" style="margin-bottom: 6px;">
+          <button class="btn-sec" onclick="addOp('DIRECT_HP')">+ Xuyên Giáp (%HP)</button>
+          <button class="btn-sec" onclick="addOp('STATUS_STUN')">+ Choáng (STUN)</button>
+        </div>
+        <div class="row" style="margin-bottom: 6px;">
+          <button class="btn-sec" onclick="addOp('STATUS_SEAL')">+ Khóa Cổ (GU_SEAL)</button>
+          <button class="btn-sec" onclick="addOp('INVINCIBLE')">+ Bất Tử (INVINCIBLE)</button>
+        </div>
+        <button class="btn-danger" style="margin-top: 6px;" onclick="resetBlocks()">Xóa Hết & Làm Lại</button>
+
+        <div style="margin-top: 14px;">
+          <label>Danh Sách Khối Đã Lắp Ráp:</label>
+          <div id="blockList"></div>
+        </div>
+
+        <button class="btn-primary" style="margin-top: 10px; font-size: 15px; padding: 10px;" onclick="executeAction()">
+          ⚡ Thi Triển Sát Chiêu (Execute Action)
+        </button>
+      </div>
+    </div>
+
+    <!-- PANEL PHẢI: KỊCH BẢN WALKTHROUGHS & LOGS GIẢI TRÌNH -->
+    <div>
+      <div class="card">
+        <h2>3. Kịch Bản Khảo Sát (Guided Walkthroughs)</h2>
+        <div class="tabs">
+          <button class="tab-btn active" onclick="loadScenario(1, this)">Kịch Bản 1: Đẳng Cấp Ngang Nhau</button>
+          <button class="tab-btn" onclick="loadScenario(2, this)">Kịch Bản 2: Bất Tử Rank 4 Lên Rank 9</button>
+          <button class="tab-btn" onclick="loadScenario(3, this)">Kịch Bản 3: Phàm Cổ Khống Chế Tiên Boss</button>
+          <button class="tab-btn" onclick="loadScenario(4, this)">Kịch Bản 4: Tổ Hợp Đa Khối (Modular 4-in-1)</button>
+        </div>
+        <div id="scenarioDesc" style="font-size: 13px; color: #8b949e; margin-bottom: 12px;"></div>
+        <button class="btn-sec" id="scenarioActionBtn" onclick="runScenarioStep()" style="width: auto; padding: 8px 16px;">
+          ▶️ Chạy Bước Kịch Bản
+        </button>
+      </div>
+
+      <div class="card">
+        <h2>
+          <span>4. Nhật Ký Tính Toán (Execution & Scaling Log)</span>
+          <span id="logSummary" class="tag">Sẵn sàng</span>
+        </h2>
+        <div class="log-box" id="combatLog">
+          <div class="log-line log-info">Hệ thống đã khởi tạo. Hãy nhấn "Thi Triển Sát Chiêu" hoặc chọn một kịch bản khảo sát.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>5. Cấu Trúc JSON Composable Block Thực Tế</h2>
+        <pre id="jsonPreview" style="background:#090d13; padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; color:#a5d6ff; max-height:180px;"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- THƯ VIỆN LOGIC THUẦN (PORTABLE LOGIC MODULE) -->
+  <script>
+    // ── MODULE LOGIC NGUYÊN TỬ (KHÔNG CHỨA DOM) ──────────────────────
+    const ComposableEngine = {
+      // 1. Phân loại Base Chance mặc định cho các nhóm hiệu ứng
+      getBaseChance(op) {
+        if (op.chance && op.chance > 0) return op.chance;
+        switch(op.op) {
+          case 'DAMAGE':
+          case 'SHIELD':
+          case 'HEAL': return 1.0;
+          case 'DIRECT_HP': return 0.85;
+          case 'STATUS':
+            if (['STUN', 'FREEZE', 'SLEEP', 'BIND'].includes(op.status_id)) return 0.40; // CC cứng
+            if (['GU_SEAL', 'SILENCE'].includes(op.status_id)) return 0.50; // Khóa chiêu
+            return 0.70; // DoT và debuff nhẹ
+          case 'BARRIER':
+            if (op.sub_type === 'INVINCIBLE') return 0.35; // Bất tử
+            return 0.80;
+          default: return 1.0;
+        }
+      },
+
+      // 2. Tính toán Caster Attenuation (áp dụng lên bản thân / đồng đội)
+      // Dùng Cổ rank thấp buff cho người rank cao -> Suy giảm mạnh
+      calculateCasterAttenuation(guRank, casterRank, op) {
+        if (casterRank <= guRank) return { factor: 1.0, reason: "Đẳng cấp phù hợp (100%)" };
+        const gap = casterRank - guRank;
+        // Công thức suy hao hàm mũ phạt nặng: (guRank / casterRank)^2
+        const factor = Math.max(0.05, Math.pow(guRank / casterRank, 2));
+        return {
+          factor: factor,
+          gap: gap,
+          reason: `Suy hao Caster: chênh lệch ${gap} rank -> uy lực còn ${(factor*100).toFixed(1)}%`
+        };
+      },
+
+      // 3. Tính toán Target Suppression (áp dụng lên đối phương)
+      // Dùng Cổ rank thấp đánh vào đối thủ rank cao -> Kháng áp chế
+      calculateTargetSuppression(guRank, targetRank, op) {
+        if (targetRank <= guRank) return { factor: 1.0, turnsReduction: 0, reason: "Không bị áp chế (100%)" };
+        const gap = targetRank - guRank;
+        // Mỗi bậc chênh lệch giảm 20% xác suất trúng
+        const factor = Math.max(0.0, 1.0 - (0.20 * gap));
+        const turnsReduction = Math.floor(gap / 2);
+        return {
+          factor: factor,
+          turnsReduction: turnsReduction,
+          gap: gap,
+          reason: factor === 0 
+            ? `Áp chế cảnh giới hoàn toàn (Chênh lệch ${gap} rank -> Miễn dịch 100%)` 
+            : `Áp chế cảnh giới: chênh lệch ${gap} rank -> tỉ lệ trúng giảm còn ${(factor*100).toFixed(1)}%`
+        };
+      },
+
+      // 4. Giải trình và thực thi toàn bộ Action Block
+      resolveAction(caster, target, guRank, blocks) {
+        const logs = [];
+        let totalDamageDealt = 0;
+        let totalShieldGained = 0;
+        let currentTargetShield = target.shield;
+
+        logs.push({ text: `=== BẮT ĐẦU THI TRIỂN CỔ TRÙNG (Rank ${guRank}) ===`, type: 'info' });
+        logs.push({ text: `Người dùng: Rank ${caster.rank} | Mục tiêu: Rank ${target.rank} (Khiên: ${currentTargetShield})`, type: 'info' });
+
+        for (const block of blocks) {
+          for (const op of block.operations) {
+            const isSelfTarget = (op.target && op.target.selector === 'SELF') || block.target.selector === 'SELF';
+            const baseChance = this.getBaseChance(op);
+            // Rank scaling bonus cơ bản: +5% mỗi rank cổ
+            const rankBonus = 0.05 * (guRank - 1);
+            let effectiveChance = Math.min(0.95, baseChance + rankBonus);
+
+            if (isSelfTarget) {
+              // Hướng Caster (Buff / Shield / Heal / Barrier)
+              const att = this.calculateCasterAttenuation(guRank, caster.rank, op);
+              effectiveChance *= att.factor;
+
+              let finalVal = (op.value || 0) * att.factor;
+              let turns = op.turns || 1;
+              if (att.gap >= 3 && turns > 1) turns = 1;
+
+              logs.push({
+                text: `[Self-Op: ${op.op}] Base: ${(baseChance*100).toFixed(0)}% -> Sau ${att.reason} -> Tỉ lệ kích hoạt: ${(effectiveChance*100).toFixed(1)}%`,
+                type: att.factor < 0.5 ? 'warn' : 'info'
+              });
+
+              // Thử roll xúc xắc
+              const roll = Math.random();
+              if (roll <= effectiveChance) {
+                if (op.op === 'SHIELD') {
+                  totalShieldGained += finalVal;
+                  logs.push({ text: `-> Tạo thành công Khiên Hộ Thể +${finalVal.toFixed(1)} (Gốc: ${op.value})`, type: 'success' });
+                } else if (op.op === 'BARRIER' && op.sub_type === 'INVINCIBLE') {
+                  if (att.gap >= 3) {
+                    logs.push({ text: `-> [BẤT TỬ BIẾN DỊ]: Cổ Rank ${guRank} không đủ tải Tiên nhân Rank ${caster.rank}! Bất tử suy thoái thành Khiên Hấp Thụ 500 điểm.`, type: 'warn' });
+                  } else {
+                    logs.push({ text: `-> Kích hoạt thành công BẤT TỬ trong ${turns} lượt!`, type: 'success' });
+                  }
+                }
+              } else {
+                logs.push({ text: `-> Thất bại! Không kích hoạt được do suy hao cảnh giới.`, type: 'danger' });
+              }
+
+            } else {
+              // Hướng Target (Damage / Debuff / DirectHP)
+              const supp = this.calculateTargetSuppression(guRank, target.rank, op);
+              effectiveChance *= supp.factor;
+
+              logs.push({
+                text: `[Target-Op: ${op.op} ${op.status_id || op.sub_type || ''}] Base: ${(baseChance*100).toFixed(0)}% -> ${supp.reason} -> Tỉ lệ kích hoạt: ${(effectiveChance*100).toFixed(1)}%`,
+                type: supp.factor < 0.5 ? 'warn' : 'info'
+              });
+
+              const roll = Math.random();
+              if (roll <= effectiveChance && effectiveChance > 0) {
+                if (op.op === 'DAMAGE') {
+                  let dmg = op.value || 100;
+                  // Trừ khiên trước
+                  if (currentTargetShield > 0) {
+                    if (currentTargetShield >= dmg) {
+                      currentTargetShield -= dmg;
+                      logs.push({ text: `-> Đòn đánh trúng Khiên Ảo địch: trừ ${dmg} khiên (Khiên còn: ${currentTargetShield})`, type: 'info' });
+                      dmg = 0;
+                    } else {
+                      dmg -= currentTargetShield;
+                      logs.push({ text: `-> Đòn đánh phá vỡ ${currentTargetShield} Khiên Ảo! Sát thương xuyên giáp: ${dmg}`, type: 'success' });
+                      currentTargetShield = 0;
+                    }
+                  }
+                  totalDamageDealt += dmg;
+                } else if (op.op === 'DIRECT_HP') {
+                  logs.push({ text: `-> [XUYÊN GIÁP TUYỆT ĐỐI]: Trừ thẳng 15% Max HP của địch, bỏ qua hoàn toàn Khiên Ảo!`, type: 'success' });
+                } else if (op.op === 'STATUS') {
+                  let turns = Math.max(1, (op.turns || 2) - supp.turnsReduction);
+                  logs.push({ text: `-> [KHỐNG CHẾ THÀNH CÔNG]: Gây trạng thái ${op.status_id} lên đối thủ trong ${turns} lượt (bị trừ ${supp.turnsReduction} lượt do áp chế).`, type: 'success' });
+                }
+              } else {
+                logs.push({ text: `-> [KHÁNG HIỆU ỨNG]: Mục tiêu cảnh giới vượt trội hóa giải hoàn toàn hiệu ứng!`, type: 'danger' });
+              }
+            }
+          }
+        }
+
+        return { logs, totalDamageDealt, totalShieldGained, finalTargetShield: currentTargetShield };
+      }
+    };
+
+    // ── STATE GIAO DIỆN & TƯƠNG TÁC (THROW-AWAY UI SHELL) ──────────────
+    let assembledBlocks = [
+      {
+        id: "attack_main",
+        trigger: "ON_ACTION",
+        target: { selector: "TARGET", bypass_frontline: false },
+        operations: [
+          { op: "DAMAGE", sub_type: "FLAT", value: 120, path: "Blade Path" }
+        ]
+      }
+    ];
+
+    function addOp(type) {
+      if (assembledBlocks.length === 0) {
+        assembledBlocks.push({ id: "action_block", trigger: "ON_ACTION", target: { selector: "TARGET" }, operations: [] });
+      }
+      const ops = assembledBlocks[0].operations;
+      switch(type) {
+        case 'DAMAGE': ops.push({ op: "DAMAGE", sub_type: "FLAT", value: 100, path: "Fire Path" }); break;
+        case 'SHIELD': ops.push({ op: "SHIELD", sub_type: "FLAT", target: { selector: "SELF" }, value: 80 }); break;
+        case 'DIRECT_HP': ops.push({ op: "DIRECT_HP", sub_type: "MAX_HP_PERCENT", value: 0.15 }); break;
+        case 'STATUS_STUN': ops.push({ op: "STATUS", status_id: "STUN", turns: 2, chance: 0.45 }); break;
+        case 'STATUS_SEAL': ops.push({ op: "STATUS", status_id: "GU_SEAL", turns: 2, chance: 0.50 }); break;
+        case 'INVINCIBLE': ops.push({ op: "BARRIER", sub_type: "INVINCIBLE", target: { selector: "SELF" }, turns: 2, chance: 0.40 }); break;
+      }
+      renderAll();
+    }
+
+    function resetBlocks() {
+      assembledBlocks = [];
+      renderAll();
+    }
+
+    function renderAll() {
+      const list = document.getElementById("blockList");
+      if (assembledBlocks.length === 0 || assembledBlocks[0].operations.length === 0) {
+        list.innerHTML = `<div style="color:#8b949e; font-size:12px; font-style:italic;">Chưa có khối hiệu ứng nào. Hãy bấm các nút bên trên để thêm.</div>`;
+      } else {
+        list.innerHTML = assembledBlocks[0].operations.map((op, idx) => `
+          <div class="block-item">
+            <span class="op-badge">${op.op}</span>
+            <span style="font-weight:600; font-size:13px;">${op.status_id || op.sub_type || ''}</span>
+            <span style="font-size:12px; color:#8b949e; margin-left:6px;">
+              ${op.value ? 'Val: ' + op.value : ''} 
+              ${op.turns ? '| Turns: ' + op.turns : ''} 
+              ${op.target ? '| Target: ' + op.target.selector : ''}
+            </span>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById("jsonPreview").textContent = JSON.stringify({ blocks: assembledBlocks }, null, 2);
+    }
+
+    function executeAction() {
+      const caster = { rank: parseInt(document.getElementById("casterRank").value) };
+      const guRank = parseInt(document.getElementById("guRank").value);
+      const target = {
+        rank: parseInt(document.getElementById("targetRank").value),
+        shield: parseFloat(document.getElementById("targetShield").value) || 0
+      };
+
+      const result = ComposableEngine.resolveAction(caster, target, guRank, assembledBlocks);
+      const logBox = document.getElementById("combatLog");
+      logBox.innerHTML = result.logs.map(l => `<div class="log-line log-${l.type}">${l.text}</div>`).join('');
+      logBox.scrollTop = logBox.scrollHeight;
+      document.getElementById("logSummary").textContent = `Dmg: ${result.totalDamageDealt.toFixed(0)} | Shield: ${result.totalShieldGained.toFixed(0)}`;
+      document.getElementById("logSummary").className = "tag green";
+    }
+
+    // ── KỊCH BẢN KHẢO SÁT ──────────────────────────────────────────────
+    const scenarios = {
+      1: {
+        title: "Kịch Bản 1: Đẳng Cấp Ngang Nhau (Cổ Rank 3, Caster Rank 3 vs Target Rank 3)",
+        desc: "Hai bên cùng cảnh giới Tam Chuyển. Hiệu ứng phát huy 100% tiềm năng, không chịu suy hao Caster hay áp chế mục tiêu.",
+        setup: () => {
+          document.getElementById("casterRank").value = "3";
+          document.getElementById("guRank").value = "3";
+          document.getElementById("targetRank").value = "3";
+          document.getElementById("targetShield").value = "100";
+          assembledBlocks = [{
+            id: "balanced_action",
+            trigger: "ON_ACTION",
+            target: { selector: "TARGET" },
+            operations: [
+              { op: "DAMAGE", sub_type: "FLAT", value: 120 },
+              { op: "STATUS", status_id: "STUN", turns: 2, chance: 0.6 }
+            ]
+          }];
+        }
+      },
+      2: {
+        title: "Kịch Bản 2: Bug Bất Tử - Cổ Rank 4 Buff Cho Tiên Nhân Rank 9",
+        desc: "Cổ sư dùng Cổ Bất Tử Rank 4 để tạo khiên bất tử cho Cổ Tiên Cửu Chuyển. Hệ thống sẽ kích hoạt Caster Attenuation phạt nặng, hạ tỉ lệ kích hoạt và chuyển trạng thái bất tử thành khiên hữu hạn.",
+        setup: () => {
+          document.getElementById("casterRank").value = "9";
+          document.getElementById("guRank").value = "4";
+          document.getElementById("targetRank").value = "8";
+          document.getElementById("targetShield").value = "500";
+          assembledBlocks = [{
+            id: "exploit_immortal",
+            trigger: "ON_ACTION",
+            target: { selector: "SELF" },
+            operations: [
+              { op: "BARRIER", sub_type: "INVINCIBLE", target: { selector: "SELF" }, turns: 3, chance: 1.0 }
+            ]
+          }];
+        }
+      },
+      3: {
+        title: "Kịch Bản 3: Phàm Cổ Rank 2 Khống Chế Tiên Boss Rank 8",
+        desc: "Phàm Cổ Sư mang Cổ Độc/Choáng Rank 2 đánh vào Đại Năng Bát Chuyển. Chênh lệch 6 bậc cảnh giới kích hoạt Target Suppression triệt tiêu hoàn toàn hiệu ứng (Miễn nhiễm 100%).",
+        setup: () => {
+          document.getElementById("casterRank").value = "2";
+          document.getElementById("guRank").value = "2";
+          document.getElementById("targetRank").value = "8";
+          document.getElementById("targetShield").value = "1000";
+          assembledBlocks = [{
+            id: "weak_cc_attempt",
+            trigger: "ON_ACTION",
+            target: { selector: "TARGET" },
+            operations: [
+              { op: "DAMAGE", sub_type: "FLAT", value: 50 },
+              { op: "STATUS", status_id: "STUN", turns: 2, chance: 0.8 },
+              { op: "STATUS", status_id: "GU_SEAL", turns: 2, chance: 0.8 }
+            ]
+          }];
+        }
+      },
+      4: {
+        title: "Kịch Bản 4: Sát Chiêu Phức Tạp Lắp Ghép Đa Khối (Modular 4-in-1)",
+        desc: "Một đòn đánh kết hợp 4 khối nguyên tử: Gây Damage + Phá Khiên trực tiếp + Trói chân mục tiêu + Tự buff khiên cho người dùng.",
+        setup: () => {
+          document.getElementById("casterRank").value = "6";
+          document.getElementById("guRank").value = "6";
+          document.getElementById("targetRank").value = "6";
+          document.getElementById("targetShield").value = "250";
+          assembledBlocks = [{
+            id: "combo_killer_move",
+            trigger: "ON_ACTION",
+            target: { selector: "TARGET" },
+            operations: [
+              { op: "DAMAGE", sub_type: "FLAT", value: 200, path: "Lightning Path" },
+              { op: "DIRECT_HP", sub_type: "MAX_HP_PERCENT", value: 0.10 },
+              { op: "STATUS", status_id: "STUN", turns: 1, chance: 0.65 },
+              { op: "SHIELD", sub_type: "FLAT", target: { selector: "SELF" }, value: 150 }
+            ]
+          }];
+        }
+      }
+    };
+
+    let currentScenarioId = 1;
+    function loadScenario(id, btn) {
+      currentScenarioId = id;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      if (btn) btn.classList.add("active");
+      const sc = scenarios[id];
+      document.getElementById("scenarioDesc").textContent = sc.desc;
+      sc.setup();
+      renderAll();
+    }
+
+    function runScenarioStep() {
+      executeAction();
+    }
+
+    // Init
+    loadScenario(1, document.querySelector(".tab-btn.active"));
+  </script>
+</body>
+</html>

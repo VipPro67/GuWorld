@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
-import type { RequiredGus } from "@/lib/gu-dict";
+import type { RequiredGus, ComposableEffectBlock } from "@/lib/gu-dict";
 import type { EffectDictionaryEntry } from "@/lib/effects";
 import { useUIStore } from "@/store/useUIStore";
 import { wsManager } from "@/lib/websocket";
@@ -780,6 +780,7 @@ export interface GuEffects {
     hours_to_max?: number;
   };
   other?: SpecialMechanic[];
+  blocks?: ComposableEffectBlock[] | null;
 }
 
 export interface GuSpec {

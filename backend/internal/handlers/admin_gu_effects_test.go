@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 )
 
 func TestValidateAndNormalizeAdminGuEffectsRejectsInvalidData(t *testing.T) {
@@ -46,8 +47,8 @@ func TestValidateAndNormalizeAdminGuEffectsCanonicalizesEnvelope(t *testing.T) {
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		t.Fatal(err)
 	}
-	if len(envelope) != 8 {
-		t.Fatalf("sections = %d, want 8", len(envelope))
+	if len(envelope) != len(effectcatalog.Sections) {
+		t.Fatalf("sections = %d, want %d", len(envelope), len(effectcatalog.Sections))
 	}
 }
 

@@ -60,7 +60,7 @@ func (r Report) Error() string {
 	return ""
 }
 
-var Sections = []string{"active", "support", "passive", "house", "explore", "refinement", "growth", "other"}
+var Sections = []string{"blocks", "active", "support", "passive", "house", "explore", "refinement", "growth", "other"}
 
 var sectionSet = func() map[string]bool {
 	m := make(map[string]bool, len(Sections))
@@ -181,7 +181,7 @@ func NormalizeAndValidate(raw []byte) ([]byte, Report, error) {
 	for _, section := range Sections {
 		value, ok := root[section]
 		if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			if section == "other" {
+			if section == "other" || section == "blocks" {
 				root[section] = json.RawMessage(`[]`)
 			} else {
 				root[section] = json.RawMessage(`{}`)
@@ -190,6 +190,10 @@ func NormalizeAndValidate(raw []byte) ([]byte, Report, error) {
 		}
 		if section == "other" {
 			validateOther(value, &report)
+			continue
+		}
+		if section == "blocks" {
+			validateBlocks(value, &report)
 			continue
 		}
 		validateObjectSection(section, value, &report)
@@ -288,13 +292,14 @@ func validateFieldValue(section, key string, raw json.RawMessage, path string, r
 
 // statusEntry mirrors one apply_status entry in any of its authoring forms.
 type statusEntry struct {
-	ID    string          `json:"id"`
-	Value json.RawMessage `json:"value"`
-	Turns json.RawMessage `json:"turns"`
+	ID     string          `json:"id"`
+	Value  json.RawMessage `json:"value"`
+	Turns  json.RawMessage `json:"turns"`
+	Chance json.RawMessage `json:"chance"`
 }
 
 // validateApplyStatus accepts the three authoring forms — a legacy status
-// string, a single {id,value,turns} object, or an array of such objects —
+// string, a single {id,value,turns,chance} object, or an array of such objects —
 // and validates every referenced status against the manifest + statusfx.
 func validateApplyStatus(raw json.RawMessage, path string, report *Report) {
 	trimmed := bytes.TrimSpace(raw)
@@ -306,24 +311,24 @@ func validateApplyStatus(raw json.RawMessage, path string, report *Report) {
 	case '"':
 		var id string
 		if err := json.Unmarshal(trimmed, &id); err != nil {
-			report.add(SeverityError, "invalid_status", path, "apply_status phải là chuỗi, object {id,value,turns} hoặc mảng")
+			report.add(SeverityError, "invalid_status", path, "apply_status phải là chuỗi, object {id,value,turns,chance} hoặc mảng")
 			return
 		}
 		entries = []statusEntry{{ID: id}}
 	case '{':
 		var one statusEntry
 		if err := json.Unmarshal(trimmed, &one); err != nil {
-			report.add(SeverityError, "invalid_status", path, "apply_status object phải có dạng {id,value,turns}")
+			report.add(SeverityError, "invalid_status", path, "apply_status object phải có dạng {id,value,turns,chance}")
 			return
 		}
 		entries = []statusEntry{one}
 	case '[':
 		if err := json.Unmarshal(trimmed, &entries); err != nil {
-			report.add(SeverityError, "invalid_status", path, "apply_status mảng phải chứa các object {id,value,turns}")
+			report.add(SeverityError, "invalid_status", path, "apply_status mảng phải chứa các object {id,value,turns,chance}")
 			return
 		}
 	default:
-		report.add(SeverityError, "invalid_status", path, "apply_status phải là chuỗi, object {id,value,turns} hoặc mảng")
+		report.add(SeverityError, "invalid_status", path, "apply_status phải là chuỗi, object {id,value,turns,chance} hoặc mảng")
 		return
 	}
 	if len(entries) == 0 {
@@ -358,6 +363,12 @@ func validateApplyStatus(raw json.RawMessage, path string, report *Report) {
 			var number float64
 			if err := json.Unmarshal(rawValue, &number); err != nil || number < 0 {
 				report.add(SeverityError, "invalid_status_field", entryPath+"."+field, field+" phải là số không âm")
+			}
+		}
+		if len(entry.Chance) > 0 {
+			var chance float64
+			if err := json.Unmarshal(entry.Chance, &chance); err != nil || chance < 0 || chance > 1 {
+				report.add(SeverityError, "invalid_status_field", entryPath+".chance", "chance phải trong khoảng 0..1")
 			}
 		}
 	}
@@ -499,4 +510,131 @@ func (r *Report) sort() {
 		}
 		return r.Issues[i].Path < r.Issues[j].Path
 	})
+}
+
+var allowedBlockTriggers = set(
+	"ALWAYS_ON", "ON_ACTION", "ON_HIT", "BEFORE_HIT", "ON_TURN_START",
+	"ON_DEATH", "ON_TICK", "CAPABILITY", "COMBAT_PASSIVE", "PASSIVE",
+	"ON_BATTLE_START", "BEFORE_ENEMY_ATTACK", "ON_CAST", "ON_CONSUME", "ON_USE",
+)
+
+var allowedTargetSelectors = set(
+	"SELF", "TARGET", "ROW", "COL", "COLUMN", "CROSS", "ALL_ENEMIES", "ALL_ALLIES", "ALL", "SINGLE",
+)
+
+var allowedAtomicOps = set(
+	"DAMAGE", "SHIELD", "HEAL", "DIRECT_HP", "STAT_MOD", "STATUS", "BARRIER", "CLEANSE", "UNIQUE",
+)
+
+func validateBlocks(raw json.RawMessage, report *Report) {
+	var blocks []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &blocks); err != nil || firstNonSpace(raw) != '[' {
+		report.add(SeverityError, "invalid_section_type", "$.blocks", "namespace blocks phải là JSON array")
+		return
+	}
+	for i, block := range blocks {
+		base := fmt.Sprintf("$.blocks[%d]", i)
+		var trigger string
+		triggerRaw, hasTrigger := block["trigger"]
+		if !hasTrigger || json.Unmarshal(triggerRaw, &trigger) != nil || strings.TrimSpace(trigger) == "" {
+			report.add(SeverityError, "missing_block_trigger", base+".trigger", "trigger phải là chuỗi không rỗng")
+		} else {
+			canonicalTrigger := strings.ToUpper(strings.TrimSpace(trigger))
+			if trigger != canonicalTrigger {
+				report.add(SeverityError, "noncanonical_trigger", base+".trigger", "trigger phải viết hoa canonical")
+			}
+			if !allowedBlockTriggers[canonicalTrigger] {
+				report.add(SeverityError, "invalid_block_trigger", base+".trigger", "trigger không được hỗ trợ: "+canonicalTrigger)
+			}
+		}
+
+		targetRaw, hasTarget := block["target"]
+		if !hasTarget || firstNonSpace(targetRaw) != '{' {
+			report.add(SeverityError, "invalid_block_target", base+".target", "target phải là JSON object")
+		} else {
+			var target map[string]json.RawMessage
+			if json.Unmarshal(targetRaw, &target) == nil {
+				if selRaw, ok := target["selector"]; ok {
+					var sel string
+					if json.Unmarshal(selRaw, &sel) != nil {
+						report.add(SeverityError, "invalid_target_selector", base+".target.selector", "selector phải là chuỗi")
+					} else {
+						cSel := strings.ToUpper(strings.TrimSpace(sel))
+						if !allowedTargetSelectors[cSel] {
+							report.add(SeverityError, "invalid_target_selector", base+".target.selector", "selector không được hỗ trợ: "+cSel)
+						}
+					}
+				}
+			}
+		}
+
+		opsRaw, hasOps := block["operations"]
+		if !hasOps || firstNonSpace(opsRaw) != '[' {
+			report.add(SeverityError, "missing_block_operations", base+".operations", "operations phải là JSON array")
+			continue
+		}
+		var ops []map[string]json.RawMessage
+		if err := json.Unmarshal(opsRaw, &ops); err != nil {
+			report.add(SeverityError, "invalid_block_operations", base+".operations", "operations JSON không hợp lệ")
+			continue
+		}
+		if len(ops) == 0 {
+			report.add(SeverityError, "empty_block_operations", base+".operations", "operations không được rỗng")
+			continue
+		}
+		for j, op := range ops {
+			opBase := fmt.Sprintf("%s.operations[%d]", base, j)
+			var opType string
+			opTypeRaw, hasOpType := op["op"]
+			if !hasOpType || json.Unmarshal(opTypeRaw, &opType) != nil || strings.TrimSpace(opType) == "" {
+				report.add(SeverityError, "missing_op_type", opBase+".op", "op phải là chuỗi không rỗng")
+				continue
+			}
+			canonicalOp := strings.ToUpper(strings.TrimSpace(opType))
+			if opType != canonicalOp {
+				report.add(SeverityError, "noncanonical_op", opBase+".op", "op phải viết hoa canonical")
+			}
+			if !allowedAtomicOps[canonicalOp] {
+				report.add(SeverityError, "invalid_op_type", opBase+".op", "op type không được hỗ trợ: "+canonicalOp)
+				continue
+			}
+
+			// Validate specific ops
+			if canonicalOp == "STATUS" {
+				var statusID string
+				if sRaw, ok := op["status_id"]; !ok || json.Unmarshal(sRaw, &statusID) != nil || strings.TrimSpace(statusID) == "" {
+					report.add(SeverityError, "missing_status_id", opBase+".status_id", "status_id phải là chuỗi không rỗng")
+				} else {
+					cID := strings.ToUpper(strings.TrimSpace(statusID))
+					if statusID != cID {
+						report.add(SeverityError, "noncanonical_status", opBase+".status_id", "status_id phải viết hoa canonical")
+					}
+					if _, ok := StatusDefinitionFor(cID); !ok {
+						report.add(SeverityError, "unknown_status", opBase+".status_id", "status_id không có trong manifest: "+cID)
+					}
+				}
+			}
+
+			if valRaw, ok := op["value"]; ok && len(valRaw) > 0 {
+				var val float64
+				if json.Unmarshal(valRaw, &val) != nil || (val < 0 && canonicalOp != "STAT_MOD") {
+					report.add(SeverityError, "invalid_op_value", opBase+".value", "value phải là số không âm")
+				}
+			}
+
+			if turnsRaw, ok := op["turns"]; ok && len(turnsRaw) > 0 {
+				var turns int
+				if json.Unmarshal(turnsRaw, &turns) != nil || turns < 0 {
+					report.add(SeverityError, "invalid_op_turns", opBase+".turns", "turns phải là số nguyên không âm")
+				}
+			}
+
+			if chanceRaw, ok := op["chance"]; ok && len(chanceRaw) > 0 {
+				var chance float64
+				if json.Unmarshal(chanceRaw, &chance) != nil || chance < 0 || chance > 1 {
+					report.add(SeverityError, "invalid_op_chance", opBase+".chance", "chance phải trong khoảng 0..1")
+				}
+			}
+		}
+	}
 }

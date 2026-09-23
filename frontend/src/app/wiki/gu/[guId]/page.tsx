@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { fetchAllGus, fetchGuById, type GuDictionaryItem } from "@/lib/gu-dict";
 import { notFound } from "next/navigation";
+import { EffectBlocksList } from "@/components/EffectBlockView";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 
 type Props = {
@@ -218,48 +219,64 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
 
           <section className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
             <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono mb-4">Hiệu ứng</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeEffects.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-emerald-400 font-mono mb-2">Chủ động</h3>
-                  <ul className="space-y-1">
-                    {activeEffects.map((e, i) => (
-                      <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {supportEffects.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-sky-400 font-mono mb-2">Hỗ trợ</h3>
-                  <ul className="space-y-1">
-                    {supportEffects.map((e, i) => (
-                      <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {passiveEffects.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-purple-400 font-mono mb-2">Thụ động</h3>
-                  <ul className="space-y-1">
-                    {passiveEffects.map((e, i) => (
-                      <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {houseEffects.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-amber-400 font-mono mb-2">Tiên Khiếu</h3>
-                  <ul className="space-y-1">
-                    {houseEffects.map((e, i) => (
-                      <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            {gu.effects?.blocks && gu.effects.blocks.length > 0 ? (
+              <div className="space-y-4">
+                <EffectBlocksList blocks={gu.effects.blocks} />
+                {houseEffects.length > 0 && (
+                  <div className="pt-3 border-t border-[var(--border)]">
+                    <h3 className="text-xs font-bold text-amber-400 font-mono mb-2">Tiên Khiếu</h3>
+                    <ul className="space-y-1">
+                      {houseEffects.map((e, i) => (
+                        <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeEffects.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold text-emerald-400 font-mono mb-2">Chủ động</h3>
+                    <ul className="space-y-1">
+                      {activeEffects.map((e, i) => (
+                        <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {supportEffects.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold text-sky-400 font-mono mb-2">Hỗ trợ</h3>
+                    <ul className="space-y-1">
+                      {supportEffects.map((e, i) => (
+                        <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {passiveEffects.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold text-purple-400 font-mono mb-2">Thụ động</h3>
+                    <ul className="space-y-1">
+                      {passiveEffects.map((e, i) => (
+                        <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {houseEffects.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold text-amber-400 font-mono mb-2">Tiên Khiếu</h3>
+                    <ul className="space-y-1">
+                      {houseEffects.map((e, i) => (
+                        <li key={i} className="text-xs text-[var(--text-primary)] font-mono">• {e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">

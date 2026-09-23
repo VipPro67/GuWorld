@@ -109,7 +109,41 @@ export interface GrowthEffect {
   hours_to_max?: number;
 }
 
+export interface TargetScope {
+  selector?: string;
+  bypass_frontline?: boolean;
+}
+
+export interface EffectCondition {
+  field: string;
+  operator: string;
+  value: number;
+}
+
+export interface AtomicOperation {
+  op: string;
+  sub_type?: string;
+  target?: TargetScope;
+  value?: number;
+  turns?: number;
+  chance?: number;
+  path?: string;
+  status_id?: string;
+  stat?: string;
+  code?: string;
+  params?: Record<string, ApiResponseData>;
+}
+
+export interface ComposableEffectBlock {
+  id?: string;
+  trigger: string;
+  target?: TargetScope;
+  conditions?: EffectCondition[];
+  operations: AtomicOperation[];
+}
+
 export interface GuEffects {
+  blocks?: ComposableEffectBlock[] | null;
   active?: ActiveEffect | null;
   passive?: PassiveEffect | null;
   growth?: GrowthEffect | null;

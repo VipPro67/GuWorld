@@ -1315,7 +1315,11 @@ func Simulate(state *CombatState) []CombatLog {
 					// Apply weak debuff (reduces damage dealt) and atk_up buff
 					dmgMultiplier *= actor.DamageMultiplier
 
-					if hasMechanic(actor.Mechanics, "PASSIVE", "DOUBLE_DAMAGE_DEALT") {
+					// COMBAT_PASSIVE is the canonical trigger; bare PASSIVE is
+					// accepted for rows authored before the rename (same
+					// ON_EVENT timing, unrelated to the passive section).
+					if hasMechanic(actor.Mechanics, "PASSIVE", "DOUBLE_DAMAGE_DEALT") ||
+						hasMechanic(actor.Mechanics, "COMBAT_PASSIVE", "DOUBLE_DAMAGE_DEALT") {
 						dmgMultiplier *= 2.0
 					}
 
@@ -1331,8 +1335,12 @@ func Simulate(state *CombatState) []CombatLog {
 						hitCount = 1
 					}
 
+					// Targets whose strike was negated by FIRST_TURN_EVADE carry
+					// no percent riders (damage_hp_percent/shield strip below).
+					evadedThisStrike := make(map[*CombatantAuto]bool)
 					for _, target := range resolved {
 						totalDmg := 0.0
+						hadEvaded := target.CustomState != nil && target.CustomState["first_turn_evade_used"] == turn
 
 						// Evasion: dodge chance from EVASION buffs, reduced by attacker Accuracy
 						if missCh := target.EvasionChance - actor.Accuracy; missCh > 0 && rng.Float64() < missCh {
@@ -1372,11 +1380,11 @@ func Simulate(state *CombatState) []CombatLog {
 							}
 						}
 
-						targetDef := target.BaseDef * target.DefenseMultiplier
-						if hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD") {
-							targetDef = math.Max(0, targetDef-30.0)
-						}
-						// Apply ignore_defense from attacker
+					targetDef := target.BaseDef * target.DefenseMultiplier
+					// ON_HIT/BYPASS_SHIELD means one thing only: the hit ignores
+					// VirtualShield (resolved in applyDamageToTarget). Defense
+					// shredding belongs to ignore_defense_* fields, not here.
+					// Apply ignore_defense from attacker
 						if actor.IgnoreDefenseFlat > 0 {
 							targetDef = math.Max(0, targetDef-actor.IgnoreDefenseFlat)
 						}
@@ -1424,6 +1432,9 @@ func Simulate(state *CombatState) []CombatLog {
 							}
 							totalHitDmg += netDmg
 							totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, !isAlly, rng)
+						}
+						if !hadEvaded && target.CustomState != nil && target.CustomState["first_turn_evade_used"] == turn {
+							evadedThisStrike[target] = true
 						}
 						totalDamageDealt += totalDmg
 
@@ -1632,14 +1643,28 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 					}
 
+					actionRank := a.Rank
+					if actionRank <= 0 {
+						actionRank = actor.Rank
+					}
+
 					// ── Percent-based direct effects (damage_hp_percent, shield strip) ──
+					// A strike negated by FIRST_TURN_EVADE carries no riders.
 					if a.DamageHPPercent > 0 || a.ShieldStripPercent > 0 {
 						for _, target := range resolved {
 							if target == nil || target.HP <= 0 {
 								continue
 							}
+							if evadedThisStrike[target] {
+								continue
+							}
 							if a.ShieldStripPercent > 0 && target.VirtualShield > 0 {
-								strip := target.VirtualShield * a.ShieldStripPercent
+								stripPct := a.ShieldStripPercent
+								if target.Rank > actionRank {
+									supp, _ := statusfx.TargetSuppressionFactor(actionRank, target.Rank)
+									stripPct *= supp
+								}
+								strip := target.VirtualShield * stripPct
 								target.VirtualShield -= strip
 								turnLogs = append(turnLogs, CombatLog{
 									Turn:      turn,
@@ -1652,20 +1677,36 @@ func Simulate(state *CombatState) []CombatLog {
 								})
 							}
 							if a.DamageHPPercent > 0 {
-								direct := target.MaxHP * a.DamageHPPercent
-								target.HP -= direct
-								if target.HP < 0 {
-									target.HP = 0
+								hpPct := a.DamageHPPercent
+								if target.Rank > actionRank {
+									supp, _ := statusfx.TargetSuppressionFactor(actionRank, target.Rank)
+									hpPct *= supp
 								}
-								turnLogs = append(turnLogs, CombatLog{
-									Turn:      turn,
-									ActorId:   actor.ID,
-									ActorName: actor.Name,
-									Action:    "HP_PERCENT",
-									TargetId:  target.ID,
-									Damage:    direct,
-									Detail:    fmt.Sprintf("[%s] đánh thẳng vào bản ngã, %s mất %.0f HP trực tiếp (còn %.0f HP)!", a.Name, target.Name, direct, target.HP),
-								})
+								if hpPct > 0 {
+									direct := target.MaxHP * hpPct
+									target.HP -= direct
+									if target.HP < 0 {
+										target.HP = 0
+									}
+									turnLogs = append(turnLogs, CombatLog{
+										Turn:      turn,
+										ActorId:   actor.ID,
+										ActorName: actor.Name,
+										Action:    "HP_PERCENT",
+										TargetId:  target.ID,
+										Damage:    direct,
+										Detail:    fmt.Sprintf("[%s] đánh thẳng vào bản ngã, %s mất %.0f HP trực tiếp (còn %.0f HP)!", a.Name, target.Name, direct, target.HP),
+									})
+								} else {
+									turnLogs = append(turnLogs, CombatLog{
+										Turn:      turn,
+										ActorId:   actor.ID,
+										ActorName: actor.Name,
+										Action:    "STATUS_IMMUNE",
+										TargetId:  target.ID,
+										Detail:    fmt.Sprintf("%s cảnh giới vượt trội, hoàn toàn miễn nhiễm sát thương trực tiếp từ [%s]!", target.Name, a.Name),
+									})
+								}
 							}
 						}
 					}
@@ -1727,16 +1768,25 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				} else {
 					allOps := collectAllStatusOps(a)
+					actionRank := a.Rank
+					if actionRank <= 0 {
+						actionRank = actor.Rank
+					}
 					if len(allOps) > 0 {
-						applyStatusOps(actor, resolved, allOps, turn, rng, &turnLogs)
+						applyStatusOps(actor, resolved, allOps, actionRank, turn, rng, &turnLogs)
 					}
 					if a.SelfEvasionPct > 0 {
+						evaPct := a.SelfEvasionPct
+						if actor.Rank > actionRank {
+							att := statusfx.CasterAttenuationFactor(actionRank, actor.Rank)
+							evaPct *= att
+						}
 						turns := a.BonusTurns + 1
 						if turns < 2 {
 							turns = 2
 						}
 						actor.ActiveEffects = append(actor.ActiveEffects, Effect{
-							ID: "EVASION", Type: "buff", Value: int(a.SelfEvasionPct * 100), Duration: turns,
+							ID: "EVASION", Type: "buff", Value: int(evaPct * 100), Duration: turns,
 						})
 						ComputeEffectMultipliers(actor)
 						turnLogs = append(turnLogs, CombatLog{
@@ -1744,7 +1794,7 @@ func Simulate(state *CombatState) []CombatLog {
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "EVASION_GAIN",
-							Detail:    fmt.Sprintf("%s nhận +%.0f%% né tránh trong %d lượt!", actor.Name, a.SelfEvasionPct*100, a.BonusTurns),
+							Detail:    fmt.Sprintf("%s nhận +%.0f%% né tránh trong %d lượt!", actor.Name, evaPct*100, a.BonusTurns),
 						})
 					}
 					if a.TargetWeakPct > 0 {
@@ -1760,7 +1810,7 @@ func Simulate(state *CombatState) []CombatLog {
 							if turns <= 0 {
 								turns = 2
 							}
-							applyStatusOps(actor, resolved, []statusfx.StatusOp{{ID: statusfx.StatusWeak, Value: a.TargetWeakPct * 100, Turns: turns}}, turn, rng, &turnLogs)
+							applyStatusOps(actor, resolved, []statusfx.StatusOp{{ID: statusfx.StatusWeak, Value: a.TargetWeakPct * 100, Turns: turns}}, actionRank, turn, rng, &turnLogs)
 						}
 					}
 					if a.DisableGuTurns > 0 {
@@ -1768,13 +1818,31 @@ func Simulate(state *CombatState) []CombatLog {
 							if target == nil || target.HP <= 0 {
 								continue
 							}
-							sealGuTurns(target, a.DisableGuTurns)
+							turns := a.DisableGuTurns
+							if target.Rank > actionRank {
+								supp, penalty := statusfx.TargetSuppressionFactor(actionRank, target.Rank)
+								if supp <= 0 {
+									turnLogs = append(turnLogs, CombatLog{
+										Turn:      turn,
+										ActorId:   target.ID,
+										ActorName: target.Name,
+										Action:    "STATUS_IMMUNE",
+										Detail:    fmt.Sprintf("%s cảnh giới vượt trội, hoàn toàn miễn nhiễm hiệu ứng phong ấn Cổ từ [%s]!", target.Name, a.Name),
+									})
+									continue
+								}
+								turns -= penalty
+								if turns < 1 {
+									turns = 1
+								}
+							}
+							sealGuTurns(target, turns)
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   target.ID,
 								ActorName: target.Name,
 								Action:    "GU_SEAL",
-								Detail:    fmt.Sprintf("%s bị phong ấn Cổ trong %d lượt, không thể dùng Cổ!", target.Name, a.DisableGuTurns),
+								Detail:    fmt.Sprintf("%s bị phong ấn Cổ trong %d lượt, không thể dùng Cổ!", target.Name, turns),
 							})
 						}
 					}
@@ -2165,115 +2233,23 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			// Fallback: Basic attack if no attack / damage action was executed in this turn pass
+			// Fallback: Basic attack if no attack / damage action was executed in this turn pass.
+			// Routed through runOne so BEFORE_ENEMY_ATTACK (FORGET_INTENT/WILL),
+			// backlash, mana, hunger and path-mastery behave exactly like a
+			// normal action. runOne applies dao/path/crit multipliers itself,
+			// hence the raw BaseDmg here.
 			if !executedDamageThisTurn {
-				daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
-				fallbackDmgMult := actor.DamageMultiplier
-				pendingDamage := getPendingDamageMult(actor)
-				if pendingDamage > 1.0 {
-					fallbackDmgMult *= pendingDamage
-					actor.PendingDamageBuffs = nil
-				}
 				fallbackAction := &SimAction{
 					ActionType: "BASIC_ATTACK",
 					Name:       "Đánh thường",
-					Damage:     actor.BaseDmg * daoMult * fallbackDmgMult,
+					Damage:     actor.BaseDmg,
 					DamageMult: 1.0,
 					ManaCost:   0,
 					TargetType: "SINGLE",
+					Path:       []string{"strength"},
 				}
-				fallbackTargets := resolveTargets(enemyTargets, fallbackAction)
-				if len(fallbackTargets) > 0 {
-					target := fallbackTargets[0]
-					initialShield := target.VirtualShield
-					initialHP := target.HP
-
-					netDmg := fallbackAction.Damage - target.BaseDef
-					netDmg *= (1.0 - pathBonus(target.PathResistance, []string{"strength"}))
-					if netDmg < 1 {
-						netDmg = 1
-					}
-					fallbackStartIndex := len(turnLogs)
-					applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
-					shieldAbsorbed := math.Max(0, initialShield-target.VirtualShield)
-					hpLost := math.Max(0, initialHP-target.HP)
-
-					// Filter out redundant shield logs created by applyDamageToTarget
-					var keptLogs []CombatLog
-					for _, l := range turnLogs[fallbackStartIndex:] {
-						if l.Action != "SHIELD_ABSORB" && l.Action != "SHIELD_BREAK" && l.Action != "SHIELD_BYPASS_ATTACK" {
-							keptLogs = append(keptLogs, l)
-						}
-					}
-					turnLogs = append(turnLogs[:fallbackStartIndex], keptLogs...)
-
-					breakdown := &DamageBreakdown{
-						BaseDamage:      actor.BaseDmg,
-						SkillMult:       1.0,
-						DaoMult:         daoMult,
-						BuffMult:        fallbackDmgMult,
-						CritMult:        1.0,
-						PathBonus:       0,
-						TargetDef:       target.BaseDef,
-						PathResist:      pathBonus(target.PathResistance, []string{"strength"}),
-						DamageReduction: target.DamageTakenReduction,
-						ShieldAbsorbed:  shieldAbsorbed,
-						HPDamage:        hpLost,
-						FinalDamage:     netDmg,
-						RawDamage:       actor.BaseDmg * daoMult * fallbackDmgMult,
-						HitCount:        1,
-						AttackerAttack:  actor.StatProvenance["attack"],
-						DefenderDefense: target.StatProvenance["defense"],
-					}
-
-					if netDmg > 0 {
-						var detailMsg string
-						if shieldAbsorbed > 0 && hpLost > 0 {
-							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (phá vỡ %.0f khiên, trừ %.0f HP, còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, netDmg, shieldAbsorbed, hpLost, target.HP)
-						} else if shieldAbsorbed > 0 && hpLost == 0 {
-							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (bị Khiên Ảo cản %.0f, còn %.0f khiên, %.0f HP)", actor.Name, fallbackAction.Name, target.Name, netDmg, shieldAbsorbed, target.VirtualShield, target.HP)
-						} else {
-							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, netDmg, target.HP)
-						}
-
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "BASIC_ATTACK",
-							TargetId:  target.ID,
-							Damage:    netDmg,
-							Detail:    detailMsg,
-							Breakdown: breakdown,
-						})
-					} else {
-						if target.VirtualShield > 0 {
-							breakdown.Reason = "Toàn bộ sát thương bị Khiên Ảo hấp thụ"
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "BASIC_ATTACK",
-								TargetId:  target.ID,
-								Damage:    0,
-								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, fallbackAction.Name, target.Name, target.VirtualShield, target.HP),
-								Breakdown: breakdown,
-							})
-						} else {
-							breakdown.Reason = "Đối phương phòng thủ kiên cố hoặc miễn nhiễm toàn bộ sát thương"
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "BASIC_ATTACK",
-								TargetId:  target.ID,
-								Damage:    0,
-								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây 0 sát thương do đối phương phòng thủ/miễn nhiễm (còn %.0f HP)!", actor.Name, fallbackAction.Name, target.Name, target.HP),
-								Breakdown: breakdown,
-							})
-						}
-					}
-				}
+				out := runOne(actor, fallbackAction, isAlly, enemyTargets)
+				_ = out // fallback always counts as the turn pass action
 				postActionChecks(enemyTargets)
 			}
 		}
@@ -2281,64 +2257,76 @@ func Simulate(state *CombatState) []CombatLog {
 		logs = append(logs, turnLogs...)
 
 		// ── Death triggers check (REBORN: rewind or in-place) ──
+		// Allies may rewind the battle or stand back up; enemies only stand
+		// back up in place — an enemy rewind would discard the fight fought.
 		rewound := false
 		var rewoundID string
 		var rewindMechs []CombatMechanic
-		for _, a := range state.Allies {
-			if a.HP > 0 || !hasMechanic(a.Mechanics, "ON_DEATH", "REBORN") || a.IsReviveLocked {
-				continue
+		tryReborn := func(c *CombatantAuto, allowRewind bool) (didRewind bool) {
+			if c.HP > 0 || !hasMechanic(c.Mechanics, "ON_DEATH", "REBORN") || c.IsReviveLocked {
+				return false
 			}
-			mechs := a.Mechanics
+			mechs := c.Mechanics
 			maxUses := mechanicInt(mechs, "ON_DEATH", "REBORN", "max_uses", 1)
 			if maxUses < 1 {
 				maxUses = 1
 			}
-			if rebornUses[a.ID] >= maxUses {
-				continue
+			if rebornUses[c.ID] >= maxUses {
+				return false
 			}
 			guaranteed := turn == 1 && mechanicBool(mechs, "ON_DEATH", "REBORN", "turn1_guaranteed", false)
 			if !guaranteed && rng.Float64() >= mechanicFloat(mechs, "ON_DEATH", "REBORN", "chance", 0) {
-				continue
+				return false
 			}
-			rebornUses[a.ID]++
-			if strings.ToLower(mechanicString(mechs, "ON_DEATH", "REBORN", "mode", "rewind")) == "in_place" {
-				hpPct := mechanicFloat(mechs, "ON_DEATH", "REBORN", "revive_hp_percent", 0.5)
-				a.HP = math.Max(1, a.MaxHP*hpPct)
-				a.IsDead = false
-				if mechanicBool(mechs, "ON_DEATH", "REBORN", "clear_debuffs", true) {
-					var kept []Effect
-					for _, eff := range a.ActiveEffects {
-						if !isDispellableEffect(eff.ID) {
-							kept = append(kept, eff)
-						}
+			rebornUses[c.ID]++
+			if allowRewind && strings.ToLower(mechanicString(mechs, "ON_DEATH", "REBORN", "mode", "rewind")) != "in_place" {
+				return true
+			}
+			hpPct := mechanicFloat(mechs, "ON_DEATH", "REBORN", "revive_hp_percent", 0.5)
+			c.HP = math.Max(1, c.MaxHP*hpPct)
+			c.IsDead = false
+			if mechanicBool(mechs, "ON_DEATH", "REBORN", "clear_debuffs", true) {
+				var kept []Effect
+				for _, eff := range c.ActiveEffects {
+					if !isDispellableEffect(eff.ID) {
+						kept = append(kept, eff)
 					}
-					a.ActiveEffects = kept
-					a.ActiveDoT = nil
 				}
-				applyRebornEmpower(a, mechs, turn, rebornUses[a.ID], &logs)
-				ComputeEffectMultipliers(a)
+				c.ActiveEffects = kept
+				c.ActiveDoT = nil
+			}
+			applyRebornEmpower(c, mechs, turn, rebornUses[c.ID], &logs)
+			ComputeEffectMultipliers(c)
+			logs = append(logs, CombatLog{
+				Turn:      turn,
+				ActorId:   c.ID,
+				ActorName: c.Name,
+				Action:    "TRIGGERED",
+				Trigger:   "REBORN",
+				Detail:    fmt.Sprintf("%s lãng quên cái chết, vùng dậy với %.0f HP (lần %d/%d)!", c.Name, c.HP, rebornUses[c.ID], maxUses),
+			})
+			return false
+		}
+		for _, a := range state.Allies {
+			if tryReborn(a, true) {
+				rewound = true
+				rewoundID = a.ID
+				rewindMechs = a.Mechanics
 				logs = append(logs, CombatLog{
 					Turn:      turn,
 					ActorId:   a.ID,
 					ActorName: a.Name,
 					Action:    "TRIGGERED",
 					Trigger:   "REBORN",
-					Detail:    fmt.Sprintf("%s lãng quên cái chết, vùng dậy với %.0f HP (lần %d/%d)!", a.Name, a.HP, rebornUses[a.ID], maxUses),
+					Detail:    "Xuân Thu Thiền kích hoạt! Nghịch chuyển thời không, quay về Lượt 1!",
 				})
-				continue
+				break
 			}
-			rewound = true
-			rewoundID = a.ID
-			rewindMechs = mechs
-			logs = append(logs, CombatLog{
-				Turn:      turn,
-				ActorId:   a.ID,
-				ActorName: a.Name,
-				Action:    "TRIGGERED",
-				Trigger:   "REBORN",
-				Detail:    "Xuân Thu Thiền kích hoạt! Nghịch chuyển thời không, quay về Lượt 1!",
-			})
-			break
+		}
+		if !rewound {
+			for _, e := range state.Enemies {
+				tryReborn(e, false)
+			}
 		}
 		if rewound {
 			initialState.Turn = 0
@@ -2439,16 +2427,24 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		damage = 1
 	}
 
-	// Định Tiên Du first turn evade
+	// Định Tiên Du first turn evade: dodges the FIRST strike on turn 1 only.
+	// Multi-hit/AoE follow-ups land normally, as do percent riders attached
+	// to the evaded strike (skipped via evadedThisStrike in runOne).
 	if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") {
-		*logs = append(*logs, CombatLog{
-			Turn:      turn,
-			ActorId:   target.ID,
-			ActorName: target.Name,
-			Action:    "EVADE",
-			Detail:    fmt.Sprintf("%s kích hoạt Định Tiên Du, né tránh đòn đánh đầu tiên hoàn toàn!", target.Name),
-		})
-		return 0
+		if target.CustomState == nil {
+			target.CustomState = make(map[string]int)
+		}
+		if target.CustomState["first_turn_evade_used"] != turn {
+			target.CustomState["first_turn_evade_used"] = turn
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "EVADE",
+				Detail:    fmt.Sprintf("%s kích hoạt Định Tiên Du, né tránh đòn đánh đầu tiên hoàn toàn!", target.Name),
+			})
+			return 0
+		}
 	}
 
 	// Invulnerable check (INVINCIBLE status or mechanic-granted "invulnerable")

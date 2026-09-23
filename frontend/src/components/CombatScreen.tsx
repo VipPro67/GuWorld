@@ -226,6 +226,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       if (spec.combat_roles?.some(r => tankRoles.has(r))) return true;
 
       // Check effects for shield/defense keys
+      if (spec.effects?.blocks?.some(b => b.operations?.some(op => op.op === "SHIELD" || (op.op === "STAT_MOD" && op.stat === "DEFENSE")))) {
+        return true;
+      }
       for (const section of ["active", "passive", "support"] as const) {
         const effects = spec.effects?.[section];
         if (!effects) continue;
@@ -541,6 +544,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       const isDefense =
         defenseRoles.has(primaryRole) ||
         roles.some(role => defenseRoles.has(role)) ||
+        Boolean(spec.effects?.blocks?.some(b => b.operations?.some(op => op.op === "SHIELD" || (op.op === "STAT_MOD" && op.stat === "DEFENSE")))) ||
         (() => {
           for (const section of [
             "active",

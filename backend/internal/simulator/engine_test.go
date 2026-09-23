@@ -657,6 +657,36 @@ func TestStatusFxStunAndInvincibleInCombat(t *testing.T) {
 	}
 }
 
+// TestGenericExtensibleStatusFx verifies that newly registered statusfx effects
+// (like HASTE, ARMOR_BREAK, WEAK) automatically update combatant multipliers and logs.
+func TestGenericExtensibleStatusFx(t *testing.T) {
+	c := newTestCombatant("unit", "Caster", 1000, 10)
+	target := newTestCombatant("target", "Target", 1000, 10)
+
+	ops := []statusfx.StatusOp{
+		{ID: statusfx.StatusHaste, Value: 30, Turns: 2},
+		{ID: statusfx.StatusArmorBreak, Value: 25, Turns: 2},
+		{ID: statusfx.StatusWeak, Value: 20, Turns: 2},
+	}
+
+	var logs []CombatLog
+	rng := rand.New(rand.NewSource(42))
+	applyStatusOps(c, []*CombatantAuto{target}, ops, c.Rank, 1, rng, &logs)
+
+	if c.EffectiveSpeed <= c.Speed {
+		t.Fatalf("expected caster speed to increase with Haste, got %v", c.EffectiveSpeed)
+	}
+	if target.DefenseMultiplier >= 1.0 {
+		t.Fatalf("expected target defense multiplier to decrease with ArmorBreak, got %v", target.DefenseMultiplier)
+	}
+	if target.DamageMultiplier >= 1.0 {
+		t.Fatalf("expected target damage multiplier to decrease with Weak, got %v", target.DamageMultiplier)
+	}
+	if len(logs) < 3 {
+		t.Fatalf("expected at least 3 status application logs, got %d", len(logs))
+	}
+}
+
 // TestSilenceForcesBasicAttack verifies that a SILENCED combatant cannot use skills.
 func TestSilenceForcesBasicAttack(t *testing.T) {
 	state := &CombatState{
@@ -1104,3 +1134,67 @@ func TestDamageBreakdownCarriesStatProvenance(t *testing.T) {
 		t.Fatal("expected a damage log with breakdown")
 	}
 }
+
+// TestCasterAttenuationInCombat verifies that when a Rank 9 immortal uses a Rank 4
+// Gu for self-buff (Invincible), Caster Attenuation suppresses the proc chance.
+func TestCasterAttenuationInCombat(t *testing.T) {
+	immortal := newTestCombatant("immortal", "Player", 50000, 100)
+	immortal.Rank = 9
+	immortal.Actions = []SimAction{{
+		ActionType: "GU_SKILL", Name: "Kim Thân Cổ", Rank: 4,
+		StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusInvincible, Turns: 2, Chance: 1.0}},
+	}}
+	enemy := newTestCombatant("foe", "Enemy", 1000, 10)
+	enemy.Rank = 9
+
+	state := &CombatState{Seed: 123, Allies: []*CombatantAuto{immortal}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	for _, l := range logs {
+		t.Logf("[%s] %s", l.Action, l.Detail)
+	}
+	missFound := false
+	for _, l := range logs {
+		if strings.Contains(l.Detail, "không kích hoạt thành công hiệu ứng [Bất Tử]") || l.Action == "STATUS_MISS" {
+			missFound = true
+			break
+		}
+	}
+	if !missFound {
+		t.Fatalf("expected miss detail due to caster attenuation on Rank 4 Gu used by Rank 9 immortal")
+	}
+}
+
+// TestTargetSuppressionImmunityInCombat verifies that when a Rank 2 mortal uses
+// a Rank 2 Gu against a Rank 8 boss (gap >= 5), the boss is completely immune.
+func TestTargetSuppressionImmunityInCombat(t *testing.T) {
+	mortal := newTestCombatant("mortal", "Player", 500, 10)
+	mortal.Rank = 2
+	mortal.Actions = []SimAction{{
+		ActionType: "GU_SKILL", Name: "Định Thân Cổ", Rank: 2,
+		StatusOps:       []statusfx.StatusOp{{ID: statusfx.StatusStun, Turns: 3, Chance: 1.0}},
+		DamageHPPercent: 0.20,
+		DisableGuTurns:  2,
+	}}
+	boss := newTestCombatant("boss", "Enemy", 50000, 100)
+	boss.Rank = 8
+
+	state := &CombatState{Seed: 456, Allies: []*CombatantAuto{mortal}, Enemies: []*CombatantAuto{boss}}
+	logs := Simulate(state)
+
+	immuneFound := false
+	for _, l := range logs {
+		if strings.Contains(l.Detail, "miễn nhiễm") {
+			immuneFound = true
+			break
+		}
+	}
+	if !immuneFound {
+		t.Fatalf("expected immune log detail for gap 6, got logs: %+v", logs)
+	}
+	// Boss HP must not have lost 20% MaxHP (10,000)
+	if boss.HP < 49000 {
+		t.Fatalf("boss HP = %v, expected no direct %%HP damage from lower rank Gu", boss.HP)
+	}
+}
+
