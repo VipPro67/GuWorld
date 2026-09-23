@@ -67,12 +67,13 @@ export const PATH_TO_DAO_GROUP: Record<string, string> = {
   dark: "ELEMENTAL", star: "ELEMENTAL", sound: "ELEMENTAL",
   space: "SPACE_TIME", time: "SPACE_TIME",
   rule: "RULE_ORDER", restriction: "RULE_ORDER", formation: "RULE_ORDER",
-  sword: "KINETIC_WEAPON", blade: "KINETIC_WEAPON", weapon: "KINETIC_WEAPON", killing: "KINETIC_WEAPON",
+  sword: "KINETIC_WEAPON", blade: "KINETIC_WEAPON", weapon: "KINETIC_WEAPON", killing: "KINETIC_WEAPON", kill: "KINETIC_WEAPON",
   strength: "BODY_LIFE", bone: "BODY_LIFE", transformation: "BODY_LIFE", food: "BODY_LIFE",
   soul: "SOUL_MIND", wisdom: "SOUL_MIND", emotion: "SOUL_MIND", enslavement: "SOUL_MIND", dream: "SOUL_MIND",
-  information: "INFORMATION_STEALTH", luck: "INFORMATION_STEALTH", theft: "INFORMATION_STEALTH", phantom: "INFORMATION_STEALTH", painting: "INFORMATION_STEALTH",
-  blood: "ORGANIC_CORRUPTION", poison: "ORGANIC_CORRUPTION",
-  refinement: "CRAFT_ALCHEMY", pill: "CRAFT_ALCHEMY",
+  information: "INFORMATION_STEALTH", luck: "INFORMATION_STEALTH", theft: "INFORMATION_STEALTH", phantom: "INFORMATION_STEALTH", painting: "INFORMATION_STEALTH", investigation: "INFORMATION_STEALTH",
+  blood: "ORGANIC_CORRUPTION", poison: "ORGANIC_CORRUPTION", death: "ORGANIC_CORRUPTION",
+  refinement: "CRAFT_ALCHEMY", pill: "CRAFT_ALCHEMY", creation: "CRAFT_ALCHEMY",
+  destruction: "RULE_ORDER",
   heaven: "HEAVEN_HUMAN", human: "HEAVEN_HUMAN", qi: "HEAVEN_HUMAN",
 };
 
@@ -1438,7 +1439,7 @@ return (
                                   for (const d of daoMarks) {
                                     if (!d || !d.path) continue;
                                     const dp = d.path.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
-                                    if (dp === mappedKey && d.amount > maxMarks) {
+                                    if ((dp === mappedKey || (mappedKey === "killing" && dp === "kill")) && d.amount > maxMarks) {
                                       maxMarks = d.amount;
                                     }
                                   }

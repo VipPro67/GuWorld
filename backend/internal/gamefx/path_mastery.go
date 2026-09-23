@@ -2,7 +2,6 @@ package gamefx
 
 import (
 	"math"
-	"strings"
 )
 
 // CalculatePathMasteryGain calculates the Chân Ý (path mastery) points earned
@@ -119,10 +118,15 @@ func PathMasteryMultiplier(pathMasteries map[string]int, paths []string) float64
 		return masteryMultiplier
 	}
 	for _, path := range paths {
-		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+		cleanPath := CleanPath(path)
 		points, ok := pathMasteries[cleanPath]
 		if !ok {
 			points, ok = pathMasteries[path]
+		}
+		if !ok && cleanPath == "killing" {
+			points, ok = pathMasteries["kill"]
+		} else if !ok && cleanPath == "kill" {
+			points, ok = pathMasteries["killing"]
 		}
 		if !ok {
 			continue

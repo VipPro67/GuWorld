@@ -96,11 +96,16 @@ func CalculateDaoNganDetailed(
 	var maxPath string
 	var sumMult float64
 
+	aggregatedMarks := make(map[string]int64)
 	for path, amount := range daoMarks {
 		if amount <= 0 {
 			continue
 		}
 		clean := gamefx.CleanPath(path)
+		aggregatedMarks[clean] += amount
+	}
+
+	for clean, amount := range aggregatedMarks {
 		mod, ok := profile.Paths[clean]
 		baseMult := gamefx.DaoAmplification(amount) + bonus[clean]
 		effectiveMult := baseMult

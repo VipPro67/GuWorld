@@ -871,6 +871,9 @@ func AllGuPaths() []string {
 		for _, item := range ranks {
 			for _, p := range item.Path {
 				normalized := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
+				if normalized == "kill" {
+					normalized = "killing"
+				}
 				if normalized != "" {
 					pathSet[normalized] = struct{}{}
 				}

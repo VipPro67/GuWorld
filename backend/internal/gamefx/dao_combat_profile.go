@@ -60,7 +60,7 @@ var PathToDaoGroup = map[string]DaoGroup{
 
 	// KINETIC_WEAPON
 	"sword": DaoGroupKineticWeapon, "blade": DaoGroupKineticWeapon,
-	"weapon": DaoGroupKineticWeapon, "killing": DaoGroupKineticWeapon,
+	"weapon": DaoGroupKineticWeapon, "killing": DaoGroupKineticWeapon, "kill": DaoGroupKineticWeapon,
 
 	// BODY_LIFE
 	"strength": DaoGroupBodyLife, "bone": DaoGroupBodyLife,
@@ -73,12 +73,16 @@ var PathToDaoGroup = map[string]DaoGroup{
 	// INFORMATION_STEALTH
 	"information": DaoGroupInformationStealth, "luck": DaoGroupInformationStealth,
 	"theft": DaoGroupInformationStealth, "phantom": DaoGroupInformationStealth, "painting": DaoGroupInformationStealth,
+	"investigation": DaoGroupInformationStealth,
 
 	// ORGANIC_CORRUPTION
-	"blood": DaoGroupOrganicCorruption, "poison": DaoGroupOrganicCorruption,
+	"blood": DaoGroupOrganicCorruption, "poison": DaoGroupOrganicCorruption, "death": DaoGroupOrganicCorruption,
 
 	// CRAFT_ALCHEMY
-	"refinement": DaoGroupCraftAlchemy, "pill": DaoGroupCraftAlchemy,
+	"refinement": DaoGroupCraftAlchemy, "pill": DaoGroupCraftAlchemy, "creation": DaoGroupCraftAlchemy,
+
+	// RULE_ORDER / DESTRUCTION
+	"destruction": DaoGroupRuleOrder,
 
 	// HEAVEN_HUMAN
 	"heaven": DaoGroupHeavenHuman, "human": DaoGroupHeavenHuman, "qi": DaoGroupHeavenHuman,
@@ -180,11 +184,19 @@ var pairOverrides = map[string]float64{
 	pairKey("earth", "metal"):         0.95,
 	pairKey("metal", "water"):         0.95,
 	pairKey("water", "wood"):          0.95,
+	pairKey("creation", "destruction"): 0.55,
+	pairKey("life", "death"):           0.55,
 }
 
-// CleanPath normalizes a path string key.
+// CleanPath normalizes a path string key to its canonical form.
 func CleanPath(path string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(path)), " path")
+	clean := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(path)), " path")
+	clean = strings.TrimSuffix(clean, "_path")
+	switch clean {
+	case "kill", "killing":
+		return "killing"
+	}
+	return clean
 }
 
 // GetCompatibility returns the compatibility score between two paths (0.0 to 1.0).
@@ -338,6 +350,11 @@ func BuildDaoCombatProfile(
 		points := 0
 		if pathMasteries != nil {
 			points = pathMasteries[p]
+			if points == 0 && p == "killing" {
+				points = pathMasteries["kill"]
+			} else if points == 0 && p == "kill" {
+				points = pathMasteries["killing"]
+			}
 		}
 		lvl := PathMasteryLevel(points)
 		realmCtrl := RealmControlForLevel(lvl)
@@ -346,6 +363,11 @@ func BuildDaoCombatProfile(
 		bonus := 0.0
 		if daoBonus != nil {
 			bonus = daoBonus[p]
+			if bonus == 0 && p == "killing" {
+				bonus = daoBonus["kill"]
+			} else if bonus == 0 && p == "kill" {
+				bonus = daoBonus["killing"]
+			}
 		}
 		daoAmp := DaoAmplification(amt) + bonus
 
@@ -398,6 +420,80 @@ func BuildDaoCombatProfile(
 			NaturalResistance:    natResist,
 			Purity:               purity,
 		}
+	}
+
+	// Also precompute for any additional paths present in cleanDaoMarks (e.g. death, creation, destruction, investigation)
+	for p, amt := range cleanDaoMarks {
+		if _, exists := profile.Paths[p]; exists {
+			continue
+		}
+		points := 0
+		if pathMasteries != nil {
+			points = pathMasteries[p]
+		}
+		lvl := PathMasteryLevel(points)
+		realmCtrl := RealmControlForLevel(lvl)
+		realmEff := RealmEfficiencyForLevel(lvl)
+
+		bonus := 0.0
+		if daoBonus != nil {
+			bonus = daoBonus[p]
+		}
+		daoAmp := DaoAmplification(amt) + bonus
+
+		var rawConflict float64
+		for otherP, otherAmt := range activeForeign {
+			if otherP == p {
+				continue
+			}
+			comp := GetCompatibility(p, otherP)
+			rawConflict += float64(otherAmt) * (1.0 - comp)
+		}
+		effConflict := rawConflict * (1.0 - realmCtrl)
+		conflictRatio := effConflict / (float64(amt) + 50000.0)
+
+		conflictMult := 1.0 / (1.0 + conflictRatio*0.8*2.0)
+		if conflictMult < 0.60 {
+			conflictMult = 0.60
+		}
+
+		var defConflict float64
+		for defP, defAmt := range cleanDaoMarks {
+			if defAmt <= 0 {
+				continue
+			}
+			comp := GetCompatibility(p, defP)
+			defConflict += float64(defAmt) * (1.0 - comp)
+		}
+		natResist := 0.0
+		if !hasNonConflictingDao && defConflict > 0 {
+			natResist = 0.30 * (defConflict / (defConflict + 50000.0))
+		}
+
+		purity := 0.0
+		if totalMarks > 0 {
+			purity = float64(amt) / float64(totalMarks)
+		}
+
+		profile.Paths[p] = PathCombatModifiers{
+			Path:                 p,
+			DaoMarks:             amt,
+			DaoAmplification:     daoAmp,
+			AttainmentLevel:      lvl,
+			AttainmentName:       PathMasteryLevelName(lvl),
+			RealmControl:         realmCtrl,
+			RealmEfficiency:      realmEff,
+			InternalConflictMult: conflictMult,
+			NaturalResistance:    natResist,
+			Purity:               purity,
+		}
+	}
+
+	// Mirror alias for killing <-> kill so direct lookups by either key succeed
+	if mod, ok := profile.Paths["killing"]; ok {
+		profile.Paths["kill"] = mod
+	} else if mod, ok := profile.Paths["kill"]; ok {
+		profile.Paths["killing"] = mod
 	}
 
 	return profile

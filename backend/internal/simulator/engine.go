@@ -243,9 +243,14 @@ func pathBonus(bonus map[string]float64, paths []string) float64 {
 	}
 	maxB := 0.0
 	for _, p := range paths {
-		clean := strings.TrimSuffix(strings.ToLower(p), " path")
+		clean := gamefx.CleanPath(p)
 		if b := bonus[clean]; b > maxB {
 			maxB = b
+		}
+		if clean == "killing" {
+			if b := bonus["kill"]; b > maxB {
+				maxB = b
+			}
 		}
 	}
 	return maxB
@@ -950,7 +955,7 @@ func Simulate(state *CombatState) []CombatLog {
 							guRank = 1
 						}
 						if len(a.Path) > 0 {
-							cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
+							cleanPath = gamefx.CleanPath(a.Path[0])
 						}
 						if guRank >= 6 {
 							baseGain = 10
@@ -960,6 +965,9 @@ func Simulate(state *CombatState) []CombatLog {
 						actor.PathMasteries = make(map[string]int)
 					}
 					pts := actor.PathMasteries[cleanPath]
+					if pts == 0 && cleanPath == "killing" {
+						pts = actor.PathMasteries["kill"]
+					}
 					currentLevel := gamefx.PathMasteryLevel(pts)
 					pathGain := gamefx.CalculatePathMasteryGain(guRank, currentLevel, baseGain)
 

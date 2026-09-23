@@ -67,6 +67,7 @@ import { GuHistoryAdminTab } from "./admin/GuHistoryAdminTab";
 import { MonitoringAdminTab } from "./admin/MonitoringAdminTab";
 import { CoreDataAdminTab } from "./admin/CoreDataAdminTab";
 import { AdminDataGrid } from "./admin/AdminDataGrid";
+import { GuEffectsEditor } from "./admin/GuEffectsEditor";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -3530,7 +3531,7 @@ export const AdminView: React.FC = () => {
 
           {dataTab === "gus" && (
             <CoreDataAdminTab kind="gus" rows={gus} loading={gusLoading}
-              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {}, other: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
+              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: { blocks: [], growth: {}, house: {} }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
               onEdit={(g) => setGuEdit({ ...structuredClone(g), _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
               onCopy={(g) => setGuEdit({ ...structuredClone(g), id: "", _isNew: true, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
               onDelete={async (g) => { if (!confirm(`Xóa toàn bộ các rank của ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} />
@@ -4628,7 +4629,7 @@ export const AdminView: React.FC = () => {
       {/* Gu Edit Modal */}
       {guEdit !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setGuEdit(null)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-2xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-3xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{guEdit.id ? "Sửa" : "Thêm"} Cổ Trùng</h3>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={guEdit.id || ""} onChange={e => setGuEdit({...guEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
@@ -4694,193 +4695,11 @@ export const AdminView: React.FC = () => {
                 <input value={(Array.isArray(guEdit[f.key]) ? guEdit[f.key] : []).join(", ")} onChange={e => setGuEdit({...guEdit, [f.key]: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
               </div>
             ))}
-            {/* Gu Effects - structured */}
-            <div className="mt-4 border-t border-zinc-800 pt-4">
-              <h4 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">Hiệu Ứng</h4>
-              {["active", "passive", "house", "growth"].map(cat => {
-                const eff = guEdit.effects?.[cat] || {};
-                return (
-                  <details key={cat} className="mb-2 bg-zinc-800/30 rounded-lg">
-                    <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">{cat} ({Object.keys(eff).length} fields)</summary>
-                    <div className="px-3 pb-3">
-                      {Object.entries(eff).map(([k, val], idx) => {
-                        const v = val as ApiResponseData;
-                        const fieldType = typeof v === "boolean" ? "boolean" : typeof v === "number" ? "number" : "string";
-                        return (
-                          <div key={idx} className="flex gap-2 items-center mb-1.5">
-                            <div className="flex-1">
-                              <input
-                                list={`suggestions-${cat}`}
-                                value={k}
-                                onChange={e => {
-                                  const newKey = e.target.value;
-                                  const newEff = { ...guEdit.effects };
-                                  const catEff = { ...newEff[cat] };
-                                  let currentVal = catEff[k];
-
-                                  const suggestedType = getEffectFieldType(cat, newKey);
-                                  if (suggestedType === "boolean" && typeof currentVal !== "boolean") {
-                                    currentVal = false;
-                                  } else if (suggestedType === "number" && typeof currentVal !== "number") {
-                                    currentVal = 0;
-                                  } else if (suggestedType === "string" && typeof currentVal !== "string") {
-                                    currentVal = "";
-                                  }
-
-                                  delete catEff[k];
-                                  catEff[newKey] = currentVal;
-                                  newEff[cat] = catEff;
-                                  setGuEdit({ ...guEdit, effects: newEff });
-                                }}
-                                className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 font-mono"
-                                placeholder="Key"
-                              />
-                            </div>
-                            <div className="w-16">
-                              <select
-                                value={fieldType}
-                                onChange={e => {
-                                  const newType = e.target.value;
-                                  const newEff = { ...guEdit.effects };
-                                  const catEff = { ...newEff[cat] };
-                                  if (newType === "boolean") {
-                                    catEff[k] = false;
-                                  } else if (newType === "number") {
-                                    catEff[k] = 0;
-                                  } else {
-                                    catEff[k] = "";
-                                  }
-                                  newEff[cat] = catEff;
-                                  setGuEdit({ ...guEdit, effects: newEff });
-                                }}
-                                className="w-full px-1 py-1 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-300 font-medium focus:ring-0 focus:outline-none cursor-pointer"
-                              >
-                                <option value="number">Số</option>
-                                <option value="string">Chữ</option>
-                                <option value="boolean">Bool</option>
-                              </select>
-                            </div>
-                            <div className="w-36">
-                              {fieldType === "boolean" ? (
-                                <label className="flex items-center gap-1.5 pt-1.5 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={!!v}
-                                    onChange={e => {
-                                      const newEff = { ...guEdit.effects };
-                                      const catEff = { ...newEff[cat] };
-                                      catEff[k] = e.target.checked;
-                                      newEff[cat] = catEff;
-                                      setGuEdit({ ...guEdit, effects: newEff });
-                                    }}
-                                    className="rounded bg-zinc-800 border-zinc-700 w-3.5 h-3.5 text-amber-600"
-                                  />
-                                  <span className="text-[10px] text-zinc-400">Kích hoạt</span>
-                                </label>
-                              ) : fieldType === "number" ? (
-                                <input
-                                  type="number"
-                                  step="any"
-                                  value={v === undefined || v === null ? "" : v}
-                                  onChange={e => {
-                                    const val = parseFloat(e.target.value);
-                                    const newEff = { ...guEdit.effects };
-                                    const catEff = { ...newEff[cat] };
-                                    catEff[k] = isNaN(val) ? 0 : val;
-                                    newEff[cat] = catEff;
-                                    setGuEdit({ ...guEdit, effects: newEff });
-                                  }}
-                                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200"
-                                  placeholder="Giá trị"
-                                />
-                              ) : (
-                                <input
-                                  type="text"
-                                  value={v || ""}
-                                  onChange={e => {
-                                    const newEff = { ...guEdit.effects };
-                                    const catEff = { ...newEff[cat] };
-                                    catEff[k] = e.target.value;
-                                    newEff[cat] = catEff;
-                                    setGuEdit({ ...guEdit, effects: newEff });
-                                  }}
-                                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200"
-                                  placeholder="Giá trị"
-                                />
-                              )}
-                            </div>
-                            <button
-                              onClick={() => {
-                                const newEff = { ...guEdit.effects };
-                                const catEff = { ...newEff[cat] };
-                                delete catEff[k];
-                                newEff[cat] = catEff;
-                                setGuEdit({ ...guEdit, effects: newEff });
-                              }}
-                              className="text-red-400 hover:text-red-300 p-1 cursor-pointer"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                      <button
-                        onClick={() => {
-                          const newEff = { ...guEdit.effects || {} };
-                          if (!newEff[cat]) newEff[cat] = {};
-                          let keyName = "";
-                          if (newEff[cat].hasOwnProperty("")) {
-                            let counter = 1;
-                            while (newEff[cat].hasOwnProperty(`new_effect_${counter}`)) {
-                              counter++;
-                            }
-                            keyName = `new_effect_${counter}`;
-                          }
-                          newEff[cat] = { ...newEff[cat], [keyName]: "" };
-                          setGuEdit({ ...guEdit, effects: newEff });
-                        }}
-                        className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1"
-                      >
-                        + Thêm hiệu ứng
-                      </button>
-                      <datalist id={`suggestions-${cat}`}>
-                        {(EFFECT_SUGGESTIONS[cat] || []).map(item => (
-                          <option key={item.key} value={item.key}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </datalist>
-                    </div>
-                  </details>
-                );
-              })}
-              {/* Other section - Special Mechanics */}
-              <details className="mb-2 bg-zinc-800/30 rounded-lg">
-                <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">other ({(guEdit.effects?.other || []).length} mechanics)</summary>
-                <div className="px-3 pb-3">
-                  {(guEdit.effects?.other || []).map((m: ApiResponseData, i: number) => (
-                    <div key={i} className="grid grid-cols-3 gap-2 mb-2 p-2 bg-zinc-800/50 rounded">
-                      <div>
-                        <label className="text-[10px] text-zinc-500 block">Sự kiện kích hoạt</label>
-                        <input value={m.event_trigger || ""} onChange={e => { const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], event_trigger: e.target.value}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500 block">Mã hành động</label>
-                        <input value={m.action_code || ""} onChange={e => { const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], action_code: e.target.value}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500 block">Params (JSON)</label>
-                        <textarea value={JSON.stringify(m.params || {})} onChange={e => { let p; try { p = JSON.parse(e.target.value) } catch { p = m.params } const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], params: p}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200 font-mono" rows={2} />
-                      </div>
-                      <div className="col-span-3 flex justify-end">
-                        <button onClick={() => { const newEff = {...guEdit.effects}; newEff.other = (newEff.other || []).filter((_: ApiResponseData, j: number) => j !== i); setGuEdit({...guEdit, effects: newEff}) }} className="text-[10px] text-red-400 hover:text-red-300">Xóa</button>
-                      </div>
-                    </div>
-                  ))}
-                  <button onClick={() => { const newEff = {...guEdit.effects}; newEff.other = [...(newEff.other || []), { event_trigger: "", action_code: "", params: {} }]; setGuEdit({...guEdit, effects: newEff}) }} className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-xs text-zinc-300 rounded">+ Thêm Mechanic</button>
-                </div>
-              </details>
-            </div>
+            {/* Gu Effects - Composable Blocks */}
+            <GuEffectsEditor
+              effects={guEdit.effects || {}}
+              onChange={(newEffects) => setGuEdit({ ...guEdit, effects: newEffects })}
+            />
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setGuEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
               <button onClick={async () => {
@@ -4895,6 +4714,9 @@ export const AdminView: React.FC = () => {
                       );
                     }
                   });
+                  if (Array.isArray(cleaned.blocks)) {
+                    cleaned.blocks = cleaned.blocks.filter((b: ApiResponseData) => b && b.trigger);
+                  }
                   body.effects = cleaned;
                 }
                 const url = isNew ? `${BACKEND_URL}/api/admin/gu-dictionary` : `${BACKEND_URL}/api/admin/gu-dictionary/${guEdit.id}?old_rank=${guEdit._old_rank || body.rank}`;

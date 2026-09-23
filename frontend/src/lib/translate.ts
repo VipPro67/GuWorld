@@ -110,6 +110,11 @@ export const PATH_MAP: Record<string, string> = {
   Painting: "Họa",
   Weapon: "Binh",
   Killing: "Sát",
+  Kill: "Sát",
+  Death: "Tử",
+  Creation: "Tạo Hóa",
+  Destruction: "Hủy Diệt",
+  Investigation: "Trinh Sát",
   Restriction: "Cấm",
   Pill: "Đan",
 };
@@ -141,6 +146,9 @@ export const pathLabels: Record<string, string> = {
   "Formation Path": "Trận Đạo",
   "Qi Path": "Khí Đạo",
   "Death Path": "Tử Đạo",
+  "Creation Path": "Tạo Hóa Đạo",
+  "Destruction Path": "Hủy Diệt Đạo",
+  "Investigation Path": "Trinh Sát Đạo",
 
   // Cơ thể, Tinh thần & Xã hội
   "Strength Path": "Lực Đạo",
@@ -166,6 +174,7 @@ export const pathLabels: Record<string, string> = {
   "Painting Path": "Họa Đạo",
   "Weapon Path": "Binh Đạo",
   "Killing Path": "Sát Đạo",
+  "Kill Path": "Sát Đạo",
   "Restriction Path": "Cấm Đạo",
   "Pill Path": "Đan Đạo",
 };
