@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
@@ -53,27 +54,10 @@ type FeedRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`
 }
 
-var guManaTable = [10]float64{
-	0,           // index 0 unused
-	1,           // Rank 1
-	2,           // Rank 2
-	5,           // Rank 3
-	20,          // Rank 4
-	100,         // Rank 5
-	10000,       // Rank 6 (10^4)
-	1000000,     // Rank 7 (10^6)
-	100000000,   // Rank 8 (10^8)
-	10000000000, // Rank 9 (10^10)
-}
+var guManaTable = gamefx.RankScaleTable
 
 func getManaVal(rank int) float64 {
-	if rank < 1 {
-		return guManaTable[1]
-	}
-	if rank > 9 {
-		return guManaTable[9]
-	}
-	return guManaTable[rank]
+	return gamefx.RankScale(rank)
 }
 
 // computeFoodNutrition calculates hunger restoration based on the Gu's rank and the food's rank

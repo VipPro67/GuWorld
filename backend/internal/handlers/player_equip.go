@@ -356,31 +356,7 @@ func UnequipAllGu(c *gin.Context) {
 
 // getSealingStoneCostByRank returns required sealing_stone quantity according to Rank P factor
 func getSealingStoneCostByRank(rank int) int64 {
-	switch rank {
-	case 1:
-		return 1
-	case 2:
-		return 2
-	case 3:
-		return 5
-	case 4:
-		return 20
-	case 5:
-		return 100
-	case 6:
-		return 10000
-	case 7:
-		return 1000000
-	case 8:
-		return 100000000
-	case 9:
-		return 10000000000
-	default:
-		if rank < 1 {
-			return 1
-		}
-		return 10000000000
-	}
+	return gamefx.SealingStoneCostByRank(rank)
 }
 
 // UpdateGuStatusRequest defines body to change status of owned Gu instance

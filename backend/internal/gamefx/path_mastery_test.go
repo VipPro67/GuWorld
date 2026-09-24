@@ -7,16 +7,16 @@ func TestPathMasteryLevel(t *testing.T) {
 		points, want int
 	}{
 		{0, 0},
-		{50, 0},
-		{99, 0},
-		{100, 1},
-		{999, 1},
-		{1000, 2},
-		{9999, 2},
-		{10000, 3},
-		{99999, 3},
-		{100000, 4},
-		{1000000, 4},
+		{5000, 0},
+		{9999, 0},
+		{10000, 1},
+		{99999, 1},
+		{100000, 2},
+		{999999, 2},
+		{1000000, 3},
+		{9999999, 3},
+		{10000000, 4},
+		{100000000, 4},
 	}
 	for _, c := range cases {
 		if got := PathMasteryLevel(c.points); got != c.want {
@@ -53,12 +53,12 @@ func TestPathMasteryLevelMultiplier(t *testing.T) {
 }
 
 func TestPathMasteryMultiplier(t *testing.T) {
-	pm := map[string]int{"fire": 1200, "water": 200}
-	// fire=1200 -> Grandmaster (level 2) -> 1.25
+	pm := map[string]int{"fire": 120000, "water": 20000}
+	// fire=120000 -> Grandmaster (level 2) -> 1.25
 	if got := PathMasteryMultiplier(pm, []string{"Fire Path", "Water Path"}); got != 1.25 {
 		t.Errorf("multiplier = %v, want 1.25", got)
 	}
-	// water=200 -> Master (1.1)
+	// water=20000 -> Master (1.1)
 	if got := PathMasteryMultiplier(pm, []string{"water"}); got != 1.1 {
 		t.Errorf("water multiplier = %v, want 1.1", got)
 	}
@@ -83,9 +83,9 @@ func TestPathMasteryLevelRequiredForRank(t *testing.T) {
 }
 
 func TestHasPathMasteryAtLeast(t *testing.T) {
-	pm := map[string]int{"fire": 1200, "water": 40}
+	pm := map[string]int{"fire": 120000, "water": 4000}
 	if !HasPathMasteryAtLeast(pm, 2) {
-		t.Errorf("fire=1200 should reach Grandmaster (level 2)")
+		t.Errorf("fire=120000 should reach Grandmaster (level 2)")
 	}
 	if HasPathMasteryAtLeast(pm, 3) {
 		t.Errorf("no path reaches level 3")
@@ -96,14 +96,14 @@ func TestHasPathMasteryAtLeast(t *testing.T) {
 	if HasPathMasteryAtLeast(nil, 1) {
 		t.Errorf("nil map should fail for minLevel 1")
 	}
-	if !HasPathMasteryAtLeast(map[string]int{"dream": 100000}, 4) {
-		t.Errorf("dream=100000 should reach Supreme (level 4)")
+	if !HasPathMasteryAtLeast(map[string]int{"dream": 10000000}, 4) {
+		t.Errorf("dream=10000000 should reach Supreme (level 4)")
 	}
 }
 
 func TestPathMasteryPointsForLevel(t *testing.T) {
 	cases := []struct{ level, want int }{
-		{0, 0}, {1, 100}, {2, 1000}, {3, 10000}, {4, 100000},
+		{0, 0}, {1, 10000}, {2, 100000}, {3, 1000000}, {4, 10000000},
 	}
 	for _, c := range cases {
 		if got := PathMasteryPointsForLevel(c.level); got != c.want {

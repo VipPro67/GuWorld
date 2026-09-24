@@ -35,6 +35,7 @@ import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { formatNumber, statusRemainLabel, calculateTribulationProgress } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
+import { getRenameCost, getImmortalPenaltyRates } from "@/lib/balance";
 import { statusIds } from "@/lib/gu-dict";
 import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, GameSection } from "@/components/ui";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
@@ -1390,8 +1391,8 @@ export const Aperture: React.FC<ApertureProps> = ({
 
                 const isChangingName = usernameInput.trim() !== "" && usernameInput.trim() !== player.username;
                 if (isChangingName && player.rank >= 6) {
-                  const lossPercent = player.rank === 6 ? 30 : player.rank === 7 ? 40 : player.rank === 8 ? 50 : 70;
-                  const confirmMsg = `⚠️ CẢNH BÁO NGHỊCH THIÊN:\n\nĐạo hữu đang đổi đạo hiệu từ "${player.username}" thành "${usernameInput.trim()}".\n\nỞ cảnh giới Cổ Tiên ${player.rank} Chuyển, hành động này sẽ chịu đại đạo phản phệ cực lớn:\n- Khấu trừ Tiên Nguyên Thạch\n- Tụt ${lossPercent}% toàn bộ Đạo Ngân\n- Tụt ${lossPercent}% Điểm Chân Ý Lưu Phái\n- Tổn hại Tiên Khiếu\n- Phát thông cáo toàn Server\n\nĐạo hữu có tuyệt đối chắc chắn muốn tiến hành?`;
+                  const penalty = getImmortalPenaltyRates(player.rank);
+                  const confirmMsg = `⚠️ CẢNH BÁO NGHỊCH THIÊN:\n\nĐạo hữu đang đổi đạo hiệu từ "${player.username}" thành "${usernameInput.trim()}".\n\nỞ cảnh giới Cổ Tiên ${player.rank} Chuyển, hành động này sẽ chịu đại đạo phản phệ cực lớn:\n- Khấu trừ Tiên Nguyên Thạch\n- Tụt ${penalty.lossPercent}% toàn bộ Đạo Ngân\n- Tụt ${penalty.lossPercent}% Điểm Chân Ý Lưu Phái\n- Tổn hại Tiên Khiếu\n- Phát thông cáo toàn Server\n\nĐạo hữu có tuyệt đối chắc chắn muốn tiến hành?`;
                   if (!window.confirm(confirmMsg)) {
                     return;
                   }
@@ -1429,49 +1430,45 @@ export const Aperture: React.FC<ApertureProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-all font-mono"
                   />
                   {/* Notice / Warning box if name is being changed */}
-                  {settingsUsername.trim() !== "" && settingsUsername.trim() !== player.username && (
-                    <div className={`p-2.5 rounded-xl border text-[11px] leading-relaxed flex flex-col gap-1 ${
-                      player.rank <= 2
-                        ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-300"
-                        : player.rank <= 5
-                        ? "bg-amber-950/30 border-amber-900/50 text-amber-300"
-                        : "bg-red-950/40 border-red-800/60 text-red-200"
-                    }`}>
-                      <div className="flex items-center gap-1.5 font-bold">
-                        {player.rank >= 6 ? (
-                          <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                        ) : (
-                          <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        )}
-                        <span>
-                          {player.rank <= 2
-                            ? "Đổi Đạo Hiệu (Miễn Phí)"
-                            : player.rank === 3
-                            ? "Phí Đổi Tên: 5.000 Nguyên Thạch"
-                            : player.rank === 4
-                            ? "Phí Đổi Tên: 20.000 Nguyên Thạch"
-                            : player.rank === 5
-                            ? "Phí Đổi Tên: 100.000 Nguyên Thạch"
-                            : `CẢNH BÁO NGHỊCH THIÊN (Cổ Tiên ${player.rank} Chuyển)`}
-                        </span>
+                  {settingsUsername.trim() !== "" && settingsUsername.trim() !== player.username && (() => {
+                    const renameCost = getRenameCost(player.rank);
+                    const penalty = getImmortalPenaltyRates(player.rank);
+                    return (
+                      <div className={`p-2.5 rounded-xl border text-[11px] leading-relaxed flex flex-col gap-1 ${
+                        player.rank <= 2
+                          ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-300"
+                          : player.rank <= 5
+                          ? "bg-amber-950/30 border-amber-900/50 text-amber-300"
+                          : "bg-red-950/40 border-red-800/60 text-red-200"
+                      }`}>
+                        <div className="flex items-center gap-1.5 font-bold">
+                          {player.rank >= 6 ? (
+                            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                          ) : (
+                            <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          )}
+                          <span>
+                            {player.rank <= 5
+                              ? renameCost.label
+                              : `CẢNH BÁO NGHỊCH THIÊN (Cổ Tiên ${player.rank} Chuyển)`}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-zinc-300">
+                          {player.rank <= 2 && "Đạo hữu ở cảnh giới Nhất / Nhị Chuyển có thể tự do đổi tên mà không chịu chi phí hay phản phệ."}
+                          {player.rank >= 3 && player.rank <= 5 && `Đổi tên sẽ khấu trừ ${renameCost.amount.toLocaleString("vi-VN")} Nguyên Thạch (Hiện có: ${Math.floor(player.primeval_stones).toLocaleString()} NT).`}
+                          {player.rank >= 6 && (
+                            <div className="space-y-0.5 text-red-300 font-mono">
+                              <p>• Tiêu hao: {renameCost.amount.toLocaleString("vi-VN")} Tiên Nguyên Thạch (Hiện có: {Math.floor(player.immortal_stones).toLocaleString()} TNT).</p>
+                              <p>• Phản phệ: Tụt <span className="font-bold text-red-400">{penalty.lossPercent}% toàn bộ Đạo Ngân</span> trong Tiên Khiếu.</p>
+                              <p>• Phản phệ: Tụt <span className="font-bold text-red-400">{penalty.lossPercent}% Điểm Chân Ý</span> trên tất cả Cảnh Giới Lưu Phái.</p>
+                              <p>• Chấn động: Tổn hại {penalty.hpLossPercent}% HP Tiên Khiếu và tăng +{penalty.stressGain} Áp Lực Tiên Khiếu.</p>
+                              <p>• Thiên Đạo Biến Động: Phát thông cáo chấn động toàn Server trên kênh Thế Giới.</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-zinc-300">
-                        {player.rank <= 2 && "Đạo hữu ở cảnh giới Nhất / Nhị Chuyển có thể tự do đổi tên mà không chịu chi phí hay phản phệ."}
-                        {player.rank === 3 && `Đổi tên sẽ khấu trừ 5.000 Nguyên Thạch (Hiện có: ${Math.floor(player.primeval_stones).toLocaleString()} NT).`}
-                        {player.rank === 4 && `Đổi tên sẽ khấu trừ 20.000 Nguyên Thạch (Hiện có: ${Math.floor(player.primeval_stones).toLocaleString()} NT).`}
-                        {player.rank === 5 && `Đổi tên sẽ khấu trừ 100.000 Nguyên Thạch (Hiện có: ${Math.floor(player.primeval_stones).toLocaleString()} NT).`}
-                        {player.rank >= 6 && (
-                          <div className="space-y-0.5 text-red-300 font-mono">
-                            <p>• Tiêu hao: {player.rank === 6 ? "100" : player.rank === 7 ? "500" : player.rank === 8 ? "2.500" : "10.000"} Tiên Nguyên Thạch (Hiện có: {Math.floor(player.immortal_stones).toLocaleString()} TNT).</p>
-                            <p>• Phản phệ: Tụt <span className="font-bold text-red-400">{player.rank === 6 ? "30%" : player.rank === 7 ? "40%" : player.rank === 8 ? "50%" : "70%"} toàn bộ Đạo Ngân</span> trong Tiên Khiếu.</p>
-                            <p>• Phản phệ: Tụt <span className="font-bold text-red-400">{player.rank === 6 ? "30%" : player.rank === 7 ? "40%" : player.rank === 8 ? "50%" : "70%"} Điểm Chân Ý</span> trên tất cả Cảnh Giới Lưu Phái.</p>
-                            <p>• Chấn động: Tổn hại {player.rank === 6 ? "20%" : player.rank === 7 ? "30%" : player.rank === 8 ? "40%" : "50%"} HP Tiên Khiếu và tăng +{player.rank === 6 ? "30" : player.rank === 7 ? "50" : player.rank === 8 ? "80" : "100"} Áp Lực Tiên Khiếu.</p>
-                            <p>• Thiên Đạo Biến Động: Phát thông cáo chấn động toàn Server trên kênh Thế Giới.</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Lời giới thiệu / Bio */}

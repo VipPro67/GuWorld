@@ -113,7 +113,7 @@ func DeduceRecipe(c *gin.Context) {
 	refineRealm := gamefx.PathMasteryLevel(refinePts)
 	targetRealm := gamefx.PathMasteryLevel(targetPts)
 
-	realmMultiplier := 1.0 + float64(wisdomRealm)*3.0 + float64(refineRealm)*2.0 + float64(targetRealm)*1.0
+	realmMultiplier := gamefx.DeductionRealmMultiplier(wisdomRealm, refineRealm, targetRealm)
 
 	wisdomDaoMarks := int64(0)
 	if player.DaoMarks != nil {
@@ -121,25 +121,7 @@ func DeduceRecipe(c *gin.Context) {
 	}
 	daoMultiplier := 1.0 + math.Sqrt(float64(wisdomDaoMarks))
 
-	rankPenalty := 1.0
-	switch targetRank {
-	case 2:
-		rankPenalty = 2.0
-	case 3:
-		rankPenalty = 5.0
-	case 4:
-		rankPenalty = 20.0
-	case 5:
-		rankPenalty = 100.0
-	case 6:
-		rankPenalty = 10000.0
-	case 7:
-		rankPenalty = 1000000.0
-	case 8:
-		rankPenalty = 100000000.0
-	case 9:
-		rankPenalty = 10000000000.0
-	}
+	rankPenalty := gamefx.RankScale(targetRank)
 
 	// Base improvement for Rank 1 is 10% - 25%
 	baseImprovement := 10.0 + rand.Float64()*15.0
@@ -227,29 +209,5 @@ func DeduceRecipe(c *gin.Context) {
 }
 
 func calculateRefinementPathGain(targetRank int, refinementRealm int) int {
-	baseGain := 0
-	switch targetRank {
-	case 1:
-		baseGain = 2
-	case 2:
-		baseGain = 5
-	case 3:
-		baseGain = 15
-	case 4:
-		baseGain = 40
-	case 5:
-		baseGain = 100
-	case 6:
-		baseGain = 500
-	case 7:
-		baseGain = 2500
-	case 8:
-		baseGain = 15000
-	case 9:
-		baseGain = 50000
-	default:
-		baseGain = 0
-	}
-
-	return gamefx.CalculatePathMasteryGain(targetRank, refinementRealm, baseGain)
+	return gamefx.CalculateRefinementPathGain(targetRank, refinementRealm)
 }

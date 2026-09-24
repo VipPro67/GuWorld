@@ -32,45 +32,12 @@ type UpdateProfileSettingsRequest struct {
 
 // GetRenameCost returns the cost type ("free", "primeval", "immortal") and the cost amount for a given rank.
 func GetRenameCost(rank int) (string, float64) {
-	switch {
-	case rank <= 2:
-		return "free", 0
-	case rank == 3:
-		return "primeval", 5000
-	case rank == 4:
-		return "primeval", 20000
-	case rank == 5:
-		return "primeval", 100000
-	case rank == 6:
-		return "immortal", 100
-	case rank == 7:
-		return "immortal", 500
-	case rank == 8:
-		return "immortal", 2500
-	case rank >= 9:
-		return "immortal", 10000
-	default:
-		return "free", 0
-	}
+	return gamefx.RenameCost(rank)
 }
 
 // GetImmortalPenaltyRates returns the loss rates for dao marks, path masteries, aperture HP, and stress gain for a given immortal rank (6-9).
 func GetImmortalPenaltyRates(rank int) (daoLossRate float64, masteryLossRate float64, hpLossRate float64, stressGain float64) {
-	switch rank {
-	case 6:
-		return 0.30, 0.30, 0.20, 30.0
-	case 7:
-		return 0.40, 0.40, 0.30, 50.0
-	case 8:
-		return 0.50, 0.50, 0.40, 80.0
-	case 9:
-		return 0.70, 0.70, 0.50, 100.0
-	default:
-		if rank > 9 {
-			return 0.70, 0.70, 0.50, 100.0
-		}
-		return 0.30, 0.30, 0.20, 30.0
-	}
+	return gamefx.ImmortalPenaltyRates(rank)
 }
 
 // ApplyImmortalRenamePenalty calculates the reduced dao marks, path masteries, and aperture damage without reducing sub-rank.

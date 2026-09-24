@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -19,59 +20,11 @@ type RolledLoot struct {
 }
 
 func lootChanceMultiplier(rank int) float64 {
-	switch rank {
-	case 1:
-		return 1.0
-	case 2:
-		return 1.1
-	case 3:
-		return 1.2
-	case 4:
-		return 1.4
-	case 5:
-		return 1.6
-	case 6:
-		return 1.0
-	case 7:
-		return 1.5
-	case 8:
-		return 2.5
-	case 9:
-		return 4.0
-	default:
-		if rank > 9 {
-			return 4.0
-		}
-		return 1.0
-	}
+	return gamefx.LootChanceMultiplier(rank)
 }
 
 func lootQuantityMultiplier(rank int) float64 {
-	switch rank {
-	case 1:
-		return 1.0
-	case 2:
-		return 2.0
-	case 3:
-		return 3.0
-	case 4:
-		return 4.0
-	case 5:
-		return 5.0
-	case 6:
-		return 1.0
-	case 7:
-		return 3.0
-	case 8:
-		return 5.0
-	case 9:
-		return 8.0
-	default:
-		if rank > 9 {
-			return 8.0
-		}
-		return 1.0
-	}
+	return gamefx.LootQuantityMultiplier(rank)
 }
 
 func RollLoot(lt models.LootTable, rank int) RolledLoot {

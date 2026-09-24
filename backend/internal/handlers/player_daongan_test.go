@@ -12,8 +12,8 @@ func TestCalculateDaoNganDetailed(t *testing.T) {
 		"water": 20000,
 	}
 	pathMasteries := map[string]int{
-		"fire":  10000, // Great Grandmaster (Level 3)
-		"water": 100,   // Master (Level 1)
+		"fire":  1000000, // Great Grandmaster (Level 3)
+		"water": 10000,   // Master (Level 1)
 	}
 
 	result := CalculateDaoNganDetailed(daoMarks, pathMasteries, false)

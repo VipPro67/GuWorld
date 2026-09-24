@@ -50,13 +50,13 @@ func determineRefineOutcome(roll, finalRate float64, refinementRealm, targetRank
 	if roll <= finalRate {
 		return OutcomeSuccess
 	}
-	safeZone := (1.0 - finalRate) * 0.25 * float64(refinementRealm) / 4.0
+	safeZone := (1.0 - finalRate) * gamefx.RefineSafeZoneFactor * float64(refinementRealm) / 4.0
 	if roll <= finalRate+safeZone {
 		return OutcomeFailSafe
 	}
-	backfireThreshold := 0.90
+	backfireThreshold := gamefx.RefineBackfireThresholdMortal
 	if targetRank >= 6 {
-		backfireThreshold = 0.75
+		backfireThreshold = gamefx.RefineBackfireThresholdImmortal
 	}
 	if roll >= backfireThreshold {
 		return OutcomeFailBackfire

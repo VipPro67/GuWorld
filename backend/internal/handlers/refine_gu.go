@@ -216,17 +216,7 @@ func RefineGu(c *gin.Context) {
 				if points > targetPathPoints {
 					targetPathPoints = points
 				}
-				bonus := 0.0
-				switch gamefx.PathMasteryLevel(points) {
-				case 1:
-					bonus = 0.02
-				case 2:
-					bonus = 0.05
-				case 3:
-					bonus = 0.08
-				case 4:
-					bonus = 0.10
-				}
+				bonus := gamefx.TargetPathMasteryBonus(gamefx.PathMasteryLevel(points))
 				if bonus > targetPathMastery {
 					targetPathMastery = bonus
 				}
@@ -244,43 +234,10 @@ func RefineGu(c *gin.Context) {
 		refinementPoints = player.PathMasteries["refinement"]
 	}
 
-	rankScale := 1.0
-	switch recipe.TargetRank {
-	case 1:
-		rankScale = 1.0
-	case 2:
-		rankScale = 2.0
-	case 3:
-		rankScale = 5.0
-	case 4:
-		rankScale = 20.0
-	case 5:
-		rankScale = 100.0
-	case 6:
-		rankScale = 10000.0
-	case 7:
-		rankScale = 1000000.0
-	case 8:
-		rankScale = 100000000.0
-	case 9:
-		rankScale = 10000000000.0
-	}
-
-	masteryMultiplier := 1.0 + float64(targetPathPoints)
-	refinementDaoBonus := (0.00632 * math.Sqrt(float64(refinementMarks)) * masteryMultiplier) / rankScale
+	refinementDaoBonus := gamefx.RefinementDaoBonus(refinementMarks, targetPathPoints, recipe.TargetRank)
 
 	refinementRealm := gamefx.PathMasteryLevel(refinementPoints)
-	refinementMasteryBonus := 0.0
-	switch refinementRealm {
-	case 1:
-		refinementMasteryBonus = 0.05
-	case 2:
-		refinementMasteryBonus = 0.10
-	case 3:
-		refinementMasteryBonus = 0.18
-	case 4:
-		refinementMasteryBonus = 0.25
-	}
+	refinementMasteryBonus := gamefx.RefinementMasteryBonus(refinementRealm)
 
 	// Luck Bonus
 	luckMarks := int64(0)
@@ -288,7 +245,7 @@ func RefineGu(c *gin.Context) {
 		luckMarks = player.DaoMarks["luck"]
 	}
 	fx := gamefx.Get(&player)
-	luckBonus := math.Min(0.10, (float64(luckMarks)*0.001)+fx.LuckBonus/100.0)
+	luckBonus := gamefx.RefinementLuckBonus(luckMarks, fx.LuckBonus)
 
 	// Environment Bonus
 	var regionPathsRaw []byte
@@ -326,17 +283,7 @@ func RefineGu(c *gin.Context) {
 	supportBonus := supportGuBonus + posRefineBonus
 
 	// Apply Immortal Penalty to flat bonuses for Rank 6+
-	immortalPenalty := 1.0
-	switch recipe.TargetRank {
-	case 6:
-		immortalPenalty = 2.0
-	case 7:
-		immortalPenalty = 5.0
-	case 8:
-		immortalPenalty = 20.0
-	case 9:
-		immortalPenalty = 100.0
-	}
+	immortalPenalty := gamefx.RefinementImmortalPenalty(recipe.TargetRank)
 
 	if immortalPenalty > 1.0 {
 		refinementMasteryBonus /= immortalPenalty

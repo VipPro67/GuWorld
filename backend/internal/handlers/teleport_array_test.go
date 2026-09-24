@@ -219,11 +219,11 @@ func TestFormationMasteryEffects(t *testing.T) {
 		t.Fatalf("expected 15 mastery gain for tier 1, got %d", gainNovice)
 	}
 
-	// 2. Master Player: Rank 3, 150 Chân Ý (Đại Sư), 500 Đạo Ngân
+	// 2. Master Player: Rank 3, 15000 Chân Ý (Đại Sư), 500 Đạo Ngân
 	masterPlayer := &models.Player{}
 	masterPlayer.ID = uuid.New()
 	masterPlayer.Rank = 3
-	masterPlayer.PathMasteries = models.PathMasteriesMap{"formation": 150}
+	masterPlayer.PathMasteries = models.PathMasteriesMap{"formation": 15000}
 	masterPlayer.DaoMarks = map[string]int64{"formation": 500}
 	masterPlayer.PrimevalStones = 5000
 
@@ -240,11 +240,11 @@ func TestFormationMasteryEffects(t *testing.T) {
 		t.Fatalf("expected 15%% discount and 2550 NT, got disc=%.0f, cost=%.0f", discMaster, costNTMaster)
 	}
 
-	// 3. Grandmaster Player: Rank 6, 1200 Chân Ý (Tông Sư)
+	// 3. Grandmaster Player: Rank 6, 120000 Chân Ý (Tông Sư)
 	grandmasterPlayer := &models.Player{}
 	grandmasterPlayer.ID = uuid.New()
 	grandmasterPlayer.Rank = 6
-	grandmasterPlayer.PathMasteries = models.PathMasteriesMap{"formation": 1200}
+	grandmasterPlayer.PathMasteries = models.PathMasteriesMap{"formation": 120000}
 	grandmasterPlayer.DaoMarks = map[string]int64{"formation": 0}
 	grandmasterPlayer.PrimevalStones = 200000
 	grandmasterPlayer.ImmortalStones = 100

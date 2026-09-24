@@ -21,8 +21,8 @@ func TestBaseRankPower(t *testing.T) {
 
 func TestGetPathAttainmentMultiplier(t *testing.T) {
 	masteries := models.PathMasteriesMap{
-		"wisdom":      150,  // Level 1: Master (1.2)
-		"information": 1200, // Level 2: Grandmaster (1.5)
+		"wisdom":      15000,  // Level 1: Master (1.2)
+		"information": 120000, // Level 2: Grandmaster (1.5)
 	}
 
 	mult := GetPathAttainmentMultiplier(masteries, "wisdom")
@@ -42,7 +42,7 @@ func TestEvaluateDivinationOutcomes(t *testing.T) {
 	viewer := &models.Player{
 		CultivationState: models.CultivationState{Rank: 6},
 		WorldState:       models.WorldState{CurrentRegion: "hub_nam_cuong"},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 1500}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 150000}},
 	}
 	target := &models.Player{
 		Account:          models.Account{Username: "TargetMortal"},
@@ -75,7 +75,7 @@ func TestEvaluateDivinationOutcomes(t *testing.T) {
 		Account:          models.Account{Username: "ImmortalVenerable"},
 		CultivationState: models.CultivationState{Rank: 8},
 		WorldState:       models.WorldState{CurrentRegion: "hub_trung_chau"},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"dark": 15000}}, // Great Grandmaster (2.0)
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"dark": 1500000}}, // Great Grandmaster (2.0)
 	}
 	targetDao := models.DaoMarksMap{"dark": 2000}
 	blindClues := models.DivinationRequest{
@@ -143,7 +143,7 @@ func TestFaithClueAmplifyAndSever(t *testing.T) {
 	}
 	faithViewer := &models.Player{
 		CultivationState: models.CultivationState{Rank: 5},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"information": 1500}}, // level 2
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"information": 150000}}, // level 2
 	}
 	target := &models.Player{
 		Account:          models.Account{Username: "Prey"},
@@ -165,7 +165,7 @@ func TestFaithClueAmplifyAndSever(t *testing.T) {
 		Account:          models.Account{Username: "Prey"},
 		CultivationState: models.CultivationState{Rank: 5},
 		WorldState:       models.WorldState{CurrentRegion: "hub_nam_cuong"},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"information": 1500}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"information": 150000}},
 	}
 	severed := DeductionBreakdown(plainViewer, nil, nil, clues, warded, 0, false, false, 0)
 	if math.Abs(severed.Clue-35.0*0.76) > 1e-9 {
@@ -178,13 +178,13 @@ func TestHeavenVeilAndPierce(t *testing.T) {
 	mortal := &models.Player{
 		CultivationState: models.CultivationState{Rank: 6},
 		WorldState:       models.WorldState{CurrentRegion: "hub_nam_cuong"},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 1500}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 150000}},
 	}
 	veiled := &models.Player{
 		Account:          models.Account{Username: "Veiled"},
 		CultivationState: models.CultivationState{Rank: 6},
 		WorldState:       models.WorldState{CurrentRegion: "hub_nam_cuong"},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"heaven": 1500}}, // level 2
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"heaven": 150000}}, // level 2
 	}
 	veiledDao := models.DaoMarksMap{"heaven": 1000} // veil = 40 + 2 = 42
 	clues := models.DivinationRequest{TargetUsername: "Veiled"}
@@ -195,7 +195,7 @@ func TestHeavenVeilAndPierce(t *testing.T) {
 	piercer := &models.Player{
 		CultivationState: models.CultivationState{Rank: 6},
 		WorldState:       models.WorldState{CurrentRegion: "hub_nam_cuong"},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 1500, "heaven": 1500}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 150000, "heaven": 150000}},
 	}
 	piercerDao := models.DaoMarksMap{"heaven": 1000} // pierce = 20 + 2 = 22
 	ScoutingRand.Seed(11)
@@ -221,7 +221,7 @@ func TestDaoMultSaturates(t *testing.T) {
 	// Whale breakdown stays proportional: stat 2000, mult 3, 100k marks.
 	whale := &models.Player{
 		CultivationState: models.CultivationState{Rank: 9},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 200000}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 20000000}},
 	}
 	bd := DeductionBreakdown(whale, nil, models.DaoMarksMap{"wisdom": 100000}, models.DivinationRequest{}, nil, 0, false, false, 0)
 	if bd.RealmDao > 14.0*bd.Stat {
@@ -251,7 +251,7 @@ func TestLuckRollBounds(t *testing.T) {
 func TestCalculateSeverCluesPower(t *testing.T) {
 	player := &models.Player{
 		CultivationState: models.CultivationState{Rank: 5},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"sword": 1200}}, // Grandmaster 1.5
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"sword": 120000}}, // Grandmaster 1.5
 	}
 	power := CalculateSeverCluesPower(player, nil)
 	if power != 50.0*1.5 {
@@ -264,7 +264,7 @@ func TestEvaluateGuDivination(t *testing.T) {
 	ScoutingRand.Seed(7)
 	viewer := &models.Player{
 		CultivationState: models.CultivationState{Rank: 5},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 1500}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 150000}},
 	}
 	mortalGu := models.GuDictionaryItem{
 		ID:   "moonlight_gu",
@@ -304,7 +304,7 @@ func TestEvaluateGuDivination(t *testing.T) {
 	}
 	ownerViewer := &models.Player{
 		CultivationState: models.CultivationState{Rank: 6},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"time": 1500}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"time": 150000}},
 	}
 	ownerStatus, ownerDelta, _, _, _ := EvaluateGuDivination(ownerViewer, equippedGu, nil, immortalGu, 1, 50.0, 10.0)
 	if ownerStatus != "full" || ownerDelta < 20.0 {
@@ -324,7 +324,7 @@ func TestGuRankDivisor(t *testing.T) {
 func TestGuDivinationRankScaling(t *testing.T) {
 	viewer := &models.Player{
 		CultivationState: models.CultivationState{Rank: 5},
-		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 1500}},
+		DaoState:         models.DaoState{PathMasteries: models.PathMasteriesMap{"wisdom": 150000}},
 	}
 	rank1Gu := models.GuDictionaryItem{ID: "g1", Name: "G1", Rank: 1, Path: []string{"moon"}}
 

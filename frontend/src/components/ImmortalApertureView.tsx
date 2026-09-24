@@ -32,6 +32,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
+import { getRankScale } from "@/lib/balance";
 import { formatNumber, calculateTribulationProgress } from "@/lib/utils";
 import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
@@ -1478,20 +1479,7 @@ return (
                               if (vhLabor === "EXPLOIT") vhLaborMult = 2.0;
                             }
 
-                            const getManaVal = (rank: number): number => {
-                              const table: Record<number, number> = {
-                                1: 1,
-                                2: 2,
-                                3: 5,
-                                4: 20,
-                                5: 100,
-                                6: 10000,
-                                7: 1000000,
-                                8: 100000000,
-                                9: 10000000000,
-                              };
-                              return table[Math.min(9, Math.max(1, rank))] || 1;
-                            };
+                            const getManaVal = (rank: number): number => getRankScale(rank);
 
                             const areaSize = aperture?.area_size || 0;
                             const areaMultiplier = 1.0 + areaSize / 10000000.0;

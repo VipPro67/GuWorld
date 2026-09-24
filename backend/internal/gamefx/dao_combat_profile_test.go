@@ -57,7 +57,7 @@ func TestBuildDaoCombatProfile_PureSpecialist(t *testing.T) {
 		"fire": 50000,
 	}
 	pathMasteries := map[string]int{
-		"fire": 10000, // Great Grandmaster (Level 3)
+		"fire": 1000000, // Great Grandmaster (Level 3)
 	}
 
 	profile := BuildDaoCombatProfile(daoMarks, pathMasteries, false, nil)
@@ -103,8 +103,8 @@ func TestBuildDaoCombatProfile_DualPathWithMastery(t *testing.T) {
 
 	// 2. Level 3 (Great Grandmaster)
 	masteriesL3 := map[string]int{
-		"fire":  10000,
-		"water": 10000,
+		"fire":  1000000,
+		"water": 1000000,
 	}
 	profileL3 := BuildDaoCombatProfile(daoMarks, masteriesL3, false, nil)
 	_, _, conflictL3 := profileL3.GetOffensiveFactors("fire")
@@ -157,7 +157,7 @@ func TestBuildDaoCombatProfile_KillPath(t *testing.T) {
 		"kill": 50000,
 	}
 	masteriesKill := map[string]int{
-		"kill": 10000, // Great Grandmaster
+		"kill": 1000000, // Great Grandmaster
 	}
 
 	profile := BuildDaoCombatProfile(daoMarksKill, masteriesKill, false, nil)
@@ -186,7 +186,7 @@ func TestBuildDaoCombatProfile_KillPath(t *testing.T) {
 		"killing": 50000,
 	}
 	masteriesKilling := map[string]int{
-		"killing": 10000,
+		"killing": 1000000,
 	}
 	profile2 := BuildDaoCombatProfile(daoMarksKilling, masteriesKilling, false, nil)
 	daoAmp, realmEff, conflictMult := profile2.GetOffensiveFactors("Kill Path")
@@ -204,9 +204,9 @@ func BenchmarkBuildDaoCombatProfile(b *testing.B) {
 		"wisdom":   2000,
 	}
 	masteries := map[string]int{
-		"fire":  10000,
-		"water": 1000,
-		"wood":  500,
+		"fire":  1000000,
+		"water": 100000,
+		"wood":  50000,
 	}
 
 	b.ResetTimer()

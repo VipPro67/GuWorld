@@ -45,11 +45,11 @@ func CalculatePathMasteryGain(guRank int, pathLevel int, baseGain int) int {
 // path -> accumulated points (players.path_masteries). The attained realm
 // (level 0-4) is derived purely from point milestones:
 //
-//	Level 0: Ordinary        (Phàm Thai)            points <  100
-//	Level 1: Master          (Đại Sư)               points >= 100
-//	Level 2: Grandmaster     (Tông Sư)              points >= 1.000
-//	Level 3: Great Grandmaster (Đại Tông Sư)        points >= 10.000
-//	Level 4: Supreme Grandmaster (Vô Thượng)        points >= 100.000
+//	Level 0: Ordinary        (Phàm Thai)            points <  10.000
+//	Level 1: Master          (Đại Sư)               points >= 10.000
+//	Level 2: Grandmaster     (Tông Sư)              points >= 100.000
+//	Level 3: Great Grandmaster (Đại Tông Sư)        points >= 1.000.000
+//	Level 4: Supreme Grandmaster (Vô Thượng)        points >= 10.000.000
 //
 // The realm is a requirement for rank advancement, not gated by rank: to
 // advance to Rank 7 a player must own at least one path at Grandmaster
@@ -59,20 +59,8 @@ func CalculatePathMasteryGain(guRank int, pathLevel int, baseGain int) int {
 // Points are earned by casting path killer moves, refining Gu, instance
 // attainment rewards, etc.
 
-const (
-	// PathMasteryMasterPoints is the milestone to reach Master (level 1).
-	PathMasteryMasterPoints = 100
-	// PathMasteryGrandmasterPoints is the milestone to reach Grandmaster (level 2).
-	PathMasteryGrandmasterPoints = 1000
-	// PathMasteryGreatGrandmasterPoints is the milestone to reach Great Grandmaster (level 3).
-	PathMasteryGreatGrandmasterPoints = 10000
-	// PathMasterySupremeGrandmasterPoints is the milestone to reach Supreme Grandmaster (level 4).
-	PathMasterySupremeGrandmasterPoints = 100000
-)
-
-// pathMasteryLevelMultipliers maps an attainment level (0-4) to its bonus
-// multiplier used in combat (mirrors the old level-name table).
-var pathMasteryLevelMultipliers = [5]float64{1.0, 1.1, 1.25, 1.4, 1.5}
+// Attainment milestones and level multipliers are centralized in balance.go.
+var pathMasteryLevelMultipliers = PathMasteryLevelMultipliers
 
 // PathMasteryLevel returns the attained realm level (0-4) for a given point
 // count. Level is a pure function of points (rank gates are enforced at

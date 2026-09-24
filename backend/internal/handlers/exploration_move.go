@@ -24,57 +24,7 @@ import (
 // based on player rank and sub-rank when crossing between different NGU_VUC regions.
 // Higher rank and sub-rank result in harsher stat suppression ("rank càng cao giảm càng nhiều").
 func GetRegionalWallDebuff(rank int, subRank int) (float64, time.Duration) {
-	if rank < 1 {
-		rank = 1
-	}
-	if subRank < 1 {
-		subRank = 1
-	}
-
-	var basePct float64
-	var baseDuration time.Duration
-
-	switch rank {
-	case 1:
-		basePct = 0.10
-		baseDuration = 5 * time.Hour
-	case 2:
-		basePct = 0.15
-		baseDuration = 8 * time.Hour
-	case 3:
-		basePct = 0.20
-		baseDuration = 10 * time.Hour
-	case 4:
-		basePct = 0.25
-		baseDuration = 12 * time.Hour
-	case 5:
-		basePct = 0.30
-		baseDuration = 15 * time.Hour
-	case 6:
-		basePct = 0.45
-		baseDuration = 20 * time.Hour
-	case 7:
-		basePct = 0.55
-		baseDuration = 25 * time.Hour
-	case 8:
-		basePct = 0.65
-		baseDuration = 30 * time.Hour
-	default: // Rank 9+
-		basePct = 0.75
-		baseDuration = 40 * time.Hour
-	}
-
-	subRankBonus := float64(subRank-1) * 0.01
-	if rank >= 6 {
-		subRankBonus = float64(subRank-1) * 0.02
-	}
-
-	totalDebuffPct := -(basePct + subRankBonus)
-	if totalDebuffPct < -0.90 {
-		totalDebuffPct = -0.90
-	}
-
-	return totalDebuffPct, baseDuration
+	return gamefx.RegionalWallDebuff(rank, subRank)
 }
 
 // CheckAndApplyRegionalWallDebuff checks if a player moved from one NGU_VUC to a different NGU_VUC.

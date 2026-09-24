@@ -5,25 +5,11 @@ import { useGameStore, GuInstance, guSpecFor } from "@/store/useGameStore";
 import { Lock, Unlock, Search, Sparkles, AlertCircle, Layers } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
+import { getSealingStoneCost } from "@/lib/balance";
 
 const getPathColor = (path: string): string => {
   const c = _getPathColor(path);
   return `${c.bg} ${c.text} ${c.border}`;
-};
-
-const getRankPFactor = (rank: number): number => {
-  switch (rank) {
-    case 1: return 1;
-    case 2: return 2;
-    case 3: return 5;
-    case 4: return 20;
-    case 5: return 100;
-    case 6: return 10000;
-    case 7: return 1000000;
-    case 8: return 100000000;
-    case 9: return 10000000000;
-    default: return rank < 1 ? 1 : 10000000000;
-  }
 };
 
 export const UtilitiesView: React.FC = () => {
@@ -87,7 +73,7 @@ export const UtilitiesView: React.FC = () => {
       return;
     }
 
-    const neededStones = getRankPFactor(gu.rank);
+    const neededStones = getSealingStoneCost(gu.rank);
     if (sealingStoneQty < neededStones) {
       addToast(`Đạo hữu không có đủ Đá Phong Ấn (sealing_stone)! Cần ${neededStones.toLocaleString("vi-VN")}x Đá Phong Ấn.`, "error");
       return;
@@ -253,7 +239,7 @@ export const UtilitiesView: React.FC = () => {
                 const spec = guSpecFor(gu.gu_id, gu.rank);
                 const name = spec?.name || gu.gu_id;
                 const isProcessing = processingId === gu.instance_id;
-                const neededStones = getRankPFactor(gu.rank);
+                const neededStones = getSealingStoneCost(gu.rank);
 
                 return (
                   <div
