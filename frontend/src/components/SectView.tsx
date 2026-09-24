@@ -125,6 +125,7 @@ export const SectView: React.FC = () => {
   // Vault state
   const [vaultTab, setVaultTab] = useState<"gu" | "material" | "recipe">("gu");
   const [vaultSearch, setVaultSearch] = useState("");
+  const [vaultRankFilter, setVaultRankFilter] = useState<string>("All");
   const [buyQtys, setBuyQtys] = useState<Record<string, number>>({});
 
   const getBuyQty = (key: string): number => buyQtys[key] || 1;
@@ -134,41 +135,79 @@ export const SectView: React.FC = () => {
     setBuyQtys((prev) => ({ ...prev, [key]: v }));
   };
 
-  const renderQtyStepper = (key: string, max?: number) => (
-    <div className="flex items-center gap-1">
-      <button
-        onClick={() => setBuyQty(key, getBuyQty(key) - 1, max)}
-        disabled={getBuyQty(key) <= 1}
-        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
-      >
-        −
-      </button>
-      <input
-        type="number"
-        min={1}
-        max={max}
-        value={getBuyQty(key)}
-        onChange={(e) => setBuyQty(key, parseInt(e.target.value) || 1, max)}
-        className="w-16 h-7 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-xs font-mono font-bold text-amber-400 outline-none focus:border-amber-600"
-      />
-      <button
-        onClick={() => setBuyQty(key, getBuyQty(key) + 1, max)}
-        disabled={max !== undefined && getBuyQty(key) >= max}
-        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
-      >
-        +
-      </button>
-      {max !== undefined && max > 1 && (
+  const renderQtyStepper = (key: string, maxInVault: number, maxAffordable?: number) => {
+    const curVal = getBuyQty(key);
+    const effectiveAffordable = maxAffordable !== undefined ? maxAffordable : maxInVault;
+    const smartMax = effectiveAffordable > 0 ? Math.min(maxInVault, effectiveAffordable) : maxInVault;
+
+    return (
+      <div className="flex items-center gap-1">
         <button
-          onClick={() => setBuyQty(key, max, max)}
-          className="px-1.5 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[10px] font-mono font-bold text-zinc-400 hover:text-amber-400 transition-colors cursor-pointer"
-          title="Tối đa"
+          type="button"
+          onClick={() => setBuyQty(key, curVal - 1, maxInVault)}
+          disabled={curVal <= 1}
+          className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
         >
-          Max
+          −
         </button>
-      )}
-    </div>
-  );
+        <input
+          type="number"
+          min={1}
+          max={maxInVault}
+          value={curVal || ""}
+          placeholder="1"
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === "") {
+              setBuyQtys((prev) => ({ ...prev, [key]: 0 }));
+              return;
+            }
+            const n = parseInt(raw);
+            if (!isNaN(n)) {
+              setBuyQty(key, n, maxInVault);
+            }
+          }}
+          onBlur={() => {
+            if (getBuyQty(key) < 1) {
+              setBuyQty(key, 1, maxInVault);
+            }
+          }}
+          className="w-16 h-7 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-xs font-mono font-bold text-amber-400 outline-none focus:border-amber-600"
+        />
+        <button
+          type="button"
+          onClick={() => setBuyQty(key, curVal + 1, maxInVault)}
+          disabled={curVal >= maxInVault}
+          className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
+        >
+          +
+        </button>
+        {maxInVault > 1 && (
+          <div className="flex items-center gap-1">
+            {maxInVault >= 10 && (
+              <button
+                type="button"
+                onClick={() => setBuyQty(key, curVal + 10, maxInVault)}
+                disabled={curVal + 10 > maxInVault}
+                className="px-1.5 h-7 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[10px] font-mono font-semibold text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                title="Cộng thêm 10"
+              >
+                +10
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setBuyQty(key, smartMax, maxInVault)}
+              className="px-1.5 h-7 rounded-lg bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/40 text-[10px] font-mono font-bold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+              title={effectiveAffordable < maxInVault ? `Mua tối đa khả năng (${smartMax})` : `Tối đa trong kho (${maxInVault})`}
+            >
+              Max
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Donation state
   const [donateType, setDonateType] = useState<"stones" | "materials" | "gu" | "recipes">("stones");
@@ -1611,14 +1650,51 @@ export const SectView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 mb-4">
-            <input
-              type="text"
-              value={vaultSearch}
-              onChange={(e) => setVaultSearch(e.target.value)}
-              placeholder="Tìm kiếm vật phẩm..."
-              className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50"
-            />
+          {/* Vault Top Bar: Contribution Point balance and Filter/Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-3.5 mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400 font-serif font-bold">Điểm Cống Hiến:</span>
+              <span className="text-sm font-mono font-bold text-yellow-400 flex items-center gap-1">
+                <Coins className="w-4 h-4 text-yellow-500" />
+                {(member?.contribution_points || 0).toLocaleString()} Pts
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveTab("donate")}
+                className="ml-2 text-[10px] font-mono text-blue-400 hover:text-blue-300 underline decoration-dotted cursor-pointer"
+              >
+                + Dâng nộp thêm
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={vaultSearch}
+                onChange={(e) => setVaultSearch(e.target.value)}
+                placeholder="Tìm kiếm vật phẩm..."
+                className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50 min-w-[160px]"
+              />
+
+              {(vaultTab === "gu" || vaultTab === "material") && (
+                <div className="flex items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800 text-[10px] font-mono">
+                  {["All", "1", "2", "3", "4", "5", "6+"].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setVaultRankFilter(r)}
+                      className={`px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                        vaultRankFilter === r
+                          ? "bg-blue-600 text-white font-bold"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {r === "All" ? "Tất cả" : r === "6+" ? "Tiên Cổ" : `R${r}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Vault Inventory Render */}
@@ -1643,8 +1719,16 @@ export const SectView: React.FC = () => {
                       return rankA - rankB;
                     }).filter((vg: ApiResponseData) => {
                       if (vg.quantity !== undefined && vg.quantity <= 0) return false;
-                      if (!vaultSearch) return true;
                       const spec = guDictionary[vg.id];
+                      const displayRank = vg.rank || spec?.rank || 1;
+                      if (vaultRankFilter !== "All") {
+                        if (vaultRankFilter === "6+") {
+                          if (displayRank < 6) return false;
+                        } else {
+                          if (displayRank !== parseInt(vaultRankFilter)) return false;
+                        }
+                      }
+                      if (!vaultSearch) return true;
                       const name = spec?.name || vg.id;
                       return name.toLowerCase().includes(vaultSearch.toLowerCase());
                     });
@@ -1657,7 +1741,9 @@ export const SectView: React.FC = () => {
                       const isImmortal = (vg.rank && vg.rank >= 6) || (spec?.rank && spec.rank >= 6);
                       const maxQty = isImmortal ? 1 : (vg.quantity !== undefined ? vg.quantity : 1);
                       const totalCost = vg.cost * qty;
-                      const unaffordable = (member?.contribution_points || 0) < totalCost;
+                      const memberPts = member?.contribution_points || 0;
+                      const maxAffordable = Math.floor(memberPts / (vg.cost || 1));
+                      const unaffordable = memberPts < totalCost;
                       const displayRank = vg.rank || spec?.rank || 1;
                       const ownedCount = player?.gu_inventory?.filter((g: ApiResponseData) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
                       const vgMaxHunger = spec?.max_hunger || 100;
@@ -1695,12 +1781,17 @@ export const SectView: React.FC = () => {
                           <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
                             {!outOfStock && (
                               <div className="flex items-center gap-2">
-                                {renderQtyStepper(qtyKey, maxQty)}
+                                {renderQtyStepper(qtyKey, maxQty, maxAffordable)}
                                 <div className="text-right">
                                   <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
                                   <span className="text-xs font-mono font-bold text-yellow-500">
-                                    {qty > 1 ? `${totalCost} Pts` : `${vg.cost} Pts`}
+                                    {totalCost.toLocaleString()} Pts
                                   </span>
+                                  {member && (
+                                    <span className={`text-[9px] font-mono block ${unaffordable ? "text-red-400 font-semibold" : "text-zinc-500"}`}>
+                                      {unaffordable ? `(Thiếu ${(totalCost - memberPts).toLocaleString()} Pts)` : `(Còn ${(memberPts - totalCost).toLocaleString()} Pts)`}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -1730,8 +1821,16 @@ export const SectView: React.FC = () => {
                   Object.entries(sect.vault_materials)
                   .filter(([matId, qty]: ApiResponseData) => {
                     if (qty <= 0) return false;
-                    if (!vaultSearch) return true;
                     const spec = itemDictionary[matId];
+                    const rank = spec?.rank || 1;
+                    if (vaultRankFilter !== "All") {
+                      if (vaultRankFilter === "6+") {
+                        if (rank < 6) return false;
+                      } else {
+                        if (rank !== parseInt(vaultRankFilter)) return false;
+                      }
+                    }
+                    if (!vaultSearch) return true;
                     const name = spec?.name || matId;
                     return name.toLowerCase().includes(vaultSearch.toLowerCase());
                   })
@@ -1741,7 +1840,9 @@ export const SectView: React.FC = () => {
                     const qtyKey = `material-${matId}`;
                     const buyQty = getBuyQty(qtyKey);
                     const totalCost = cost * buyQty;
-                    const unaffordable = (member?.contribution_points || 0) < totalCost;
+                    const memberPts = member?.contribution_points || 0;
+                    const maxAffordable = Math.floor(memberPts / (cost || 1));
+                    const unaffordable = memberPts < totalCost;
 
                     const ownedCount = player?.materials_inventory?.[matId] || 0;
 
@@ -1771,12 +1872,17 @@ export const SectView: React.FC = () => {
                         <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
                           {qty > 0 && (
                             <div className="flex items-center gap-2">
-                              {renderQtyStepper(qtyKey, qty)}
+                              {renderQtyStepper(qtyKey, qty, maxAffordable)}
                               <div className="text-right">
                                 <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
                                 <span className="text-xs font-mono font-bold text-yellow-500">
-                                  {buyQty > 1 ? `${totalCost} Pts` : `${cost} Pts`}
+                                  {totalCost.toLocaleString()} Pts
                                 </span>
+                                {member && (
+                                  <span className={`text-[9px] font-mono block ${unaffordable ? "text-red-400 font-semibold" : "text-zinc-500"}`}>
+                                    {unaffordable ? `(Thiếu ${(totalCost - memberPts).toLocaleString()} Pts)` : `(Còn ${(memberPts - totalCost).toLocaleString()} Pts)`}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           )}
@@ -1847,7 +1953,12 @@ export const SectView: React.FC = () => {
                         <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
                           <div className="text-right">
                             <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
-                            <span className="text-xs font-mono font-bold text-yellow-500">{cost} Pts</span>
+                            <span className="text-xs font-mono font-bold text-yellow-500">{cost.toLocaleString()} Pts</span>
+                            {member && !isUnlocked && (
+                              <span className={`text-[9px] font-mono block ${unaffordable ? "text-red-400 font-semibold" : "text-zinc-500"}`}>
+                                {unaffordable ? `(Thiếu ${(cost - member.contribution_points).toLocaleString()} Pts)` : `(Còn ${(member.contribution_points - cost).toLocaleString()} Pts)`}
+                              </span>
+                            )}
                           </div>
                           <button
                             onClick={async () => {

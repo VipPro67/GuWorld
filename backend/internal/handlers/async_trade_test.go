@@ -29,3 +29,31 @@ func TestAcceptTradeOfferRequiresAuth(t *testing.T) {
 		t.Errorf("expected 401 for unauthenticated request, got %d", w.Code)
 	}
 }
+
+func TestCreateTradeOfferRequiresAuth(t *testing.T) {
+	r := server.SetupRouter(nil)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost,
+		"/api/shop/bao-hoang/trade-offers",
+		nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated request, got %d", w.Code)
+	}
+}
+
+func TestCancelTradeOfferRequiresAuth(t *testing.T) {
+	r := server.SetupRouter(nil)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost,
+		"/api/shop/bao-hoang/trade-offers/cancel",
+		nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated request, got %d", w.Code)
+	}
+}

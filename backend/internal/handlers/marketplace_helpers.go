@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -269,7 +270,10 @@ func settleExpiredTradeOffers() error {
 			continue
 		}
 		_, _ = tx.Exec(`UPDATE trade_offers SET status = 'EXPIRED' WHERE id = $1`, eo.id)
-		tx.Commit()
+		if err := tx.Commit(); err == nil {
+			notify.Send(db.DB, eo.creatorID, "trade_offer_expired", "Đơn Trao Đổi Hết Hạn",
+				"Đơn trao đổi tự động của đạo hữu trên Bảo Hoàng Thiên đã hết hạn. Toàn bộ vật phẩm đã được hoàn trả an toàn.")
+		}
 	}
 	return nil
 }

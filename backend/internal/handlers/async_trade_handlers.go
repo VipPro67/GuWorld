@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -19,9 +20,10 @@ import (
 )
 
 type CreateTradeOfferRequest struct {
-	Offered       models.TradeOfferData `json:"offered" binding:"required"`
-	Requested     models.TradeOfferData `json:"requested" binding:"required"`
-	DurationHours int                   `json:"duration_hours" binding:"required"`
+	Offered        models.TradeOfferData `json:"offered" binding:"required"`
+	Requested      models.TradeOfferData `json:"requested" binding:"required"`
+	DurationHours  int                   `json:"duration_hours" binding:"required"`
+	TargetUsername string                `json:"target_username"`
 }
 
 type AcceptTradeOfferRequest struct {
@@ -32,16 +34,46 @@ type CancelTradeOfferRequest struct {
 	OfferID string `json:"offer_id" binding:"required"`
 }
 
+type OfferedGuInfo struct {
+	InstanceID string `json:"instance_id"`
+	GuID       string `json:"gu_id"`
+	GuName     string `json:"gu_name"`
+	Rank       int    `json:"rank"`
+}
+
 type TradeOfferResponse struct {
-	ID              string                `json:"id"`
-	CreatorID       string                `json:"creator_id"`
-	CreatorUsername string                `json:"creator_username"`
-	Offered         models.TradeOfferData `json:"offered"`
-	Requested       models.TradeOfferData `json:"requested"`
-	Status          string                `json:"status"`
-	DurationHours   int                   `json:"duration_hours"`
-	EndTime         time.Time             `json:"end_time"`
-	CreatedAt       time.Time             `json:"created_at"`
+	ID               string                `json:"id"`
+	CreatorID        string                `json:"creator_id"`
+	CreatorUsername  string                `json:"creator_username"`
+	TargetID         *string               `json:"target_id,omitempty"`
+	TargetUsername   *string               `json:"target_username,omitempty"`
+	Offered          models.TradeOfferData `json:"offered"`
+	OfferedGuDetails []OfferedGuInfo       `json:"offered_gu_details,omitempty"`
+	Requested        models.TradeOfferData `json:"requested"`
+	Status           string                `json:"status"`
+	DurationHours    int                   `json:"duration_hours"`
+	EndTime          time.Time             `json:"end_time"`
+	CreatedAt        time.Time             `json:"created_at"`
+}
+
+func isTradeOfferEmpty(data models.TradeOfferData) bool {
+	if data.PrimevalStones > 0 || data.ImmortalStones > 0 {
+		return false
+	}
+	if len(data.Gus) > 0 {
+		return false
+	}
+	for _, qty := range data.Materials {
+		if qty > 0 {
+			return false
+		}
+	}
+	for _, rate := range data.Recipes {
+		if rate > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // System BHTH UUID sentinel for locking offered Gu items
@@ -56,6 +88,14 @@ func CreateTradeOffer(c *gin.Context) {
 	}
 	if req.DurationHours < 1 || req.DurationHours > 168 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Thời hạn đơn trao đổi từ 1 đến 168 giờ"})
+		return
+	}
+	if isTradeOfferEmpty(req.Offered) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn phải đưa ra ít nhất một vật phẩm, Cổ trùng, bí phương hoặc tiền tệ để trao đổi"})
+		return
+	}
+	if isTradeOfferEmpty(req.Requested) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn phải yêu cầu ít nhất một vật phẩm, Cổ trùng, bí phương hoặc tiền tệ muốn nhận"})
 		return
 	}
 
@@ -80,6 +120,28 @@ func CreateTradeOffer(c *gin.Context) {
 	if !HasBaoHoangAccess(creator.GuInventory) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Thông Thiên Cổ và Thần Niệm Cổ để kết nối Bảo Hoàng Thiên!"})
 		return
+	}
+
+	var activeCount int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM trade_offers WHERE creator_id = $1 AND status = 'ACTIVE' AND end_time > NOW()`, creator.ID).Scan(&activeCount)
+	if activeCount >= 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn chỉ có thể tạo tối đa 10 đơn trao đổi đang hoạt động cùng lúc trên Bảo Hoàng Thiên"})
+		return
+	}
+
+	targetPlayerID := creator.ID // default: public offer (sentinel: targetPlayerID == creator.ID)
+	if req.TargetUsername != "" {
+		var tID uuid.UUID
+		err := tx.QueryRow(`SELECT id FROM players WHERE username = $1`, req.TargetUsername).Scan(&tID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không tìm thấy đạo hữu %s để chỉ định trao đổi", req.TargetUsername)})
+			return
+		}
+		if tID == creator.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chỉ định chính bản thân làm đối tác trao đổi"})
+			return
+		}
+		targetPlayerID = tID
 	}
 
 	// Validate & Lock Offered Items
@@ -128,14 +190,27 @@ func CreateTradeOffer(c *gin.Context) {
 
 	for _, guInstID := range offered.Gus {
 		var ownerID uuid.UUID
-		var isVital bool
-		err := tx.QueryRow(`SELECT player_id, is_vital FROM player_gu WHERE id = $1`, guInstID).Scan(&ownerID, &isVital)
+		var isVital, equipped, isLocked bool
+		var state string
+		err := tx.QueryRow(`SELECT player_id, is_vital, equipped, is_locked, state FROM player_gu WHERE id = $1`, guInstID).Scan(&ownerID, &isVital, &equipped, &isLocked, &state)
 		if err != nil || ownerID != creator.ID {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không sở hữu Cổ trùng đưa trao đổi"})
 			return
 		}
 		if isVital {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể dùng Bổn Mạng Cổ làm vật trao đổi!"})
+			return
+		}
+		if equipped {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang trang bị!"})
+			return
+		}
+		if isLocked {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang bị khóa!"})
+			return
+		}
+		if state == "DEAD" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đã tử vong!"})
 			return
 		}
 		// Lock Gu to system BHTH UUID
@@ -169,14 +244,8 @@ func CreateTradeOffer(c *gin.Context) {
 	err = tx.QueryRow(`
 		INSERT INTO trade_offers (creator_id, player_id, offered_data, requested_data, status, duration_hours, end_time)
 		VALUES ($1, $2, $3, $4, 'ACTIVE', $5, $6)
-		ON CONFLICT (creator_id, player_id) DO UPDATE SET
-			offered_data = EXCLUDED.offered_data,
-			requested_data = EXCLUDED.requested_data,
-			status = 'ACTIVE',
-			end_time = EXCLUDED.end_time,
-			duration_hours = EXCLUDED.duration_hours
 		RETURNING id`,
-		creator.ID, authID, offeredJSON, requestedJSON, req.DurationHours, endTime,
+		creator.ID, targetPlayerID, offeredJSON, requestedJSON, req.DurationHours, endTime,
 	).Scan(&offerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo đơn trao đổi"})
@@ -228,27 +297,64 @@ func GetTradeOffers(c *gin.Context) {
 	}
 
 	rows, err := db.DB.Query(`
-		SELECT t.id, t.creator_id, p.username, t.offered_data, t.requested_data, t.status, t.duration_hours, t.end_time, t.created_at
+		SELECT t.id, t.creator_id, p.username, t.player_id, COALESCE(tp.username, ''),
+		       t.offered_data, t.requested_data, t.status, t.duration_hours, t.end_time, t.created_at
 		FROM trade_offers t
 		JOIN players p ON p.id = t.creator_id
+		LEFT JOIN players tp ON tp.id = t.player_id AND t.player_id != t.creator_id
 		WHERE t.status = 'ACTIVE' AND t.end_time > NOW()
-		ORDER BY t.created_at DESC LIMIT 100`)
+		  AND (t.player_id = t.creator_id OR t.player_id = $1 OR t.creator_id = $1)
+		ORDER BY t.created_at DESC LIMIT 100`, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query error"})
 		return
 	}
 	defer rows.Close()
 
+	var allGuInstIDs []string
 	res := []TradeOfferResponse{}
 	for rows.Next() {
 		var o TradeOfferResponse
+		var pID uuid.UUID
+		var targetUName string
 		var offJSON, reqJSON []byte
-		if err := rows.Scan(&o.ID, &o.CreatorID, &o.CreatorUsername, &offJSON, &reqJSON, &o.Status, &o.DurationHours, &o.EndTime, &o.CreatedAt); err == nil {
+		if err := rows.Scan(&o.ID, &o.CreatorID, &o.CreatorUsername, &pID, &targetUName, &offJSON, &reqJSON, &o.Status, &o.DurationHours, &o.EndTime, &o.CreatedAt); err == nil {
 			_ = json.Unmarshal(offJSON, &o.Offered)
 			_ = json.Unmarshal(reqJSON, &o.Requested)
+			if pID != uuid.Nil && o.CreatorID != pID.String() {
+				pIDStr := pID.String()
+				o.TargetID = &pIDStr
+				if targetUName != "" {
+					o.TargetUsername = &targetUName
+				}
+			}
+			allGuInstIDs = append(allGuInstIDs, o.Offered.Gus...)
 			res = append(res, o)
 		}
 	}
+
+	if len(allGuInstIDs) > 0 {
+		guRows, err := db.DB.Query(`SELECT id, gu_id, gu_rank FROM player_gu WHERE id = ANY($1::text[])`, pq.Array(allGuInstIDs))
+		if err == nil {
+			defer guRows.Close()
+			guInfoMap := make(map[string]OfferedGuInfo)
+			for guRows.Next() {
+				var info OfferedGuInfo
+				if err := guRows.Scan(&info.InstanceID, &info.GuID, &info.Rank); err == nil {
+					info.GuName = getGuName(info.GuID, info.Rank)
+					guInfoMap[info.InstanceID] = info
+				}
+			}
+			for i := range res {
+				for _, instID := range res[i].Offered.Gus {
+					if info, found := guInfoMap[instID]; found {
+						res[i].OfferedGuDetails = append(res[i].OfferedGuDetails, info)
+					}
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, res)
 }
 
@@ -311,9 +417,9 @@ func AcceptTradeOffer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể tự chấp nhận đơn trao đổi của mình"})
 		return
 	}
-	// Only the creator can accept their own trade offer (1-sided exact match)
-	if playerID != acceptor.ID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không có quyền chấp nhận đơn trao đổi này"})
+	// Check if this is a targeted trade offer for someone else
+	if playerID != uuid.Nil && playerID != creatorID && playerID != acceptor.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đơn trao đổi này được chỉ định riêng cho đạo hữu khác"})
 		return
 	}
 
@@ -427,6 +533,12 @@ func AcceptTradeOffer(c *gin.Context) {
 		_ = addMaterialTx(tx, creator.ID, matID, qty)
 	}
 	for _, guInstID := range matchedAcceptorGus {
+		var guID string
+		var rank int
+		if err := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE id = $1`, guInstID).Scan(&guID, &rank); err == nil && rank >= 6 {
+			_ = db.LogGuHistory(tx, guInstID, guID, rank, "bhth_trade_offer", &acceptor.ID, &creator.ID,
+				fmt.Sprintf("Trao đổi Bảo Hoàng Thiên từ %s sang %s", acceptor.Username, creator.Username), nil)
+		}
 		_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, creator.ID, guInstID)
 	}
 	for reqRecID := range requested.Recipes {
@@ -454,6 +566,12 @@ func AcceptTradeOffer(c *gin.Context) {
 		_ = addMaterialTx(tx, acceptor.ID, matID, qty)
 	}
 	for _, guInstID := range offered.Gus {
+		var guID string
+		var rank int
+		if err := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE id = $1`, guInstID).Scan(&guID, &rank); err == nil && rank >= 6 {
+			_ = db.LogGuHistory(tx, guInstID, guID, rank, "bhth_trade_offer", &creator.ID, &acceptor.ID,
+				fmt.Sprintf("Trao đổi Bảo Hoàng Thiên từ %s sang %s", creator.Username, acceptor.Username), nil)
+		}
 		_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, acceptor.ID, guInstID)
 	}
 	for offRecID, offRate := range offered.Recipes {
@@ -474,8 +592,8 @@ func AcceptTradeOffer(c *gin.Context) {
 		})
 	}
 
-	// Mark completed
-	_, err = tx.Exec(`UPDATE trade_offers SET status = 'COMPLETED' WHERE id = $1`, offerUUID)
+	// Mark completed and record acceptor as player_id
+	_, err = tx.Exec(`UPDATE trade_offers SET status = 'COMPLETED', player_id = $1 WHERE id = $2`, acceptor.ID, offerUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái đơn trao đổi"})
 		return

@@ -248,6 +248,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/trade/cancel/:id` |
 | POST | `/trade/offer/:id` | Body có thể chứa `recipes: [{"recipe_id": "..."}]` cùng với stones/gus/materials. |
 | POST | `/trade/lock/:id` |
+| POST | `/trade/unlock/:id` | Mở khóa ưu đãi để chỉnh sửa lại vật phẩm/đá, tự động hủy xác nhận của cả hai bên để đảm bảo an toàn. |
 | POST | `/trade/confirm/:id` |
 
 **Quy định phí & thời gian Bảo Hoàng Thiên:**

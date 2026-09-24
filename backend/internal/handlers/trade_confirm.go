@@ -239,6 +239,63 @@ func LockTrade(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch. Nhân Khí +1."})
 }
 
+func UnlockTrade(c *gin.Context) {
+	tradeID := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var senderID, receiverID uuid.UUID
+	var senderName, receiverName string
+	var status string
+	err = tx.QueryRow(`
+		SELECT t.sender_id, p1.username, t.receiver_id, p2.username, t.status 
+		FROM trades t
+		JOIN players p1 ON t.sender_id = p1.id
+		JOIN players p2 ON t.receiver_id = p2.id
+		WHERE t.id = $1 FOR UPDATE OF t
+	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName, &status)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
+		return
+	}
+
+	if status != "ACCEPTED" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Trạng thái giao dịch không cho phép mở khóa"})
+		return
+	}
+
+	if authID == senderID {
+		_, err = tx.Exec(`UPDATE trades SET sender_locked = false, sender_confirmed = false, receiver_confirmed = false, updated_at = NOW() WHERE id = $1`, tradeID)
+	} else if authID == receiverID {
+		_, err = tx.Exec(`UPDATE trades SET receiver_locked = false, sender_confirmed = false, receiver_confirmed = false, updated_at = NOW() WHERE id = $1`, tradeID)
+	} else {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unlock failed"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+	notifyTradeParticipants(senderID, receiverID)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã mở khóa giao dịch để chỉnh sửa."})
+}
+
 func ConfirmTrade(c *gin.Context) {
 	tradeID := c.Param("id")
 	authID, exists := middleware.GetPlayerID(c)

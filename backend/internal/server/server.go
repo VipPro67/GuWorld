@@ -767,6 +767,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			trade.POST("/cancel/:id", handlers.CancelTrade)
 			trade.POST("/offer/:id", handlers.UpdateTradeOffer)
 			trade.POST("/lock/:id", handlers.LockTrade)
+			trade.POST("/unlock/:id", handlers.UnlockTrade)
 			trade.POST("/confirm/:id", handlers.ConfirmTrade)
 		}
 

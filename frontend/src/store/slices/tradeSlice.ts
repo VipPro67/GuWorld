@@ -11,6 +11,7 @@ export interface TradeSlice {
   cancelTrade: (tradeId: string) => Promise<boolean>;
   updateTradeOffer: (tradeId: string, offer: { primeval_stones: number; immortal_stones: number; gus: string[]; materials: Record<string, number>; recipes: Record<string, number> }) => Promise<boolean>;
   lockTrade: (tradeId: string) => Promise<boolean>;
+  unlockTrade: (tradeId: string) => Promise<boolean>;
   confirmTrade: (tradeId: string) => Promise<boolean>;
 }
 
@@ -147,6 +148,26 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
       if (!response.ok) throw new Error(data.error || "Khóa giao dịch thất bại");
       get().addLog("Đã khóa ưu đãi giao dịch!");
       get().addToast("Đã khóa ưu đãi giao dịch!", "success");
+      await get().fetchActiveTrade();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      await get().fetchActiveTrade();
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
+  unlockTrade: async (tradeId) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/unlock/${tradeId}`, { method: "POST" });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Mở khóa giao dịch thất bại");
+      get().addLog("Đã mở khóa giao dịch để chỉnh sửa!");
+      get().addToast("Đã mở khóa giao dịch!", "info");
       await get().fetchActiveTrade();
       return true;
     } catch (caught: unknown) {

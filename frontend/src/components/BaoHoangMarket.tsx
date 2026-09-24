@@ -18,8 +18,14 @@ import {
   CheckCircle,
   XCircle,
   Package,
+  Bug,
+  ScrollText,
+  Plus,
+  Minus,
+  X,
 } from "lucide-react";
-import { GamePanel, GameTabs, GameButton, GameCard, GameInput } from "@/components/ui";
+import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge } from "@/components/ui";
+import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
 
 interface RecipeData {
   recipe_id: string;
@@ -77,6 +83,7 @@ export function BaoHoangMarket({
   onRefresh,
   onCreate,
   onBid,
+  guDictionary,
   itemDictionary,
 }: Props) {
   const [tab, setTab] = useState<"orderBook" | "asyncTrade" | "auction" | "create">("orderBook");
@@ -138,17 +145,50 @@ export function BaoHoangMarket({
   const [requestedMats, setRequestedMats] = useState<Record<string, number>>({});
   const [requestedRecipes, setRequestedRecipes] = useState<Record<string, number>>({});
   const [tradeOfferDuration, setTradeOfferDuration] = useState(72);
+  const [tradeOfferTargetUser, setTradeOfferTargetUser] = useState("");
+  const [tradeOfferFilter, setTradeOfferFilter] = useState<"all" | "mine" | "targeted">("all");
 
-  // Picker temp states for Trade Offer Builder
-  const [addOffMatID, setAddOffMatID] = useState("");
-  const [addOffMatQty, setAddOffMatQty] = useState(1);
-  const [addOffGuID, setAddOffGuID] = useState("");
-  const [addOffRecID, setAddOffRecID] = useState("");
+  // Visual Asset Picker Modal State
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"offer" | "request">("offer");
+  const [pickerTab, setPickerTab] = useState<AssetTab>("material");
 
-  const [addReqMatID, setAddReqMatID] = useState("");
-  const [addReqMatQty, setAddReqMatQty] = useState(1);
-  const [addReqGuID, setAddReqGuID] = useState("");
-  const [addReqRecID, setAddReqRecID] = useState("");
+  const openAssetPicker = (mode: "offer" | "request", tab: AssetTab) => {
+    setPickerMode(mode);
+    setPickerTab(tab);
+    setPickerOpen(true);
+  };
+
+  const handleAddMaterialFromPicker = (matId: string, qty: number) => {
+    if (pickerMode === "offer") {
+      const owned = player.materials_inventory?.[matId] || 0;
+      const current = offeredMats[matId] || 0;
+      const newQty = Math.min(owned, current + qty);
+      setOfferedMats((prev) => ({ ...prev, [matId]: newQty }));
+    } else {
+      setRequestedMats((prev) => ({ ...prev, [matId]: (prev[matId] || 0) + qty }));
+    }
+  };
+
+  const handleAddGuFromPicker = (guIdentifier: string) => {
+    if (pickerMode === "offer") {
+      if (!offeredGuIDs.includes(guIdentifier)) {
+        setOfferedGuIDs((prev) => [...prev, guIdentifier]);
+      }
+    } else {
+      if (!requestedGuIDs.includes(guIdentifier)) {
+        setRequestedGuIDs((prev) => [...prev, guIdentifier]);
+      }
+    }
+  };
+
+  const handleAddRecipeFromPicker = (recipeId: string, completionRate: number = 100) => {
+    if (pickerMode === "offer") {
+      setOfferedRecipes((prev) => ({ ...prev, [recipeId]: completionRate }));
+    } else {
+      setRequestedRecipes((prev) => ({ ...prev, [recipeId]: 100 }));
+    }
+  };
 
   // Auction form state
   const [aucItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
@@ -250,7 +290,7 @@ export function BaoHoangMarket({
 
   const handleCreateTradeOfferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createTradeOffer({
+    const success = await createTradeOffer({
       offered: {
         primeval_stones: offeredStones,
         immortal_stones: offeredImmortal,
@@ -266,8 +306,22 @@ export function BaoHoangMarket({
         recipes: requestedRecipes,
       },
       durationHours: tradeOfferDuration,
+      targetUsername: tradeOfferTargetUser.trim() || undefined,
     });
-    setTab("asyncTrade");
+    if (success) {
+      setOfferedStones(0);
+      setOfferedImmortal(0);
+      setOfferedGuIDs([]);
+      setOfferedMats({});
+      setOfferedRecipes({});
+      setRequestedStones(0);
+      setRequestedImmortal(0);
+      setRequestedGuIDs([]);
+      setRequestedMats({});
+      setRequestedRecipes({});
+      setTradeOfferTargetUser("");
+      setTab("asyncTrade");
+    }
   };
 
   const handleCreateAuctionSubmit = async (e: React.FormEvent) => {
@@ -325,17 +379,23 @@ export function BaoHoangMarket({
   });
 
   const filteredTradeOffers = tradeOffers.filter((offer) => {
+    if (tradeOfferFilter === "mine" && offer.creator_id !== player.id) return false;
+    if (tradeOfferFilter === "targeted" && offer.target_id !== player.id && offer.target_username !== player.username) return false;
+
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     const creator = (offer.creator_username || offer.creator_id).toLowerCase();
+    const target = (offer.target_username || offer.target_id || "").toLowerCase();
     const offeredMatNames = Object.keys(offer.offered.materials || {}).map((k) => (itemDictionary[k]?.name || k).toLowerCase());
     const requestedMatNames = Object.keys(offer.requested.materials || {}).map((k) => (itemDictionary[k]?.name || k).toLowerCase());
-    const offeredGuNames = (offer.offered.gus || []).map((gid) => {
-      const g = guInventory.find((inst) => inst.instance_id === gid);
-      return g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id).toLowerCase() : gid.toLowerCase();
-    });
+    const offeredGuNames = (offer.offered_gu_details && offer.offered_gu_details.length > 0)
+      ? offer.offered_gu_details.map(g => g.gu_name.toLowerCase())
+      : (offer.offered.gus || []).map((gid) => {
+          const g = guInventory.find((inst) => inst.instance_id === gid);
+          return g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id).toLowerCase() : gid.toLowerCase();
+        });
     const requestedGuNames = (offer.requested.gus || []).map((gid) => {
-      const spec = guSpecFor(gid, 1);
+      const spec = guSpecFor(gid, 1) || guDictionary?.[gid];
       return spec ? spec.name.toLowerCase() : gid.toLowerCase();
     });
     const offeredRecNames = Object.keys(offer.offered.recipes || {}).map((r) => r.toLowerCase());
@@ -343,6 +403,7 @@ export function BaoHoangMarket({
 
     return (
       creator.includes(q) ||
+      target.includes(q) ||
       offeredMatNames.some((n) => n.includes(q)) ||
       requestedMatNames.some((n) => n.includes(q)) ||
       offeredGuNames.some((n) => n.includes(q)) ||
@@ -605,7 +666,31 @@ export function BaoHoangMarket({
         {/* TAB 2: TRAO ĐỔI AUTO (ASYNC TRADE OFFERS) */}
         {tab === "asyncTrade" && (
           <div className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex gap-2">
+                <GameButton
+                  size="xs"
+                  variant={tradeOfferFilter === "all" ? "primary" : "ghost"}
+                  onClick={() => setTradeOfferFilter("all")}
+                >
+                  Tất Cả ({tradeOffers.length})
+                </GameButton>
+                <GameButton
+                  size="xs"
+                  variant={tradeOfferFilter === "mine" ? "primary" : "ghost"}
+                  onClick={() => setTradeOfferFilter("mine")}
+                >
+                  Của Tôi ({tradeOffers.filter(o => o.creator_id === player.id).length})
+                </GameButton>
+                <GameButton
+                  size="xs"
+                  variant={tradeOfferFilter === "targeted" ? "primary" : "ghost"}
+                  onClick={() => setTradeOfferFilter("targeted")}
+                >
+                  Chỉ Định Cho Tôi ({tradeOffers.filter(o => o.target_id === player.id || o.target_username === player.username).length})
+                </GameButton>
+              </div>
+
               <div className="relative w-64">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <GameInput
@@ -625,15 +710,34 @@ export function BaoHoangMarket({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredTradeOffers.map((offer) => {
                   const isMine = offer.creator_id === player.id;
+                  const isTargetedToOther = !!offer.target_username && offer.target_username !== player.username && !isMine;
+
+                  const hasPrimeval = (player.primeval_stones || 0) >= (offer.requested.primeval_stones || 0);
+                  const hasImmortal = offer.requested.immortal_stones > 0 ? (player.rank >= 6 && (player.immortal_stones || 0) >= offer.requested.immortal_stones) : true;
+                  const hasMats = Object.entries(offer.requested.materials || {}).every(([matId, qty]) => (player.materials_inventory?.[matId] || 0) >= qty);
+                  const hasGus = (offer.requested.gus || []).every(gid => guInventory.some(g => (g.gu_id === gid || g.instance_id === gid) && !g.is_vital && !g.equipped && g.status !== "DEAD"));
+                  const hasRecipes = Object.keys(offer.requested.recipes || {}).every(recId => (player.unlocked_recipes || []).some(r => r.recipe_id === recId));
+                  const canAccept = hasPrimeval && hasImmortal && hasMats && hasGus && hasRecipes && !isTargetedToOther;
+
                   return (
                     <GameCard key={offer.id} variant="vital" className="p-4 space-y-4">
                       <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
                           <span className="text-sm font-bold font-serif text-zinc-200">{offer.creator_username}</span>
+                          {offer.target_username && (
+                            <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-sans">
+                              🎯 Chỉ định: {offer.target_username}
+                            </span>
+                          )}
+                          {isMine && (
+                            <span className="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full font-sans">
+                              Đơn của tôi
+                            </span>
+                          )}
                         </div>
                         <span className="text-xs text-zinc-500 font-mono">
-                          Thời hạn: {new Date(offer.end_time).toLocaleDateString()}
+                          Hạn: {new Date(offer.end_time).toLocaleDateString()}
                         </span>
                       </div>
 
@@ -647,11 +751,17 @@ export function BaoHoangMarket({
                           {Object.entries(offer.offered.materials || {}).map(([k, v]) => (
                             <div key={k}>• {v}x {itemDictionary[k]?.name || k}</div>
                           ))}
-                          {(offer.offered.gus || []).map((instId) => {
-                            const g = guInventory.find((i) => i.instance_id === instId);
-                            const name = g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id) : instId;
-                            return <div key={instId}>• Cổ: {name}</div>;
-                          })}
+                          {offer.offered_gu_details && offer.offered_gu_details.length > 0 ? (
+                            offer.offered_gu_details.map((g) => (
+                              <div key={g.instance_id}>• Cổ: {g.gu_name} (Hạng {g.rank})</div>
+                            ))
+                          ) : (
+                            (offer.offered.gus || []).map((instId) => {
+                              const g = guInventory.find((i) => i.instance_id === instId);
+                              const name = g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id) : instId;
+                              return <div key={instId}>• Cổ: {name}</div>;
+                            })
+                          )}
                           {Object.entries(offer.offered.recipes || {}).map(([recId, rate]) => {
                             const rSpec = recipes.find((r) => r.id === recId);
                             const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
@@ -664,20 +774,69 @@ export function BaoHoangMarket({
                           <span className="text-amber-400 font-bold text-[11px] block border-b border-amber-500/20 pb-1 mb-1">
                             VẬT YÊU CẦU (REQUESTED)
                           </span>
-                          {offer.requested.primeval_stones > 0 && <div>• {offer.requested.primeval_stones} Nguyên Thạch</div>}
-                          {offer.requested.immortal_stones > 0 && <div>• {offer.requested.immortal_stones} Tiên Nguyên</div>}
-                          {Object.entries(offer.requested.materials || {}).map(([k, v]) => (
-                            <div key={k}>• {v}x {itemDictionary[k]?.name || k}</div>
-                          ))}
+                          {offer.requested.primeval_stones > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span>• {offer.requested.primeval_stones} Nguyên Thạch</span>
+                              {!isMine && (
+                                <span className={hasPrimeval ? "text-emerald-400 font-bold text-[10px]" : "text-red-400 font-bold text-[10px]"}>
+                                  {hasPrimeval ? "✓" : `✗`}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {offer.requested.immortal_stones > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span>• {offer.requested.immortal_stones} Tiên Nguyên</span>
+                              {!isMine && (
+                                <span className={hasImmortal ? "text-emerald-400 font-bold text-[10px]" : "text-red-400 font-bold text-[10px]"}>
+                                  {hasImmortal ? "✓" : `✗`}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {Object.entries(offer.requested.materials || {}).map(([k, v]) => {
+                            const owned = player.materials_inventory?.[k] || 0;
+                            const ok = owned >= v;
+                            return (
+                              <div key={k} className="flex items-center justify-between">
+                                <span>• {v}x {itemDictionary[k]?.name || k}</span>
+                                {!isMine && (
+                                  <span className={ok ? "text-emerald-400 font-bold text-[10px]" : "text-red-400 font-bold text-[10px]"}>
+                                    {ok ? `✓ (${owned})` : `✗ (${owned}/${v})`}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                           {(offer.requested.gus || []).map((gid) => {
-                            const spec = guSpecFor(gid, 1);
-                            return <div key={gid}>• Cổ: {spec?.name || gid}</div>;
+                            const spec = guSpecFor(gid, 1) || guDictionary?.[gid];
+                            const ok = guInventory.some(g => (g.gu_id === gid || g.instance_id === gid) && !g.is_vital && !g.equipped && g.status !== "DEAD");
+                            return (
+                              <div key={gid} className="flex items-center justify-between">
+                                <span>• Cổ: {spec?.name || gid}</span>
+                                {!isMine && (
+                                  <span className={ok ? "text-emerald-400 font-bold text-[10px]" : "text-red-400 font-bold text-[10px]"}>
+                                    {ok ? "✓ Có" : "✗ Thiếu"}
+                                  </span>
+                                )}
+                              </div>
+                            );
                           })}
                           {Object.entries(offer.requested.recipes || {}).map(([recId]) => {
                             const rSpec = recipes.find((r) => r.id === recId);
                             const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
                             const name = targetGu ? `Bí phương ${targetGu}` : `Bí phương ${recId}`;
-                            return <div key={recId}>• {name}</div>;
+                            const ok = (player.unlocked_recipes || []).some(r => r.recipe_id === recId);
+                            return (
+                              <div key={recId} className="flex items-center justify-between">
+                                <span>• {name}</span>
+                                {!isMine && (
+                                  <span className={ok ? "text-emerald-400 font-bold text-[10px]" : "text-red-400 font-bold text-[10px]"}>
+                                    {ok ? "✓ Có" : "✗ Thiếu"}
+                                  </span>
+                                )}
+                              </div>
+                            );
                           })}
                         </div>
                       </div>
@@ -693,15 +852,20 @@ export function BaoHoangMarket({
                           >
                             Hủy Trao Đổi
                           </GameButton>
+                        ) : isTargetedToOther ? (
+                          <span className="text-xs text-zinc-500 italic">
+                            Chỉ dành riêng cho {offer.target_username}
+                          </span>
                         ) : (
                           <GameButton
                             size="xs"
-                            variant="primary"
+                            variant={canAccept ? "primary" : "ghost"}
+                            disabled={!canAccept}
                             onClick={() => acceptTradeOffer(offer.id)}
                             loading={actionLoading}
-                            leftIcon={<CheckCircle className="w-3.5 h-3.5" />}
+                            leftIcon={canAccept ? <CheckCircle className="w-3.5 h-3.5" /> : undefined}
                           >
-                            Chấp Nhận Trao Đổi (Exact Match)
+                            {canAccept ? "Chấp Nhận Trao Đổi (Đủ Điều Kiện)" : "Chưa Đủ Điều Kiện Trao Đổi"}
                           </GameButton>
                         )}
                       </div>
@@ -1062,174 +1226,292 @@ export function BaoHoangMarket({
               <form onSubmit={handleCreateTradeOfferSubmit} className="space-y-4">
 
                 {/* ===== PANEL: ĐỒ ĐEM TRAO ĐỔI ===== */}
-                <div className="rounded-xl border border-emerald-500/30 overflow-hidden">
+                <div className="rounded-xl border border-emerald-500/30 overflow-hidden bg-zinc-950/60">
                   {/* Header */}
-                  <div className="bg-emerald-950/60 px-4 py-2.5 flex items-center justify-between">
+                  <div className="bg-emerald-950/60 px-4 py-2.5 flex items-center justify-between border-b border-emerald-500/20">
                     <div className="flex items-center gap-2">
                       <span className="text-emerald-400 text-base">📤</span>
                       <span className="text-sm font-bold text-emerald-300">Đồ Đem Trao Đổi</span>
-                      <span className="text-[10px] text-zinc-500 font-normal">(tài sản sẽ bị khóa)</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">(tài sản trong túi bạn sẽ bị khóa)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <GameButton
+                        size="xs"
+                        variant="secondary"
+                        type="button"
+                        onClick={() => openAssetPicker("offer", "material")}
+                        className="text-xs"
+                      >
+                        + Vật Phẩm
+                      </GameButton>
+                      <GameButton
+                        size="xs"
+                        variant="secondary"
+                        type="button"
+                        onClick={() => openAssetPicker("offer", "gu")}
+                        className="text-xs"
+                      >
+                        + Cổ Trùng
+                      </GameButton>
+                      <GameButton
+                        size="xs"
+                        variant="secondary"
+                        type="button"
+                        onClick={() => openAssetPicker("offer", "recipe")}
+                        className="text-xs"
+                      >
+                        + Bí Phương
+                      </GameButton>
                     </div>
                   </div>
 
-                  <div className="bg-zinc-950/70 p-4 space-y-4">
+                  <div className="p-4 space-y-4">
                     {/* Currency */}
                     <div>
                       <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">💰 Tiền Tệ</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch</label>
-                          <GameInput type="number" min={0} value={offeredStones} onChange={(e) => setOfferedStones(Number(e.target.value))} />
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[11px] text-zinc-400">Nguyên Thạch</label>
+                            <button
+                              type="button"
+                              onClick={() => setOfferedStones(Math.floor(player.primeval_stones || 0))}
+                              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium"
+                            >
+                              Tối đa: {(player.primeval_stones || 0).toLocaleString()}
+                            </button>
+                          </div>
+                          <GameInput
+                            type="number"
+                            min={0}
+                            value={offeredStones}
+                            onChange={(e) => setOfferedStones(Number(e.target.value))}
+                          />
                         </div>
                         <div>
-                          <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên</label>
-                          <GameInput type="number" min={0} value={offeredImmortal} onChange={(e) => setOfferedImmortal(Number(e.target.value))} />
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[11px] text-zinc-400">Tiên Nguyên</label>
+                            {player.rank >= 6 && (
+                              <button
+                                type="button"
+                                onClick={() => setOfferedImmortal(Math.floor(player.immortal_stones || 0))}
+                                className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium"
+                              >
+                                Tối đa: {(player.immortal_stones || 0).toLocaleString()}
+                              </button>
+                            )}
+                          </div>
+                          <GameInput
+                            type="number"
+                            min={0}
+                            value={offeredImmortal}
+                            onChange={(e) => setOfferedImmortal(Number(e.target.value))}
+                            disabled={player.rank < 6}
+                          />
                         </div>
                       </div>
                     </div>
 
-                    {/* Materials */}
-                    <div className="border-t border-zinc-800 pt-3">
-                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📦 Vật Phẩm</p>
-                      <div className="flex gap-2">
-                        <select
-                          value={addOffMatID}
-                          onChange={(e) => setAddOffMatID(e.target.value)}
-                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
-                        >
-                          <option value="">-- Chọn Nguyên Liệu --</option>
-                          {Object.entries(itemDictionary).map(([k, v]) => (
-                            <option key={k} value={k}>{v.name} ({k})</option>
-                          ))}
-                        </select>
-                        <GameInput
-                          type="number"
-                          min={1}
-                          value={addOffMatQty}
-                          onChange={(e) => setAddOffMatQty(Number(e.target.value))}
-                          className="w-20 text-xs"
-                        />
-                        <GameButton
-                          size="xs"
-                          variant="secondary"
-                          type="button"
-                          onClick={() => {
-                            if (!addOffMatID || addOffMatQty <= 0) return;
-                            setOfferedMats(prev => ({ ...prev, [addOffMatID]: (prev[addOffMatID] || 0) + addOffMatQty }));
-                            setAddOffMatID("");
-                          }}
-                        >
-                          Thêm
-                        </GameButton>
-                      </div>
-                      {Object.keys(offeredMats).length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {Object.entries(offeredMats).map(([k, qty]) => (
-                            <span key={k} className="inline-flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/40 text-emerald-200 text-xs px-3 py-1 rounded-full">
-                              <span className="font-medium">{qty}×</span> {itemDictionary[k]?.name || k}
-                              <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...offeredMats }; delete c[k]; setOfferedMats(c); }} />
-                            </span>
-                          ))}
+                    {/* Visual Selections Display */}
+                    <div className="border-t border-zinc-800/80 pt-3 space-y-3">
+                      {Object.keys(offeredMats).length === 0 && offeredGuIDs.length === 0 && Object.keys(offeredRecipes).length === 0 ? (
+                        <div className="border border-dashed border-zinc-800 rounded-xl p-4 text-center">
+                          <p className="text-xs text-zinc-500">Chưa có vật phẩm, cổ trùng hay bí phương nào được đưa vào đơn.</p>
+                          <div className="flex justify-center gap-3 mt-2 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => openAssetPicker("offer", "material")}
+                              className="text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <Package className="w-3.5 h-3.5" /> + Chọn Vật Phẩm
+                            </button>
+                            <span className="text-zinc-700">•</span>
+                            <button
+                              type="button"
+                              onClick={() => openAssetPicker("offer", "gu")}
+                              className="text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <Bug className="w-3.5 h-3.5" /> + Chọn Cổ Trùng
+                            </button>
+                            <span className="text-zinc-700">•</span>
+                            <button
+                              type="button"
+                              onClick={() => openAssetPicker("offer", "recipe")}
+                              className="text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <ScrollText className="w-3.5 h-3.5" /> + Chọn Bí Phương
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      ) : (
+                        <>
+                          {/* Materials */}
+                          {Object.keys(offeredMats).length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-semibold text-zinc-400 uppercase flex items-center gap-1">
+                                  <Package className="w-3 h-3 text-emerald-400" /> Vật Phẩm ({Object.keys(offeredMats).length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openAssetPicker("offer", "material")}
+                                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium"
+                                >
+                                  + Thêm / Sửa
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(offeredMats).map(([matId, qty]) => {
+                                  const total = player.materials_inventory?.[matId] || 0;
+                                  const avail = total - qty;
+                                  return (
+                                    <div
+                                      key={matId}
+                                      className="inline-flex items-center gap-2 bg-zinc-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-xs text-emerald-200"
+                                    >
+                                      <span className="font-semibold text-white">{qty}×</span>
+                                      <span className="truncate max-w-[140px]">{itemDictionary[matId]?.name || matId}</span>
+                                      <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5 ml-0.5">
+                                        <button
+                                          type="button"
+                                          title="Giảm 1"
+                                          onClick={() => {
+                                            if (qty <= 1) {
+                                              const c = { ...offeredMats };
+                                              delete c[matId];
+                                              setOfferedMats(c);
+                                            } else {
+                                              setOfferedMats((prev) => ({ ...prev, [matId]: qty - 1 }));
+                                            }
+                                          }}
+                                          className="w-4 h-4 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-300 text-xs"
+                                        >
+                                          -
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Tăng 1"
+                                          disabled={avail <= 0}
+                                          onClick={() => {
+                                            if (avail > 0) {
+                                              setOfferedMats((prev) => ({ ...prev, [matId]: qty + 1 }));
+                                            }
+                                          }}
+                                          className="w-4 h-4 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:hover:bg-zinc-800 flex items-center justify-center text-zinc-300 text-xs"
+                                        >
+                                          +
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Xóa"
+                                          onClick={() => {
+                                            const c = { ...offeredMats };
+                                            delete c[matId];
+                                            setOfferedMats(c);
+                                          }}
+                                          className="text-red-400 hover:text-red-300 ml-1"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
 
-                    {/* Gu */}
-                    <div className="border-t border-zinc-800 pt-3">
-                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">🐛 Cổ Trùng</p>
-                      <div className="flex gap-2">
-                        <select
-                          value={addOffGuID}
-                          onChange={(e) => setAddOffGuID(e.target.value)}
-                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
-                        >
-                          <option value="">-- Chọn Cổ Trùng Trong Túi --</option>
-                          {guInventory.filter(g => !g.is_vital && g.status !== "DEAD" && !offeredGuIDs.includes(g.instance_id)).map((g) => {
-                            const spec = guSpecFor(g.gu_id, g.rank);
-                            return (
-                              <option key={g.instance_id} value={g.instance_id}>
-                                {spec?.name || g.gu_id} (Hạng {g.rank})
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <GameButton
-                          size="xs"
-                          variant="secondary"
-                          type="button"
-                          onClick={() => {
-                            if (!addOffGuID) return;
-                            setOfferedGuIDs(prev => [...prev, addOffGuID]);
-                            setAddOffGuID("");
-                          }}
-                        >
-                          Thêm
-                        </GameButton>
-                      </div>
-                      {offeredGuIDs.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {offeredGuIDs.map((instId) => {
-                            const g = guInventory.find(i => i.instance_id === instId);
-                            const name = g ? (guSpecFor(g.gu_id, g.rank)?.name || g.gu_id) : instId;
-                            return (
-                              <span key={instId} className="inline-flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/40 text-emerald-200 text-xs px-3 py-1 rounded-full">
-                                {name}
-                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => setOfferedGuIDs(prev => prev.filter(id => id !== instId))} />
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                          {/* Gus */}
+                          {offeredGuIDs.length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-semibold text-zinc-400 uppercase flex items-center gap-1">
+                                  <Bug className="w-3 h-3 text-emerald-400" /> Cổ Trùng ({offeredGuIDs.length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openAssetPicker("offer", "gu")}
+                                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium"
+                                >
+                                  + Thêm / Sửa
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {offeredGuIDs.map((instId) => {
+                                  const g = guInventory.find((i) => i.instance_id === instId);
+                                  const spec = g ? guSpecFor(g.gu_id, g.rank) : undefined;
+                                  const name = spec?.name || g?.gu_id || instId;
+                                  const rank = g?.rank || 1;
+                                  return (
+                                    <div
+                                      key={instId}
+                                      className="inline-flex items-center gap-2 bg-zinc-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-xs text-emerald-200"
+                                    >
+                                      <GameBadge variant="rank" rank={rank} size="sm">
+                                        Hạng {rank}
+                                      </GameBadge>
+                                      <span className="truncate max-w-[140px] font-medium">{name}</span>
+                                      <button
+                                        type="button"
+                                        title="Xóa"
+                                        onClick={() => setOfferedGuIDs((prev) => prev.filter((id) => id !== instId))}
+                                        className="text-red-400 hover:text-red-300 ml-1"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
 
-                    {/* Recipes */}
-                    <div className="border-t border-zinc-800 pt-3">
-                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📜 Bí Phương Đã Khai Mở</p>
-                      <div className="flex gap-2">
-                        <select
-                          value={addOffRecID}
-                          onChange={(e) => setAddOffRecID(e.target.value)}
-                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
-                        >
-                          <option value="">-- Chọn Bí Phương --</option>
-                          {(player.unlocked_recipes || []).filter(r => !offeredRecipes[r.recipe_id]).map((ur) => {
-                            const rSpec = recipes.find(r => r.id === ur.recipe_id);
-                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
-                            return (
-                              <option key={ur.recipe_id} value={ur.recipe_id}>
-                                {targetGu ? `Bí phương ${targetGu} (${ur.completion_rate}%)` : `${ur.recipe_id} (${ur.completion_rate}%)`}
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <GameButton
-                          size="xs"
-                          variant="secondary"
-                          type="button"
-                          onClick={() => {
-                            if (!addOffRecID) return;
-                            const ur = (player.unlocked_recipes || []).find(r => r.recipe_id === addOffRecID);
-                            setOfferedRecipes(prev => ({ ...prev, [addOffRecID]: ur ? ur.completion_rate : 100 }));
-                            setAddOffRecID("");
-                          }}
-                        >
-                          Thêm
-                        </GameButton>
-                      </div>
-                      {Object.keys(offeredRecipes).length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {Object.entries(offeredRecipes).map(([recId, rate]) => {
-                            const rSpec = recipes.find(r => r.id === recId);
-                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
-                            const name = targetGu ? `Bí phương ${targetGu}` : recId;
-                            return (
-                              <span key={recId} className="inline-flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/40 text-emerald-200 text-xs px-3 py-1 rounded-full">
-                                {name} <span className="text-emerald-400">({rate}%)</span>
-                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...offeredRecipes }; delete c[recId]; setOfferedRecipes(c); }} />
-                              </span>
-                            );
-                          })}
-                        </div>
+                          {/* Recipes */}
+                          {Object.keys(offeredRecipes).length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-semibold text-zinc-400 uppercase flex items-center gap-1">
+                                  <ScrollText className="w-3 h-3 text-emerald-400" /> Bí Phương ({Object.keys(offeredRecipes).length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openAssetPicker("offer", "recipe")}
+                                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium"
+                                >
+                                  + Thêm / Sửa
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(offeredRecipes).map(([recId, rate]) => {
+                                  const rSpec = recipes.find((r) => r.id === recId);
+                                  const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                                  const name = targetGu ? `Bí phương ${targetGu}` : recId;
+                                  return (
+                                    <div
+                                      key={recId}
+                                      className="inline-flex items-center gap-2 bg-zinc-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-xs text-emerald-200"
+                                    >
+                                      <span className="truncate max-w-[140px] font-medium">{name}</span>
+                                      <span className="text-[10px] text-emerald-400 font-mono">({rate}%)</span>
+                                      <button
+                                        type="button"
+                                        title="Xóa"
+                                        onClick={() => {
+                                          const c = { ...offeredRecipes };
+                                          delete c[recId];
+                                          setOfferedRecipes(c);
+                                        }}
+                                        className="text-red-400 hover:text-red-300 ml-1"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -1243,169 +1525,280 @@ export function BaoHoangMarket({
                 </div>
 
                 {/* ===== PANEL: ĐỒ MUỐN NHẬN ===== */}
-                <div className="rounded-xl border border-amber-500/30 overflow-hidden">
+                <div className="rounded-xl border border-amber-500/30 overflow-hidden bg-zinc-950/60">
                   {/* Header */}
-                  <div className="bg-amber-950/50 px-4 py-2.5 flex items-center justify-between">
+                  <div className="bg-amber-950/50 px-4 py-2.5 flex items-center justify-between border-b border-amber-500/20">
                     <div className="flex items-center gap-2">
                       <span className="text-amber-400 text-base">📥</span>
                       <span className="text-sm font-bold text-amber-300">Đồ Muốn Nhận</span>
                       <span className="text-[10px] text-zinc-500 font-normal">(người đổi phải cung cấp)</span>
                     </div>
+                    <div className="flex items-center gap-1.5">
+                      <GameButton
+                        size="xs"
+                        variant="secondary"
+                        type="button"
+                        onClick={() => openAssetPicker("request", "material")}
+                        className="text-xs"
+                      >
+                        + Vật Phẩm
+                      </GameButton>
+                      <GameButton
+                        size="xs"
+                        variant="secondary"
+                        type="button"
+                        onClick={() => openAssetPicker("request", "gu")}
+                        className="text-xs"
+                      >
+                        + Cổ Trùng
+                      </GameButton>
+                      <GameButton
+                        size="xs"
+                        variant="secondary"
+                        type="button"
+                        onClick={() => openAssetPicker("request", "recipe")}
+                        className="text-xs"
+                      >
+                        + Bí Phương
+                      </GameButton>
+                    </div>
                   </div>
 
-                  <div className="bg-zinc-950/70 p-4 space-y-4">
+                  <div className="p-4 space-y-4">
                     {/* Currency */}
                     <div>
                       <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">💰 Tiền Tệ</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-[11px] text-zinc-400 block mb-1">Nguyên Thạch</label>
-                          <GameInput type="number" min={0} value={requestedStones} onChange={(e) => setRequestedStones(Number(e.target.value))} />
+                          <GameInput
+                            type="number"
+                            min={0}
+                            value={requestedStones}
+                            onChange={(e) => setRequestedStones(Number(e.target.value))}
+                          />
                         </div>
                         <div>
                           <label className="text-[11px] text-zinc-400 block mb-1">Tiên Nguyên</label>
-                          <GameInput type="number" min={0} value={requestedImmortal} onChange={(e) => setRequestedImmortal(Number(e.target.value))} />
+                          <GameInput
+                            type="number"
+                            min={0}
+                            value={requestedImmortal}
+                            onChange={(e) => setRequestedImmortal(Number(e.target.value))}
+                          />
                         </div>
                       </div>
                     </div>
 
-                    {/* Materials */}
-                    <div className="border-t border-zinc-800 pt-3">
-                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📦 Vật Phẩm</p>
-                      <div className="flex gap-2">
-                        <select
-                          value={addReqMatID}
-                          onChange={(e) => setAddReqMatID(e.target.value)}
-                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
-                        >
-                          <option value="">-- Chọn Nguyên Liệu --</option>
-                          {Object.entries(itemDictionary).map(([k, v]) => (
-                            <option key={k} value={k}>{v.name} ({k})</option>
-                          ))}
-                        </select>
-                        <GameInput
-                          type="number"
-                          min={1}
-                          value={addReqMatQty}
-                          onChange={(e) => setAddReqMatQty(Number(e.target.value))}
-                          className="w-20 text-xs"
-                        />
-                        <GameButton
-                          size="xs"
-                          variant="secondary"
-                          type="button"
-                          onClick={() => {
-                            if (!addReqMatID || addReqMatQty <= 0) return;
-                            setRequestedMats(prev => ({ ...prev, [addReqMatID]: (prev[addReqMatID] || 0) + addReqMatQty }));
-                            setAddReqMatID("");
-                          }}
-                        >
-                          Thêm
-                        </GameButton>
-                      </div>
-                      {Object.keys(requestedMats).length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {Object.entries(requestedMats).map(([k, qty]) => (
-                            <span key={k} className="inline-flex items-center gap-1.5 bg-amber-900/40 border border-amber-600/40 text-amber-200 text-xs px-3 py-1 rounded-full">
-                              <span className="font-medium">{qty}×</span> {itemDictionary[k]?.name || k}
-                              <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...requestedMats }; delete c[k]; setRequestedMats(c); }} />
-                            </span>
-                          ))}
+                    {/* Visual Selections Display */}
+                    <div className="border-t border-zinc-800/80 pt-3 space-y-3">
+                      {Object.keys(requestedMats).length === 0 && requestedGuIDs.length === 0 && Object.keys(requestedRecipes).length === 0 ? (
+                        <div className="border border-dashed border-zinc-800 rounded-xl p-4 text-center">
+                          <p className="text-xs text-zinc-500">Chưa có vật phẩm, cổ trùng hay bí phương nào được yêu cầu.</p>
+                          <div className="flex justify-center gap-3 mt-2 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => openAssetPicker("request", "material")}
+                              className="text-amber-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <Package className="w-3.5 h-3.5" /> + Yêu Cầu Vật Phẩm
+                            </button>
+                            <span className="text-zinc-700">•</span>
+                            <button
+                              type="button"
+                              onClick={() => openAssetPicker("request", "gu")}
+                              className="text-amber-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <Bug className="w-3.5 h-3.5" /> + Yêu Cầu Cổ Trùng
+                            </button>
+                            <span className="text-zinc-700">•</span>
+                            <button
+                              type="button"
+                              onClick={() => openAssetPicker("request", "recipe")}
+                              className="text-amber-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <ScrollText className="w-3.5 h-3.5" /> + Yêu Cầu Bí Phương
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      ) : (
+                        <>
+                          {/* Materials */}
+                          {Object.keys(requestedMats).length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-semibold text-zinc-400 uppercase flex items-center gap-1">
+                                  <Package className="w-3 h-3 text-amber-400" /> Vật Phẩm ({Object.keys(requestedMats).length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openAssetPicker("request", "material")}
+                                  className="text-[10px] text-amber-400 hover:text-amber-300 font-medium"
+                                >
+                                  + Thêm / Sửa
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(requestedMats).map(([matId, qty]) => (
+                                  <div
+                                    key={matId}
+                                    className="inline-flex items-center gap-2 bg-zinc-900 border border-amber-500/40 rounded-xl px-2.5 py-1 text-xs text-amber-200"
+                                  >
+                                    <span className="font-semibold text-white">{qty}×</span>
+                                    <span className="truncate max-w-[140px]">{itemDictionary[matId]?.name || matId}</span>
+                                    <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5 ml-0.5">
+                                      <button
+                                        type="button"
+                                        title="Giảm 1"
+                                        onClick={() => {
+                                          if (qty <= 1) {
+                                            const c = { ...requestedMats };
+                                            delete c[matId];
+                                            setRequestedMats(c);
+                                          } else {
+                                            setRequestedMats((prev) => ({ ...prev, [matId]: qty - 1 }));
+                                          }
+                                        }}
+                                        className="w-4 h-4 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-300 text-xs"
+                                      >
+                                        -
+                                      </button>
+                                      <button
+                                        type="button"
+                                        title="Tăng 1"
+                                        onClick={() => {
+                                          setRequestedMats((prev) => ({ ...prev, [matId]: qty + 1 }));
+                                        }}
+                                        className="w-4 h-4 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-300 text-xs"
+                                      >
+                                        +
+                                      </button>
+                                      <button
+                                        type="button"
+                                        title="Xóa"
+                                        onClick={() => {
+                                          const c = { ...requestedMats };
+                                          delete c[matId];
+                                          setRequestedMats(c);
+                                        }}
+                                        className="text-red-400 hover:text-red-300 ml-1"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
-                    {/* Gu */}
-                    <div className="border-t border-zinc-800 pt-3">
-                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">🐛 Cổ Trùng <span className="normal-case font-normal text-zinc-600">(nhập mã Cổ)</span></p>
-                      <div className="flex gap-2">
-                        <GameInput
-                          placeholder="VD: GU_DIVINE_SENSE"
-                          value={addReqGuID}
-                          onChange={(e) => setAddReqGuID(e.target.value)}
-                          className="flex-1 text-xs min-w-0"
-                        />
-                        <GameButton
-                          size="xs"
-                          variant="secondary"
-                          type="button"
-                          onClick={() => {
-                            if (!addReqGuID.trim()) return;
-                            const clean = addReqGuID.trim();
-                            if (!requestedGuIDs.includes(clean)) {
-                              setRequestedGuIDs(prev => [...prev, clean]);
-                            }
-                            setAddReqGuID("");
-                          }}
-                        >
-                          Thêm
-                        </GameButton>
-                      </div>
-                      {requestedGuIDs.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {requestedGuIDs.map((gid) => {
-                            const spec = guSpecFor(gid, 1);
-                            return (
-                              <span key={gid} className="inline-flex items-center gap-1.5 bg-amber-900/40 border border-amber-600/40 text-amber-200 text-xs px-3 py-1 rounded-full">
-                                {spec?.name || gid}
-                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => setRequestedGuIDs(prev => prev.filter(id => id !== gid))} />
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                          {/* Gus */}
+                          {requestedGuIDs.length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-semibold text-zinc-400 uppercase flex items-center gap-1">
+                                  <Bug className="w-3 h-3 text-amber-400" /> Cổ Trùng ({requestedGuIDs.length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openAssetPicker("request", "gu")}
+                                  className="text-[10px] text-amber-400 hover:text-amber-300 font-medium"
+                                >
+                                  + Thêm / Sửa
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {requestedGuIDs.map((gid) => {
+                                  const spec = guSpecFor(gid, 1) || guDictionary?.[gid];
+                                  const name = spec?.name || gid;
+                                  const rank = spec?.rank || 1;
+                                  return (
+                                    <div
+                                      key={gid}
+                                      className="inline-flex items-center gap-2 bg-zinc-900 border border-amber-500/40 rounded-xl px-2.5 py-1 text-xs text-amber-200"
+                                    >
+                                      <GameBadge variant="rank" rank={rank} size="sm">
+                                        Hạng {rank}
+                                      </GameBadge>
+                                      <span className="truncate max-w-[140px] font-medium">{name}</span>
+                                      <button
+                                        type="button"
+                                        title="Xóa"
+                                        onClick={() => setRequestedGuIDs((prev) => prev.filter((id) => id !== gid))}
+                                        className="text-red-400 hover:text-red-300 ml-1"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
 
-                    {/* Recipes */}
-                    <div className="border-t border-zinc-800 pt-3">
-                      <p className="text-[11px] text-zinc-500 font-semibold uppercase mb-2">📜 Bí Phương Yêu Cầu</p>
-                      <div className="flex gap-2">
-                        <select
-                          value={addReqRecID}
-                          onChange={(e) => setAddReqRecID(e.target.value)}
-                          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-200 min-w-0"
-                        >
-                          <option value="">-- Chọn Bí Phương Cần --</option>
-                          {recipes.filter(r => !requestedRecipes[r.id]).map((r) => {
-                            const targetGu = r.target_gu_id ? guSpecFor(r.target_gu_id, r.target_rank || 1)?.name : "";
-                            return (
-                              <option key={r.id} value={r.id}>
-                                {targetGu ? `Bí phương ${targetGu} (${r.id})` : r.id}
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <GameButton
-                          size="xs"
-                          variant="secondary"
-                          type="button"
-                          onClick={() => {
-                            if (!addReqRecID) return;
-                            setRequestedRecipes(prev => ({ ...prev, [addReqRecID]: 100 }));
-                            setAddReqRecID("");
-                          }}
-                        >
-                          Thêm
-                        </GameButton>
-                      </div>
-                      {Object.keys(requestedRecipes).length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {Object.keys(requestedRecipes).map((recId) => {
-                            const rSpec = recipes.find(r => r.id === recId);
-                            const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
-                            const name = targetGu ? `Bí phương ${targetGu}` : recId;
-                            return (
-                              <span key={recId} className="inline-flex items-center gap-1.5 bg-amber-900/40 border border-amber-600/40 text-amber-200 text-xs px-3 py-1 rounded-full">
-                                {name}
-                                <XCircle className="w-3.5 h-3.5 cursor-pointer text-red-400 hover:text-red-200 shrink-0" onClick={() => { const c = { ...requestedRecipes }; delete c[recId]; setRequestedRecipes(c); }} />
-                              </span>
-                            );
-                          })}
-                        </div>
+                          {/* Recipes */}
+                          {Object.keys(requestedRecipes).length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-semibold text-zinc-400 uppercase flex items-center gap-1">
+                                  <ScrollText className="w-3 h-3 text-amber-400" /> Bí Phương ({Object.keys(requestedRecipes).length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openAssetPicker("request", "recipe")}
+                                  className="text-[10px] text-amber-400 hover:text-amber-300 font-medium"
+                                >
+                                  + Thêm / Sửa
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.keys(requestedRecipes).map((recId) => {
+                                  const rSpec = recipes.find((r) => r.id === recId);
+                                  const targetGu = rSpec?.target_gu_id ? guSpecFor(rSpec.target_gu_id, rSpec.target_rank || 1)?.name : "";
+                                  const name = targetGu ? `Bí phương ${targetGu}` : recId;
+                                  return (
+                                    <div
+                                      key={recId}
+                                      className="inline-flex items-center gap-2 bg-zinc-900 border border-amber-500/40 rounded-xl px-2.5 py-1 text-xs text-amber-200"
+                                    >
+                                      <span className="truncate max-w-[140px] font-medium">{name}</span>
+                                      <button
+                                        type="button"
+                                        title="Xóa"
+                                        onClick={() => {
+                                          const c = { ...requestedRecipes };
+                                          delete c[recId];
+                                          setRequestedRecipes(c);
+                                        }}
+                                        className="text-red-400 hover:text-red-300 ml-1"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
                 </div>
+
+                {/* Target Player (Optional) */}
+                {/* <div className="bg-zinc-900/40 rounded-xl p-3 border border-zinc-800 space-y-1">
+                  <label className="text-xs text-zinc-400 block font-medium">🎯 Chỉ Định Đạo Hữu (Tùy chọn)</label>
+                  <GameInput
+                    placeholder="Nhập tên đạo hữu (bỏ trống để đăng công khai cho toàn máy chủ)..."
+                    value={tradeOfferTargetUser}
+                    onChange={(e) => setTradeOfferTargetUser(e.target.value)}
+                    className="text-xs"
+                  />
+                  <span className="text-[10px] text-zinc-500 block">
+                    Nếu điền tên, chỉ đạo hữu đó mới nhìn thấy và chấp nhận được đơn trao đổi này.
+                  </span>
+                </div> */}
 
                 {/* Footer */}
                 <div className="flex items-center gap-3 bg-zinc-900/60 rounded-lg px-4 py-2.5">
@@ -1418,11 +1811,11 @@ export function BaoHoangMarket({
                     onChange={(e) => setTradeOfferDuration(Number(e.target.value))}
                     className="w-20 text-xs"
                   />
-                  <span className="text-xs text-zinc-500">giờ (tối đa 168)</span>
+                  <span className="text-xs text-zinc-500">giờ (tối đa 168 giờ)</span>
                 </div>
 
                 <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading}>
-                  Đăng Đơn Trao Đổi Auto
+                  Đăng Đơn Trao Đổi Tự Động
                 </GameButton>
               </form>
             )}
@@ -1477,13 +1870,42 @@ export function BaoHoangMarket({
             </p>
 
             <div>
-              <label className="text-xs text-zinc-400 block mb-1">Số lượng giao dịch</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-zinc-400">Số lượng giao dịch</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maxOrder = selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled;
+                    if (selectedBuybackOrder.order_type === "SELL") {
+                      const affordable = selectedBuybackOrder.currency === "immortal"
+                        ? Math.floor(player.immortal_stones / selectedBuybackOrder.unit_price)
+                        : Math.floor(player.primeval_stones / selectedBuybackOrder.unit_price);
+                      setSellQtyInput(Math.max(1, Math.min(maxOrder, affordable > 0 ? affordable : maxOrder)));
+                    } else {
+                      let owned = 0;
+                      if (selectedBuybackOrder.item_type === "Gu") {
+                        const targetGuId = typeof selectedBuybackOrder.item_target === "object" && selectedBuybackOrder.item_target !== null
+                          ? (selectedBuybackOrder.item_target as { gu_id?: string }).gu_id
+                          : String(selectedBuybackOrder.item_target);
+                        owned = player.gu_inventory?.filter(g => g.gu_id === targetGuId && g.status !== "DEAD").length || 0;
+                      } else if (selectedBuybackOrder.item_type === "Material") {
+                        const matId = typeof selectedBuybackOrder.item_target === "string" ? selectedBuybackOrder.item_target : String(selectedBuybackOrder.item_target);
+                        owned = player.materials_inventory?.[matId] || 0;
+                      }
+                      setSellQtyInput(Math.max(1, Math.min(maxOrder, owned > 0 ? owned : maxOrder)));
+                    }
+                  }}
+                  className="text-[10px] font-mono text-amber-400 hover:text-amber-300 font-bold px-2 py-0.5 rounded bg-amber-950/40 border border-amber-800/40 hover:bg-amber-900/40 cursor-pointer transition-colors"
+                >
+                  Tối Đa
+                </button>
+              </div>
               <GameInput
                 type="number"
                 min={1}
                 max={selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled}
                 value={sellQtyInput}
-                onChange={(e) => setSellQtyInput(Number(e.target.value))}
+                onChange={(e) => setSellQtyInput(Math.max(1, Number(e.target.value) || 1))}
               />
             </div>
 
@@ -1582,6 +2004,28 @@ export function BaoHoangMarket({
           </GameCard>
         </div>
       )}
+
+      {/* MODAL: VISUAL ASSET PICKER FOR TRADE OFFERS */}
+      <TradeAssetPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        mode={pickerMode}
+        initialTab={pickerTab}
+        player={player}
+        guInventory={guInventory}
+        recipes={recipes}
+        itemDictionary={itemDictionary}
+        guDictionary={guDictionary}
+        offeredMats={offeredMats}
+        offeredGuIDs={offeredGuIDs}
+        offeredRecipes={offeredRecipes}
+        requestedMats={requestedMats}
+        requestedGuIDs={requestedGuIDs}
+        requestedRecipes={requestedRecipes}
+        onAddMaterial={handleAddMaterialFromPicker}
+        onAddGu={handleAddGuFromPicker}
+        onAddRecipe={handleAddRecipeFromPicker}
+      />
     </GamePanel>
   );
 }

@@ -22,6 +22,13 @@ export interface BuybackOrder {
   created_at: string;
 }
 
+export interface OfferedGuInfo {
+  instance_id: string;
+  gu_id: string;
+  gu_name: string;
+  rank: number;
+}
+
 export interface TradeOfferData {
   primeval_stones: number;
   immortal_stones: number;
@@ -34,7 +41,10 @@ export interface AsyncTradeOffer {
   id: string;
   creator_id: string;
   creator_username: string;
+  target_id?: string;
+  target_username?: string;
   offered: TradeOfferData;
+  offered_gu_details?: OfferedGuInfo[];
   requested: TradeOfferData;
   status: string;
   duration_hours: number;
@@ -60,7 +70,7 @@ export interface MarketplaceSlice {
 
   // Async Trade Offers
   fetchTradeOffers: () => Promise<void>;
-  createTradeOffer: (payload: { offered: TradeOfferData; requested: TradeOfferData; durationHours: number }) => Promise<boolean>;
+  createTradeOffer: (payload: { offered: TradeOfferData; requested: TradeOfferData; durationHours: number; targetUsername?: string }) => Promise<boolean>;
   acceptTradeOffer: (offerId: string) => Promise<boolean>;
   cancelTradeOffer: (offerId: string) => Promise<boolean>;
 }
@@ -336,6 +346,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
           offered: payload.offered,
           requested: payload.requested,
           duration_hours: payload.durationHours,
+          target_username: payload.targetUsername || "",
         }),
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }

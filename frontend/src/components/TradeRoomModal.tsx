@@ -16,6 +16,7 @@ export const TradeRoomModal: React.FC = () => {
     cancelTrade,
     updateTradeOffer,
     lockTrade,
+    unlockTrade,
     confirmTrade,
     guDictionary,
     itemDictionary,
@@ -536,7 +537,26 @@ export const TradeRoomModal: React.FC = () => {
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
                             <span className="flex items-center gap-1 text-yellow-500/95"><Coins className="w-3 h-3" /> Nguyên Thạch</span>
-                            <span>Sở hữu: {(player.primeval_stones).toLocaleString()}</span>
+                            <div className="flex items-center gap-2">
+                              <span>Sở hữu: {(player.primeval_stones).toLocaleString()}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPrimevalInput(player.primeval_stones);
+                                  const updatedOffer = {
+                                    primeval_stones: player.primeval_stones,
+                                    immortal_stones: myOffer?.immortal_stones || 0,
+                                    gus: myOffer?.gus || [],
+                                    materials: myOffer?.materials || {},
+                                    recipes: myOffer?.recipes || {},
+                                  };
+                                  updateTradeOffer(activeTrade.id, updatedOffer);
+                                }}
+                                className="text-[9px] font-mono font-bold text-amber-400 hover:text-amber-300 px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-800/40 cursor-pointer"
+                              >
+                                Tối đa
+                              </button>
+                            </div>
                           </div>
                           <input
                             type="number"
@@ -556,7 +576,26 @@ export const TradeRoomModal: React.FC = () => {
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
                               <span className="flex items-center gap-1 text-purple-400"><Sparkles className="w-3 h-3" /> Tiên Nguyên Thạch</span>
-                              <span>Sở hữu: {player.immortal_stones.toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
+                              <div className="flex items-center gap-2">
+                                <span>Sở hữu: {player.immortal_stones.toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setImmortalInput(player.immortal_stones);
+                                    const updatedOffer = {
+                                      primeval_stones: myOffer?.primeval_stones || 0,
+                                      immortal_stones: player.immortal_stones,
+                                      gus: myOffer?.gus || [],
+                                      materials: myOffer?.materials || {},
+                                      recipes: myOffer?.recipes || {},
+                                    };
+                                    updateTradeOffer(activeTrade.id, updatedOffer);
+                                  }}
+                                  className="text-[9px] font-mono font-bold text-amber-400 hover:text-amber-300 px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-800/40 cursor-pointer"
+                                >
+                                  Tối đa
+                                </button>
+                              </div>
                             </div>
                             <input
                               type="number"
@@ -812,14 +851,27 @@ export const TradeRoomModal: React.FC = () => {
                           </select>
 
                           {selectedMat && (
-                            <input
-                              type="number"
-                              min={1}
-                              max={player.materials_inventory[selectedMat] - (myOffer?.materials?.[selectedMat] || 0)}
-                              value={selectedMatQty}
-                              onChange={(e) => setSelectedMatQty(Math.max(1, parseInt(e.target.value) || 1))}
-                              className="w-16 bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-center font-mono text-zinc-300 focus:outline-none"
-                            />
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={1}
+                                max={player.materials_inventory[selectedMat] - (myOffer?.materials?.[selectedMat] || 0)}
+                                value={selectedMatQty}
+                                onChange={(e) => setSelectedMatQty(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-16 bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-center font-mono text-zinc-300 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const maxAvailable = player.materials_inventory[selectedMat] - (myOffer?.materials?.[selectedMat] || 0);
+                                  setSelectedMatQty(Math.max(1, maxAvailable));
+                                }}
+                                className="px-2 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] font-mono font-bold text-amber-400 rounded-xl cursor-pointer"
+                                title="Chọn toàn bộ"
+                              >
+                                Max
+                              </button>
+                            </div>
                           )}
 
                           <button
@@ -1061,18 +1113,25 @@ export const TradeRoomModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Lock Offer Button */}
+            {/* Lock / Unlock Offer Button */}
             {!myLocked ? (
               <button
-                onClick={() => lockTrade(activeTrade.id)}
+                onClick={() => {
+                  syncStones();
+                  lockTrade(activeTrade.id);
+                }}
                 className="px-5 py-2.5 rounded-xl text-xs font-serif font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/25 border border-emerald-500/20"
               >
                 <Lock className="w-3.5 h-3.5" /> Khóa Giao Dịch
               </button>
             ) : (
-              <span className="px-5 py-2.5 rounded-xl text-xs font-serif font-bold bg-zinc-900 text-zinc-500 border border-zinc-800 flex items-center gap-1.5 select-none">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Đã Khóa Của Bạn
-              </span>
+              <button
+                onClick={() => unlockTrade(activeTrade.id)}
+                className="px-4 py-2.5 rounded-xl text-xs font-serif font-bold bg-amber-950/50 hover:bg-amber-900/60 text-amber-300 border border-amber-800/40 flex items-center gap-1.5 cursor-pointer transition-colors shadow-lg shadow-amber-950/25"
+                title="Bấm để mở khóa và chỉnh sửa lại vật phẩm"
+              >
+                <Unlock className="w-3.5 h-3.5" /> Mở Khóa Chỉnh Sửa
+              </button>
             )}
 
             {/* Confirm Trade Button (Enabled only when both locked and you haven't confirmed yet) */}
