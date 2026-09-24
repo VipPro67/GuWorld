@@ -447,10 +447,6 @@ func BuyFromSectVault(c *gin.Context) {
 	if quantity <= 0 {
 		quantity = 1
 	}
-	if quantity > 100 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi lần chỉ được trao đổi tối đa 100 đơn vị!"})
-		return
-	}
 
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -541,21 +537,23 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 		for i := int64(0); i < quantity; i++ {
 			newGu := createVaultWithdrawnGu(req.ItemID, actualRank, guSpec)
-			if vgInstID != "" {
+			if vgInstID != "" && vgRank >= 6 {
 				newGu.InstanceID = vgInstID
 			}
 			player.GuInventory = append(player.GuInventory, newGu)
 
-			guName := req.ItemID
-			if guSpec.Name != "" {
-				guName = guSpec.Name
+			if vgRank >= 6 {
+				guName := req.ItemID
+				if guSpec.Name != "" {
+					guName = guSpec.Name
+				}
+				withdrawSummary := fmt.Sprintf("Cổ Sư [%s] rút/đổi Cổ trùng [%s] R%d từ Kho Tông Môn.", player.Username, guName, actualRank)
+				_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "SECT_VAULT_WITHDRAWN", nil, &player.ID, withdrawSummary, map[string]interface{}{
+					"sect_id": m.SectID,
+					"cost":    cost,
+					"gu_name": guName,
+				})
 			}
-			withdrawSummary := fmt.Sprintf("Cổ Sư [%s] rút/đổi Cổ trùng [%s] R%d từ Kho Tông Môn.", player.Username, guName, actualRank)
-			_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "SECT_VAULT_WITHDRAWN", nil, &player.ID, withdrawSummary, map[string]interface{}{
-				"sect_id": m.SectID,
-				"cost":    cost,
-				"gu_name": guName,
-			})
 		}
 
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {

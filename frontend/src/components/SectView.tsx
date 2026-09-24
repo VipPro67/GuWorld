@@ -128,15 +128,16 @@ export const SectView: React.FC = () => {
   const [buyQtys, setBuyQtys] = useState<Record<string, number>>({});
 
   const getBuyQty = (key: string): number => buyQtys[key] || 1;
-  const setBuyQty = (key: string, n: number): void => {
-    const v = Math.max(1, Math.min(100, Math.floor(n) || 1));
+  const setBuyQty = (key: string, n: number, max?: number): void => {
+    const upper = max !== undefined ? Math.max(1, max) : Number.MAX_SAFE_INTEGER;
+    const v = Math.max(1, Math.min(upper, Math.floor(n) || 1));
     setBuyQtys((prev) => ({ ...prev, [key]: v }));
   };
 
   const renderQtyStepper = (key: string, max?: number) => (
     <div className="flex items-center gap-1">
       <button
-        onClick={() => setBuyQty(key, getBuyQty(key) - 1)}
+        onClick={() => setBuyQty(key, getBuyQty(key) - 1, max)}
         disabled={getBuyQty(key) <= 1}
         className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
       >
@@ -145,18 +146,27 @@ export const SectView: React.FC = () => {
       <input
         type="number"
         min={1}
-        max={max ?? 100}
+        max={max}
         value={getBuyQty(key)}
-        onChange={(e) => setBuyQty(key, parseInt(e.target.value) || 1)}
-        className="w-14 h-7 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-xs font-mono font-bold text-amber-400 outline-none focus:border-amber-600"
+        onChange={(e) => setBuyQty(key, parseInt(e.target.value) || 1, max)}
+        className="w-16 h-7 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-xs font-mono font-bold text-amber-400 outline-none focus:border-amber-600"
       />
       <button
-        onClick={() => setBuyQty(key, getBuyQty(key) + 1)}
+        onClick={() => setBuyQty(key, getBuyQty(key) + 1, max)}
         disabled={max !== undefined && getBuyQty(key) >= max}
         className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
       >
         +
       </button>
+      {max !== undefined && max > 1 && (
+        <button
+          onClick={() => setBuyQty(key, max, max)}
+          className="px-1.5 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[10px] font-mono font-bold text-zinc-400 hover:text-amber-400 transition-colors cursor-pointer"
+          title="Tối đa"
+        >
+          Max
+        </button>
+      )}
     </div>
   );
 
@@ -1644,7 +1654,8 @@ export const SectView: React.FC = () => {
                       const uKey = `${vg.id}_${vg.rank || 0}`;
                       const qtyKey = `gu-${uKey}`;
                       const qty = getBuyQty(qtyKey);
-                      const maxQty = vg.quantity !== undefined ? vg.quantity : 1;
+                      const isImmortal = (vg.rank && vg.rank >= 6) || (spec?.rank && spec.rank >= 6);
+                      const maxQty = isImmortal ? 1 : (vg.quantity !== undefined ? vg.quantity : 1);
                       const totalCost = vg.cost * qty;
                       const unaffordable = (member?.contribution_points || 0) < totalCost;
                       const displayRank = vg.rank || spec?.rank || 1;
