@@ -11,9 +11,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -651,8 +653,36 @@ func AttackSect(c *gin.Context) {
 	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": msg})
 }
 
+// sectPlunderVoidPct — Thiên Đạo Tiêu Hủy (Void Destruction) khi cướp kho Tông Môn,
+// tương tự deathPenaltyConfig.VoidDestructionPct: một phần chiến lợi phẩm bị tiêu
+// hủy vĩnh viễn, chỉ phần còn lại được chia cho đội tấn công.
+const sectPlunderVoidPct = 40.0
+
+// splitVoidDestruction chia số chiến lợi phẩm bị cướp thành phần bị tiêu hủy vĩnh
+// viễn và phần chuyển cho đội, theo đúng cơ chế death penalty: khi mất đúng 1 đơn
+// vị thì 50% cơ hội bị tiêu hủy; ngược lại luôn giữ lại ít nhất 1 đơn vị cho đội.
+func splitVoidDestruction(stolen int64, voidPct float64) (destroyed, delivered int64) {
+	if stolen <= 0 {
+		return 0, 0
+	}
+	destroyed = int64(math.Round(float64(stolen) * voidPct))
+	if stolen == 1 {
+		if rand.Float64() < 0.5 {
+			destroyed = 1
+		} else {
+			destroyed = 0
+		}
+	} else if destroyed >= stolen {
+		destroyed = stolen - 1
+	}
+	return destroyed, stolen - destroyed
+}
+
 // ApplySectWarVictory is called by auto-combat resolution when attacker wins a SECT_WAR combat.
 // It plunders funds, vault_materials, vault_gu, and vault_recipes from the target sect.
+// Một phần chiến lợi phẩm bị Thiên Đạo tiêu hủy vĩnh viễn (Void Destruction),
+// phần còn lại chia cho đội tấn công. Mọi thao tác xóa kho / lưu đồ cho đội chạy
+// theo batch (một câu SQL mỗi bảng / mỗi thành viên) để nhanh và chính xác.
 func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.CombatState) []string {
 	var logs []string
 	if combat == nil || combat.TargetSectID == "" {
@@ -692,140 +722,212 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		plunderPercent = 0.05
 	}
 
-	// 1. Plunder funds
+	voidPct := sectPlunderVoidPct / 100.0
+
+	// 1. Plunder funds — một phần bị Thiên Đạo tiêu hủy vĩnh viễn
 	stolenFunds := int64(float64(targetFunds) * plunderPercent)
-	if stolenFunds > 0 && mySectID != "" {
+	destroyedFunds := int64(float64(stolenFunds) * voidPct)
+	creditedFunds := stolenFunds - destroyedFunds
+	if creditedFunds > 0 && mySectID != "" {
 		// Credit attacker's sect (if attacker has no sect, funds disappear into the void)
-		_, _ = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, stolenFunds, mySectID)
+		if _, err := tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, creditedFunds, mySectID); err != nil {
+			logger.S.Errorf("ApplySectWarVictory: failed to credit funds to sect %s: %v", mySectID, err)
+		}
 	}
 
 	// 2. Plunder vault_materials (items)
+	type stolenMat struct {
+		itemID    string
+		vaultQty  int64
+		stolen    int64
+		destroyed int64
+	}
+	var matsList []stolenMat
 	matRows, err := tx.Query(`SELECT item_id, quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0 FOR UPDATE`, combat.TargetSectID)
-	stolenMats := make(map[string]int64)
-	if err == nil {
-		type targetMatRow struct {
-			itemID string
-			qty    int64
-		}
-		var matsList []targetMatRow
+	if err != nil {
+		logger.S.Errorf("ApplySectWarVictory: failed to load vault materials for sect %s: %v", combat.TargetSectID, err)
+	} else {
 		for matRows.Next() {
-			var tm targetMatRow
-			if err := matRows.Scan(&tm.itemID, &tm.qty); err == nil {
-				matsList = append(matsList, tm)
+			var itemID string
+			var qty int64
+			if err := matRows.Scan(&itemID, &qty); err != nil {
+				continue
 			}
+			stolen := int64(float64(qty) * plunderPercent)
+			if stolen <= 0 {
+				continue
+			}
+			destroyed, _ := splitVoidDestruction(stolen, voidPct)
+			matsList = append(matsList, stolenMat{itemID: itemID, vaultQty: qty, stolen: stolen, destroyed: destroyed})
 		}
 		matRows.Close()
+	}
 
-		for _, tm := range matsList {
-			stolen := int64(float64(tm.qty) * plunderPercent)
-			if stolen > 0 {
-				stolenMats[tm.itemID] = stolen
-				if stolen >= tm.qty {
-					_, _ = tx.Exec(`DELETE FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2`, combat.TargetSectID, tm.itemID)
-				} else {
-					_, _ = tx.Exec(`UPDATE sect_vault_materials SET quantity = quantity - $1, updated_at = NOW() WHERE sect_id = $2 AND item_id = $3`, stolen, combat.TargetSectID, tm.itemID)
-				}
+	// Batch update vault: whole rows removed in one DELETE, partial rows in one UPDATE
+	if len(matsList) > 0 {
+		fullRemoveIDs := make([]string, 0, len(matsList))
+		partialIDs := make([]string, 0, len(matsList))
+		partialAmts := make([]int64, 0, len(matsList))
+		for _, m := range matsList {
+			if m.stolen >= m.vaultQty {
+				fullRemoveIDs = append(fullRemoveIDs, m.itemID)
+			} else {
+				partialIDs = append(partialIDs, m.itemID)
+				partialAmts = append(partialAmts, m.stolen)
+			}
+		}
+		if len(fullRemoveIDs) > 0 {
+			if _, err := tx.Exec(`DELETE FROM sect_vault_materials WHERE sect_id = $1 AND item_id = ANY($2::text[])`, combat.TargetSectID, pq.Array(fullRemoveIDs)); err != nil {
+				logger.S.Errorf("ApplySectWarVictory: failed to batch delete vault materials for sect %s: %v", combat.TargetSectID, err)
+			}
+		}
+		if len(partialIDs) > 0 {
+			if _, err := tx.Exec(`
+				UPDATE sect_vault_materials AS sv
+				SET quantity = sv.quantity - v.amt, updated_at = NOW()
+				FROM unnest($1::text[], $2::bigint[]) AS v(item_id, amt)
+				WHERE sv.sect_id = $3 AND sv.item_id = v.item_id
+			`, pq.Array(partialIDs), pq.Array(partialAmts), combat.TargetSectID); err != nil {
+				logger.S.Errorf("ApplySectWarVictory: failed to batch update vault materials for sect %s: %v", combat.TargetSectID, err)
 			}
 		}
 	}
 
-	// Distribute materials among team members
-	if len(stolenMats) > 0 {
+	// Distribute delivered materials among team members (one batched insert per member)
+	deliveredMats := make(map[string]int64, len(matsList))
+	for _, m := range matsList {
+		if d := m.stolen - m.destroyed; d > 0 {
+			deliveredMats[m.itemID] = d
+		}
+	}
+	if len(deliveredMats) > 0 {
 		numMembers := int64(len(teamMembers))
-		for matID, totalQty := range stolenMats {
-			perMember := totalQty / numMembers
-			rem := totalQty % numMembers
-			for i, mID := range teamMembers {
-				qty := perMember
-				if int64(i) < rem {
+		for i, mID := range teamMembers {
+			entries := make([]services.ItemBatchEntry, 0, len(deliveredMats))
+			for itemID, totalQty := range deliveredMats {
+				qty := totalQty / numMembers
+				if int64(i) < totalQty%numMembers {
 					qty++
 				}
 				if qty > 0 {
-					_ = InventorySvc.AddItem(tx, mID.String(), matID, "materials", qty)
+					entries = append(entries, services.ItemBatchEntry{ItemID: itemID, Category: "materials", Quantity: qty})
+				}
+			}
+			if len(entries) > 0 {
+				if err := InventorySvc.AddItemsBatch(tx, mID.String(), entries); err != nil {
+					logger.S.Errorf("ApplySectWarVictory: failed to deliver materials to player %s: %v", mID, err)
 				}
 			}
 		}
 	}
 
 	// 3. Plunder vault_gu
+	type stolenGu struct {
+		rowID      string
+		guID       string
+		rank       int
+		cost       int64
+		vaultQty   int64
+		hunger     float64
+		instanceID string
+		stolen     int64
+		destroyed  int64
+	}
+	var gusList []stolenGu
 	guRows, err := tx.Query(`SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 FOR UPDATE`, combat.TargetSectID)
-	var stolenGus []SectVaultGuItem
-	if err == nil {
-		type targetGuRow struct {
-			id         string
-			guID       string
-			rank       int
-			cost       int64
-			quantity   int64
-			hunger     float64
-			instanceID string
-		}
-		var gusList []targetGuRow
+	if err != nil {
+		logger.S.Errorf("ApplySectWarVictory: failed to load vault Gus for sect %s: %v", combat.TargetSectID, err)
+	} else {
 		for guRows.Next() {
-			var tg targetGuRow
-			if err := guRows.Scan(&tg.id, &tg.guID, &tg.rank, &tg.cost, &tg.quantity, &tg.hunger, &tg.instanceID); err == nil {
-				gusList = append(gusList, tg)
+			var tg stolenGu
+			if err := guRows.Scan(&tg.rowID, &tg.guID, &tg.rank, &tg.cost, &tg.vaultQty, &tg.hunger, &tg.instanceID); err != nil {
+				continue
 			}
+			stolen := int64(math.Ceil(float64(tg.vaultQty) * plunderPercent))
+			if stolen > tg.vaultQty {
+				stolen = tg.vaultQty
+			}
+			if stolen <= 0 {
+				continue
+			}
+			tg.stolen = stolen
+			tg.destroyed, _ = splitVoidDestruction(stolen, voidPct)
+			gusList = append(gusList, tg)
 		}
 		guRows.Close()
+	}
 
+	// Batch update vault: whole rows removed in one DELETE, partial rows in one UPDATE
+	if len(gusList) > 0 {
+		fullRemoveRowIDs := make([]string, 0, len(gusList))
+		partialRowIDs := make([]string, 0, len(gusList))
+		partialAmts := make([]int64, 0, len(gusList))
 		for _, tg := range gusList {
-			stolenQty := int64(math.Ceil(float64(tg.quantity) * plunderPercent))
-			if stolenQty > tg.quantity {
-				stolenQty = tg.quantity
+			if tg.stolen >= tg.vaultQty {
+				fullRemoveRowIDs = append(fullRemoveRowIDs, tg.rowID)
+			} else {
+				partialRowIDs = append(partialRowIDs, tg.rowID)
+				partialAmts = append(partialAmts, tg.stolen)
 			}
-			if stolenQty > 0 {
-				stolenGus = append(stolenGus, SectVaultGuItem{
-					ID:         tg.guID,
-					InstanceID: tg.instanceID,
-					Rank:       tg.rank,
-					Cost:       tg.cost,
-					Quantity:   stolenQty,
-					Hunger:     tg.hunger,
-				})
-				if stolenQty >= tg.quantity {
-					_, _ = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, tg.id)
-				} else {
-					_, _ = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, stolenQty, tg.id)
-				}
+		}
+		if len(fullRemoveRowIDs) > 0 {
+			if _, err := tx.Exec(`DELETE FROM sect_vault_gu WHERE id = ANY($1::text[])`, pq.Array(fullRemoveRowIDs)); err != nil {
+				logger.S.Errorf("ApplySectWarVictory: failed to batch delete vault Gus for sect %s: %v", combat.TargetSectID, err)
+			}
+		}
+		if len(partialRowIDs) > 0 {
+			if _, err := tx.Exec(`
+				UPDATE sect_vault_gu AS sv
+				SET quantity = sv.quantity - v.amt, updated_at = NOW()
+				FROM unnest($1::text[], $2::bigint[]) AS v(id, amt)
+				WHERE sv.id = v.id
+			`, pq.Array(partialRowIDs), pq.Array(partialAmts)); err != nil {
+				logger.S.Errorf("ApplySectWarVictory: failed to batch update vault Gus for sect %s: %v", combat.TargetSectID, err)
 			}
 		}
 	}
 
-	// Distribute stolen Gus to team members
-	if len(stolenGus) > 0 {
-		memberIdx := 0
-		for _, sg := range stolenGus {
-			for q := int64(0); q < sg.Quantity; q++ {
-				recipient := teamMembers[memberIdx%len(teamMembers)]
-				memberIdx++
-				instID := sg.InstanceID
-				if instID == "" || q > 0 {
-					instID = uuid.New().String()
-				}
-				r := sg.Rank
-				if r <= 0 {
-					r = 1
-				}
-				newGu := models.GuInstance{
-					InstanceID: instID,
-					GuID:       sg.ID,
-					Rank:       r,
-					Hunger:     int(sg.Hunger),
-					Status:     "NORMAL",
-					Equipped:   false,
-					IsVital:    false,
-				}
-				_ = db.AddPlayerGu(tx, recipient.String(), newGu)
+	// Distribute delivered Gus to team members (round-robin, one bulk insert per member)
+	memberBuckets := make([][]models.GuInstance, len(teamMembers))
+	memberIdx := 0
+	for _, tg := range gusList {
+		for q := int64(0); q < tg.stolen-tg.destroyed; q++ {
+			recipient := memberIdx % len(teamMembers)
+			memberIdx++
+			instID := tg.instanceID
+			if instID == "" || q > 0 {
+				instID = uuid.New().String()
 			}
+			r := tg.rank
+			if r <= 0 {
+				r = 1
+			}
+			memberBuckets[recipient] = append(memberBuckets[recipient], models.GuInstance{
+				InstanceID: instID,
+				GuID:       tg.guID,
+				Rank:       r,
+				Hunger:     int(tg.hunger),
+				Status:     "NORMAL",
+				Equipped:   false,
+				IsVital:    false,
+			})
+		}
+	}
+	for i, bucket := range memberBuckets {
+		if len(bucket) == 0 {
+			continue
+		}
+		if err := db.AddPlayerGusBulk(tx, teamMembers[i].String(), bucket); err != nil {
+			logger.S.Errorf("ApplySectWarVictory: failed to deliver %d Gus to player %s: %v", len(bucket), teamMembers[i], err)
 		}
 	}
 
 	// 4. Plunder vault_recipes
 	recRows, err := tx.Query(`SELECT recipe_id, completion_rate FROM sect_vault_recipes WHERE sect_id = $1 FOR UPDATE`, combat.TargetSectID)
-	var stolenRecipes []models.SectVaultRecipe
-	if err == nil {
-		var targetVaultRecipes []models.SectVaultRecipe
+	var targetVaultRecipes []models.SectVaultRecipe
+	if err != nil {
+		logger.S.Errorf("ApplySectWarVictory: failed to load vault recipes for sect %s: %v", combat.TargetSectID, err)
+	} else {
 		for recRows.Next() {
 			var vr models.SectVaultRecipe
 			if err := recRows.Scan(&vr.RecipeID, &vr.CompletionRate); err == nil {
@@ -833,30 +935,68 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 			}
 		}
 		recRows.Close()
+	}
 
-		for _, vr := range targetVaultRecipes {
-			if rand.Float64() < plunderPercent {
-				stolenRecipes = append(stolenRecipes, vr)
-			}
+	var stolenRecipes []models.SectVaultRecipe
+	for _, vr := range targetVaultRecipes {
+		if rand.Float64() < plunderPercent {
+			stolenRecipes = append(stolenRecipes, vr)
 		}
-		if len(targetVaultRecipes) > 0 && len(stolenRecipes) == 0 {
-			stolenRecipes = append(stolenRecipes, targetVaultRecipes[0])
-		}
+	}
+	if len(targetVaultRecipes) > 0 && len(stolenRecipes) == 0 {
+		stolenRecipes = append(stolenRecipes, targetVaultRecipes[0])
+	}
 
+	// Split stolen recipes between Void Destruction and the team (same as death penalty)
+	destroyedRecCount := int(math.Round(float64(len(stolenRecipes)) * voidPct))
+	if len(stolenRecipes) == 1 {
+		if rand.Float64() < 0.5 {
+			destroyedRecCount = 1
+		} else {
+			destroyedRecCount = 0
+		}
+	} else if destroyedRecCount >= len(stolenRecipes) {
+		destroyedRecCount = len(stolenRecipes) - 1
+		if destroyedRecCount < 0 {
+			destroyedRecCount = 0
+		}
+	}
+	destroyedRecipes := stolenRecipes[:destroyedRecCount]
+	deliveredRecipes := stolenRecipes[destroyedRecCount:]
+
+	// Remove every stolen recipe from the vault in one batched delete
+	if len(stolenRecipes) > 0 {
+		stolenRecIDs := make([]string, 0, len(stolenRecipes))
 		for _, sr := range stolenRecipes {
-			_, _ = tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, combat.TargetSectID, sr.RecipeID)
+			stolenRecIDs = append(stolenRecIDs, sr.RecipeID)
+		}
+		if _, err := tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = ANY($2::text[])`, combat.TargetSectID, pq.Array(stolenRecIDs)); err != nil {
+			logger.S.Errorf("ApplySectWarVictory: failed to batch delete vault recipes for sect %s: %v", combat.TargetSectID, err)
 		}
 	}
 
-	// Unlock stolen recipes for team members
-	for _, sr := range stolenRecipes {
+	// Unlock delivered recipes for team members in one batched upsert (preserves
+	// existing progress: completion_rate stays the GREATEST, deduce/favorite untouched)
+	if len(deliveredRecipes) > 0 {
+		recIDs := make([]string, 0, len(deliveredRecipes))
+		recRates := make([]float64, 0, len(deliveredRecipes))
+		for _, sr := range deliveredRecipes {
+			recIDs = append(recIDs, sr.RecipeID)
+			recRates = append(recRates, sr.CompletionRate)
+		}
+		memberIDs := make([]string, 0, len(teamMembers))
 		for _, mID := range teamMembers {
-			_, _ = tx.Exec(`
-				INSERT INTO player_recipe_progress (player_id, recipe_id, completion_rate, is_unlocked, created_at, updated_at)
-				VALUES ($1, $2, $3, true, NOW(), NOW())
-				ON CONFLICT (player_id, recipe_id)
-				DO UPDATE SET is_unlocked = true, completion_rate = GREATEST(player_recipe_progress.completion_rate, EXCLUDED.completion_rate), updated_at = NOW()
-			`, mID, sr.RecipeID, sr.CompletionRate)
+			memberIDs = append(memberIDs, mID.String())
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO player_recipe_progress (player_id, recipe_id, completion_rate, is_unlocked, created_at, updated_at)
+			SELECT m, r.rec_id, r.rate, true, NOW(), NOW()
+			FROM unnest($1::uuid[]) AS m
+			CROSS JOIN unnest($2::text[], $3::double precision[]) AS r(rec_id, rate)
+			ON CONFLICT (player_id, recipe_id)
+			DO UPDATE SET is_unlocked = true, completion_rate = GREATEST(player_recipe_progress.completion_rate, EXCLUDED.completion_rate), updated_at = NOW()
+		`, pq.Array(memberIDs), pq.Array(recIDs), pq.Array(recRates)); err != nil {
+			logger.S.Errorf("ApplySectWarVictory: failed to batch unlock recipes for team: %v", err)
 		}
 	}
 
@@ -883,32 +1023,72 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 
 	logs = append(logs, fmt.Sprintf("Công phá Tông Môn %s thành công!", targetName))
 	if stolenFunds > 0 {
-		if mySectID != "" {
-			logs = append(logs, fmt.Sprintf("Cướp được %d Quỹ Tông Môn chuyển vào Tông Môn ta.", stolenFunds))
-		} else {
+		if mySectID == "" {
 			logs = append(logs, fmt.Sprintf("Cướp phá tiêu hủy %d Quỹ Tông Môn (quỹ bị tiêu biến vào hư vô).", stolenFunds))
+		} else if destroyedFunds > 0 {
+			logs = append(logs, fmt.Sprintf("Cướp được %d Quỹ Tông Môn: %d chuyển vào Tông Môn ta, %d bị Thiên Đạo tiêu hủy vĩnh viễn.", stolenFunds, creditedFunds, destroyedFunds))
+		} else {
+			logs = append(logs, fmt.Sprintf("Cướp được %d Quỹ Tông Môn chuyển vào Tông Môn ta.", stolenFunds))
 		}
 	}
-	if len(stolenMats) > 0 {
-		matMsg := "Cướp linh tài kho tông (chia đều cho đội):"
-		for key, val := range stolenMats {
-			matMsg += fmt.Sprintf(" %s x%d,", key, val)
+	var matDelivered, matDestroyed []string
+	for _, m := range matsList {
+		name := m.itemID
+		if spec, ok := models.ItemRegistry[m.itemID]; ok && spec.Name != "" {
+			name = spec.Name
 		}
-		logs = append(logs, matMsg)
+		if d := m.stolen - m.destroyed; d > 0 {
+			matDelivered = append(matDelivered, fmt.Sprintf("%s x%d", name, d))
+		}
+		if m.destroyed > 0 {
+			matDestroyed = append(matDestroyed, fmt.Sprintf("%s x%d", name, m.destroyed))
+		}
 	}
-	if len(stolenGus) > 0 {
-		guMsg := "Cướp Cổ trùng kho tông (chia cho đội):"
-		for _, sg := range stolenGus {
-			guMsg += fmt.Sprintf(" %s R%d x%d,", sg.ID, sg.Rank, sg.Quantity)
-		}
-		logs = append(logs, guMsg)
+	if len(matDelivered) > 0 {
+		logs = append(logs, "Cướp linh tài kho tông (chia đều cho đội): "+joinDropList(matDelivered))
 	}
-	if len(stolenRecipes) > 0 {
-		recMsg := "Cướp bí phương kho tông (mở khóa cho đội):"
-		for _, sr := range stolenRecipes {
-			recMsg += fmt.Sprintf(" %s,", sr.RecipeID)
+	if len(matDestroyed) > 0 {
+		logs = append(logs, "Thiên Đạo tiêu hủy vĩnh viễn linh tài: "+joinDropList(matDestroyed))
+	}
+	var guDelivered, guDestroyed []string
+	for _, tg := range gusList {
+		name := tg.guID
+		if guDef, ok := models.GetGuAny(tg.guID); ok && guDef.Name != "" {
+			name = guDef.Name
 		}
-		logs = append(logs, recMsg)
+		if d := tg.stolen - tg.destroyed; d > 0 {
+			guDelivered = append(guDelivered, fmt.Sprintf("%s R%d x%d", name, tg.rank, d))
+		}
+		if tg.destroyed > 0 {
+			guDestroyed = append(guDestroyed, fmt.Sprintf("%s R%d x%d", name, tg.rank, tg.destroyed))
+		}
+	}
+	if len(guDelivered) > 0 {
+		logs = append(logs, "Cướp Cổ trùng kho tông (chia cho đội): "+joinDropList(guDelivered))
+	}
+	if len(guDestroyed) > 0 {
+		logs = append(logs, "Thiên Đạo chấn nát vĩnh viễn Cổ trùng kho tông: "+joinDropList(guDestroyed))
+	}
+	var recDelivered, recDestroyed []string
+	for _, sr := range destroyedRecipes {
+		name := sr.RecipeID
+		if guDef, ok := models.GetGuAny(sr.RecipeID); ok && guDef.Name != "" {
+			name = guDef.Name
+		}
+		recDestroyed = append(recDestroyed, name)
+	}
+	for _, sr := range deliveredRecipes {
+		name := sr.RecipeID
+		if guDef, ok := models.GetGuAny(sr.RecipeID); ok && guDef.Name != "" {
+			name = guDef.Name
+		}
+		recDelivered = append(recDelivered, name)
+	}
+	if len(recDelivered) > 0 {
+		logs = append(logs, "Cướp bí phương kho tông (mở khóa cho đội): "+joinDropList(recDelivered))
+	}
+	if len(recDestroyed) > 0 {
+		logs = append(logs, "Thiên Đạo tiêu hủy vĩnh viễn bí phương kho tông: "+joinDropList(recDestroyed))
 	}
 
 	// Notifications
@@ -917,7 +1097,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 			fmt.Sprintf("Tông môn ta đã đánh chiếm %s! Cướp được %d Quỹ.", targetName, stolenFunds))
 	}
 	_ = SendSystemMessage("sect", sql.NullString{String: combat.TargetSectID, Valid: true},
-		fmt.Sprintf("Tông môn bị đạo hữu %s và đội ngũ tấn công và thất thủ! Mất %d Quỹ cùng Cổ trùng, linh tài kho. Hộ Sơn Đại Trận bảo hộ trong %d giờ.", player.Username, stolenFunds, shieldHours))
+		fmt.Sprintf("Tông môn bị đạo hữu %s và đội ngũ tấn công và thất thủ! Mất %d Quỹ cùng Cổ trùng, linh tài kho (một phần bị Thiên Đạo tiêu hủy vĩnh viễn). Hộ Sơn Đại Trận bảo hộ trong %d giờ.", player.Username, stolenFunds, shieldHours))
 
 	return logs
 }

@@ -530,6 +530,7 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - Thắng trận áp dụng chiến lợi phẩm vào thẳng túi đồ thật; thua trận cập nhật trạng thái theo handler combat.
 - **Túi đồ khi khám phá là túi thật:** nguyên liệu/Cổ/tiền nhặt được trong chuyến đi vào thẳng túi đồ (không còn "túi tạm"). Khi về trấn an toàn không có bước "thu hoạch" — đồ đã nằm sẵn trong túi.
 - **Chết thì rơi đồ:** khi bại trận dã ngoại, bỏ chạy ngất xỉu hay thua PvP, đạo hữu có thể rơi một phần thạch, nguyên liệu, Cổ không trang bị/không phải Bản Mệnh và Bí phương. Tài sản tạo thành ground drop/hài cốt trên bản đồ thay vì biến mất hoặc chuyển thẳng vào túi người thắng; quyền nhặt tuân theo thời gian khóa mô tả ở mục bản đồ.
+- **Công phá Tông Môn cướp kho:** thắng khiêu chiến Tông Môn sẽ cướp một phần Quỹ, linh tài, Cổ trùng và Bí phương trong bảo khố chia cho đội tấn công. Tuy nhiên **Thiên Đạo cũng tiêu hủy vĩnh viễn ~40% chiến lợi phẩm** (giống cơ chế rơi đồ khi tử đạo: mất đúng 1 đơn vị thì 50% cơ hội bị chấn nát, ngược lại luôn giữ lại ít nhất 1 đơn vị cho đội); tông môn thất thủ được Hộ Sơn Đại Trận bảo hộ.
 - **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu tại HUB và chịu hình phạt rơi đồ như trên. Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
 - Khi hệ thống quá tải (tranh chấp khoá dữ liệu do nhiều thao tác cùng lúc), các thao tác chiến đấu (bỏ chạy/rút lui/bắt sủng…) trả về thông báo **bận và yêu cầu thử lại** thay vì treo vô hạn.
 

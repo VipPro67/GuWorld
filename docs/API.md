@@ -320,6 +320,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/sects/promotion-requests` |
 | POST | `/sects/promotion-requests/:requestId/action` |
 | GET | `/sects/mines` | Danh sách Lãnh địa + phòng thủ (`defenders`), `total_defense_power`, `output_per_hour`. |
+| POST | `/sects/attack` | Khiêu chiến Tông Môn (SECT_WAR) tại tọa độ tông môn. Body: `{"target_sect_id": "..."}`. Thắng: cướp Quỹ/linh tài/Cổ trùng/Bí phương kho tông chia cho đội — một phần chiến lợi phẩm bị Thiên Đạo tiêu hủy vĩnh viễn (40%, tương tự khi tử đạo); tông môn bị đánh nhận Hộ Sơn Đại Trận bảo hộ. Thua: đệ tử trấn thủ nhận cống hiến, tông môn được bảo hộ ngắn. |
 | POST | `/sects/mines/defend` | Bố trí phòng thủ (Trưởng Lão/Hộ Pháp/Chưởng Môn). Body: `{"mine_id": 1, "defender_type": "member|beast", "player_id": "...", "monster_id": "...", "monster_rank": 3}`. `beast` tốn `hạng × 500` Quỹ. |
 | POST | `/sects/mines/undefend` | Rút phòng thủ. Body: `{"defender_id": "uuid"}`. |
 | POST | `/sects/mines/attack` | Công kích Lãnh địa — **chỉ Trưởng Lão/Hộ Pháp/Chưởng Môn**. Body: `{"mine_id": 1, "attacker_id": "uuid (rỗng = người phát động)"}`. So sánh sức mạnh, trả `won`, `attacker_power`, `defense_power`. Nhân Khí thuộc về đệ tử được chọn ra trận. |
