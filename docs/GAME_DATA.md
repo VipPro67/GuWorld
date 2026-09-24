@@ -65,7 +65,7 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 
 Điểm nhận từ: sát chiêu thành công (+2/path hạch tâm), luyện cổ thành công (+2, +10 nếu Cổ Tiên rank ≥ 6), thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
 
-**Giới hạn điểm Chân Ý mỗi trận:** các nguồn trong trận chiến thường (đánh tay, đánh tự động/Simulator, sát chiêu) bị chặn ở `gamefx.PathMasteryBattleGainLimit(rank)` = **Rank × 10 điểm/trận**. Counter lưu trong `players.active_combat.path_mastery_gained`, tự reset khi trận mới bắt đầu. Thưởng từ phó bản (attainment) và luyện cổ không tính vào giới hạn này.
+**Giới hạn điểm Chân Ý mỗi trận:** các nguồn trong trận chiến thường từ Cổ phàm và Sát chiêu phàm (đánh tay, đánh tự động/Simulator, sát chiêu phàm) bị chặn ở `gamefx.PathMasteryBattleGainLimit(rank)` = **Rank × 10 điểm/trận**. Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** không bị giới hạn tối đa trong trận chiến, thỏa sức ngộ đạo (uncapped). Counter lưu trong `players.active_combat.path_mastery_gained`, tự reset khi trận mới bắt đầu. Thưởng từ phó bản (attainment) và luyện cổ không tính vào giới hạn này.
 
 ### Phó Bản — bảng `instance_templates`
 

@@ -631,6 +631,7 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 	act := simulator.SimAction{
 		ActionType: "KILLER_MOVE",
 		Name:       km.Name,
+		Rank:       km.RankRequired,
 		Damage:     km.DamageValue,
 		DamageMult: 1.0,
 		Defense:    km.DefenseValue,

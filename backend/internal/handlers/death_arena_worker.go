@@ -46,9 +46,12 @@ func StartDeathArenaWorker(ctx context.Context) {
 	}()
 }
 
-// recoverDeathArenaOnStartup checks if any tournament was interrupted by a restart
+// recoverDeathArenaOnStartup reconciles death arena state on every boot:
+// it resumes (or finishes) a stuck IN_PROGRESS tournament, starts a stuck
+// LOCKED one, closes an overdue REGISTRATION, and creates Saturday
+// registration when due.
 func recoverDeathArenaOnStartup() {
-	// A. Resume active IN_PROGRESS tournament
+	// A. Resume or finish active IN_PROGRESS tournament
 	var inProgressID string
 	err := db.DB.QueryRow(`
 		SELECT id FROM death_arena_tournaments 
@@ -56,21 +59,63 @@ func recoverDeathArenaOnStartup() {
 		ORDER BY scheduled_at DESC LIMIT 1
 	`).Scan(&inProgressID)
 	if err == nil && inProgressID != "" {
-		logger.S.Infof("Death Arena: Recovered active tournament %s on startup", inProgressID)
-		if !IsProcessingMatches() {
-			go processPendingMatches(inProgressID)
+		reconcileInProgressTournament(inProgressID)
+		return
+	}
+
+	// B. Start stuck LOCKED tournament (bracket generated but never started)
+	var lockedID string
+	if err := db.DB.QueryRow(`
+		SELECT id FROM death_arena_tournaments
+		WHERE status = 'LOCKED'
+		ORDER BY scheduled_at DESC LIMIT 1
+	`).Scan(&lockedID); err == nil && lockedID != "" {
+		logger.S.Infof("Death Arena: Found stuck LOCKED tournament %s on startup, starting it", lockedID)
+		if err := StartTournament(lockedID); err != nil {
+			logger.S.Errorf("Death Arena: Failed to start stuck LOCKED tournament %s: %v", lockedID, err)
 		}
 		return
 	}
 
-	// B. Close and start tournament if REGISTRATION is already past closed time
+	// C. Close and start tournament if REGISTRATION is already past closed time
 	_ = closeRegistrationAndStart()
 
-	// C. If Saturday between 16:00 and 17:00 VN time, ensure registration is created
+	// D. If Saturday between 16:00 and 17:00 VN time, ensure registration is created
 	vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
 	nowVN := time.Now().In(vnLoc)
 	if nowVN.Weekday() == time.Saturday && nowVN.Hour() >= 16 && nowVN.Hour() < 17 {
 		_ = createTournamentIfNeeded()
+	}
+}
+
+// reconcileInProgressTournament decides whether a stuck IN_PROGRESS tournament
+// still has matches to play or is ready to advance/finish (e.g. crash between
+// the last match commit and the round advance left it hanging).
+func reconcileInProgressTournament(tournamentID string) {
+	// Reset matches stuck IN_PROGRESS (crashed mid-resolve) back to PENDING
+	// so the count below reflects all unfinished work.
+	_, _ = db.DB.Exec(`UPDATE death_arena_matches SET status = 'PENDING' WHERE tournament_id = $1 AND status = 'IN_PROGRESS'`, tournamentID)
+
+	var pending int
+	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM death_arena_matches WHERE tournament_id = $1 AND status = 'PENDING'`, tournamentID).Scan(&pending)
+	if pending > 0 {
+		logger.S.Infof("Death Arena: Resumed tournament %s on startup (%d pending matches)", tournamentID, pending)
+		if !IsProcessingMatches() {
+			go processPendingMatches(tournamentID)
+		}
+		return
+	}
+
+	// No pending matches left but tournament never finished: advance now
+	// (crowns champion + awards rewards, or creates next-round matches).
+	logger.S.Infof("Death Arena: Tournament %s has no pending matches on startup, advancing round", tournamentID)
+	advanceToNextRound(tournamentID)
+
+	// If advancing created a next round, make sure a worker picks it up.
+	var status string
+	_ = db.DB.QueryRow(`SELECT status FROM death_arena_tournaments WHERE id = $1`, tournamentID).Scan(&status)
+	if status == "IN_PROGRESS" && !IsProcessingMatches() {
+		go processPendingMatches(tournamentID)
 	}
 }
 

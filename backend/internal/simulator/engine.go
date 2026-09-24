@@ -943,24 +943,38 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
-				remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
-				if remaining > 0 {
-					cleanPath := "strength"
-					guRank := 1
-					baseGain := 1
-					if a.ActionType == "GU_SKILL" {
-						guRank = a.Rank
-						if guRank < 1 {
-							guRank = 1
-						}
-						if len(a.Path) > 0 {
-							cleanPath = gamefx.CleanPath(a.Path[0])
-						}
-						if guRank >= 6 {
-							baseGain = 10
-						}
+			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK" || a.ActionType == "KILLER_MOVE") && actor.Kind == "Player" && !state.VirtualMode {
+				cleanPath := "strength"
+				guRank := 1
+				baseGain := 1
+				if a.ActionType == "GU_SKILL" {
+					guRank = a.Rank
+					if guRank < 1 {
+						guRank = 1
 					}
+					if len(a.Path) > 0 {
+						cleanPath = gamefx.CleanPath(a.Path[0])
+					}
+					if guRank >= 6 {
+						baseGain = 10
+					}
+				} else if a.ActionType == "KILLER_MOVE" {
+					guRank = a.Rank
+					if guRank < 1 {
+						guRank = 1
+					}
+					if len(a.Path) > 0 {
+						cleanPath = gamefx.CleanPath(a.Path[0])
+					}
+					baseGain = 2
+					if guRank >= 6 {
+						baseGain = 10
+					}
+				}
+
+				isImmortal := guRank >= 6
+				remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
+				if isImmortal || remaining > 0 {
 					if actor.PathMasteries == nil {
 						actor.PathMasteries = make(map[string]int)
 					}
@@ -972,11 +986,17 @@ func Simulate(state *CombatState) []CombatLog {
 					pathGain := gamefx.CalculatePathMasteryGain(guRank, currentLevel, baseGain)
 
 					if pathGain > 0 {
-						clamped := pathGain > remaining
-						if clamped {
-							pathGain = remaining
+						clamped := false
+						if !isImmortal {
+							if pathGain > remaining {
+								pathGain = remaining
+								clamped = true
+							}
+							actor.PathMasteryGained += pathGain
+							if actor.PathMasteryGained >= actor.PathMasteryGainLimit {
+								clamped = true
+							}
 						}
-						actor.PathMasteryGained += pathGain
 						actor.PathMasteries[cleanPath] += pathGain
 
 						newPts := actor.PathMasteries[cleanPath]

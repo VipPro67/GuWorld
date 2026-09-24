@@ -1198,3 +1198,82 @@ func TestTargetSuppressionImmunityInCombat(t *testing.T) {
 	}
 }
 
+func TestPathMasteryCombat_MortalCapped_ImmortalUncapped(t *testing.T) {
+	// Mortal test: limit is 5 points. Gu rank 1 skill gains 1 point per turn.
+	// Over 10 turns, it should only gain 5 points and trigger PATH_MASTERY_CAP.
+	mortal := newTestCombatant("mortal", "Player", 5000, 10)
+	mortal.Rank = 1
+	mortal.PathMasteryGainLimit = 5
+	mortal.PathMasteries = map[string]int{"fire": 0}
+	mortal.Actions = []SimAction{{
+		ActionType: "GU_SKILL",
+		Name:       "Hỏa Diễm Cổ",
+		Rank:       1,
+		Path:       []string{"fire"},
+		Damage:     1,
+	}}
+	dummy := newTestCombatant("dummy", "Enemy", 50000, 0)
+	dummy.Rank = 1
+
+	state := &CombatState{Seed: 123, Allies: []*CombatantAuto{mortal}, Enemies: []*CombatantAuto{dummy}}
+	_ = Simulate(state)
+
+	if mortal.PathMasteries["fire"] != 5 {
+		t.Fatalf("expected mortal path mastery capped at 5, got %d", mortal.PathMasteries["fire"])
+	}
+	if mortal.PathMasteryGained != 5 {
+		t.Fatalf("expected mortal PathMasteryGained to be 5, got %d", mortal.PathMasteryGained)
+	}
+
+	// Immortal test: limit is 10 points. Tiên Cổ rank 6 skill gains 10 points per turn.
+	// Over 10+ turns, it should exceed the battle cap (10) without any cap trigger!
+	immortal := newTestCombatant("immortal", "Player", 5000, 10)
+	immortal.Rank = 6
+	immortal.PathMasteryGainLimit = 10
+	immortal.PathMasteries = map[string]int{"fire": 0}
+	immortal.Actions = []SimAction{{
+		ActionType: "GU_SKILL",
+		Name:       "Phần Thiên Tiên Cổ",
+		Rank:       6,
+		Path:       []string{"fire"},
+		Damage:     1,
+	}}
+	dummy2 := newTestCombatant("dummy2", "Enemy", 50000, 0)
+	dummy2.Rank = 6
+
+	stateImmortal := &CombatState{Seed: 123, Allies: []*CombatantAuto{immortal}, Enemies: []*CombatantAuto{dummy2}}
+	_ = Simulate(stateImmortal)
+
+	if immortal.PathMasteries["fire"] <= 10 {
+		t.Fatalf("expected immortal path mastery to exceed battle cap (10), got %d", immortal.PathMasteries["fire"])
+	}
+	if immortal.PathMasteryGained != 0 {
+		t.Fatalf("expected immortal PathMasteryGained to remain 0 (uncapped), got %d", immortal.PathMasteryGained)
+	}
+
+	// Immortal killer move test: Rank 6 killer move should also exceed battle cap
+	immortalKM := newTestCombatant("immortal_km", "Player", 5000, 10)
+	immortalKM.Rank = 6
+	immortalKM.PathMasteryGainLimit = 10
+	immortalKM.PathMasteries = map[string]int{"sword": 0}
+	immortalKM.Actions = []SimAction{{
+		ActionType: "KILLER_MOVE",
+		Name:       "Vạn Kiếm Quy Tông",
+		Rank:       6,
+		Path:       []string{"sword"},
+		Damage:     1,
+	}}
+	dummy3 := newTestCombatant("dummy3", "Enemy", 50000, 0)
+	dummy3.Rank = 6
+
+	stateImmortalKM := &CombatState{Seed: 123, Allies: []*CombatantAuto{immortalKM}, Enemies: []*CombatantAuto{dummy3}}
+	_ = Simulate(stateImmortalKM)
+
+	if immortalKM.PathMasteries["sword"] <= 10 {
+		t.Fatalf("expected immortal killer move path mastery to exceed battle cap (10), got %d", immortalKM.PathMasteries["sword"])
+	}
+	if immortalKM.PathMasteryGained != 0 {
+		t.Fatalf("expected immortal killer move PathMasteryGained to remain 0 (uncapped), got %d", immortalKM.PathMasteryGained)
+	}
+}
+

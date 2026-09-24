@@ -402,7 +402,7 @@ func CastKillerMove(c *gin.Context) {
 		corePath := normalizePath(preview.Path)
 		currentLevel := gamefx.PathMasteryLevel(player.PathMasteries[corePath])
 		pathGain := gamefx.CalculatePathMasteryGain(moveRank, currentLevel, killerMovePathMasteryGain)
-		if gained := applyPathMasteryGain(&player, corePath, pathGain); gained > 0 {
+		if gained := applyPathMasteryGain(&player, corePath, pathGain, moveRank); gained > 0 {
 			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[corePath])
 			logs = append(logs, fmt.Sprintf("Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", gained, strings.Title(corePath), gamefx.PathMasteryLevelName(newLevel)))
 		}

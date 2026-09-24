@@ -127,7 +127,7 @@ Ví dụ JSON:
 | **Luyện Cổ thành công** | `refine.go` | +2 điểm cho path Cổ đích; **+10 điểm nếu Cổ Tiên (rank ≥ 6)** |
 | **Chân Ý từ phó bản** | `instance.go` | cộng thẳng `amount` điểm vào path |
 
-> **Giới hạn mỗi trận (battle cap):** các nguồn trong trận chiến thường — đánh tự động/Simulator (`simulator/engine.go`), sát chiêu (`killer_move.go`) — bị chặn ở **`PathMasteryBattleGainLimit(rank)` = Rank × 10 điểm/trận** (`gamefx/path_mastery.go`). Counter lưu trong `players.active_combat.path_mastery_gained` (JSONB, reset mỗi trận); với auto-combat, cap được áp dụng ngay trong vòng lặp simulator qua `CombatantAuto.PathMasteryGainLimit`. Khi chạm trần, điểm Chân Ý không cộng thêm và log có ghi `PATH_MASTERY_CAP`. Luyện cổ và thưởng phó bản không tính vào giới hạn này.
+> **Giới hạn mỗi trận (battle cap):** các nguồn trong trận chiến thường từ Cổ phàm và Sát chiêu phàm — đánh tự động/Simulator (`simulator/engine.go`), sát chiêu phàm (`killer_move.go`) — bị chặn ở **`PathMasteryBattleGainLimit(rank)` = Rank × 10 điểm/trận** (`gamefx/path_mastery.go`). Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** được giải phóng hoàn toàn giới hạn (uncapped), không có tối đa điểm Chân Ý nhận trong 1 trận. Counter lưu trong `players.active_combat.path_mastery_gained` (JSONB, reset mỗi trận); với auto-combat, cap được áp dụng ngay trong vòng lặp simulator qua `CombatantAuto.PathMasteryGainLimit`. Khi nguồn phàm chạm trần, điểm Chân Ý phàm không cộng thêm và log có ghi `PATH_MASTERY_CAP`. Luyện cổ và thưởng phó bản không tính vào giới hạn này.
 
 ### 2.3 Công Thức Ảnh Hưởng
 
