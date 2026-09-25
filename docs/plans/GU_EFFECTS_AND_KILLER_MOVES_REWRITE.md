@@ -9,7 +9,7 @@ Không nên tiếp tục thêm field vào `ActiveEffect`, thêm nhánh `if` tron
 
 Hướng đề xuất là xây một **effect runtime data-driven, có kiểu và có phiên bản**:
 
-1. Dữ liệu Cổ và công thức sát chiêu chỉ mô tả một danh sách `EffectSpec` nhỏ, tuần tự và có điều kiện.
+1. Dữ liệu Cổ và công thức sát chiêu chỉ dùng một `EffectEnvelope` v2 chứa danh sách `blocks` nhỏ, tuần tự và có điều kiện.
 2. Một compiler validate dữ liệu rồi biên dịch thành `CompiledAction`; combat engine chỉ thực thi một tập opcode ổn định.
 3. Effect thật sự đặc biệt dùng `mechanic_id` trỏ tới implementation Go đăng ký tường minh, thay vì thêm một field boolean mới hoặc nhúng script tùy ý.
 4. Sát chiêu trở thành **định nghĩa game toàn cục có công thức chính xác**, còn bản ghi người chơi chỉ giữ trạng thái sở hữu/thông thạo/loadout. Không còn suy ra sát chiêu từ mọi tổ hợp Cổ.
@@ -21,7 +21,7 @@ Hướng đề xuất là xây một **effect runtime data-driven, có kiểu v�
 
 ### 2.1. Nguồn dữ liệu và vòng đời
 
-- `Gu.csv` có 4.334 dòng dữ liệu. Mỗi dòng luôn mang tám namespace JSON (`active`, `passive`, `growth`, `other`, `explore`, `support`, `refinement`, `house`), nhưng Go chỉ deserialize bốn namespace `active`, `passive`, `growth`, `other` trong `GuEffects`.[^gu-model]
+- Snapshot kiểm toán hiện tại: `Gu.csv` có 4.223 dòng dữ liệu. Mỗi dòng mang đồng thời prototype `blocks` và tám namespace legacy (`active`, `passive`, `growth`, `other`, `explore`, `support`, `refinement`, `house`). Đây là trạng thái chuyển tiếp, không phải contract v2.[^gu-model]
 - Admin import ghi JSON vào `gu_dictionary.effects`; bảng dùng khóa `(id, rank)` và JSONB không có version/schema discriminator.[^gu-schema]
 - `models.LoadGuRegistry` đọc toàn bảng vào map global `GuRegistry[id][rank]`, thay map nguyên khối và xóa một số Redis dictionary cache. Registry không có revision công khai, snapshot hay cơ chế đồng bộ đọc/ghi.[^gu-registry]
 - `GuEffects.Scan` dùng `encoding/json` mặc định: key lạ bị bỏ qua im lặng; bước normalize chỉ quy shorthand status về một `ApplyStatus` duy nhất.[^gu-scan]
@@ -163,42 +163,53 @@ type EffectRuntime interface {
 
 Deletion test: nếu xóa module này, validation, target selection, stacking, execution và log sẽ lại tràn về handler/simulator — module đủ sâu và đáng tồn tại. Đây **không phải service/repository layer**; gameplay orchestration vẫn ở handler theo convention repo, còn semantics effect nằm đúng seam engine.
 
-### 4.3. `EffectSpec` đề xuất
+### 4.3. `EffectEnvelope` v2 đã chốt
 
 ```json
 {
   "schema_version": 2,
-  "effects": [
+  "blocks": [
     {
       "id": "main_hit",
-      "trigger": "on_cast",
-      "op": "deal_damage",
-      "target": "selected_enemies",
-      "value": {"base": 120, "scale": [{"stat": "attack", "ratio": 0.8}]},
-      "damage_type": "physical",
-      "path": ["blood"],
-      "order": 100
+      "trigger": "ON_CAST",
+      "order": 100,
+      "target": {"selector": "SELECTED_TARGET"},
+      "conditions": [],
+      "operations": [{
+        "op": "DAMAGE",
+        "subtype": "DIRECT",
+        "amount": {"unit": "FLAT", "value": 120, "scaling": [{"kind": "SOURCE_STAT", "stat_key": "ATTACK", "ratio": 0.8}]},
+        "damage_type": "PHYSICAL",
+        "path_key": "blood"
+      }]
     },
     {
       "id": "bleed_after_hit",
-      "trigger": "after_damage",
-      "condition": {"event": "main_hit", "result": "hit"},
-      "op": "apply_status",
-      "target": "event_targets",
-      "status": "bleed",
-      "stacks": 1,
-      "duration": {"turns": 3},
-      "order": 200
+      "trigger": "AFTER_DAMAGE",
+      "order": 200,
+      "target": {"selector": "EVENT_TARGETS"},
+      "conditions": [{"kind": "EVENT_RESULT", "block_id": "main_hit", "result": "HIT"}],
+      "operations": [{
+        "op": "APPLY_STATUS",
+        "status_id": "BLEED",
+        "stacking": {"mode": "ADD", "max_stacks": 1, "key_scope": "STATUS"},
+        "duration": {"clock": "COMBAT_TURN", "value": 3}
+      }]
     }
   ]
 }
 ```
 
+Root chỉ được có `schema_version` và `blocks`; không giữ song song `active`,
+`passive`, `growth`, `other` hoặc các namespace legacy khác. Contract enum,
+ordering, lifecycle, budget, provenance và matrix migration đầy đủ nằm trong
+`docs/GAME_DATA.md`; tài liệu kế hoạch không định nghĩa một dialect thứ hai.
+
 Các nguyên tắc:
 
 - `id` ổn định trong definition để condition tham chiếu, debug và telemetry.
 - `trigger` và `order` bắt buộc; không dựa vào thứ tự map JSON.
-- Giá trị có unit/type riêng: `Ratio`, `Percent`, `Flat`, `Turns`, `Count`, không dùng một `float64` chung ở runtime.
+- Giá trị có unit/type enum `FLAT`, `RATIO`, `PERCENT_POINTS`, `TURNS`, `TICKS`, `SECONDS`, `MINUTES`, `COUNT`, `PER_HOUR`; không dùng một `float64` chung ở runtime.
 - Target selector thuộc catalog hữu hạn, được compile trước trận.
 - RNG chỉ qua `EffectContext.RNG`; seed ghi vào combat snapshot.
 - Mọi op trả event chuẩn hóa, log/UI description được render từ event/template chứ không lẫn vào tính toán.
@@ -208,8 +219,8 @@ Các nguyên tắc:
 Chốt trước một state machine tối thiểu:
 
 ```text
-validate cast -> pay costs -> before_cast -> select targets -> on_cast
--> before_hit -> hit/miss -> before_damage -> damage -> after_damage
+validate cast -> before_cast -> pay costs -> select targets -> on_cast
+-> before_hit -> hit/miss -> on_hit -> before_damage -> damage -> after_damage
 -> apply status -> after_hit -> after_cast -> cooldown -> turn_end
 ```
 
@@ -240,7 +251,7 @@ Envelope, versioning và validation được dùng chung, nhưng không ép mọ
 | Periodic/`other` | regen, stones, lifespan, thought | tick snapshot → worker commands |
 | House/support | namespace chưa typed | chỉ chốt sau inventory Phase 0 |
 
-Phase 0 phải tạo matrix **mọi key/action code → parser → compiler → executor → persistence owner → tests**. Không xóa legacy namespace nào trước khi có đích migration hoặc xác nhận chỉ là metadata.
+Phase 0 đã có baseline inventory/matrix authoritative trong `docs/GAME_DATA.md`: mọi key/action code được nối với nguồn, trigger, target, unit/scaling, executor, persistence owner, UI và test/gap. Không xóa legacy namespace nào trước khi converter v2 + executor + parity test + database audit đạt cổng migration.
 
 ## 5. Thiết kế sát chiêu mới
 
