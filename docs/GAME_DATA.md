@@ -365,9 +365,14 @@ Các trường quan trọng trong dictionary:
 
 **Bảng A — Cấu trúc dữ liệu Effect Cổ trùng** (struct chuẩn: `models.GuEffects` bao gồm `Blocks []ComposableEffectBlock`, `Active`, `Passive`, `Growth`, `Other`).
 
-*Khối `blocks` (Composable Effect Blocks — ECA Model):*
-Toàn bộ Cổ trùng trong `backend/data/Gu.csv` đã được chuẩn hóa bổ sung khối `blocks`. Mỗi block tuân thủ cấu trúc Event-Condition-Action:
-- `trigger`: thời điểm kích hoạt (`ALWAYS_ON`, `ON_ACTION`, `ON_HIT`, `BEFORE_HIT`, `ON_TURN_START`, `ON_DEATH`, `ON_TICK`, `CAPABILITY`, `COMBAT_PASSIVE`, `ON_BATTLE_START`, `BEFORE_ENEMY_ATTACK`, `ON_CAST`, `ON_CONSUME`, `ON_USE`).
+*Khối `blocks` (Composable Effect Blocks — ECA Model, **prototype chưa được runtime thực thi**):*
+
+`blocks` hiện được parse/validate; frontend còn dùng một phần operation để hiển thị, chỉnh sửa và phân loại Cổ shield/defense khi dựng đội. Backend gameplay chưa có executor gọi `GuEffects.GetBlocks()`, còn các hành vi gameplay backend/frontend vẫn phụ thuộc trực tiếp vào `active`, `passive`, `growth` và `other`. Do đó **không được xóa các namespace cũ hoặc chỉ author effect bằng `blocks`**.
+
+Dữ liệu hiện tại cũng chưa tương đương: bộ chuyển đổi prototype chỉ ánh xạ một phần active/passive/other, không ánh xạ `growth`, và còn bỏ sót các cơ chế như di chuyển, điều tra, cổng dịch chuyển, bắt quái, luyện cổ cùng nhiều hiệu ứng đặc thù. Một số dòng CSV có legacy effect nhưng không có block hữu dụng; `conditions` chưa được runtime xử lý. Muốn chuyển sang block-only phải hoàn thành đồng thời executor theo trigger/op, ánh xạ toàn bộ key, chuyển đổi mọi dòng CSV, chuyển các consumer frontend/backend và có kiểm thử parity trước khi xóa schema cũ.
+
+Cấu trúc prototype của mỗi block:
+- `trigger`: thời điểm kích hoạt (`ALWAYS_ON`, `ON_ACTION`, `ON_HIT`, `BEFORE_HIT`, `ON_TURN_START`, `ON_DEATH`, `ON_TICK`, `CAPABILITY`, `COMBAT_PASSIVE`, `PASSIVE`, `ON_BATTLE_START`, `BEFORE_ENEMY_ATTACK`, `ON_CAST`, `ON_CONSUME`, `ON_USE`).
 - `target`: mục tiêu thi triển (`selector`: `SELF`, `TARGET`, `ROW`, `COL`, `ALL_ENEMIES`, `ALL_ALLIES`, `ALL`; `bypass_frontline`: boolean).
 - `conditions`: điều kiện kích hoạt bổ trợ (mảng `{field, operator, value}`).
 - `operations`: mảng các thao tác nguyên tử (Atomic Operations) thuộc 9 nhóm:
