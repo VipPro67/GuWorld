@@ -26,7 +26,7 @@ Hiệu ứng trừng phạt xảy ra khi Cổ sư cố gắng suy diễn một m
 ## Modular Effect System & Realm Scaling (Hệ Thống Hiệu Ứng Lắp Ráp & Thang Đo Cảnh Giới)
 
 ### Khối Hiệu Ứng Lắp Ráp (Composable Effect Block)
-Cấu trúc nguyên tử hóa mô tả một hiệu ứng hoàn chỉnh theo mô hình ECA (Event-Condition-Action): gồm `Trigger` (thời điểm xảy ra sự kiện), `Conditions` (điều kiện lọc ngữ cảnh), `Target` (mục tiêu thụ hưởng/chịu đòn), `Operations` (hành động/hiệu ứng thành phần như Damage, Shield, Status, StatMod) và `Scaling` (quy tắc co giãn theo Rank Cổ/Đạo Ngân). Cho phép kết hợp linh hoạt nhiều khối effect mà không cần sửa code engine mỗi khi có Cổ trùng mới.
+Cấu trúc nguyên tử hóa **đang ở mức prototype dữ liệu**, mô tả hiệu ứng theo mô hình ECA (Event-Condition-Action): gồm `Trigger` (thời điểm xảy ra sự kiện), `Conditions` (điều kiện lọc ngữ cảnh), `Target` (mục tiêu thụ hưởng/chịu đòn) và `Operations` (hành động/hiệu ứng thành phần như Damage, Shield, Status, StatMod). Backend gameplay hiện tại chưa thực thi `blocks`; frontend mới chỉ đọc một phần để hiển thị, chỉnh sửa và phân loại Cổ khi dựng đội. Các hành vi gameplay vẫn phụ thuộc trực tiếp vào `active`, `passive`, `growth` và `other`. Vì vậy không được coi `blocks` là nguồn dữ liệu chuẩn hoặc xóa các namespace cũ cho tới khi có executor, chuyển đổi đủ dữ liệu và kiểm thử tương đương hành vi.
 
 ### Suy Hao Cảnh Giới Tự Thân (Caster Rank Attenuation)
 Cơ chế suy giảm uy lực và thời lượng của hiệu ứng buff/bảo hộ khi Cổ sư cấp cao sử dụng Cổ trùng có Rank thấp hơn cảnh giới của bản thân áp lên chính mình (ví dụ Cổ Rank 4 tạo hiệu ứng Bất Tử cho Cổ Tiên Rank 9). Hiệu quả bảo vệ suy giảm mạnh theo hàm mũ hoặc chuyển đổi thành giá trị hữu hạn để tránh phá vỡ cân bằng cảnh giới.
@@ -36,4 +36,3 @@ Cơ chế bảo hộ và kháng cự tự nhiên của mục tiêu cấp cao tr�
 
 ### Xác Suất Kích Hoạt Động (Dynamic Proc Chance)
 Tỉ lệ kích hoạt thực tế của một hiệu ứng trong chiến đấu, được suy ra từ Xác suất cơ bản (`BaseChance` theo phân loại độ mạnh của hiệu ứng), cộng dồn tăng tiến theo Rank Cổ trùng (`+delta * (GuRank - 1)`), và điều chỉnh sau cùng thông qua Áp Chế Cảnh Giới, Kháng Tính Tâm Thần (Mental Resistance) và Vận Số (Luck).
-
