@@ -98,10 +98,13 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
-`players.state_revision` là bộ đếm `BIGINT` tăng đơn điệu cho trạng thái người
-chơi. Trigger trên `players` và các bảng có khóa ngoại trực tiếp tới `players`
-tăng revision trong cùng transaction; snapshot, delta realtime và mutation
-response dùng giá trị này để client loại bỏ dữ liệu đến trễ hoặc đảo thứ tự.
+`players.state_revision` cùng tổng counter trong `player_collection_revisions`
+tạo bộ đếm tăng đơn điệu cho trạng thái người chơi. Trigger trên `players` ghi
+trực tiếp vào dòng người chơi; trigger trên bảng con tăng một trong 64 counter
+phân mảnh theo transaction trong `player_collection_revisions` để không khóa
+dòng `players` hay một counter chung đang được nhiều API sử dụng. Snapshot, delta realtime
+và mutation response cộng hai giá trị để client loại bỏ dữ liệu đến trễ hoặc
+đảo thứ tự.
 
 Các cột mô tả nhân dạng và trạng thái của người chơi, giá trị lưu bằng **key tiếng Anh**, effect được resolve tập trung trong `backend/internal/gamefx/fx.go`:
 
