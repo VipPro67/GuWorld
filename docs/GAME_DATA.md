@@ -361,6 +361,282 @@ Các trường quan trọng trong dictionary:
 
 ### Hiệu ứng Cổ (effects)
 
+## Đặc tả effect thống nhất v2 (authoritative)
+
+> Mục này là hợp đồng đích đã chốt. Struct `ComposableEffectBlock` và trường
+> `blocks` hiện tại chỉ là prototype chuyển tiếp; chúng **không** phải v2 và
+> không được dùng để suy ra rằng runtime đã thực thi block.
+
+### Biên dữ liệu và inventory legacy
+
+Inventory được quét trên toàn bộ `Gu.csv` (4.223 dòng), `Item.csv` (641 dòng),
+`Race.csv`, `Constitution.csv`, `Status.csv`, seed fallback trong
+`schema_dictionaries.go`, `killer_moves.effects` và
+`aperture_variant_events.effects`. Số lượng chỉ là snapshot kiểm toán; contract
+được xác định bởi key, không bởi số dòng.
+
+Các thuộc tính sau **không phải effect** và phải ở ngoài envelope: `name`,
+`description`, rank/path/type/rarity/tags và ảnh; `base_mana_cost`, targeting/cast/
+cooldown cấu hình; `Status.default_duration_minutes` (policy khi cấp status),
+`Status.blocked_actions` (access policy do handler kiểm tra), `Constitution.tier`;
+`hunger_rate`, `food_types`, `max_hunger` và quy tắc chết đói; metadata/lifecycle
+của aperture event. Duration trong block là lifetime của một runtime effect,
+không thay thế duration mặc định của dictionary status.
+
+**Matrix A — namespace/key Cổ legacy.** Key không ghi `[parser-only]` được quan
+sát trực tiếp trong `Gu.csv.effects` và persist ở `gu_dictionary.effects`;
+`[parser-only]` nghĩa là chỉ còn trong Go model/manifest để đọc DB cũ, không có
+trong snapshot CSV hiện tại. UI label là `Gu.name` cộng formatter
+operation (legacy chưa có label riêng); definition do `gu_dictionary` sở hữu,
+runtime combat nằm trong combat snapshot, còn world/worker command persist bởi
+handler/worker tương ứng. `catalog` bên dưới nghĩa là các test
+`effectcatalog/{catalog,validate,timing}_test.go`; `characterization` gồm test
+handler/simulator/worker hiện có. Mọi key không có executor đầy đủ được giữ trong
+inventory nhưng **không được coi là supported**.
+
+| Legacy namespace/key (mỗi key trong ô là một entry độc lập) | Trigger → target | Unit / scaling | Executor hiện tại; persistence owner | Test hiện có |
+|---|---|---|---|---|
+| `active.damage_flat`; `damage_mult`; `damage_path`; `damage_hp_percent` | action → selected enemy(s) | flat HP; multiplier; path enum; ratio max HP | combat handler + simulator; combat state | catalog + simulator |
+| `active.shield_flat`; `shield_flat_reduce_percent`; `heal_flat`; `mana_regen`; `blood_drain`; `convert_damage_to_heal_percent` | action/hit → self or selected target | flat shield/HP/mana; ratios | combat; `players`/combat state; conversion key chưa executor | catalog + handler/simulator (không có conversion) |
+| `active.apply_status`; `status_duration_ticks`; `status_tick_damage` | after hit → selected target(s) | status id, turns, flat/tier legacy, optional probability | `statusfx` + simulator; combat state | catalog + status/simulator |
+| `active.target_selector`; `range` | selection before action | enum; cells | handler/simulator; transient | catalog |
+| `[parser-only] active.ignore_defense`; `ignore_defense_pct`; `armor_pen`; `crit_rate_boost`; `speed_boost_flat`; `all_stats_buff_percent`; `lifesteal_rate` | action/hit | flat or ratio (legacy names không đồng nhất) | typed model/runtime legacy; combat state | model/simulator characterization |
+| `active.curve_attack`; `summon_phantom` | action → enemies/summon | flat/count | combat legacy/partial; combat state | catalog + simulator characterization |
+| `[parser-only] active.summon_growth_phantoms`; `[parser-only] active.summon_count_per_tick`; `[parser-only] active.phantom_damage_scale` | growth tick → summon | bool/count/ratio | parser/model only; chưa có persistence executor | catalog only, không parity |
+| `active.disable_gu_next_turn`; `forget_reality_chance`; `self_evasion_boost_percent`; `target_damage_reduce_percent` | hit → self/target | bool/probability/ratio | simulator/statusfx; combat state | forget-gu + simulator |
+| `active.capture_bonus`; `portal_create`; `random_portal` | world use → self/world | ratio/bool | explore/world handlers; player/world tables | handler characterization |
+| `active.cleansing_power`; `active.wood_transformation` | action → self | ratio/bool | combat legacy partial; combat state | catalog; parity chưa đầy đủ |
+| `[parser-only] active.refine_mana_tier`; `[parser-only] active.replicate`; `[parser-only] active.generate_gu`; `[parser-only] active.invulnerable_ticks`; `[parser-only] active.absorb_damage_flat` | before refine/action → self hoặc generated entity | tier/bool/id/ticks/flat | model/manifest only; chưa có v2 executor/persistence command | catalog only, không parity |
+| `active.reveal_all_stealth`; `active.reveal_weakness` | action/world inspect → targets/world | bool | migrate runtime v2; definition JSONB, chưa có persistence command | catalog only, không parity |
+| `active.summon_monster_id`; `active.sleep`; `active.decoy_count` | action → summon/targets | entity id/bool/count | migrate runtime v2; combat/world owner chưa chốt | catalog only, không parity |
+| `active.stat_base_attack`; `stat_base_defense`; `stat_base_hp`; `evasion` | always-on (đặt nhầm namespace) → self | flat/ratio | legacy player stats; `player_gu` | catalog |
+| `active.description` | không trigger | text metadata, **không effect** | content only | catalog |
+| `passive.stat_base_attack`; `stat_base_defense`; `stat_base_hp`; `stat_base_speed` | always-on equipped ACTIVE → self | flat | player stats/combat snapshot; `player_gu` | player-stats + catalog |
+| `passive.movement`; `investigation`; `[parser-only] hearing`; `evasion`; `luck`; `accuracy`; `disguise_level`; `storage_capacity` | always-on/capability → self | flat (evasion/accuracy hiện legacy ratio-like) | player/world/inventory readers | catalog + handler characterization |
+| `passive.damage_multiplier_on_hit`; `damage_mult`; `[parser-only] damage_reduction`; `tenacity`; `cc_resist` | always-on/combat event → self | ratio | combat; combat snapshot | simulator/status tests; `damage_mult` migrate |
+| `passive.anti_heaven_damage_reduction_percent`; `anti_earth_damage_reduction_percent`; `anti_dream_damage_reduction_percent`; `immune_dream_status`; `forget_heaven_protection`; `forget_earth_protection` | combat passive → self | ratio/bool | combat snapshot | simulator characterization |
+| `passive.success_rate_bonus`; `refine_mana_tier`; `soul_refinement`; `path_conflict_reduction` | before refinement → self | ratio/tier | refinement handlers; player/loadout; conflict key known bug | refine tests + catalog |
+| `passive.time_speed_multiplier`; `dao_mark_multiplier`; `kill_path_damage_buff`; `kill_path_dao_marks_mult` | always-on/worker or reward → self | multiplier/ratio | time/reward paths; latter ba chờ migrate | catalog only |
+| `passive.stat_base_luck`; `luck_flat`; `storage_slots` | always-on → self | flat/count | chưa canonical; chờ migrate | catalog only |
+| `passive.cleansing_power`; `passive.description` | passive / meta | ratio; text | partial / content only | catalog |
+| `growth.max_attack`; `max_defense`; `max_hp`; `max_speed`; `hours_to_max` | growth tick → Gu instance | flat cap; hours | growth worker; `player_gu` | catalog/worker characterization |
+| `support`; `house`; `explore`; `refinement` | — | — | hiện rỗng toàn bộ CSV; reserved legacy roots, không được author mới | import/catalog |
+
+Các shorthand active cũ `freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`,
+`bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt` không còn ở
+CSV nhưng vẫn là legacy keys trong parser/manifest. Chúng map sang
+`apply_status`; chỉ adapter import được phép nhận chúng.
+
+**Matrix B — `other`/`UNIQUE` action code (đủ 45 code trong CSV, cộng một hook
+runtime-only được ghi rõ).** Mỗi code là
+một native hook candidate; `source` là `Gu.effects.other`, UI là tên Cổ + renderer
+hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu registry v2.
+
+| Trigger | Action code | Target / unit & scaling | Executor; persistence owner | Test |
+|---|---|---|---|---|
+| `ON_CONSUME` | `SACRIFICE_APTITUDE`, `RANK_PROGRESS`, `ADD_SOUL_MAX`, `ADD_LIFESPAN_YEARS`, `RESTORE_SOUL_HP`, `RESTORE_MENTAL`, `INCREASE_TIME_SPEED`, `REDUCE_STRESS`, `ADD_THOUGHT_MAX`, `DECREASE_TIME_SPEED` | self; typed flat/rank/year/multiplier theo params | `gu-consume`; `players`/aperture | `handlers/gu_effects_test.go` + catalog |
+| `ON_CONSUME` | `MAN_BEAST_BURIAL`, `POISON_VOW`, `SPRING_EGG_HATCH`, `STONE_APERTURE`, `THIRD_WATCH` | self/world; params legacy | chưa đầy đủ, migrate v2; không được silent no-op | catalog only |
+| `ON_USE` | `RECORD_MESSAGE` | selected message target; text payload | support endpoint alias `RECORD`; persistent support state | handler + catalog |
+| `ON_TICK` | `MANA_REGEN_TICK`, `THOUGHT_REGEN_TICK`, `SOUL_REGEN_TICK` | self; resource points/hour | resource regen worker; `players` | worker/model tests + catalog |
+| `ON_TICK` | `GENERATE_STONES_TICK`, `GENERATE_IMMORTAL_STONES_TICK` | owner; currency/hour | hunger worker; wallet/player balances and Gu hunger | `worker/hunger_test.go` + catalog |
+| `ON_DEATH` | `REBORN` | self; probability, ratio HP, count/turns | simulator; combat state | simulator + catalog |
+| `BEFORE_ENEMY_ATTACK` | `FORGET_INTENT_INTERRUPT`, `FORGET_WILL_CONFUSE` | event attacker/targets; probabilities, turns, activation count | simulator; combat state | forget-gu tests + catalog |
+| `ON_TURN_START` | `POEM_INTENT` | self/enemies; hook params | simulator; combat state | effect timing + catalog |
+| `ON_BATTLE_START` | `SEIZE_INITIATIVE` | self vs primary enemy; lifespan ratio | simulator; initiative snapshot | engine + catalog |
+| `ON_CAST` | `SUMMON_WOLF_FRONTLINE`, `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE` | hook-declared combat targets; typed params required | simulator; combat state | engine/effect timing + catalog |
+| `ON_HIT` | `BYPASS_SHIELD` | event targets; bool | simulator; hit event | engine + catalog |
+| `BEFORE_HIT` (manifest/runtime-only; không có trong `other` CSV hiện tại) | `FIRST_TURN_EVADE` | self; bool/turn gate | simulator; combat state | engine + catalog |
+| `PASSIVE` | `DOUBLE_DAMAGE_DEALT` | self; multiplier | simulator; combat snapshot (`COMBAT_PASSIVE` là tên v2) | engine + catalog |
+| `CAPABILITY` | `MARKETPLACE_ACCESS`, `REMOTE_TRADE`, `CHAT_CONNECT`, `CHAT_PERCEIVE`, `IGNORE_MOVEMENT_RANGE`, `LOOT_PREVIEW`, `DISGUISE`, `CHANGE_FORM_DISGUISE`, `PERFECT_DISGUISE`, `ARENA_IDENTITY_MASK`, `SACRIFICE_NPC` | self/capability subject; bool/range/level theo schema hook | marketplace/trade/chat/scouting/world handlers; owner domain tương ứng | catalog + handler/scouting characterization |
+
+**Matrix C — dictionary nhân vật, item và hai surface JSONB còn lại.**
+
+| Nguồn / legacy key | Trigger → target | Unit / scaling | Executor hiện tại; persistence owner | UI label / test |
+|---|---|---|---|---|
+| Race/Constitution/Status: `stat_mods.{attack,defense,speed}` | always-on → self | ratio, cộng dồn | `gamefx.Get`; player/combat derived snapshot | `effects.ts`; `gamefx/fx_test.go`, player stats |
+| Race/Constitution: `dao_mark.<path>`, `path_damage.<path>`, `path_resistance.<path>` | always-on/combat → self | ratio by path | gamefx + combat; dictionary + player selection | formatter; gamefx/combat tests |
+| Shared: `mana_regen`, `max_mana`, `cultivation_efficiency`, `dao_mark_gain`, `refine`, `healing_received`, `mental_resistance`, `soul_defense`, `soul_regen`, `hp_regen`, `aperture_stress_bonus`, `tenacity`, `cc_resist` | always-on → self | ratios, trừ `hp_regen` flat HP/hour | gamefx consumers (regen/cultivate/refine/combat/tribulation); players | formatter có một phần; `gamefx/fx_test.go`, status/refine tests |
+| Shared: `luck` | always-on → self | flat | gamefx/player stats | formatter + gamefx tests |
+| Race: `immortal`, `disable_hp_regen`, `disable_mana_regen`, `disable_soul_regen`, `disable_resource_regen` | always-on → self | boolean | lifespan/regen policy; players.race | thiếu label cho một số flag; gamefx tests một phần |
+| Status: `death_drop_mult`, `pvp_immune` | while status active → self | multiplier/bool | **không có field/executor: silent no-op hiện tại, phải fail khi compile v2** | chưa có label/test execution |
+| Item: `hunger`, `restore_hp`, `heal_aperture`, `increase_human_qi`, `random_constitution`, `random_race`, `open_mine_chest` | item use/feed → self/pet/aperture | flat hoặc command enum | item/pet handlers; inventory + players/aperture | `Item.name`; `handlers/item_effects_test.go` (coverage từng key chưa đầy đủ) |
+| `killer_moves.effects`: `base_damage_bonus|damage`, `base_defense_bonus|defense|add_base_defense`, `flat_damage`, `flat_defense`, `damage_multiplier|damage_boost`, `defense_multiplier|defense_boost|shield_multiplier`, `success_rate_bonus|stability_bonus|stability_penalty`, `channel_time|channeling|channeling_reduction` | move build/cast → selected enemy or self | flat, ratio, points, ticks; dao scaling `1+marks/100` | builder/manual/auto paths không đồng nhất; `killer_moves` owns snapshot | builder raw key; hầu như chưa có mapping tests |
+| `killer_moves.effects`: `life_steal|lifesteal`, `multi_hit`, `phantom_attack`, `thorns_damage`, `heal`, `bleed`, `poison`, `stun`, `mana_regen`, `heal_hp|regen`, `portal_create`, `random_portal` | hit/cast/world use | percent-vs-ratio legacy, count, flat, bool | manual, auto và world chỉ xử lý các tập con khác nhau; combat/player/world persistence | raw key; simulator chỉ có characterization hạn chế |
+| `aperture_variant_events.effects` | chưa có producer/trigger | chưa xác định | chỉ có JSONB owner event row; **không executor/persistence command** | không UI, không test; mọi payload hiện là no-op |
+
+Seed fallback trong `schema_dictionaries.go` dùng cùng key với CSV và không tạo
+namespace mới. Khác biệt seed/CSV phải được kiểm tra parity; đáng chú ý
+`death_drop_mult` và `pvp_immune` hiện bị `encoding/json` bỏ qua.
+
+Các field aggregate chỉ có trong `gamefx.Effects` nhưng không xuất hiện trong
+snapshot năm CSV/seed hiện tại là `max_mana`, `dao_mark_gain`, `soul_defense`,
+`soul_regen`, `hp_regen`, `aperture_stress_bonus`, `tenacity`, `cc_resist`;
+chúng là parser/runtime surface cho DB cũ hoặc nội dung tương lai, không được
+gán nhầm provenance CSV. Matrix vẫn giữ chúng để migration không bỏ sót.
+
+### Envelope duy nhất
+
+Mọi definition mới (Gu, item, race, constitution, status effect, killer move và
+aperture variant event) dùng đúng một root, không có sibling `active`, `passive`,
+`growth`, `other`, `support`, `house`, `explore` hay `refinement`:
+
+```json
+{"schema_version":2,"blocks":[{"id":"main_hit","trigger":"ON_CAST","order":100,"chance":1,"target":{"selector":"SELECTED_TARGET","filters":{"life_state":"ALIVE"}},"conditions":[],"operations":[{"op":"DAMAGE","subtype":"DIRECT","amount":{"unit":"FLAT","value":120,"scaling":[{"kind":"SOURCE_STAT","stat_key":"ATTACK","ratio":0.8}]}}],"source":{"definition_kind":"GU","definition_id":"GU_EXAMPLE","definition_version":1}}]}
+```
+
+`schema_version` phải bằng `2`; unknown version, unknown field và duplicate block
+ID đều là compile error. Block ID khớp `^[a-z][a-z0-9_]{0,63}$`, duy nhất trong
+một definition và ổn định qua revision nếu semantics không đổi.
+
+### Typed contract
+
+- **Trigger enum:** loadout `ON_EQUIP`, `ON_UNEQUIP`, `ALWAYS_ON`; combat
+  `ON_BATTLE_START`, `BEFORE_CAST`, `ON_CAST`, `BEFORE_HIT`, `ON_HIT`,
+  `BEFORE_DAMAGE`, `AFTER_DAMAGE`, `AFTER_HIT`, `AFTER_CAST`, `ON_TURN_START`,
+  `ON_TURN_END`, `BEFORE_DEATH`, `ON_DEATH`, `ON_BATTLE_END`; item
+  `BEFORE_USE`, `ON_USE`, `ON_CONSUME`; world `CAPABILITY`, `BEFORE_EXPLORE`,
+  `ON_EXPLORE`, `ON_MOVE`, `ON_CAPTURE`; refinement `BEFORE_REFINE`,
+  `ON_REFINE_SUCCESS`, `ON_REFINE_FAILURE`; growth `ON_GROWTH_TICK`,
+  `ON_GROWTH_COMPLETE`; worker `ON_WORKER_TICK` kèm `worker_kind`. Legacy
+  `ON_TICK`, `PASSIVE`, `ON_ACTION` chỉ tồn tại ở adapter và phải map tới một
+  trigger/domain cụ thể.
+- **Target selector enum:** `SELF`, `SELECTED_TARGET`, `EVENT_SOURCE`,
+  `EVENT_TARGETS`, `ALL_ALLIES`, `ALL_ENEMIES`, `ROW`, `COLUMN`, `RANDOM_ALLY`,
+  `RANDOM_ENEMY`; filters typed gồm `life_state`, `include_self`, `count`, path,
+  disposition và frontline policy. Random selector bắt buộc dùng RNG của context.
+- **Condition** là discriminated union (`SOURCE_STAT_COMPARE`,
+  `TARGET_STAT_COMPARE`, `RESOURCE_COMPARE`, `TARGET_HAS_STATUS`, `EVENT_RESULT`,
+  `WORLD_STATE_COMPARE`) với comparator `EQ|NE|LT|LTE|GT|GTE|IN`; không dùng
+  `{field,operator,value:float64}` tự do.
+- **Operation enum:** `DAMAGE`, `HEAL`, `SHIELD`, `MODIFY_RESOURCE`,
+  `MODIFY_STAT`, `APPLY_STATUS`, `REMOVE_STATUS`, `DISPEL`, `BARRIER`, `MOVE`,
+  `SUMMON`, `DESPAWN`, `INVENTORY`, `GROWTH`, `WORLD`, `REFINEMENT`,
+  `EMIT_EVENT`, `UNIQUE`. Mỗi `(op, subtype)` quy định field hợp lệ.
+- `stat_key` và `resource_key` là enum. Stat tối thiểu gồm `HP_MAX`, `ATTACK`,
+  `DEFENSE`, `SPEED`, `EVASION`, `ACCURACY`, `LUCK`, `TENACITY`, `CC_RESIST`;
+  resource gồm `HP`, `MANA`, `SOUL_HP`, `THOUGHT`, `APERTURE_HP`,
+  `PRIMEVAL_STONE`, `IMMORTAL_STONE`, `HUNGER`.
+- `amount` luôn có `unit`: `FLAT`, `RATIO` (0..1), `PERCENT_POINTS`, `TURNS`,
+  `TICKS`, `SECONDS`, `MINUTES`, `COUNT`, `PER_HOUR`. Scaling là union
+  `NONE`, `SOURCE_STAT`, `TARGET_STAT`, `MAX_RESOURCE`, `MISSING_RESOURCE`,
+  `DAO_MARK`, `RANK`; key và ratio bắt buộc theo kind. Không tự đổi `20` thành
+  `0.2`, không dùng một `float64` vô nghĩa chung cho mọi op.
+
+Contract discriminator tối thiểu (ngoài các field trong cột là lỗi):
+
+| Op | Subtype | Field bắt buộc | Unit/scaling hợp lệ |
+|---|---|---|---|
+| `DAMAGE` | `DIRECT`, `DOT` | `amount`, `damage_type`, optional `path_key` | `FLAT`/`RATIO`; source/target stat, max resource, dao mark, rank |
+| `HEAL`, `SHIELD` | `DIRECT`, `HOT` / `BARRIER` | `amount`, `resource_key` với heal | `FLAT`/`RATIO`; max/missing resource, source stat, rank |
+| `MODIFY_RESOURCE` | `ADD`, `REMOVE`, `SET` | `resource_key`, `amount` | `FLAT`/`RATIO`; max/missing resource, rank |
+| `MODIFY_STAT` | `ADD_FLAT`, `MULTIPLY_RATIO` | `stat_key`, `amount` | `FLAT` cho add; `RATIO` cho multiply; rank/dao mark optional |
+| `APPLY_STATUS` | `ADD`, `REFRESH` | `status_id`, `duration`, `stacking` | status-defined amount; duration chỉ `TURNS|TICKS|SECONDS|MINUTES` |
+| `REMOVE_STATUS`, `DISPEL` | `BY_ID`, `BY_CATEGORY` / `BUFF`, `DEBUFF`, `ALL` | status id/category hoặc `amount:COUNT` | chỉ `COUNT` cho dispel giới hạn |
+| `MOVE` | `ABSOLUTE`, `RELATIVE`, `TELEPORT` | typed destination/delta | cells `COUNT`; không scaling |
+| `SUMMON`, `DESPAWN` | `ENTITY`, `ILLUSION` / `BY_ID`, `BY_TAG` | template/id/tag, `amount:COUNT` | `COUNT`; rank scaling optional |
+| `INVENTORY`, `GROWTH`, `WORLD`, `REFINEMENT`, `EMIT_EVENT` | domain command enum đã đăng ký | typed command payload | schema command quyết định; không arbitrary map |
+| `BARRIER` | `INVINCIBLE`, `STATUS_IMMUNITY` | `duration` | typed duration; không amount |
+| `UNIQUE` | `NATIVE_HOOK` | `code`, params theo registry | chỉ param schema đã đăng ký |
+
+`damage_type` enum là `PHYSICAL|PATH|TRUE`; `path_key` phải có trong path
+registry. Danh sách stat/resource ở trên là closed set v2 ban đầu (từ “tối
+thiểu” không có nghĩa cho phép chuỗi khác); mở rộng cần bump minor catalog
+contract và compiler/runtime/UI cùng lúc.
+
+### Ordering, chance, stacking và lifecycle
+
+Khi một event phát sinh, runtime: (1) chụp immutable catalog/loadout revision;
+(2) lấy eligible blocks; (3) sort theo phase chuẩn, `order`, definition stable
+order, rồi `block.id`; (4) evaluate condition; (5) roll block `chance` đúng một
+lần bằng contextual deterministic RNG; (6) resolve target; (7) chạy operation
+theo array order; (8) enqueue event mới. Combat phase chuẩn là:
+
+```text
+BEFORE_CAST -> pay cost -> ON_CAST -> BEFORE_HIT -> hit/miss
+-> ON_HIT -> BEFORE_DAMAGE -> apply damage -> AFTER_DAMAGE -> AFTER_HIT
+-> AFTER_CAST -> cooldown -> ON_TURN_END
+```
+
+`ALWAYS_ON` được recompute khi loadout/status/revision đổi; item/refinement/world
+chạy trong transaction handler và nhận command typed; growth/worker chạy theo
+tick idempotent và checkpoint; battle hooks sống trong snapshot trận và bị hủy
+khi `ON_BATTLE_END`. Block chance mặc định 1; chance per-target phải khai báo
+`roll_scope:"PER_TARGET"`, không suy đoán.
+
+| Domain | Thứ tự và vòng đời bắt buộc |
+|---|---|
+| Loadout/passive | validate mutation → `ON_UNEQUIP` cũ → persist loadout → `ON_EQUIP` mới → recompute `ALWAYS_ON`; derived modifier sống tới mutation/revision/status expiry kế tiếp. |
+| Battle | snapshot → `ON_BATTLE_START`; mỗi turn `ON_TURN_START` → action chain ở trên → `ON_TURN_END`; lethal damage chạy `BEFORE_DEATH` rồi `ON_DEATH`; kết quả/persist → `ON_BATTLE_END`; effect combat không thoát khỏi battle nếu không phát domain command tường minh. |
+| Item | validate inventory/target → `BEFORE_USE` → reserve/consume transactionally → `ON_USE` → `ON_CONSUME` chỉ sau khi quantity giảm thành công → persist commands; rollback toàn bộ nếu executor lỗi. |
+| World | snapshot cell/player → `BEFORE_EXPLORE` → movement (`ON_MOVE`) → reveal/resolve (`ON_EXPLORE`) → capture (`ON_CAPTURE`) → persist world/player command; `CAPABILITY` chỉ là gate được query, không tự enqueue. |
+| Refinement | snapshot recipe/resources → `BEFORE_REFINE` → deterministic roll → đúng một trong `ON_REFINE_SUCCESS`/`ON_REFINE_FAILURE` → persist consume/reward/status trong cùng transaction. |
+| Growth | worker checkpoint → `ON_GROWTH_TICK`; khi chạm cap phát `ON_GROWTH_COMPLETE` đúng một lần; persist Gu instance + checkpoint idempotency. |
+| Worker | lock/checkpoint owner → `ON_WORKER_TICK(worker_kind)` → commands → atomic checkpoint; không catch-up vô hạn và không chạy lại cùng tick ID. Worker kind enum ban đầu: `RESOURCE_REGEN`, `GU_HUNGER`, `STATUS_EXPIRY`, `APERTURE_GROWTH`. |
+
+Runtime effect có `duration:{clock:COMBAT_TURN|WORKER_TICK|REAL_TIME,value}` và
+`stacking:{key_scope:STATUS|SOURCE_DEFINITION|SOURCE_ACTOR,mode:REPLACE|REFRESH|ADD|MAX|INDEPENDENT,max_stacks,snapshot_scaling}`.
+Provenance bắt buộc gồm definition kind/id/version/content hash, block ID, source
+actor/entity và event/turn/time tạo. Runtime trả event/domain command; effect
+executor không tự ghi DB.
+
+Giới hạn compiler mặc định: tối đa 128 block/definition, 32 operation/block,
+64 target/operation, repeat 16, trigger depth 16 và 1.024 emitted event/action.
+Vượt giới hạn tạo lỗi/event rõ ràng và abort action; không truncate/no-op im lặng.
+
+### `UNIQUE` là native hook, không phải escape hatch im lặng
+
+Operation `{"op":"UNIQUE","code":"REBORN","params":{...}}` chỉ compile nếu
+registry có khóa `(schema_version, code)`. Registration phải khai báo domain và
+trigger được phép, schema params typed (required/default/range/unknown-field
+policy), target policy, RNG/determinism, cost và số event tối đa, executor owner,
+description renderer và test vector. Compiler fail closed khi code/trigger/domain/
+param/executor không hợp lệ. Không cho upload script/code và không chấp nhận
+warning rồi no-op. Manifest owner/disposition hiện tại chỉ là inventory migration,
+không phải native-hook registry.
+
+Schema params v2 không kế thừa `map[string]any`. Mỗi code trong Matrix B phải
+trỏ tới một `param_schema_id`; nhóm không có params dùng `EMPTY` và reject mọi
+field. Baseline migration registry:
+
+| Param schema | Typed fields | Hook áp dụng |
+|---|---|---|
+| `EMPTY` | không field | capability flags, `BYPASS_SHIELD`, `FIRST_TURN_EVADE`, `DOUBLE_DAMAGE_DEALT`, `POEM_INTENT`, các cast hook chưa có param trong CSV |
+| `VALUE_FLAT` | `value: number` required, finite; unit do hook cố định | add/restore/reduce resource, rank/lifespan/thought/soul/time, regen/generate tick hooks |
+| `RANGE_COUNT` | `range: integer[1,64]` hoặc count typed theo hook | capability khoảng cách và summon hooks có range/count |
+| `REBORN_V1` | `chance: RATIO` required; `mode: REWIND|IN_PLACE=REWIND`; `max_uses:int[1,10]=1`; `turn1_guaranteed:bool=false`; `revive_hp_percent:RATIO=.5`; `clear_debuffs:bool=true`; ba `empower_*_percent:RATIO=0`; `empower_turns:TURNS[1,100]=100` | `REBORN` |
+| `FORGET_INTENT_V1` | `chance:RATIO`; `disable_target_gu_turns:TURNS`; `max_successful_activations:COUNT`; `backfire_after_max:bool` | `FORGET_INTENT_INTERRUPT` |
+| `FORGET_WILL_V1` | `activation_chance`, `hit_user_chance`, `hit_self_chance`, `miss_chance`, `backfire_chance`: `RATIO` (nhánh target phải tổng 1); `backfire_disable_turns:TURNS` | `FORGET_WILL_CONFUSE` |
+| `SEIZE_V1` | `lifespan_ratio:RATIO_OR_MULTIPLIER` finite, `>0`, default `3` | `SEIZE_INITIATIVE` |
+| `APTITUDE_V1` | `aptitude_gain:FLAT`, `aptitude_cap:FLAT` và `gain<=cap` | `SACRIFICE_APTITUDE` |
+
+Mapping bắt buộc cho inventory hiện tại: `REBORN→REBORN_V1`,
+`FORGET_INTENT_INTERRUPT→FORGET_INTENT_V1`,
+`FORGET_WILL_CONFUSE→FORGET_WILL_V1`, `SEIZE_INITIATIVE→SEIZE_V1`,
+`SACRIFICE_APTITUDE→APTITUDE_V1`; các hook `ADD_*`, `RESTORE_*`,
+`INCREASE_TIME_SPEED`, `DECREASE_TIME_SPEED`, `REDUCE_STRESS`,
+`RANK_PROGRESS`, `*_REGEN_TICK`, `GENERATE_*_TICK` map tạm `VALUE_FLAT`;
+`IGNORE_MOVEMENT_RANGE` map `RANGE_COUNT`; mọi capability flag còn lại cùng
+`BYPASS_SHIELD`, `FIRST_TURN_EVADE`, `DOUBLE_DAMAGE_DEALT`, `POEM_INTENT` map
+`EMPTY`. Sáu cast hook map `EMPTY` chỉ nếu row không có params; nếu có params,
+compiler fail cho tới khi có schema riêng. `MAN_BEAST_BURIAL`, `POISON_VOW`,
+`SPRING_EGG_HATCH`, `STONE_APERTURE`, `THIRD_WATCH`, `RECORD_MESSAGE` hiện map
+`UNREGISTERED` và vì vậy bị v2 compiler reject.
+
+Trước khi một hook legacy thuộc `EMPTY`, `VALUE_FLAT` hoặc `RANGE_COUNT` được
+đánh dấu executable, registration phải thu hẹp schema thành ID riêng nếu unit,
+default hoặc range khác nhau. Năm code consume đang `migrate` và `RECORD_MESSAGE`
+không được compile v2 cho tới khi có schema chuyên biệt; đây là fail-closed có
+chủ ý, không phải silent no-op.
+
+### Cổng migration bắt buộc
+
+Một legacy key/code chỉ được xóa khi: có dòng matrix; converter tạo v2 hợp lệ;
+executor/native hook đã đăng ký; characterization + golden parity chạy ở manual,
+auto và world/worker liên quan; persistence/UI renderer đã chuyển; audit database
+không còn payload legacy. `partial`, `migrate`, `known_bug` và
+`aperture_variant_events.effects` chưa dùng đều phải fail khi author v2, tuyệt đối
+không được quảng bá là effect hoạt động.
+
 > Hai bảng dưới đây đối chiếu **key effect hiện có trong game** (quét `data/Gu.csv`, 596 Cổ) với **catalog chuẩn đề xuất** (nguồn `Turnbase_Combat_Schema_Co_Gioi.xlsx`, sheet `CORE_SCHEMA` + `ALL_EFFECTS`). Cột **Trạng thái trong game** phân loại: `CÓ` (đã có data + code xử lý), `CÓ data / chưa code` (key xuất hiện trong CSV nhưng combat không xử lý), `Đổi tên` (tồn tại nhưng key khác), `Cần thêm` (chưa có). Số trong ngoặc ở cột số Cổ = số Cổ đang dùng key đó.
 
 **Bảng A — Cấu trúc dữ liệu Effect Cổ trùng** (struct chuẩn: `models.GuEffects` bao gồm `Blocks []ComposableEffectBlock`, `Active`, `Passive`, `Growth`, `Other`).

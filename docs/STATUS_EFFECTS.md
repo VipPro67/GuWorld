@@ -2,6 +2,30 @@
 
 Tài liệu chi tiết về kiến trúc, luồng hoạt động, danh mục status effect, và hướng dẫn lập trình viên **thêm Cổ trùng / Effect mới** vào hệ thống GuWorld.
 
+> **Phạm vi và thuật ngữ:** danh mục/status semantics trong tài liệu này mô tả
+> runtime hiện tại. Contract authoring đích là **Definition → Envelope → Block →
+> Trigger → Condition → Target selector → Operation → Amount (Unit + Scaling) →
+> Runtime effect/Event/Command → Native hook**, được chốt tại
+> `docs/GAME_DATA.md` mục “Đặc tả effect thống nhất v2”. “Status” chỉ một trạng
+> thái runtime có ID; bonus race/constitution/player-status gọi là **character
+> modifier**. `active`, `passive`, `growth`, `other` và `SpecialMechanic` là
+> **legacy namespace**, không phải cấu trúc để author nội dung v2.
+
+## Contract authoring mới
+
+Effect mới chỉ dùng envelope duy nhất `{"schema_version":2,"blocks":[...]}`;
+không thêm field vào `ActiveEffect`, không thêm sibling legacy namespace và
+không nhúng cả hai representation trong một definition. Status operation dùng
+`op:"APPLY_STATUS"`, `status_id`, amount/unit rõ ràng, duration clock rõ ràng,
+stacking policy và chance; duration đó khác với
+`status_dictionary.default_duration_minutes`, vốn chỉ là policy khi cấp status
+ngoài combat. `blocked_actions` cũng là policy handler, không phải operation.
+
+Cơ chế đặc thù dùng native hook `UNIQUE` đã đăng ký và validate params; unknown
+code/param/trigger phải làm compile thất bại, không được silent no-op. Các ví dụ
+legacy bên dưới chỉ phục vụ đọc/migrate dữ liệu hiện tại; chúng không phải mẫu
+cho dữ liệu mới.
+
 ---
 
 ## 1. Tổng Quan Kiến Trúc (Architecture Overview)
@@ -69,98 +93,23 @@ Hệ thống sử dụng helper `models.InventoryHasGuMechanic(playerGuInv, "ACT
 
 ---
 
-## 3. Hướng Dẫn Chi Tiết: Thêm Effect & Cổ Mới (Developer Guide)
+## 3. Hướng Dẫn Legacy: đọc và migrate Effect/Cổ hiện tại
 
-### Trường Hợp 1: Thêm Cổ Mới Sử Dụng Effect ĐÃ CÓ SẴN (Không cần sửa Go Code)
+Các payload `active/passive/growth/other` đang tồn tại phải được đọc qua matrix
+legacy trong `GAME_DATA.md`. Khi migrate một definition:
 
-Nếu hiệu ứng bạn muốn dùng đã có trong hệ thống (như `damage_flat`, `shield_flat`, `stat_base_attack`, `apply_status: "STEALTH"`...):
+1. Ghi nhận mọi key/action code, executor, persistence owner, UI và test parity.
+2. Chuyển sang đúng một envelope v2; mỗi block có ID duy nhất, trigger/order,
+   selector, condition, chance và operation typed.
+3. Dùng primitive operation nếu biểu đạt được. Chỉ dùng `UNIQUE` sau khi native
+   hook có registry entry, schema params, renderer và test.
+4. Chạy golden parity cho mọi runtime liên quan (manual, auto, world,
+   refinement/growth/worker), rồi audit database không còn payload legacy.
+5. Import qua Admin → **Dữ liệu** và restart registry khi cần.
 
-1. Mở file [backend/data/Gu.csv](file:///home/vippro67/Documents/GitHub/GuWorld/backend/data/Gu.csv).
-2. Thêm dòng Cổ mới với cấu trúc JSON trong cột `effects`:
-   ```csv
-   GU_LIGHTNING_BOLT,Lôi Đình Cổ,3,Active,6,"[""lightning_stone""]",300,"Bắn ra tia sét gây sát thương và có cơ hội làm choáng đối thủ.","[""Lightning Path""]",10.0,"{""active"": {""damage_flat"": 450, ""apply_status"": ""STUN"", ""status_duration_ticks"": 1}, ""passive"": {""stat_base_attack"": 15}, ""growth"": {}, ""other"": []}",,False,ATTACK_CORE,"[""ATTACK_CORE""]","[""lightning"",""damage""]","[""damage_boost""]",1200.0,
-   ```
-3. Đăng nhập Admin Panel -> Tab **Dữ liệu** -> Import bảng **Cổ Trùng**.
-4. Restart server backend.
-
----
-
-### Trường Hợp 2: Thêm Chỉ Số Passive Mới (Ví dụ: `stat_crit_damage_pct` - Tăng % sát thương bạo kích)
-
-1. **Khai báo field trong struct `PassiveEffect`** tại [backend/internal/models/gu.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/models/gu.go#L69):
-   ```go
-   type PassiveEffect struct {
-       // ... các field khác
-       StatCritDamagePct float64 `json:"stat_crit_damage_pct,omitempty"`
-   }
-   ```
-
-2. **Đăng ký key vào Catalog Manifest** tại [backend/internal/effectcatalog/manifest.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/effectcatalog/manifest.go#L58):
-   ```go
-   add("passive", DispositionSupported, "player-stats", 
-       "stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", 
-       "movement", "investigation", "hearing", "evasion", "luck", "accuracy", 
-       "damage_multiplier_on_hit", "cleansing_power", "disguise_level", 
-       "stat_crit_damage_pct") // <--- Thêm key mới vào đây
-   ```
-
-3. **Cập nhật logic tính toán chỉ số**:
-   Trong hàm tính toán combat/stats (như `gamefx/fx.go` hoặc simulator), đọc `spec.Effects.Passive.StatCritDamagePct` và cộng dồn vào thuộc tính nhân vật.
-
-4. **Thêm dữ liệu vào `Gu.csv`**, Import qua Admin Panel và restart backend.
-
----
-
-### Trường Hợp 3: Thêm Hiệu Ứng Active Combat Mới (Ví dụ: `burn_mana_flat` - Đốt Chân nguyên đối thủ)
-
-1. **Khai báo field trong struct `ActiveEffect`** tại [backend/internal/models/gu.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/models/gu.go#L16):
-   ```go
-   type ActiveEffect struct {
-       // ... các field khác
-       BurnManaFlat float64 `json:"burn_mana_flat,omitempty"`
-   }
-   ```
-
-2. **Đăng ký key vào Catalog Manifest** tại [backend/internal/effectcatalog/manifest.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/effectcatalog/manifest.go#L47):
-   ```go
-   add("active", DispositionSupported, "combat",
-       "damage_flat", "heal_flat", "shield_flat", ..., "burn_mana_flat")
-   ```
-
-3. **Xử lý logic chiêu thức trong Combat Engine**:
-   Trong [simulator/engine.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/simulator/engine.go) hoặc [handlers/combat_effects.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/handlers/combat_effects.go):
-   ```go
-   if guSpec.Effects.Active != nil && guSpec.Effects.Active.BurnManaFlat > 0 {
-       target.Mana = math.Max(0, target.Mana - guSpec.Effects.Active.BurnManaFlat)
-   }
-   ```
-
-4. **Thêm dữ liệu vào `Gu.csv`**, Import qua Admin Panel và restart backend.
-
----
-
-### Trường Hợp 4: Thêm Special Mechanic / Capability Mới (Ví dụ: `TELEPORT_HUB` - Dịch chuyển về Hub)
-
-1. **Đăng ký Action Code & Trigger** tại [backend/internal/effectcatalog/manifest.go](file:///home/vippro67/Documents/GitHub/GuWorld/backend/internal/effectcatalog/manifest.go#L124):
-   ```go
-   add("CAPABILITY", DispositionSupported, "world", 
-       "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", ..., "TELEPORT_HUB")
-   ```
-
-2. **Xử lý logic kiểm tra trong Handler**:
-   Trong handler di chuyển/hành động (ví dụ `player_explore.go`):
-   ```go
-   if models.InventoryHasGuMechanic(playerGuInv, "TELEPORT_HUB", true) {
-       // Cho phép dịch chuyển tức thời về thành chính
-   }
-   ```
-
-3. **Định nghĩa Cổ trùng trong `Gu.csv`**:
-   ```csv
-   GU_SPACE_TELEPORT,Định Hướng Cổ,4,Support,6,"[""space_crystal""]",400,"Cho phép dịch chuyển tức thời về Hub.","[""Space Path""]",20.0,"{""active"": {}, ""passive"": {}, ""growth"": {}, ""other"": [{""event_trigger"": ""CAPABILITY"", ""action_code"": ""TELEPORT_HUB"", ""params"": {}}]}",,False,SUPPORT_UTILITY,"[""SUPPORT_UTILITY""]","[""space""]","[""utility_boost""]",2500.0,
-   ```
-
-4. **Import qua Admin Panel & Restart backend**.
+Không thêm field mới vào `ActiveEffect`/`PassiveEffect`, không thêm nhánh theo ID
+Cổ trong engine và không chỉ thêm action code vào manifest. Manifest chỉ phân
+loại inventory; nó không chứng minh có executor.
 
 ---
 
