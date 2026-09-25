@@ -8,7 +8,7 @@ import (
 )
 
 func mech(trigger, action, params string) CombatMechanic {
-	return CombatMechanic{Trigger: trigger, ActionCode: action, Params: []byte(params)}
+	return NewCombatMechanic(trigger, action, []byte(params))
 }
 
 func logCount(logs []CombatLog, action string) int {

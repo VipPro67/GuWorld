@@ -1,7 +1,6 @@
 package simulator
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -23,35 +22,20 @@ func hasMechanic(mechanics []CombatMechanic, trigger, actionCode string) bool {
 
 func mechanicFloat(mechanics []CombatMechanic, trigger, actionCode, key string, fallback float64) float64 {
 	for _, mechanic := range mechanics {
-		if mechanic.Trigger != trigger || mechanic.ActionCode != actionCode {
-			continue
-		}
-		// Params hold mixed types; decode per key instead of whole-map.
-		var params map[string]json.RawMessage
-		if json.Unmarshal(mechanic.Params, &params) == nil {
-			if raw, ok := params[key]; ok {
-				var value float64
-				if json.Unmarshal(raw, &value) == nil {
-					return value
-				}
+		if mechanic.Trigger == trigger && mechanic.ActionCode == actionCode {
+			if value, ok := mechanic.Values[key].(float64); ok {
+				return value
 			}
 		}
 	}
 	return fallback
 }
 
-func mechanicString(mechanics []CombatMechanic, trigger, actionCode, key string, fallback string) string {
+func mechanicString(mechanics []CombatMechanic, trigger, actionCode, key, fallback string) string {
 	for _, mechanic := range mechanics {
-		if mechanic.Trigger != trigger || mechanic.ActionCode != actionCode {
-			continue
-		}
-		var params map[string]json.RawMessage
-		if json.Unmarshal(mechanic.Params, &params) == nil {
-			if raw, ok := params[key]; ok {
-				var value string
-				if json.Unmarshal(raw, &value) == nil {
-					return value
-				}
+		if mechanic.Trigger == trigger && mechanic.ActionCode == actionCode {
+			if value, ok := mechanic.Values[key].(string); ok {
+				return value
 			}
 		}
 	}
@@ -59,35 +43,14 @@ func mechanicString(mechanics []CombatMechanic, trigger, actionCode, key string,
 }
 
 func mechanicInt(mechanics []CombatMechanic, trigger, actionCode, key string, fallback int) int {
-	for _, mechanic := range mechanics {
-		if mechanic.Trigger != trigger || mechanic.ActionCode != actionCode {
-			continue
-		}
-		var params map[string]json.RawMessage
-		if json.Unmarshal(mechanic.Params, &params) == nil {
-			if raw, ok := params[key]; ok {
-				var value float64
-				if json.Unmarshal(raw, &value) == nil {
-					return int(value)
-				}
-			}
-		}
-	}
-	return fallback
+	return int(mechanicFloat(mechanics, trigger, actionCode, key, float64(fallback)))
 }
 
 func mechanicBool(mechanics []CombatMechanic, trigger, actionCode, key string, fallback bool) bool {
 	for _, mechanic := range mechanics {
-		if mechanic.Trigger != trigger || mechanic.ActionCode != actionCode {
-			continue
-		}
-		var params map[string]json.RawMessage
-		if json.Unmarshal(mechanic.Params, &params) == nil {
-			if raw, ok := params[key]; ok {
-				var value bool
-				if json.Unmarshal(raw, &value) == nil {
-					return value
-				}
+		if mechanic.Trigger == trigger && mechanic.ActionCode == actionCode {
+			if value, ok := mechanic.Values[key].(bool); ok {
+				return value
 			}
 		}
 	}
@@ -361,6 +324,12 @@ func cloneMechanics(source []CombatMechanic) []CombatMechanic {
 	copy(result, source)
 	for i := range result {
 		result[i].Params = append([]byte(nil), source[i].Params...)
+		if source[i].Values != nil {
+			result[i].Values = make(map[string]any, len(source[i].Values))
+			for key, value := range source[i].Values {
+				result[i].Values[key] = value
+			}
+		}
 	}
 	return result
 }

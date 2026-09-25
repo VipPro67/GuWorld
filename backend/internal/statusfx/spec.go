@@ -15,7 +15,15 @@ type StatusOp struct {
 	Value  float64
 	Turns  int
 	Chance float64 // proc chance per application (0..1); 0 = always applies
+	Unit   StatusUnit
 }
+
+type StatusUnit string
+
+const (
+	UnitFlat    StatusUnit = "flat"
+	UnitPercent StatusUnit = "percent"
+)
 
 // StatusSpec declares how a status behaves. It is the single source of truth
 // the simulator consults to apply/tick a status, so new statuses are a data
@@ -309,7 +317,11 @@ func ResolveStatus(id string, value float64, turns int) (StatusOp, error) {
 	if turns <= 0 {
 		turns = spec.DefaultTurns
 	}
-	return StatusOp{ID: spec.ID, Value: value, Turns: turns}, nil
+	unit := UnitPercent
+	if spec.Behaviour == BehaviourDot || spec.Behaviour == BehaviourRegen || spec.DirectHP {
+		unit = UnitFlat
+	}
+	return StatusOp{ID: spec.ID, Value: value, Turns: turns, Unit: unit}, nil
 }
 
 // ResolveStatusWithTier normalizes a status application when specified by tier (1-5).
@@ -320,7 +332,11 @@ func ResolveStatusWithTier(id string, tier int) (StatusOp, error) {
 	}
 	val := TierToPercent(spec.ID, tier)
 	dur := TierToDuration(spec.ID, tier)
-	return StatusOp{ID: spec.ID, Value: val, Turns: dur}, nil
+	unit := UnitPercent
+	if spec.Behaviour == BehaviourDot || spec.Behaviour == BehaviourRegen || spec.DirectHP {
+		unit = UnitFlat
+	}
+	return StatusOp{ID: spec.ID, Value: val, Turns: dur, Unit: unit}, nil
 }
 
 // UnknownStatusError reports an apply_status key not present in the registry.
@@ -504,5 +520,3 @@ func CanApplyStatusWithGuRank(rng *rand.Rand, casterRank, targetRank, guRank int
 func CanApplyStatus(rng *rand.Rand, casterRank, targetRank int, casterDaoMarks, targetDaoMarks map[string]int64, spec StatusSpec, targetStatusResist float64) bool {
 	return CanApplyStatusWithGuRank(rng, casterRank, targetRank, 1, casterDaoMarks, targetDaoMarks, spec, targetStatusResist, 0)
 }
-
-
