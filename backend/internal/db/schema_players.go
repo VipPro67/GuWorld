@@ -92,9 +92,8 @@ func schemaPlayers() error {
 		return err
 	}
 
-	// Every update of the player row advances its ordering token. Collection
-	// triggers installed after all schema steps update this row too, so their
-	// revision change is atomic with the owning transaction.
+	// Player-row writes serialize on the row itself, so this counter is ordered
+	// by commit visibility for those writes.
 	if err := execSchema("players_state_revision_trigger", `
 	CREATE OR REPLACE FUNCTION bump_player_row_state_revision()
 	RETURNS trigger LANGUAGE plpgsql AS $$
@@ -237,10 +236,34 @@ func schemaPlayers() error {
 // installPlayerCollectionRevisionTriggers attaches an ownership trigger to
 // every table with a direct foreign key to players. Discovering the foreign
 // keys keeps new player-owned collections covered without duplicating their
-// schema here. Transfers bump both the former and new owner exactly inside the
-// collection mutation's transaction.
+// schema here. Collection revisions deliberately live outside players: the
+// old triggers updated the hot player row and inverted the lock order of APIs
+// that mutate child rows before locking players, causing widespread 55P03
+// lock timeouts.
 func installPlayerCollectionRevisionTriggers() error {
-	return execSchema("player_collection_state_revision_triggers", `
+	return execSchema("player_collection_state_revision_triggers", playerCollectionRevisionSchema)
+}
+
+const playerCollectionRevisionSchema = `
+	CREATE TABLE IF NOT EXISTS player_collection_revisions (
+		player_id UUID NOT NULL,
+		shard SMALLINT NOT NULL,
+		state_revision BIGINT NOT NULL DEFAULT 0,
+		PRIMARY KEY (player_id, shard)
+	);
+
+	CREATE OR REPLACE FUNCTION delete_player_collection_revisions()
+	RETURNS trigger LANGUAGE plpgsql AS $$
+	BEGIN
+		DELETE FROM player_collection_revisions WHERE player_id = OLD.id;
+		RETURN OLD;
+	END;
+	$$;
+	DROP TRIGGER IF EXISTS trg_delete_player_collection_revisions ON players;
+	CREATE TRIGGER trg_delete_player_collection_revisions
+		AFTER DELETE ON players
+		FOR EACH ROW EXECUTE FUNCTION delete_player_collection_revisions();
+
 	CREATE OR REPLACE FUNCTION bump_player_collection_state_revision()
 	RETURNS trigger LANGUAGE plpgsql AS $$
 	DECLARE
@@ -255,15 +278,18 @@ func installPlayerCollectionRevisionTriggers() error {
 			new_owner := NULLIF(to_jsonb(NEW)->>owner_column, '')::uuid;
 		END IF;
 
-		IF old_owner IS NOT NULL THEN
-			-- During ON DELETE CASCADE the owner is already being deleted. Avoid
-			-- touching that tuple from a child AFTER DELETE trigger.
-			IF EXISTS (SELECT 1 FROM players WHERE id = old_owner) THEN
-				UPDATE players SET state_revision = state_revision + 1 WHERE id = old_owner;
-			END IF;
+		IF old_owner IS NOT NULL AND EXISTS (SELECT 1 FROM players WHERE id = old_owner) THEN
+			INSERT INTO player_collection_revisions (player_id, shard, state_revision)
+			VALUES (old_owner, mod(txid_current(), 64)::smallint, 1)
+			ON CONFLICT (player_id, shard) DO UPDATE
+			SET state_revision = player_collection_revisions.state_revision + 1;
 		END IF;
-		IF new_owner IS NOT NULL AND new_owner IS DISTINCT FROM old_owner THEN
-			UPDATE players SET state_revision = state_revision + 1 WHERE id = new_owner;
+		IF new_owner IS NOT NULL AND new_owner IS DISTINCT FROM old_owner
+			AND EXISTS (SELECT 1 FROM players WHERE id = new_owner) THEN
+			INSERT INTO player_collection_revisions (player_id, shard, state_revision)
+			VALUES (new_owner, mod(txid_current(), 64)::smallint, 1)
+			ON CONFLICT (player_id, shard) DO UPDATE
+			SET state_revision = player_collection_revisions.state_revision + 1;
 		END IF;
 		IF TG_OP = 'DELETE' THEN
 			RETURN OLD;
@@ -287,6 +313,7 @@ func installPlayerCollectionRevisionTriggers() error {
 			  AND c.confrelid = 'players'::regclass
 			  AND ra.attname = 'id'
 			  AND c.conrelid <> 'players'::regclass
+			  AND c.conrelid <> 'player_collection_revisions'::regclass
 		LOOP
 			EXECUTE format('DROP TRIGGER IF EXISTS %I ON %s', fk.trigger_name, fk.table_name);
 			EXECUTE format(
@@ -294,8 +321,7 @@ func installPlayerCollectionRevisionTriggers() error {
 				fk.trigger_name, fk.table_name, fk.column_name
 			);
 		END LOOP;
-	END $$;`)
-}
+	END $$;`
 
 func schemaPlayerExtras() error {
 	if err := execSchema("referrals", `

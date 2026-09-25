@@ -47,7 +47,7 @@ func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models
 		return player, err
 	}
 	if s.cleanExpiredStatuses(q, &player) {
-		_ = q.QueryRow(`SELECT state_revision FROM players WHERE id = $1`, id).Scan(&player.StateRevision)
+		_ = q.QueryRow(`SELECT p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, id).Scan(&player.StateRevision)
 	}
 
 	if s.db != nil {
@@ -78,7 +78,7 @@ func (s *PlayerService) LoadForUpdateEquipped(tx *sql.Tx, id uuid.UUID) (models.
 		return player, err
 	}
 	if s.cleanExpiredStatuses(tx, &player) {
-		_ = tx.QueryRow(`SELECT state_revision FROM players WHERE id = $1`, id).Scan(&player.StateRevision)
+		_ = tx.QueryRow(`SELECT p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, id).Scan(&player.StateRevision)
 	}
 	if s.db != nil {
 		if inv, errR := db.LoadPlayerGus(tx, id.String(), true); errR == nil {
@@ -97,7 +97,7 @@ func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player,
 		return player, err
 	}
 	if s.cleanExpiredStatuses(q, &player) {
-		_ = q.QueryRow(`SELECT state_revision FROM players WHERE id = $1`, id).Scan(&player.StateRevision)
+		_ = q.QueryRow(`SELECT p.state_revision + COALESCE((SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id), 0) FROM players p WHERE p.id = $1`, id).Scan(&player.StateRevision)
 	}
 	if s.db != nil {
 		var qy db.Queryer
@@ -166,8 +166,10 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
    COALESCE(immortal_state, '{}'), growth_data,
 		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses,
-		       COALESCE(version, 0), COALESCE(state_revision, 0)
-FROM players
+		       COALESCE(p.version, 0), COALESCE(p.state_revision, 0) + COALESCE((
+		           SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id
+		       ), 0)
+FROM players p
 		WHERE id = $1
 	`
 	if forUpdate {

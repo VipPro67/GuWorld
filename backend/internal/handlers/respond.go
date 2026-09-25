@@ -15,8 +15,10 @@ func refreshActionPlayerState(player *models.Player) {
 	// Read the response fields and their revision from one MVCC snapshot. Never
 	// attach a newer revision to values retained in a pre-commit Go model.
 	_ = db.DB.QueryRow(`
-		SELECT state_revision, primeval_stones, immortal_stones, human_qi
-		FROM players WHERE id = $1
+		SELECT p.state_revision + COALESCE((
+			SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id
+		), 0), p.primeval_stones, p.immortal_stones, p.human_qi
+		FROM players p WHERE p.id = $1
 	`, player.ID).Scan(
 		&player.StateRevision, &player.PrimevalStones,
 		&player.ImmortalStones, &player.HumanQi,
