@@ -89,9 +89,9 @@ func UpdateProfileSettings(c *gin.Context) {
 	}
 
 	// Validate Disguise requirements if player wants to activate or configure disguise
-	hasConcealment := models.InventoryHasGuMechanic(player.GuInventory, "DISGUISE", true)
-	hasAttitude := models.InventoryHasGuMechanic(player.GuInventory, "PERFECT_DISGUISE", true)
-	hasFormChange := models.InventoryHasGuMechanic(player.GuInventory, "CHANGE_FORM_DISGUISE", true)
+	hasConcealment := models.InventoryHasGuCapability(player.GuInventory, "DISGUISE", true)
+	hasAttitude := models.InventoryHasGuCapability(player.GuInventory, "PERFECT_DISGUISE", true)
+	hasFormChange := models.InventoryHasGuCapability(player.GuInventory, "CHANGE_FORM_DISGUISE", true)
 
 	isDisguised := req.IsDisguised && hasConcealment
 	if isDisguised {

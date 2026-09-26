@@ -365,53 +365,74 @@ type GuDictionaryItem struct {
 
 type Gu = GuDictionaryItem
 
-// GuMechanic resolves a gameplay capability from the catalog effect column.
-// Callers may still use GuID to locate the definition, but must not infer
-// behavior from that identifier.
-func GuMechanic(instance GuInstance, actionCode string) (SpecialMechanic, bool) {
+// GuCapability resolves behavior from the immutable compiled definition.
+// Callers may use GuID to locate a definition, but must not inspect its
+// persisted authoring JSON.
+func GuCapability(instance GuInstance, code string) (gameplayeffects.Capability, bool) {
 	spec, ok := GetGu(instance.GuID, instance.Rank)
 	if !ok {
 		spec, ok = GetGuAny(instance.GuID)
 	}
 	if !ok {
-		return SpecialMechanic{}, false
+		return gameplayeffects.Capability{}, false
 	}
-	for _, mechanic := range spec.Effects.Other {
-		if mechanic.ActionCode == actionCode {
-			return mechanic, true
-		}
+	compiled := compiledGuDefinition(&spec.Effects)
+	if compiled == nil {
+		return gameplayeffects.Capability{}, false
 	}
-	return SpecialMechanic{}, false
+	return compiled.Capability(code)
 }
 
-func InventoryHasGuMechanic(inventory GuInventory, actionCode string, requireEquipped bool) bool {
+func compiledGuDefinition(definition *GuEffects) *gameplayeffects.Compiled {
+	if definition == nil {
+		return nil
+	}
+	if compiled := definition.Compiled(); compiled != nil {
+		return compiled
+	}
+	// Definitions assembled by tests or tools do not pass through sql.Scanner.
+	// Compile them through the same definition compiler before querying.
+	if err := definition.compile(); err != nil {
+		return nil
+	}
+	return definition.Compiled()
+}
+
+func InventoryHasGuCapability(inventory GuInventory, code string, requireEquipped bool) bool {
 	for _, instance := range inventory {
 		if instance.Status == "DEAD" || (requireEquipped && (!instance.Equipped || instance.Status != "ACTIVE")) {
 			continue
 		}
-		if _, ok := GuMechanic(instance, actionCode); ok {
+		if _, ok := GuCapability(instance, code); ok {
 			return true
 		}
-		if actionCode == "DISGUISE" {
+		// Compatibility for catalogs that represented disguise as a derived
+		// stat before it became an explicit capability. This reads the compiled
+		// projection, never the persisted passive object.
+		if code == "DISGUISE" {
 			spec, ok := GetGu(instance.GuID, instance.Rank)
 			if !ok {
 				spec, ok = GetGuAny(instance.GuID)
 			}
-			if ok && spec.Effects.Passive != nil && spec.Effects.Passive.DisguiseLevel > 0 {
-				return true
+			if compiled := compiledGuDefinition(&spec.Effects); ok && compiled != nil {
+				for _, passive := range compiled.Passives() {
+					if passive.Stat == "DISGUISE" && passive.Value > 0 {
+						return true
+					}
+				}
 			}
 		}
 	}
 	return false
 }
 
-func GuMechanicFloat(instance GuInstance, actionCode, key string) float64 {
-	mechanic, ok := GuMechanic(instance, actionCode)
+func GuCapabilityFloat(instance GuInstance, code, key string) float64 {
+	capability, ok := GuCapability(instance, code)
 	if !ok {
 		return 0
 	}
 	var params map[string]float64
-	if json.Unmarshal(mechanic.Params, &params) != nil {
+	if json.Unmarshal(capability.Params, &params) != nil {
 		return 0
 	}
 	return params[key]

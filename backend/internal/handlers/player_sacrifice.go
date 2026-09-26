@@ -49,9 +49,9 @@ func SacrificeNPC(c *gin.Context) {
 	// 1. Resolve the sacrifice ability and its tuning from the equipped Gu effects.
 	aptitudeGain, aptitudeCap := 0, 0
 	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
-		if gain := models.GuMechanicFloat(gu, "SACRIFICE_NPC", "aptitude_gain"); gain > 0 {
+		if gain := models.GuCapabilityFloat(gu, "SACRIFICE_NPC", "aptitude_gain"); gain > 0 {
 			aptitudeGain = int(gain)
-			aptitudeCap = int(models.GuMechanicFloat(gu, "SACRIFICE_NPC", "aptitude_cap"))
+			aptitudeCap = int(models.GuCapabilityFloat(gu, "SACRIFICE_NPC", "aptitude_cap"))
 			break
 		}
 	}

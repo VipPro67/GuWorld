@@ -189,7 +189,7 @@ type SimAction struct {
 	CompiledOperations []gameplayeffects.CompiledOperation
 }
 
-// CombatMechanic is the simulator-facing form of effects.other. Params stay
+// CombatMechanic is the simulator-facing form of a compiled UNIQUE operation. Params stay
 // immutable JSON so combat snapshots are deterministic and definitions can be
 // extended without coupling the engine to Gu identifiers.
 type CombatMechanic struct {

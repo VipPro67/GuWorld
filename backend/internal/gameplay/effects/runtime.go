@@ -191,10 +191,29 @@ func (c *Compiled) Capabilities() []Capability {
 			continue
 		}
 		for _, op := range b.operations {
+			if op.Type != OpUnique {
+				continue
+			}
 			out = append(out, Capability{op.Code, append([]byte(nil), op.Params...)})
 		}
 	}
 	return out
+}
+
+// Capability returns a defensive copy of the first compiled capability with
+// the requested code. Capability consumers must query this projection instead
+// of interpreting the persisted authoring JSON.
+func (c *Compiled) Capability(code string) (Capability, bool) {
+	if c == nil {
+		return Capability{}, false
+	}
+	code = strings.ToUpper(strings.TrimSpace(code))
+	for _, capability := range c.Capabilities() {
+		if strings.ToUpper(capability.Code) == code {
+			return capability, true
+		}
+	}
+	return Capability{}, false
 }
 func (c *Compiled) Growth() []Growth {
 	var out []Growth

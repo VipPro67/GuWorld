@@ -334,7 +334,7 @@ func GetPlayerProfile(c *gin.Context) {
 			// resp.ScoutingStatus = "Trinh sát thất bại! Đối phương ngụy trang tinh vi hoặc tu vi vượt trội."
 			resp.DominantPath = "Chưa rõ"
 		} else {
-			hasAttitudeGu := models.InventoryHasGuMechanic(target.GuInventory, "PERFECT_DISGUISE", true)
+			hasAttitudeGu := models.InventoryHasGuCapability(target.GuInventory, "PERFECT_DISGUISE", true)
 
 			if hasAttitudeGu {
 				// Perfect disguise via Attitude Gu

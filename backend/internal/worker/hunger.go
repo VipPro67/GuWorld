@@ -67,7 +67,7 @@ func processScheduledTicks(ctx context.Context, db *sql.DB) {
 // ── ON_TICK batch ──────────────────────────────────────────────────────────
 
 // findOnTickPlayers returns the player ids that own at least one equipped
-// ACTIVE Gu whose dictionary effects.other contains an ON_TICK trigger.
+// ACTIVE Gu whose compiled definition contains an ON_TICK trigger.
 func findOnTickPlayers(db *sql.DB) ([]string, error) {
 	rows, err := db.Query(`
 		SELECT DISTINCT pg.player_id::text
