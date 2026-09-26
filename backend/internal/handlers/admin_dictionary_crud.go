@@ -119,20 +119,25 @@ func marshalArray(arr []string) json.RawMessage {
 	return b
 }
 
-func validateAndNormalizeAdminGuEffects(c *gin.Context, raw *json.RawMessage) bool {
-	normalized, report, err := effectcatalog.NormalizeAndValidate(*raw)
-	if err != nil {
+func validateAndNormalizeAdminGuEffects(c *gin.Context, key string, raw *json.RawMessage) bool {
+	issues := effectcatalog.ValidateBlockV2(*raw, effectcatalog.Location{Source: "gu", Key: key})
+	if len(issues) != 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":  "Effect Cổ trùng không hợp lệ: " + report.Error(),
-			"issues": report.Issues,
+			"error":  "Effect Block v2 không hợp lệ",
+			"issues": issues,
 		})
 		return false
 	}
-	// Preserve the canonical envelope at every write boundary. Warnings remain
-	// visible to Admin without blocking legacy fields during the migration.
-	*raw = append((*raw)[:0], normalized...)
-	c.Set("gu_effect_warnings", report.Warnings())
 	return true
+}
+
+func validateAdminEffects(c *gin.Context, source, key string, raw json.RawMessage) bool {
+	issues := effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: source, Key: key})
+	if len(issues) == 0 {
+		return true
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": "Effect Block v2 không hợp lệ", "issues": issues})
+	return false
 }
 
 func guEffectWarnings(c *gin.Context) []effectcatalog.Issue {
@@ -168,9 +173,9 @@ func AdminCreateGuItem(c *gin.Context) {
 		req.TargetType = "SINGLE"
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`)
+		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
 	}
-	if !validateAndNormalizeAdminGuEffects(c, &req.Effects) {
+	if !validateAndNormalizeAdminGuEffects(c, req.ID, &req.Effects) {
 		return
 	}
 
@@ -211,7 +216,10 @@ func AdminUpdateGuItem(c *gin.Context) {
 	if req.ID == "" {
 		req.ID = guID
 	}
-	if len(req.Effects) > 0 && !validateAndNormalizeAdminGuEffects(c, &req.Effects) {
+	if req.Name != "" && len(req.Effects) == 0 {
+		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
+	}
+	if len(req.Effects) > 0 && !validateAndNormalizeAdminGuEffects(c, req.ID, &req.Effects) {
 		return
 	}
 
@@ -330,9 +338,6 @@ func AdminUpdateGuItem(c *gin.Context) {
 		if req.TargetType == "" {
 			req.TargetType = "SINGLE"
 		}
-		if len(req.Effects) == 0 {
-			req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`)
-		}
 		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,is_immortal=$13,primary_role=$14,combat_roles=$15,combat_tags=$16,support_tags=$17,base_price=$18,image_url=$19 WHERE id=$20 AND rank=$21`,
 			req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
 			req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.IsImmortal, req.PrimaryRole,
@@ -441,7 +446,10 @@ func AdminCreateItemItem(c *gin.Context) {
 		req.Rank = 1
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{}`)
+		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
+	}
+	if !validateAdminEffects(c, "item", req.ID, req.Effects) {
+		return
 	}
 	_, err := db.DB.Exec(`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,base_price,image_url,rarity) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
 		req.ID, req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL, req.Rarity)
@@ -504,6 +512,9 @@ func AdminUpdateItemItem(c *gin.Context) {
 		idx++
 	}
 	if len(req.Effects) > 0 {
+		if !validateAdminEffects(c, "item", itemID, req.Effects) {
+			return
+		}
 		sets = append(sets, "effects=$"+strconv.Itoa(idx))
 		args = append(args, req.Effects)
 		idx++

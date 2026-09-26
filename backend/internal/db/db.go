@@ -321,6 +321,9 @@ func ensureAdmin() error {
 
 // SeedDictionaries populates gameplay master data from CSV files.
 func SeedDictionaries() error {
+	if err := preflightEffectCSVs([]effectCSVSource{{"item", "Item.csv", "id"}, {"gu", "Gu.csv", "id"}, {"constitution", "Constitution.csv", "key"}, {"race", "Race.csv", "key"}, {"status", "Status.csv", "key"}}); err != nil {
+		return err
+	}
 	if err := seedItemsFromCSV("Item.csv"); err != nil {
 		return fmt.Errorf("CSV item seed failed: %w", err)
 	}
@@ -460,11 +463,72 @@ func safeJSONArray(raw string, fallback string, rowLabel string) string {
 }
 
 func normalizedGuEffectsJSON(raw string, rowLabel string) (string, effectcatalog.Report, error) {
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal([]byte(raw), &envelope) == nil {
+		if _, ok := envelope["schema_version"]; ok {
+			issues := effectcatalog.ValidateBlockV2([]byte(raw), effectcatalog.Location{Source: "gu", Key: rowLabel})
+			if len(issues) > 0 {
+				return "", effectcatalog.Report{}, &effectcatalog.ValidationError{Issues: issues}
+			}
+			return raw, effectcatalog.Report{}, nil
+		}
+	}
 	normalized, report, err := effectcatalog.NormalizeAndValidate([]byte(raw))
 	if err != nil {
 		return "", report, fmt.Errorf("%s: %w", rowLabel, err)
 	}
 	return string(normalized), report, nil
+}
+
+type effectCSVSource struct{ source, filename, keyColumn string }
+
+// preflightEffectCSVs completes validation for the whole requested batch
+// before any seeder can issue its first INSERT/UPDATE.
+func preflightEffectCSVs(sources []effectCSVSource) error {
+	all := make([]effectcatalog.ValidationIssue, 0)
+	for _, source := range sources {
+		f, reader, header, err := openCSV(source.filename)
+		if err != nil {
+			return err
+		}
+		keyIdx, effectsIdx := colIndex(header, source.keyColumn), colIndex(header, "effects")
+		if keyIdx < 0 || effectsIdx < 0 {
+			f.Close()
+			return fmt.Errorf("%s missing required columns (%s, effects)", source.filename, source.keyColumn)
+		}
+		rowNumber := 1
+		for {
+			row, err := reader.Read()
+			rowNumber++
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				f.Close()
+				return fmt.Errorf("%s row %d: %w", source.filename, rowNumber, err)
+			}
+			if len(row) == 0 {
+				continue
+			}
+			cell := func(index int) string {
+				if index < 0 || index >= len(row) {
+					return ""
+				}
+				return row[index]
+			}
+			key := strings.TrimSpace(cell(keyIdx))
+			raw := strings.TrimSpace(cell(effectsIdx))
+			if raw == "" {
+				raw = `{"schema_version":2,"blocks":[]}`
+			}
+			all = append(all, effectcatalog.ValidateBlockV2([]byte(raw), effectcatalog.Location{Source: source.source, Row: rowNumber, Key: key})...)
+		}
+		f.Close()
+	}
+	if len(all) > 0 {
+		return &effectcatalog.ValidationError{Issues: all}
+	}
+	return nil
 }
 
 // parseRarity parses the rarity column (1-9 tier, empty/unset = 0). Non-numeric
@@ -2790,14 +2854,29 @@ func AvailableTables() []string {
 func TableImport(table string) error {
 	switch table {
 	case "item":
+		if err := preflightEffectCSVs([]effectCSVSource{{"item", "Item.csv", "id"}}); err != nil {
+			return err
+		}
 		return seedItemsFromCSV("Item.csv")
 	case "gu":
+		if err := preflightEffectCSVs([]effectCSVSource{{"gu", "Gu.csv", "id"}}); err != nil {
+			return err
+		}
 		return seedGusFromCSV("Gu.csv")
 	case "constitution":
+		if err := preflightEffectCSVs([]effectCSVSource{{"constitution", "Constitution.csv", "key"}}); err != nil {
+			return err
+		}
 		return seedConstitutionsFromCSV("Constitution.csv")
 	case "race":
+		if err := preflightEffectCSVs([]effectCSVSource{{"race", "Race.csv", "key"}}); err != nil {
+			return err
+		}
 		return seedRacesFromCSV("Race.csv")
 	case "status":
+		if err := preflightEffectCSVs([]effectCSVSource{{"status", "Status.csv", "key"}}); err != nil {
+			return err
+		}
 		return seedStatusesFromCSV("Status.csv")
 	case "recipe":
 		return seedRecipesFromCSV("Recipe.csv")

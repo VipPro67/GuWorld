@@ -6,9 +6,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
+
+func validateDictionaryEffects(c *gin.Context, source, key string, raw json.RawMessage) bool {
+	issues := effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: source, Key: key})
+	if len(issues) == 0 {
+		return true
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": "Effect Block v2 không hợp lệ", "issues": issues})
+	return false
+}
+
+var emptyBlockEffects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
 
 // --- Constitution Dictionary Handlers ---
 
@@ -53,7 +65,10 @@ func AdminCreateConstitution(c *gin.Context) {
 		return
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{}`)
+		req.Effects = append(json.RawMessage(nil), emptyBlockEffects...)
+	}
+	if !validateDictionaryEffects(c, "constitution", req.Key, req.Effects) {
+		return
 	}
 	if req.Tier < 1 {
 		req.Tier = 1
@@ -78,6 +93,9 @@ func AdminUpdateConstitution(c *gin.Context) {
 	var req ConstitutionRow
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !validateDictionaryEffects(c, "constitution", key, req.Effects) {
 		return
 	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `UPDATE constitution_dictionary SET name = COALESCE(NULLIF($1,''), name), tier = $2, description = $3, effects = $4 WHERE key = $5`,
@@ -149,7 +167,10 @@ func AdminCreateRace(c *gin.Context) {
 		return
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{}`)
+		req.Effects = append(json.RawMessage(nil), emptyBlockEffects...)
+	}
+	if !validateDictionaryEffects(c, "race", req.Key, req.Effects) {
+		return
 	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO race_dictionary (key, name, description, effects) VALUES ($1, $2, $3, $4)`,
 		req.Key, req.Name, req.Description, req.Effects)
@@ -171,6 +192,9 @@ func AdminUpdateRace(c *gin.Context) {
 	var req RaceRow
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !validateDictionaryEffects(c, "race", key, req.Effects) {
 		return
 	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `UPDATE race_dictionary SET name = COALESCE(NULLIF($1,''), name), description = $2, effects = $3 WHERE key = $4`,
@@ -244,7 +268,10 @@ func AdminCreateStatus(c *gin.Context) {
 		return
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{}`)
+		req.Effects = append(json.RawMessage(nil), emptyBlockEffects...)
+	}
+	if !validateDictionaryEffects(c, "status", req.Key, req.Effects) {
+		return
 	}
 	if len(req.BlockedActions) == 0 {
 		req.BlockedActions = json.RawMessage(`[]`)
@@ -268,6 +295,9 @@ func AdminUpdateStatus(c *gin.Context) {
 	var req StatusDictRow
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !validateDictionaryEffects(c, "status", key, req.Effects) {
 		return
 	}
 	_, err := db.DB.ExecContext(c.Request.Context(), `UPDATE status_dictionary SET name = COALESCE(NULLIF($1,''), name), description = $2, effects = $3, default_duration_minutes = $4, blocked_actions = $5 WHERE key = $6`,

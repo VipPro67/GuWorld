@@ -17,7 +17,9 @@ const (
 	maxGuCatalogEffectBytes = 32 << 20
 )
 
-type guEffectPreviewRequest struct {
+type effectPreviewRequest struct {
+	Source  string          `json:"source"`
+	Key     string          `json:"key"`
 	Effects json.RawMessage `json:"effects" binding:"required"`
 }
 
@@ -26,7 +28,7 @@ func AdminValidateGuEffects(c *gin.Context) {
 		return
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxGuEffectPreviewBytes)
-	var req guEffectPreviewRequest
+	var req effectPreviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
@@ -37,12 +39,8 @@ func AdminValidateGuEffects(c *gin.Context) {
 		return
 	}
 
-	normalized, report, err := effectcatalog.NormalizeAndValidate(req.Effects)
-	response := gin.H{"valid": err == nil, "report": report}
-	if err == nil {
-		response["normalized_effects"] = json.RawMessage(normalized)
-	}
-	c.JSON(http.StatusOK, response)
+	issues := effectcatalog.ValidateBlockV2(req.Effects, effectcatalog.Location{Source: req.Source, Key: req.Key})
+	c.JSON(http.StatusOK, gin.H{"valid": len(issues) == 0, "schema_version": effectcatalog.BlockSchemaVersion, "issues": issues})
 }
 
 func AdminAuditGuEffects(c *gin.Context) {
@@ -83,4 +81,54 @@ func AdminAuditGuEffects(c *gin.Context) {
 		"generated_at": time.Now().UTC(),
 		"report":       effectcatalog.ValidateGuCatalog(entries),
 	})
+}
+
+// AdminAuditEffectCatalog validates every effect-bearing dictionary through
+// the same block-v2 contract used by write and CSV boundaries.
+func AdminAuditEffectCatalog(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	type query struct{ source, sql string }
+	queries := []query{
+		{"gu", `SELECT id || ':' || rank::text, effects FROM gu_dictionary ORDER BY id, rank`},
+		{"item", `SELECT id, effects FROM item_dictionary ORDER BY id`},
+		{"race", `SELECT key, effects FROM race_dictionary WHERE key != '' ORDER BY key`},
+		{"constitution", `SELECT key, effects FROM constitution_dictionary WHERE key != '' ORDER BY key`},
+		{"status", `SELECT key, effects FROM status_dictionary ORDER BY key`},
+	}
+	issues := make([]effectcatalog.ValidationIssue, 0)
+	entries := 0
+	for _, q := range queries {
+		rows, err := db.DB.QueryContext(c.Request.Context(), q.sql)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc effect catalog: " + err.Error()})
+			return
+		}
+		row := 0
+		for rows.Next() {
+			row++
+			var key string
+			var raw []byte
+			if err := rows.Scan(&key, &raw); err != nil {
+				rows.Close()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			entries++
+			issues = append(issues, effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: q.source, Row: row, Key: key})...)
+			if entries > maxGuCatalogEntries || len(issues) > maxGuCatalogEntries {
+				rows.Close()
+				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "Effect catalog vượt giới hạn audit an toàn"})
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		rows.Close()
+	}
+	c.JSON(http.StatusOK, gin.H{"schema_version": effectcatalog.BlockSchemaVersion, "source": "database", "generated_at": time.Now().UTC(), "valid": len(issues) == 0, "entries": entries, "issues": issues})
 }

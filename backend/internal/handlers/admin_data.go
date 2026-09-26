@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -9,11 +10,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
+
+func writeImportError(c *gin.Context, prefix string, err error) {
+	var validation *effectcatalog.ValidationError
+	if errors.As(err, &validation) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": prefix, "issues": validation.Issues})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": prefix + ": " + err.Error()})
+}
 
 // AdminImportData seeds all dictionary tables from CSV files.
 // POST /api/admin/data/import
@@ -24,7 +35,7 @@ func AdminImportData(c *gin.Context) {
 	}
 
 	if err := db.SeedFromCSV(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Import thất bại: " + err.Error()})
+		writeImportError(c, "Import thất bại", err)
 		return
 	}
 
@@ -106,7 +117,7 @@ func AdminImportTable(c *gin.Context) {
 	table := c.Param("table")
 
 	if err := db.TableImport(table); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Import bảng " + table + " thất bại: " + err.Error()})
+		writeImportError(c, "Import bảng "+table+" thất bại", err)
 		return
 	}
 
