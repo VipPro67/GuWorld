@@ -118,3 +118,15 @@ npm run build
 - Component/view gameplay thay đổi: cập nhật `PROJECT.md` và `WIKI.md` nếu ảnh hưởng người chơi.
 - CSV/schema thay đổi: cập nhật `docs/GAME_DATA.md`.
 - Lệnh chạy/env thay đổi: cập nhật tài liệu này và README tương ứng.
+
+## Effect catalog Block v2 migration
+
+Stop the backend, then run `cd backend && go run ./cmd/migrate_effect_catalog`.
+The command snapshots all seven effect owners, rejects hash conflicts and unsafe
+legacy conversions, and commits the backfill in one serializable transaction.
+Restart the backend after success; the migration deliberately does not hot-swap
+registries. Restore the exact stored payloads with
+`go run ./cmd/migrate_effect_catalog -rollback <revision>`.
+In a later rollout, after every process has restarted on the validated catalog,
+install the block-only checks with
+`go run ./cmd/migrate_effect_catalog -install-constraints`.

@@ -506,6 +506,12 @@ gán nhầm provenance CSV. Matrix vẫn giữ chúng để migration không b�
 
 ### Envelope duy nhất
 
+Mỗi effect owner lưu `schema_version`, `catalog_revision` và SHA-256
+`content_hash`. `effect_catalog_snapshots` giữ nguyên JSON cùng metadata trước
+migration để rollback chính xác. Constraint block-only được cài `NOT VALID`;
+chỉ validate ở rollout sau khi backfill xác nhận không còn legacy/conflict. CSV
+không được coi là mới hơn row đã được admin sửa trong DB.
+
 Mọi definition mới (Gu, item, race, constitution, status effect, killer move và
 aperture variant event) dùng đúng một root, không có sibling `active`, `passive`,
 `growth`, `other`, `support`, `house`, `explore` hay `refinement`:

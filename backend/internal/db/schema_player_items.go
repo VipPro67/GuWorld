@@ -101,7 +101,7 @@ func schemaPlayerItems() error {
 		defense_value DOUBLE PRECISION NOT NULL DEFAULT 0,
 		cooldown INTEGER NOT NULL DEFAULT 0,
 		channel_time INTEGER NOT NULL DEFAULT 1,
-		effects JSONB NOT NULL DEFAULT '{}',
+		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}',
 		is_mastered BOOLEAN NOT NULL DEFAULT FALSE,
 		is_reliable BOOLEAN NOT NULL DEFAULT FALSE,
 		is_instant_cast BOOLEAN NOT NULL DEFAULT FALSE,
@@ -109,6 +109,9 @@ func schemaPlayerItems() error {
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
+		return err
+	}
+	if err := effectCatalogColumns("killer_moves"); err != nil {
 		return err
 	}
 	if err := execSchema("killer_moves_player_path_idx", `
