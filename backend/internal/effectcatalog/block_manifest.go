@@ -33,13 +33,13 @@ var OperationCatalog = map[string]OperationDefinition{
 	"SHIELD":    {values("FLAT", "MULTIPLIER"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "turns"), []string{"value"}, true, false},
 	"HEAL":      {values("FLAT", "PERCENT", "LIFESTEAL", "RESOURCE"), anyTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "resource"), []string{"value"}, true, false},
 	"DIRECT_HP": {values("FLAT", "MAX_HP_PERCENT", "SHIELD_STRIP"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit"), []string{"value"}, true, false},
-	"STAT_MOD":  {values("ADD_FLAT", "MULTIPLY_PERCENT", "SET"), anyTriggers, combatTargets, values("op", "sub_type", "target", "stat", "value", "unit", "turns", "stack_policy"), []string{"stat", "value"}, false, false},
+	"STAT_MOD":  {values("ADD_FLAT", "MULTIPLY_PERCENT", "SET", "GROWTH_CAP"), anyTriggers, combatTargets, values("op", "sub_type", "target", "stat", "value", "unit", "turns", "stack_policy"), []string{"stat", "value"}, false, false},
 	"STATUS":    {nil, combatTriggers, combatTargets, values("op", "target", "status_id", "value", "turns", "chance", "stack_policy"), []string{"status_id", "turns", "chance"}, true, false},
 	"BARRIER":   {values("FLAT", "PERCENT"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "turns", "stack_policy"), []string{"value", "turns"}, true, false},
 	"CLEANSE":   {values("ALL", "DEBUFF", "STATUS"), anyTriggers, combatTargets, values("op", "sub_type", "target", "status_id"), nil, true, false},
 	"UNIQUE":    {nil, anyTriggers, combatTargets, values("op", "target", "code", "params"), []string{"code"}, false, false},
 }
-var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "ACCURACY", "EVASION", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL")
+var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "ACCURACY", "EVASION", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL", "MOVEMENT", "INVESTIGATION", "REFINE_MANA_TIER", "STORAGE")
 var ResourceCatalog = values("HP", "MANA", "SOUL", "THOUGHT", "APTITUDE", "LIFESPAN", "STRESS", "PRIMEVAL_STONE", "IMMORTAL_STONE")
 var StatusCatalog = values("BLEED", "POISON", "BURN", "FEAR", "CONFUSE", "STEALTH", "SLEEP", "BLIND", "CHARM", "BIND", "FORGET_EGO", "FORGET_REALITY", "SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "REGEN", "ATK_UP", "DEF_UP", "THORNS", "TAUNT", "HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "REVIVE_LOCK", "ESSENCE_LEAK", "GU_SEAL", "SOUL_WOUND", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH", "STUN", "FREEZE", "SILENCE", "ROOT", "CONFUSION", "DECAY")
 var UnitCatalog = values("FLAT", "PERCENT", "RATIO", "POINTS")
@@ -114,4 +114,6 @@ func init() {
 	register("BEFORE_HIT", "FIRST_TURN_EVADE")
 	register("COMBAT_PASSIVE", "DOUBLE_DAMAGE_DEALT")
 	register("CAPABILITY", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK")
+	register("CAPABILITY", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")
+	register("ON_TICK", "GROWTH_DURATION_HOURS")
 }

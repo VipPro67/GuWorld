@@ -323,6 +323,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			admin.POST("/gu-effects/validate", handlers.AdminValidateGuEffects)
 			admin.GET("/gu-effects/audit", handlers.AdminAuditGuEffects)
 			admin.POST("/effect-catalog/validate", handlers.AdminValidateGuEffects)
+			admin.GET("/effect-catalog/metadata", handlers.AdminEffectCatalogMetadata)
 			admin.GET("/effect-catalog/audit", handlers.AdminAuditEffectCatalog)
 			admin.POST("/gu-dictionary", handlers.AdminCreateGuItem)
 			admin.PUT("/gu-dictionary/:id", handlers.AdminUpdateGuItem)

@@ -1,4 +1,9 @@
 
+import type { EffectEnvelope } from "@/lib/effect-blocks";
+export type { EffectBlock as ComposableEffectBlock, EffectOperation as AtomicOperation, EffectTarget as TargetScope, EffectCondition } from "@/lib/effect-blocks";
+
+/* Legacy declarations below are retained only temporarily for API compatibility.
+ * New UI code must consume EffectEnvelope and selectors from effect-blocks. */
 // One apply_status entry: a statusfx status with optional intensity/duration.
 // The backend accepts a legacy string, a single object, or an array of these.
 export interface StatusApplication {
@@ -109,47 +114,12 @@ export interface GrowthEffect {
   hours_to_max?: number;
 }
 
-export interface TargetScope {
-  selector?: string;
-  bypass_frontline?: boolean;
-}
-
-export interface EffectCondition {
-  field: string;
-  operator: string;
-  value: number;
-}
-
-export interface AtomicOperation {
-  op: string;
-  sub_type?: string;
-  target?: TargetScope;
-  value?: number;
-  turns?: number;
-  chance?: number;
-  path?: string;
-  status_id?: string;
-  stat?: string;
-  code?: string;
-  params?: Record<string, ApiResponseData>;
-}
-
-export interface ComposableEffectBlock {
-  id?: string;
-  trigger: string;
-  target?: TargetScope;
-  conditions?: EffectCondition[];
-  operations: AtomicOperation[];
-}
-
-export interface GuEffects {
-  blocks?: ComposableEffectBlock[] | null;
-  active?: ActiveEffect | null;
-  passive?: PassiveEffect | null;
-  growth?: GrowthEffect | null;
+/** @deprecated Read-only compatibility for catalogs not migrated by the data job yet. */
+export type GuEffects = EffectEnvelope & {
+  active?: ActiveEffect | null; passive?: PassiveEffect | null; growth?: GrowthEffect | null;
+  support?: Record<string, ApiResponseData> | null; house?: Record<string, ApiResponseData> | null;
   other?: SpecialMechanic[] | null;
-  [key: string]: ApiResponseData;
-}
+};
 
 export interface GuDictionaryItem {
   id: string;
@@ -201,7 +171,7 @@ export interface ItemSpec {
   rarity?: number;
   rank?: number;
   path?: string;
-  effects?: Record<string, number>;
+  effects?: EffectEnvelope;
   tags?: string[];
   description: string;
   base_price?: number;

@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
-import type { RequiredGus, ComposableEffectBlock } from "@/lib/gu-dict";
+import type { RequiredGus } from "@/lib/gu-dict";
+import type { EffectEnvelope } from "@/lib/effect-blocks";
+import { manaRegenPerTick } from "@/lib/effect-blocks";
 import type { EffectDictionaryEntry } from "@/lib/effects";
 import { useUIStore } from "@/store/useUIStore";
 import { wsManager } from "@/lib/websocket";
@@ -420,13 +422,8 @@ const manaRegenTickPerHour = (player: Player, guDictionary: Record<string, GuSpe
   for (const gu of player.gu_inventory) {
     if (!gu.equipped || gu.status !== "ACTIVE") continue;
     const spec = guSpecFor(gu.gu_id, gu.rank);
-    if (!spec || !spec.effects?.other) continue;
-    for (const mech of spec.effects.other) {
-      if (mech.event_trigger !== "ON_TICK" || mech.action_code !== "MANA_REGEN_TICK") continue;
-      let val = mech.params?.value;
-      if (typeof val !== "number" || val <= 0) val = 0.5;
-      total += val * manaRegenTickFactor(player.rank, gu.rank);
-    }
+    if (!spec) continue;
+    total += manaRegenPerTick(spec.effects) * manaRegenTickFactor(player.rank, gu.rank);
   }
   return total;
 };
@@ -761,27 +758,14 @@ export interface GroundDrop {
 }
 
 
-export interface SpecialMechanic {
-  event_trigger: string;
-  action_code: string;
-  params: Record<string, ApiResponseData>;
-}
-
-export interface GuEffects {
-  active?: Record<string, ApiResponseData>;
-  support?: Record<string, ApiResponseData>;
-  passive?: Record<string, ApiResponseData>;
-  house?: Record<string, ApiResponseData>;
-  growth?: {
-    max_attack?: number;
-    max_defense?: number;
-    max_hp?: number;
-    max_speed?: number;
-    hours_to_max?: number;
-  };
-  other?: SpecialMechanic[];
-  blocks?: ComposableEffectBlock[] | null;
-}
+/** @deprecated Legacy members remain read-only until every checked-in catalog is migrated. */
+export type GuEffects = EffectEnvelope & {
+  active?: Record<string, ApiResponseData>; support?: Record<string, ApiResponseData>;
+  passive?: Record<string, ApiResponseData>; house?: Record<string, ApiResponseData>;
+  growth?: { max_attack?: number; max_defense?: number; max_hp?: number; max_speed?: number; hours_to_max?: number };
+  other?: Array<{ event_trigger: string; action_code: string; params: Record<string, ApiResponseData> }>;
+  heal_aperture?: number;
+};
 
 export interface GuSpec {
   id: string;
@@ -813,7 +797,7 @@ export interface ItemSpec {
   rarity?: number;
   rank?: number;
   path?: string;
-  effects?: Record<string, number>;
+  effects?: EffectEnvelope;
   tags?: string[];
   description: string;
   base_price?: number;

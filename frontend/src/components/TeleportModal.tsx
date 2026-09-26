@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { canCreatePortal, usesRandomPortal } from "@/lib/effect-blocks";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 
@@ -38,12 +39,12 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   // Filter Portal Gu
   const portalGus = player?.gu_inventory?.filter((gu) => {
     const spec = guSpecFor(gu.gu_id, gu.rank);
-    return gu.equipped && gu.status === "ACTIVE" && (spec?.effects?.active?.portal_create === true || spec?.effects?.active?.random_portal === true);
+    return gu.equipped && gu.status === "ACTIVE" && (canCreatePortal(spec?.effects) || usesRandomPortal(spec?.effects));
   }) ?? [];
   const [selectedGu, setSelectedGu] = useState<string>("");
   const activeGu = player?.gu_inventory?.find(g => g.instance_id === selectedGu);
   const activeSpec = activeGu ? guSpecFor(activeGu.gu_id, activeGu.rank) : null;
-  const isRandomPortal = activeSpec?.effects?.active?.random_portal === true;
+  const isRandomPortal = usesRandomPortal(activeSpec?.effects);
 
   useEffect(() => {
     if (portalGus.length > 0 && !selectedGu) {
