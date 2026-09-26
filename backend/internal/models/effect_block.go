@@ -96,7 +96,10 @@ type ComposableEffectBlock struct {
 
 // CompileLegacyToBlocks converts legacy ActiveEffect, PassiveEffect, and SpecialMechanic
 // into a standardized slice of ComposableEffectBlock.
-func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other []SpecialMechanic) []ComposableEffectBlock {
+// compileLegacyPrototype is retained only for the original prototype tests.
+// Production conversion uses effect_legacy_adapter.go and the typed gameplay
+// effects package so there is exactly one public legacy adapter.
+func compileLegacyPrototype(active *ActiveEffect, passive *PassiveEffect, other []SpecialMechanic) []ComposableEffectBlock {
 	var blocks []ComposableEffectBlock
 
 	// 1. Passive Stats -> ALWAYS_ON Block
