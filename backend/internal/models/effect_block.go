@@ -69,17 +69,20 @@ const (
 
 // AtomicOperation is a single granular action within a ComposableEffectBlock.
 type AtomicOperation struct {
-	Op       AtomicOpType    `json:"op"`
-	SubType  string          `json:"sub_type,omitempty"`
-	Target   *TargetScope    `json:"target,omitempty"`
-	Value    float64         `json:"value,omitempty"`
-	Turns    int             `json:"turns,omitempty"`
-	Chance   float64         `json:"chance,omitempty"`
-	Path     string          `json:"path,omitempty"`
-	StatusID string          `json:"status_id,omitempty"`
-	Stat     string          `json:"stat,omitempty"`
-	Code     string          `json:"code,omitempty"`
-	Params   json.RawMessage `json:"params,omitempty"`
+	Op          AtomicOpType    `json:"op"`
+	SubType     string          `json:"sub_type,omitempty"`
+	Target      *TargetScope    `json:"target,omitempty"`
+	Value       float64         `json:"value,omitempty"`
+	Unit        string          `json:"unit,omitempty"`
+	Turns       int             `json:"turns,omitempty"`
+	Chance      float64         `json:"chance,omitempty"`
+	Path        string          `json:"path,omitempty"`
+	StatusID    string          `json:"status_id,omitempty"`
+	Stat        string          `json:"stat,omitempty"`
+	Resource    string          `json:"resource,omitempty"`
+	StackPolicy string          `json:"stack_policy,omitempty"`
+	Code        string          `json:"code,omitempty"`
+	Params      json.RawMessage `json:"params,omitempty"`
 }
 
 // ComposableEffectBlock bundles an Event-Condition-Action (ECA) unit.
@@ -131,7 +134,7 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 		}
 		if len(passOps) > 0 {
 			blocks = append(blocks, ComposableEffectBlock{
-				ID:         "legacy_passive_stats",
+				ID:         "LEGACY_PASSIVE_STATS",
 				Trigger:    TriggerAlwaysOn,
 				Target:     TargetScope{Selector: TargetSelf},
 				Operations: passOps,
@@ -296,7 +299,7 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 
 		if len(actOps) > 0 {
 			blocks = append(blocks, ComposableEffectBlock{
-				ID:         "legacy_active_action",
+				ID:         "LEGACY_ACTIVE_ACTION",
 				Trigger:    TriggerOnAction,
 				Target:     TargetScope{Selector: selector, BypassFrontline: active.CurveAttack},
 				Operations: actOps,
