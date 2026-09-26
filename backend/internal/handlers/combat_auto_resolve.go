@@ -425,13 +425,10 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		Defense:    def,
 		ManaCost:   cost,
 	}
-	for _, mechanic := range spec.Effects.Other {
-		if mechanic.EventTrigger == "ON_CAST" || mechanic.EventTrigger == "ON_HIT" {
-			act.Mechanics = append(act.Mechanics, simulator.CombatMechanic{
-				Trigger: mechanic.EventTrigger, ActionCode: mechanic.ActionCode, Params: append([]byte(nil), mechanic.Params...),
-			})
-		}
+	if compiled := spec.Effects.Compiled(); compiled != nil {
+		act.CompiledOperations = compiled.CompileCombatAction().Operations
 	}
+	act.Mechanics = append(act.Mechanics, combatMechanicsForSpec(*spec, true)...)
 
 	if actor.Rank < spec.Rank {
 		act.BacklashDamage = gamefx.HigherRankHPCost(spec.Rank, actor.Rank, actor.MaxHP)
@@ -672,4 +669,21 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 
 	act.TargetType = "SINGLE"
 	return act
+}
+
+// combatMechanicsForSpec is the migration adapter. Registry-loaded definitions
+// always take the compiled path; the legacy fallback supports synthetic specs in
+// tests and can be removed with the legacy effect fields after parity.
+func combatMechanicsForSpec(spec models.GuDictionaryItem, action bool) []simulator.CombatMechanic {
+	if compiled := spec.Effects.Compiled(); compiled != nil {
+		return simulator.CompiledCombatMechanics(compiled, action)
+	}
+	var result []simulator.CombatMechanic
+	for _, mechanic := range spec.Effects.Other {
+		isAction := mechanic.EventTrigger == "ON_CAST" || mechanic.EventTrigger == "ON_HIT"
+		if isAction == action {
+			result = append(result, simulator.NewCombatMechanic(mechanic.EventTrigger, mechanic.ActionCode, mechanic.Params))
+		}
+	}
+	return result
 }

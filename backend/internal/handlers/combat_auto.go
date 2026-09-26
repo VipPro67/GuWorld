@@ -620,15 +620,7 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		if !ok {
 			continue
 		}
-		for _, mechanic := range spec.Effects.Other {
-			if mechanic.EventTrigger != "ON_CAST" && mechanic.EventTrigger != "ON_HIT" {
-				enemyMechanics = append(enemyMechanics, simulator.CombatMechanic{
-					Trigger:    mechanic.EventTrigger,
-					ActionCode: mechanic.ActionCode,
-					Params:     append([]byte(nil), mechanic.Params...),
-				})
-			}
-		}
+		enemyMechanics = append(enemyMechanics, combatMechanicsForSpec(spec, false)...)
 	}
 	simEnemy.Mechanics = enemyMechanics
 
@@ -880,11 +872,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		if !ok {
 			continue
 		}
-		for _, mechanic := range spec.Effects.Other {
-			if mechanic.EventTrigger != "ON_CAST" && mechanic.EventTrigger != "ON_HIT" {
-				combatantMechanics = append(combatantMechanics, simulator.CombatMechanic{Trigger: mechanic.EventTrigger, ActionCode: mechanic.ActionCode, Params: append([]byte(nil), mechanic.Params...)})
-			}
-		}
+		combatantMechanics = append(combatantMechanics, combatMechanicsForSpec(spec, false)...)
 	}
 
 	// Status suppression/enhancement factors scale the whole action output of

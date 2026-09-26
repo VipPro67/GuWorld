@@ -11,6 +11,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -200,7 +201,7 @@ type ActiveEffect struct {
 	LifeStealRate      float64 `json:"lifesteal_rate,omitempty"`
 	RefineManaTier     float64 `json:"refine_mana_tier,omitempty"`
 	DamageMult         float64 `json:"damage_mult,omitempty"`
-	ShieldMult          float64 `json:"shield_mult,omitempty"`
+	ShieldMult         float64 `json:"shield_mult,omitempty"`
 	CleansingPower     float64 `json:"cleansing_power,omitempty"`
 	SummonPhantom      bool    `json:"summon_phantom,omitempty"`
 	GenerateGu         bool    `json:"generate_gu,omitempty"`
@@ -220,14 +221,14 @@ type ActiveEffect struct {
 	SpeedBoostFlat   float64 `json:"speed_boost_flat,omitempty"`       // flat speed bonus
 
 	// Percent-based direct effects (0..1). Generic: any Gu may set them.
-	DamageHPPercent          float64 `json:"damage_hp_percent,omitempty"`          // % target MaxHP as direct HP damage (bypasses shield)
-	ShieldFlatReducePercent  float64 `json:"shield_flat_reduce_percent,omitempty"` // % target current shield stripped
-	DisableGuNextTurn        bool    `json:"disable_gu_next_turn,omitempty"`       // seal target Gu for 1 turn (GU_SEAL)
-	ForgetRealityChance      float64 `json:"forget_reality_chance,omitempty"`      // proc gate (0..1) for the action's status + bonus effects
-	SelfEvasionBoostPercent  float64 `json:"self_evasion_boost_percent,omitempty"` // self evasion buff (0..1)
-	TargetDamageReducePct    float64 `json:"target_damage_reduce_percent,omitempty"`
-	DamagePath               string  `json:"damage_path,omitempty"`      // overrides action dao path (e.g. "Dream Path")
-	StatBaseAttackFlat       float64 `json:"stat_base_attack,omitempty"` // flat bonus added to action damage
+	DamageHPPercent         float64 `json:"damage_hp_percent,omitempty"`          // % target MaxHP as direct HP damage (bypasses shield)
+	ShieldFlatReducePercent float64 `json:"shield_flat_reduce_percent,omitempty"` // % target current shield stripped
+	DisableGuNextTurn       bool    `json:"disable_gu_next_turn,omitempty"`       // seal target Gu for 1 turn (GU_SEAL)
+	ForgetRealityChance     float64 `json:"forget_reality_chance,omitempty"`      // proc gate (0..1) for the action's status + bonus effects
+	SelfEvasionBoostPercent float64 `json:"self_evasion_boost_percent,omitempty"` // self evasion buff (0..1)
+	TargetDamageReducePct   float64 `json:"target_damage_reduce_percent,omitempty"`
+	DamagePath              string  `json:"damage_path,omitempty"`      // overrides action dao path (e.g. "Dream Path")
+	StatBaseAttackFlat      float64 `json:"stat_base_attack,omitempty"` // flat bonus added to action damage
 
 	// Shorthand status effect fields — tier value (e.g. "freeze": 1 = speed T1)
 	// Normalized to ApplyStatus + StatusDurationTicks during loading.
@@ -272,12 +273,12 @@ type PassiveEffect struct {
 
 	// Conditional path counters (0..1 damage reduction when the attacker's
 	// Gu path matches; resolved by Gu path, e.g. "Heaven Path" → "heaven").
-	AntiHeavenPct            float64 `json:"anti_heaven_damage_reduction_percent,omitempty"`
-	AntiEarthPct             float64 `json:"anti_earth_damage_reduction_percent,omitempty"`
-	AntiDreamPct             float64 `json:"anti_dream_damage_reduction_percent,omitempty"`
-	ImmuneDreamStatus        bool    `json:"immune_dream_status,omitempty"` // immune to dream-path statuses
-	ForgetHeavenProtection   bool    `json:"forget_heaven_protection,omitempty"`
-	ForgetEarthProtection    bool    `json:"forget_earth_protection,omitempty"`
+	AntiHeavenPct          float64 `json:"anti_heaven_damage_reduction_percent,omitempty"`
+	AntiEarthPct           float64 `json:"anti_earth_damage_reduction_percent,omitempty"`
+	AntiDreamPct           float64 `json:"anti_dream_damage_reduction_percent,omitempty"`
+	ImmuneDreamStatus      bool    `json:"immune_dream_status,omitempty"` // immune to dream-path statuses
+	ForgetHeavenProtection bool    `json:"forget_heaven_protection,omitempty"`
+	ForgetEarthProtection  bool    `json:"forget_earth_protection,omitempty"`
 }
 
 type SpecialMechanic struct {
@@ -295,19 +296,49 @@ type GrowthEffect struct {
 }
 
 type GuEffects struct {
-	Blocks  []ComposableEffectBlock `json:"blocks,omitempty"`
-	Active  *ActiveEffect           `json:"active"`
-	Passive *PassiveEffect          `json:"passive"`
-	Growth  *GrowthEffect           `json:"growth,omitempty"`
-	Other   []SpecialMechanic       `json:"other"`
+	Blocks   []gameplayeffects.Block `json:"blocks,omitempty"`
+	compiled *gameplayeffects.Compiled
+	Active   *ActiveEffect     `json:"active"`
+	Passive  *PassiveEffect    `json:"passive"`
+	Growth   *GrowthEffect     `json:"growth,omitempty"`
+	Other    []SpecialMechanic `json:"other"`
 }
 
-// GetBlocks returns the explicit Blocks if present, or compiles them on the fly from legacy fields.
-func (g *GuEffects) GetBlocks() []ComposableEffectBlock {
-	if len(g.Blocks) > 0 {
-		return g.Blocks
+// GetBlocks exposes authoring definitions for migration tooling. Runtime callers use
+// Compiled, which is materialized during registry loading.
+func (g *GuEffects) GetBlocks() []gameplayeffects.Block {
+	blocks := g.Blocks
+	if len(blocks) == 0 {
+		blocks = CompileLegacyToBlocks(g.Active, g.Passive, g.Other)
 	}
-	return CompileLegacyToBlocks(g.Active, g.Passive, g.Other)
+	result := append([]gameplayeffects.Block(nil), blocks...)
+	for i := range result {
+		result[i].Conditions = append([]gameplayeffects.Condition(nil), blocks[i].Conditions...)
+		result[i].Operations = append([]gameplayeffects.Operation(nil), blocks[i].Operations...)
+		for j := range result[i].Operations {
+			result[i].Operations[j].Params = append([]byte(nil), blocks[i].Operations[j].Params...)
+			if blocks[i].Operations[j].Target != nil {
+				target := *blocks[i].Operations[j].Target
+				result[i].Operations[j].Target = &target
+			}
+		}
+	}
+	return result
+}
+
+func (g *GuEffects) Compiled() *gameplayeffects.Compiled { return g.compiled }
+
+func (g *GuEffects) compile() error {
+	blocks := g.Blocks
+	if len(blocks) == 0 {
+		blocks = CompileLegacyToBlocks(g.Active, g.Passive, g.Other)
+	}
+	compiled, err := (gameplayeffects.Compiler{}).Compile(blocks)
+	if err != nil {
+		return err
+	}
+	g.compiled = compiled
+	return nil
 }
 
 type GuDictionaryItem struct {
@@ -427,6 +458,9 @@ func (g *GuEffects) Scan(value interface{}) error {
 	}
 	if g.Other == nil {
 		g.Other = []SpecialMechanic{}
+	}
+	if err := g.compile(); err != nil {
+		return fmt.Errorf("compile Gu effects: %w", err)
 	}
 	return nil
 }

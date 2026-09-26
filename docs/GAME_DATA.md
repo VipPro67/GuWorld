@@ -1127,3 +1127,21 @@ Bảng `teleport_arrays` lưu các thực thể trận pháp do người chơi v
 - **Quyền truy cập:** `PUBLIC` (Toàn server), `SECT` (Thành viên Tông Môn), `PERSONAL` (Chỉ chủ sở hữu).
 - **Phí dịch chuyển & Két sắt:** Chủ sở hữu cấu hình bật/tắt thu phí và mức giá vé. Khi có người sử dụng, 95% phí được tích lũy vào Két Sắt Trận Pháp (`vault_balance`) để chủ sở hữu đến rút, 5% hao tán theo quy luật trời đất.
 - **Bảo trì & Thu hồi:** Tiêu hao Nguyên Thạch để sửa chữa hồi phục độ bền. Khi thu hồi (Dismantle), hoàn trả 50% chi phí xây dựng ban đầu (nhân theo tỉ lệ % độ bền còn lại) và tự động chuyển toàn bộ số dư Két Sắt về túi nhân vật.
+
+### Compiled effect runtime
+
+`effects.blocks` is authored as JSON but is compiled once when a Gu definition is
+loaded. The immutable runtime representation lives in
+`backend/internal/gameplay/effects`; gameplay loops must query that representation
+instead of parsing JSON or dispatching unregistered strings. The compiler validates
+the authoritative trigger, selector, condition, operation, stat/resource, and native
+mechanic vocabularies. Status IDs and semantics remain authoritative in `statusfx`;
+a `STATUS` operation becomes a `statusfx.StatusOp` with an explicit value unit,
+chance, and turn duration.
+
+Effect evaluation is pure and returns domain commands. Handlers/workers remain the
+orchestrators and must apply any database-changing command through their existing
+transaction. Runtime execution contexts carry deterministic RNG, actor/target
+snapshots, rank, mastery, Dao marks, paths, and catalog revision, and enforce event,
+trigger-depth, repeat, and summon budgets. During migration, compiled combat
+operations are attached to `simulator.SimAction` alongside its legacy fields.
