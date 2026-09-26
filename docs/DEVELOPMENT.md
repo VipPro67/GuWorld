@@ -1,5 +1,12 @@
 # Development Guide
 
+## Auditing legacy effect data
+
+Run `go run ./cmd/migrate_gu_effects -format gu -source data/Gu.csv` from
+`backend/` for a non-destructive JSON audit. Candidate files are only written
+when both `-write` and a non-source `-output` path are supplied. See
+`docs/GAME_DATA.md` for report fields and the migration gate.
+
 ## Prerequisites
 
 - Go theo `backend/go.mod`.

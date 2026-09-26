@@ -1,5 +1,35 @@
 # Game Data
 
+## Effect block migration audit
+
+Legacy effects are converted by format, not through a shared best-effort
+decoder. Formats are `gu`, `item`, `gamefx`, `killer_move`, and
+`aperture_variant_event`. Gu conversion separately audits `active`, `passive`,
+`growth`, `other`, `explore`, `support`, `refinement`, and `house`; unknown or
+context-dependent semantics are reported rather than guessed.
+
+```bash
+cd backend
+go run ./cmd/migrate_gu_effects -format gu -source data/Gu.csv > effect-audit.json
+go run ./cmd/migrate_gu_effects -format item -source data/Item.csv \
+  -write -output /tmp/Item.blocks.csv -report /tmp/item-audit.json
+```
+
+The command is a dry-run by default. `-write` requires a distinct `-output`
+path and refuses to overwrite its source. Reports contain `converted`,
+`exact_parity`, `unsupported`, `ambiguous`, `duplicate`,
+`divergent_explicit_block_legacy`, and `suggested_mapping` arrays.
+
+Migration remains in the `audit` phase until coverage is 100%, every problem
+array is empty, and `shadow_mismatch_count` is zero for the approved
+fixture/snapshot set. Aperture variant event effects currently have no runtime
+semantic contract, so their converter deliberately reports them as ambiguous.
+
+Backend shadow comparison is opt-in with `EFFECT_BLOCK_SHADOW=1`. The legacy
+result remains authoritative; block evaluation runs synchronously against pure
+snapshots, never receives an effect applicator, and only emits structured
+`effect_block_shadow_mismatch` records.
+
 Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 
 ## CSV gameplay files

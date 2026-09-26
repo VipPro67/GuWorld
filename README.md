@@ -1,5 +1,10 @@
 # GuWorld
 
+Effect migration is non-destructive by default. From `backend/`, run
+`go run ./cmd/migrate_gu_effects -format gu -source data/Gu.csv` to produce a
+machine-readable audit without changing CSV data. See `docs/GAME_DATA.md` for
+format-specific conversion and migration-gate rules.
+
 GuWorld là web game RPG text-based lấy cảm hứng từ hệ thống tu luyện/Cổ trùng. Codebase hiện tại gồm:
 
 - **Backend:** Go + Gin, PostgreSQL, Redis (bắt buộc), JWT/cookie auth.

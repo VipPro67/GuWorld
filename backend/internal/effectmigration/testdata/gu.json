@@ -1,0 +1,1 @@
+{"active":{"damage_flat":12,"target_selector":"TARGET"},"passive":{"movement":2},"growth":{"max_hp":20,"hours_to_max":4},"other":[{"event_trigger":"CAPABILITY","action_code":"DISGUISE","params":{"level":1}}]}
