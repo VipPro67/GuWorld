@@ -12,13 +12,16 @@ func schemaDictionaries() error {
 		name VARCHAR(100) NOT NULL,
 		item_type VARCHAR(50) NOT NULL,
 		rank INTEGER DEFAULT 1,
-		effects JSONB NOT NULL DEFAULT '{}',
+		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}',
 		description TEXT,
 		base_price NUMERIC(30,3) NOT NULL DEFAULT 0,
 		image_url TEXT NOT NULL DEFAULT '',
 		rarity INTEGER NOT NULL DEFAULT 0,
 		path VARCHAR(50) NOT NULL DEFAULT ''
 	);`); err != nil {
+		return err
+	}
+	if err := effectCatalogColumns("item_dictionary"); err != nil {
 		return err
 	}
 
@@ -40,7 +43,7 @@ func schemaDictionaries() error {
 		path JSONB NOT NULL DEFAULT '[]'::jsonb,
 		gu_type VARCHAR(50) NOT NULL,
 		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
-		effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}',
+		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}',
 		hunger_rate INTEGER NOT NULL,
 		food_types JSONB NOT NULL DEFAULT '[]',
 		max_hunger INTEGER DEFAULT 100,
@@ -58,6 +61,9 @@ func schemaDictionaries() error {
 	);`); err != nil {
 		return err
 	}
+	if err := effectCatalogColumns("gu_dictionary"); err != nil {
+		return err
+	}
 	if err := execSchema("gu_dictionary_price_decimal_upgrade", `
 	ALTER TABLE gu_dictionary ALTER COLUMN base_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(base_price, 0)::NUMERIC, 3);
 	`); err != nil {
@@ -69,8 +75,11 @@ func schemaDictionaries() error {
     tier INTEGER NOT NULL DEFAULT 0,
 		key VARCHAR(100) PRIMARY KEY,
 		name VARCHAR(200) NOT NULL,
-		effects JSONB NOT NULL DEFAULT '{}'
+		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}'
 	);`); err != nil {
+		return err
+	}
+	if err := effectCatalogColumns("constitution_dictionary"); err != nil {
 		return err
 	}
 
@@ -78,8 +87,11 @@ func schemaDictionaries() error {
 	CREATE TABLE IF NOT EXISTS race_dictionary (
 		key VARCHAR(100) PRIMARY KEY,
 		name VARCHAR(200) NOT NULL,
-		effects JSONB NOT NULL DEFAULT '{}'
+		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}'
 	);`); err != nil {
+		return err
+	}
+	if err := effectCatalogColumns("race_dictionary"); err != nil {
 		return err
 	}
 
@@ -90,11 +102,14 @@ func schemaDictionaries() error {
 	CREATE TABLE IF NOT EXISTS status_dictionary (
 		key VARCHAR(100) PRIMARY KEY,
 		name VARCHAR(200) NOT NULL,
-		effects JSONB NOT NULL DEFAULT '{}',
+		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}',
 		default_duration_minutes INTEGER NOT NULL DEFAULT 0,
 		blocked_actions JSONB NOT NULL DEFAULT '[]',
 		description TEXT NOT NULL DEFAULT ''
 	);`); err != nil {
+		return err
+	}
+	if err := effectCatalogColumns("status_dictionary"); err != nil {
 		return err
 	}
 

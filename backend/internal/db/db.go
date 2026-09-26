@@ -112,6 +112,7 @@ func InitSchema() error {
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
 		{"aperture", schemaAperture},
+		{"effect_catalog_migration", schemaEffectCatalogMigration},
 		{"combat", schemaCombat},
 		{"trade", schemaTrade},
 		{"social", schemaSocial},
@@ -676,6 +677,7 @@ func seedGusFromCSV(filename string) error {
 	supportTagsIdx := col("support_tags")
 	basePriceIdx := col("base_price")
 	imageURLIdx := col("image_url")
+	targetTypeIdx := col("target_type")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
@@ -806,8 +808,8 @@ func seedGusFromCSV(filename string) error {
 			}
 		}
 
-		targetType := "SINGLE"
-		if effMap != nil {
+		targetType := strings.ToUpper(get(row, targetTypeIdx))
+		if targetType == "" && effMap != nil {
 			if _, ok := effMap["aoe_row"]; ok {
 				targetType = "ROW"
 			} else if _, ok := effMap["aoe_col"]; ok {
@@ -819,6 +821,9 @@ func seedGusFromCSV(filename string) error {
 			} else if _, ok := effMap["aoe"]; ok {
 				targetType = "ALL"
 			}
+		}
+		if targetType == "" {
+			targetType = "SINGLE"
 		}
 
 		_, err := DB.Exec(`
@@ -2750,28 +2755,28 @@ func ExportToCSV() error {
 	exports := []exportDef{
 		{
 			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END FROM item_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Gu.csv",
-			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"schema_version":2,"blocks":[]}'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Constitution.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}') FROM constitution_dictionary ORDER BY key`,
 		},
 		{
 			filename: "Race.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}') FROM race_dictionary ORDER BY key`,
 		},
 		{
 			filename: "Status.csv",
 			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
 		},
 		{
 			filename: "Recipe.csv",
@@ -2918,27 +2923,27 @@ func TableExport(table string) error {
 		"item": {
 			filename: "Item.csv",
 			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
 		},
 		"gu": {
 			filename: "Gu.csv",
-			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"schema_version":2,"blocks":[]}'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		"constitution": {
 			filename: "Constitution.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}') FROM constitution_dictionary ORDER BY key`,
 		},
 		"race": {
 			filename: "Race.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}') FROM race_dictionary ORDER BY key`,
 		},
 		"status": {
 			filename: "Status.csv",
 			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'{"schema_version":2,"blocks":[]}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
 		},
 		"recipe": {
 			filename: "Recipe.csv",

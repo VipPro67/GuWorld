@@ -246,11 +246,14 @@ func schemaAperture() error {
 		race VARCHAR(50),
 		severity VARCHAR(20) NOT NULL DEFAULT 'LOW',
 		description TEXT,
-		effects JSONB NOT NULL DEFAULT '{}',
+		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}',
 		resolved BOOLEAN NOT NULL DEFAULT false,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		resolved_at TIMESTAMP WITH TIME ZONE
 	);`); err != nil {
+		return err
+	}
+	if err := effectCatalogColumns("aperture_variant_events"); err != nil {
 		return err
 	}
 	if err := execSchema("aperture_variant_events_aperture_idx", `
