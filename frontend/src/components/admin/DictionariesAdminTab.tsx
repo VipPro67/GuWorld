@@ -1,8 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Plus, RefreshCw, X, Shield, Activity, Users } from "lucide-react";
 import { AdminDataGrid, AdminGridColumn } from "./AdminDataGrid";
+import { GuEffectsEditor } from "./GuEffectsEditor";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const parseEffectsForEditor = (value: ApiResponseData) => {
+  if (typeof value !== "string") return value || { schema_version: 2, blocks: [] };
+  try { return JSON.parse(value); } catch { return { schema_version: 2, blocks: [] }; }
+};
 
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -167,10 +172,10 @@ export const DictionariesAdminTab: React.FC<{
               setIsNew(true);
               setEditItem(
                 type === "constitution"
-                  ? { key: "", name: "", tier: 1, description: "", effects: {} }
+                  ? { key: "", name: "", tier: 1, description: "", effects: { schema_version: 2, blocks: [] } }
                   : type === "race"
-                  ? { key: "", name: "", description: "", effects: {} }
-                  : { key: "", name: "", description: "", effects: {}, default_duration_minutes: 30, blocked_actions: [] }
+                  ? { key: "", name: "", description: "", effects: { schema_version: 2, blocks: [] } }
+                  : { key: "", name: "", description: "", effects: { schema_version: 2, blocks: [] }, default_duration_minutes: 30, blocked_actions: [] }
               );
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors cursor-pointer"
@@ -270,19 +275,12 @@ export const DictionariesAdminTab: React.FC<{
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-zinc-500 font-mono">Hiệu ứng (Effects JSON)</label>
-                <textarea
-                  value={
-                    typeof editItem.effects === "string"
-                      ? editItem.effects
-                      : JSON.stringify(editItem.effects, null, 2)
-                  }
-                  onChange={(e) => setEditItem({ ...editItem, effects: e.target.value })}
-                  rows={4}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 font-mono text-[11px] mt-1 focus:outline-none focus:border-amber-500/50"
-                />
-              </div>
+              <GuEffectsEditor
+                effects={parseEffectsForEditor(editItem.effects)}
+                source={type}
+                effectKey={editItem.key || "new"}
+                onChange={(effects) => setEditItem({ ...editItem, effects })}
+              />
             </div>
 
             <div className="flex gap-3 justify-end pt-2">

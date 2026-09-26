@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { operationsBy } from "@/lib/effect-blocks";
 import { useGameStore, ApertureResourceNode, TribulationEnemy } from "@/store/useGameStore";
 import {
   Shield,
@@ -980,7 +981,7 @@ return (
                       qty,
                       spec: itemDictionary[itemId],
                     }))
-                    .filter(item => item.spec && item.spec.effects && item.spec.effects.heal_aperture !== undefined);
+                    .filter(item => item.spec && operationsBy(item.spec.effects, { code: "HEAL_APERTURE" }).length > 0);
 
                   if (healingItems.length === 0) return null;
 
@@ -1019,7 +1020,7 @@ return (
                                     <div className="font-bold">{item.spec.name}</div>
                                     <div className="text-[10px] text-slate-400">Số lượng: {item.qty}</div>
                                   </div>
-                                  <div className="text-emerald-400 font-bold">+{item.spec.effects?.heal_aperture} HP</div>
+                                  <div className="text-emerald-400 font-bold">+{operationsBy(item.spec.effects, { code: "HEAL_APERTURE" })[0]?.value || 0} HP</div>
                                 </button>
                               ))}
                             </div>

@@ -4,12 +4,49 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 )
+
+func sortedEffectKeys[T any](values map[string]T) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// AdminEffectCatalogMetadata exposes the validator's catalogs so every admin
+// editor authors exactly the same vocabulary accepted by the backend.
+func AdminEffectCatalogMetadata(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	operations := make([]gin.H, 0, len(effectcatalog.OperationCatalog))
+	for _, name := range sortedEffectKeys(effectcatalog.OperationCatalog) {
+		definition := effectcatalog.OperationCatalog[name]
+		operations = append(operations, gin.H{
+			"name": name, "sub_types": sortedEffectKeys(definition.SubTypes),
+			"triggers": sortedEffectKeys(definition.Triggers), "targets": sortedEffectKeys(definition.Targets),
+			"allowed_fields": sortedEffectKeys(definition.Allowed), "required_fields": definition.Required,
+		})
+	}
+	nativeCodes := sortedEffectKeys(effectcatalog.NativeHooks)
+	c.JSON(http.StatusOK, gin.H{
+		"schema_version": effectcatalog.BlockSchemaVersion,
+		"triggers":       sortedEffectKeys(effectcatalog.TriggerCatalog), "targets": sortedEffectKeys(effectcatalog.TargetCatalog),
+		"operations": operations, "stats": sortedEffectKeys(effectcatalog.StatCatalog),
+		"statuses": sortedEffectKeys(effectcatalog.StatusCatalog), "resources": sortedEffectKeys(effectcatalog.ResourceCatalog),
+		"units": sortedEffectKeys(effectcatalog.UnitCatalog), "stack_policies": sortedEffectKeys(effectcatalog.StackPolicyCatalog),
+		"condition_fields": sortedEffectKeys(effectcatalog.ConditionFields), "condition_operators": sortedEffectKeys(effectcatalog.ConditionOperators),
+		"native_codes": nativeCodes,
+	})
+}
 
 const (
 	maxGuEffectPreviewBytes = 256 << 10

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { hasRefinementMechanic } from "@/lib/effect-blocks";
 import { GamePanel, GameCard } from "@/components/ui";
 // UI migrated to shared components
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
@@ -49,9 +50,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     if (gu.gu_id === "GU_THOUGHT_RECOVERY") return true;
     const spec = guSpecFor(gu.gu_id, gu.rank) || guDictionary[gu.gu_id];
     if (!spec) return false;
-    return spec.effects?.other?.some(
-      (eff) => eff.event_trigger === "ON_CONSUME" && eff.action_code === "RESTORE_MENTAL"
-    ) ?? false;
+    return hasRefinementMechanic(spec.effects, "RESTORE_MENTAL");
   });
 
   const handleQuickUseRestoreMental = async () => {

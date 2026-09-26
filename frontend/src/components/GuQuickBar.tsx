@@ -2,7 +2,7 @@
 
 import { useMemo, useEffect } from "react";
 import { guSpecFor, useGameStore, type GuInstance, type GuSpec } from "@/store/useGameStore";
-import { statusIds, statusValue } from "@/lib/gu-dict";
+import { canCreatePortal, operationsBy, usesRandomPortal } from "@/lib/effect-blocks";
 import { useWorldStore } from "@/store/useWorldStore";
 import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair } from "lucide-react";
 
@@ -33,62 +33,27 @@ export function GuQuickBar() {
       const spec = guSpecFor(gu.gu_id, gu.rank);
       if (!spec) continue;
 
-      const active = spec.effects?.active;
-      const other = spec.effects?.other;
-
+      const operations = operationsBy(spec.effects, { trigger: ["ON_ACTION", "ON_USE", "CAPABILITY"] });
       let type: GuSkillSlot["effectType"] | null = null;
       let label = "Kích hoạt";
       let isTargeted = false;
-
-      if (active) {
-        const ids = statusIds(active.apply_status);
-        if (active.heal_flat && active.heal_flat > 0) {
-          type = "heal";
-          label = `Hồi ${active.heal_flat} HP`;
-        } else if (ids.includes("REGEN")) {
-          type = "heal";
-          label = "Phục Sinh";
-        } else if (active.mana_regen && active.mana_regen > 0) {
-          type = "mana_regen";
-          label = `+${active.mana_regen} Mana`;
-        } else if (ids.includes("ATK_UP")) {
-          type = "buff_atk";
-          label = `+${statusValue(active.apply_status, "ATK_UP", active.status_tick_damage || 50)} ATK`;
-        } else if (ids.includes("DEF_UP")) {
-          type = "buff_def";
-          label = `+${statusValue(active.apply_status, "DEF_UP", active.status_tick_damage || 50)} DEF`;
-        } else if (ids.includes("SPEED_UP") || ids.includes("HASTE")) {
-          type = "buff_speed";
-          label = `+${statusValue(active.apply_status, "SPEED_UP", statusValue(active.apply_status, "HASTE", active.status_tick_damage || 20))} Tốc`;
-        } else if (active.shield_flat && active.shield_flat > 0) {
-          type = "shield";
-          label = `+${active.shield_flat} Khiên`;
-        } else if (active.portal_create) {
-          type = "teleport";
-          label = "Dịch Chuyển";
-          isTargeted = true;
-        } else if (active.random_portal) {
-          type = "teleport";
-          label = "Dịch Chuyển Ngẫu Nhiên";
-        } else {
-          // Fallback for general Active Gu effects
-          type = "utility";
-          if (active.damage_flat && active.damage_flat > 0) {
-            label = `${active.damage_flat} Dmg`;
-          } else {
-            label = "Kích hoạt";
-          }
-        }
-      }
-
-      if (!type && other && Array.isArray(other)) {
-        for (const mechanic of other) {
-          if (mechanic.event_trigger === "ON_WORLD_MAP") {
-            type = "utility";
-            label = "Hỗ Trợ";
-            break;
-          }
-        }
+      const first = operations[0];
+      const status = operations.find((operation) => operation.op === "STATUS");
+      if (canCreatePortal(spec.effects) || usesRandomPortal(spec.effects)) {
+        type = "teleport";
+        isTargeted = canCreatePortal(spec.effects);
+        label = isTargeted ? "Dịch Chuyển" : "Dịch Chuyển Ngẫu Nhiên";
+      } else if (first?.op === "HEAL") {
+        type = first.resource === "MANA" ? "mana_regen" : "heal";
+        label = `${first.resource === "MANA" ? "+" : "Hồi "}${first.value || 0} ${first.resource || "HP"}`;
+      } else if (status?.status_id) {
+        const id = status.status_id.toUpperCase();
+        type = id === "ATK_UP" ? "buff_atk" : id === "DEF_UP" ? "buff_def" : ["HASTE", "SPEED_UP"].includes(id) ? "buff_speed" : id === "REGEN" ? "heal" : "utility";
+        label = `${id} ${status.value || ""}`.trim();
+      } else if (first?.op === "SHIELD" || first?.op === "BARRIER") {
+        type = "shield"; label = `+${first.value || 0} Khiên`;
+      } else if (first) {
+        type = "utility"; label = first.op === "DAMAGE" ? `${first.value || 0} Dmg` : "Kích hoạt";
       }
 
       if (type) {

@@ -1,4 +1,4 @@
-import { statusIds } from "@/lib/gu-dict";
+import { operationsBy, numericValue, type EffectEnvelope } from "@/lib/effect-blocks";
 
 export type EffectBadge = { key: string; label: string; className: string };
 
@@ -83,44 +83,18 @@ export const EFFECT_LABEL: Record<string, string> = {
 
 export const getCombatEffects = (spec: unknown): EffectBadge[] => {
   if (!spec || typeof spec !== "object") return [];
-  const obj = spec as Record<string, unknown>;
-  const effects = obj.effects as Record<string, unknown> | undefined;
-  const active = effects?.active as Record<string, number | string | boolean | undefined> | undefined;
-  if (!active) return [];
-  const a = active;
+  const effects = (spec as { effects?: EffectEnvelope }).effects;
+  if (!effects) return [];
   const out: EffectBadge[] = [];
-  const num = (v: unknown): number => (typeof v === "number" ? v : 0);
-  if ((num(a.damage_flat) > 0) || (num(a.damage_mult) > 0)) {
-    const val = num(a.damage_mult) > 0 ? `x${a.damage_mult}` : a.damage_flat;
-    out.push({ key: "damage", label: `DMG ${val}`, className: EFFECT_STYLE.damage });
-  }
-  if (num(a.damage_hp_percent) > 0) {
-    out.push({ key: "damage_hp", label: `-${(num(a.damage_hp_percent) * 100).toFixed(0)}% HP`, className: EFFECT_STYLE.damage });
-  }
-  if (num(a.shield_flat_reduce_percent) > 0) {
-    out.push({ key: "strip", label: `-${(num(a.shield_flat_reduce_percent) * 100).toFixed(0)}% Khiên`, className: EFFECT_STYLE.shield });
-  }
-  if (num(a.shield_flat) > 0 || num(a.shield_mult) > 0) {
-    const val = num(a.shield_mult) > 0 ? `x${a.shield_mult}` : a.shield_flat;
-    out.push({ key: "shield", label: `Khiên ${val}`, className: EFFECT_STYLE.shield });
-  }
-  if (num(a.heal_flat) > 0) {
-    out.push({ key: "heal", label: `Chữa ${a.heal_flat}`, className: EFFECT_STYLE.heal });
-  }
-  if (num(a.lifesteal_rate) > 0) {
-    out.push({ key: "lifesteal", label: `Hút ${(num(a.lifesteal_rate) * 100).toFixed(0)}%`, className: EFFECT_STYLE.lifesteal });
-  }
-  if (num(a.mana_regen) > 0) {
-    out.push({ key: "mana", label: `+${a.mana_regen} Nguyên`, className: EFFECT_STYLE.mana });
-  }
-  if (num(a.capture_bonus) > 0) {
-    out.push({ key: "capture", label: `+${a.capture_bonus}% Bắt`, className: EFFECT_STYLE.capture });
-  }
-  if (a.apply_status) {
-    for (const upper of statusIds(a.apply_status)) {
-      if (EFFECT_STYLE[upper]) {
-        out.push({ key: upper, label: EFFECT_LABEL[upper] || upper, className: EFFECT_STYLE[upper] });
-      }
+  for (const op of operationsBy(effects)) {
+    const { value, unit } = numericValue(op);
+    const shown = unit === "PERCENT" || unit === "RATIO" ? `${Math.round(value * 100)}%` : `${value}`;
+    if (op.op === "DAMAGE" || op.op === "DIRECT_HP") out.push({ key: "damage", label: `DMG ${shown}`, className: EFFECT_STYLE.damage });
+    if (op.op === "SHIELD" || op.op === "BARRIER") out.push({ key: "shield", label: `Khiên ${shown}`, className: EFFECT_STYLE.shield });
+    if (op.op === "HEAL") out.push({ key: op.resource === "MANA" ? "mana" : "heal", label: `${op.resource === "MANA" ? "+" : "Chữa "}${shown}`, className: EFFECT_STYLE[op.resource === "MANA" ? "mana" : "heal"] });
+    if (op.op === "STATUS" && op.status_id) {
+      const upper = op.status_id.toUpperCase();
+      out.push({ key: upper, label: EFFECT_LABEL[upper] || upper, className: EFFECT_STYLE[upper] || EFFECT_STYLE.mana });
     }
   }
   return out.slice(0, 4);
