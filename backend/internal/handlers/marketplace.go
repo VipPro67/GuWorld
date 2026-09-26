@@ -97,7 +97,7 @@ func CreateListing(c *gin.Context) {
 	}
 
 	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
-		return models.InventoryHasGuMechanic(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
+		return models.InventoryHasGuCapability(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
 	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
@@ -359,9 +359,10 @@ func ListListings(c *gin.Context) {
 		return
 	}
 
-	var count int
-	err := db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu pg JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.rank WHERE pg.player_id = $1 AND pg.state != 'DEAD' AND gd.effects->'other' @> '[{"action_code":"MARKETPLACE_ACCESS"}]'::jsonb`, authID).Scan(&count)
-	hasConnectingHeaven := err == nil && count > 0
+	// Resolve catalog behavior from the in-memory compiled definition. Do not
+	// scan or interpret gu_dictionary.effects JSON on the request path.
+	inventory, err := db.LoadPlayerGus(db.DB, authID.String(), false)
+	hasConnectingHeaven := err == nil && models.InventoryHasGuCapability(inventory, "MARKETPLACE_ACCESS", false)
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
 		return
@@ -481,7 +482,7 @@ func PlaceBid(c *gin.Context) {
 	}
 
 	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
-		return models.InventoryHasGuMechanic(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
+		return models.InventoryHasGuCapability(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
 	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
@@ -645,7 +646,7 @@ func BuyListing(c *gin.Context) {
 	}
 
 	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(buyer.GuInventory, func(gu models.GuInstance) bool {
-		return models.InventoryHasGuMechanic(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
+		return models.InventoryHasGuCapability(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
 	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
@@ -724,7 +725,7 @@ func BuyListing(c *gin.Context) {
 
 	if listingType == "TRADE" {
 		_, _, sellerConnectingHeaven := models.FindFirstMatchingGu(seller.GuInventory, func(gu models.GuInstance) bool {
-			return models.InventoryHasGuMechanic(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
+			return models.InventoryHasGuCapability(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
 		})
 		if !sellerConnectingHeaven {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Người bán không còn sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối Bảo Hoàng Thiên, giao dịch thất bại!"})
@@ -891,7 +892,7 @@ func CancelListing(c *gin.Context) {
 	}
 
 	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
-		return models.InventoryHasGuMechanic(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
+		return models.InventoryHasGuCapability(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
 	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
