@@ -33,10 +33,10 @@ import {
 } from "lucide-react";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { formatNumber, statusRemainLabel, calculateTribulationProgress } from "@/lib/utils";
-import { formatGameEffects } from "@/lib/effects";
+import { combatCategory, disguiseLevel, growthConfig, hasCapability, isCombatEligible } from "@/lib/effect-blocks";
+import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 import { getRenameCost, getImmortalPenaltyRates } from "@/lib/balance";
-import { statusIds } from "@/lib/gu-dict";
 import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, GameSection } from "@/components/ui";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 import { Num } from "./Num";
@@ -156,7 +156,7 @@ function collectOwnedGrowthTypes(player: Player, guDictionary: Record<string, Gu
   const map = new Map<string, { gu_id: string; rank: number; growth_hours: number }>();
   (player.gu_inventory || []).forEach((gu) => {
     const spec = guSpecFor(gu.gu_id, gu.rank);
-    if (!spec?.effects?.growth?.hours_to_max) return;
+    if (!spec || !growthConfig(spec)?.hours_to_max) return;
     const key = `${gu.gu_id}@${gu.rank}`;
     const gh = gu.growth_hours || 0;
     const existing = map.get(key);
@@ -233,7 +233,10 @@ export const Aperture: React.FC<ApertureProps> = ({
   const rank = player.rank;
   const subRank = player.sub_rank;
   const guInventory = player.gu_inventory || [];
-  const eligibleGusForCombat = guInventory.filter(g => g.status === "ACTIVE" && g.equipped);
+  const eligibleGusForCombat = guInventory.filter((g) => {
+    const spec = guSpecFor(g.gu_id, g.rank);
+    return g.status === "ACTIVE" && g.equipped && Boolean(spec && isCombatEligible(spec));
+  });
   const killerMoves = store.killerMoves || [];
   const percent = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
   const rankName = RANK_NAMES[rank] ?? `Rank ${rank}`;
@@ -386,13 +389,13 @@ export const Aperture: React.FC<ApertureProps> = ({
   const checkMechanic = (actionCode: string) => {
     return equippedActiveGus.some((g) => {
       const spec = guSpecFor(g.gu_id, g.rank);
-      return spec?.effects?.other?.some((m) => m.action_code === actionCode) ?? false;
+      return Boolean(spec && hasCapability(spec, actionCode));
     });
   };
 
   const hasConcealment = checkMechanic("DISGUISE") || equippedActiveGus.some((g) => {
     const spec = guSpecFor(g.gu_id, g.rank);
-    return Number(spec?.effects?.passive?.disguise_level || 0) > 0;
+    return Boolean(spec && disguiseLevel(spec) > 0);
   });
   const hasAttitude = checkMechanic("PERFECT_DISGUISE");
   const hasFormChange = checkMechanic("CHANGE_FORM_DISGUISE");
@@ -791,31 +794,13 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-900">
                       <div className="text-[10px] text-zinc-500 font-mono">Chủng Tộc</div>
                       <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">{raceLabel(player.race) || "Nhân Tộc"}</div>
-                      {raceEffects && formatGameEffects(raceEffects).length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {formatGameEffects(raceEffects).map((eff, i) => (
-                            <li key={i} className="text-[10px] leading-snug text-amber-200/70">
-                              <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
-                              {eff}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      {raceEffects && <EffectEnvelopeView effects={raceEffects} />}
                     </div>
                     {cell("Giới Tính", genderLabels[player.gender] || player.gender || "Không rõ")}
                     <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-800">
                       <div className="text-[10px] text-zinc-500 font-mono">Thể Chất</div>
                       <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">{constitutionLabel(player.constitution) || "Không có"}</div>
-                      {constitutionEffects && formatGameEffects(constitutionEffects).length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {formatGameEffects(constitutionEffects).map((eff, i) => (
-                            <li key={i} className="text-[10px] leading-snug text-amber-200/70">
-                              <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
-                              {eff}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      {constitutionEffects && <EffectEnvelopeView effects={constitutionEffects} />}
                     </div>
                     <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-900">
                       <div className="text-[10px] text-zinc-500 font-mono">Trạng Thái</div>
@@ -984,7 +969,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {growing.map(t => {
                       const spec = guSpecFor(t.gu_id, t.rank);
-                      const g = spec?.effects?.growth;
+                      const g = spec ? growthConfig(spec) : null;
                       const maxH = g?.hours_to_max || 168;
                       const curH = t.growth_hours || 0;
                       const pct = Math.min(100, Math.round((curH / maxH) * 1000) / 10);
@@ -1737,19 +1722,10 @@ export const Aperture: React.FC<ApertureProps> = ({
                           .filter((gu) => {
                             if (combatCategoryTab === "all") return true;
                             const spec = guSpecFor(gu.gu_id, gu.rank);
-                            if (!spec || !spec.effects || !spec.effects.active) return combatCategoryTab === "other";
-                            const act = spec.effects.active;
-                            const ids = statusIds(act.apply_status);
-                            if ((act.shield_flat && act.shield_flat > 0) || ids.includes("DEF_UP") || act.wood_transformation) {
-                              return combatCategoryTab === "shield";
-                            }
-                            if ((act.heal_flat && act.heal_flat > 0) || ids.includes("REGEN") || (act.life_steal_rate && act.life_steal_rate > 0)) {
-                              return combatCategoryTab === "heal";
-                            }
-                            if ((act.damage_flat && act.damage_flat > 0) || (act.damage_mult && act.damage_mult > 1.0)) {
-                              return combatCategoryTab === "damage";
-                            }
-                            return combatCategoryTab === "other";
+                            if (!spec) return combatCategoryTab === "other";
+                            const category = combatCategory(spec);
+                            const selectedCategory = { damage: "attack", shield: "defense", heal: "support", other: "other" }[combatCategoryTab];
+                            return category === selectedCategory;
                           })
                           .map((gu) => {
                           const spec = guSpecFor(gu.gu_id, gu.rank);

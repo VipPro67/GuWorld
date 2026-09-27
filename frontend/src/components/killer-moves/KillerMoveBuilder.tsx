@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { translateStat } from "@/lib/translate";
 import { guSpecFor, GuInstance, GuSpec, KillerMove, Player, useGameStore } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
+import { EffectEnvelopeView } from "@/components/EffectBlockView";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -236,7 +237,7 @@ function GuSlot({ slot, guDictionary, onDropGu, onClear }: { slot: BuilderSlot; 
     >
       <span className="text-xs uppercase tracking-widest opacity-70">{slot.type === "CORE" ? "Core Gu" : `Support ${slot.index + 1}`}</span>
       <strong className="text-sm">{slot.gu ? guName(slot.gu, guDictionary) : "Trống"}</strong>
-      {slot.gu && <EffectChips effects={(slot.type === "CORE" ? guSpecFor(slot.gu.gu_id, slot.gu.rank)?.effects?.active : guSpecFor(slot.gu.gu_id, slot.gu.rank)?.effects?.support) || {}} />}
+      {slot.gu && <EffectEnvelopeView effects={guSpecFor(slot.gu.gu_id, slot.gu.rank)?.effects} />}
     </button>
   );
 }
@@ -428,15 +429,6 @@ function EffectSection({ title, effects, emptyText }: { title: string; effects: 
       <div className="flex flex-wrap gap-2 rounded-xl bg-slate-900 p-3 text-xs text-slate-300">
         {entries.length === 0 ? emptyText : entries.map(([key, value]) => <span key={key} className="rounded-full border border-purple-400/30 bg-purple-950/30 px-2 py-1">{translateStat(key)}: {value}</span>)}
       </div>
-    </div>
-  );
-}
-
-function EffectChips({ effects }: { effects: Record<string, number> }) {
-  const entries = Object.entries(effects).slice(0, 2);
-  return (
-    <div className="mt-1 flex flex-wrap gap-1">
-      {entries.map(([key, val]) => <span key={key} className="whitespace-nowrap rounded-md bg-slate-800/50 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">{translateStat(key)}: {val}</span>)}
     </div>
   );
 }

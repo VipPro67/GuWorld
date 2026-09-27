@@ -10,6 +10,7 @@ import { getPathColor } from "@/lib/utils";
 import { masteryKeyForPoints, masteryLevelForPoints, pathLabels } from "@/lib/translate";
 import { GamePanel, GameButton, GameCard, GameProgressBar, GameSection } from "@/components/ui";
 import { rankLabel, subRankLabel, typeColor, gridXLabel, getCombatEffects } from "@/lib/combat";
+import { captureBonus, investigation, isCombatEligible } from "@/lib/effect-blocks";
 // UI migrated to shared components
 
 interface CombatScreenProps {
@@ -114,11 +115,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     }
   }, [combatSettings]);
 
-  // Filter: only show Gu with combat-relevant active effects (mirrors backend hasCombatActiveEffects)
   const isCombatGu = useCallback((gu: GuInstance): boolean => {
     const spec = guSpecFor(gu.gu_id, gu.rank);
-    if (!spec?.effects?.active) return false;
-    return true; // For now, consider all active effect Gu as combat-relevant
+    return Boolean(spec && isCombatEligible(spec));
   }, [guDictionary]);
 
   const eligibleGus = useMemo(
@@ -131,9 +130,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     (player.gu_inventory || []).forEach((gu) => {
       if (gu.status !== "ACTIVE" || !gu.equipped) return;
       const spec = guSpecFor(gu.gu_id, gu.rank);
-      if (spec?.effects?.passive?.investigation) {
-        inv += spec.effects.passive.investigation;
-      }
+      if (spec) inv += investigation(spec);
     });
     return inv;
   }, [player.gu_inventory, guDictionary]);
@@ -212,7 +209,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     const selectedIds = selectedGuIds;
     if (selectedIds.length === 0) return true;
 
-    const shieldKeys = new Set(["defense", "add_base_defense", "virtual_shield", "orbit_shield", "team_shield", "shield_flat"]);
     const tankRoles = new Set(["Defense", "Tank", "Guardian"]);
 
     for (const id of selectedIds) {
@@ -228,13 +224,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       // Check effects for shield/defense keys
       if (spec.effects?.blocks?.some(b => b.operations?.some(op => op.op === "SHIELD" || (op.op === "STAT_MOD" && op.stat === "DEFENSE")))) {
         return true;
-      }
-      for (const section of ["active", "passive", "support"] as const) {
-        const effects = spec.effects?.[section];
-        if (!effects) continue;
-        for (const key of Object.keys(effects)) {
-          if (shieldKeys.has(key) && (effects[key] || 0) > 0) return true;
-        }
       }
     }
     return false;
@@ -1072,7 +1061,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               const gu = eligibleGus.find(g => g.instance_id === id);
               if (!gu) return null;
               const spec = guSpecFor(gu.gu_id, gu.rank);
-              return spec?.effects?.active?.capture_bonus ? { gu, spec } : null;
+              return spec && captureBonus(spec) > 0 ? { gu, spec } : null;
             })
             .filter((x): x is { gu: GuInstance; spec: GuSpec } => x !== null);
           const hasCaptureBonus = captureCandidates.length > 0;

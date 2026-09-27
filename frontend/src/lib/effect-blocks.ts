@@ -42,6 +42,13 @@ export interface EffectEnvelope {
   blocks: EffectBlock[];
 }
 
+export interface EffectDictionaryEntry {
+  tier?: number;
+  key: string;
+  name: string;
+  effects?: EffectEnvelope;
+}
+
 /** Metadata is supplied by the backend catalog; the frontend owns no enum copy. */
 export interface EffectCatalogOperation {
   name: string; sub_types: string[]; triggers: string[]; targets: string[];
@@ -63,15 +70,12 @@ export interface EffectCatalogMetadata {
 
 export const EMPTY_EFFECT_ENVELOPE: EffectEnvelope = { schema_version: 2, blocks: [] };
 
-type TransitionalEffects = Partial<EffectEnvelope> & { blocks?: EffectBlock[] | null };
-export type EffectLike = EffectEnvelope | TransitionalEffects | { effects?: TransitionalEffects | null } | null | undefined;
+export type EffectLike = EffectEnvelope | { effects?: EffectEnvelope | null } | null | undefined;
 
 export function effectEnvelope(value: EffectLike): EffectEnvelope {
   const candidate = value && typeof value === "object" && "effects" in value ? value.effects : value;
-  // Transitional reads accept block-bearing rows created before schema_version
-  // was added. Authoring and validation remain strict Block v2.
-  return candidate && "blocks" in candidate && Array.isArray(candidate.blocks)
-    ? { schema_version: 2, blocks: candidate.blocks }
+  return candidate && "schema_version" in candidate && candidate.schema_version === 2 && "blocks" in candidate && Array.isArray(candidate.blocks)
+    ? candidate
     : EMPTY_EFFECT_ENVELOPE;
 }
 
@@ -113,6 +117,14 @@ export function hasCapability(value: EffectLike, code: string): boolean {
   return hasOperation(value, { trigger: "CAPABILITY", op: "UNIQUE", code });
 }
 
+export function statModifier(value: EffectLike, stat: string, trigger: string | string[] = "ALWAYS_ON"): number {
+  return operationsBy(value, { trigger, op: "STAT_MOD", stat })
+    .reduce((sum, operation) => sum + numericValue(operation).value, 0);
+}
+
+export const investigation = (value: EffectLike) => statModifier(value, "INVESTIGATION");
+export const disguiseLevel = (value: EffectLike) => statModifier(value, "DISGUISE");
+
 export type CombatCategory = "attack" | "defense" | "support" | "other";
 export function combatCategory(value: EffectLike): CombatCategory {
   if (hasOperation(value, { op: "DAMAGE" }) || hasOperation(value, { op: "DIRECT_HP" })) return "attack";
@@ -127,7 +139,8 @@ export function isCombatEligible(value: EffectLike): boolean {
 export interface GrowthConfig { max_attack: number; max_defense: number; max_hp: number; max_speed: number; hours_to_max: number }
 export function growthConfig(value: EffectLike): GrowthConfig | null {
   const cap = (stat: string) => operationsBy(value, { op: "STAT_MOD", stat, subType: "GROWTH_CAP" })[0]?.value || 0;
-  const hours = operationsBy(value, { op: "UNIQUE", code: "GROWTH_DURATION_HOURS" })[0]?.value || 0;
+  const duration = operationsBy(value, { op: "UNIQUE", code: "GROWTH_DURATION_HOURS" })[0];
+  const hours = typeof duration?.params?.value === "number" ? duration.params.value : numericValue(duration).value;
   if (!hours && !cap("ATTACK") && !cap("DEFENSE") && !cap("HP") && !cap("SPEED")) return null;
   return { max_attack: cap("ATTACK"), max_defense: cap("DEFENSE"), max_hp: cap("HP"), max_speed: cap("SPEED"), hours_to_max: hours };
 }
@@ -138,5 +151,8 @@ export const captureBonus = (value: EffectLike) => operationsBy(value, { code: "
   .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op).value), 0);
 export const refinementTier = (value: EffectLike) => operationsBy(value, { op: "STAT_MOD", stat: "REFINE_MANA_TIER" })[0]?.value ?? 0;
 export const hasRefinementMechanic = (value: EffectLike, code: string) => hasOperation(value, { op: "UNIQUE", code });
+export const nativeNumericValue = (value: EffectLike, code: string) => operationsBy(value, { op: "UNIQUE", code })
+  .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op).value), 0);
 export const manaRegenPerTick = (value: EffectLike) => operationsBy(value, { trigger: "ON_TICK", op: "UNIQUE", code: "MANA_REGEN_TICK" })
   .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op, 0.5).value), 0);
+export const restoreHunger = (value: EffectLike) => nativeNumericValue(value, "RESTORE_HUNGER");
