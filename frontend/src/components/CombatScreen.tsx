@@ -10,7 +10,7 @@ import { getPathColor } from "@/lib/utils";
 import { masteryKeyForPoints, masteryLevelForPoints, pathLabels } from "@/lib/translate";
 import { GamePanel, GameButton, GameCard, GameProgressBar, GameSection } from "@/components/ui";
 import { rankLabel, subRankLabel, typeColor, gridXLabel, getCombatEffects } from "@/lib/combat";
-import { captureBonus, investigation, isCombatEligible } from "@/lib/effect-blocks";
+import { captureBonus, investigation, isCombatEligible, operationsBy } from "@/lib/effect-blocks";
 // UI migrated to shared components
 
 interface CombatScreenProps {
@@ -117,7 +117,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const isCombatGu = useCallback((gu: GuInstance): boolean => {
     const spec = guSpecFor(gu.gu_id, gu.rank);
-    return Boolean(spec && isCombatEligible(spec));
+    if (!spec) return false;
+    return isCombatEligible(spec.effects);
   }, [guDictionary]);
 
   const eligibleGus = useMemo(
@@ -130,7 +131,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     (player.gu_inventory || []).forEach((gu) => {
       if (gu.status !== "ACTIVE" || !gu.equipped) return;
       const spec = guSpecFor(gu.gu_id, gu.rank);
-      if (spec) inv += investigation(spec);
+      if (!spec) return;
+      const ops = operationsBy(spec.effects, { trigger: "ALWAYS_ON", op: "STAT_MOD", stat: "INVESTIGATION" });
+      for (const op of ops) inv += op.value ?? 0;
     });
     return inv;
   }, [player.gu_inventory, guDictionary]);

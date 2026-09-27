@@ -8,7 +8,7 @@ import * as jsxRuntime from "react/jsx-runtime";
 
 const source = fs.readFileSync(new URL("./EffectBlockView.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-const module = { exports: {} };
+const mod = { exports: {} };
 const formatTarget = (target) => target?.bypass_frontline ? `${target.selector} (Xuyên hàng)` : target?.selector || null;
 const localRequire = (id) => {
   if (id === "react") return { ...React, default: React };
@@ -17,8 +17,8 @@ const localRequire = (id) => {
   if (id === "@/lib/effect-presentation") return { formatEffectTarget: formatTarget, renderableEffectBlocks: (effects) => !effects ? { blocks: [] } : effects.schema_version === 2 ? { blocks: effects.blocks } : { blocks: [], unsupportedSchema: effects.schema_version } };
   return {};
 };
-new Function("require", "module", "exports", compiled)(localRequire, module, module.exports);
-const { EffectEnvelopeView, formatOperation } = module.exports;
+new Function("require", "module", "exports", compiled)(localRequire, mod, mod.exports);
+const { EffectEnvelopeView, formatOperation } = mod.exports;
 
 test("operation formatter includes path and native params", () => {
   assert.match(formatOperation({ op: "DAMAGE", sub_type: "FLAT", value: 12, path: "fire" }).text, /12.*fire/);

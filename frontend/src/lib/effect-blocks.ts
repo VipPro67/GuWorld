@@ -38,7 +38,7 @@ export interface EffectBlock {
 }
 
 export interface EffectEnvelope {
-  schema_version: 2;
+  schema_version?: number;
   blocks: EffectBlock[];
 }
 
@@ -62,21 +62,27 @@ export interface EffectNativeHook {
   code: string; domain: string; triggers: string[]; params: Record<string, EffectParamSpec>;
 }
 export interface EffectCatalogMetadata {
-  schema_version: 2; triggers: string[]; targets: string[]; operations: EffectCatalogOperation[];
+  schema_version?: number; triggers: string[]; targets: string[]; operations: EffectCatalogOperation[];
   stats: string[]; statuses: string[]; resources: string[]; units: string[];
   stack_policies: string[]; condition_fields: string[]; condition_operators: string[];
   native_codes: string[]; native_hooks: EffectNativeHook[];
 }
 
-export const EMPTY_EFFECT_ENVELOPE: EffectEnvelope = { schema_version: 2, blocks: [] };
+export const EMPTY_EFFECT_ENVELOPE: EffectEnvelope = { blocks: [] };
 
-export type EffectLike = EffectEnvelope | { effects?: EffectEnvelope | null } | null | undefined;
+export type EffectLike = EffectEnvelope | EffectBlock[] | { effects?: EffectEnvelope | EffectBlock[] | null } | null | undefined;
 
 export function effectEnvelope(value: EffectLike): EffectEnvelope {
-  const candidate = value && typeof value === "object" && "effects" in value ? value.effects : value;
-  return candidate && "schema_version" in candidate && candidate.schema_version === 2 && "blocks" in candidate && Array.isArray(candidate.blocks)
-    ? candidate
-    : EMPTY_EFFECT_ENVELOPE;
+  const candidate = value && typeof value === "object" && "effects" in value
+    ? (value as { effects?: EffectEnvelope | EffectBlock[] | null }).effects
+    : value;
+  if (Array.isArray(candidate)) {
+    return { blocks: candidate };
+  }
+  if (candidate && "blocks" in candidate && Array.isArray(candidate.blocks)) {
+    return candidate as EffectEnvelope;
+  }
+  return EMPTY_EFFECT_ENVELOPE;
 }
 
 export function blocksByTrigger(value: EffectLike, ...triggers: string[]): EffectBlock[] {

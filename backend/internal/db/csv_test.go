@@ -64,7 +64,7 @@ func TestValidateCSVFiles(t *testing.T) {
 			t.Errorf("Gu %s (rank %s) has invalid effects: %v", id, rank, err)
 			continue
 		}
-		var effEnvelope map[string]interface{}
+		var effEnvelope any
 		if err := json.Unmarshal([]byte(effectsRawNormalized), &effEnvelope); err != nil {
 			t.Errorf("Gu %s (rank %s) has invalid effects JSON: %v", id, rank, err)
 		}
@@ -134,5 +134,37 @@ func TestValidateCSVFiles(t *testing.T) {
 				t.Errorf("Recipe for %s has invalid required_materials: %v", target, err)
 			}
 		}
+	}
+}
+
+func TestPreflightSources(t *testing.T) {
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir("../.."); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldWD)
+
+	sources := []struct {
+		table    string
+		filename string
+		key      string
+	}{
+		{"gu", "Gu.csv", "id"},
+		{"item", "Item.csv", "id"},
+		{"race", "Race.csv", "key"},
+		{"constitution", "Constitution.csv", "key"},
+		{"status", "Status.csv", "key"},
+	}
+
+	for _, s := range sources {
+		t.Run(s.table, func(t *testing.T) {
+			err := preflightEffectCSVs([]effectCSVSource{{s.table, s.filename, s.key}})
+			if err != nil {
+				t.Errorf("%s preflight failed: %v", s.table, err)
+			}
+		})
 	}
 }

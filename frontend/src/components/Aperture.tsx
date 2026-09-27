@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { formatNumber, statusRemainLabel, calculateTribulationProgress } from "@/lib/utils";
-import { combatCategory, disguiseLevel, growthConfig, hasCapability, isCombatEligible } from "@/lib/effect-blocks";
+import { combatCategory as combatCategoryBlock, disguiseLevel, growthConfig, hasCapability, isCombatEligible } from "@/lib/effect-blocks";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 import { getRenameCost, getImmortalPenaltyRates } from "@/lib/balance";
@@ -1723,9 +1723,11 @@ export const Aperture: React.FC<ApertureProps> = ({
                             if (combatCategoryTab === "all") return true;
                             const spec = guSpecFor(gu.gu_id, gu.rank);
                             if (!spec) return combatCategoryTab === "other";
-                            const category = combatCategory(spec);
-                            const selectedCategory = { damage: "attack", shield: "defense", heal: "support", other: "other" }[combatCategoryTab];
-                            return category === selectedCategory;
+                            const cat = combatCategoryBlock(spec.effects);
+                            if (combatCategoryTab === "shield") return cat === "defense";
+                            if (combatCategoryTab === "heal") return cat === "support";
+                            if (combatCategoryTab === "damage") return cat === "attack";
+                            return cat === "other";
                           })
                           .map((gu) => {
                           const spec = guSpecFor(gu.gu_id, gu.rank);

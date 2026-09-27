@@ -175,6 +175,17 @@ func TestItemEffectCommandsAreSorted(t *testing.T) {
 	}
 }
 
+func TestItemEffectsScan_Blocks(t *testing.T) {
+	raw := `[{"id":"RESTORE_HUNGER","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"RESTORE_HUNGER","params":{"value":50}}]}]`
+	var eff ItemEffects
+	if err := eff.Scan(raw); err != nil {
+		t.Fatalf("failed to scan item blocks: %v", err)
+	}
+	if eff["hunger"] != 50 {
+		t.Fatalf("expected hunger 50, got: %v", eff)
+	}
+}
+
 func TestCompiledProjectionSupplementsPartialAuthoredBlocks(t *testing.T) {
 	spec := Gu{Effects: GuEffects{
 		Blocks:  []gameplayeffects.Block{{Trigger: gameplayeffects.TriggerAlwaysOn, Target: gameplayeffects.Target{Selector: gameplayeffects.TargetSelf}, Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpStatMod, Stat: "ACCURACY", SubType: "ADD_FLAT", Value: 4}}}},

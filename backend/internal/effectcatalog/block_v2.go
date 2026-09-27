@@ -47,24 +47,35 @@ var canonicalID = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 // effect is executable when the block compiler cannot see it.
 func ValidateBlockV2(raw []byte, loc Location) []ValidationIssue {
 	v := blockValidator{loc: loc}
-	var root map[string]json.RawMessage
-	if err := decodeObject(raw, &root); err != nil {
-		v.add("$", "invalid_json", err.Error(), "", nil)
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
 		return v.issues
 	}
-	v.fields(root, "$", "schema_version", "blocks")
-	var version int
-	if b, ok := root["schema_version"]; !ok {
-		v.add("$.schema_version", "required_field", "schema_version is required", "", nil)
-	} else if json.Unmarshal(b, &version) != nil || version != BlockSchemaVersion {
-		v.add("$.schema_version", "unsupported_schema_version", "schema_version must be 2", "", nil)
-	}
+
 	var blocks []map[string]json.RawMessage
-	if b, ok := root["blocks"]; !ok {
-		v.add("$.blocks", "required_field", "blocks is required", "", nil)
-	} else if json.Unmarshal(b, &blocks) != nil || firstNonSpace(b) != '[' {
-		v.add("$.blocks", "invalid_type", "blocks must be an array", "", nil)
+
+	if trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &blocks); err != nil {
+			v.add("$", "invalid_type", "blocks must be an array: "+err.Error(), "", nil)
+			return v.issues
+		}
+	} else if trimmed[0] == '{' {
+		var root map[string]json.RawMessage
+		if err := decodeObject(raw, &root); err != nil {
+			v.add("$", "invalid_json", err.Error(), "", nil)
+			return v.issues
+		}
+		v.fields(root, "$", "schema_version", "blocks")
+		if b, ok := root["blocks"]; !ok {
+			v.add("$.blocks", "required_field", "blocks is required", "", nil)
+		} else if json.Unmarshal(b, &blocks) != nil || firstNonSpace(b) != '[' {
+			v.add("$.blocks", "invalid_type", "blocks must be an array", "", nil)
+		}
+	} else {
+		v.add("$", "invalid_json", "expected JSON array or object", "", nil)
+		return v.issues
 	}
+
 	seen := map[string]bool{}
 	for i, block := range blocks {
 		v.block(block, i, seen)

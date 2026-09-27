@@ -20,7 +20,7 @@ func validateDictionaryEffects(c *gin.Context, source, key string, raw json.RawM
 	return false
 }
 
-var emptyBlockEffects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
+var emptyBlockEffects = json.RawMessage(`[]`)
 
 // --- Constitution Dictionary Handlers ---
 

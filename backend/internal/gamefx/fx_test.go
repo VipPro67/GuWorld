@@ -238,3 +238,24 @@ func TestDeadPlayerBlockedAction(t *testing.T) {
 		t.Errorf("expected dead player to have cultivate action blocked")
 	}
 }
+
+func TestEffectsUnmarshalJSON_Blocks(t *testing.T) {
+	raw := `[
+		{"id":"STAT_MODS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"STAT_MODS","params":{"value":{"attack":0.1,"defense":0.1}}}]},
+		{"id":"REFINE_SUCCESS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"REFINE_SUCCESS","params":{"value":-0.1}}]},
+		{"id":"IMMORTAL","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"IMMORTAL","params":{"value":true}}]}
+	]`
+	var eff Effects
+	if err := json.Unmarshal([]byte(raw), &eff); err != nil {
+		t.Fatalf("failed to unmarshal blocks: %v", err)
+	}
+	if eff.StatMods["attack"] != 0.1 || eff.StatMods["defense"] != 0.1 {
+		t.Errorf("expected stat_mods attack/defense 0.1, got: %v", eff.StatMods)
+	}
+	if eff.RefineBonus != -0.1 {
+		t.Errorf("expected refine -0.1, got: %v", eff.RefineBonus)
+	}
+	if !eff.Immortal {
+		t.Errorf("expected immortal true, got false")
+	}
+}

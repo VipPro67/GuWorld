@@ -572,6 +572,20 @@ func (g *GuEffects) Scan(value interface{}) error {
 		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
 
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &g.Blocks); err != nil {
+			return fmt.Errorf("invalid Gu effects array: %w", err)
+		}
+		if g.Other == nil {
+			g.Other = []SpecialMechanic{}
+		}
+		if err := g.compile(); err != nil {
+			return fmt.Errorf("compile Gu effects: %w", err)
+		}
+		return nil
+	}
+
 	normalized, _, err := effectcatalog.NormalizeAndValidate(b)
 	if err != nil {
 		return fmt.Errorf("invalid Gu effects: %w", err)
@@ -659,11 +673,14 @@ func (a *ActiveEffect) normalize() {
 }
 
 func (g GuEffects) Value() (driver.Value, error) {
-	b, err := json.Marshal(g)
-	if err != nil {
-		return "{}", err
+	if len(g.Blocks) > 0 {
+		b, err := json.Marshal(g.Blocks)
+		if err != nil {
+			return "[]", err
+		}
+		return string(b), nil
 	}
-	return string(b), nil
+	return "[]", nil
 }
 
 func GetFlatGuEffects(gu Gu) map[string]float64 {

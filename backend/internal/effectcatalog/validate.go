@@ -173,6 +173,9 @@ func NormalizeAndValidate(raw []byte) ([]byte, Report, error) {
 	}
 
 	for key := range root {
+		if key == "schema_version" || key == "catalog_revision" || key == "content_hash" {
+			continue
+		}
 		if !sectionSet[key] {
 			report.add(SeverityError, "unknown_section", "$."+key, "namespace effect không được hỗ trợ")
 		}

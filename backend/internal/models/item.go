@@ -1,6 +1,7 @@
 package models
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -13,6 +14,20 @@ import (
 
 // ItemEffects represents flexible stats map stored in JSONB
 type ItemEffects map[string]float64
+
+var itemBlockCodeToKey = map[string]string{
+	"RESTORE_HUNGER":      "hunger",
+	"RESTORE_HP":          "restore_hp",
+	"RESTORE_MANA":        "restore_mana",
+	"INCREASE_HUMAN_QI":   "increase_human_qi",
+	"HEAL_APERTURE":       "heal_aperture",
+	"RANDOM_CONSTITUTION": "random_constitution",
+	"RANDOM_RACE":         "random_race",
+	"OPEN_MINE_CHEST":     "open_mine_chest",
+	"CHANGE_RACE":         "change_race",
+	"LIFESPAN_BOOST":      "lifespan_boost",
+	"SOUL_BOOST":          "soul_boost",
+}
 
 // Scan implements the sql.Scanner interface for ItemEffects
 func (e *ItemEffects) Scan(value interface{}) error {
@@ -29,11 +44,57 @@ func (e *ItemEffects) Scan(value interface{}) error {
 	default:
 		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
-	if len(b) == 0 || string(b) == "null" {
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
 		*e = ItemEffects{}
 		return nil
 	}
-	return json.Unmarshal(b, e)
+	if trimmed[0] == '[' {
+		return e.scanBlocks(trimmed)
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &root); err == nil {
+		if blocksRaw, ok := root["blocks"]; ok {
+			trimmedB := bytes.TrimSpace(blocksRaw)
+			if len(trimmedB) > 0 && trimmedB[0] == '[' {
+				return e.scanBlocks(trimmedB)
+			}
+		}
+	}
+	return json.Unmarshal(trimmed, e)
+}
+
+func (e *ItemEffects) scanBlocks(data []byte) error {
+	*e = make(ItemEffects)
+	type blockOp struct {
+		Op     string          `json:"op"`
+		Code   string          `json:"code"`
+		Params json.RawMessage `json:"params"`
+	}
+	type blockItem struct {
+		Operations []blockOp `json:"operations"`
+	}
+	var blocks []blockItem
+	if err := json.Unmarshal(data, &blocks); err != nil {
+		return err
+	}
+	for _, b := range blocks {
+		for _, op := range b.Operations {
+			code := strings.ToUpper(op.Code)
+			key, ok := itemBlockCodeToKey[code]
+			if !ok {
+				key = strings.ToLower(op.Code)
+			}
+			var p struct {
+				Value float64 `json:"value"`
+			}
+			if len(op.Params) > 0 {
+				_ = json.Unmarshal(op.Params, &p)
+			}
+			(*e)[key] = p.Value
+		}
+	}
+	return nil
 }
 
 // Value implements the driver.Valuer interface for ItemEffects

@@ -173,7 +173,7 @@ func AdminCreateGuItem(c *gin.Context) {
 		req.TargetType = "SINGLE"
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
+		req.Effects = json.RawMessage(`[]`)
 	}
 	if !validateAndNormalizeAdminGuEffects(c, req.ID, &req.Effects) {
 		return
@@ -217,7 +217,7 @@ func AdminUpdateGuItem(c *gin.Context) {
 		req.ID = guID
 	}
 	if req.Name != "" && len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
+		req.Effects = json.RawMessage(`[]`)
 	}
 	if len(req.Effects) > 0 && !validateAndNormalizeAdminGuEffects(c, req.ID, &req.Effects) {
 		return
@@ -446,7 +446,7 @@ func AdminCreateItemItem(c *gin.Context) {
 		req.Rank = 1
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
+		req.Effects = json.RawMessage(`[]`)
 	}
 	if !validateAdminEffects(c, "item", req.ID, req.Effects) {
 		return
