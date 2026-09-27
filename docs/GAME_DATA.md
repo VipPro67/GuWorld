@@ -504,165 +504,28 @@ snapshot năm CSV/seed hiện tại là `max_mana`, `dao_mark_gain`, `soul_defen
 chúng là parser/runtime surface cho DB cũ hoặc nội dung tương lai, không được
 gán nhầm provenance CSV. Matrix vẫn giữ chúng để migration không bỏ sót.
 
-### Envelope duy nhất
+### Effect Block v2 authoritative (contract phẳng)
 
-Mỗi effect owner lưu `schema_version`, `catalog_revision` và SHA-256
-`content_hash`. `effect_catalog_snapshots` giữ nguyên JSON cùng metadata trước
-migration để rollback chính xác. Constraint block-only được cài `NOT VALID`;
-chỉ validate ở rollout sau khi backfill xác nhận không còn legacy/conflict. CSV
-không được coi là mới hơn row đã được admin sửa trong DB.
+Contract đích hiện tại là contract phẳng đang được validator, compiler và Admin triển khai. Contract giàu semantic trước đây (nested `amount`, `SELECTED_TARGET`, condition discriminated union, v.v.) **không phải** format v2 và không được dùng để tạo format thứ ba. Các khả năng mới phải được nâng dần trên contract này.
 
-Mọi definition mới (Gu, item, race, constitution, status effect, killer move và
-aperture variant event) dùng đúng một root, không có sibling `active`, `passive`,
-`growth`, `other`, `support`, `house`, `explore` hay `refinement`:
+Vocabulary authoritative nằm tại `backend/internal/effectcatalog/block_manifest.go`. Endpoint `GET /api/admin/effect-catalog/metadata` sinh trực tiếp trigger, selector, condition field/operator, operation/subtype, stat, resource, unit, stack policy và native hook param schema từ catalog đó. Validator và compiler cùng đọc catalog; frontend không duy trì enum riêng.
+
+Root chỉ có `schema_version` và `blocks`:
 
 ```json
-{"schema_version":2,"blocks":[{"id":"main_hit","trigger":"ON_CAST","order":100,"chance":1,"target":{"selector":"SELECTED_TARGET","filters":{"life_state":"ALIVE"}},"conditions":[],"operations":[{"op":"DAMAGE","subtype":"DIRECT","amount":{"unit":"FLAT","value":120,"scaling":[{"kind":"SOURCE_STAT","stat_key":"ATTACK","ratio":0.8}]}}],"source":{"definition_kind":"GU","definition_id":"GU_EXAMPLE","definition_version":1}}]}
+{"schema_version":2,"blocks":[{"id":"MAIN_HIT","trigger":"ON_CAST","target":{"selector":"TARGET"},"conditions":[{"field":"TARGET_HP_PERCENT","operator":"LTE","value":0.5}],"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":120,"unit":"FLAT","path":"Sword Path"}]}]}
 ```
 
-`schema_version` phải bằng `2`; unknown version, unknown field và duplicate block
-ID đều là compile error. Block ID khớp `^[a-z][a-z0-9_]{0,63}$`, duy nhất trong
-một definition và ổn định qua revision nếu semantics không đổi.
+- `schema_version` bắt buộc bằng `2`. Block `id` dùng `UPPER_SNAKE_CASE`, khớp `^[A-Z][A-Z0-9_]*$` và duy nhất trong definition.
+- Trigger hiện hành: `ALWAYS_ON`, `ON_ACTION`, `ON_HIT`, `BEFORE_HIT`, `ON_TURN_START`, `ON_DEATH`, `ON_TICK`, `CAPABILITY`, `COMBAT_PASSIVE`, `PASSIVE`, `ON_BATTLE_START`, `BEFORE_ENEMY_ATTACK`, `ON_CAST`, `ON_CONSUME`, `ON_USE`. `PASSIVE` được giữ để tương thích; dữ liệu mới nên dùng `ALWAYS_ON` cho stat thụ động hoặc `COMBAT_PASSIVE` cho hook trong trận.
+- Target có shape `{selector,bypass_frontline?}`. Selector: `SELF`, `TARGET`, `ROW`, `COL`, `ALL_ENEMIES`, `ALL_ALLIES`, `ALL`. Không dùng alias `SELECTED_TARGET`, `COLUMN` hoặc `SINGLE`.
+- Condition có đúng shape `{field,operator,value}` với `value` là number. Danh sách field/operator đóng và được trả qua metadata.
+- Operation là object phẳng. `op` thuộc `DAMAGE`, `SHIELD`, `HEAL`, `DIRECT_HP`, `STAT_MOD`, `STATUS`, `BARRIER`, `CLEANSE`, `UNIQUE`; field tùy operation được metadata khai báo qua `allowed_fields`, `required_fields`, `sub_types`, `triggers`, `targets`. Tên field chuẩn là `sub_type` (không phải `subtype`), `value` number; các semantic bổ sung dùng `unit`, `resource`, `stack_policy`, `stat`, `status_id`, `turns`, `chance`, `path`, `code`, `params`.
+- `unit`, `resource` và `stack_policy` được giữ xuyên suốt authoring DTO → compiled operation → runtime command. Không được tự suy diễn/chuyển đổi tỷ lệ.
+- `UNIQUE` chỉ chấp nhận `code` đã đăng ký. Mỗi native hook khai báo domain, trigger và schema params (type, required, min/max hoặc enum); validator và compiler đều fail closed khi code/trigger/params không hợp lệ.
+- Status ID được lấy từ `statusfx.Registry`, không có danh sách status song song.
 
-### Typed contract
-
-- **Trigger enum:** loadout `ON_EQUIP`, `ON_UNEQUIP`, `ALWAYS_ON`; combat
-  `ON_BATTLE_START`, `BEFORE_CAST`, `ON_CAST`, `BEFORE_HIT`, `ON_HIT`,
-  `BEFORE_DAMAGE`, `AFTER_DAMAGE`, `AFTER_HIT`, `AFTER_CAST`, `ON_TURN_START`,
-  `ON_TURN_END`, `BEFORE_DEATH`, `ON_DEATH`, `ON_BATTLE_END`; item
-  `BEFORE_USE`, `ON_USE`, `ON_CONSUME`; world `CAPABILITY`, `BEFORE_EXPLORE`,
-  `ON_EXPLORE`, `ON_MOVE`, `ON_CAPTURE`; refinement `BEFORE_REFINE`,
-  `ON_REFINE_SUCCESS`, `ON_REFINE_FAILURE`; growth `ON_GROWTH_TICK`,
-  `ON_GROWTH_COMPLETE`; worker `ON_WORKER_TICK` kèm `worker_kind`. Legacy
-  `ON_TICK`, `PASSIVE`, `ON_ACTION` chỉ tồn tại ở adapter và phải map tới một
-  trigger/domain cụ thể.
-- **Target selector enum:** `SELF`, `SELECTED_TARGET`, `EVENT_SOURCE`,
-  `EVENT_TARGETS`, `ALL_ALLIES`, `ALL_ENEMIES`, `ROW`, `COLUMN`, `RANDOM_ALLY`,
-  `RANDOM_ENEMY`; filters typed gồm `life_state`, `include_self`, `count`, path,
-  disposition và frontline policy. Random selector bắt buộc dùng RNG của context.
-- **Condition** là discriminated union (`SOURCE_STAT_COMPARE`,
-  `TARGET_STAT_COMPARE`, `RESOURCE_COMPARE`, `TARGET_HAS_STATUS`, `EVENT_RESULT`,
-  `WORLD_STATE_COMPARE`) với comparator `EQ|NE|LT|LTE|GT|GTE|IN`; không dùng
-  `{field,operator,value:float64}` tự do.
-- **Operation enum:** `DAMAGE`, `HEAL`, `SHIELD`, `MODIFY_RESOURCE`,
-  `MODIFY_STAT`, `APPLY_STATUS`, `REMOVE_STATUS`, `DISPEL`, `BARRIER`, `MOVE`,
-  `SUMMON`, `DESPAWN`, `INVENTORY`, `GROWTH`, `WORLD`, `REFINEMENT`,
-  `EMIT_EVENT`, `UNIQUE`. Mỗi `(op, subtype)` quy định field hợp lệ.
-- `stat_key` và `resource_key` là enum. Stat tối thiểu gồm `HP_MAX`, `ATTACK`,
-  `DEFENSE`, `SPEED`, `EVASION`, `ACCURACY`, `LUCK`, `TENACITY`, `CC_RESIST`;
-  resource gồm `HP`, `MANA`, `SOUL_HP`, `THOUGHT`, `APERTURE_HP`,
-  `PRIMEVAL_STONE`, `IMMORTAL_STONE`, `HUNGER`.
-- `amount` luôn có `unit`: `FLAT`, `RATIO` (0..1), `PERCENT_POINTS`, `TURNS`,
-  `TICKS`, `SECONDS`, `MINUTES`, `COUNT`, `PER_HOUR`. Scaling là union
-  `NONE`, `SOURCE_STAT`, `TARGET_STAT`, `MAX_RESOURCE`, `MISSING_RESOURCE`,
-  `DAO_MARK`, `RANK`; key và ratio bắt buộc theo kind. Không tự đổi `20` thành
-  `0.2`, không dùng một `float64` vô nghĩa chung cho mọi op.
-
-Contract discriminator tối thiểu (ngoài các field trong cột là lỗi):
-
-| Op | Subtype | Field bắt buộc | Unit/scaling hợp lệ |
-|---|---|---|---|
-| `DAMAGE` | `DIRECT`, `DOT` | `amount`, `damage_type`, optional `path_key` | `FLAT`/`RATIO`; source/target stat, max resource, dao mark, rank |
-| `HEAL`, `SHIELD` | `DIRECT`, `HOT` / `BARRIER` | `amount`, `resource_key` với heal | `FLAT`/`RATIO`; max/missing resource, source stat, rank |
-| `MODIFY_RESOURCE` | `ADD`, `REMOVE`, `SET` | `resource_key`, `amount` | `FLAT`/`RATIO`; max/missing resource, rank |
-| `MODIFY_STAT` | `ADD_FLAT`, `MULTIPLY_RATIO` | `stat_key`, `amount` | `FLAT` cho add; `RATIO` cho multiply; rank/dao mark optional |
-| `APPLY_STATUS` | `ADD`, `REFRESH` | `status_id`, `duration`, `stacking` | status-defined amount; duration chỉ `TURNS|TICKS|SECONDS|MINUTES` |
-| `REMOVE_STATUS`, `DISPEL` | `BY_ID`, `BY_CATEGORY` / `BUFF`, `DEBUFF`, `ALL` | status id/category hoặc `amount:COUNT` | chỉ `COUNT` cho dispel giới hạn |
-| `MOVE` | `ABSOLUTE`, `RELATIVE`, `TELEPORT` | typed destination/delta | cells `COUNT`; không scaling |
-| `SUMMON`, `DESPAWN` | `ENTITY`, `ILLUSION` / `BY_ID`, `BY_TAG` | template/id/tag, `amount:COUNT` | `COUNT`; rank scaling optional |
-| `INVENTORY`, `GROWTH`, `WORLD`, `REFINEMENT`, `EMIT_EVENT` | domain command enum đã đăng ký | typed command payload | schema command quyết định; không arbitrary map |
-| `BARRIER` | `INVINCIBLE`, `STATUS_IMMUNITY` | `duration` | typed duration; không amount |
-| `UNIQUE` | `NATIVE_HOOK` | `code`, params theo registry | chỉ param schema đã đăng ký |
-
-`damage_type` enum là `PHYSICAL|PATH|TRUE`; `path_key` phải có trong path
-registry. Danh sách stat/resource ở trên là closed set v2 ban đầu (từ “tối
-thiểu” không có nghĩa cho phép chuỗi khác); mở rộng cần bump minor catalog
-contract và compiler/runtime/UI cùng lúc.
-
-### Ordering, chance, stacking và lifecycle
-
-Khi một event phát sinh, runtime: (1) chụp immutable catalog/loadout revision;
-(2) lấy eligible blocks; (3) sort theo phase chuẩn, `order`, definition stable
-order, rồi `block.id`; (4) evaluate condition; (5) roll block `chance` đúng một
-lần bằng contextual deterministic RNG; (6) resolve target; (7) chạy operation
-theo array order; (8) enqueue event mới. Combat phase chuẩn là:
-
-```text
-BEFORE_CAST -> pay cost -> ON_CAST -> BEFORE_HIT -> hit/miss
--> ON_HIT -> BEFORE_DAMAGE -> apply damage -> AFTER_DAMAGE -> AFTER_HIT
--> AFTER_CAST -> cooldown -> ON_TURN_END
-```
-
-`ALWAYS_ON` được recompute khi loadout/status/revision đổi; item/refinement/world
-chạy trong transaction handler và nhận command typed; growth/worker chạy theo
-tick idempotent và checkpoint; battle hooks sống trong snapshot trận và bị hủy
-khi `ON_BATTLE_END`. Block chance mặc định 1; chance per-target phải khai báo
-`roll_scope:"PER_TARGET"`, không suy đoán.
-
-| Domain | Thứ tự và vòng đời bắt buộc |
-|---|---|
-| Loadout/passive | validate mutation → `ON_UNEQUIP` cũ → persist loadout → `ON_EQUIP` mới → recompute `ALWAYS_ON`; derived modifier sống tới mutation/revision/status expiry kế tiếp. |
-| Battle | snapshot → `ON_BATTLE_START`; mỗi turn `ON_TURN_START` → action chain ở trên → `ON_TURN_END`; lethal damage chạy `BEFORE_DEATH` rồi `ON_DEATH`; kết quả/persist → `ON_BATTLE_END`; effect combat không thoát khỏi battle nếu không phát domain command tường minh. |
-| Item | validate inventory/target → `BEFORE_USE` → reserve/consume transactionally → `ON_USE` → `ON_CONSUME` chỉ sau khi quantity giảm thành công → persist commands; rollback toàn bộ nếu executor lỗi. |
-| World | snapshot cell/player → `BEFORE_EXPLORE` → movement (`ON_MOVE`) → reveal/resolve (`ON_EXPLORE`) → capture (`ON_CAPTURE`) → persist world/player command; `CAPABILITY` chỉ là gate được query, không tự enqueue. |
-| Refinement | snapshot recipe/resources → `BEFORE_REFINE` → deterministic roll → đúng một trong `ON_REFINE_SUCCESS`/`ON_REFINE_FAILURE` → persist consume/reward/status trong cùng transaction. |
-| Growth | worker checkpoint → `ON_GROWTH_TICK`; khi chạm cap phát `ON_GROWTH_COMPLETE` đúng một lần; persist Gu instance + checkpoint idempotency. |
-| Worker | lock/checkpoint owner → `ON_WORKER_TICK(worker_kind)` → commands → atomic checkpoint; không catch-up vô hạn và không chạy lại cùng tick ID. Worker kind enum ban đầu: `RESOURCE_REGEN`, `GU_HUNGER`, `STATUS_EXPIRY`, `APERTURE_GROWTH`. |
-
-Runtime effect có `duration:{clock:COMBAT_TURN|WORKER_TICK|REAL_TIME,value}` và
-`stacking:{key_scope:STATUS|SOURCE_DEFINITION|SOURCE_ACTOR,mode:REPLACE|REFRESH|ADD|MAX|INDEPENDENT,max_stacks,snapshot_scaling}`.
-Provenance bắt buộc gồm definition kind/id/version/content hash, block ID, source
-actor/entity và event/turn/time tạo. Runtime trả event/domain command; effect
-executor không tự ghi DB.
-
-Giới hạn compiler mặc định: tối đa 128 block/definition, 32 operation/block,
-64 target/operation, repeat 16, trigger depth 16 và 1.024 emitted event/action.
-Vượt giới hạn tạo lỗi/event rõ ràng và abort action; không truncate/no-op im lặng.
-
-### `UNIQUE` là native hook, không phải escape hatch im lặng
-
-Operation `{"op":"UNIQUE","code":"REBORN","params":{...}}` chỉ compile nếu
-registry có khóa `(schema_version, code)`. Registration phải khai báo domain và
-trigger được phép, schema params typed (required/default/range/unknown-field
-policy), target policy, RNG/determinism, cost và số event tối đa, executor owner,
-description renderer và test vector. Compiler fail closed khi code/trigger/domain/
-param/executor không hợp lệ. Không cho upload script/code và không chấp nhận
-warning rồi no-op. Manifest owner/disposition hiện tại chỉ là inventory migration,
-không phải native-hook registry.
-
-Schema params v2 không kế thừa `map[string]any`. Mỗi code trong Matrix B phải
-trỏ tới một `param_schema_id`; nhóm không có params dùng `EMPTY` và reject mọi
-field. Baseline migration registry:
-
-| Param schema | Typed fields | Hook áp dụng |
-|---|---|---|
-| `EMPTY` | không field | capability flags, `BYPASS_SHIELD`, `FIRST_TURN_EVADE`, `DOUBLE_DAMAGE_DEALT`, `POEM_INTENT`, các cast hook chưa có param trong CSV |
-| `VALUE_FLAT` | `value: number` required, finite; unit do hook cố định | add/restore/reduce resource, rank/lifespan/thought/soul/time, regen/generate tick hooks |
-| `RANGE_COUNT` | `range: integer[1,64]` hoặc count typed theo hook | capability khoảng cách và summon hooks có range/count |
-| `REBORN_V1` | `chance: RATIO` required; `mode: REWIND|IN_PLACE=REWIND`; `max_uses:int[1,10]=1`; `turn1_guaranteed:bool=false`; `revive_hp_percent:RATIO=.5`; `clear_debuffs:bool=true`; ba `empower_*_percent:RATIO=0`; `empower_turns:TURNS[1,100]=100` | `REBORN` |
-| `FORGET_INTENT_V1` | `chance:RATIO`; `disable_target_gu_turns:TURNS`; `max_successful_activations:COUNT`; `backfire_after_max:bool` | `FORGET_INTENT_INTERRUPT` |
-| `FORGET_WILL_V1` | `activation_chance`, `hit_user_chance`, `hit_self_chance`, `miss_chance`, `backfire_chance`: `RATIO` (nhánh target phải tổng 1); `backfire_disable_turns:TURNS` | `FORGET_WILL_CONFUSE` |
-| `SEIZE_V1` | `lifespan_ratio:RATIO_OR_MULTIPLIER` finite, `>0`, default `3` | `SEIZE_INITIATIVE` |
-| `APTITUDE_V1` | `aptitude_gain:FLAT`, `aptitude_cap:FLAT` và `gain<=cap` | `SACRIFICE_APTITUDE` |
-
-Mapping bắt buộc cho inventory hiện tại: `REBORN→REBORN_V1`,
-`FORGET_INTENT_INTERRUPT→FORGET_INTENT_V1`,
-`FORGET_WILL_CONFUSE→FORGET_WILL_V1`, `SEIZE_INITIATIVE→SEIZE_V1`,
-`SACRIFICE_APTITUDE→APTITUDE_V1`; các hook `ADD_*`, `RESTORE_*`,
-`INCREASE_TIME_SPEED`, `DECREASE_TIME_SPEED`, `REDUCE_STRESS`,
-`RANK_PROGRESS`, `*_REGEN_TICK`, `GENERATE_*_TICK` map tạm `VALUE_FLAT`;
-`IGNORE_MOVEMENT_RANGE` map `RANGE_COUNT`; mọi capability flag còn lại cùng
-`BYPASS_SHIELD`, `FIRST_TURN_EVADE`, `DOUBLE_DAMAGE_DEALT`, `POEM_INTENT` map
-`EMPTY`. Sáu cast hook map `EMPTY` chỉ nếu row không có params; nếu có params,
-compiler fail cho tới khi có schema riêng. `MAN_BEAST_BURIAL`, `POISON_VOW`,
-`SPRING_EGG_HATCH`, `STONE_APERTURE`, `THIRD_WATCH`, `RECORD_MESSAGE` hiện map
-`UNREGISTERED` và vì vậy bị v2 compiler reject.
-
-Trước khi một hook legacy thuộc `EMPTY`, `VALUE_FLAT` hoặc `RANGE_COUNT` được
-đánh dấu executable, registration phải thu hẹp schema thành ID riêng nếu unit,
-default hoặc range khác nhau. Năm code consume đang `migrate` và `RECORD_MESSAGE`
-không được compile v2 cho tới khi có schema chuyên biệt; đây là fail-closed có
-chủ ý, không phải silent no-op.
+Catalog metadata là nguồn đúng duy nhất cho editor và tooling; danh sách trên chỉ mô tả snapshot để đọc tài liệu. Mở rộng vocabulary phải sửa catalog cùng test conformance, không thêm map riêng trong compiler hoặc frontend.
 
 ### Cổng migration bắt buộc
 
@@ -677,25 +540,25 @@ không được quảng bá là effect hoạt động.
 
 **Bảng A — Cấu trúc dữ liệu Effect Cổ trùng** (struct chuẩn: `models.GuEffects` bao gồm `Blocks []ComposableEffectBlock`, `Active`, `Passive`, `Growth`, `Other`).
 
-*Khối `blocks` (Composable Effect Blocks — ECA Model, **prototype chưa được runtime thực thi**):*
+*Khối `blocks` (Composable Effect Blocks — ECA Model, contract phẳng v2):*
 
-`blocks` hiện được parse/validate; frontend còn dùng một phần operation để hiển thị, chỉnh sửa và phân loại Cổ shield/defense khi dựng đội. Backend gameplay chưa có executor gọi `GuEffects.GetBlocks()`, còn các hành vi gameplay backend/frontend vẫn phụ thuộc trực tiếp vào `active`, `passive`, `growth` và `other`. Do đó **không được xóa các namespace cũ hoặc chỉ author effect bằng `blocks`**.
+`blocks` được parse, validate và compile thành representation typed khi registry tải. Trong giai đoạn migration, nhiều gameplay consumer vẫn còn đọc `active`, `passive`, `growth` và `other`; chỉ xóa namespace cũ sau khi các cổng parity/migration bên dưới đều đạt.
 
-Dữ liệu hiện tại cũng chưa tương đương: bộ chuyển đổi prototype chỉ ánh xạ một phần active/passive/other, không ánh xạ `growth`, và còn bỏ sót các cơ chế như di chuyển, điều tra, cổng dịch chuyển, bắt quái, luyện cổ cùng nhiều hiệu ứng đặc thù. Một số dòng CSV có legacy effect nhưng không có block hữu dụng; `conditions` chưa được runtime xử lý. Muốn chuyển sang block-only phải hoàn thành đồng thời executor theo trigger/op, ánh xạ toàn bộ key, chuyển đổi mọi dòng CSV, chuyển các consumer frontend/backend và có kiểm thử parity trước khi xóa schema cũ.
+Dữ liệu hiện tại cũng chưa tương đương: bộ chuyển đổi prototype chỉ ánh xạ một phần active/passive/other, không ánh xạ `growth`, và còn bỏ sót các cơ chế như di chuyển, điều tra, cổng dịch chuyển, bắt quái, luyện cổ cùng nhiều hiệu ứng đặc thù. Một số dòng CSV có legacy effect nhưng không có block hữu dụng. Muốn chuyển sang block-only phải hoàn thành đồng thời executor theo trigger/op, ánh xạ toàn bộ key, chuyển đổi mọi dòng CSV, chuyển các consumer frontend/backend và có kiểm thử parity trước khi xóa schema cũ.
 
-Cấu trúc prototype của mỗi block:
+Cấu trúc flat v2 của mỗi block:
 - `trigger`: thời điểm kích hoạt (`ALWAYS_ON`, `ON_ACTION`, `ON_HIT`, `BEFORE_HIT`, `ON_TURN_START`, `ON_DEATH`, `ON_TICK`, `CAPABILITY`, `COMBAT_PASSIVE`, `PASSIVE`, `ON_BATTLE_START`, `BEFORE_ENEMY_ATTACK`, `ON_CAST`, `ON_CONSUME`, `ON_USE`).
 - `target`: mục tiêu thi triển (`selector`: `SELF`, `TARGET`, `ROW`, `COL`, `ALL_ENEMIES`, `ALL_ALLIES`, `ALL`; `bypass_frontline`: boolean).
 - `conditions`: điều kiện kích hoạt bổ trợ (mảng `{field, operator, value}`).
 - `operations`: mảng các thao tác nguyên tử (Atomic Operations) thuộc 9 nhóm:
   1. `DAMAGE`: sát thương phẳng (`FLAT`), hệ số (`MULTIPLIER`), lưu phái (`path`).
   2. `SHIELD`: khiên ảo Chân Nguyên Giáp (`FLAT`, `MULTIPLIER`).
-  3. `HEAL`: hồi máu (`FLAT`), chân nguyên (`MANA`), hút máu (`LIFESTEAL`).
-  4. `DIRECT_HP`: sát thương trừ máu trực tiếp xuyên khiên (`MAX_HP_PERCENT`, `DIRECT_HP_DAMAGE`), hủy khiên (`SHIELD_STRIP`).
+  3. `HEAL`: hồi phục `FLAT`, `PERCENT`, `LIFESTEAL` hoặc `RESOURCE` (resource chọn bằng field `resource`).
+  4. `DIRECT_HP`: sát thương trực tiếp `FLAT`, `MAX_HP_PERCENT` hoặc hủy khiên `SHIELD_STRIP`.
   5. `STAT_MOD`: biến đổi chỉ số nhân vật (`ATTACK`, `DEFENSE`, `SPEED`, `EVASION`, `CRIT_RATE`, `ALL`...) dạng `ADD_FLAT` hoặc `MULTIPLY_PERCENT`.
   6. `STATUS`: gắn hiệu ứng trạng thái quản lý bởi `statusfx` (`status_id`, `value`, `turns`, `chance`).
-  7. `BARRIER`: bảo hộ tuyệt đối (`INVINCIBLE`, `STATUS_IMMUNITY`).
-  8. `CLEANSE`: thanh tẩy hiệu ứng (`DISPEL_DEBUFF`, `DISPEL_BUFF`).
+  7. `BARRIER`: bảo hộ có subtype `FLAT` hoặc `PERCENT` cùng thời lượng.
+  8. `CLEANSE`: thanh tẩy `ALL`, `DEBUFF` hoặc một `STATUS` cụ thể.
   9. `UNIQUE`: cơ chế phi tuyến tính đặc thù (`code`, `params`).
 
 *Khối `active` (44 key):*

@@ -4,15 +4,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle, FileCode, Layers, Plus, Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
-import { EMPTY_EFFECT_ENVELOPE, type EffectBlock, type EffectEnvelope, type EffectOperation } from "@/lib/effect-blocks";
+import { EMPTY_EFFECT_ENVELOPE, type EffectBlock, type EffectCatalogMetadata, type EffectEnvelope, type EffectOperation } from "@/lib/effect-blocks";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 
-interface CatalogOperation { name: string; sub_types: string[]; required_fields: string[]; allowed_fields: string[] }
-interface EffectCatalogMetadata {
-  schema_version: 2; triggers: string[]; targets: string[]; operations: CatalogOperation[];
-  stats: string[]; statuses: string[]; resources: string[]; units: string[];
-  stack_policies: string[]; condition_fields: string[]; condition_operators: string[]; native_codes: string[];
-}
 interface ValidationIssue { path: string; error_code: string; message: string; block_id?: string; operation_index?: number }
 interface Props {
   effects: ApiResponseData;
@@ -24,6 +18,7 @@ interface Props {
 const fallbackMetadata: EffectCatalogMetadata = {
   schema_version: 2, triggers: [], targets: [], operations: [], stats: [], statuses: [], resources: [], units: [],
   stack_policies: [], condition_fields: [], condition_operators: [], native_codes: [],
+	  native_hooks: [],
 };
 const asEnvelope = (effects: ApiResponseData): EffectEnvelope => {
   const value = effects as Partial<EffectEnvelope>;

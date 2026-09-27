@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -22,7 +23,7 @@ type Snapshot struct {
 type Context struct {
 	RNG                             *rand.Rand
 	Actor, Target                   Snapshot
-	Rank, Mastery                   int
+	Rank, Mastery, Turn, Stacks     int
 	DaoMarks                        map[string]int64
 	Path                            []string
 	CatalogRevision                 uint64
@@ -42,14 +43,14 @@ const (
 )
 
 type Command struct {
-	Domain                    Domain
-	Operation                 OperationType
-	Code, SubType, Stat, Path string
-	Target                    Selector
-	Value                     float64
-	Params                    []byte
-	Values                    map[string]any
-	Status                    *statusfx.StatusOp
+	Domain                                                 Domain
+	Operation                                              OperationType
+	Code, SubType, Stat, Path, Unit, Resource, StackPolicy string
+	Target                                                 Selector
+	Value                                                  float64
+	Params                                                 []byte
+	Values                                                 map[string]any
+	Status                                                 *statusfx.StatusOp
 }
 type Result struct {
 	Commands  []Command
@@ -101,28 +102,29 @@ type compiledBlock struct {
 	operations []CompiledOperation
 }
 type CompiledOperation struct {
-	Type             OperationType
-	Trigger          Trigger
-	SubType          string
-	Target           *Target
-	Value            float64
-	Path, Stat, Code string
-	Params           []byte
-	Values           map[string]any
-	Status           *statusfx.StatusOp
+	Type                        OperationType
+	Trigger                     Trigger
+	SubType                     string
+	Target                      *Target
+	Value                       float64
+	Path, Stat, Code            string
+	Unit, Resource, StackPolicy string
+	Params                      []byte
+	Values                      map[string]any
+	Status                      *statusfx.StatusOp
 }
 
 func (Compiler) Compile(input []Block) (*Compiled, error) {
 	blocks := make([]compiledBlock, 0, len(input))
 	for _, b := range input {
-		if !Triggers[b.Trigger] {
+		if !effectcatalog.TriggerCatalog[string(b.Trigger)] {
 			return nil, fmt.Errorf("effect %q: unknown trigger %q", b.ID, b.Trigger)
 		}
-		if !Selectors[b.Target.Selector] {
+		if !effectcatalog.TargetCatalog[string(b.Target.Selector)] {
 			return nil, fmt.Errorf("effect %q: unknown selector %q", b.ID, b.Target.Selector)
 		}
 		for _, condition := range b.Conditions {
-			if !Conditions[strings.ToUpper(condition.Field)] || !ConditionOperators[strings.ToUpper(condition.Operator)] {
+			if !effectcatalog.ConditionFields[strings.ToUpper(condition.Field)] || !effectcatalog.ConditionOperators[strings.ToUpper(condition.Operator)] {
 				return nil, fmt.Errorf("effect %q: unknown condition %q/%q", b.ID, condition.Field, condition.Operator)
 			}
 		}
@@ -133,10 +135,25 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 		}
 		cb := compiledBlock{id: b.ID, trigger: b.Trigger, target: b.Target, conditions: conditions}
 		for _, op := range b.Operations {
-			if !Operations[op.Op] {
+			definition, knownOperation := effectcatalog.OperationCatalog[string(op.Op)]
+			if !knownOperation {
 				return nil, fmt.Errorf("effect %q: unknown operation %q", b.ID, op.Op)
 			}
-			co := CompiledOperation{Type: op.Op, SubType: op.SubType, Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Code: op.Code, Params: append([]byte(nil), op.Params...)}
+			if !definition.Triggers[string(b.Trigger)] {
+				return nil, fmt.Errorf("effect %q: operation %q does not support trigger %q", b.ID, op.Op, b.Trigger)
+			}
+			effectiveTarget := string(b.Target.Selector)
+			if op.Target != nil {
+				effectiveTarget = string(op.Target.Selector)
+			}
+			if !definition.Targets[effectiveTarget] {
+				return nil, fmt.Errorf("effect %q: operation %q does not support target %q", b.ID, op.Op, effectiveTarget)
+			}
+			subType := strings.ToUpper(op.SubType)
+			if subType != "" && len(definition.SubTypes) > 0 && !definition.SubTypes[subType] {
+				return nil, fmt.Errorf("effect %q: unknown subtype %q for %q", b.ID, op.SubType, op.Op)
+			}
+			co := CompiledOperation{Type: op.Op, SubType: subType, Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Unit: strings.ToUpper(op.Unit), Resource: strings.ToUpper(op.Resource), StackPolicy: strings.ToUpper(op.StackPolicy), Code: strings.ToUpper(op.Code), Params: append([]byte(nil), op.Params...)}
 			if len(op.Params) > 0 {
 				if err := json.Unmarshal(op.Params, &co.Values); err != nil {
 					return nil, fmt.Errorf("effect %q: invalid native params: %w", b.ID, err)
@@ -144,7 +161,7 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 			}
 			if op.Target != nil {
 				t := *op.Target
-				if !Selectors[t.Selector] {
+				if !effectcatalog.TargetCatalog[string(t.Selector)] {
 					return nil, fmt.Errorf("effect %q: unknown selector %q", b.ID, t.Selector)
 				}
 				co.Target = &t
@@ -157,11 +174,29 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 				resolved.Chance = op.Chance
 				co.Status = &resolved
 			}
-			if op.Stat != "" && !Stats[co.Stat] {
-				return nil, fmt.Errorf("effect %q: unknown stat/resource %q", b.ID, op.Stat)
+			if co.Stat != "" && !effectcatalog.StatCatalog[co.Stat] {
+				return nil, fmt.Errorf("effect %q: unknown stat %q", b.ID, op.Stat)
 			}
-			if op.Op == OpUnique && !NativeMechanics[op.Code] {
+			if co.Unit != "" && !effectcatalog.UnitCatalog[co.Unit] {
+				return nil, fmt.Errorf("effect %q: unknown unit %q", b.ID, op.Unit)
+			}
+			if co.Resource != "" && !effectcatalog.ResourceCatalog[co.Resource] {
+				return nil, fmt.Errorf("effect %q: unknown resource %q", b.ID, op.Resource)
+			}
+			if co.StackPolicy != "" && !effectcatalog.StackPolicyCatalog[co.StackPolicy] {
+				return nil, fmt.Errorf("effect %q: unknown stack policy %q", b.ID, op.StackPolicy)
+			}
+			if op.Op == OpUnique && effectcatalog.NativeHooks[co.Code].Triggers == nil {
 				return nil, fmt.Errorf("effect %q: unknown native mechanic %q", b.ID, op.Code)
+			}
+			if op.Op == OpUnique {
+				hook := effectcatalog.NativeHooks[co.Code]
+				if !hook.Triggers[string(b.Trigger)] {
+					return nil, fmt.Errorf("effect %q: native mechanic %q does not support trigger %q", b.ID, op.Code, b.Trigger)
+				}
+				if err := effectcatalog.ValidateNativeParams(co.Code, op.Params); err != nil {
+					return nil, fmt.Errorf("effect %q: %w", b.ID, err)
+				}
 			}
 			cb.operations = append(cb.operations, co)
 		}
@@ -311,7 +346,7 @@ func (c *Compiled) Evaluate(ctx Context, event Event) (Result, error) {
 			if op.Target != nil {
 				target = op.Target.Selector
 			}
-			cmd := Command{Domain: domain, Operation: op.Type, Code: op.Code, SubType: op.SubType, Stat: op.Stat, Path: op.Path, Target: target, Value: op.Value, Params: append([]byte(nil), op.Params...), Values: cloneValues(op.Values)}
+			cmd := Command{Domain: domain, Operation: op.Type, Code: op.Code, SubType: op.SubType, Stat: op.Stat, Path: op.Path, Unit: op.Unit, Resource: op.Resource, StackPolicy: op.StackPolicy, Target: target, Value: op.Value, Params: append([]byte(nil), op.Params...), Values: cloneValues(op.Values)}
 			if op.Status != nil {
 				s := *op.Status
 				cmd.Status = &s
@@ -325,9 +360,13 @@ func conditionsMatch(cs []Condition, ctx Context) bool {
 	for _, c := range cs {
 		var got float64
 		switch strings.ToUpper(c.Field) {
-		case "ACTOR_HP_PERCENT":
+		case "ACTOR_HP_PERCENT", "HP_PERCENT":
 			if ctx.Actor.MaxHP > 0 {
 				got = ctx.Actor.HP / ctx.Actor.MaxHP
+			}
+		case "MANA_PERCENT":
+			if ctx.Actor.MaxMana > 0 {
+				got = ctx.Actor.Mana / ctx.Actor.MaxMana
 			}
 		case "TARGET_HP_PERCENT":
 			if ctx.Target.MaxHP > 0 {
@@ -337,6 +376,10 @@ func conditionsMatch(cs []Condition, ctx Context) bool {
 			got = float64(ctx.Rank)
 		case "MASTERY":
 			got = float64(ctx.Mastery)
+		case "TURN":
+			got = float64(ctx.Turn)
+		case "STACKS":
+			got = float64(ctx.Stacks)
 		default:
 			return false
 		}
@@ -361,6 +404,10 @@ func conditionsMatch(cs []Condition, ctx Context) bool {
 			if got != c.Value {
 				return false
 			}
+		case "NE":
+			if got == c.Value {
+				return false
+			}
 		default:
 			return false
 		}
@@ -372,8 +419,8 @@ func domainFor(op CompiledOperation) Domain {
 		return DomainDerived
 	}
 	if op.Type == OpUnique {
-		if NativeMechanicDomains[op.Code] != "" {
-			return NativeMechanicDomains[op.Code]
+		if hook, ok := effectcatalog.NativeHooks[op.Code]; ok && hook.Domain != "" {
+			return Domain(hook.Domain)
 		}
 	}
 	return DomainCombat

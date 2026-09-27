@@ -60,17 +60,20 @@ const (
 )
 
 type Operation struct {
-	Op       OperationType   `json:"op"`
-	SubType  string          `json:"sub_type,omitempty"`
-	Target   *Target         `json:"target,omitempty"`
-	Value    float64         `json:"value,omitempty"`
-	Turns    int             `json:"turns,omitempty"`
-	Chance   float64         `json:"chance,omitempty"`
-	Path     string          `json:"path,omitempty"`
-	StatusID string          `json:"status_id,omitempty"`
-	Stat     string          `json:"stat,omitempty"`
-	Code     string          `json:"code,omitempty"`
-	Params   json.RawMessage `json:"params,omitempty"`
+	Op          OperationType   `json:"op"`
+	SubType     string          `json:"sub_type,omitempty"`
+	Target      *Target         `json:"target,omitempty"`
+	Value       float64         `json:"value,omitempty"`
+	Turns       int             `json:"turns,omitempty"`
+	Chance      float64         `json:"chance,omitempty"`
+	Path        string          `json:"path,omitempty"`
+	StatusID    string          `json:"status_id,omitempty"`
+	Stat        string          `json:"stat,omitempty"`
+	Unit        string          `json:"unit,omitempty"`
+	Resource    string          `json:"resource,omitempty"`
+	StackPolicy string          `json:"stack_policy,omitempty"`
+	Code        string          `json:"code,omitempty"`
+	Params      json.RawMessage `json:"params,omitempty"`
 }
 type Block struct {
 	ID         string      `json:"id,omitempty"`

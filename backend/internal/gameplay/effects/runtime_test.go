@@ -102,19 +102,19 @@ func TestCapabilityQueryReturnsDefensiveCopy(t *testing.T) {
 		Trigger: TriggerCapability,
 		Target:  Target{Selector: TargetSelf},
 		Operations: []Operation{{
-			Op: OpUnique, Code: "MARKETPLACE_ACCESS", Params: []byte(`{"range":2}`),
+			Op: OpUnique, Code: "MARKETPLACE_ACCESS", Params: []byte(`{}`),
 		}},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	capability, ok := compiled.Capability("marketplace_access")
-	if !ok || capability.Code != "MARKETPLACE_ACCESS" || string(capability.Params) != `{"range":2}` {
+	if !ok || capability.Code != "MARKETPLACE_ACCESS" || string(capability.Params) != `{}` {
 		t.Fatalf("unexpected capability: %+v, %v", capability, ok)
 	}
 	capability.Params[0] = 'x'
 	again, _ := compiled.Capability("MARKETPLACE_ACCESS")
-	if string(again.Params) != `{"range":2}` {
+	if string(again.Params) != `{}` {
 		t.Fatalf("compiled capability was mutated: %s", again.Params)
 	}
 }
@@ -124,7 +124,7 @@ func TestCapabilityQueryIgnoresNonUniqueOperations(t *testing.T) {
 		Trigger: TriggerCapability,
 		Target:  Target{Selector: TargetSelf},
 		Operations: []Operation{{
-			Op: OpDamage, Code: "MARKETPLACE_ACCESS", Value: 1,
+			Op: OpHeal, SubType: "FLAT", Code: "MARKETPLACE_ACCESS", Value: 1,
 		}},
 	}})
 	if err != nil {
