@@ -192,6 +192,7 @@ type operation struct {
 	Chance   any             `json:"chance,omitempty"`
 	Path     string          `json:"path,omitempty"`
 	Code     string          `json:"code,omitempty"`
+	Unit     string          `json:"unit,omitempty"`
 	Params   json.RawMessage `json:"params,omitempty"`
 }
 
@@ -222,10 +223,10 @@ var guFlat = map[string]operation{
 	"passive.stat_base_hp": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "HP"}, "passive.stat_base_speed": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "SPEED"},
 	"passive.movement": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "MOVEMENT"}, "passive.investigation": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "INVESTIGATION"},
 	"passive.hearing": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "HEARING"}, "passive.disguise_level": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "DISGUISE"},
-	"passive.time_speed_multiplier": {Op: "STAT_MOD", SubType: "MULTIPLY_PERCENT", Stat: "TIME_SPEED"}, "passive.success_rate_bonus": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "REFINE_SUCCESS"},
+	"passive.time_speed_multiplier": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "TIME_SPEED", Unit: "RATIO"}, "passive.success_rate_bonus": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "REFINE_SUCCESS", Unit: "PERCENT"},
 	"passive.refine_mana_tier": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "REFINE_MANA_TIER"}, "passive.storage_capacity": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "STORAGE"},
 	"passive.tenacity": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "TENACITY"}, "passive.cc_resist": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "CC_RESIST"},
-	"passive.dao_mark_multiplier": {Op: "STAT_MOD", SubType: "MULTIPLY_PERCENT", Stat: "DAO_MARK"}, "passive.path_conflict_reduction": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_CONFLICT_REDUCTION"},
+	"passive.dao_mark_multiplier": {Op: "STAT_MOD", SubType: "MULTIPLY_PERCENT", Stat: "DAO_MARK", Unit: "RATIO"}, "passive.path_conflict_reduction": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_CONFLICT_REDUCTION", Unit: "PERCENT"},
 	"growth.max_attack": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "ATTACK"}, "growth.max_defense": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "DEFENSE"},
 	"growth.max_hp": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "HP"}, "growth.max_speed": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "SPEED"},
 	"growth.hours_to_max": {Op: "UNIQUE", Code: "GROWTH_DURATION_HOURS"},
@@ -280,13 +281,23 @@ func ConvertGu(id string, raw []byte) Result {
 				continue
 			}
 			seen[bid] = true
-			tmpl.Value = decodeAny(fields[key])
+			value := decodeAny(fields[key])
+			if tmpl.Op == "UNIQUE" {
+				if (tmpl.Code == "PORTAL_CREATE" || tmpl.Code == "RANDOM_PORTAL") && value == false {
+					continue
+				}
+				if tmpl.Code == "CAPTURE_BONUS" || tmpl.Code == "GROWTH_DURATION_HOURS" {
+					tmpl.Params, _ = json.Marshal(map[string]any{"value": value})
+				}
+			} else {
+				tmpl.Value = value
+			}
 			trigger := "ALWAYS_ON"
 			if ns == "active" {
 				trigger = "ON_ACTION"
 			}
-			if ns == "growth" {
-				trigger = "ON_TICK"
+			if fq == "active.capture_bonus" || fq == "active.portal_create" || fq == "active.random_portal" {
+				trigger = "CAPABILITY"
 			}
 			blocks = append(blocks, block{ID: bid, Trigger: trigger, Target: target{Selector: "SELF"}, Operations: []operation{tmpl}})
 			converted = append(converted, f)
@@ -341,7 +352,7 @@ func ConvertItem(id string, raw []byte) Result {
 	return convertFlatNative(FormatItem, id, raw, "ON_CONSUME", itemMappings)
 }
 
-var gameFXMappings = map[string]string{"stat_mods": "STAT_MODS", "refine": "REFINE_SUCCESS", "dao_mark": "DAO_MARK_MODIFIER", "path_damage": "PATH_DAMAGE_MODIFIER", "path_resistance": "PATH_RESISTANCE_MODIFIER", "luck": "LUCK", "max_mana": "MAX_MANA", "mana_regen": "MANA_REGEN", "cultivation_efficiency": "CULTIVATION_EFFICIENCY", "dao_mark_gain": "DAO_MARK_GAIN", "healing_received": "HEALING_RECEIVED", "hp_regen": "HP_REGEN", "mental_resistance": "MENTAL_RESISTANCE", "soul_defense": "SOUL_DEFENSE", "soul_regen": "SOUL_REGEN", "tenacity": "TENACITY", "cc_resist": "CC_RESIST", "aperture_stress_bonus": "APERTURE_STRESS", "non_conflicting_dao_marks": "NON_CONFLICTING_DAO_MARKS", "immortal": "IMMORTAL", "disable_hp_regen": "DISABLE_HP_REGEN", "disable_mana_regen": "DISABLE_MANA_REGEN", "disable_resource_regen": "DISABLE_RESOURCE_REGEN", "disable_soul_regen": "DISABLE_SOUL_REGEN", "blocked_actions": "BLOCKED_ACTIONS"}
+var gameFXMappings = map[string]string{"stat_mods": "STAT_MODS", "refine": "REFINE_SUCCESS", "dao_mark": "DAO_MARK_MODIFIER", "path_damage": "PATH_DAMAGE_MODIFIER", "path_resistance": "PATH_RESISTANCE_MODIFIER", "luck": "LUCK", "max_mana": "MAX_MANA", "mana_regen": "MANA_REGEN", "cultivation_efficiency": "CULTIVATION_EFFICIENCY", "dao_mark_gain": "DAO_MARK_GAIN", "healing_received": "HEALING_RECEIVED", "hp_regen": "HP_REGEN", "mental_resistance": "MENTAL_RESISTANCE", "soul_defense": "SOUL_DEFENSE", "soul_regen": "SOUL_REGEN", "tenacity": "TENACITY", "cc_resist": "CC_RESIST", "aperture_stress_bonus": "APERTURE_STRESS", "non_conflicting_dao_marks": "NON_CONFLICTING_DAO_MARKS", "immortal": "IMMORTAL", "disable_hp_regen": "DISABLE_HP_REGEN", "disable_mana_regen": "DISABLE_MANA_REGEN", "disable_resource_regen": "DISABLE_RESOURCE_REGEN", "disable_soul_regen": "DISABLE_SOUL_REGEN"}
 
 func ConvertGameFX(id string, raw []byte) Result {
 	return convertFlatNative(FormatGameFX, id, raw, "ALWAYS_ON", gameFXMappings)

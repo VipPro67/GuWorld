@@ -32,7 +32,15 @@ report stays in `audit` until every converted effect has parity evidence and
 every problem array is empty. CLI and database backfill use the same gate error
 code and reason, and `-write` refuses a closed gate. Aperture variant event
 effects currently have no runtime semantic contract, so their converter
-deliberately reports them as ambiguous.
+deliberately reports them as ambiguous. `aperture_variant_events` is excluded
+from the database cutover owner list until it has a native executor and a
+parity oracle; an empty envelope must not be used as substitute semantics.
+
+`status_dictionary.blocked_actions` is action-gating metadata, not an effect,
+and remains in its dedicated column. Race, constitution, and status modifiers
+use `ALWAYS_ON`/`SELF` blocks. Item mappings must choose `ON_CONSUME` or
+`ON_USE` from the native execution surface rather than applying one generic
+trigger to every legacy key.
 
 Gu candidates contain only `schema_version` and `blocks`; legacy sibling
 namespaces are not copied into candidate output.

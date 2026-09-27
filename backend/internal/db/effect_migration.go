@@ -31,7 +31,8 @@ var migrationOwners = []effectOwner{
 	{"constitution_dictionary", `jsonb_build_object('key',key)`, `key=$1`, effectmigration.FormatGameFX},
 	{"status_dictionary", `jsonb_build_object('key',key)`, `key=$1`, effectmigration.FormatGameFX},
 	{"killer_moves", `jsonb_build_object('id',id)`, `id=$1::uuid`, effectmigration.FormatKiller},
-	{"aperture_variant_events", `jsonb_build_object('id',id)`, `id=$1::uuid`, effectmigration.FormatAperture},
+	// aperture_variant_events.effects has no runtime executor. Keep the owner
+	// outside cutover rather than manufacturing an envelope with false parity.
 }
 
 func effectHash(raw []byte) (string, error) {

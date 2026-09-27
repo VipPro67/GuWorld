@@ -153,3 +153,41 @@ func TestEmptyEnvelopePassesGate(t *testing.T) {
 		t.Fatalf("empty envelope report = %+v; envelope=%s", r.Report, r.Envelope)
 	}
 }
+
+func TestGuDomainMappingsUseRuntimeTriggersAndUnits(t *testing.T) {
+	r := ConvertGu("domain", []byte(`{"active":{"capture_bonus":0.2,"portal_create":true,"random_portal":false},"passive":{"time_speed_multiplier":2,"success_rate_bonus":15,"path_conflict_reduction":100},"growth":{"max_hp":10,"hours_to_max":24}}`))
+	if !r.Report.Validated {
+		t.Fatalf("candidate did not validate: %s", r.Envelope)
+	}
+	var envelope struct {
+		Blocks []struct {
+			Trigger    string      `json:"trigger"`
+			Operations []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	wantTrigger := map[string]string{"CAPTURE_BONUS": "CAPABILITY", "PORTAL_CREATE": "CAPABILITY", "TIME_SPEED": "ALWAYS_ON", "REFINE_SUCCESS": "ALWAYS_ON", "PATH_CONFLICT_REDUCTION": "ALWAYS_ON", "HP": "ALWAYS_ON"}
+	wantUnit := map[string]string{"TIME_SPEED": "RATIO", "REFINE_SUCCESS": "PERCENT", "PATH_CONFLICT_REDUCTION": "PERCENT"}
+	for _, b := range envelope.Blocks {
+		op := b.Operations[0]
+		key := op.Code
+		if key == "" {
+			key = op.Stat
+		}
+		if got := wantTrigger[key]; got != "" && b.Trigger != got {
+			t.Errorf("%s trigger = %s, want %s", key, b.Trigger, got)
+		}
+		if got := wantUnit[key]; got != "" && op.Unit != got {
+			t.Errorf("%s unit = %s, want %s", key, op.Unit, got)
+		}
+	}
+}
+
+func TestBlockedActionsRemainStatusMetadata(t *testing.T) {
+	r := ConvertGameFX("status", []byte(`{"blocked_actions":["explore"]}`))
+	if len(r.Report.Converted) != 0 || len(r.Report.Unsupported) != 1 {
+		t.Fatalf("blocked_actions was converted as an effect: %+v", r.Report)
+	}
+}
