@@ -23,6 +23,7 @@ import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiR
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
+import { EffectEnvelopeView } from "@/components/EffectBlockView";
 
 
 // Types
@@ -1041,14 +1042,8 @@ export default function WikiClientView({
 
                     {/* Stats & Price */}
                     <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-900/60 text-[10px] font-mono text-[var(--text-muted)]">
-                      {item.effects && Object.keys(item.effects).length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {Object.entries(item.effects).slice(0, 2).map(([k, v]) => (
-                            <span key={k} className="px-1 py-0.5 rounded bg-zinc-900/60 text-zinc-400 text-[8px]">
-                              {k}: +{v}
-                            </span>
-                          ))}
-                        </div>
+                      {item.effects ? (
+                        <EffectEnvelopeView effects={item.effects} />
                       ) : (
                         <span className="text-zinc-600 italic text-[9px]">Vật phẩm phổ thông</span>
                       )}

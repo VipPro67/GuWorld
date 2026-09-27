@@ -2,125 +2,6 @@
 import type { EffectEnvelope } from "@/lib/effect-blocks";
 export type { EffectBlock as ComposableEffectBlock, EffectOperation as AtomicOperation, EffectTarget as TargetScope, EffectCondition } from "@/lib/effect-blocks";
 
-/* Legacy declarations below are retained only temporarily for API compatibility.
- * New UI code must consume EffectEnvelope and selectors from effect-blocks. */
-// One apply_status entry: a statusfx status with optional intensity/duration.
-// The backend accepts a legacy string, a single object, or an array of these.
-export interface StatusApplication {
-  id: string;
-  value?: number;
-  turns?: number;
-}
-
-export type ApplyStatus = string | StatusApplication | StatusApplication[];
-
-// statusIds normalizes any apply_status authoring form into canonical IDs.
-// Accepts unknown: raw JSON from the API/admin editor may be loosely typed.
-export function statusIds(applyStatus?: unknown): string[] {
-  if (!applyStatus) return [];
-  const list = Array.isArray(applyStatus) ? applyStatus : [applyStatus];
-  const ids: string[] = [];
-  for (const entry of list) {
-    const id = (typeof entry === "string" ? entry : (entry as StatusApplication)?.id ?? "").toUpperCase();
-    if (id) ids.push(id);
-  }
-  return ids;
-}
-
-// statusValue returns the intensity declared for a status entry, or fallback
-// when the entry relies on the legacy top-level status_tick_damage.
-export function statusValue(applyStatus: unknown, id: string, fallback: number): number {
-  if (!applyStatus) return fallback;
-  const list = Array.isArray(applyStatus) ? applyStatus : [applyStatus];
-  for (const entry of list) {
-    if (typeof entry === "string") {
-      if (entry.toUpperCase() === id) return fallback;
-    } else if (entry && (entry as StatusApplication).id?.toUpperCase() === id) {
-      const value = (entry as StatusApplication).value;
-      return value && value > 0 ? value : fallback;
-    }
-  }
-  return fallback;
-}
-
-export interface ActiveEffect {
-  damage_flat?: number;
-  damage_mult?: number;
-  shield_mult?: number;
-  shield_flat?: number;
-  range?: number;
-  mana_regen?: number;
-  wood_transformation?: boolean;
-  blood_drain?: boolean;
-  replicate?: boolean;
-  apply_status?: ApplyStatus;
-  status_tick_damage?: number;
-  status_duration_ticks?: number;
-  lifesteal_rate?: number;
-  heal_flat?: number;
-  refine_mana_tier?: number;
-  cleansing_power?: number;
-  summon_phantom?: boolean;
-  generate_gu?: boolean;
-  curve_attack?: boolean;
-  summon_growth_phantoms?: boolean;
-  summon_count_per_tick?: number;
-  phantom_damage_scale?: number;
-  damage_hp_percent?: number;
-  shield_flat_reduce_percent?: number;
-  disable_gu_next_turn?: boolean;
-  forget_reality_chance?: number;
-  self_evasion_boost_percent?: number;
-  target_damage_reduce_percent?: number;
-  damage_path?: string;
-  stat_base_attack?: number;
-  [key: string]: ApiResponseData;
-}
-
-export interface PassiveEffect {
-  stat_base_attack?: number;
-  stat_base_defense?: number;
-  soul_refinement?: number;
-  storage_capacity?: number;
-  movement?: number;
-  investigation?: number;
-  hearing?: number;
-  evasion?: number;
-  refine_mana_tier?: number;
-  cleansing_power?: number;
-  damage_multiplier_on_hit?: number;
-  path_conflict_reduction?: number;
-  anti_heaven_damage_reduction_percent?: number;
-  anti_earth_damage_reduction_percent?: number;
-  anti_dream_damage_reduction_percent?: number;
-  immune_dream_status?: boolean;
-  forget_heaven_protection?: boolean;
-  forget_earth_protection?: boolean;
-  [key: string]: ApiResponseData;
-}
-
-export interface SpecialMechanic {
-  event_trigger: string;
-  action_code: string;
-  params: Record<string, ApiResponseData>;
-  chance: number;
-}
-
-export interface GrowthEffect {
-  max_attack?: number;
-  max_defense?: number;
-  max_hp?: number;
-  max_speed?: number;
-  hours_to_max?: number;
-}
-
-/** @deprecated Read-only compatibility for catalogs not migrated by the data job yet. */
-export type GuEffects = EffectEnvelope & {
-  active?: ActiveEffect | null; passive?: PassiveEffect | null; growth?: GrowthEffect | null;
-  support?: Record<string, ApiResponseData> | null; house?: Record<string, ApiResponseData> | null;
-  other?: SpecialMechanic[] | null;
-};
-
 export interface GuDictionaryItem {
   id: string;
   name: string;
@@ -128,7 +9,7 @@ export interface GuDictionaryItem {
   path: string[];
   gu_type: string;
   base_mana_cost: number;
-  effects: GuEffects;
+  effects: EffectEnvelope;
   food_types: string[];
   hunger_rate: number;
   max_hunger: number;

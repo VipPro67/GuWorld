@@ -1,9 +1,8 @@
 import { create } from "zustand";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import type { RequiredGus } from "@/lib/gu-dict";
-import type { EffectEnvelope } from "@/lib/effect-blocks";
-import { manaRegenPerTick } from "@/lib/effect-blocks";
-import type { EffectDictionaryEntry } from "@/lib/effects";
+import { manaRegenPerTick, nativeNumericValue } from "@/lib/effect-blocks";
+import type { EffectDictionaryEntry, EffectEnvelope } from "@/lib/effect-blocks";
 import { useUIStore } from "@/store/useUIStore";
 import { wsManager } from "@/lib/websocket";
 import { authFetch } from "@/lib/auth";
@@ -524,7 +523,7 @@ export const createManaSnapshotFromPlayer = (player: Player, guDictionary: Recor
   base_hp: player.base_hp,
   hp_regen_rate: player.hp_regen_rate || 0,
   mana_regen_tick_per_hour: manaRegenTickPerHour(player, guDictionary),
-  mana_regen_mult: 1 + (player.constitution ? (constitutionDictionary?.[player.constitution]?.effects?.mana_regen ?? 1) : 0),
+  mana_regen_mult: 1 + (player.constitution ? nativeNumericValue(constitutionDictionary?.[player.constitution], "MANA_REGEN") : 0),
 });
 
 export interface ImmortalAperture {
@@ -758,15 +757,6 @@ export interface GroundDrop {
 }
 
 
-/** @deprecated Legacy members remain read-only until every checked-in catalog is migrated. */
-export type GuEffects = EffectEnvelope & {
-  active?: Record<string, ApiResponseData>; support?: Record<string, ApiResponseData>;
-  passive?: Record<string, ApiResponseData>; house?: Record<string, ApiResponseData>;
-  growth?: { max_attack?: number; max_defense?: number; max_hp?: number; max_speed?: number; hours_to_max?: number };
-  other?: Array<{ event_trigger: string; action_code: string; params: Record<string, ApiResponseData> }>;
-  heal_aperture?: number;
-};
-
 export interface GuSpec {
   id: string;
   name: string;
@@ -774,7 +764,7 @@ export interface GuSpec {
   path: string[];
   gu_type: string;
   base_mana_cost: number;
-  effects: GuEffects;
+  effects: EffectEnvelope;
   hunger_rate: number;
   food_types: string[];
   max_hunger: number;

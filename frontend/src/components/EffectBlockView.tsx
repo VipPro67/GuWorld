@@ -1,6 +1,7 @@
 import React from "react";
 import type { EffectBlock, EffectEnvelope, EffectOperation, EffectTarget } from "@/lib/effect-blocks";
 import { translatePath } from "@/lib/translate";
+import { formatEffectTarget, renderableEffectBlocks } from "@/lib/effect-presentation";
 
 const TRIGGER_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   ALWAYS_ON: { label: "Nội Tại", color: "bg-purple-950/60 text-purple-300 border-purple-800/50", icon: "💎" },
@@ -127,43 +128,7 @@ const UNIQUE_NAMES: Record<string, string> = {
   IMMUNE_PATH_STATUS: "Miễn Nhiễm Trạng Thái Lưu Phái",
 };
 
-export function formatTarget(target?: EffectTarget): string | null {
-  if (!target || !target.selector) return null;
-  const sel = target.selector.toUpperCase();
-  let label = "";
-  switch (sel) {
-    case "TARGET":
-    case "SINGLE":
-      label = "Mục tiêu";
-      break;
-    case "ROW":
-      label = "Hàng ngang";
-      break;
-    case "COL":
-    case "COLUMN":
-      label = "Hàng dọc";
-      break;
-    case "ALL_ENEMIES":
-      label = "Toàn bộ địch";
-      break;
-    case "ALL_ALLIES":
-      label = "Toàn bộ đồng đội";
-      break;
-    case "ALL":
-      label = "Toàn trận";
-      break;
-    case "SELF":
-      label = target.bypass_frontline ? "Bản thân" : "";
-      break;
-    default:
-      label = sel;
-  }
-  if (!label && !target.bypass_frontline) return null;
-  if (target.bypass_frontline) {
-    return label ? `${label} (Xuyên hàng)` : "Xuyên hàng";
-  }
-  return label;
-}
+export const formatTarget = formatEffectTarget;
 
 export function formatOperation(op: EffectOperation): { text: string; color: string; icon: string } {
   const opType = (op.op || "").toUpperCase();
@@ -305,9 +270,9 @@ export const EffectBlocksList: React.FC<{ blocks?: EffectBlock[] | null }> = ({ 
 
 /** Canonical renderer. Unknown envelopes never throw and remain inspectable. */
 export const EffectEnvelopeView: React.FC<{ effects?: EffectEnvelope | null }> = ({ effects }) => {
-  if (!effects) return null;
-  if (effects.schema_version !== 2) {
-    return <div className="text-[10px] text-amber-400">Effect schema không được hỗ trợ: {String(effects.schema_version)}</div>;
+  const presentation = renderableEffectBlocks(effects);
+  if (presentation.unsupportedSchema !== undefined) {
+    return <div className="text-[10px] text-amber-400">Effect schema không được hỗ trợ: {String(presentation.unsupportedSchema)}</div>;
   }
-  return <EffectBlocksList blocks={effects.blocks} />;
+  return <EffectBlocksList blocks={presentation.blocks} />;
 };

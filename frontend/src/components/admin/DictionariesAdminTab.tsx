@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Plus, RefreshCw, X, Shield, Activity, Users } from "lucide-react";
 import { AdminDataGrid, AdminGridColumn } from "./AdminDataGrid";
-import { GuEffectsEditor } from "./GuEffectsEditor";
+import { GuEffectsEditor, validateAllEffectEditors } from "./GuEffectsEditor";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const parseEffectsForEditor = (value: ApiResponseData) => {
@@ -77,6 +77,10 @@ export const DictionariesAdminTab: React.FC<{
   const handleSave = async () => {
     if (!editItem || !editItem.key) {
       addToast("Key không được để trống", "error");
+      return;
+    }
+    if (!await validateAllEffectEditors()) {
+      addToast("Effect Block chưa hợp lệ", "error");
       return;
     }
     try {
