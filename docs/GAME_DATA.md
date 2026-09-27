@@ -45,10 +45,22 @@ trigger to every legacy key.
 Gu candidates contain only `schema_version` and `blocks`; legacy sibling
 namespaces are not copied into candidate output.
 
-Backend shadow comparison is opt-in with `EFFECT_BLOCK_SHADOW=1`. The legacy
-result remains authoritative; block evaluation runs synchronously against pure
-snapshots, never receives an effect applicator, and only emits structured
-`effect_block_shadow_mismatch` records.
+Backend shadow comparison primitives are opt-in with `EFFECT_BLOCK_SHADOW=1`.
+Rollout is intentionally staged in this order: player derived stats,
+capabilities, growth projections, item results, world/refinement commands,
+combat actions, then deterministic combat outcomes. The legacy result remains
+authoritative. Worker/world/item comparisons may only project commands/results;
+the shadow callback never receives an effect applicator and therefore cannot
+apply a second side effect. Mismatches are normalized for floating-point noise,
+map ordering, and nil/empty collections, then emitted as structured
+`effect_block_shadow_mismatch` records with definition ID/rank and catalog
+revision.
+
+For a non-empty candidate, golden/differential evidence alone never opens the
+migration gate. The runtime evidence recorder must attach the exact immutable
+snapshot ID, catalog revision, and observed `shadow_mismatch_count` to the
+machine-readable `effectmigration.Report`. Missing or unbound evidence keeps the
+gate closed; it is never inferred from a default counter.
 
 Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 

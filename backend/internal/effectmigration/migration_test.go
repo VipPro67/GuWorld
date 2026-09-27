@@ -93,7 +93,9 @@ func TestEvaluateMigrationGateLevels(t *testing.T) {
 		{"missing parity", Report{Total: 1, Validated: true, Converted: []Finding{finding}}, "missing_parity", false},
 		{"shadow mismatch", Report{Total: 1, Validated: true, Converted: []Finding{finding}, ExactParity: []Finding{finding}, ShadowMismatchCount: 1}, "shadow_mismatch", false},
 		{"empty envelope", Report{Validated: true}, "", true},
-		{"exact golden parity", Report{Total: 1, Validated: true, Converted: []Finding{finding}, ExactParity: []Finding{finding}}, "", true},
+		{"shadow not compared", Report{Total: 1, Validated: true, Converted: []Finding{finding}, ExactParity: []Finding{finding}}, "shadow_not_compared", false},
+		{"unbound shadow", Report{Total: 1, Validated: true, Converted: []Finding{finding}, ExactParity: []Finding{finding}, ShadowCompared: true}, "shadow_evidence_unbound", false},
+		{"selected zero-mismatch shadow", Report{Total: 1, Validated: true, Converted: []Finding{finding}, ExactParity: []Finding{finding}, ShadowCompared: true, ShadowSnapshotID: "snapshot-1", ShadowCatalogRevision: 7}, "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,8 +130,12 @@ func TestConversionNeedsRealParityEvidence(t *testing.T) {
 		t.Fatalf("conversion incorrectly established parity: %+v", r.Report)
 	}
 	RecordGoldenParity(&r.Report, append([]Finding(nil), r.Report.Converted...))
-	if !r.Report.MigrationGate || len(r.Report.ExactParity) != 1 {
-		t.Fatalf("golden evidence did not open gate: %+v", r.Report)
+	if r.Report.MigrationGate || r.Report.ErrorCode != "shadow_not_compared" || len(r.Report.ExactParity) != 1 {
+		t.Fatalf("golden evidence bypassed shadow gate: %+v", r.Report)
+	}
+	RecordShadowParityFor(&r.Report, "snapshot-1", 7, 0)
+	if !r.Report.MigrationGate {
+		t.Fatalf("bound zero-mismatch shadow did not open gate: %+v", r.Report)
 	}
 }
 
@@ -142,8 +148,26 @@ func TestMatchingExplicitBlocksProvideDifferentialParity(t *testing.T) {
 	}
 	withBlocks := []byte(`{"active":{"damage_flat":2},"blocks":` + string(envelope["blocks"]) + `}`)
 	result := ConvertGu("fixture", withBlocks)
-	if !result.Report.MigrationGate || len(result.Report.DifferentialParity) != 1 || len(result.Report.ExactParity) != 1 {
-		t.Fatalf("matching differential result did not open gate: %+v", result.Report)
+	if result.Report.MigrationGate || result.Report.ErrorCode != "shadow_not_compared" || len(result.Report.DifferentialParity) != 1 || len(result.Report.ExactParity) != 1 {
+		t.Fatalf("matching differential result bypassed shadow gate: %+v", result.Report)
+	}
+	RecordShadowParityFor(&result.Report, "snapshot-2", 9, 0)
+	if !result.Report.MigrationGate {
+		t.Fatalf("bound zero-mismatch shadow did not open gate: %+v", result.Report)
+	}
+}
+
+func TestShadowEvidenceMustBeBoundToSelectedCatalog(t *testing.T) {
+	finding := Finding{Format: FormatGu, SourceID: "fixture", Key: "damage_flat"}
+	report := Report{Total: 1, Validated: true, Converted: []Finding{finding}}
+	RecordGoldenParity(&report, []Finding{finding})
+	RecordShadowParity(&report, 0)
+	if report.MigrationGate || report.ErrorCode != "shadow_evidence_unbound" {
+		t.Fatalf("unbound evidence opened gate: %+v", report)
+	}
+	RecordShadowParityFor(&report, "snapshot-3", 11, 0)
+	if !report.MigrationGate || !report.ShadowParity {
+		t.Fatalf("selected evidence did not open gate: %+v", report)
 	}
 }
 
