@@ -49,6 +49,8 @@ type Report struct {
 	ShadowCompared               bool      `json:"shadow_compared"`
 	ShadowMismatchCount          int       `json:"shadow_mismatch_count"`
 	ShadowParity                 bool      `json:"shadow_parity"`
+	ShadowSnapshotID             string    `json:"shadow_snapshot_id,omitempty"`
+	ShadowCatalogRevision        uint64    `json:"shadow_catalog_revision,omitempty"`
 	AuditCoveragePercent         float64   `json:"audit_coverage_percent"`
 	MigrationGate                bool      `json:"migration_gate"`
 	ErrorCode                    string    `json:"error_code,omitempty"`
@@ -78,6 +80,8 @@ func EvaluateMigrationGate(report Report) GateEvaluation {
 		return fail("differential_divergence", "explicit blocks diverge from the legacy conversion")
 	case !report.Validated:
 		return fail("candidate_validation_failed", "candidate Block v2 envelope is invalid")
+	case report.ShadowMismatchCount < 0:
+		return fail("invalid_shadow_count", "shadow mismatch count cannot be negative")
 	case report.ShadowMismatchCount > 0:
 		return fail("shadow_mismatch", "shadow execution differs from the legacy runtime")
 	}
@@ -88,13 +92,19 @@ func EvaluateMigrationGate(report Report) GateEvaluation {
 	if parityCoverage(report.Converted, report.ExactParity) < len(report.Converted) {
 		return fail("missing_parity", "converted effects lack golden or differential parity evidence")
 	}
+	if !report.ShadowCompared {
+		return fail("shadow_not_compared", "shadow execution has not been recorded")
+	}
+	if strings.TrimSpace(report.ShadowSnapshotID) == "" || report.ShadowCatalogRevision == 0 {
+		return fail("shadow_evidence_unbound", "shadow evidence must identify the selected snapshot and catalog revision")
+	}
 	return GateEvaluation{MigrationGate: true}
 }
 
 func applyMigrationGate(report *Report) {
 	// ExactParity has provenance: only actual golden/differential successes feed it.
 	report.ExactParity = mergeParityEvidence(report.Converted, report.GoldenParity, report.DifferentialParity)
-	report.ShadowParity = report.ShadowCompared && report.ShadowMismatchCount == 0
+	report.ShadowParity = report.ShadowCompared && report.ShadowMismatchCount == 0 && strings.TrimSpace(report.ShadowSnapshotID) != "" && report.ShadowCatalogRevision > 0
 	report.AuditCoveragePercent = 100
 	if report.Total > 0 {
 		report.AuditCoveragePercent = 100 * float64(len(report.ExactParity)) / float64(report.Total)
@@ -163,6 +173,16 @@ func RecordDifferentialParity(report *Report, findings []Finding) {
 func RecordShadowParity(report *Report, mismatchCount int) {
 	report.ShadowCompared = true
 	report.ShadowMismatchCount = mismatchCount
+	applyMigrationGate(report)
+}
+
+// RecordShadowParityFor binds runtime evidence to the immutable player/world
+// snapshot and catalog revision selected for the migration decision.
+func RecordShadowParityFor(report *Report, snapshotID string, catalogRevision uint64, mismatchCount int) {
+	report.ShadowCompared = true
+	report.ShadowMismatchCount = mismatchCount
+	report.ShadowSnapshotID = strings.TrimSpace(snapshotID)
+	report.ShadowCatalogRevision = catalogRevision
 	applyMigrationGate(report)
 }
 

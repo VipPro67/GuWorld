@@ -5,7 +5,9 @@
 Run `go run ./cmd/migrate_gu_effects -format gu -source data/Gu.csv` from
 `backend/` for a non-destructive JSON audit. Candidate files are only written
 when both `-write` and a non-source `-output` path are supplied. See
-`docs/GAME_DATA.md` for report fields and the migration gate.
+`docs/GAME_DATA.md` for report fields and the migration gate. Non-empty
+candidates remain closed until runtime shadow evidence is bound to the selected
+snapshot and catalog revision in the machine-readable report.
 
 ## Prerequisites
 
