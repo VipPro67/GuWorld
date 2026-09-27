@@ -33,6 +33,17 @@ const STAT_NAMES: Record<string, string> = {
   LUCK: "Vận Khí",
   ALL: "Toàn Chỉ Số",
   DAMAGE_DEALT: "Sát Thương Gây Ra",
+  MOVEMENT: "Di Chuyển",
+  INVESTIGATION: "Điều Tra",
+  HEARING: "Thính Giác",
+  DISGUISE: "Ngụy Trang",
+  TIME_SPEED: "Tốc Độ Thời Gian",
+  REFINE_SUCCESS: "Tỷ Lệ Luyện Cổ",
+  REFINE_MANA_TIER: "Tiết Kiệm Chân Nguyên Luyện Cổ",
+  STORAGE: "Sức Chứa",
+  DAO_MARK: "Đạo Ngân",
+  PATH_CONFLICT_REDUCTION: "Giảm Xung Đột Đạo",
+  PATH_RESISTANCE: "Kháng Lưu Phái",
 };
 
 const STATUS_NAMES: Record<string, string> = {
@@ -109,6 +120,11 @@ const UNIQUE_NAMES: Record<string, string> = {
   ADD_LIFESPAN_YEARS: "Tăng Thọ Nguyên",
   RANK_PROGRESS: "Tiến Cảnh Giới",
   SACRIFICE_APTITUDE: "Tế Lễ Tư Chất",
+  PORTAL_CREATE: "Tạo Cổng Dịch Chuyển",
+  RANDOM_PORTAL: "Cổng Dịch Chuyển Ngẫu Nhiên",
+  CAPTURE_BONUS: "Tăng Tỷ Lệ Thu Phục",
+  GROWTH_DURATION_HOURS: "Thời Gian Trưởng Thành Cổ",
+  IMMUNE_PATH_STATUS: "Miễn Nhiễm Trạng Thái Lưu Phái",
 };
 
 export function formatTarget(target?: EffectTarget): string | null {

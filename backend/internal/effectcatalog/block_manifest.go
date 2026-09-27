@@ -45,7 +45,7 @@ var OperationCatalog = map[string]OperationDefinition{
 	"CLEANSE":   {values("ALL", "DEBUFF", "STATUS"), anyTriggers, combatTargets, values("op", "sub_type", "target", "status_id"), nil, true, false},
 	"UNIQUE":    {nil, anyTriggers, combatTargets, values("op", "target", "code", "params"), []string{"code"}, false, false},
 }
-var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "ACCURACY", "EVASION", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL", "MANA", "MOVEMENT", "INVESTIGATION", "REFINE_MANA_TIER", "STORAGE")
+var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "ACCURACY", "EVASION", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL", "MANA", "MOVEMENT", "INVESTIGATION", "HEARING", "DISGUISE", "TIME_SPEED", "REFINE_SUCCESS", "REFINE_MANA_TIER", "STORAGE", "DAO_MARK", "PATH_CONFLICT_REDUCTION", "PATH_RESISTANCE")
 var ResourceCatalog = values("HP", "MANA", "SOUL", "THOUGHT", "APTITUDE", "LIFESPAN", "STRESS", "PRIMEVAL_STONE", "IMMORTAL_STONE")
 var StatusCatalog = func() map[string]bool {
 	m := map[string]bool{}
@@ -149,7 +149,8 @@ func init() {
 		}
 	}
 	register("ON_CONSUME", "item_use", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "MAN_BEAST_BURIAL", "POISON_VOW", "SPRING_EGG_HATCH", "STONE_APERTURE", "THIRD_WATCH")
-	register("ON_TICK", "growth", "MANA_REGEN_TICK", "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK", "GENERATE_STONES_TICK", "GENERATE_IMMORTAL_STONES_TICK", "GROWTH_DURATION_HOURS")
+	register("ON_TICK", "growth", "MANA_REGEN_TICK", "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK", "GENERATE_STONES_TICK", "GENERATE_IMMORTAL_STONES_TICK")
+	register("ALWAYS_ON", "growth", "GROWTH_DURATION_HOURS")
 	register("ON_USE", "world", "RECORD_MESSAGE")
 	register("ON_TURN_START", "combat", "POEM_INTENT")
 	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE")
@@ -161,12 +162,15 @@ func init() {
 	// Schemas below describe parameters present in the authoritative CSV data.
 	// Hooks without parameters retain the closed EMPTY schema.
 	valueSchema := map[string]ParamSpec{"value": {Type: "number", Required: true}}
-	for _, code := range []string{"ADD_LIFESPAN_YEARS", "ADD_SOUL_MAX", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "GENERATE_IMMORTAL_STONES_TICK", "GENERATE_STONES_TICK", "INCREASE_TIME_SPEED", "MANA_REGEN_TICK", "REDUCE_STRESS", "RESTORE_MENTAL", "RESTORE_SOUL_HP", "SOUL_REGEN_TICK", "THOUGHT_REGEN_TICK"} {
+	for _, code := range []string{"ADD_LIFESPAN_YEARS", "ADD_SOUL_MAX", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "GENERATE_IMMORTAL_STONES_TICK", "GENERATE_STONES_TICK", "GROWTH_DURATION_HOURS", "INCREASE_TIME_SPEED", "MANA_REGEN_TICK", "REDUCE_STRESS", "RESTORE_MENTAL", "RESTORE_SOUL_HP", "SOUL_REGEN_TICK", "THOUGHT_REGEN_TICK"} {
 		hook := NativeHooks[code]
 		hook.Params = valueSchema
 		NativeHooks[code] = hook
 	}
-	hook := NativeHooks["SEIZE_INITIATIVE"]
+	hook := NativeHooks["CAPTURE_BONUS"]
+	hook.Params = valueSchema
+	NativeHooks["CAPTURE_BONUS"] = hook
+	hook = NativeHooks["SEIZE_INITIATIVE"]
 	hook.Params = map[string]ParamSpec{"lifespan_ratio": {Type: "number", Required: true}}
 	NativeHooks["SEIZE_INITIATIVE"] = hook
 	hook = NativeHooks["RECORD_MESSAGE"]

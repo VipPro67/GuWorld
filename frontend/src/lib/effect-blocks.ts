@@ -134,7 +134,8 @@ export function growthConfig(value: EffectLike): GrowthConfig | null {
 
 export const canCreatePortal = (value: EffectLike) => hasCapability(value, "PORTAL_CREATE");
 export const usesRandomPortal = (value: EffectLike) => hasCapability(value, "RANDOM_PORTAL");
-export const captureBonus = (value: EffectLike) => operationsBy(value, { code: "CAPTURE_BONUS" }).reduce((sum, op) => sum + numericValue(op).value, 0);
+export const captureBonus = (value: EffectLike) => operationsBy(value, { code: "CAPTURE_BONUS" })
+  .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op).value), 0);
 export const refinementTier = (value: EffectLike) => operationsBy(value, { op: "STAT_MOD", stat: "REFINE_MANA_TIER" })[0]?.value ?? 0;
 export const hasRefinementMechanic = (value: EffectLike, code: string) => hasOperation(value, { op: "UNIQUE", code });
 export const manaRegenPerTick = (value: EffectLike) => operationsBy(value, { trigger: "ON_TICK", op: "UNIQUE", code: "MANA_REGEN_TICK" })
