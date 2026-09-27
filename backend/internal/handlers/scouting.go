@@ -142,8 +142,8 @@ func InspectLocalPlayer(c *gin.Context) {
 		// Calculate investigation FOV range
 		investigationRange := 15.0 + float64(viewer.Rank)*2.0
 		for _, gu := range models.FilterEquippedActive(viewer.GuInventory) {
-			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-				investigationRange += spec.Effects.Passive.Investigation * 2.0
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+				investigationRange += models.GuStatValue(spec, "INVESTIGATION") * 2.0
 			}
 		}
 
@@ -834,12 +834,9 @@ func ResonanceScan(c *gin.Context) {
 				hasConceal := false
 				for _, g := range models.FilterEquippedActive(pGus) {
 					if spec, ok := models.GetGu(g.GuID, g.Rank); ok {
-						for _, mechanic := range spec.Effects.Other {
-							if mechanic.ActionCode == "CONCEAL_GU" || mechanic.ActionCode == "PERFECT_DISGUISE" {
-								hasConceal = true
-								break
-							}
-						}
+						_, conceal := models.GuNativeMechanic(spec, "CONCEAL_GU")
+						_, perfect := models.GuNativeMechanic(spec, "PERFECT_DISGUISE")
+						hasConceal = conceal || perfect
 					}
 				}
 
@@ -1403,4 +1400,3 @@ func ExecuteDivineGu(c *gin.Context) {
 		Message:            msg,
 	})
 }
-

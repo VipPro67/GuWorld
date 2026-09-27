@@ -27,7 +27,8 @@ var (
 // CalculatePlayerStats computes dynamic stats based on equipped active Gu bugs and passive mods
 
 func flushGrowthOnUnequip(player *models.Player, gu *models.GuInstance, spec *models.GuDictionaryItem) {
-	if spec.Effects.Growth == nil || spec.Effects.Growth.HoursToMax <= 0 || gu.EquippedAt == nil {
+	growth, hasGrowth := models.GrowthProfile(*spec)
+	if !hasGrowth || gu.EquippedAt == nil {
 		return
 	}
 	tsm := player.TimeSpeedMultiplier + models.EquippedTimeSpeedBonus(player.GuInventory)
@@ -46,14 +47,12 @@ func flushGrowthOnUnequip(player *models.Player, gu *models.GuInstance, spec *mo
 		player.GrowthData.Boosts.Speed += spd
 		player.BaseHP += hp
 	}
-	if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+	if gu.GrowthHours >= growth.HoursToMax {
 		player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
-			GuID:    gu.GuID,
-			Rank:    gu.Rank,
-			Attack:  spec.Effects.Growth.MaxAttack,
-			Defense: spec.Effects.Growth.MaxDefense,
-			HP:      spec.Effects.Growth.MaxHP,
-			Speed:   spec.Effects.Growth.MaxSpeed,
+			GuID:   gu.GuID,
+			Rank:   gu.Rank,
+			Attack: growth.MaxAttack, Defense: growth.MaxDefense,
+			HP: growth.MaxHP, Speed: growth.MaxSpeed,
 		})
 	}
 }
@@ -154,7 +153,8 @@ func EquipGu(c *gin.Context) {
 	}
 
 	isFullyGrown := false
-	if specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0 {
+	_, specHasGrowth := models.GrowthProfile(spec)
+	if specOk && specHasGrowth {
 		for _, fg := range player.GrowthData.FullyGrown {
 			if fg.GuID == targetGu.GuID && fg.Rank == targetGu.Rank {
 				isFullyGrown = true
@@ -201,7 +201,7 @@ func EquipGu(c *gin.Context) {
 				}
 			}
 			// Set EquippedAt if this Gu has growth effect and isn't fully grown yet
-			if specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0 && !isFullyGrown {
+			if specOk && specHasGrowth && !isFullyGrown {
 				now := time.Now()
 				targetGu.EquippedAt = &now
 			}
@@ -290,7 +290,8 @@ func UnequipAllGu(c *gin.Context) {
 
 			// Unequip — flush pending growth time
 			spec, specOk := models.GetGu(gu.GuID, gu.Rank)
-			hasGrowth := specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0
+			growth, hasGrowth := models.GrowthProfile(spec)
+			hasGrowth = specOk && hasGrowth
 			if hasGrowth && gu.EquippedAt != nil {
 				tsm := player.TimeSpeedMultiplier + models.EquippedTimeSpeedBonus(player.GuInventory)
 				if tsm <= 0 {
@@ -307,14 +308,12 @@ func UnequipAllGu(c *gin.Context) {
 						player.BaseHP += hp
 					}
 					// Check if fully grown now, add to FullyGrown list
-					if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+					if gu.GrowthHours >= growth.HoursToMax {
 						player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
-							GuID:    gu.GuID,
-							Rank:    gu.Rank,
-							Attack:  spec.Effects.Growth.MaxAttack,
-							Defense: spec.Effects.Growth.MaxDefense,
-							HP:      spec.Effects.Growth.MaxHP,
-							Speed:   spec.Effects.Growth.MaxSpeed,
+							GuID:   gu.GuID,
+							Rank:   gu.Rank,
+							Attack: growth.MaxAttack, Defense: growth.MaxDefense,
+							HP: growth.MaxHP, Speed: growth.MaxSpeed,
 						})
 					}
 				}

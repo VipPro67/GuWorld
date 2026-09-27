@@ -11,7 +11,7 @@ func TestRandomConstitutionEffect(t *testing.T) {
 	item := models.ItemSpec{ID: "ITEM_RANDOM_CONSTITUTION", Name: "Hoán Thể Đan"}
 	for i := 0; i < 50; i++ {
 		p := &models.Player{CharacterState: models.CharacterState{Constitution: "solar_sun_moon_body"}}
-		msg, err := randomConstitutionEffect(nil, p, item)
+		msg, err := randomConstitutionEffect(nil, p, item, 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -31,7 +31,7 @@ func TestRandomRaceEffect(t *testing.T) {
 	item := models.ItemSpec{ID: "ITEM_RANDOM_RACE", Name: "Hoán Huyết Đan"}
 	for i := 0; i < 50; i++ {
 		p := &models.Player{CharacterState: models.CharacterState{Race: "human"}}
-		msg, err := randomRaceEffect(nil, p, item)
+		msg, err := randomRaceEffect(nil, p, item, 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

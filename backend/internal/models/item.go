@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -62,6 +63,51 @@ type ItemSpec struct {
 	Path        string      `json:"path"`
 }
 
+type ItemEffectCommand struct {
+	Code  string
+	Value float64
+}
+
+var itemEffectCodes = map[string]bool{
+	"mortal_only": true, "immortal_only": true, "min_rank": true, "max_rank": true,
+	"restore_hp": true, "restore_mana": true, "soul_boost": true, "remove_negative_status": true,
+	"lifespan_boost": true, "open_mine_chest": true, "heal_aperture": true,
+	"increase_human_qi": true, "random_constitution": true, "random_race": true,
+	"change_race": true, "hunger": true,
+}
+
+func CompileItemEffects(input ItemEffects) ([]ItemEffectCommand, error) {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		if !itemEffectCodes[key] {
+			return nil, fmt.Errorf("unknown item effect %q", key)
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	commands := make([]ItemEffectCommand, 0, len(keys))
+	for _, key := range keys {
+		commands = append(commands, ItemEffectCommand{Code: key, Value: input[key]})
+	}
+	return commands, nil
+}
+
+// EffectCommands is the typed, deterministic item-use projection. Callers do
+// not inspect the persisted effects map directly.
+func (item ItemSpec) EffectCommands() []ItemEffectCommand {
+	commands, _ := CompileItemEffects(item.Effects)
+	return commands
+}
+
+func (item ItemSpec) HasEffect(code string) bool {
+	for _, command := range item.EffectCommands() {
+		if command.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
 // ItemRegistry holds the memory map cache of all Item specifications.
 var ItemRegistry = make(map[string]ItemSpec)
 
@@ -108,6 +154,9 @@ func LoadItemRegistry(db *sql.DB) error {
 		}
 
 		item.ItemType = item.Type // align for backward compatibility
+		if _, compileErr := CompileItemEffects(item.Effects); compileErr != nil {
+			return fmt.Errorf("compile item %s effects: %w", item.ID, compileErr)
+		}
 		newRegistry[item.ID] = item
 		count++
 	}

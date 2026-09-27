@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
@@ -9,6 +10,12 @@ import (
 // CompileLegacyToBlocks converts legacy ActiveEffect, PassiveEffect, and SpecialMechanic
 // into a standardized slice of ComposableEffectBlock.
 func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other []SpecialMechanic) []effects.Block {
+	return CompileLegacyToBlocksWithGrowth(active, passive, nil, other)
+}
+
+// CompileLegacyToBlocksWithGrowth is the compatibility compiler used while
+// legacy catalogs are being shadowed against Block v2.
+func CompileLegacyToBlocksWithGrowth(active *ActiveEffect, passive *PassiveEffect, growth *GrowthEffect, other []SpecialMechanic) []effects.Block {
 	var blocks []effects.Block
 
 	// 1. Passive Stats -> ALWAYS_ON Block
@@ -44,6 +51,22 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 		if passive.Luck != 0 {
 			passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: "LUCK", SubType: "ADD_FLAT", Value: passive.Luck})
 		}
+		legacyStats := []struct {
+			stat  string
+			value float64
+		}{
+			{"MOVEMENT", passive.Movement}, {"INVESTIGATION", passive.Investigation},
+			{"HEARING", passive.Hearing}, {"DISGUISE", passive.DisguiseLevel},
+			{"TIME_SPEED", passive.TimeSpeedMultiplier}, {"REFINE_SUCCESS", passive.SuccessRateBonus},
+			{"REFINE_MANA_TIER", passive.RefineManaTier}, {"STORAGE", passive.StorageCapacity},
+			{"SOUL_REFINEMENT", passive.SoulRefinement}, {"CLEANSING_POWER", passive.CleansingPower},
+			{"PATH_CONFLICT_REDUCTION", passive.PathConflictReduction},
+		}
+		for _, entry := range legacyStats {
+			if entry.value != 0 {
+				passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: entry.stat, SubType: "ADD_FLAT", Value: entry.value})
+			}
+		}
 		if len(passOps) > 0 {
 			blocks = append(blocks, effects.Block{
 				ID:         "LEGACY_PASSIVE_STATS",
@@ -51,6 +74,40 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 				Target:     effects.Target{Selector: effects.TargetSelf},
 				Operations: passOps,
 			})
+		}
+	}
+
+	if growth != nil {
+		var ops []effects.Operation
+		for _, entry := range []struct {
+			stat  string
+			value float64
+		}{{"ATTACK", growth.MaxAttack}, {"DEFENSE", growth.MaxDefense}, {"HP", growth.MaxHP}, {"SPEED", growth.MaxSpeed}} {
+			if entry.value != 0 {
+				ops = append(ops, effects.Operation{Op: effects.OpStatMod, Stat: entry.stat, SubType: "GROWTH_CAP", Value: entry.value})
+			}
+		}
+		if growth.HoursToMax > 0 {
+			ops = append(ops, effects.Operation{Op: effects.OpUnique, Code: "GROWTH_DURATION_HOURS", Params: []byte(fmt.Sprintf(`{"value":%g}`, growth.HoursToMax))})
+		}
+		if len(ops) > 0 {
+			blocks = append(blocks, effects.Block{ID: "LEGACY_GROWTH", Trigger: effects.TriggerAlwaysOn, Target: effects.Target{Selector: effects.TargetSelf}, Operations: ops})
+		}
+	}
+
+	if active != nil {
+		var capabilities []effects.Operation
+		if active.PortalCreate {
+			capabilities = append(capabilities, effects.Operation{Op: effects.OpUnique, Code: "PORTAL_CREATE"})
+		}
+		if active.RandomPortal {
+			capabilities = append(capabilities, effects.Operation{Op: effects.OpUnique, Code: "RANDOM_PORTAL"})
+		}
+		if active.CaptureBonus != 0 {
+			capabilities = append(capabilities, effects.Operation{Op: effects.OpUnique, Code: "CAPTURE_BONUS", Params: []byte(fmt.Sprintf(`{"value":%g}`, active.CaptureBonus))})
+		}
+		if len(capabilities) > 0 {
+			blocks = append(blocks, effects.Block{ID: "LEGACY_CAPABILITIES", Trigger: effects.TriggerCapability, Target: effects.Target{Selector: effects.TargetSelf}, Operations: capabilities})
 		}
 	}
 
@@ -224,6 +281,15 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 	for _, sm := range other {
 		trigger := effects.Trigger(strings.ToUpper(strings.TrimSpace(sm.EventTrigger)))
 		code := strings.ToUpper(strings.TrimSpace(sm.ActionCode))
+		params := sm.Params
+		if string(params) == "{}" || len(params) == 0 {
+			switch code {
+			case "MANA_REGEN_TICK":
+				params = []byte(`{"value":0.5}`)
+			case "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK":
+				params = []byte(`{"value":1}`)
+			}
+		}
 		blocks = append(blocks, effects.Block{
 			ID:      code,
 			Trigger: trigger,
@@ -232,7 +298,7 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 				{
 					Op:     effects.OpUnique,
 					Code:   code,
-					Params: sm.Params,
+					Params: params,
 				},
 			},
 		})

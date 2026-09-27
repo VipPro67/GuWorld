@@ -186,13 +186,13 @@ func Get(p *models.Player) Effects {
 		}
 		applied[gu.GuID] = true
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok || spec.Effects.Passive == nil {
+		if !ok {
 			continue
 		}
 		addEffects(&fx, Effects{
-			Tenacity:                 spec.Effects.Passive.Tenacity,
-			CCResist:                 spec.Effects.Passive.CCResist,
-			NonConflictingDaoMarks:   spec.Effects.Passive.PathConflictReduction >= 100,
+			Tenacity:               models.GuStatValue(spec, "TENACITY"),
+			CCResist:               models.GuStatValue(spec, "CC_RESIST"),
+			NonConflictingDaoMarks: models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION") >= 100,
 		})
 	}
 
@@ -288,11 +288,15 @@ func PassiveHPBonus(p *models.Player) float64 {
 		}
 		applied[gu.GuID] = true
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok || spec.Effects.Passive == nil || spec.Effects.Passive.StatBaseHP <= 0 {
+		if !ok {
+			continue
+		}
+		baseHP := models.GuStatValue(spec, "HP")
+		if baseHP <= 0 {
 			continue
 		}
 		masteryMult, daoMult := GuStatMultipliers(p.PathMasteries, p.DaoMarks, spec.Path)
-		total += spec.Effects.Passive.StatBaseHP * masteryMult * daoMult
+		total += baseHP * masteryMult * daoMult
 	}
 	return total
 }

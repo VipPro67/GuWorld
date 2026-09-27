@@ -79,8 +79,8 @@ func UseItem(c *gin.Context) {
 	}
 
 	if player.IsDead {
-		_, hasLifespanBoost := item.Effects["lifespan_boost"]
-		_, hasRaceChange := item.Effects["change_race"]
+		hasLifespanBoost := item.HasEffect("lifespan_boost")
+		hasRaceChange := item.HasEffect("change_race")
 		if !hasLifespanBoost && !hasRaceChange {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Chỉ có thể sử dụng Thọ Nguyên Cổ để hồi sinh!"})
 			return
@@ -97,9 +97,9 @@ func UseItem(c *gin.Context) {
 	messages := []string{}
 
 	// 1. Validation phase
-	for effectKey := range item.Effects {
-		if valHandler, ok := ValidateItemEffects[effectKey]; ok {
-			_, err := valHandler(tx, &player, item)
+	for _, effect := range item.EffectCommands() {
+		if valHandler, ok := ValidateItemEffects[effect.Code]; ok {
+			_, err := valHandler(tx, &player, item, effect.Value)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -108,9 +108,9 @@ func UseItem(c *gin.Context) {
 	}
 
 	// 2. Application phase
-	for effectKey := range item.Effects {
-		if appHandler, ok := ApplyItemEffects[effectKey]; ok {
-			msg, err := appHandler(tx, &player, item)
+	for _, effect := range item.EffectCommands() {
+		if appHandler, ok := ApplyItemEffects[effect.Code]; ok {
+			msg, err := appHandler(tx, &player, item, effect.Value)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -251,9 +251,9 @@ func UseItems(c *gin.Context) {
 		}
 
 		// 1. Validation phase
-		for effectKey := range item.Effects {
-			if valHandler, ok := ValidateItemEffects[effectKey]; ok {
-				_, err := valHandler(tx, &player, item)
+		for _, effect := range item.EffectCommands() {
+			if valHandler, ok := ValidateItemEffects[effect.Code]; ok {
+				_, err := valHandler(tx, &player, item, effect.Value)
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s: %s", item.Name, err.Error())})
 					return
@@ -263,9 +263,9 @@ func UseItems(c *gin.Context) {
 
 		// 2. Application phase
 		itemMsg := []string{}
-		for effectKey := range item.Effects {
-			if appHandler, ok := ApplyItemEffects[effectKey]; ok {
-				msg, err := appHandler(tx, &player, item)
+		for _, effect := range item.EffectCommands() {
+			if appHandler, ok := ApplyItemEffects[effect.Code]; ok {
+				msg, err := appHandler(tx, &player, item, effect.Value)
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s: %s", item.Name, err.Error())})
 					return
