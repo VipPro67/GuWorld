@@ -39,7 +39,7 @@ func main() {
 	result, err := db.BackfillEffectsBlockV2(context.Background())
 	if err != nil {
 		for _, conflict := range result.Conflicts {
-			fmt.Fprintf(os.Stderr, "%s %s: %s\n", conflict.Table, conflict.Key, conflict.Reason)
+			fmt.Fprintf(os.Stderr, "%s %s: %s: %s\n", conflict.Table, conflict.Key, conflict.Code, conflict.Reason)
 		}
 		fatal(err)
 	}

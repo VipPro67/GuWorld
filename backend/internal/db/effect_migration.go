@@ -12,7 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/effectmigration"
 )
 
-type EffectMigrationConflict struct{ Table, Key, Reason string }
+type EffectMigrationConflict struct{ Table, Key, Code, Reason string }
 type EffectMigrationResult struct {
 	Revision         int64
 	Updated, Skipped int
@@ -94,7 +94,7 @@ func BackfillEffectsBlockV2(ctx context.Context) (EffectMigrationResult, error) 
 			}
 			key := string(keyRaw)
 			if storedHash != "" && storedHash != currentHash {
-				result.Conflicts = append(result.Conflicts, EffectMigrationConflict{owner.table, key, "content_hash does not match current database payload"})
+				result.Conflicts = append(result.Conflicts, EffectMigrationConflict{Table: owner.table, Key: key, Code: "content_hash_mismatch", Reason: "content_hash does not match current database payload"})
 				continue
 			}
 			if _, err = tx.ExecContext(ctx, `INSERT INTO effect_catalog_snapshots(revision,table_name,row_key,effects_before,schema_version_before,catalog_revision_before,content_hash_before) VALUES($1,$2,$3::jsonb,$4::jsonb,$5,$6,$7) ON CONFLICT DO NOTHING`, result.Revision, owner.table, keyRaw, effects, schemaVersion, oldRevision, currentHash); err != nil {
@@ -108,8 +108,9 @@ func BackfillEffectsBlockV2(ctx context.Context) (EffectMigrationResult, error) 
 				continue
 			}
 			converted := effectmigration.Convert(owner.format, key, effects)
-			if len(converted.Envelope) == 0 || len(converted.Report.Unsupported)+len(converted.Report.Ambiguous)+len(converted.Report.Duplicate)+len(converted.Report.DivergentExplicitBlockLegacy) != 0 || len(effectcatalog.ValidateBlockV2(converted.Envelope, effectcatalog.Location{Source: owner.table, Key: key})) != 0 {
-				result.Conflicts = append(result.Conflicts, EffectMigrationConflict{owner.table, key, "legacy payload has no lossless validated Block v2 conversion"})
+			decision := effectmigration.EvaluateMigrationGate(converted.Report)
+			if !decision.MigrationGate {
+				result.Conflicts = append(result.Conflicts, EffectMigrationConflict{Table: owner.table, Key: key, Code: decision.ErrorCode, Reason: decision.Reason})
 				continue
 			}
 			newHash, _ := effectHash(converted.Envelope)
