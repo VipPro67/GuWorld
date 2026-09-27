@@ -21,6 +21,8 @@ type aggregate struct {
 	Format        effectmigration.Format   `json:"format"`
 	Results       []effectmigration.Result `json:"results"`
 	MigrationGate bool                     `json:"migration_gate"`
+	ErrorCode     string                   `json:"error_code,omitempty"`
+	ErrorReason   string                   `json:"error_reason,omitempty"`
 }
 
 func main() {
@@ -57,10 +59,18 @@ func main() {
 	}
 	fatalIf(err)
 	gate := len(results) > 0
+	var gateCode, gateReason string
 	for _, result := range results {
 		gate = gate && result.Report.MigrationGate
+		if gateCode == "" && !result.Report.MigrationGate {
+			decision := effectmigration.EvaluateMigrationGate(result.Report)
+			gateCode, gateReason = decision.ErrorCode, decision.Reason
+		}
 	}
-	audit := aggregate{SchemaVersion: 1, DryRun: !write, Source: source, Format: format, Results: results, MigrationGate: gate}
+	if len(results) == 0 {
+		gateCode, gateReason = "empty_input", "input contains no effect records"
+	}
+	audit := aggregate{SchemaVersion: 1, DryRun: !write, Source: source, Format: format, Results: results, MigrationGate: gate, ErrorCode: gateCode, ErrorReason: gateReason}
 	encoded, err := json.MarshalIndent(audit, "", "  ")
 	fatalIf(err)
 	encoded = append(encoded, '\n')
@@ -71,6 +81,9 @@ func main() {
 	}
 	fatalIf(err)
 	if write {
+		if !gate {
+			fatalIf(fmt.Errorf("%s: %s", gateCode, gateReason))
+		}
 		fatalIf(os.WriteFile(output, candidate, 0o644))
 	}
 }
@@ -149,13 +162,8 @@ func rejectSourceDestination(absSource, destination string) error {
 }
 
 func mergeCandidate(format effectmigration.Format, legacy, envelope []byte) ([]byte, error) {
-	if format != effectmigration.FormatGu {
-		return envelope, nil
-	}
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(legacy, &root); err != nil {
-		return nil, err
-	}
+	_ = format
+	_ = legacy
 	var candidate struct {
 		SchemaVersion int             `json:"schema_version"`
 		Blocks        json.RawMessage `json:"blocks"`
@@ -163,8 +171,5 @@ func mergeCandidate(format effectmigration.Format, legacy, envelope []byte) ([]b
 	if err := json.Unmarshal(envelope, &candidate); err != nil {
 		return nil, err
 	}
-	version, _ := json.Marshal(candidate.SchemaVersion)
-	root["schema_version"] = version
-	root["blocks"] = candidate.Blocks
-	return json.Marshal(root)
+	return json.Marshal(candidate)
 }

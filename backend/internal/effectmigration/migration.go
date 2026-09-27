@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 )
 
 type Format string
@@ -35,15 +37,133 @@ type Report struct {
 	Phase                        string    `json:"phase"`
 	Total                        int       `json:"total"`
 	Converted                    []Finding `json:"converted"`
+	Validated                    bool      `json:"validated"`
+	GoldenParity                 []Finding `json:"golden_parity"`
+	DifferentialParity           []Finding `json:"differential_parity"`
 	ExactParity                  []Finding `json:"exact_parity"`
 	Unsupported                  []Finding `json:"unsupported"`
 	Ambiguous                    []Finding `json:"ambiguous"`
 	Duplicate                    []Finding `json:"duplicate"`
 	DivergentExplicitBlockLegacy []Finding `json:"divergent_explicit_block_legacy"`
 	SuggestedMapping             []Finding `json:"suggested_mapping"`
+	ShadowCompared               bool      `json:"shadow_compared"`
 	ShadowMismatchCount          int       `json:"shadow_mismatch_count"`
+	ShadowParity                 bool      `json:"shadow_parity"`
 	AuditCoveragePercent         float64   `json:"audit_coverage_percent"`
 	MigrationGate                bool      `json:"migration_gate"`
+	ErrorCode                    string    `json:"error_code,omitempty"`
+	ErrorReason                  string    `json:"error_reason,omitempty"`
+}
+
+// GateEvaluation is the stable decision shared by file and database migrations.
+type GateEvaluation struct {
+	MigrationGate bool   `json:"migration_gate"`
+	ErrorCode     string `json:"error_code,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+// EvaluateMigrationGate evaluates evidence, rather than treating successful
+// serialization as semantic parity. GoldenParity and DifferentialParity must
+// be populated by the corresponding fixture/differential runner.
+func EvaluateMigrationGate(report Report) GateEvaluation {
+	fail := func(code, reason string) GateEvaluation { return GateEvaluation{ErrorCode: code, Reason: reason} }
+	switch {
+	case len(report.Unsupported) > 0:
+		return fail("unsupported_effect", "legacy payload contains unsupported effects")
+	case len(report.Ambiguous) > 0:
+		return fail("ambiguous_effect", "legacy payload contains ambiguous effects")
+	case len(report.Duplicate) > 0:
+		return fail("duplicate_effect", "legacy payload contains duplicate effects")
+	case len(report.DivergentExplicitBlockLegacy) > 0:
+		return fail("differential_divergence", "explicit blocks diverge from the legacy conversion")
+	case !report.Validated:
+		return fail("candidate_validation_failed", "candidate Block v2 envelope is invalid")
+	case report.ShadowMismatchCount > 0:
+		return fail("shadow_mismatch", "shadow execution differs from the legacy runtime")
+	}
+	// A validated empty envelope has no semantics for a parity runner to compare.
+	if report.Total == 0 {
+		return GateEvaluation{MigrationGate: true}
+	}
+	if parityCoverage(report.Converted, report.ExactParity) < len(report.Converted) {
+		return fail("missing_parity", "converted effects lack golden or differential parity evidence")
+	}
+	return GateEvaluation{MigrationGate: true}
+}
+
+func applyMigrationGate(report *Report) {
+	// ExactParity has provenance: only actual golden/differential successes feed it.
+	report.ExactParity = mergeParityEvidence(report.Converted, report.GoldenParity, report.DifferentialParity)
+	report.ShadowParity = report.ShadowCompared && report.ShadowMismatchCount == 0
+	report.AuditCoveragePercent = 100
+	if report.Total > 0 {
+		report.AuditCoveragePercent = 100 * float64(len(report.ExactParity)) / float64(report.Total)
+		if report.AuditCoveragePercent > 100 {
+			report.AuditCoveragePercent = 100
+		}
+	}
+	decision := EvaluateMigrationGate(*report)
+	report.MigrationGate, report.ErrorCode, report.ErrorReason = decision.MigrationGate, decision.ErrorCode, decision.Reason
+	if decision.MigrationGate {
+		report.Phase = "migration"
+	}
+}
+
+func findingIdentity(f Finding) string {
+	return string(f.Format) + "\x00" + f.SourceID + "\x00" + f.Namespace + "\x00" + f.Key
+}
+
+func parityCoverage(converted, evidence []Finding) int {
+	wanted := make(map[string]bool, len(converted))
+	for _, finding := range converted {
+		wanted[findingIdentity(finding)] = true
+	}
+	covered := map[string]bool{}
+	for _, finding := range evidence {
+		id := findingIdentity(finding)
+		if wanted[id] {
+			covered[id] = true
+		}
+	}
+	return len(covered)
+}
+
+func mergeParityEvidence(converted []Finding, groups ...[]Finding) []Finding {
+	wanted := make(map[string]bool, len(converted))
+	for _, finding := range converted {
+		wanted[findingIdentity(finding)] = true
+	}
+	seen := map[string]bool{}
+	out := []Finding{}
+	for _, group := range groups {
+		for _, finding := range group {
+			id := findingIdentity(finding)
+			if wanted[id] && !seen[id] {
+				seen[id] = true
+				out = append(out, finding)
+			}
+		}
+	}
+	return out
+}
+
+// RecordGoldenParity records successful fixture comparisons and re-evaluates the gate.
+func RecordGoldenParity(report *Report, findings []Finding) {
+	report.GoldenParity = nz(findings)
+	applyMigrationGate(report)
+}
+
+// RecordDifferentialParity records successful legacy-vs-candidate comparisons.
+func RecordDifferentialParity(report *Report, findings []Finding) {
+	report.DifferentialParity = nz(findings)
+	applyMigrationGate(report)
+}
+
+// RecordShadowParity records that a shadow run completed and how many comparisons differed.
+func RecordShadowParity(report *Report, mismatchCount int) {
+	report.ShadowCompared = true
+	report.ShadowMismatchCount = mismatchCount
+	applyMigrationGate(report)
 }
 
 type Result struct {
@@ -122,7 +242,7 @@ func ConvertGu(id string, raw []byte) Result {
 	if err := json.Unmarshal(raw, &root); err != nil {
 		return finalize(nil, []Finding{{Format: FormatGu, SourceID: id, Reason: err.Error()}}, nil, nil, nil, nil)
 	}
-	var blocks []block
+	blocks := []block{}
 	var converted, unsupported, ambiguous, duplicate, divergent []Finding
 	seen := map[string]bool{}
 	for _, ns := range []string{"active", "passive", "growth", "explore", "support", "refinement", "house"} {
@@ -193,17 +313,26 @@ func ConvertGu(id string, raw []byte) Result {
 		SchemaVersion int     `json:"schema_version"`
 		Blocks        []block `json:"blocks"`
 	}{2, blocks})
+	differentialProven := false
 	if explicit := root["blocks"]; len(explicit) > 0 && !emptyJSON(explicit) {
 		var got []block
-		if json.Unmarshal(explicit, &got) == nil {
+		if err := json.Unmarshal(explicit, &got); err != nil {
+			unsupported = append(unsupported, Finding{Format: FormatGu, SourceID: id, Namespace: "blocks", Reason: "explicit blocks must be an array"})
+		} else {
 			a, _ := json.Marshal(got)
 			b, _ := json.Marshal(blocks)
 			if !bytes.Equal(a, b) {
 				divergent = append(divergent, Finding{Format: FormatGu, SourceID: id, Namespace: "blocks", Reason: "explicit blocks differ from deterministic legacy conversion"})
+			} else {
+				differentialProven = true
 			}
 		}
 	}
-	return finalize(envelope, unsupported, ambiguous, duplicate, divergent, converted)
+	result := finalize(envelope, unsupported, ambiguous, duplicate, divergent, converted)
+	if differentialProven {
+		RecordDifferentialParity(&result.Report, converted)
+	}
+	return result
 }
 
 var itemMappings = map[string]string{"restore_hp": "RESTORE_HP", "increase_human_qi": "INCREASE_HUMAN_QI", "heal_aperture": "HEAL_APERTURE", "random_constitution": "RANDOM_CONSTITUTION", "random_race": "RANDOM_RACE", "open_mine_chest": "OPEN_MINE_CHEST", "hunger": "RESTORE_HUNGER"}
@@ -233,7 +362,7 @@ func convertFlatNative(format Format, id string, raw []byte, trigger string, map
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		return finalize(nil, []Finding{{Format: format, SourceID: id, Reason: err.Error()}}, nil, nil, nil, nil)
 	}
-	var blocks []block
+	blocks := []block{}
 	var converted, unsupported, ambiguous, duplicate []Finding
 	seen := map[string]bool{}
 	for _, key := range sortedKeys(fields) {
@@ -266,7 +395,7 @@ func convertFlatNative(format Format, id string, raw []byte, trigger string, map
 }
 
 func finalize(envelope json.RawMessage, unsupported, ambiguous, duplicate, divergent, converted []Finding) Result {
-	r := Report{SchemaVersion: 1, Phase: "audit", Unsupported: nz(unsupported), Ambiguous: nz(ambiguous), Duplicate: nz(duplicate), DivergentExplicitBlockLegacy: nz(divergent), Converted: nz(converted), ExactParity: []Finding{}, SuggestedMapping: []Finding{}}
+	r := Report{SchemaVersion: 1, Phase: "audit", Unsupported: nz(unsupported), Ambiguous: nz(ambiguous), Duplicate: nz(duplicate), DivergentExplicitBlockLegacy: nz(divergent), Converted: nz(converted), GoldenParity: []Finding{}, DifferentialParity: []Finding{}, ExactParity: []Finding{}, SuggestedMapping: []Finding{}}
 	for _, group := range [][]Finding{unsupported, ambiguous} {
 		for _, f := range group {
 			if len(f.SuggestedMapping) > 0 {
@@ -275,13 +404,8 @@ func finalize(envelope json.RawMessage, unsupported, ambiguous, duplicate, diver
 		}
 	}
 	r.Total = len(converted) + len(unsupported) + len(ambiguous) + len(duplicate)
-	if r.Total > 0 {
-		r.AuditCoveragePercent = 100 * float64(len(converted)+len(r.ExactParity)) / float64(r.Total)
-	}
-	r.MigrationGate = r.Total > 0 && len(r.ExactParity) == r.Total && len(unsupported) == 0 && len(ambiguous) == 0 && len(duplicate) == 0 && len(divergent) == 0 && r.ShadowMismatchCount == 0
-	if r.MigrationGate {
-		r.Phase = "migration"
-	}
+	r.Validated = len(envelope) > 0 && len(effectcatalog.ValidateBlockV2(envelope, effectcatalog.Location{Source: "migration_candidate"})) == 0
+	applyMigrationGate(&r)
 	return Result{Envelope: envelope, Report: r}
 }
 func sortedKeys(m map[string]json.RawMessage) []string {

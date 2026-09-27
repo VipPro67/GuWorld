@@ -72,9 +72,84 @@ func TestReportJSONUsesStableMachineReadableArrays(t *testing.T) {
 	if err = json.Unmarshal(b, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"converted", "exact_parity", "unsupported", "ambiguous", "duplicate", "divergent_explicit_block_legacy", "suggested_mapping"} {
+	for _, key := range []string{"converted", "golden_parity", "differential_parity", "exact_parity", "unsupported", "ambiguous", "duplicate", "divergent_explicit_block_legacy", "suggested_mapping"} {
 		if _, ok := decoded[key].([]any); !ok {
 			t.Fatalf("%s is not an array: %s", key, b)
 		}
+	}
+}
+
+func TestEvaluateMigrationGateLevels(t *testing.T) {
+	finding := Finding{Format: FormatGu, SourceID: "fixture", Key: "damage_flat"}
+	tests := []struct {
+		name   string
+		report Report
+		code   string
+		pass   bool
+	}{
+		{"unsupported", Report{Validated: true, Unsupported: []Finding{finding}}, "unsupported_effect", false},
+		{"ambiguous", Report{Validated: true, Ambiguous: []Finding{finding}}, "ambiguous_effect", false},
+		{"divergence", Report{Validated: true, DivergentExplicitBlockLegacy: []Finding{finding}}, "differential_divergence", false},
+		{"missing parity", Report{Total: 1, Validated: true, Converted: []Finding{finding}}, "missing_parity", false},
+		{"shadow mismatch", Report{Total: 1, Validated: true, Converted: []Finding{finding}, ExactParity: []Finding{finding}, ShadowMismatchCount: 1}, "shadow_mismatch", false},
+		{"empty envelope", Report{Validated: true}, "", true},
+		{"exact golden parity", Report{Total: 1, Validated: true, Converted: []Finding{finding}, ExactParity: []Finding{finding}}, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EvaluateMigrationGate(tt.report)
+			if got.MigrationGate != tt.pass || got.ErrorCode != tt.code {
+				t.Fatalf("decision = %+v", got)
+			}
+		})
+	}
+}
+
+func TestParityEvidenceMustCoverEachConvertedEffect(t *testing.T) {
+	one := Finding{Format: FormatGu, SourceID: "fixture", Key: "one"}
+	two := Finding{Format: FormatGu, SourceID: "fixture", Key: "two"}
+	report := Report{Total: 2, Validated: true, Converted: []Finding{one, two}}
+	RecordGoldenParity(&report, []Finding{one, one})
+	if report.MigrationGate || report.ErrorCode != "missing_parity" || len(report.ExactParity) != 1 {
+		t.Fatalf("duplicate evidence opened gate: %+v", report)
+	}
+}
+
+func TestMalformedExplicitGuBlocksFail(t *testing.T) {
+	r := ConvertGu("bad-blocks", []byte(`{"blocks":{"not":"an array"}}`))
+	if r.Report.MigrationGate || len(r.Report.Unsupported) != 1 {
+		t.Fatalf("malformed explicit blocks passed: %+v", r.Report)
+	}
+}
+
+func TestConversionNeedsRealParityEvidence(t *testing.T) {
+	r := ConvertGu("fixture", []byte(`{"active":{"damage_flat":2}}`))
+	if !r.Report.Validated || r.Report.MigrationGate || len(r.Report.ExactParity) != 0 {
+		t.Fatalf("conversion incorrectly established parity: %+v", r.Report)
+	}
+	RecordGoldenParity(&r.Report, append([]Finding(nil), r.Report.Converted...))
+	if !r.Report.MigrationGate || len(r.Report.ExactParity) != 1 {
+		t.Fatalf("golden evidence did not open gate: %+v", r.Report)
+	}
+}
+
+func TestMatchingExplicitBlocksProvideDifferentialParity(t *testing.T) {
+	legacy := []byte(`{"active":{"damage_flat":2}}`)
+	first := ConvertGu("fixture", legacy)
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(first.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	withBlocks := []byte(`{"active":{"damage_flat":2},"blocks":` + string(envelope["blocks"]) + `}`)
+	result := ConvertGu("fixture", withBlocks)
+	if !result.Report.MigrationGate || len(result.Report.DifferentialParity) != 1 || len(result.Report.ExactParity) != 1 {
+		t.Fatalf("matching differential result did not open gate: %+v", result.Report)
+	}
+}
+
+func TestEmptyEnvelopePassesGate(t *testing.T) {
+	r := ConvertItem("empty", []byte(`{}`))
+	if !r.Report.Validated || !r.Report.MigrationGate || r.Report.Total != 0 {
+		t.Fatalf("empty envelope report = %+v; envelope=%s", r.Report, r.Envelope)
 	}
 }

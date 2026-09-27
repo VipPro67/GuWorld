@@ -35,7 +35,7 @@ func TestRejectSourceDestinationIncludesReportAliases(t *testing.T) {
 	}
 }
 
-func TestMergeGuCandidateRetainsLegacyNamespaces(t *testing.T) {
+func TestMergeGuCandidateIsEnvelopeOnly(t *testing.T) {
 	legacy := []byte(`{"active":{"damage_flat":2},"growth":{"max_hp":3}}`)
 	envelope := []byte(`{"schema_version":2,"blocks":[{"id":"DAMAGE"}]}`)
 	got, err := mergeCandidate(effectmigration.FormatGu, legacy, envelope)
@@ -46,9 +46,12 @@ func TestMergeGuCandidateRetainsLegacyNamespaces(t *testing.T) {
 	if err = json.Unmarshal(got, &root); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"active", "growth", "schema_version", "blocks"} {
+	for _, key := range []string{"schema_version", "blocks"} {
 		if _, ok := root[key]; !ok {
 			t.Fatalf("missing %s in %s", key, got)
 		}
+	}
+	if len(root) != 2 {
+		t.Fatalf("candidate retained legacy siblings: %s", got)
 	}
 }

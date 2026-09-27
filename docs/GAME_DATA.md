@@ -16,14 +16,26 @@ go run ./cmd/migrate_gu_effects -format item -source data/Item.csv \
 ```
 
 The command is a dry-run by default. `-write` requires a distinct `-output`
-path and refuses to overwrite its source. Reports contain `converted`,
-`exact_parity`, `unsupported`, `ambiguous`, `duplicate`,
-`divergent_explicit_block_legacy`, and `suggested_mapping` arrays.
+path and refuses to overwrite its source. Reports expose `converted`,
+`validated`, `golden_parity`, `differential_parity`, `exact_parity`,
+`shadow_parity`, `unsupported`, `ambiguous`, `duplicate`,
+`divergent_explicit_block_legacy`, and `suggested_mapping` fields.
 
-Migration remains in the `audit` phase until coverage is 100%, every problem
-array is empty, and `shadow_mismatch_count` is zero for the approved
-fixture/snapshot set. Aperture variant event effects currently have no runtime
-semantic contract, so their converter deliberately reports them as ambiguous.
+The levels are separate: `converted` only means a candidate was produced;
+`validated` means that exact candidate passes the Block v2 contract; golden and
+differential parity are evidence from their respective runners; and shadow
+parity means runtime comparison found no mismatch. `exact_parity` is populated
+only from successful golden/differential evidence, never inferred from
+conversion or an empty problem list. A validated empty effect envelope is a
+valid migration and does not require a non-zero effect count. Otherwise the
+report stays in `audit` until every converted effect has parity evidence and
+every problem array is empty. CLI and database backfill use the same gate error
+code and reason, and `-write` refuses a closed gate. Aperture variant event
+effects currently have no runtime semantic contract, so their converter
+deliberately reports them as ambiguous.
+
+Gu candidates contain only `schema_version` and `blocks`; legacy sibling
+namespaces are not copied into candidate output.
 
 Backend shadow comparison is opt-in with `EFFECT_BLOCK_SHADOW=1`. The legacy
 result remains authoritative; block evaluation runs synchronously against pure
