@@ -46,7 +46,7 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 		}
 		if len(passOps) > 0 {
 			blocks = append(blocks, effects.Block{
-				ID:         "legacy_passive_stats",
+				ID:         "LEGACY_PASSIVE_STATS",
 				Trigger:    effects.TriggerAlwaysOn,
 				Target:     effects.Target{Selector: effects.TargetSelf},
 				Operations: passOps,
@@ -108,10 +108,11 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 		}
 		if active.ManaRegen > 0 {
 			actOps = append(actOps, effects.Operation{
-				Op:      effects.OpHeal,
-				SubType: "MANA",
-				Target:  &effects.Target{Selector: effects.TargetSelf},
-				Value:   active.ManaRegen,
+				Op:       effects.OpHeal,
+				SubType:  "RESOURCE",
+				Resource: "MANA",
+				Target:   &effects.Target{Selector: effects.TargetSelf},
+				Value:    active.ManaRegen,
 			})
 		}
 		if active.LifeStealRate > 0 {
@@ -211,7 +212,7 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 
 		if len(actOps) > 0 {
 			blocks = append(blocks, effects.Block{
-				ID:         "legacy_active_action",
+				ID:         "LEGACY_ACTIVE_ACTION",
 				Trigger:    effects.TriggerOnAction,
 				Target:     effects.Target{Selector: selector, BypassFrontline: active.CurveAttack},
 				Operations: actOps,
@@ -222,14 +223,15 @@ func CompileLegacyToBlocks(active *ActiveEffect, passive *PassiveEffect, other [
 	// 3. Special Mechanics -> Respective Trigger Blocks
 	for _, sm := range other {
 		trigger := effects.Trigger(strings.ToUpper(strings.TrimSpace(sm.EventTrigger)))
+		code := strings.ToUpper(strings.TrimSpace(sm.ActionCode))
 		blocks = append(blocks, effects.Block{
-			ID:      sm.ActionCode,
+			ID:      code,
 			Trigger: trigger,
 			Target:  effects.Target{Selector: effects.TargetSelf},
 			Operations: []effects.Operation{
 				{
 					Op:     effects.OpUnique,
-					Code:   sm.ActionCode,
+					Code:   code,
 					Params: sm.Params,
 				},
 			},

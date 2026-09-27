@@ -98,7 +98,7 @@ var numberFields = set(
 	"damage_flat", "heal_flat", "shield_flat", "status_tick_damage", "range", "mana_regen", "lifesteal_rate", "refine_mana_tier",
 	"damage_mult", "shield_mult", "cleansing_power", "capture_bonus", "summon_count_per_tick", "phantom_damage_scale", "ignore_defense", "ignore_defense_pct",
 	"crit_rate_boost", "all_stats_buff_percent", "speed_boost_flat", "freeze", "slow", "slow1", "weak", "stun", "silence", "bleed",
-	"poison", "thorns", "regen", "atk_up", "def_up", 	"taunt", "tenacity", "cc_resist", "stat_base_attack", "stat_base_defense", "stat_base_hp",
+	"poison", "thorns", "regen", "atk_up", "def_up", "taunt", "tenacity", "cc_resist", "stat_base_attack", "stat_base_defense", "stat_base_hp",
 	"stat_base_speed", "path_conflict_reduction", "damage_multiplier_on_hit", "soul_refinement", "storage_capacity", "movement",
 	"investigation", "hearing", "evasion", "luck", "success_rate_bonus", "time_speed_multiplier", "accuracy", "max_attack", "max_defense",
 	"max_hp", "max_speed", "hours_to_max",
@@ -115,9 +115,9 @@ var booleanFields = set(
 	"disable_gu_next_turn", "immune_dream_status", "forget_heaven_protection", "forget_earth_protection",
 )
 var stringFields = set("target_selector", "summon_monster_id", "damage_path")
-	var ratioFields = set("lifesteal_rate", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent", "convert_damage_to_heal_percent", "kill_path_damage_buff", "tenacity", "cc_resist",
-		"damage_hp_percent", "shield_flat_reduce_percent", "forget_reality_chance", "self_evasion_boost_percent", "target_damage_reduce_percent",
-		"anti_heaven_damage_reduction_percent", "anti_earth_damage_reduction_percent", "anti_dream_damage_reduction_percent")
+var ratioFields = set("lifesteal_rate", "ignore_defense_pct", "crit_rate_boost", "all_stats_buff_percent", "convert_damage_to_heal_percent", "kill_path_damage_buff", "tenacity", "cc_resist",
+	"damage_hp_percent", "shield_flat_reduce_percent", "forget_reality_chance", "self_evasion_boost_percent", "target_damage_reduce_percent",
+	"anti_heaven_damage_reduction_percent", "anti_earth_damage_reduction_percent", "anti_dream_damage_reduction_percent")
 var signedNumberFields = set("luck", "success_rate_bonus")
 var targetSelectors = set("SINGLE", "ROW", "COL", "COLUMN", "CROSS", "ALL")
 
@@ -512,20 +512,6 @@ func (r *Report) sort() {
 	})
 }
 
-var allowedBlockTriggers = set(
-	"ALWAYS_ON", "ON_ACTION", "ON_HIT", "BEFORE_HIT", "ON_TURN_START",
-	"ON_DEATH", "ON_TICK", "CAPABILITY", "COMBAT_PASSIVE", "PASSIVE",
-	"ON_BATTLE_START", "BEFORE_ENEMY_ATTACK", "ON_CAST", "ON_CONSUME", "ON_USE",
-)
-
-var allowedTargetSelectors = set(
-	"SELF", "TARGET", "ROW", "COL", "COLUMN", "CROSS", "ALL_ENEMIES", "ALL_ALLIES", "ALL", "SINGLE",
-)
-
-var allowedAtomicOps = set(
-	"DAMAGE", "SHIELD", "HEAL", "DIRECT_HP", "STAT_MOD", "STATUS", "BARRIER", "CLEANSE", "UNIQUE",
-)
-
 func validateBlocks(raw json.RawMessage, report *Report) {
 	var blocks []map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &blocks); err != nil || firstNonSpace(raw) != '[' {
@@ -543,7 +529,7 @@ func validateBlocks(raw json.RawMessage, report *Report) {
 			if trigger != canonicalTrigger {
 				report.add(SeverityError, "noncanonical_trigger", base+".trigger", "trigger phải viết hoa canonical")
 			}
-			if !allowedBlockTriggers[canonicalTrigger] {
+			if !TriggerCatalog[canonicalTrigger] {
 				report.add(SeverityError, "invalid_block_trigger", base+".trigger", "trigger không được hỗ trợ: "+canonicalTrigger)
 			}
 		}
@@ -560,7 +546,7 @@ func validateBlocks(raw json.RawMessage, report *Report) {
 						report.add(SeverityError, "invalid_target_selector", base+".target.selector", "selector phải là chuỗi")
 					} else {
 						cSel := strings.ToUpper(strings.TrimSpace(sel))
-						if !allowedTargetSelectors[cSel] {
+						if !TargetCatalog[cSel] {
 							report.add(SeverityError, "invalid_target_selector", base+".target.selector", "selector không được hỗ trợ: "+cSel)
 						}
 					}
@@ -594,7 +580,7 @@ func validateBlocks(raw json.RawMessage, report *Report) {
 			if opType != canonicalOp {
 				report.add(SeverityError, "noncanonical_op", opBase+".op", "op phải viết hoa canonical")
 			}
-			if !allowedAtomicOps[canonicalOp] {
+			if _, ok := OperationCatalog[canonicalOp]; !ok {
 				report.add(SeverityError, "invalid_op_type", opBase+".op", "op type không được hỗ trợ: "+canonicalOp)
 				continue
 			}

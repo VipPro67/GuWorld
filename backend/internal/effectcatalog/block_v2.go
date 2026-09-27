@@ -112,7 +112,7 @@ func (v *blockValidator) block(b map[string]json.RawMessage, i int, seen map[str
 		seen[id] = true
 	}
 	trigger := v.requiredCanonical(b, "trigger", base, id, nil)
-	if trigger != "" && !TriggerCatalog[trigger].Valid {
+	if trigger != "" && !TriggerCatalog[trigger] {
 		v.add(base+".trigger", "unknown_trigger", "trigger is not registered", id, nil)
 	}
 	target := v.target(b["target"], base+".target", id, nil, true)

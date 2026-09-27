@@ -42,6 +42,25 @@ export interface EffectEnvelope {
   blocks: EffectBlock[];
 }
 
+/** Metadata is supplied by the backend catalog; the frontend owns no enum copy. */
+export interface EffectCatalogOperation {
+  name: string; sub_types: string[]; triggers: string[]; targets: string[];
+  required_fields: string[]; allowed_fields: string[];
+}
+export interface EffectParamSpec {
+  type: "bool" | "string" | "integer" | "number"; required: boolean;
+  min?: number; max?: number; enum?: Record<string, boolean>;
+}
+export interface EffectNativeHook {
+  code: string; domain: string; triggers: string[]; params: Record<string, EffectParamSpec>;
+}
+export interface EffectCatalogMetadata {
+  schema_version: 2; triggers: string[]; targets: string[]; operations: EffectCatalogOperation[];
+  stats: string[]; statuses: string[]; resources: string[]; units: string[];
+  stack_policies: string[]; condition_fields: string[]; condition_operators: string[];
+  native_codes: string[]; native_hooks: EffectNativeHook[];
+}
+
 export const EMPTY_EFFECT_ENVELOPE: EffectEnvelope = { schema_version: 2, blocks: [] };
 
 type TransitionalEffects = Partial<EffectEnvelope> & { blocks?: EffectBlock[] | null };
