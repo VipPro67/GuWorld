@@ -3,7 +3,7 @@ name: Deploy Backend to AWS Lightsail
 on:
   push:
     branches:
-      - master
+      - deploy
     paths:
       - 'backend/**'
       - 'docker-compose.yml'
@@ -83,8 +83,8 @@ jobs:
 
             cd /home/${{ secrets.LIGHTSAIL_USERNAME }}/GuWorld
 
-            git fetch origin master
-            git reset --hard origin/master
+            git fetch origin deploy
+            git reset --hard origin/deploy
 
             echo "${{ secrets.GITHUB_TOKEN }}" |
             docker login ghcr.io \
