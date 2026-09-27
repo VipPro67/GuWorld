@@ -45,7 +45,7 @@ var OperationCatalog = map[string]OperationDefinition{
 	"CLEANSE":   {values("ALL", "DEBUFF", "STATUS"), anyTriggers, combatTargets, values("op", "sub_type", "target", "status_id"), nil, true, false},
 	"UNIQUE":    {nil, anyTriggers, combatTargets, values("op", "target", "code", "params"), []string{"code"}, false, false},
 }
-var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "ACCURACY", "EVASION", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL", "MANA", "MOVEMENT", "INVESTIGATION", "HEARING", "DISGUISE", "TIME_SPEED", "REFINE_SUCCESS", "REFINE_MANA_TIER", "STORAGE", "DAO_MARK", "PATH_CONFLICT_REDUCTION", "PATH_RESISTANCE")
+var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "ACCURACY", "EVASION", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL", "MANA", "MOVEMENT", "INVESTIGATION", "HEARING", "DISGUISE", "TIME_SPEED", "REFINE_SUCCESS", "REFINE_MANA_TIER", "STORAGE", "SOUL_REFINEMENT", "CLEANSING_POWER", "DAO_MARK", "PATH_CONFLICT_REDUCTION", "PATH_RESISTANCE")
 var ResourceCatalog = values("HP", "MANA", "SOUL", "THOUGHT", "APTITUDE", "LIFESPAN", "STRESS", "PRIMEVAL_STONE", "IMMORTAL_STONE")
 var StatusCatalog = func() map[string]bool {
 	m := map[string]bool{}
@@ -158,7 +158,7 @@ func init() {
 	register("ON_HIT", "combat", "BYPASS_SHIELD")
 	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE")
 	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT")
-	register("CAPABILITY", "capability", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")
+	register("CAPABILITY", "capability", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "CONCEAL_GU", "SEVER_CLUES", "ARENA_IDENTITY_MASK", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")
 	// Schemas below describe parameters present in the authoritative CSV data.
 	// Hooks without parameters retain the closed EMPTY schema.
 	valueSchema := map[string]ParamSpec{"value": {Type: "number", Required: true}}

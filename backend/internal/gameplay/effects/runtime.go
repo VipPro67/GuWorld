@@ -84,6 +84,7 @@ type Query interface {
 	Passives() []Passive
 	Capabilities() []Capability
 	Growth() []Growth
+	Operations(Trigger) []CompiledOperation
 }
 
 // Evaluator is pure: it returns commands and never owns a database handle.
@@ -272,6 +273,34 @@ func (c *Compiled) CompileCombatAction() CombatAction {
 		a.Operations = append(a.Operations, cloneOps(b.operations)...)
 	}
 	return a
+}
+
+// Operations returns a defensive copy of all operations authored for trigger.
+// Domain code uses this projection instead of reaching back into the JSON DTO.
+func (c *Compiled) Operations(trigger Trigger) []CompiledOperation {
+	if c == nil {
+		return nil
+	}
+	var out []CompiledOperation
+	for _, block := range c.blocks {
+		if block.trigger != trigger {
+			continue
+		}
+		out = append(out, cloneOps(block.operations)...)
+	}
+	return out
+}
+
+// StatValue sums a typed stat projection for one trigger and subtype.
+func (c *Compiled) StatValue(trigger Trigger, stat, subType string) float64 {
+	stat, subType = strings.ToUpper(stat), strings.ToUpper(subType)
+	var total float64
+	for _, op := range c.Operations(trigger) {
+		if op.Type == OpStatMod && op.Stat == stat && (subType == "" || op.SubType == subType) {
+			total += op.Value
+		}
+	}
+	return total
 }
 func cloneOps(in []CompiledOperation) []CompiledOperation {
 	out := append([]CompiledOperation(nil), in...)

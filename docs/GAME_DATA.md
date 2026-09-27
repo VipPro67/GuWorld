@@ -75,6 +75,11 @@ Không ghi số dòng cố định trong tài liệu vì dataset thay đổi th�
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.
 - `models.LoadItemRegistry(db.DB)` load `item_dictionary` vào `models.ItemRegistry` khi server start.
+- Runtime gameplay không đọc trực tiếp các namespace authoring `active`, `passive`,
+  `growth`, `other` trong các domain derived stats, scouting/profile/refinement
+  và growth. Registry compile chúng thành projection bất biến; item use cũng
+  dispatch qua danh sách lệnh typed, có thứ tự ổn định, thay vì để handler đọc
+  trực tiếp map JSON.
 - Các registry constitution, race, status, monster và zone cũng được load từ database khi server start.
 - API `/api/dictionary` trả dữ liệu dictionary cho frontend.
 - API `/api/recipes` trả recipe refining cho frontend.

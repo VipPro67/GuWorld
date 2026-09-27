@@ -107,8 +107,8 @@ func maxPathLevel(masteries models.PathMasteriesMap, paths ...string) int {
 func sumInvestigation(gus []models.GuInstance) float64 {
 	sum := 0.0
 	for _, gu := range gus {
-		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-			sum += spec.Effects.Passive.Investigation
+		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+			sum += models.GuStatValue(spec, "INVESTIGATION")
 		}
 	}
 	return sum
@@ -117,17 +117,11 @@ func sumInvestigation(gus []models.GuInstance) float64 {
 func sumDisguise(gus []models.GuInstance) (disguise float64, perfect bool, conceal bool) {
 	for _, gu := range gus {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
-			if spec.Effects.Passive != nil {
-				disguise += spec.Effects.Passive.DisguiseLevel * 5.0
-			}
-			for _, mechanic := range spec.Effects.Other {
-				if mechanic.ActionCode == "PERFECT_DISGUISE" {
-					perfect = true
-				}
-				if mechanic.ActionCode == "CONCEAL_GU" {
-					conceal = true
-				}
-			}
+			disguise += models.GuStatValue(spec, "DISGUISE") * 5.0
+			_, hasPerfect := models.GuNativeMechanic(spec, "PERFECT_DISGUISE")
+			_, hasConceal := models.GuNativeMechanic(spec, "CONCEAL_GU")
+			perfect = perfect || hasPerfect
+			conceal = conceal || hasConceal
 		}
 	}
 	return disguise, perfect, conceal
@@ -136,8 +130,8 @@ func sumDisguise(gus []models.GuInstance) (disguise float64, perfect bool, conce
 func sumLuck(gus []models.GuInstance) float64 {
 	sum := 0.0
 	for _, gu := range gus {
-		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-			sum += spec.Effects.Passive.Luck
+		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+			sum += models.GuStatValue(spec, "LUCK")
 		}
 	}
 	return sum
@@ -435,10 +429,10 @@ func CalculateSeverCluesPower(player *models.Player, gus []models.GuInstance) fl
 	guBonus := 0.0
 	for _, gu := range gus {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
-			for _, mechanic := range spec.Effects.Other {
-				if mechanic.ActionCode == "SEVER_CLUES" || mechanic.ActionCode == "PERFECT_DISGUISE" {
-					guBonus += 30.0
-				}
+			if _, ok := models.GuNativeMechanic(spec, "SEVER_CLUES"); ok {
+				guBonus += 30.0
+			} else if _, ok := models.GuNativeMechanic(spec, "PERFECT_DISGUISE"); ok {
+				guBonus += 30.0
 			}
 		}
 	}
@@ -480,7 +474,7 @@ func EvaluateGuDivination(
 	}
 
 	stat := basePower + investigationSum
-	realmDao := stat*(attainMult*daoBonus-1)
+	realmDao := stat * (attainMult*daoBonus - 1)
 
 	resBonus := resourceBonus
 	if resBonus > (stat+realmDao)*0.35 {
@@ -517,7 +511,7 @@ func EvaluateGuDivination(
 		RealmDao:    realmDao / divisor,
 		Clue:        clue / divisor,
 		LuckRoll:    luck,
-		Total:       (stat + realmDao + clue) / divisor + luck,
+		Total:       (stat+realmDao+clue)/divisor + luck,
 		RankDivisor: divisor,
 	}
 

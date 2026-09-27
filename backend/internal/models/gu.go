@@ -307,10 +307,7 @@ type GuEffects struct {
 // GetBlocks exposes authoring definitions for migration tooling. Runtime callers use
 // Compiled, which is materialized during registry loading.
 func (g *GuEffects) GetBlocks() []gameplayeffects.Block {
-	blocks := g.Blocks
-	if len(blocks) == 0 {
-		blocks = CompileLegacyToBlocks(g.Active, g.Passive, g.Other)
-	}
+	blocks := mergeEffectBlocks(g.Blocks, CompileLegacyToBlocksWithGrowth(g.Active, g.Passive, g.Growth, g.Other))
 	result := append([]gameplayeffects.Block(nil), blocks...)
 	for i := range result {
 		result[i].Conditions = append([]gameplayeffects.Condition(nil), blocks[i].Conditions...)
@@ -329,16 +326,48 @@ func (g *GuEffects) GetBlocks() []gameplayeffects.Block {
 func (g *GuEffects) Compiled() *gameplayeffects.Compiled { return g.compiled }
 
 func (g *GuEffects) compile() error {
-	blocks := g.Blocks
-	if len(blocks) == 0 {
-		blocks = CompileLegacyToBlocks(g.Active, g.Passive, g.Other)
-	}
+	blocks := mergeEffectBlocks(g.Blocks, CompileLegacyToBlocksWithGrowth(g.Active, g.Passive, g.Growth, g.Other))
 	compiled, err := (gameplayeffects.Compiler{}).Compile(blocks)
 	if err != nil {
 		return err
 	}
 	g.compiled = compiled
 	return nil
+}
+
+// mergeEffectBlocks keeps authored Block v2 operations authoritative while
+// compiling only missing legacy semantics during the shadow-parity window.
+// Once persisted catalogs have parity, the legacy side can be removed without
+// changing any runtime consumer.
+func mergeEffectBlocks(authored, legacy []gameplayeffects.Block) []gameplayeffects.Block {
+	if len(authored) == 0 {
+		return legacy
+	}
+	result := append([]gameplayeffects.Block(nil), authored...)
+	seen := make(map[string]bool)
+	key := func(trigger gameplayeffects.Trigger, op gameplayeffects.Operation) string {
+		return strings.Join([]string{string(trigger), string(op.Op), strings.ToUpper(op.SubType), strings.ToUpper(op.Stat), strings.ToUpper(op.Code), strings.ToUpper(op.StatusID), strings.ToUpper(op.Resource)}, "|")
+	}
+	for _, block := range authored {
+		for _, operation := range block.Operations {
+			seen[key(block.Trigger, operation)] = true
+		}
+	}
+	for _, block := range legacy {
+		missing := block
+		missing.Operations = nil
+		for _, operation := range block.Operations {
+			operationKey := key(block.Trigger, operation)
+			if !seen[operationKey] {
+				missing.Operations = append(missing.Operations, operation)
+				seen[operationKey] = true
+			}
+		}
+		if len(missing.Operations) > 0 {
+			result = append(result, missing)
+		}
+	}
+	return result
 }
 
 type GuDictionaryItem struct {
@@ -396,6 +425,82 @@ func compiledGuDefinition(definition *GuEffects) *gameplayeffects.Compiled {
 		return nil
 	}
 	return definition.Compiled()
+}
+
+// CompiledGuEffects exposes the immutable runtime definition for a Gu spec.
+// Authoring DTO fields must stay behind this seam during the Block v2 cutover.
+func CompiledGuEffects(spec GuDictionaryItem) *gameplayeffects.Compiled {
+	return compiledGuDefinition(&spec.Effects)
+}
+
+// GuStatValue reads an ALWAYS_ON typed stat projection.
+func GuStatValue(spec GuDictionaryItem, stat string) float64 {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return 0
+	}
+	return compiled.StatValue(gameplayeffects.TriggerAlwaysOn, stat, "")
+}
+
+// GuNativeMechanic returns the first compiled native operation with code.
+func GuNativeMechanic(spec GuDictionaryItem, code string) (gameplayeffects.CompiledOperation, bool) {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return gameplayeffects.CompiledOperation{}, false
+	}
+	code = strings.ToUpper(strings.TrimSpace(code))
+	for _, operation := range compiled.NativeMechanics() {
+		if operation.Code == code {
+			return operation, true
+		}
+	}
+	return gameplayeffects.CompiledOperation{}, false
+}
+
+func GuSpecCapability(spec GuDictionaryItem, code string) (gameplayeffects.Capability, bool) {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return gameplayeffects.Capability{}, false
+	}
+	return compiled.Capability(code)
+}
+
+func GuSpecCapabilityFloat(spec GuDictionaryItem, code, key string) float64 {
+	capability, ok := GuSpecCapability(spec, code)
+	if !ok {
+		return 0
+	}
+	var params map[string]float64
+	if json.Unmarshal(capability.Params, &params) != nil {
+		return 0
+	}
+	return params[key]
+}
+
+type GuGrowthProfile struct {
+	MaxAttack, MaxDefense, MaxHP, MaxSpeed, HoursToMax float64
+}
+
+// GrowthProfile resolves growth metadata from compiled blocks.
+func GrowthProfile(spec GuDictionaryItem) (GuGrowthProfile, bool) {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return GuGrowthProfile{}, false
+	}
+	profile := GuGrowthProfile{
+		MaxAttack:  compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "ATTACK", "GROWTH_CAP"),
+		MaxDefense: compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "DEFENSE", "GROWTH_CAP"),
+		MaxHP:      compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "HP", "GROWTH_CAP"),
+		MaxSpeed:   compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "SPEED", "GROWTH_CAP"),
+	}
+	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
+		if op.Type == gameplayeffects.OpUnique && op.Code == "GROWTH_DURATION_HOURS" {
+			if value, ok := op.Values["value"].(float64); ok {
+				profile.HoursToMax = value
+			}
+		}
+	}
+	return profile, profile.HoursToMax > 0
 }
 
 func InventoryHasGuCapability(inventory GuInventory, code string, requireEquipped bool) bool {

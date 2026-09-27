@@ -134,3 +134,18 @@ func TestCapabilityQueryIgnoresNonUniqueOperations(t *testing.T) {
 		t.Fatal("non-UNIQUE operation granted a capability")
 	}
 }
+
+func TestOperationsAndStatValueAreTypedDefensiveProjections(t *testing.T) {
+	compiled, err := (Compiler{}).Compile([]Block{{Trigger: TriggerAlwaysOn, Target: Target{Selector: TargetSelf}, Operations: []Operation{{Op: OpStatMod, Stat: "INVESTIGATION", SubType: "ADD_FLAT", Value: 3}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := compiled.StatValue(TriggerAlwaysOn, "investigation", "add_flat"); got != 3 {
+		t.Fatalf("stat = %v", got)
+	}
+	ops := compiled.Operations(TriggerAlwaysOn)
+	ops[0].Value = 99
+	if got := compiled.StatValue(TriggerAlwaysOn, "INVESTIGATION", "ADD_FLAT"); got != 3 {
+		t.Fatalf("projection mutated: %v", got)
+	}
+}

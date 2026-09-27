@@ -2,6 +2,8 @@ package models
 
 import (
 	"testing"
+
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 )
 
 func TestGetFlatGuEffectsPassiveOnlyDoesNotPanic(t *testing.T) {
@@ -151,5 +153,39 @@ func TestResolveStatusRankScaling(t *testing.T) {
 	ops = mk().ResolveStatusApplications()
 	if ops[0].Chance != 0.35 || ops[0].Turns != 1 {
 		t.Fatalf("unranked = %+v, want chance 0.35 turns 1", ops[0])
+	}
+}
+
+func TestGrowthProfileCompilesLegacyGrowth(t *testing.T) {
+	spec := Gu{Effects: GuEffects{Growth: &GrowthEffect{MaxAttack: 10, MaxHP: 20, HoursToMax: 24}}}
+	profile, ok := GrowthProfile(spec)
+	if !ok {
+		t.Fatal("expected growth profile")
+	}
+	if profile.MaxAttack != 10 || profile.MaxHP != 20 || profile.HoursToMax != 24 {
+		t.Fatalf("unexpected profile: %+v", profile)
+	}
+}
+
+func TestItemEffectCommandsAreSorted(t *testing.T) {
+	item := ItemSpec{Effects: ItemEffects{"restore_mana": 2, "restore_hp": 1}}
+	commands := item.EffectCommands()
+	if len(commands) != 2 || commands[0].Code != "restore_hp" || commands[1].Code != "restore_mana" {
+		t.Fatalf("unexpected commands: %+v", commands)
+	}
+}
+
+func TestCompiledProjectionSupplementsPartialAuthoredBlocks(t *testing.T) {
+	spec := Gu{Effects: GuEffects{
+		Blocks:  []gameplayeffects.Block{{Trigger: gameplayeffects.TriggerAlwaysOn, Target: gameplayeffects.Target{Selector: gameplayeffects.TargetSelf}, Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpStatMod, Stat: "ACCURACY", SubType: "ADD_FLAT", Value: 4}}}},
+		Passive: &PassiveEffect{Investigation: 7},
+		Growth:  &GrowthEffect{MaxAttack: 10, HoursToMax: 24},
+	}}
+	if got := GuStatValue(spec, "INVESTIGATION"); got != 7 {
+		t.Fatalf("investigation = %v", got)
+	}
+	profile, ok := GrowthProfile(spec)
+	if !ok || profile.MaxAttack != 10 || profile.HoursToMax != 24 {
+		t.Fatalf("growth = %+v, %v", profile, ok)
 	}
 }
