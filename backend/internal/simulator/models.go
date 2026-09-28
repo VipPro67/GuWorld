@@ -167,7 +167,7 @@ type SimAction struct {
 	BacklashDamage float64 // HP damage taken by caster from Gu backlash
 
 	// Targeting (AOE support)
-	TargetType string // "SINGLE" | "ROW" | "COL" | "CROSS" | "ALL"
+	TargetType string // "SINGLE" | "ROW" | "COL" | "CROSS" | "ALL" | "ALL_ENEMIES"
 	TargetX    int    // preferred grid X (1=Front, 2=Mid, 3=Back)
 	TargetY    int    // preferred grid Y (1=Top, 2=Mid, 3=Bottom)
 	Bypass     bool   // true if action bypasses frontline protection (e.g. CurveAttack)

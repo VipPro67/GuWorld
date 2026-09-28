@@ -1277,3 +1277,66 @@ func TestPathMasteryCombat_MortalCapped_ImmortalUncapped(t *testing.T) {
 	}
 }
 
+func TestTargetAllEnemiesWithMultiplier(t *testing.T) {
+	// 1. Verify resolveTargets returns all alive enemies when TargetType is "ALL_ENEMIES"
+	e1 := newTestCombatant("e1", "Enemy", 1000, 0)
+	e2 := newTestCombatant("e2", "Enemy", 1000, 0)
+	e3 := newTestCombatant("e3", "Enemy", 0, 0) // dead
+	e1.GridX, e1.GridY = 1, 1
+	e2.GridX, e2.GridY = 2, 2
+	e3.GridX, e3.GridY = 3, 3
+
+	actionAoE := &SimAction{
+		ActionType: "GU_SKILL",
+		Name:       "Liệt Diễm Môn",
+		Damage:     100,
+		DamageMult: 1.5,
+		TargetType: "ALL_ENEMIES",
+	}
+
+	targets := resolveTargets([]*CombatantAuto{e1, e2, e3}, actionAoE)
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 alive targets for ALL_ENEMIES, got %d", len(targets))
+	}
+	if targets[0].ID != "e1" || targets[1].ID != "e2" {
+		t.Fatalf("expected e1 and e2 as targets, got %v and %v", targets[0].ID, targets[1].ID)
+	}
+
+	// 2. Full simulation: attacker uses ALL_ENEMIES skill with 1.5x multiplier on 2 enemies
+	attacker := newTestCombatant("attacker", "Player", 1000, 0)
+	attacker.Speed = 50
+	attacker.Actions = []SimAction{*actionAoE}
+
+	t1 := newTestCombatant("t1", "Enemy", 1000, 0)
+	t2 := newTestCombatant("t2", "Enemy", 1000, 0)
+	t1.Speed = 10
+	t2.Speed = 10
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{attacker},
+		Enemies: []*CombatantAuto{t1, t2},
+	}
+	logs := Simulate(state)
+
+	var turn1ActionLog *CombatLog
+	for i := range logs {
+		if logs[i].Turn == 1 && logs[i].Action == "GU_SKILL" {
+			turn1ActionLog = &logs[i]
+			break
+		}
+	}
+	if turn1ActionLog == nil {
+		t.Fatalf("expected GU_SKILL log in turn 1")
+	}
+
+	// Verify both targets were hit and took 150 damage (100 * 1.5)
+	if !strings.Contains(turn1ActionLog.Detail, "lên t1, gây 150 sát thương") {
+		t.Errorf("expected t1 to take 150 damage, got log detail: %s", turn1ActionLog.Detail)
+	}
+	if !strings.Contains(turn1ActionLog.Detail, "lên t2, gây 150 sát thương") {
+		t.Errorf("expected t2 to take 150 damage, got log detail: %s", turn1ActionLog.Detail)
+	}
+}
+
+

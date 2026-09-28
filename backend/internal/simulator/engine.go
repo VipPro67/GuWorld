@@ -363,8 +363,8 @@ func getTarget(enemies []*CombatantAuto) *CombatantAuto {
 // resolveTargets returns indices of alive targets based on the action's targeting type.
 // It mirrors the logic in handlers/combat_targeting.go's ResolveTargets.
 func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAuto {
-	targetType := action.TargetType
-	if targetType == "" {
+	targetType := strings.ToUpper(strings.TrimSpace(action.TargetType))
+	if targetType == "" || targetType == "TARGET" {
 		targetType = "SINGLE"
 	}
 
@@ -412,7 +412,7 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 		}
 		return []*CombatantAuto{alive[0]}
 
-	case "COL":
+	case "COL", "COLUMN":
 		var hits []*CombatantAuto
 		for _, e := range alive {
 			if e.GridY == targetY {
@@ -450,7 +450,7 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 		}
 		return []*CombatantAuto{alive[0]}
 
-	case "ALL":
+	case "ALL", "ALL_ENEMIES":
 		return alive
 
 	default: // "SINGLE"
