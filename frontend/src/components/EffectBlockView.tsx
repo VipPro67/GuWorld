@@ -191,6 +191,109 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
     }
     case "UNIQUE": {
       const code = (op.code || "").toUpperCase();
+      const val = op.params?.value !== undefined ? op.params.value : op.value;
+
+      if (code === "STAT_MODS" && val && typeof val === "object") {
+        const parts = Object.entries(val as Record<string, number>).map(([k, v]) => {
+          const sName = STAT_NAMES[k.toUpperCase()] || k;
+          return `${sName} ${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
+        });
+        const isPositive = Object.values(val as Record<string, number>).every((v) => v >= 0);
+        return { text: parts.join(", "), color: isPositive ? "text-amber-300" : "text-rose-400", icon: "📊" };
+      }
+      if (code === "DAO_MARK_MODIFIER" && val && typeof val === "object") {
+        const parts = Object.entries(val as Record<string, number>).map(([path, v]) => {
+          return `Đạo Ngân [${translatePath(path)}] ${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
+        });
+        return { text: parts.join(", "), color: "text-indigo-300", icon: "⚡" };
+      }
+      if (code === "PATH_DAMAGE_MODIFIER" && val && typeof val === "object") {
+        const parts = Object.entries(val as Record<string, number>).map(([path, v]) => {
+          return `Sát Thương [${translatePath(path)}] ${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
+        });
+        return { text: parts.join(", "), color: "text-rose-300", icon: "⚔️" };
+      }
+      if (code === "PATH_RESISTANCE_MODIFIER" && val && typeof val === "object") {
+        const parts = Object.entries(val as Record<string, number>).map(([path, v]) => {
+          return `Kháng [${translatePath(path)}] ${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
+        });
+        return { text: parts.join(", "), color: "text-sky-300", icon: "🛡️" };
+      }
+      if (code === "MANA_REGEN") {
+        const num = Number(val) || 0;
+        return { text: `Hồi Chân Nguyên ${num >= 0 ? "+" : ""}${num}`, color: "text-cyan-300", icon: "💧" };
+      }
+      if (code === "MAX_MANA") {
+        const num = Number(val) || 0;
+        return { text: `Chân Nguyên Tối Đa +${Math.round(num * 100)}%`, color: "text-cyan-300", icon: "💧" };
+      }
+      if (code === "HEALING_RECEIVED") {
+        const num = Number(val) || 0;
+        return { text: `Hiệu Quả Hồi Máu ${num >= 0 ? "+" : ""}${Math.round(num * 100)}%`, color: num >= 0 ? "text-emerald-300" : "text-rose-400", icon: "💚" };
+      }
+      if (code === "HP_REGEN") {
+        const num = Number(val) || 0;
+        return { text: `Hồi Sinh Lực ${num >= 0 ? "+" : ""}${num}/giờ`, color: "text-emerald-300", icon: "💚" };
+      }
+      if (code === "REFINE_SUCCESS") {
+        const num = Number(val) || 0;
+        return { text: `Tỷ Lệ Luyện Cổ ${num >= 0 ? "+" : ""}${Math.round(num * 100)}%`, color: num >= 0 ? "text-amber-300" : "text-rose-400", icon: "🧪" };
+      }
+      if (code === "LUCK") {
+        const num = Number(val) || 0;
+        return { text: `Vận Khí ${num >= 0 ? "+" : ""}${num}`, color: "text-yellow-300", icon: "🍀" };
+      }
+      if (code === "CULTIVATION_EFFICIENCY") {
+        const num = Number(val) || 0;
+        return { text: `Hiệu Suất Tu Luyện ${num >= 0 ? "+" : ""}${Math.round(num * 100)}%`, color: num >= 0 ? "text-purple-300" : "text-rose-400", icon: "📈" };
+      }
+      if (code === "DAO_MARK_GAIN") {
+        const num = Number(val) || 0;
+        return { text: `Thu Hoạch Đạo Ngân +${Math.round(num * 100)}%`, color: "text-violet-300", icon: "✨" };
+      }
+      if (code === "MENTAL_RESISTANCE") {
+        const num = Number(val) || 0;
+        return { text: `Kháng Tâm Trí / Khống Chế +${Math.round(num * 100)}%`, color: "text-teal-300", icon: "🧘" };
+      }
+      if (code === "SOUL_DEFENSE") {
+        const num = Number(val) || 0;
+        return { text: `Phòng Ngự Hồn Phách +${Math.round(num * 100)}%`, color: "text-indigo-300", icon: "👻" };
+      }
+      if (code === "SOUL_REGEN") {
+        const num = Number(val) || 0;
+        return { text: `Dưỡng Hồn +${Math.round(num * 100)}%`, color: "text-indigo-300", icon: "👻" };
+      }
+      if (code === "TENACITY") {
+        const num = Number(val) || 0;
+        return { text: `Kiên Cường +${Math.round(num * 100)}%`, color: "text-blue-300", icon: "🛡️" };
+      }
+      if (code === "CC_RESIST") {
+        const num = Number(val) || 0;
+        return { text: `Kháng Khống Chế +${Math.round(num * 100)}%`, color: "text-blue-300", icon: "🛡️" };
+      }
+      if (code === "APERTURE_STRESS") {
+        const num = Number(val) || 0;
+        return { text: `Áp Lực Không Khiếu +${Math.round(num * 100)}%`, color: "text-red-300", icon: "💥" };
+      }
+      if (code === "NON_CONFLICTING_DAO_MARKS") {
+        return { text: `Đạo Ngân Không Xung Đột`, color: "text-amber-300", icon: "☯️" };
+      }
+      if (code === "IMMORTAL") {
+        return { text: `Thọ Nguyên Vô Tận (Bất Tử)`, color: "text-yellow-300 font-semibold", icon: "♾️" };
+      }
+      if (code === "DISABLE_HP_REGEN") {
+        return { text: `Không Thể Hồi Sinh Lực Tự Nhiên`, color: "text-rose-400", icon: "🚫" };
+      }
+      if (code === "DISABLE_MANA_REGEN") {
+        return { text: `Không Thể Hồi Chân Nguyên Tự Nhiên`, color: "text-rose-400", icon: "🚫" };
+      }
+      if (code === "DISABLE_RESOURCE_REGEN") {
+        return { text: `Không Thể Hồi Tiên/Chân Nguyên`, color: "text-rose-400", icon: "🚫" };
+      }
+      if (code === "DISABLE_SOUL_REGEN") {
+        return { text: `Không Thể Phục Hồi Hồn Phách`, color: "text-rose-400", icon: "🚫" };
+      }
+
       const codeName = UNIQUE_NAMES[code] || code;
       const paramStr = op.params && Object.keys(op.params).length > 0 ? ` ${JSON.stringify(op.params)}` : "";
       return { text: `${codeName}${paramStr}`, color: "text-fuchsia-300", icon: "🔮" };
