@@ -174,7 +174,6 @@ export const pathLabels: Record<string, string> = {
   "Painting Path": "Họa Đạo",
   "Weapon Path": "Binh Đạo",
   "Killing Path": "Sát Đạo",
-  "Kill Path": "Sát Đạo",
   "Restriction Path": "Cấm Đạo",
   "Pill Path": "Đan Đạo",
 };

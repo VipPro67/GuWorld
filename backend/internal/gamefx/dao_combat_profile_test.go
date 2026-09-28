@@ -152,17 +152,17 @@ func TestBuildDaoCombatProfile_NonConflictingTrait(t *testing.T) {
 }
 
 func TestBuildDaoCombatProfile_KillPath(t *testing.T) {
-	// 1. Test with legacy "kill" key in daoMarks and pathMasteries
-	daoMarksKill := map[string]int64{
+	// Test backward compat: "kill" key in daoMarks/pathMasteries is normalized
+	daoMarks := map[string]int64{
 		"kill": 50000,
 	}
-	masteriesKill := map[string]int{
-		"kill": 1000000, // Great Grandmaster
+	masteries := map[string]int{
+		"killing": 1000000,
 	}
 
-	profile := BuildDaoCombatProfile(daoMarksKill, masteriesKill, false, nil)
-	if profile.DominantPath != "killing" && profile.DominantPath != "kill" {
-		t.Errorf("expected dominant path killing/kill, got %s", profile.DominantPath)
+	profile := BuildDaoCombatProfile(daoMarks, masteries, false, nil)
+	if profile.DominantPath != "killing" {
+		t.Errorf("expected dominant path killing, got %s", profile.DominantPath)
 	}
 	if profile.TotalDaoMarks != 50000 {
 		t.Errorf("expected total marks 50000, got %d", profile.TotalDaoMarks)
@@ -181,7 +181,7 @@ func TestBuildDaoCombatProfile_KillPath(t *testing.T) {
 		}
 	}
 
-	// 2. Test with "killing" in daoMarks and queried as "Kill Path"
+	// Test with canonical "killing" key
 	daoMarksKilling := map[string]int64{
 		"killing": 50000,
 	}

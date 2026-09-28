@@ -1339,4 +1339,59 @@ func TestTargetAllEnemiesWithMultiplier(t *testing.T) {
 	}
 }
 
+func TestManaRestoreAndCleanse(t *testing.T) {
+	attacker := newTestCombatant("attacker", "Player", 1000, 0)
+	attacker.Mana = 30
+	attacker.MaxMana = 100
+	attacker.Speed = 50
+	attacker.ActiveEffects = []Effect{
+		{ID: "WEAK", Type: "debuff", Value: 20, Duration: 3},
+	}
+	ComputeEffectMultipliers(attacker)
+
+	action := SimAction{
+		ActionType:     "GU_SKILL",
+		Name:           "Thực Khí Tịnh Hóa",
+		ManaCost:       0,
+		ManaRestore:    40,
+		CleanseDebuffs: true,
+		TargetType:     "SELF",
+	}
+	attacker.Actions = []SimAction{action}
+
+	defender := newTestCombatant("defender", "Enemy", 1000, 0)
+	defender.Speed = 10
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{attacker},
+		Enemies: []*CombatantAuto{defender},
+	}
+	logs := Simulate(state)
+
+	var foundConsolidatedLog bool
+	for _, l := range logs {
+		if l.Turn == 1 && l.Action == "GU_SKILL" && l.ActorId == attacker.ID {
+			if strings.Contains(l.Detail, "khôi phục 40") && strings.Contains(l.Detail, "tịnh hóa bản thân, xóa bỏ 1 hiệu ứng bất lợi") {
+				foundConsolidatedLog = true
+			}
+			if l.TargetId != attacker.ID {
+				t.Errorf("expected TargetId == %s for SELF target, got %s", attacker.ID, l.TargetId)
+			}
+		}
+	}
+	if !foundConsolidatedLog {
+		t.Errorf("expected consolidated GU_SKILL log with mana restore and cleanse details in turn 1")
+	}
+	if attacker.Mana < 70 {
+		t.Errorf("expected attacker mana >= 70, got %.0f", attacker.Mana)
+	}
+	for _, eff := range attacker.ActiveEffects {
+		if eff.Type == "debuff" {
+			t.Errorf("expected no debuffs on attacker after cleanse, found %s", eff.ID)
+		}
+	}
+}
+
+
 

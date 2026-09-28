@@ -60,7 +60,7 @@ var PathToDaoGroup = map[string]DaoGroup{
 
 	// KINETIC_WEAPON
 	"sword": DaoGroupKineticWeapon, "blade": DaoGroupKineticWeapon,
-	"weapon": DaoGroupKineticWeapon, "killing": DaoGroupKineticWeapon, "kill": DaoGroupKineticWeapon,
+	"weapon": DaoGroupKineticWeapon, "killing": DaoGroupKineticWeapon,
 
 	// BODY_LIFE
 	"strength": DaoGroupBodyLife, "bone": DaoGroupBodyLife,
@@ -352,8 +352,6 @@ func BuildDaoCombatProfile(
 			points = pathMasteries[p]
 			if points == 0 && p == "killing" {
 				points = pathMasteries["kill"]
-			} else if points == 0 && p == "kill" {
-				points = pathMasteries["killing"]
 			}
 		}
 		lvl := PathMasteryLevel(points)
@@ -365,8 +363,6 @@ func BuildDaoCombatProfile(
 			bonus = daoBonus[p]
 			if bonus == 0 && p == "killing" {
 				bonus = daoBonus["kill"]
-			} else if bonus == 0 && p == "kill" {
-				bonus = daoBonus["killing"]
 			}
 		}
 		daoAmp := DaoAmplification(amt) + bonus
@@ -487,13 +483,6 @@ func BuildDaoCombatProfile(
 			NaturalResistance:    natResist,
 			Purity:               purity,
 		}
-	}
-
-	// Mirror alias for killing <-> kill so direct lookups by either key succeed
-	if mod, ok := profile.Paths["killing"]; ok {
-		profile.Paths["kill"] = mod
-	} else if mod, ok := profile.Paths["kill"]; ok {
-		profile.Paths["killing"] = mod
 	}
 
 	return profile
