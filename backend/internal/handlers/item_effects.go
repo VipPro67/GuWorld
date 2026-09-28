@@ -13,7 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-type ItemEffectHandler func(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error)
+type ItemEffectHandler func(tx *sql.Tx, player *models.Player, item models.ItemSpec, value float64) (string, error)
 
 var ValidateItemEffects = map[string]ItemEffectHandler{
 	"mortal_only":   mortalOnlyEffect,
@@ -35,7 +35,7 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"random_race":            randomRaceEffect,
 }
 
-func randomConstitutionEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+func randomConstitutionEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
 	defs := gamefx.AllConstitutions()
 	if len(defs) == 0 {
 		return "", fmt.Errorf("không có thể chất nào trong registry.")
@@ -53,7 +53,7 @@ func randomConstitutionEffect(tx *sql.Tx, player *models.Player, item models.Ite
 	return fmt.Sprintf("Đạo hữu sử dụng %s, thức tỉnh thể chất [%s]!", item.Name, gamefx.ConstitutionDisplayName(chosen.Key)), nil
 }
 
-func randomRaceEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+func randomRaceEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
 	defs := gamefx.AllRaces()
 	if len(defs) == 0 {
 		return "", fmt.Errorf("không có chủng tộc nào trong registry.")
@@ -71,8 +71,7 @@ func randomRaceEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (
 	return fmt.Sprintf("Đạo hữu sử dụng %s, chuyển hóa thành chủng tộc [%s]!", item.Name, gamefx.RaceDisplayName(chosen.Key)), nil
 }
 
-func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["heal_aperture"]
+func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
 	if val <= 0 {
 		return "", nil
 	}
@@ -124,8 +123,7 @@ func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec)
 	return fmt.Sprintf("Đạo hữu sử dụng %s, khôi phục %.0f sinh lực Tiên Khiếu!", item.Name, val), nil
 }
 
-func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["increase_human_qi"]
+func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
 	if val <= 0 {
 		return "", nil
 	}
@@ -135,8 +133,7 @@ func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec) (s
 	return fmt.Sprintf("Đạo hữu sử dụng %s, tăng 50.000 nhân khí!", item.Name), nil
 }
 
-func lifespanBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["lifespan_boost"]
+func lifespanBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
 	player.Lifespan += val
 	if player.Lifespan > 0 {
 		player.IsDead = false
@@ -144,8 +141,7 @@ func lifespanBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.0f năm thọ nguyên tối đa và hồi phục %.0f năm tuổi thọ!", item.Name, val, val), nil
 }
 
-func restoreManaEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	value := item.Effects["restore_mana"]
+func restoreManaEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, value float64) (string, error) {
 	player.CurrentMana += value
 	if player.CurrentMana > player.MaxMana {
 		player.CurrentMana = player.MaxMana
@@ -153,8 +149,7 @@ func restoreManaEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) 
 	return fmt.Sprintf("Đạo hữu sử dụng %s, phục hồi %.0f Chân Nguyên!", item.Name, value), nil
 }
 
-func restoreHPEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	value := item.Effects["restore_hp"]
+func restoreHPEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, value float64) (string, error) {
 	player.HP += value
 	if player.HP > gamefx.EffectiveMaxHP(player) {
 		player.HP = gamefx.EffectiveMaxHP(player)
@@ -162,38 +157,35 @@ func restoreHPEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (s
 	return fmt.Sprintf("Đạo hữu sử dụng %s, hồi phục %.0f HP!", item.Name, value), nil
 }
 
-func mortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+func mortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
 	if util.IsImmortalPlayer(player) {
 		return "", fmt.Errorf("%s chỉ bổ sung Chân Nguyên phàm cấp; Cổ Tiên cần Tiên Nguyên Thạch hoặc Tiên Khiếu ngưng tụ Tiên Nguyên.", item.Name)
 	}
 	return "", nil
 }
 
-func immortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+func immortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
 	if !util.IsImmortalPlayer(player) {
 		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên.", item.Name)
 	}
 	return "", nil
 }
 
-func minRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["min_rank"]
+func minRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
 	if float64(player.Rank) < val {
 		return "", fmt.Errorf("Yêu cầu tu vi tối thiểu %s để sử dụng %s.", models.GetRankName(int(val)), item.Name)
 	}
 	return "", nil
 }
 
-func maxRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["max_rank"]
+func maxRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
 	if float64(player.Rank) > val {
 		return "", fmt.Errorf("Tu vi vượt quá giới hạn tối đa %s để sử dụng %s.", models.GetRankName(int(val)), item.Name)
 	}
 	return "", nil
 }
 
-func soulBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["soul_boost"]
+func soulBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
 	if player.DaoMarks == nil {
 		player.DaoMarks = make(models.DaoMarksMap)
 	}
@@ -201,7 +193,7 @@ func soulBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (s
 	return fmt.Sprintf("Hồn phách của đạo hữu được tráng kiện (+%.0f điểm Hồn lực).", val), nil
 }
 
-func removeNegativeStatusEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+func removeNegativeStatusEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
 	if player.ActiveCombat != nil && len(player.ActiveCombat.PlayerStatusEffects) > 0 {
 		player.ActiveCombat.PlayerStatusEffects = []models.StatusEffect{}
 		return fmt.Sprintf("%s giải trừ toàn bộ trạng thái tiêu cực của đạo hữu trong trận chiến.", item.Name), nil
@@ -234,7 +226,7 @@ func formatSummaryOfRewards(reward map[string]interface{}) string {
 	}
 }
 
-func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
 	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
 	// reward is implicitly used in messages
 

@@ -118,7 +118,7 @@ func HasBaoHoangAccess(inventory models.GuInventory) bool {
 	}
 	if !hasConnectingHeaven {
 		_, _, hasConnectingHeaven = models.FindFirstMatchingGu(inventory, func(gu models.GuInstance) bool {
-			return models.InventoryHasGuMechanic(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
+			return models.InventoryHasGuCapability(models.GuInventory{gu}, "MARKETPLACE_ACCESS", false)
 		})
 	}
 	return hasConnectingHeaven && hasDivineSense
@@ -277,4 +277,3 @@ func settleExpiredTradeOffers() error {
 	}
 	return nil
 }
-

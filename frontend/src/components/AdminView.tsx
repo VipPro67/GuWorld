@@ -56,7 +56,7 @@ import {
   Leaf,
 } from "lucide-react";
 import { translateGuType, translateItemType, translatePath, translateMastery, masteryKeyForPoints } from "@/lib/translate";
-import { formatGameEffects } from "@/lib/effects";
+import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { statusRemainLabel, formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
 import { TopupWalletAdminTab } from "./admin/TopupWalletAdminTab";
@@ -67,7 +67,7 @@ import { GuHistoryAdminTab } from "./admin/GuHistoryAdminTab";
 import { MonitoringAdminTab } from "./admin/MonitoringAdminTab";
 import { CoreDataAdminTab } from "./admin/CoreDataAdminTab";
 import { AdminDataGrid } from "./admin/AdminDataGrid";
-import { GuEffectsEditor } from "./admin/GuEffectsEditor";
+import { GuEffectsEditor, validateAllEffectEditors } from "./admin/GuEffectsEditor";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -1766,9 +1766,6 @@ export const AdminView: React.FC = () => {
                           {detail.equipped_gus.map((gu) => {
                             const spec = guSpecFor(gu.gu_id, gu.rank);
                             const displayName = gu.name || spec?.name || gu.gu_id;
-                            const passive = spec?.effects?.passive;
-                            const active = spec?.effects?.active;
-                            const growth = spec?.effects?.growth;
 
                             return (
                               <div
@@ -1818,39 +1815,10 @@ export const AdminView: React.FC = () => {
                                   ) : null}
                                 </div>
 
-                                {/* Gu effects summary */}
-                                {(passive || active || growth || gu.description) && (
-                                  <div className="bg-zinc-900/60 rounded-lg p-2 text-[11px] text-zinc-300 space-y-1">
-                                    {passive && (
-                                      <div className="text-[10px] text-zinc-400 flex flex-wrap gap-1.5">
-                                        <span className="text-amber-400 font-semibold">Bị động:</span>
-                                        {passive.stat_base_attack ? <span>Công +{passive.stat_base_attack}</span> : null}
-                                        {passive.stat_base_defense ? <span>Thủ +{passive.stat_base_defense}</span> : null}
-                                        {passive.stat_base_hp ? <span>Máu +{passive.stat_base_hp}</span> : null}
-                                        {passive.stat_base_speed ? <span>Tốc +{passive.stat_base_speed}</span> : null}
-                                        {passive.evasion ? <span>Né +{passive.evasion}%</span> : null}
-                                      </div>
-                                    )}
-                                    {active && (
-                                      <div className="text-[10px] text-zinc-400 flex flex-wrap gap-1.5">
-                                        <span className="text-cyan-400 font-semibold">Chủ động:</span>
-                                        {active.damage ? <span>Sát thương {active.damage}</span> : null}
-                                        {active.heal_hp ? <span>Hồi máu +{active.heal_hp}</span> : null}
-                                        {active.mana_cost ? <span>Chân nguyên tiêu hao {active.mana_cost}</span> : null}
-                                      </div>
-                                    )}
-                                    {growth && (
-                                      <div className="text-[10px] text-zinc-400 flex flex-wrap gap-1.5">
-                                        <span className="text-emerald-400 font-semibold">Trưởng thành:</span>
-                                        {growth.max_attack ? <span>Công max +{growth.max_attack}</span> : null}
-                                        {growth.max_defense ? <span>Thủ max +{growth.max_defense}</span> : null}
-                                        {growth.max_hp ? <span>Máu max +{growth.max_hp}</span> : null}
-                                        {growth.max_speed ? <span>Tốc max +{growth.max_speed}</span> : null}
-                                      </div>
-                                    )}
-                                    {gu.description && !passive && !active && (
-                                      <div className="text-[10px] text-zinc-400 italic line-clamp-2">{gu.description}</div>
-                                    )}
+                                {/* Canonical Effect Block v2 summary */}
+                                {spec?.effects && (
+                                  <div className="bg-zinc-900/60 rounded-lg p-2">
+                                    <EffectEnvelopeView effects={spec.effects} />
                                   </div>
                                 )}
                               </div>
@@ -2101,16 +2069,7 @@ export const AdminView: React.FC = () => {
                         <div className="p-3.5 rounded-xl border bg-zinc-950/40 border-zinc-800/80 flex flex-col gap-1">
                           <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Chủng Tộc</div>
                           <div className="text-base font-bold text-zinc-100 font-mono">{raceLabel(detail.race) || "Nhân Tộc"}</div>
-                          {raceEffects && formatGameEffects(raceEffects).length > 0 && (
-                            <ul className="mt-1.5 space-y-1">
-                              {formatGameEffects(raceEffects).map((eff, i) => (
-                                <li key={i} className="text-[10px] leading-snug text-amber-200/70">
-                                  <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
-                                  {eff}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                          {raceEffects && <EffectEnvelopeView effects={raceEffects} />}
                         </div>
 
                         {/* Gender */}
@@ -2123,16 +2082,7 @@ export const AdminView: React.FC = () => {
                         <div className="p-3.5 rounded-xl border bg-zinc-950/40 border-zinc-800/80 flex flex-col gap-1">
                           <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Thể Chất</div>
                           <div className="text-base font-bold text-zinc-100 font-mono">{constitutionLabel(detail.constitution) || "Không có"}</div>
-                          {constitutionEffects && formatGameEffects(constitutionEffects).length > 0 && (
-                            <ul className="mt-1.5 space-y-1">
-                              {formatGameEffects(constitutionEffects).map((eff, i) => (
-                                <li key={i} className="text-[10px] leading-snug text-amber-200/70">
-                                  <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
-                                  {eff}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                          {constitutionEffects && <EffectEnvelopeView effects={constitutionEffects} />}
                         </div>
 
                         {/* Statuses */}
@@ -3531,7 +3481,7 @@ export const AdminView: React.FC = () => {
 
           {dataTab === "gus" && (
             <CoreDataAdminTab kind="gus" rows={gus} loading={gusLoading}
-              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: { blocks: [], growth: {}, house: {} }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
+              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: { schema_version: 2, blocks: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
               onEdit={(g) => setGuEdit({ ...structuredClone(g), _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
               onCopy={(g) => setGuEdit({ ...structuredClone(g), id: "", _isNew: true, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
               onDelete={async (g) => { if (!confirm(`Xóa toàn bộ các rank của ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} />
@@ -3539,7 +3489,7 @@ export const AdminView: React.FC = () => {
 
           {dataTab === "items" && (
             <CoreDataAdminTab kind="items" rows={items} loading={itemsLoading}
-              onCreate={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0, image_url: "", _isNew: true })}
+              onCreate={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: { schema_version: 2, blocks: [] }, description: "", base_price: 0, image_url: "", _isNew: true })}
               onEdit={(item) => setItemEdit({ ...structuredClone(item), effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
               onCopy={(item) => setItemEdit({ ...structuredClone(item), id: "", _isNew: true, effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
               onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/item-dictionary/${item.id}`, "DELETE"); if (ok) fetchItems(); }} />
@@ -4703,22 +4653,9 @@ export const AdminView: React.FC = () => {
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setGuEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
               <button onClick={async () => {
+                if (!await validateAllEffectEditors()) { addToast?.("Effect Block chưa hợp lệ", "error"); return; }
                 const isNew = !!guEdit._isNew;
                 const { _isNew, ...body } = guEdit;
-                if (body.effects) {
-                  const cleaned = { ...body.effects };
-                  ["active", "passive", "house", "growth"].forEach(cat => {
-                    if (cleaned[cat]) {
-                      cleaned[cat] = Object.fromEntries(
-                        Object.entries(cleaned[cat]).filter(([k]) => k.trim() !== "")
-                      );
-                    }
-                  });
-                  if (Array.isArray(cleaned.blocks)) {
-                    cleaned.blocks = cleaned.blocks.filter((b: ApiResponseData) => b && b.trigger);
-                  }
-                  body.effects = cleaned;
-                }
                 const url = isNew ? `${BACKEND_URL}/api/admin/gu-dictionary` : `${BACKEND_URL}/api/admin/gu-dictionary/${guEdit.id}?old_rank=${guEdit._old_rank || body.rank}`;
                 const method = isNew ? "POST" : "PUT";
                 const ok = await exec(url, method, body);
@@ -4779,25 +4716,15 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={itemEdit.description || ""} onChange={e => setItemEdit({...itemEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              {/* Effects key-value pairs */}
-              <div className="border-t border-zinc-800 pt-3">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Hiệu ứng — key: value</label>
-                {Object.entries(itemEdit.effects || {}).map(([k, v], idx) => (
-                  <div key={idx} className="flex gap-2 mb-1.5">
-                    <input value={k} onChange={e => { const newEff = {...itemEdit.effects}; const val = newEff[k]; delete newEff[k]; newEff[e.target.value] = val; setItemEdit({...itemEdit, effects: newEff}) }} className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" placeholder="key" />
-                    <input type="number" step="any" value={v as number} onChange={e => setItemEdit({...itemEdit, effects: {...itemEdit.effects, [k]: parseFloat(e.target.value) || 0}})} className="w-24 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" placeholder="value" />
-                    <button onClick={() => { const newEff = {...itemEdit.effects}; delete newEff[k]; setItemEdit({...itemEdit, effects: newEff}) }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
-                  </div>
-                ))}
-                <button onClick={() => setItemEdit({...itemEdit, effects: {...itemEdit.effects, [""]: 0}})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm hiệu ứng</button>
-              </div>
+              <GuEffectsEditor effects={itemEdit.effects || { schema_version: 2, blocks: [] }} source="item" effectKey={itemEdit.id || "new"} onChange={(effects) => setItemEdit({ ...itemEdit, effects })} />
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setItemEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
               <button onClick={async () => {
+                if (!await validateAllEffectEditors()) { addToast?.("Effect Block chưa hợp lệ", "error"); return; }
                 const isNew = !!itemEdit._isNew;
                 const itemUrl = isNew ? `${BACKEND_URL}/api/admin/item-dictionary` : `${BACKEND_URL}/api/admin/item-dictionary/${itemEdit.id}`;
-                const clean = {...itemEdit, effects: Object.fromEntries(Object.entries(itemEdit.effects || {}).filter(([k]) => k.trim() !== ""))}; delete clean._isNew;
+                const clean = {...itemEdit}; delete clean._isNew;
                 const ok = await exec(itemUrl, isNew ? "POST" : "PUT", clean);
                 if (ok) { setItemEdit(null); fetchItems(); }
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>

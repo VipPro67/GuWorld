@@ -4,6 +4,8 @@
 package gamefx
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -78,6 +80,165 @@ type Effects struct {
 	// statuses (keys: gamefx.Action* constants, e.g. "explore", "cultivate").
 	// Handlers consult it via HasBlockedAction before executing a flow.
 	BlockedActions map[string]bool `json:"blocked_actions,omitempty"`
+}
+
+// UnmarshalJSON unmarshals either a legacy Effects object or a pure Block v2 array [...].
+func (e *Effects) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		*e = Effects{}
+		return nil
+	}
+
+	// 1. If it's a JSON array `[...]`, parse blocks
+	if trimmed[0] == '[' {
+		return e.unmarshalBlocks(trimmed)
+	}
+
+	// 2. If it's a JSON object `{...}`:
+	// Check if it's an envelope `{"blocks": [...]}`
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &root); err != nil {
+		return err
+	}
+	if b, ok := root["blocks"]; ok {
+		trimmedB := bytes.TrimSpace(b)
+		if len(trimmedB) > 0 && trimmedB[0] == '[' {
+			return e.unmarshalBlocks(trimmedB)
+		}
+	}
+
+	// Legacy struct fields
+	type alias Effects
+	var a alias
+	if err := json.Unmarshal(trimmed, &a); err != nil {
+		return err
+	}
+	*e = Effects(a)
+	return nil
+}
+
+func (e *Effects) unmarshalBlocks(data []byte) error {
+	*e = Effects{
+		StatMods:            map[string]float64{},
+		DaoNganBonus:        map[string]float64{},
+		PathDamageBonus:     map[string]float64{},
+		PathResistanceBonus: map[string]float64{},
+	}
+
+	type blockOp struct {
+		Op     string          `json:"op"`
+		Code   string          `json:"code"`
+		Params json.RawMessage `json:"params"`
+	}
+	type blockItem struct {
+		Operations []blockOp `json:"operations"`
+	}
+
+	var blocks []blockItem
+	if err := json.Unmarshal(data, &blocks); err != nil {
+		return err
+	}
+
+	for _, b := range blocks {
+		for _, op := range b.Operations {
+			if op.Op != "UNIQUE" && op.Op != "" {
+				continue
+			}
+			var p struct {
+				Value any `json:"value"`
+			}
+			if len(op.Params) > 0 {
+				_ = json.Unmarshal(op.Params, &p)
+			}
+
+			asFloat := func(v any) float64 {
+				switch n := v.(type) {
+				case float64:
+					return n
+				case int:
+					return float64(n)
+				default:
+					return 0
+				}
+			}
+			asBool := func(v any) bool {
+				if b, ok := v.(bool); ok {
+					return b
+				}
+				return false
+			}
+			asMap := func(v any) map[string]float64 {
+				m := make(map[string]float64)
+				if rawMap, ok := v.(map[string]any); ok {
+					for k, val := range rawMap {
+						m[k] = asFloat(val)
+					}
+				}
+				return m
+			}
+
+			switch strings.ToUpper(op.Code) {
+			case "STAT_MODS":
+				for k, v := range asMap(p.Value) {
+					e.StatMods[k] += v
+				}
+			case "REFINE_SUCCESS":
+				e.RefineBonus += asFloat(p.Value)
+			case "DAO_MARK_MODIFIER":
+				for k, v := range asMap(p.Value) {
+					e.DaoNganBonus[k] += v
+				}
+			case "PATH_DAMAGE_MODIFIER":
+				for k, v := range asMap(p.Value) {
+					e.PathDamageBonus[k] += v
+				}
+			case "PATH_RESISTANCE_MODIFIER":
+				for k, v := range asMap(p.Value) {
+					e.PathResistanceBonus[k] += v
+				}
+			case "LUCK":
+				e.LuckBonus += asFloat(p.Value)
+			case "MAX_MANA":
+				e.MaxManaBonus += asFloat(p.Value)
+			case "MANA_REGEN":
+				e.ManaRegenBonus += asFloat(p.Value)
+			case "CULTIVATION_EFFICIENCY":
+				e.CultivationEfficiencyBonus += asFloat(p.Value)
+			case "DAO_MARK_GAIN":
+				e.DaoMarkGainBonus += asFloat(p.Value)
+			case "HEALING_RECEIVED":
+				e.HealingReceivedBonus += asFloat(p.Value)
+			case "HP_REGEN":
+				e.HPRegenBonus += asFloat(p.Value)
+			case "MENTAL_RESISTANCE":
+				e.MentalResistanceBonus += asFloat(p.Value)
+			case "SOUL_DEFENSE":
+				e.SoulDefenseBonus += asFloat(p.Value)
+			case "SOUL_REGEN":
+				e.SoulRegenBonus += asFloat(p.Value)
+			case "TENACITY":
+				e.Tenacity += asFloat(p.Value)
+			case "CC_RESIST":
+				e.CCResist += asFloat(p.Value)
+			case "APERTURE_STRESS":
+				e.ApertureStressBonus += asFloat(p.Value)
+			case "NON_CONFLICTING_DAO_MARKS":
+				e.NonConflictingDaoMarks = asBool(p.Value)
+			case "IMMORTAL":
+				e.Immortal = asBool(p.Value)
+			case "DISABLE_HP_REGEN":
+				e.DisableHPRegen = asBool(p.Value)
+			case "DISABLE_MANA_REGEN":
+				e.DisableManaRegen = asBool(p.Value)
+			case "DISABLE_RESOURCE_REGEN":
+				e.DisableResourceRegen = asBool(p.Value)
+			case "DISABLE_SOUL_REGEN":
+				e.DisableSoulRegen = asBool(p.Value)
+			}
+		}
+	}
+	return nil
 }
 
 // ApplyToEnemyCombatState populates all defender character effect properties into a CombatState.
@@ -186,13 +347,13 @@ func Get(p *models.Player) Effects {
 		}
 		applied[gu.GuID] = true
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok || spec.Effects.Passive == nil {
+		if !ok {
 			continue
 		}
 		addEffects(&fx, Effects{
-			Tenacity:                 spec.Effects.Passive.Tenacity,
-			CCResist:                 spec.Effects.Passive.CCResist,
-			NonConflictingDaoMarks:   spec.Effects.Passive.PathConflictReduction >= 100,
+			Tenacity:               models.GuStatValue(spec, "TENACITY"),
+			CCResist:               models.GuStatValue(spec, "CC_RESIST"),
+			NonConflictingDaoMarks: models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION") >= 100,
 		})
 	}
 
@@ -288,11 +449,15 @@ func PassiveHPBonus(p *models.Player) float64 {
 		}
 		applied[gu.GuID] = true
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok || spec.Effects.Passive == nil || spec.Effects.Passive.StatBaseHP <= 0 {
+		if !ok {
+			continue
+		}
+		baseHP := models.GuStatValue(spec, "HP")
+		if baseHP <= 0 {
 			continue
 		}
 		masteryMult, daoMult := GuStatMultipliers(p.PathMasteries, p.DaoMarks, spec.Path)
-		total += spec.Effects.Passive.StatBaseHP * masteryMult * daoMult
+		total += baseHP * masteryMult * daoMult
 	}
 	return total
 }

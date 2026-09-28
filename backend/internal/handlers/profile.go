@@ -18,32 +18,32 @@ import (
 )
 
 type PlayerProfileResponse struct {
-	Username        string             `json:"username"`
-	Rank            int                `json:"rank"`
-	SubRank         int                `json:"sub_rank"`
-	AptitudeType    string             `json:"aptitude_type"`
-	AptitudePercent int                `json:"aptitude_percent"`
-	CurrentMana     float64            `json:"current_mana"`
-	MaxMana         float64            `json:"max_mana"`
-	PrimevalStones  float64            `json:"primeval_stones"`
-	ImmortalStones  float64            `json:"immortal_stones"`
-	HP              float64            `json:"hp"`
-	BaseHP          float64            `json:"base_hp"`
-	SectName        string             `json:"sect_name"`
-	EquippedGus     []string           `json:"equipped_gus"`
-	ScoutingStatus  string             `json:"scouting_status"`
-	StatusType      string             `json:"status_type"` // "success", "partial", "failure"
-	DeltaScore      float64            `json:"delta_score,omitempty"`
+	Username        string              `json:"username"`
+	Rank            int                 `json:"rank"`
+	SubRank         int                 `json:"sub_rank"`
+	AptitudeType    string              `json:"aptitude_type"`
+	AptitudePercent int                 `json:"aptitude_percent"`
+	CurrentMana     float64             `json:"current_mana"`
+	MaxMana         float64             `json:"max_mana"`
+	PrimevalStones  float64             `json:"primeval_stones"`
+	ImmortalStones  float64             `json:"immortal_stones"`
+	HP              float64             `json:"hp"`
+	BaseHP          float64             `json:"base_hp"`
+	SectName        string              `json:"sect_name"`
+	EquippedGus     []string            `json:"equipped_gus"`
+	ScoutingStatus  string              `json:"scouting_status"`
+	StatusType      string              `json:"status_type"` // "success", "partial", "failure"
+	DeltaScore      float64             `json:"delta_score,omitempty"`
 	MyScore         *models.ScoreDetail `json:"my_score,omitempty"`
-	DominantPath    string             `json:"dominant_path"`
-	DaoMarks        models.DaoMarksMap `json:"dao_marks"`
-	PathMasteries   map[string]int     `json:"path_masteries"`
-	Bio             string             `json:"bio"`
-	AvatarURL       string             `json:"avatar_url"`
-	Race            string             `json:"race"`
-	Gender          string             `json:"gender"`
-	Constitution    string             `json:"constitution"`
-	Statuses        models.StatusList  `json:"statuses"`
+	DominantPath    string              `json:"dominant_path"`
+	DaoMarks        models.DaoMarksMap  `json:"dao_marks"`
+	PathMasteries   map[string]int      `json:"path_masteries"`
+	Bio             string              `json:"bio"`
+	AvatarURL       string              `json:"avatar_url"`
+	Race            string              `json:"race"`
+	Gender          string              `json:"gender"`
+	Constitution    string              `json:"constitution"`
+	Statuses        models.StatusList   `json:"statuses"`
 }
 
 // getDominantPath determines the player's primary path based on Dao Marks or Path Masteries
@@ -164,8 +164,8 @@ func GetPlayerProfile(c *gin.Context) {
 
 		investigationRange := 15.0 + float64(viewerRank)*2.0
 		for _, gu := range models.FilterEquippedActive(viewerGuInventory) {
-			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-				investigationRange += spec.Effects.Passive.Investigation * 2.0
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+				investigationRange += models.GuStatValue(spec, "INVESTIGATION") * 2.0
 			}
 		}
 
@@ -179,8 +179,8 @@ func GetPlayerProfile(c *gin.Context) {
 	// 3. Compute Scouting Level of Viewer
 	scoutingLevel := float64(viewerRank)
 	for _, gu := range models.FilterEquippedActive(viewerGuInventory) {
-		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-			scoutingLevel += spec.Effects.Passive.Investigation
+		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+			scoutingLevel += models.GuStatValue(spec, "INVESTIGATION")
 		}
 	}
 	for path, points := range viewerPathMasteries {
@@ -202,8 +202,8 @@ func GetPlayerProfile(c *gin.Context) {
 	// 4. Compute Disguise Level of Target
 	disguiseLevel := float64(target.Rank)
 	for _, gu := range models.FilterEquippedActive(target.GuInventory) {
-		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok && spec.Effects.Passive != nil {
-			disguiseLevel += spec.Effects.Passive.DisguiseLevel
+		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+			disguiseLevel += models.GuStatValue(spec, "DISGUISE")
 		}
 	}
 	for path, points := range target.PathMasteries {
@@ -334,7 +334,7 @@ func GetPlayerProfile(c *gin.Context) {
 			// resp.ScoutingStatus = "Trinh sát thất bại! Đối phương ngụy trang tinh vi hoặc tu vi vượt trội."
 			resp.DominantPath = "Chưa rõ"
 		} else {
-			hasAttitudeGu := models.InventoryHasGuMechanic(target.GuInventory, "PERFECT_DISGUISE", true)
+			hasAttitudeGu := models.InventoryHasGuCapability(target.GuInventory, "PERFECT_DISGUISE", true)
 
 			if hasAttitudeGu {
 				// Perfect disguise via Attitude Gu

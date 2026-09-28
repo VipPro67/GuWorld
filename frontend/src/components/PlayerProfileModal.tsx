@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
-import { formatGameEffects } from "@/lib/effects";
+import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { statusRemainLabel } from "@/lib/utils";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
 import { Num } from "./Num";
@@ -310,16 +310,7 @@ export const PlayerProfileModal: React.FC = () => {
               <span className="text-sm font-semibold text-[var(--text-primary)]">
                 {race ? raceLabel(race) : "Không rõ"}
               </span>
-              {race && formatGameEffects(raceDictionary?.[race]?.effects).length > 0 && (
-                <ul className="mt-1 space-y-1">
-                  {formatGameEffects(raceDictionary?.[race]?.effects).map((eff, i) => (
-                    <li key={i} className="text-[10px] leading-snug text-amber-200/70">
-                      <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
-                      {eff}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {race && <EffectEnvelopeView effects={raceDictionary?.[race]?.effects} />}
             </div>
             <div className="flex flex-col gap-1.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-3.5">
               <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Giới tính</span>
@@ -332,16 +323,7 @@ export const PlayerProfileModal: React.FC = () => {
               <span className="text-sm font-semibold text-[var(--text-primary)]">
                 {constitution ? constitutionLabel(constitution) : "Không có"}
               </span>
-              {constitution && formatGameEffects(constitutionDictionary?.[constitution]?.effects).length > 0 && (
-                <ul className="mt-1 space-y-1">
-                  {formatGameEffects(constitutionDictionary?.[constitution]?.effects).map((eff, i) => (
-                    <li key={i} className="text-[10px] leading-snug text-amber-200/70">
-                      <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
-                      {eff}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {constitution && <EffectEnvelopeView effects={constitutionDictionary?.[constitution]?.effects} />}
             </div>
             <div className="flex flex-col gap-1.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-3.5">
               <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Trạng thái</span>

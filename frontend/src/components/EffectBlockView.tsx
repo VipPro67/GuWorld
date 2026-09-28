@@ -1,6 +1,7 @@
 import React from "react";
-import type { ComposableEffectBlock, AtomicOperation, TargetScope } from "@/lib/gu-dict";
+import type { EffectBlock, EffectEnvelope, EffectOperation, EffectTarget } from "@/lib/effect-blocks";
 import { translatePath } from "@/lib/translate";
+import { formatEffectTarget, renderableEffectBlocks } from "@/lib/effect-presentation";
 
 const TRIGGER_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   ALWAYS_ON: { label: "Nội Tại", color: "bg-purple-950/60 text-purple-300 border-purple-800/50", icon: "💎" },
@@ -33,6 +34,17 @@ const STAT_NAMES: Record<string, string> = {
   LUCK: "Vận Khí",
   ALL: "Toàn Chỉ Số",
   DAMAGE_DEALT: "Sát Thương Gây Ra",
+  MOVEMENT: "Di Chuyển",
+  INVESTIGATION: "Điều Tra",
+  HEARING: "Thính Giác",
+  DISGUISE: "Ngụy Trang",
+  TIME_SPEED: "Tốc Độ Thời Gian",
+  REFINE_SUCCESS: "Tỷ Lệ Luyện Cổ",
+  REFINE_MANA_TIER: "Tiết Kiệm Chân Nguyên Luyện Cổ",
+  STORAGE: "Sức Chứa",
+  DAO_MARK: "Đạo Ngân",
+  PATH_CONFLICT_REDUCTION: "Giảm Xung Đột Đạo",
+  PATH_RESISTANCE: "Kháng Lưu Phái",
 };
 
 const STATUS_NAMES: Record<string, string> = {
@@ -109,47 +121,16 @@ const UNIQUE_NAMES: Record<string, string> = {
   ADD_LIFESPAN_YEARS: "Tăng Thọ Nguyên",
   RANK_PROGRESS: "Tiến Cảnh Giới",
   SACRIFICE_APTITUDE: "Tế Lễ Tư Chất",
+  PORTAL_CREATE: "Tạo Cổng Dịch Chuyển",
+  RANDOM_PORTAL: "Cổng Dịch Chuyển Ngẫu Nhiên",
+  CAPTURE_BONUS: "Tăng Tỷ Lệ Thu Phục",
+  GROWTH_DURATION_HOURS: "Thời Gian Trưởng Thành Cổ",
+  IMMUNE_PATH_STATUS: "Miễn Nhiễm Trạng Thái Lưu Phái",
 };
 
-export function formatTarget(target?: TargetScope): string | null {
-  if (!target || !target.selector) return null;
-  const sel = target.selector.toUpperCase();
-  let label = "";
-  switch (sel) {
-    case "TARGET":
-    case "SINGLE":
-      label = "Mục tiêu";
-      break;
-    case "ROW":
-      label = "Hàng ngang";
-      break;
-    case "COL":
-    case "COLUMN":
-      label = "Hàng dọc";
-      break;
-    case "ALL_ENEMIES":
-      label = "Toàn bộ địch";
-      break;
-    case "ALL_ALLIES":
-      label = "Toàn bộ đồng đội";
-      break;
-    case "ALL":
-      label = "Toàn trận";
-      break;
-    case "SELF":
-      label = target.bypass_frontline ? "Bản thân" : "";
-      break;
-    default:
-      label = sel;
-  }
-  if (!label && !target.bypass_frontline) return null;
-  if (target.bypass_frontline) {
-    return label ? `${label} (Xuyên hàng)` : "Xuyên hàng";
-  }
-  return label;
-}
+export const formatTarget = formatEffectTarget;
 
-export function formatOperation(op: AtomicOperation): { text: string; color: string; icon: string } {
+export function formatOperation(op: EffectOperation): { text: string; color: string; icon: string } {
   const opType = (op.op || "").toUpperCase();
   switch (opType) {
     case "DAMAGE": {
@@ -219,7 +200,18 @@ export function formatOperation(op: AtomicOperation): { text: string; color: str
   }
 }
 
-export const EffectBlockItem: React.FC<{ block: ComposableEffectBlock; index?: number }> = ({ block }) => {
+const operationMeta = (op: EffectOperation): string[] => {
+  const parts: string[] = [];
+  const target = formatTarget(op.target);
+  if (target) parts.push(`mục tiêu: ${target}`);
+  if (op.unit) parts.push(`đơn vị: ${op.unit}`);
+  if (typeof op.chance === "number") parts.push(`tỉ lệ: ${Math.round(op.chance * 100)}%`);
+  if (typeof op.turns === "number") parts.push(`${op.turns} lượt`);
+  if (op.stack_policy) parts.push(`cộng dồn: ${op.stack_policy}`);
+  return parts;
+};
+
+export const EffectBlockItem: React.FC<{ block: EffectBlock; index?: number }> = ({ block }) => {
   const triggerKey = (block.trigger || "").toUpperCase();
   const cfg = TRIGGER_CONFIG[triggerKey] || {
     label: block.trigger || "Hiệu ứng",
@@ -241,8 +233,15 @@ export const EffectBlockItem: React.FC<{ block: ComposableEffectBlock; index?: n
         </span>
       )}
 
+      {block.conditions?.map((condition, index) => (
+        <span key={`condition-${index}`} className="px-1.5 py-0.5 rounded bg-slate-900/70 text-slate-300 border border-slate-700/60 text-[9px] font-mono">
+          nếu {condition.field} {condition.operator} {condition.value}
+        </span>
+      ))}
+
       {block.operations && block.operations.map((op, i) => {
         const { text, color, icon } = formatOperation(op);
+        const metadata = operationMeta(op);
         return (
           <span
             key={i}
@@ -250,6 +249,7 @@ export const EffectBlockItem: React.FC<{ block: ComposableEffectBlock; index?: n
           >
             <span className="opacity-80 text-[9px]">{icon}</span>
             <span>{text}</span>
+            {metadata.length > 0 && <span className="text-zinc-500">· {metadata.join(" · ")}</span>}
           </span>
         );
       })}
@@ -257,7 +257,7 @@ export const EffectBlockItem: React.FC<{ block: ComposableEffectBlock; index?: n
   );
 };
 
-export const EffectBlocksList: React.FC<{ blocks?: ComposableEffectBlock[] | null }> = ({ blocks }) => {
+export const EffectBlocksList: React.FC<{ blocks?: EffectBlock[] | null }> = ({ blocks }) => {
   if (!blocks || !Array.isArray(blocks) || blocks.length === 0) return null;
   return (
     <div className="flex flex-col gap-1 w-full">
@@ -266,4 +266,13 @@ export const EffectBlocksList: React.FC<{ blocks?: ComposableEffectBlock[] | nul
       ))}
     </div>
   );
+};
+
+/** Canonical renderer. Unknown envelopes never throw and remain inspectable. */
+export const EffectEnvelopeView: React.FC<{ effects?: EffectEnvelope | null }> = ({ effects }) => {
+  const presentation = renderableEffectBlocks(effects);
+  if (presentation.unsupportedSchema !== undefined) {
+    return <div className="text-[10px] text-amber-400">Effect schema không được hỗ trợ: {String(presentation.unsupportedSchema)}</div>;
+  }
+  return <EffectBlocksList blocks={presentation.blocks} />;
 };

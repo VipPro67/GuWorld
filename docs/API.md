@@ -467,3 +467,10 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 | GET | `/scouting/tracked-targets` | Lấy danh sách con mồi đang mang ấn ký kèm tọa độ thời gian thực `(region, x, y)`. |
 | POST | `/scouting/sever-clues` | Đoạn tuyệt thiên cơ, chém đứt toàn bộ ấn ký đang theo dõi và tàn dư ô bản đồ. Tốn 20 Chân Nguyên (cố định). |
 | POST | `/scouting/resonance-scan` | Cảm ứng Cổ trùng và xung kích Đạo ngân (Dao Pulses) trong khu vực. Tốn 50 Chân Nguyên (cố định) + 200 Nguyên Thạch, hoặc TNT với Tiên nhân. |
+### Effect catalog Block v2 (Admin)
+
+- `POST /api/admin/effect-catalog/validate` validates `{ "source": "gu|item|race|constitution|status", "key": "...", "effects": { ... } }` without writing. Definitions are block-only and require `schema_version: 2` plus `blocks`; legacy namespaces and unknown fields are rejected.
+- `GET /api/admin/effect-catalog/metadata` returns the canonical trigger, target, operation, stat, status, resource, unit, stack-policy, condition, and native-code catalogs used by the validator. Admin editors must use this metadata instead of maintaining a separate hard-coded vocabulary.
+- `GET /api/admin/effect-catalog/audit` audits Gu, Item, Race, Constitution, and Status definitions in the database.
+- Validation responses contain `source`, `row` (for CSV), `key`, `block_id`, `operation_index`, `path`, `error_code`, and `message`. CSV import returns HTTP 400 with the same `issues` payload and completes validation for the whole effect-bearing batch before the first database write.
+- The older `/api/admin/gu-effects/validate` and `/api/admin/gu-effects/audit` route names remain as aliases during the endpoint migration; validation payloads follow the strict Block v2 contract above.

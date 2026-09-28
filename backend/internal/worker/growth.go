@@ -224,7 +224,7 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 		for i := range guInv {
 			gu := &guInv[i]
 			spec, ok := models.GetGu(gu.GuID, gu.Rank)
-			if !ok || spec.Effects.Growth == nil || spec.Effects.Growth.HoursToMax <= 0 {
+			if _, hasGrowth := models.GrowthProfile(spec); !ok || !hasGrowth {
 				continue
 			}
 			key := typeKey{guID: gu.GuID, rank: gu.Rank}
@@ -313,14 +313,13 @@ func processGrowthBatch(ctx context.Context, db *sql.DB, playerIDs []string) {
 				baseHP += hpBoost
 			}
 
-			if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+			growth, _ := models.GrowthProfile(spec)
+			if gu.GrowthHours >= growth.HoursToMax {
 				growthData.FullyGrown = append(growthData.FullyGrown, models.FullyGrownInfo{
-					GuID:    gu.GuID,
-					Rank:    gu.Rank,
-					Attack:  spec.Effects.Growth.MaxAttack,
-					Defense: spec.Effects.Growth.MaxDefense,
-					HP:      spec.Effects.Growth.MaxHP,
-					Speed:   spec.Effects.Growth.MaxSpeed,
+					GuID:   gu.GuID,
+					Rank:   gu.Rank,
+					Attack: growth.MaxAttack, Defense: growth.MaxDefense,
+					HP: growth.MaxHP, Speed: growth.MaxSpeed,
 				})
 			}
 
@@ -444,7 +443,7 @@ func findGrowthAffectedPlayers(ctx context.Context, db *sql.DB) ([]string, error
 
 	for id, ranks := range models.GuRegistry {
 		for rank, spec := range ranks {
-			if spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0 {
+			if _, ok := models.GrowthProfile(spec); ok {
 				growthKeys = append(growthKeys, guKey{id: id, rank: rank})
 			}
 		}
@@ -487,10 +486,10 @@ func findGrowthAffectedPlayers(ctx context.Context, db *sql.DB) ([]string, error
 }
 
 func ApplyGrowthProgressWorker(gu *models.GuInstance, spec models.GuDictionaryItem, elapsedHours float64) (attack, defense, hp, speed float64) {
-	if spec.Effects.Growth == nil || elapsedHours <= 0 {
+	g, ok := models.GrowthProfile(spec)
+	if !ok || elapsedHours <= 0 {
 		return 0, 0, 0, 0
 	}
-	g := spec.Effects.Growth
 	maxHours := g.HoursToMax
 	if maxHours <= 0 {
 		maxHours = 168

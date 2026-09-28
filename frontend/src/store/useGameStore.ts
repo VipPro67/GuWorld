@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
-import type { RequiredGus, ComposableEffectBlock } from "@/lib/gu-dict";
-import type { EffectDictionaryEntry } from "@/lib/effects";
+import type { RequiredGus } from "@/lib/gu-dict";
+import { manaRegenPerTick, nativeNumericValue } from "@/lib/effect-blocks";
+import type { EffectDictionaryEntry, EffectEnvelope } from "@/lib/effect-blocks";
 import { useUIStore } from "@/store/useUIStore";
 import { wsManager } from "@/lib/websocket";
 import { authFetch } from "@/lib/auth";
@@ -420,13 +421,8 @@ const manaRegenTickPerHour = (player: Player, guDictionary: Record<string, GuSpe
   for (const gu of player.gu_inventory) {
     if (!gu.equipped || gu.status !== "ACTIVE") continue;
     const spec = guSpecFor(gu.gu_id, gu.rank);
-    if (!spec || !spec.effects?.other) continue;
-    for (const mech of spec.effects.other) {
-      if (mech.event_trigger !== "ON_TICK" || mech.action_code !== "MANA_REGEN_TICK") continue;
-      let val = mech.params?.value;
-      if (typeof val !== "number" || val <= 0) val = 0.5;
-      total += val * manaRegenTickFactor(player.rank, gu.rank);
-    }
+    if (!spec) continue;
+    total += manaRegenPerTick(spec.effects) * manaRegenTickFactor(player.rank, gu.rank);
   }
   return total;
 };
@@ -527,7 +523,7 @@ export const createManaSnapshotFromPlayer = (player: Player, guDictionary: Recor
   base_hp: player.base_hp,
   hp_regen_rate: player.hp_regen_rate || 0,
   mana_regen_tick_per_hour: manaRegenTickPerHour(player, guDictionary),
-  mana_regen_mult: 1 + (player.constitution ? (constitutionDictionary?.[player.constitution]?.effects?.mana_regen ?? 1) : 0),
+  mana_regen_mult: 1 + (player.constitution ? nativeNumericValue(constitutionDictionary?.[player.constitution], "MANA_REGEN") : 0),
 });
 
 export interface ImmortalAperture {
@@ -761,28 +757,6 @@ export interface GroundDrop {
 }
 
 
-export interface SpecialMechanic {
-  event_trigger: string;
-  action_code: string;
-  params: Record<string, ApiResponseData>;
-}
-
-export interface GuEffects {
-  active?: Record<string, ApiResponseData>;
-  support?: Record<string, ApiResponseData>;
-  passive?: Record<string, ApiResponseData>;
-  house?: Record<string, ApiResponseData>;
-  growth?: {
-    max_attack?: number;
-    max_defense?: number;
-    max_hp?: number;
-    max_speed?: number;
-    hours_to_max?: number;
-  };
-  other?: SpecialMechanic[];
-  blocks?: ComposableEffectBlock[] | null;
-}
-
 export interface GuSpec {
   id: string;
   name: string;
@@ -790,7 +764,7 @@ export interface GuSpec {
   path: string[];
   gu_type: string;
   base_mana_cost: number;
-  effects: GuEffects;
+  effects: EffectEnvelope;
   hunger_rate: number;
   food_types: string[];
   max_hunger: number;
@@ -813,7 +787,7 @@ export interface ItemSpec {
   rarity?: number;
   rank?: number;
   path?: string;
-  effects?: Record<string, number>;
+  effects?: EffectEnvelope;
   tags?: string[];
   description: string;
   base_price?: number;

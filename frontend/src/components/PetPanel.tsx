@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { GamePanel, GameButton, GameCard, GameBadge } from "@/components/ui";
 import { Player, PlayerPet, ItemSpec, MonsterSpec, useGameStore } from "@/store/useGameStore";
+import { restoreHunger } from "@/lib/effect-blocks";
 import { PawPrint, Heart, Swords, Moon, Trash2, Merge, Users, ChevronDown, ChevronUp } from "lucide-react";
 // UI migrated to shared components
 
@@ -63,8 +64,8 @@ export const PetPanel: React.FC<PetPanelProps> = ({
   const mergeOverLimit = !!(mergeMode && mergeTarget && mergeSources.length > 0 && mergeTotalCount > mergeLimit);
 
   const hungerValue = (item: ItemSpec): number => {
-    const effects = item.effects as Record<string, number> | undefined;
-    if (effects?.hunger && effects.hunger > 0) return effects.hunger;
+    const restored = restoreHunger(item);
+    if (restored > 0) return restored;
     return Math.max(item.rank ?? 1, 1) * 10;
   };
 

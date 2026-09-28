@@ -7,7 +7,7 @@ import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, 
 import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
 import { GamePanel } from "@/components/ui";
-import { EffectBlocksList } from "@/components/EffectBlockView";
+import { EffectEnvelopeView } from "@/components/EffectBlockView";
 
 interface GuInventoryProps {
   player: Player;
@@ -781,30 +781,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         {spec.effects && Object.keys(spec.effects).length > 0 && (
                           <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                             <span className="text-zinc-600 font-mono block mb-0.5">Hiệu Ứng</span>
-                            <div className="flex flex-wrap items-center gap-1">
-                              {Object.entries(spec.effects).map(([k, v]) => {
-                                const val = v as unknown;
-                                if (typeof val === "object" && val !== null) {
-                                  if (Array.isArray(val)) {
-                                    return (
-                                      <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 text-zinc-300 whitespace-nowrap">
-                                        {FormatKey(k)}: {val.length} mục
-                                      </span>
-                                    );
-                                  }
-                                  return Object.entries(val).map(([subK, subV]) => (
-                                    <span key={`${k}-${subK}`} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 text-zinc-300 whitespace-nowrap">
-                                      {FormatKey(subK)}: {String(subV)}
-                                    </span>
-                                  ));
-                                }
-                                return (
-                                  <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 text-zinc-300 whitespace-nowrap">
-                                    {FormatKey(k)}: {String(val)}
-                                  </span>
-                                );
-                              })}
-                            </div>
+                            <EffectEnvelopeView effects={spec.effects} />
                           </div>
                         )}
                         {spec.tags && spec.tags.length > 0 && (
@@ -1477,46 +1454,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       {spec.effects && Object.keys(spec.effects).length > 0 && (
                                         <div className="col-span-2 md:col-span-3 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                                           <span className="text-zinc-600 font-mono block mb-1">Hiệu Ứng</span>
-                                          <div className="flex flex-col gap-1.5">
-                                            {Array.isArray(spec.effects.blocks) && spec.effects.blocks.length > 0 ? (
-                                              <EffectBlocksList blocks={spec.effects.blocks} />
-                                            ) : (
-                                              Object.entries(spec.effects).map(([section, effects]) =>
-                                                section === "other" && Array.isArray(effects) && effects.length > 0 ? (
-                                                  <div key={section} className="flex flex-wrap items-center gap-1">
-                                                    <span className="text-zinc-500 font-mono text-[9px] uppercase">{section}:</span>
-                                                    {effects.map((effect, mi: number) => (
-                                                      <span key={mi} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 whitespace-nowrap">
-                                                        {effect?.event_trigger || "?"} → {effect?.action_code || "?"}
-                                                        {effect?.params && Object.keys(effect.params).length > 0 ? ` (${JSON.stringify(effect.params)})` : ""}
-                                                      </span>
-                                                    ))}
-                                                  </div>
-                                                ) : (
-                                                  effects && typeof effects === 'object' && !Array.isArray(effects) && Object.keys(effects).length > 0 && (
-                                                    <div key={section} className="flex flex-wrap items-center gap-1">
-                                                      <span className="text-zinc-500 font-mono text-[9px] uppercase">{section}:</span>
-                                                      {Object.entries(effects).map(([k, v]) => (
-                                                        <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 whitespace-nowrap">
-                                                          {FormatKey(k)}: {String(v)}
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                  )
-                                                )
-                                              )
-                                            )}
-                                            {spec.effects.growth && typeof spec.effects.growth === 'object' && Object.keys(spec.effects.growth).length > 0 && (
-                                              <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-zinc-900/60">
-                                                <span className="text-emerald-500 font-mono text-[9px] uppercase">Nuôi dưỡng:</span>
-                                                {Object.entries(spec.effects.growth).map(([k, v]) => (
-                                                  <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 text-[9px] text-zinc-400">
-                                                    {FormatKey(k)}: {String(v)}
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
+                                          <EffectEnvelopeView effects={spec.effects} />
                                         </div>
                                       )}
                                       <Link

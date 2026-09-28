@@ -1,0 +1,19 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { EMPTY_EFFECT_ENVELOPE, captureBonus, combatCategory, disguiseLevel, effectEnvelope, growthConfig, hasCapability, investigation, isCombatEligible, operationsBy, statModifier, type EffectEnvelope } from "./effect-blocks.ts";
+const effects: EffectEnvelope = { schema_version: 2, blocks: [
+  { id: "passive", trigger: "ALWAYS_ON", target: { selector: "SELF" }, operations: [
+    { op: "STAT_MOD", stat: "INVESTIGATION", value: 2 }, { op: "STAT_MOD", stat: "INVESTIGATION", value: 3 },
+    { op: "STAT_MOD", stat: "DISGUISE", value: 4 }, { op: "STAT_MOD", stat: "SPEED", value: 0.2 },
+  ] },
+  { id: "attack", trigger: "ON_ACTION", target: { selector: "TARGET" }, operations: [{ op: "DAMAGE", value: 10 }] },
+  { id: "capture", trigger: "CAPABILITY", target: { selector: "SELF" }, operations: [
+    { op: "UNIQUE", code: "CAPTURE_BONUS", params: { value: 0.25 } }, { op: "UNIQUE", code: "DISGUISE" },
+  ] },
+  { id: "growth", trigger: "ALWAYS_ON", target: { selector: "SELF" }, operations: [
+    { op: "STAT_MOD", sub_type: "GROWTH_CAP", stat: "ATTACK", value: 12 }, { op: "UNIQUE", code: "GROWTH_DURATION_HOURS", params: { value: 48 } },
+  ] },
+] };
+test("effectEnvelope requires schema_version 2", () => { assert.equal(effectEnvelope({ blocks: effects.blocks } as never), EMPTY_EFFECT_ENVELOPE); assert.equal(effectEnvelope(effects), effects); assert.equal(effectEnvelope({ effects }), effects); });
+test("modifier selectors sum canonical operations", () => { assert.equal(investigation(effects), 5); assert.equal(disguiseLevel(effects), 4); assert.equal(statModifier(effects, "speed"), 0.2); assert.equal(operationsBy(effects, { op: "damage" }).length, 1); });
+test("domain selectors read block operations", () => { assert.equal(hasCapability(effects, "disguise"), true); assert.equal(isCombatEligible(effects), true); assert.equal(captureBonus(effects), 0.25); assert.equal(combatCategory(effects), "attack"); assert.deepEqual(growthConfig(effects), { max_attack: 12, max_defense: 0, max_hp: 0, max_speed: 0, hours_to_max: 48 }); });

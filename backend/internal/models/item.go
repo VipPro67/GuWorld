@@ -1,10 +1,12 @@
 package models
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -12,6 +14,20 @@ import (
 
 // ItemEffects represents flexible stats map stored in JSONB
 type ItemEffects map[string]float64
+
+var itemBlockCodeToKey = map[string]string{
+	"RESTORE_HUNGER":      "hunger",
+	"RESTORE_HP":          "restore_hp",
+	"RESTORE_MANA":        "restore_mana",
+	"INCREASE_HUMAN_QI":   "increase_human_qi",
+	"HEAL_APERTURE":       "heal_aperture",
+	"RANDOM_CONSTITUTION": "random_constitution",
+	"RANDOM_RACE":         "random_race",
+	"OPEN_MINE_CHEST":     "open_mine_chest",
+	"CHANGE_RACE":         "change_race",
+	"LIFESPAN_BOOST":      "lifespan_boost",
+	"SOUL_BOOST":          "soul_boost",
+}
 
 // Scan implements the sql.Scanner interface for ItemEffects
 func (e *ItemEffects) Scan(value interface{}) error {
@@ -28,11 +44,57 @@ func (e *ItemEffects) Scan(value interface{}) error {
 	default:
 		return fmt.Errorf("unsupported Scan, expected []byte or string, got %T", value)
 	}
-	if len(b) == 0 || string(b) == "null" {
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
 		*e = ItemEffects{}
 		return nil
 	}
-	return json.Unmarshal(b, e)
+	if trimmed[0] == '[' {
+		return e.scanBlocks(trimmed)
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &root); err == nil {
+		if blocksRaw, ok := root["blocks"]; ok {
+			trimmedB := bytes.TrimSpace(blocksRaw)
+			if len(trimmedB) > 0 && trimmedB[0] == '[' {
+				return e.scanBlocks(trimmedB)
+			}
+		}
+	}
+	return json.Unmarshal(trimmed, e)
+}
+
+func (e *ItemEffects) scanBlocks(data []byte) error {
+	*e = make(ItemEffects)
+	type blockOp struct {
+		Op     string          `json:"op"`
+		Code   string          `json:"code"`
+		Params json.RawMessage `json:"params"`
+	}
+	type blockItem struct {
+		Operations []blockOp `json:"operations"`
+	}
+	var blocks []blockItem
+	if err := json.Unmarshal(data, &blocks); err != nil {
+		return err
+	}
+	for _, b := range blocks {
+		for _, op := range b.Operations {
+			code := strings.ToUpper(op.Code)
+			key, ok := itemBlockCodeToKey[code]
+			if !ok {
+				key = strings.ToLower(op.Code)
+			}
+			var p struct {
+				Value float64 `json:"value"`
+			}
+			if len(op.Params) > 0 {
+				_ = json.Unmarshal(op.Params, &p)
+			}
+			(*e)[key] = p.Value
+		}
+	}
+	return nil
 }
 
 // Value implements the driver.Valuer interface for ItemEffects
@@ -60,6 +122,51 @@ type ItemSpec struct {
 	ImageURL    string      `json:"image_url"`
 	Rarity      int         `json:"rarity"`
 	Path        string      `json:"path"`
+}
+
+type ItemEffectCommand struct {
+	Code  string
+	Value float64
+}
+
+var itemEffectCodes = map[string]bool{
+	"mortal_only": true, "immortal_only": true, "min_rank": true, "max_rank": true,
+	"restore_hp": true, "restore_mana": true, "soul_boost": true, "remove_negative_status": true,
+	"lifespan_boost": true, "open_mine_chest": true, "heal_aperture": true,
+	"increase_human_qi": true, "random_constitution": true, "random_race": true,
+	"change_race": true, "hunger": true,
+}
+
+func CompileItemEffects(input ItemEffects) ([]ItemEffectCommand, error) {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		if !itemEffectCodes[key] {
+			return nil, fmt.Errorf("unknown item effect %q", key)
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	commands := make([]ItemEffectCommand, 0, len(keys))
+	for _, key := range keys {
+		commands = append(commands, ItemEffectCommand{Code: key, Value: input[key]})
+	}
+	return commands, nil
+}
+
+// EffectCommands is the typed, deterministic item-use projection. Callers do
+// not inspect the persisted effects map directly.
+func (item ItemSpec) EffectCommands() []ItemEffectCommand {
+	commands, _ := CompileItemEffects(item.Effects)
+	return commands
+}
+
+func (item ItemSpec) HasEffect(code string) bool {
+	for _, command := range item.EffectCommands() {
+		if command.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 // ItemRegistry holds the memory map cache of all Item specifications.
@@ -108,6 +215,9 @@ func LoadItemRegistry(db *sql.DB) error {
 		}
 
 		item.ItemType = item.Type // align for backward compatibility
+		if _, compileErr := CompileItemEffects(item.Effects); compileErr != nil {
+			return fmt.Errorf("compile item %s effects: %w", item.ID, compileErr)
+		}
 		newRegistry[item.ID] = item
 		count++
 	}

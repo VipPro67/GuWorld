@@ -4,14 +4,16 @@ import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
 import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
+import { operationsBy } from "@/lib/effect-blocks";
 
 function computeMovementSpeed(gamePlayer: Player | null, guDictionary: Record<string, GuSpec>): number {
   if (!gamePlayer) return 1;
   let movement = 1.0;
   for (const gu of gamePlayer.gu_inventory) {
     if (!gu.equipped || gu.status !== "ACTIVE") continue;
-    const passive = guSpecFor(gu.gu_id, gu.rank)?.effects?.passive;
-    if (passive?.movement) movement += passive.movement;
+    const spec = guSpecFor(gu.gu_id, gu.rank);
+    movement += operationsBy(spec?.effects, { trigger: "ALWAYS_ON", op: "STAT_MOD", stat: "MOVEMENT" })
+      .reduce((sum, operation) => sum + (operation.value || 0), 0);
   }
   return Math.max(1, movement);
 }

@@ -87,7 +87,18 @@ func ValidateGuCatalog(entries []GuEntry) CatalogReport {
 			validation.add(SeverityError, "effect_too_large", "$", "một effect definition vượt giới hạn 256 KiB")
 			err = validation
 		} else {
-			_, validation, err = NormalizeAndValidate(entry.Effects)
+			trimmed := bytes.TrimSpace(entry.Effects)
+			if len(trimmed) > 0 && trimmed[0] == '[' {
+				issues := ValidateBlockV2(trimmed, Location{Source: "gu", Key: entry.ID})
+				for _, iss := range issues {
+					validation.add(SeverityError, iss.Code, iss.Path, iss.Message)
+				}
+				if validation.HasErrors() {
+					err = validation
+				}
+			} else {
+				_, validation, err = NormalizeAndValidate(entry.Effects)
+			}
 		}
 		if duplicate {
 			validation.add(SeverityError, "duplicate_entry", "$", "trùng định danh Gu (id, rank)")

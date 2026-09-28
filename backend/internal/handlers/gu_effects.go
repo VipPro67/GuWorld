@@ -72,7 +72,9 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 
 	// Rule 3: Energy cost
 	cost := gamefx.EnergyCost(player, spec)
-	if spec.Effects.Active != nil && (spec.Effects.Active.PortalCreate || spec.Effects.Active.RandomPortal) {
+	_, portal := models.GuSpecCapability(*spec, "PORTAL_CREATE")
+	_, randomPortal := models.GuSpecCapability(*spec, "RANDOM_PORTAL")
+	if portal || randomPortal {
 		if spec.Rank < player.Rank {
 			return fmt.Errorf("Không thể thực hiện dịch chuyển: Cấp độ Cổ trùng (%d) thấp hơn tu vi bản thân (%d)!", spec.Rank, player.Rank)
 		}
@@ -351,12 +353,14 @@ func ApplyPostDamageEffects(ctx *CombatContext, playerAction *Action, enemyActio
 // ── GENERIC EVENT DISPATCHER ─────────────────────────────────────────────
 
 func HandleGuEvent(player *models.Player, specs models.GuDictionaryItem, guInstance models.GuInstance, eventTrigger string) (string, error) {
-	if specs.Effects.Other == nil {
+	compiled := models.CompiledGuEffects(specs)
+	if compiled == nil {
 		return "", nil
 	}
 	var logs []string
-	for _, mechanic := range specs.Effects.Other {
-		if mechanic.EventTrigger == eventTrigger {
+	for _, operation := range compiled.NativeMechanics() {
+		if string(operation.Trigger) == eventTrigger {
+			mechanic := models.SpecialMechanic{EventTrigger: eventTrigger, ActionCode: operation.Code, Params: operation.Params}
 			msg, err := handleActionCode(player, specs, guInstance, mechanic)
 			if err != nil {
 				return "", err
@@ -658,10 +662,10 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 // ApplyGrowthProgress calculates and applies growth progress for a Gu instance.
 // Returns the delta boosts applied.
 func ApplyGrowthProgress(gu *models.GuInstance, spec *models.GuDictionaryItem, elapsedHours float64) (attack, defense, hp, speed float64) {
-	if spec.Effects.Growth == nil || elapsedHours <= 0 {
+	g, ok := models.GrowthProfile(*spec)
+	if !ok || elapsedHours <= 0 {
 		return 0, 0, 0, 0
 	}
-	g := spec.Effects.Growth
 	maxHours := g.HoursToMax
 	if maxHours <= 0 {
 		maxHours = 168 // default 1 week
@@ -691,9 +695,7 @@ func ApplyGrowthProgress(gu *models.GuInstance, spec *models.GuDictionaryItem, e
 // dispatcher so every ON_CONSUME path shares one loop. Kept for backward
 // compatibility with existing callers/tests.
 func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem, mechanic models.SpecialMechanic) (string, error) {
-	single := spec
-	single.Effects.Other = []models.SpecialMechanic{mechanic}
-	return HandleGuEvent(player, single, gu, mechanic.EventTrigger)
+	return handleActionCode(player, spec, gu, mechanic)
 }
 
 func tickStatusEffects(player *models.Player, ctx *CombatContext) {

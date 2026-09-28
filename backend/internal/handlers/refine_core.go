@@ -87,10 +87,10 @@ func collectRefineSupportBonus(player *models.Player) float64 {
 		applied[gu.GuID] = true
 
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok || spec.Effects.Passive == nil {
+		if !ok {
 			continue
 		}
-		totalBonus += spec.Effects.Passive.SuccessRateBonus
+		totalBonus += models.GuStatValue(spec, "REFINE_SUCCESS")
 	}
 	return totalBonus / 100.0
 }

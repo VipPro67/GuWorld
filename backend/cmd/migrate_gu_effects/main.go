@@ -1,131 +1,175 @@
+// Command migrate_gu_effects audits all legacy effect formats and emits block-v2
+// candidates. Dry-run is the default and source files are never overwritten.
 package main
 
 import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"io"
-	"log"
 	"os"
+	"path/filepath"
 
-	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
-	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/effectmigration"
 )
 
+type aggregate struct {
+	SchemaVersion int                      `json:"schema_version"`
+	DryRun        bool                     `json:"dry_run"`
+	Source        string                   `json:"source"`
+	Format        effectmigration.Format   `json:"format"`
+	Results       []effectmigration.Result `json:"results"`
+	MigrationGate bool                     `json:"migration_gate"`
+	ErrorCode     string                   `json:"error_code,omitempty"`
+	ErrorReason   string                   `json:"error_reason,omitempty"`
+}
+
 func main() {
-	csvPath := "data/Gu.csv"
-	if _, err := os.Stat(csvPath); os.IsNotExist(err) {
-		csvPath = "backend/data/Gu.csv"
-	}
-	if _, err := os.Stat(csvPath); os.IsNotExist(err) {
-		csvPath = "../../backend/data/Gu.csv"
-	}
+	var formatName, source, output, reportPath string
+	var write bool
+	flag.StringVar(&formatName, "format", "gu", "gu, item, gamefx, killer_move, or aperture_variant_event")
+	flag.StringVar(&source, "source", "data/Gu.csv", "source CSV (gu/item) or JSON file")
+	flag.StringVar(&output, "output", "", "candidate output path (required with -write)")
+	flag.StringVar(&reportPath, "report", "", "machine-readable audit report; defaults to stdout")
+	flag.BoolVar(&write, "write", false, "write candidate output; never overwrites source")
+	flag.Parse()
 
-	file, err := os.Open(csvPath)
-	if err != nil {
-		log.Fatalf("Không thể mở file CSV %s: %v", csvPath, err)
+	format, err := effectmigration.ParseFormat(formatName)
+	fatalIf(err)
+	absSource, err := filepath.Abs(source)
+	fatalIf(err)
+	if write && output == "" {
+		fatalIf(fmt.Errorf("-output is required with -write"))
 	}
-	defer file.Close()
+	for _, destination := range []string{output, reportPath} {
+		if destination != "" {
+			fatalIf(rejectSourceDestination(absSource, destination))
+		}
+	}
+	data, err := os.ReadFile(source)
+	fatalIf(err)
+	var results []effectmigration.Result
+	var candidate []byte
+	if filepath.Ext(source) == ".csv" {
+		results, candidate, err = convertCSV(format, data)
+	} else {
+		results = []effectmigration.Result{effectmigration.Convert(format, filepath.Base(source), data)}
+		candidate = results[0].Envelope
+	}
+	fatalIf(err)
+	gate := len(results) > 0
+	var gateCode, gateReason string
+	for _, result := range results {
+		gate = gate && result.Report.MigrationGate
+		if gateCode == "" && !result.Report.MigrationGate {
+			decision := effectmigration.EvaluateMigrationGate(result.Report)
+			gateCode, gateReason = decision.ErrorCode, decision.Reason
+		}
+	}
+	if len(results) == 0 {
+		gateCode, gateReason = "empty_input", "input contains no effect records"
+	}
+	audit := aggregate{SchemaVersion: 1, DryRun: !write, Source: source, Format: format, Results: results, MigrationGate: gate, ErrorCode: gateCode, ErrorReason: gateReason}
+	encoded, err := json.MarshalIndent(audit, "", "  ")
+	fatalIf(err)
+	encoded = append(encoded, '\n')
+	if reportPath == "" {
+		_, err = os.Stdout.Write(encoded)
+	} else {
+		err = os.WriteFile(reportPath, encoded, 0o644)
+	}
+	fatalIf(err)
+	if write {
+		if !gate {
+			fatalIf(fmt.Errorf("%s: %s", gateCode, gateReason))
+		}
+		fatalIf(os.WriteFile(output, candidate, 0o644))
+	}
+}
 
-	reader := csv.NewReader(file)
+func convertCSV(format effectmigration.Format, data []byte) ([]effectmigration.Result, []byte, error) {
+	reader := csv.NewReader(bytes.NewReader(data))
 	reader.LazyQuotes = true
-	header, err := reader.Read()
+	rows, err := reader.ReadAll()
 	if err != nil {
-		log.Fatalf("Lỗi đọc header CSV: %v", err)
+		return nil, nil, err
 	}
-
-	idIdx, rankIdx, effectsIdx := -1, -1, -1
-	for i, col := range header {
-		switch col {
-		case "id":
-			idIdx = i
-		case "rank":
-			rankIdx = i
-		case "effects":
-			effectsIdx = i
+	if len(rows) == 0 {
+		return nil, nil, fmt.Errorf("empty CSV")
+	}
+	idIndex, effectsIndex := -1, -1
+	for i, name := range rows[0] {
+		if name == "id" {
+			idIndex = i
+		}
+		if name == "effects" {
+			effectsIndex = i
 		}
 	}
-
-	if idIdx < 0 || rankIdx < 0 || effectsIdx < 0 {
-		log.Fatalf("CSV thiếu cột bắt buộc (id, rank, effects)")
+	if idIndex < 0 || effectsIndex < 0 {
+		return nil, nil, fmt.Errorf("CSV requires id and effects columns")
 	}
-
-	var allRows [][]string
-	allRows = append(allRows, header)
-
-	migratedCount := 0
-	lineNum := 1
-
-	for {
-		lineNum++
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Fatalf("Lỗi đọc dòng %d: %v", lineNum, err)
-		}
-
-		if len(row) <= effectsIdx || row[idIdx] == "" {
-			allRows = append(allRows, row)
+	results := make([]effectmigration.Result, 0, len(rows)-1)
+	for i := 1; i < len(rows); i++ {
+		if len(rows[i]) <= effectsIndex || len(rows[i]) <= idIndex {
 			continue
 		}
-
-		effectsStr := row[effectsIdx]
-		var rawRoot map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(effectsStr), &rawRoot); err != nil {
-			log.Fatalf("Dòng %d (Gu: %s): Lỗi parse effects JSON: %v", lineNum, row[idIdx], err)
-		}
-
-		var typedEffects models.GuEffects
-		if err := json.Unmarshal([]byte(effectsStr), &typedEffects); err != nil {
-			log.Fatalf("Dòng %d (Gu: %s): Lỗi parse GuEffects: %v", lineNum, row[idIdx], err)
-		}
-
-		// Compile legacy active, passive, other into modular blocks
-		blocks := models.CompileLegacyToBlocks(typedEffects.Active, typedEffects.Passive, typedEffects.Other)
-		blocksJSON, err := json.Marshal(blocks)
-		if err != nil {
-			log.Fatalf("Dòng %d (Gu: %s): Lỗi marshal blocks: %v", lineNum, row[idIdx], err)
-		}
-
-		rawRoot["blocks"] = json.RawMessage(blocksJSON)
-
-		combinedJSON, err := json.Marshal(rawRoot)
-		if err != nil {
-			log.Fatalf("Dòng %d (Gu: %s): Lỗi marshal combined effects: %v", lineNum, row[idIdx], err)
-		}
-
-		normalized, report, err := effectcatalog.NormalizeAndValidate(combinedJSON)
-		if err != nil || report.HasErrors() {
-			log.Fatalf("Dòng %d (Gu: %s, Rank: %s): NormalizeAndValidate thất bại: %v (issues: %+v)",
-				lineNum, row[idIdx], row[rankIdx], err, report.Issues)
-		}
-
-		row[effectsIdx] = string(normalized)
-		allRows = append(allRows, row)
-		migratedCount++
-	}
-
-	file.Close()
-
-	// Write migrated rows back to CSV
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	for _, r := range allRows {
-		if err := writer.Write(r); err != nil {
-			log.Fatalf("Lỗi ghi dòng vào buffer: %v", err)
+		result := effectmigration.Convert(format, rows[i][idIndex], []byte(rows[i][effectsIndex]))
+		results = append(results, result)
+		if len(result.Envelope) > 0 {
+			candidate, mergeErr := mergeCandidate(format, []byte(rows[i][effectsIndex]), result.Envelope)
+			if mergeErr != nil {
+				return nil, nil, mergeErr
+			}
+			rows[i][effectsIndex] = string(candidate)
 		}
 	}
-	writer.Flush()
+	var out bytes.Buffer
+	writer := csv.NewWriter(&out)
+	writer.WriteAll(rows)
 	if err := writer.Error(); err != nil {
-		log.Fatalf("Lỗi flush CSV writer: %v", err)
+		return nil, nil, err
 	}
+	return results, out.Bytes(), nil
+}
 
-	if err := os.WriteFile(csvPath, buf.Bytes(), 0644); err != nil {
-		log.Fatalf("Lỗi ghi đè file CSV %s: %v", csvPath, err)
+func fatalIf(err error) {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
 
-	fmt.Printf("Migration hoàn tất thành công! Đã xử lý và chuẩn hóa %d bản ghi Cổ trùng vào %s\n", migratedCount, csvPath)
+func rejectSourceDestination(absSource, destination string) error {
+	info, err := os.Lstat(destination)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing symlink destination %s", destination)
+	}
+	absDestination, err := filepath.Abs(destination)
+	if err != nil {
+		return err
+	}
+	if absDestination == absSource {
+		return fmt.Errorf("refusing to overwrite source file %s", destination)
+	}
+	sourceInfo, sourceErr := os.Stat(absSource)
+	destinationInfo, destinationErr := os.Stat(absDestination)
+	if sourceErr == nil && destinationErr == nil && os.SameFile(sourceInfo, destinationInfo) {
+		return fmt.Errorf("refusing source-equivalent destination %s", destination)
+	}
+	return nil
+}
+
+func mergeCandidate(format effectmigration.Format, legacy, envelope []byte) ([]byte, error) {
+	_ = format
+	_ = legacy
+	var candidate struct {
+		SchemaVersion int             `json:"schema_version"`
+		Blocks        json.RawMessage `json:"blocks"`
+	}
+	if err := json.Unmarshal(envelope, &candidate); err != nil {
+		return nil, err
+	}
+	return json.Marshal(candidate)
 }

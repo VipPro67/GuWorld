@@ -112,6 +112,7 @@ func InitSchema() error {
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
 		{"aperture", schemaAperture},
+		{"effect_catalog_migration", schemaEffectCatalogMigration},
 		{"combat", schemaCombat},
 		{"trade", schemaTrade},
 		{"social", schemaSocial},
@@ -321,6 +322,9 @@ func ensureAdmin() error {
 
 // SeedDictionaries populates gameplay master data from CSV files.
 func SeedDictionaries() error {
+	if err := preflightEffectCSVs([]effectCSVSource{{"item", "Item.csv", "id"}, {"gu", "Gu.csv", "id"}, {"constitution", "Constitution.csv", "key"}, {"race", "Race.csv", "key"}, {"status", "Status.csv", "key"}}); err != nil {
+		return err
+	}
 	if err := seedItemsFromCSV("Item.csv"); err != nil {
 		return fmt.Errorf("CSV item seed failed: %w", err)
 	}
@@ -425,6 +429,19 @@ func colIndex(header []string, name string) int {
 	return -1
 }
 
+func safeJSON(raw string, fallback string, rowLabel string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return fallback
+	}
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		logger.S.Warnf("invalid JSON in %s: %v", rowLabel, err)
+		return fallback
+	}
+	return value
+}
+
 func safeJSONObject(raw string, fallback string, rowLabel string) string {
 	value := strings.TrimSpace(raw)
 	if value == "" {
@@ -460,11 +477,83 @@ func safeJSONArray(raw string, fallback string, rowLabel string) string {
 }
 
 func normalizedGuEffectsJSON(raw string, rowLabel string) (string, effectcatalog.Report, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "[]" {
+		return "[]", effectcatalog.Report{}, nil
+	}
+	if trimmed[0] == '[' {
+		issues := effectcatalog.ValidateBlockV2([]byte(trimmed), effectcatalog.Location{Source: "gu", Key: rowLabel})
+		if len(issues) > 0 {
+			return "", effectcatalog.Report{}, &effectcatalog.ValidationError{Issues: issues}
+		}
+		return trimmed, effectcatalog.Report{}, nil
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal([]byte(raw), &envelope) == nil {
+		if _, ok := envelope["schema_version"]; ok || envelope["blocks"] != nil {
+			issues := effectcatalog.ValidateBlockV2([]byte(raw), effectcatalog.Location{Source: "gu", Key: rowLabel})
+			if len(issues) > 0 {
+				return "", effectcatalog.Report{}, &effectcatalog.ValidationError{Issues: issues}
+			}
+			return raw, effectcatalog.Report{}, nil
+		}
+	}
 	normalized, report, err := effectcatalog.NormalizeAndValidate([]byte(raw))
 	if err != nil {
 		return "", report, fmt.Errorf("%s: %w", rowLabel, err)
 	}
 	return string(normalized), report, nil
+}
+
+type effectCSVSource struct{ source, filename, keyColumn string }
+
+// preflightEffectCSVs completes validation for the whole requested batch
+// before any seeder can issue its first INSERT/UPDATE.
+func preflightEffectCSVs(sources []effectCSVSource) error {
+	all := make([]effectcatalog.ValidationIssue, 0)
+	for _, source := range sources {
+		f, reader, header, err := openCSV(source.filename)
+		if err != nil {
+			return err
+		}
+		keyIdx, effectsIdx := colIndex(header, source.keyColumn), colIndex(header, "effects")
+		if keyIdx < 0 || effectsIdx < 0 {
+			f.Close()
+			return fmt.Errorf("%s missing required columns (%s, effects)", source.filename, source.keyColumn)
+		}
+		rowNumber := 1
+		for {
+			row, err := reader.Read()
+			rowNumber++
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				f.Close()
+				return fmt.Errorf("%s row %d: %w", source.filename, rowNumber, err)
+			}
+			if len(row) == 0 {
+				continue
+			}
+			cell := func(index int) string {
+				if index < 0 || index >= len(row) {
+					return ""
+				}
+				return row[index]
+			}
+			key := strings.TrimSpace(cell(keyIdx))
+			raw := strings.TrimSpace(cell(effectsIdx))
+			if raw == "" {
+				raw = `[]`
+			}
+			all = append(all, effectcatalog.ValidateBlockV2([]byte(raw), effectcatalog.Location{Source: source.source, Row: rowNumber, Key: key})...)
+		}
+		f.Close()
+	}
+	if len(all) > 0 {
+		return &effectcatalog.ValidationError{Issues: all}
+	}
+	return nil
 }
 
 // parseRarity parses the rarity column (1-9 tier, empty/unset = 0). Non-numeric
@@ -530,11 +619,11 @@ func seedItemsFromCSV(filename string) error {
 			fmt.Sscanf(strings.TrimSpace(row[rankIdx]), "%d", &rank)
 		}
 
-		effects := "{}"
+		effects := "[]"
 		if effectsIdx >= 0 && effectsIdx < len(row) {
 			effVal := strings.TrimSpace(row[effectsIdx])
 			if effVal != "" {
-				effects = effVal
+				effects = safeJSON(effVal, "[]", fmt.Sprintf("item %s effects", id))
 			}
 		}
 
@@ -612,6 +701,7 @@ func seedGusFromCSV(filename string) error {
 	supportTagsIdx := col("support_tags")
 	basePriceIdx := col("base_price")
 	imageURLIdx := col("image_url")
+	targetTypeIdx := col("target_type")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
@@ -742,8 +832,8 @@ func seedGusFromCSV(filename string) error {
 			}
 		}
 
-		targetType := "SINGLE"
-		if effMap != nil {
+		targetType := strings.ToUpper(get(row, targetTypeIdx))
+		if targetType == "" && effMap != nil {
 			if _, ok := effMap["aoe_row"]; ok {
 				targetType = "ROW"
 			} else if _, ok := effMap["aoe_col"]; ok {
@@ -755,6 +845,9 @@ func seedGusFromCSV(filename string) error {
 			} else if _, ok := effMap["aoe"]; ok {
 				targetType = "ALL"
 			}
+		}
+		if targetType == "" {
+			targetType = "SINGLE"
 		}
 
 		_, err := DB.Exec(`
@@ -828,7 +921,7 @@ func seedConstitutionsFromCSV(filename string) error {
 	for _, key := range order {
 		row := seen[key]
 		name := get(row, nameIdx)
-		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+		effects := safeJSON(get(row, effectsIdx), "[]", fmt.Sprintf("%s effects", key))
 		tierStr := get(row, tierIdx)
 		tierVal := 0
 		if tierStr != "" {
@@ -898,7 +991,7 @@ func seedRacesFromCSV(filename string) error {
 	for _, key := range order {
 		row := seen[key]
 		name := get(row, nameIdx)
-		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+		effects := safeJSON(get(row, effectsIdx), "[]", fmt.Sprintf("%s effects", key))
 		_, err := DB.Exec(`
 			INSERT INTO race_dictionary (key, name, effects)
 			VALUES ($1, $2, $3::jsonb)
@@ -964,7 +1057,7 @@ func seedStatusesFromCSV(filename string) error {
 	for _, key := range order {
 		row := seen[key]
 		name := get(row, nameIdx)
-		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+		effects := safeJSON(get(row, effectsIdx), "[]", fmt.Sprintf("%s effects", key))
 		blocked := safeJSONArray(get(row, blockedIdx), "[]", fmt.Sprintf("%s blocked_actions", key))
 		duration := 0
 		if d := get(row, durationIdx); d != "" {
@@ -2686,28 +2779,28 @@ func ExportToCSV() error {
 	exports := []exportDef{
 		{
 			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END FROM item_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'[]'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Gu.csv",
-			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Constitution.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM constitution_dictionary ORDER BY key`,
 		},
 		{
 			filename: "Race.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM race_dictionary ORDER BY key`,
 		},
 		{
 			filename: "Status.csv",
 			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'[]'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
 		},
 		{
 			filename: "Recipe.csv",
@@ -2790,14 +2883,29 @@ func AvailableTables() []string {
 func TableImport(table string) error {
 	switch table {
 	case "item":
+		if err := preflightEffectCSVs([]effectCSVSource{{"item", "Item.csv", "id"}}); err != nil {
+			return err
+		}
 		return seedItemsFromCSV("Item.csv")
 	case "gu":
+		if err := preflightEffectCSVs([]effectCSVSource{{"gu", "Gu.csv", "id"}}); err != nil {
+			return err
+		}
 		return seedGusFromCSV("Gu.csv")
 	case "constitution":
+		if err := preflightEffectCSVs([]effectCSVSource{{"constitution", "Constitution.csv", "key"}}); err != nil {
+			return err
+		}
 		return seedConstitutionsFromCSV("Constitution.csv")
 	case "race":
+		if err := preflightEffectCSVs([]effectCSVSource{{"race", "Race.csv", "key"}}); err != nil {
+			return err
+		}
 		return seedRacesFromCSV("Race.csv")
 	case "status":
+		if err := preflightEffectCSVs([]effectCSVSource{{"status", "Status.csv", "key"}}); err != nil {
+			return err
+		}
 		return seedStatusesFromCSV("Status.csv")
 	case "recipe":
 		return seedRecipesFromCSV("Recipe.csv")
@@ -2839,27 +2947,27 @@ func TableExport(table string) error {
 		"item": {
 			filename: "Item.csv",
 			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'[]'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
 		},
 		"gu": {
 			filename: "Gu.csv",
-			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		"constitution": {
 			filename: "Constitution.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM constitution_dictionary ORDER BY key`,
 		},
 		"race": {
 			filename: "Race.csv",
 			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM race_dictionary ORDER BY key`,
 		},
 		"status": {
 			filename: "Status.csv",
 			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
-			query:    `SELECT key, name, COALESCE(effects::text,'{}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
+			query:    `SELECT key, name, COALESCE(effects::text,'[]'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
 		},
 		"recipe": {
 			filename: "Recipe.csv",

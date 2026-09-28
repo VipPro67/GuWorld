@@ -1,7 +1,9 @@
 package simulator
 
 import (
+	"encoding/json"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -153,13 +155,13 @@ type SimAction struct {
 
 	// Percent-based direct effects (0..1), from active.damage_hp_percent etc.
 	// Generic: any Gu may set them; engine applies them after normal damage.
-	DamageHPPercent     float64 // % target MaxHP as direct HP damage (bypasses shield)
-	ShieldStripPercent  float64 // % target current shield stripped
-	ProcChance          float64 // 0 = always; >0 = gate status ops + bonus effects
-	SelfEvasionPct      float64 // self evasion buff 0..1 (EVASION effect)
-	TargetWeakPct       float64 // WEAK intensity 0..1 applied to target
-	BonusTurns          int     // duration for SelfEvasionPct/TargetWeakPct effects
-	DisableGuTurns      int     // GU_SEAL turns applied to target (disable_gu_next_turn)
+	DamageHPPercent    float64 // % target MaxHP as direct HP damage (bypasses shield)
+	ShieldStripPercent float64 // % target current shield stripped
+	ProcChance         float64 // 0 = always; >0 = gate status ops + bonus effects
+	SelfEvasionPct     float64 // self evasion buff 0..1 (EVASION effect)
+	TargetWeakPct      float64 // WEAK intensity 0..1 applied to target
+	BonusTurns         int     // duration for SelfEvasionPct/TargetWeakPct effects
+	DisableGuTurns     int     // GU_SEAL turns applied to target (disable_gu_next_turn)
 
 	// Backlash from using Gu rank > actor rank
 	BacklashDamage float64 // HP damage taken by caster from Gu backlash
@@ -181,15 +183,44 @@ type SimAction struct {
 	// action. SourceID remains metadata for logs/tactics; the engine must never
 	// infer gameplay behavior from it.
 	Mechanics []CombatMechanic
+
+	// CompiledOperations is the temporary v2 adapter payload. Legacy fields
+	// above remain populated until simulator parity is complete.
+	CompiledOperations []gameplayeffects.CompiledOperation
 }
 
-// CombatMechanic is the simulator-facing form of effects.other. Params stay
+// CombatMechanic is the simulator-facing form of a compiled UNIQUE operation. Params stay
 // immutable JSON so combat snapshots are deterministic and definitions can be
 // extended without coupling the engine to Gu identifiers.
 type CombatMechanic struct {
 	Trigger    string
 	ActionCode string
-	Params     []byte
+	Params     []byte // legacy authoring payload; never decoded by the simulator
+	Values     map[string]any
+}
+
+// NewCombatMechanic compiles native mechanic parameters before simulation.
+func NewCombatMechanic(trigger, actionCode string, params []byte) CombatMechanic {
+	m := CombatMechanic{Trigger: trigger, ActionCode: actionCode, Params: append([]byte(nil), params...)}
+	_ = json.Unmarshal(params, &m.Values)
+	return m
+}
+
+// CompiledCombatMechanics adapts registry-compiled native mechanics without
+// parsing JSON during combat construction or simulation.
+func CompiledCombatMechanics(compiled *gameplayeffects.Compiled, action bool) []CombatMechanic {
+	if compiled == nil {
+		return nil
+	}
+	var result []CombatMechanic
+	for _, op := range compiled.NativeMechanics() {
+		isAction := op.Trigger == gameplayeffects.TriggerOnCast || op.Trigger == gameplayeffects.TriggerOnHit
+		if isAction != action {
+			continue
+		}
+		result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: op.Code, Params: append([]byte(nil), op.Params...), Values: op.Values})
+	}
+	return result
 }
 
 // Effect represents an active buff or debuff on a combatant.
@@ -248,16 +279,16 @@ type CombatantAuto struct {
 
 	// Character effects from race/constitution/statuses. Computed by the handler
 	// from gamefx.Get(player) and applied by the engine during battle.
-	DaoBonus             map[string]float64 // additive dao-path multiplier (path affinity)
-	PathDamageBonus      map[string]float64 // additive damage multiplier for a path
-	PathResistance       map[string]float64 // additive damage reduction taken for a path
-	HealingReceived      float64            // multiplier bonus on healing received
-	MentalResistance     float64            // chance (0-1) to resist control effects
-	Tenacity             float64            // generic self-dispel chance + CC duration reduction (0-1)
-	CCResist             float64            // generic proc resist vs all debuffs (0-1)
-	SoulDefenseBonus     float64            // percentage reduction of soul damage taken
-	LuckBonus            float64            // flat increase of luck stat
-	HasNonConflictingDao bool               // true if character possesses non-conflicting dao marks trait
+	DaoBonus             map[string]float64       // additive dao-path multiplier (path affinity)
+	PathDamageBonus      map[string]float64       // additive damage multiplier for a path
+	PathResistance       map[string]float64       // additive damage reduction taken for a path
+	HealingReceived      float64                  // multiplier bonus on healing received
+	MentalResistance     float64                  // chance (0-1) to resist control effects
+	Tenacity             float64                  // generic self-dispel chance + CC duration reduction (0-1)
+	CCResist             float64                  // generic proc resist vs all debuffs (0-1)
+	SoulDefenseBonus     float64                  // percentage reduction of soul damage taken
+	LuckBonus            float64                  // flat increase of luck stat
+	HasNonConflictingDao bool                     // true if character possesses non-conflicting dao marks trait
 	DaoProfile           *gamefx.DaoCombatProfile // precomputed O(1) dao conflict and natural defense profile
 
 	// StatProvenance maps stat key ("attack"/"defense"/"speed"/
@@ -300,19 +331,19 @@ type CombatantAuto struct {
 	IsBound        bool // immobilize, loses turn (BIND)
 	IsReviveLocked bool // cannot be revived (REVIVE_LOCK)
 	// New GuWorld specific flags
-	IsEssenceLeaking     bool    // ESSENCE_LEAK drains Chân Nguyên each turn
-	HasGuSeal            bool    // GU_SEAL disables one equipped Gu's active effects
-	HasSoulWound         bool    // SOUL_WOUND true damage and CN cost increase
-	HasThoughtChaos      bool    // THOUGHT_CHAOS can cause KillerMove failure
-	HasDaoConflict       bool    // DAO_CONFLICT reduces heal/shield from allies
-	AccuracyPenalty      float64 // 0..1 miss chance (BLIND)
-	EvasionChance        float64 // 0..1 dodge chance (EVASION buff, e.g. FORGET_REALITY)
-	ImmuneDreamStatus    bool    // immune to dream-path statuses (FORGET_DREAM)
-	DamageTakenReduction float64 // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP / INVINCIBLE)
-	Accuracy             float64 // accuracy bonus (reduces miss chance from Blind, adds to dodge check)
-	CritRateBonus        float64 // extra crit chance (0..1) from Gu active effects
-	IgnoreDefenseFlat    float64 // flat defense ignored by attacker
-	IgnoreDefensePct     float64 // % defense ignored by attacker (0..1)
+	IsEssenceLeaking     bool               // ESSENCE_LEAK drains Chân Nguyên each turn
+	HasGuSeal            bool               // GU_SEAL disables one equipped Gu's active effects
+	HasSoulWound         bool               // SOUL_WOUND true damage and CN cost increase
+	HasThoughtChaos      bool               // THOUGHT_CHAOS can cause KillerMove failure
+	HasDaoConflict       bool               // DAO_CONFLICT reduces heal/shield from allies
+	AccuracyPenalty      float64            // 0..1 miss chance (BLIND)
+	EvasionChance        float64            // 0..1 dodge chance (EVASION buff, e.g. FORGET_REALITY)
+	ImmuneDreamStatus    bool               // immune to dream-path statuses (FORGET_DREAM)
+	DamageTakenReduction float64            // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP / INVINCIBLE)
+	Accuracy             float64            // accuracy bonus (reduces miss chance from Blind, adds to dodge check)
+	CritRateBonus        float64            // extra crit chance (0..1) from Gu active effects
+	IgnoreDefenseFlat    float64            // flat defense ignored by attacker
+	IgnoreDefensePct     float64            // % defense ignored by attacker (0..1)
 	PendingDamageBuffs   map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on attack)
 	PendingShieldBuffs   map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on shield)
 

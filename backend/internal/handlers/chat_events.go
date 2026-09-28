@@ -78,8 +78,8 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 			return "", false
 		}
 
-		hasConnectingHeaven = models.InventoryHasGuMechanic(player.GuInventory, "CHAT_CONNECT", false)
-		hasDivineSense = models.InventoryHasGuMechanic(player.GuInventory, "CHAT_PERCEIVE", false)
+		hasConnectingHeaven = models.InventoryHasGuCapability(player.GuInventory, "CHAT_CONNECT", false)
+		hasDivineSense = models.InventoryHasGuCapability(player.GuInventory, "CHAT_PERCEIVE", false)
 		if !hasConnectingHeaven || !hasDivineSense {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần sở hữu Thông Thiên Cổ (GU_CONNECTING_HEAVEN) và Thần Niệm Cổ (GU_DIVINE_SENSE) để xem tin nhắn kênh Bảo Hoàng Thiên!"})
 			return "", false

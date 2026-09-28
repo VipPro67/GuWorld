@@ -197,7 +197,7 @@ func ExploreNode(c *gin.Context) {
 
 		hasHeavenSecret := false
 		for _, gu := range player.GuInventory {
-			if models.InventoryHasGuMechanic(models.GuInventory{gu}, "LOOT_PREVIEW", true) {
+			if models.InventoryHasGuCapability(models.GuInventory{gu}, "LOOT_PREVIEW", true) {
 				hasHeavenSecret = true
 				break
 			}

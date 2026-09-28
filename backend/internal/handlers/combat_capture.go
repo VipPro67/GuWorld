@@ -94,8 +94,8 @@ func CaptureMonster(c *gin.Context) {
 		if !ok {
 			continue
 		}
-		if spec.Effects.Active != nil && spec.Effects.Active.CaptureBonus > 0 {
-			totalCaptureBonus += spec.Effects.Active.CaptureBonus
+		if bonus := models.GuSpecCapabilityFloat(spec, "CAPTURE_BONUS", "value"); bonus > 0 {
+			totalCaptureBonus += bonus
 			if spec.Rank > bestCaptureRank {
 				bestCaptureRank = spec.Rank
 			}

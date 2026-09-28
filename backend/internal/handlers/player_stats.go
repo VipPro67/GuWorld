@@ -6,6 +6,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -97,55 +98,32 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		if gu.Equipped && gu.Status == "ACTIVE" && gu.Rank == guBestRank[gu.GuID] && !guApplied[gu.GuID] {
 			guApplied[gu.GuID] = true
 			spec, ok := models.GetGu(gu.GuID, gu.Rank)
-			if !ok || spec.Effects.Passive == nil {
+			if !ok {
 				continue
 			}
-			passive := spec.Effects.Passive
 			mult, daoMult := gamefx.GuStatMultipliers(player.PathMasteries, player.DaoMarks, spec.Path)
 
 			srcID := "gu:" + gu.GuID
-			if passive.StatBaseAttack > 0 {
-				addSrc("attack", srcID, spec.Name, passive.StatBaseAttack, mult, daoMult)
+			if value := models.GuStatValue(spec, "ATTACK"); value > 0 {
+				addSrc("attack", srcID, spec.Name, value, mult, daoMult)
 			}
-			if passive.StatBaseDefense > 0 {
-				addSrc("defense", srcID, spec.Name, passive.StatBaseDefense, mult, daoMult)
+			if value := models.GuStatValue(spec, "DEFENSE"); value > 0 {
+				addSrc("defense", srcID, spec.Name, value, mult, daoMult)
 			}
-			if passive.StatBaseSpeed > 0 {
-				addSrc("speed", srcID, spec.Name, passive.StatBaseSpeed, mult, 1)
+			if value := models.GuStatValue(spec, "SPEED"); value > 0 {
+				addSrc("speed", srcID, spec.Name, value, mult, 1)
 			}
-			if passive.StatBaseHP > 0 {
-				addSrc("hp", srcID, spec.Name, passive.StatBaseHP, mult, daoMult)
+			if value := models.GuStatValue(spec, "HP"); value > 0 {
+				addSrc("hp", srcID, spec.Name, value, mult, daoMult)
 			}
-			if passive.DamageMultiplierOnHit > 0 && player.BaseHP > 0 {
+			if value := models.GuStatValue(spec, "DAMAGE_DEALT"); value > 0 && player.BaseHP > 0 {
 				missingHpRate := 1.0 - player.HP/player.BaseHP
-				addSrc("damage_multiplier", srcID, spec.Name, missingHpRate*passive.DamageMultiplierOnHit, 1, 1)
+				addSrc("damage_multiplier", srcID, spec.Name, missingHpRate*value, 1, 1)
 			}
-			if passive.SoulRefinement > 0 {
-				addSrc("soul", srcID, spec.Name, passive.SoulRefinement, 1, 1)
-			}
-			if passive.StorageCapacity > 0 {
-				addSrc("storage", srcID, spec.Name, passive.StorageCapacity, 1, 1)
-			}
-			if passive.Movement > 0 {
-				addSrc("movement", srcID, spec.Name, passive.Movement, 1, 1)
-			}
-			if passive.Investigation > 0 {
-				addSrc("investigation", srcID, spec.Name, passive.Investigation, 1, 1)
-			}
-			if passive.Hearing > 0 {
-				addSrc("hearing", srcID, spec.Name, passive.Hearing, 1, 1)
-			}
-			if passive.Evasion > 0 {
-				addSrc("evasion", srcID, spec.Name, passive.Evasion, 1, 1)
-			}
-			if passive.Accuracy > 0 {
-				addSrc("accuracy", srcID, spec.Name, passive.Accuracy, 1, 1)
-			}
-			if passive.CleansingPower > 0 {
-				addSrc("cleansing_power", srcID, spec.Name, passive.CleansingPower, 1, 1)
-			}
-			if passive.Luck > 0 {
-				addSrc("luck", srcID, spec.Name, passive.Luck, 1, 1)
+			for _, entry := range []struct{ stat, key string }{{"SOUL_REFINEMENT", "soul"}, {"STORAGE", "storage"}, {"MOVEMENT", "movement"}, {"INVESTIGATION", "investigation"}, {"HEARING", "hearing"}, {"EVASION", "evasion"}, {"ACCURACY", "accuracy"}, {"CLEANSING_POWER", "cleansing_power"}, {"LUCK", "luck"}} {
+				if value := models.GuStatValue(spec, entry.stat); value > 0 {
+					addSrc(entry.key, srcID, spec.Name, value, 1, 1)
+				}
 			}
 		}
 	}
@@ -217,11 +195,11 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		for _, gu := range player.GuInventory {
 			if gu.Equipped && gu.Status == "ACTIVE" {
 				spec, ok := models.GetGu(gu.GuID, gu.Rank)
-				if !ok || spec.Effects.Active == nil {
+				if !ok {
 					continue
 				}
-				if spec.Effects.Active.AllStatsBuffPct > 0 {
-					totalBuffPct += spec.Effects.Active.AllStatsBuffPct
+				if compiled := models.CompiledGuEffects(spec); compiled != nil {
+					totalBuffPct += compiled.StatValue(gameplayeffects.TriggerOnAction, "ALL", "MULTIPLY_PERCENT")
 				}
 			}
 		}

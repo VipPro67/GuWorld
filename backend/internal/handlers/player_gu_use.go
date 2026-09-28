@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -129,14 +130,7 @@ func UseConsumableGu(c *gin.Context) {
 	// hunger instead of consuming the instance. Any other ON_CONSUME deletes it.
 	var reduceHunger bool
 	var hungerCost int = 20
-	if specs.Effects.Other != nil {
-		for _, mechanic := range specs.Effects.Other {
-			if mechanic.ActionCode == "SACRIFICE_APTITUDE" {
-				reduceHunger = true
-				break
-			}
-		}
-	}
+	_, reduceHunger = models.GuNativeMechanic(specs, "SACRIFICE_APTITUDE")
 
 	if reduceHunger {
 		if guHunger < hungerCost {
@@ -305,9 +299,17 @@ func UseSupportGu(c *gin.Context) {
 	}
 	// support.heal_flat is gone: out-of-combat healing reads the same
 	// active.heal_flat the combat engine uses, capped at EffectiveMaxHP.
-	if specs.Effects.Active != nil && specs.Effects.Active.HealFlat > 0 {
+	heal := 0.0
+	if compiled := models.CompiledGuEffects(specs); compiled != nil {
+		for _, operation := range compiled.CompileCombatAction().Operations {
+			if operation.Type == gameplayeffects.OpHeal && operation.SubType == "FLAT" {
+				heal += operation.Value
+			}
+		}
+	}
+	if heal > 0 {
 		before := player.HP
-		player.HP += specs.Effects.Active.HealFlat
+		player.HP += heal
 		if maxHP := gamefx.EffectiveMaxHP(&player); player.HP > maxHP {
 			player.HP = maxHP
 		}
