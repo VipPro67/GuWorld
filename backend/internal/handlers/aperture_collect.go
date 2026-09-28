@@ -295,7 +295,7 @@ func normalizePathKey(path string) string {
 		return "dream"
 	case "huyễn", "phantom":
 		return "phantom"
-	case "sát", "killing", "kill":
+	case "sát", "killing":
 		return "killing"
 	case "lực", "strength":
 		return "strength"

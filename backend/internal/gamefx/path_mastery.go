@@ -113,8 +113,6 @@ func PathMasteryMultiplier(pathMasteries map[string]int, paths []string) float64
 		}
 		if !ok && cleanPath == "killing" {
 			points, ok = pathMasteries["kill"]
-		} else if !ok && cleanPath == "kill" {
-			points, ok = pathMasteries["killing"]
 		}
 		if !ok {
 			continue

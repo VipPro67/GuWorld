@@ -127,6 +127,8 @@ type SimAction struct {
 	Defense       float64  // shield value granted to self (excludes dao bonus)
 	Healing       float64  // HP restored to self (excludes dao bonus)
 	ManaCost      float64  // mana consumed on use
+	ManaRestore   float64  // mana restored to self
+	CleanseDebuffs bool    // purges debuffs/DoTs from self
 	BleedPerTurn  float64  // bleed DoT per turn (applied to target)
 	PoisonPerTurn float64  // poison DoT per turn (applied to target)
 	LifeStealPct  float64  // percentage of damage dealt healed back (0-1)

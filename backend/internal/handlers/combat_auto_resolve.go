@@ -495,6 +495,12 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			boost := active.RefineManaTier * 0.20
 			act.Damage += act.Damage * boost
 		}
+		if active.ManaRegen > 0 {
+			act.ManaRestore += active.ManaRegen
+		}
+		if active.CleansingPower > 0 {
+			act.CleanseDebuffs = true
+		}
 		if active.WoodTransformation {
 			act.Defense += 30.0
 		}
@@ -520,7 +526,9 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 				}
 				for _, op := range block.Operations {
 					if op.Target != nil && op.Target.Selector != "" {
-						act.TargetType = string(op.Target.Selector)
+						if !strings.EqualFold(string(op.Target.Selector), "SELF") || act.TargetType == "" {
+							act.TargetType = string(op.Target.Selector)
+						}
 						if op.Target.BypassFrontline {
 							act.Bypass = true
 						}
@@ -532,6 +540,12 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 						}
 						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
 							act.DamageMult = op.Value
+						} else if strings.EqualFold(op.SubType, "MAX_HP_PERCENT") && op.Value > 0 {
+							if op.Value <= 1.0 {
+								act.DamageHPPercent = op.Value
+							} else {
+								act.DamageHPPercent = op.Value / 100.0
+							}
 						}
 					case gameplayeffects.OpShield:
 						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
@@ -539,16 +553,48 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 						}
 					case gameplayeffects.OpHeal:
 						if strings.EqualFold(op.SubType, "LIFESTEAL") {
-							act.LifeStealPct += op.Value
+							if op.Value > 1.0 {
+								act.LifeStealPct += op.Value / 100.0
+							} else {
+								act.LifeStealPct += op.Value
+							}
+						} else if (strings.EqualFold(op.SubType, "RESOURCE") && strings.EqualFold(op.Resource, "MANA")) || strings.EqualFold(op.SubType, "MANA") {
+							act.ManaRestore += op.Value
+						} else if strings.EqualFold(op.SubType, "PERCENT") {
+							if op.Value <= 1.0 {
+								act.Healing += actor.MaxHP * op.Value
+							} else {
+								act.Healing += actor.MaxHP * (op.Value / 100.0)
+							}
 						} else if strings.EqualFold(op.SubType, "FLAT") || op.SubType == "" {
 							act.Healing += op.Value
 						}
 					case gameplayeffects.OpDirectHP:
 						if strings.EqualFold(op.SubType, "MAX_HP_PERCENT") {
-							act.DamageHPPercent = op.Value
+							if op.Value <= 1.0 {
+								act.DamageHPPercent = op.Value
+							} else {
+								act.DamageHPPercent = op.Value / 100.0
+							}
 						} else if strings.EqualFold(op.SubType, "SHIELD_STRIP") {
-							act.ShieldStripPercent = op.Value
+							if op.Value <= 1.0 {
+								act.ShieldStripPercent = op.Value
+							} else {
+								act.ShieldStripPercent = op.Value / 100.0
+							}
 						}
+					case gameplayeffects.OpBarrier:
+						if strings.EqualFold(op.SubType, "PERCENT") {
+							if op.Value <= 1.0 {
+								act.Defense += actor.MaxHP * op.Value
+							} else {
+								act.Defense += actor.MaxHP * (op.Value / 100.0)
+							}
+						} else {
+							act.Defense += op.Value
+						}
+					case gameplayeffects.OpCleanse:
+						act.CleanseDebuffs = true
 					case gameplayeffects.OpStatus:
 						turns := op.Turns
 						if turns <= 0 {
@@ -580,7 +626,11 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 							act.Defense += op.Value
 						case "EVASION":
 							act.SelfEvasionPct = op.Value
-							act.BonusTurns = 2
+							if op.Turns > 0 {
+								act.BonusTurns = op.Turns
+							} else {
+								act.BonusTurns = 2
+							}
 						}
 					case gameplayeffects.OpUnique:
 						switch strings.ToUpper(op.Code) {

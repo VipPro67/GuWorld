@@ -1046,16 +1046,11 @@ func AllGuPaths() []string {
 	pathSet := make(map[string]struct{})
 	for _, ranks := range GuRegistry {
 		for _, item := range ranks {
-			for _, p := range item.Path {
-				normalized := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
-				if normalized == "kill" {
-					normalized = "killing"
-				}
-				if normalized != "" {
-					pathSet[normalized] = struct{}{}
-				}
-			}
+		for _, p := range item.Path {
+			normalized := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
+			pathSet[normalized] = struct{}{}
 		}
+	}
 	}
 	allPathsCache = make([]string, 0, len(pathSet))
 	for p := range pathSet {

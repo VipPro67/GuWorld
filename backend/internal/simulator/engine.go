@@ -210,11 +210,6 @@ func pathBonus(bonus map[string]float64, paths []string) float64 {
 		if b := bonus[clean]; b > maxB {
 			maxB = b
 		}
-		if clean == "killing" {
-			if b := bonus["kill"]; b > maxB {
-				maxB = b
-			}
-		}
 	}
 	return maxB
 }
@@ -948,9 +943,6 @@ func Simulate(state *CombatState) []CombatLog {
 						actor.PathMasteries = make(map[string]int)
 					}
 					pts := actor.PathMasteries[cleanPath]
-					if pts == 0 && cleanPath == "killing" {
-						pts = actor.PathMasteries["kill"]
-					}
 					currentLevel := gamefx.PathMasteryLevel(pts)
 					pathGain := gamefx.CalculatePathMasteryGain(guRank, currentLevel, baseGain)
 
@@ -1067,8 +1059,8 @@ func Simulate(state *CombatState) []CombatLog {
 				// Dao mark multiplier for this action's path (applies to damage, shield, heal)
 				daoMult, hasDao := actorDaoMultiplier(actor, a.Path)
 
-				// Buffer shield/heal logs — emit after action name
-				var shieldLog, healLog *CombatLog
+				// Buffer shield/heal/mana/cleanse logs — emit after action name
+				var shieldLog, healLog, manaLog, cleanseLog *CombatLog
 
 				// Apply shield to self
 				if a.Defense > 0 {
@@ -1132,6 +1124,53 @@ func Simulate(state *CombatState) []CombatLog {
 						hl.Detail = fmt.Sprintf("%s hồi phục %.0f HP (gốc %.0f + Đạo Ngân %.0f)!", actor.Name, heal, baseHeal, daoHeal)
 					}
 					healLog = &hl
+				}
+
+				// Apply mana restore to self
+				if a.ManaRestore > 0 {
+					needed := actor.MaxMana - actor.Mana
+					restore := math.Min(needed, a.ManaRestore)
+					if restore > 0 {
+						actor.Mana += restore
+						ml := CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "MANA_RESTORE",
+							Damage:    restore,
+							Detail:    fmt.Sprintf("%s khôi phục %.0f %s!", actor.Name, restore, actor.GetManaName()),
+						}
+						manaLog = &ml
+					}
+				}
+
+				// Apply cleanse to self
+				if a.CleanseDebuffs {
+					var keptEffects []Effect
+					cleansedCount := 0
+					for _, eff := range actor.ActiveEffects {
+						if eff.Type == "debuff" {
+							cleansedCount++
+						} else {
+							keptEffects = append(keptEffects, eff)
+						}
+					}
+					actor.ActiveEffects = keptEffects
+					if len(actor.ActiveDoT) > 0 {
+						cleansedCount += len(actor.ActiveDoT)
+						actor.ActiveDoT = nil
+					}
+					if cleansedCount > 0 {
+						ComputeEffectMultipliers(actor)
+						cl := CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "CLEANSE",
+							Detail:    fmt.Sprintf("%s tịnh hóa bản thân, xóa bỏ %d hiệu ứng bất lợi!", actor.Name, cleansedCount),
+						}
+						cleanseLog = &cl
+					}
 				}
 
 				// ── Special Actions preprocessing ──
@@ -1577,6 +1616,12 @@ func Simulate(state *CombatState) []CombatLog {
 					if healLog != nil {
 						turnLogs = append(turnLogs, *healLog)
 					}
+					if manaLog != nil {
+						turnLogs = append(turnLogs, *manaLog)
+					}
+					if cleanseLog != nil {
+						turnLogs = append(turnLogs, *cleanseLog)
+					}
 
 					// ── Multi-hit log ──
 					if hitCount > 1 && len(resolved) > 0 {
@@ -1734,12 +1779,16 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 					}
 
+					targetID := firstTarget.ID
+					if strings.EqualFold(a.TargetType, "SELF") {
+						targetID = actor.ID
+					}
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    a.ActionType,
-						TargetId:  firstTarget.ID,
+						TargetId:  targetID,
 						Detail:    detailMsg,
 					})
 
@@ -1748,6 +1797,12 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 					if healLog != nil {
 						turnLogs = append(turnLogs, *healLog)
+					}
+					if manaLog != nil {
+						turnLogs = append(turnLogs, *manaLog)
+					}
+					if cleanseLog != nil {
+						turnLogs = append(turnLogs, *cleanseLog)
 					}
 				}
 

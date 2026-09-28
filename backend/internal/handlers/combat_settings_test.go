@@ -492,4 +492,83 @@ func TestResolveTargetsAllEnemies(t *testing.T) {
 	}
 }
 
+func TestBuildSimActionFromGu_ExtendedOperations(t *testing.T) {
+	guSpec := models.GuDictionaryItem{
+		ID:   "EXT_OPS_GU",
+		Name: "Hỗn Hợp Cổ",
+		Rank: 2,
+		Effects: models.GuEffects{
+			Blocks: []gameplayeffects.Block{
+				{
+					ID:      "ACTIVE_SKILL",
+					Trigger: gameplayeffects.TriggerOnAction,
+					Target:  gameplayeffects.Target{Selector: gameplayeffects.TargetAllEnemies},
+					Operations: []gameplayeffects.Operation{
+						{
+							Op:      gameplayeffects.OpDamage,
+							SubType: "MAX_HP_PERCENT",
+							Value:   0.25,
+						},
+						{
+							Op:       gameplayeffects.OpHeal,
+							SubType:  "RESOURCE",
+							Resource: "MANA",
+							Value:    50,
+							Target:   &gameplayeffects.Target{Selector: gameplayeffects.TargetSelf},
+						},
+						{
+							Op:      gameplayeffects.OpBarrier,
+							SubType: "PERCENT",
+							Value:   0.15,
+						},
+						{
+							Op:      gameplayeffects.OpCleanse,
+							SubType: "ALL",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	actor := &models.Combatant{
+		ID:         "actor_test",
+		Name:       "Actor",
+		Rank:       2,
+		MaxHP:      1000,
+		BaseAttack: 50,
+	}
+
+	act, err := buildSimActionFromGu(actor, &guSpec, "GU_SKILL")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 1. TargetType should remain ALL_ENEMIES even though one sub-op had TargetSelf
+	if act.TargetType != "ALL_ENEMIES" {
+		t.Errorf("expected TargetType ALL_ENEMIES, got %s", act.TargetType)
+	}
+
+	// 2. DamageHPPercent
+	if act.DamageHPPercent != 0.25 {
+		t.Errorf("expected DamageHPPercent == 0.25, got %f", act.DamageHPPercent)
+	}
+
+	// 3. ManaRestore
+	if act.ManaRestore != 50 {
+		t.Errorf("expected ManaRestore == 50, got %f", act.ManaRestore)
+	}
+
+	// 4. Barrier added to Defense (1000 * 0.15 = 150)
+	if act.Defense < 150 {
+		t.Errorf("expected Defense >= 150 from barrier, got %f", act.Defense)
+	}
+
+	// 5. CleanseDebuffs
+	if !act.CleanseDebuffs {
+		t.Errorf("expected CleanseDebuffs == true")
+	}
+}
+
+
 
