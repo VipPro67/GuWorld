@@ -156,7 +156,7 @@ func init() {
 	register("ALWAYS_ON", "growth", "GROWTH_DURATION_HOURS")
 	register("ON_USE", "world", "RECORD_MESSAGE")
 	register("ON_TURN_START", "combat", "POEM_INTENT")
-	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE")
+	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU")
 	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE")
 	register("ON_HIT", "combat", "BYPASS_SHIELD")
 	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE")
@@ -176,9 +176,29 @@ func init() {
 	hook = NativeHooks["SEIZE_INITIATIVE"]
 	hook.Params = map[string]ParamSpec{"lifespan_ratio": {Type: "number", Required: true}}
 	NativeHooks["SEIZE_INITIATIVE"] = hook
+	hook = NativeHooks["SAT_KHI_GUARANTEE"]
+	hook.Params = map[string]ParamSpec{"sat_khi_threshold": {Type: "number", Required: true}}
+	NativeHooks["SAT_KHI_GUARANTEE"] = hook
 	hook = NativeHooks["RECORD_MESSAGE"]
 	hook.Params = map[string]ParamSpec{"range": {Type: "integer", Required: true}}
 	NativeHooks["RECORD_MESSAGE"] = hook
+	hook = NativeHooks["PERM_STEAL_GU"]
+	hook.Params = map[string]ParamSpec{
+		"base_chance":      number(false, 0, 1),
+		"chance_delta":     number(false, 0, 1),
+		"vital_penalty":    number(false, 0, 1),
+		"target_selection": {Type: "string"},
+	}
+	NativeHooks["PERM_STEAL_GU"] = hook
+	hook = NativeHooks["TEMP_STEAL_GU"]
+	hook.Params = map[string]ParamSpec{
+		"base_chance":      number(false, 0, 1),
+		"chance_delta":     number(false, 0, 1),
+		"vital_penalty":    number(false, 0, 1),
+		"target_selection": {Type: "string"},
+		"duration":         {Type: "string"},
+	}
+	NativeHooks["TEMP_STEAL_GU"] = hook
 
 	anyValueSchema := map[string]ParamSpec{"value": {Type: "any", Required: false}}
 	for _, code := range []string{

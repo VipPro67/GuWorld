@@ -305,6 +305,17 @@ type CombatState struct {
 	TribulationEventID string  `json:"tribulation_event_id,omitempty"`
 	ApertureHP         float64 `json:"aperture_hp,omitempty"`
 	ApertureMaxHP      float64 `json:"aperture_max_hp,omitempty"`
+
+	// Steal Gu pre-combat mechanics (Vô Tướng Thủ & Ám Thâu Cổ)
+	TempStolenGuInstanceID string `json:"temp_stolen_gu_instance_id,omitempty"`
+	TempStolenGuID         string `json:"temp_stolen_gu_id,omitempty"`
+	TempStolenGuRank       int    `json:"temp_stolen_gu_rank,omitempty"`
+	TempStolenGuName       string `json:"temp_stolen_gu_name,omitempty"`
+	PermStolenGuInstanceID string `json:"perm_stolen_gu_instance_id,omitempty"`
+	PermStolenGuID         string `json:"perm_stolen_gu_id,omitempty"`
+	PermStolenGuRank       int    `json:"perm_stolen_gu_rank,omitempty"`
+	PermStolenGuName       string `json:"perm_stolen_gu_name,omitempty"`
+	StealLogMessage        string `json:"steal_log_message,omitempty"`
 }
 
 // ImmortalState groups immortal expansion data.

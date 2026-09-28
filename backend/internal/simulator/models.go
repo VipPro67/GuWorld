@@ -400,6 +400,9 @@ type CombatState struct {
 	// spills into the aperture. Tracked so the replay can show it depleting.
 	ApertureHP    float64
 	ApertureMaxHP float64
+
+	// Pre-battle events logged at Turn 0 (e.g. Steal Gu)
+	InitialLogs []CombatLog
 }
 
 // CombatSnapshot captures full stats of all combatants at a point in time.

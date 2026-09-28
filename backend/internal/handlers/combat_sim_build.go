@@ -102,6 +102,58 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 		simState.Enemies = append(simState.Enemies, simEnemy)
 	}
 
+	// Inject Steal Gu mechanics and pre-combat battle logs
+	if player.ActiveCombat != nil && player.ActiveCombat.StealLogMessage != "" {
+		actionType := "STEAL_GU"
+		if player.ActiveCombat.PermStolenGuID != "" {
+			actionType = "PERM_STEAL_GU"
+		} else if player.ActiveCombat.TempStolenGuID != "" {
+			actionType = "TEMP_STEAL_GU"
+		}
+		simState.InitialLogs = append(simState.InitialLogs, simulator.CombatLog{
+			Turn:      0,
+			ActorId:   player.ID.String(),
+			ActorName: player.Username,
+			Action:    actionType,
+			Detail:    player.ActiveCombat.StealLogMessage,
+		})
+	}
+
+	// For Temporary Steal: disable stolen Gu from victim, and grant skill to thief
+	if player.ActiveCombat != nil && player.ActiveCombat.TempStolenGuID != "" {
+		stolenGuID := player.ActiveCombat.TempStolenGuID
+		stolenInstID := player.ActiveCombat.TempStolenGuInstanceID
+
+		// Disable action on enemies
+		for _, enemy := range simState.Enemies {
+			var filteredActions []simulator.SimAction
+			for _, act := range enemy.Actions {
+				if act.SourceID == stolenGuID || (stolenInstID != "" && act.InstanceID == stolenInstID) {
+					continue
+				}
+				filteredActions = append(filteredActions, act)
+			}
+			enemy.Actions = filteredActions
+		}
+
+		// Grant stolen Gu's active skill to player
+		if stolenSpec, ok := models.GetGu(stolenGuID, player.ActiveCombat.TempStolenGuRank); ok {
+			if hasCombatActiveEffects(&stolenSpec) {
+				actor := models.CombatantFromPlayer(player, CalculatePlayerStats(player))
+				stolenAction, err := buildSimActionFromGu(&actor, &stolenSpec, "GU_SKILL")
+				if err == nil {
+					attackFactor := statusStatFactor(player, "attack")
+					defenseFactor := statusStatFactor(player, "defense")
+					stolenAction.SourceID = stolenSpec.ID
+					stolenAction.InstanceID = stolenInstID
+					stolenAction.Damage *= attackFactor
+					stolenAction.Defense *= defenseFactor
+					simPlayer.Actions = append(simPlayer.Actions, stolenAction)
+				}
+			}
+		}
+	}
+
 	return simState, nil
 }
 

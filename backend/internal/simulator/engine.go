@@ -535,6 +535,15 @@ func Simulate(state *CombatState) []CombatLog {
 		Detail:   "Trận chiến bắt đầu.",
 		Snapshot: startSnap,
 	})
+	if len(state.InitialLogs) > 0 {
+		for _, initLog := range state.InitialLogs {
+			initLog.Turn = 0
+			if initLog.Snapshot == nil {
+				initLog.Snapshot = startSnap
+			}
+			logs = append(logs, initLog)
+		}
+	}
 
 	maxTurns := 100
 
@@ -1365,7 +1374,7 @@ func Simulate(state *CombatState) []CombatLog {
 						actor.PendingDamageBuffs = nil // consume all pending damage buffs
 					}
 
-					shieldBypass := hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD")
+					shieldBypass := hasMechanic(a.Mechanics, "ON_HIT", "BYPASS_SHIELD") || (hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState != nil && actor.CustomState["sat_khi_level"] > 10)
 					hitCount := a.MultiHit
 					if hitCount < 1 {
 						hitCount = 1
@@ -1379,7 +1388,8 @@ func Simulate(state *CombatState) []CombatLog {
 						hadEvaded := target.CustomState != nil && target.CustomState["first_turn_evade_used"] == turn
 
 						// Evasion: dodge chance from EVASION buffs, reduced by attacker Accuracy
-						if missCh := target.EvasionChance - actor.Accuracy; missCh > 0 && rng.Float64() < missCh {
+						satKhiGuaranteed := hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState != nil && actor.CustomState["sat_khi_level"] > 10
+						if missCh := target.EvasionChance - actor.Accuracy; missCh > 0 && rng.Float64() < missCh && !satKhiGuaranteed {
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   actor.ID,
@@ -2509,7 +2519,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 			}
 		}
 	}
-	if isInvulnerable {
+	if isInvulnerable && !(actor.CustomState != nil && hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState["sat_khi_level"] > 10) {
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   actor.ID,
@@ -2518,6 +2528,15 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 			Detail:    fmt.Sprintf("%s miễn nhiễm mọi sát thương nhờ trạng thái Bất Tử!", target.Name),
 		})
 		return 0
+	}
+	if isInvulnerable {
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   actor.ID,
+			ActorName: actor.Name,
+			Action:    "BLOCKED_BREAK",
+			Detail:    fmt.Sprintf("Sát khí Tất Sát xuyên qua Bất Tử! %s vẫn nhận sát thương!", target.Name),
+		})
 	}
 
 	// ── Freeze break: taking damage has 50% chance to break freeze ──

@@ -526,3 +526,24 @@ func EquippedTimeSpeedBonus(q Queryer, playerID string) (float64, error) {
 	}
 	return total, nil
 }
+
+// TransferGuOwnership transfers a Gu instance from one player to another.
+// It sets equipped=false, is_vital=false, equipped_at=nil and updates player_id.
+func TransferGuOwnership(tx Execer, instanceID, fromPlayerID, toPlayerID string) error {
+	res, err := tx.Exec(`
+		UPDATE player_gu 
+		SET player_id = $1, equipped = false, is_vital = false, equipped_at = NULL, updated_at = NOW()
+		WHERE id = $2 AND player_id = $3`,
+		toPlayerID, instanceID, fromPlayerID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("gu instance %s not found or not owned by %s", instanceID, fromPlayerID)
+	}
+	return nil
+}
