@@ -35,8 +35,8 @@ function TargetEditor({ value, targets, onChange, label }: { value: EffectTarget
 }
 
 function ParamsEditor({ operation, specs, onChange }: { operation: EffectOperation; specs: Record<string, EffectParamSpec>; onChange: (params: Record<string, string | number | boolean | null> | undefined) => void }) {
-  const params = operation.params || {};
-  const set = (key: string, value: string | number | boolean | undefined) => { const next = { ...params }; if (value === undefined || value === "") delete next[key]; else next[key] = value; onChange(Object.keys(next).length ? next : undefined); };
+  const params = (operation.params as Record<string, string | number | boolean | null> | undefined) || {};
+  const set = (key: string, value: string | number | boolean | undefined) => { const next: Record<string, string | number | boolean | null> = { ...params }; if (value === undefined || value === "") delete next[key]; else next[key] = value; onChange(Object.keys(next).length ? next : undefined); };
   return <>{Object.entries(specs).map(([key, spec]) => <label key={key} className="flex items-center gap-1 text-[10px] text-zinc-400">{key}{spec.required && "*"}{spec.type === "bool" ? <input type="checkbox" checked={Boolean(params[key])} onChange={e => set(key, e.target.checked)} /> : spec.enum ? <select className="bg-zinc-900 rounded p-1" value={String(params[key] ?? "")} onChange={e => set(key, e.target.value)}><option value="">—</option>{Object.keys(spec.enum).map(v => <option key={v}>{v}</option>)}</select> : spec.type === "number" || spec.type === "integer" ? <input className="w-24 bg-zinc-900 rounded p-1" type="number" step={spec.type === "integer" ? 1 : "any"} min={spec.min} max={spec.max} value={String(params[key] ?? "")} onChange={e => set(key, e.target.value === "" ? undefined : Number(e.target.value))} /> : <input className="w-28 bg-zinc-900 rounded p-1" value={String(params[key] ?? "")} onChange={e => set(key, e.target.value)} />}</label>)}</>;
 }
 

@@ -80,6 +80,8 @@ type Effects struct {
 	// statuses (keys: gamefx.Action* constants, e.g. "explore", "cultivate").
 	// Handlers consult it via HasBlockedAction before executing a flow.
 	BlockedActions map[string]bool `json:"blocked_actions,omitempty"`
+	// RawBlocks preserves the original block-v2 JSON array when loaded from DB or CSV.
+	RawBlocks json.RawMessage `json:"-"`
 }
 
 // UnmarshalJSON unmarshals either a legacy Effects object or a pure Block v2 array [...].
@@ -90,9 +92,13 @@ func (e *Effects) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// 1. If it's a JSON array `[...]`, parse blocks
+	// 1. If it's a JSON array `[...]`, parse blocks and preserve raw bytes
 	if trimmed[0] == '[' {
-		return e.unmarshalBlocks(trimmed)
+		err := e.unmarshalBlocks(trimmed)
+		if err == nil {
+			e.RawBlocks = append([]byte(nil), trimmed...)
+		}
+		return err
 	}
 
 	// 2. If it's a JSON object `{...}`:
@@ -104,7 +110,11 @@ func (e *Effects) UnmarshalJSON(data []byte) error {
 	if b, ok := root["blocks"]; ok {
 		trimmedB := bytes.TrimSpace(b)
 		if len(trimmedB) > 0 && trimmedB[0] == '[' {
-			return e.unmarshalBlocks(trimmedB)
+			err := e.unmarshalBlocks(trimmedB)
+			if err == nil {
+				e.RawBlocks = append([]byte(nil), trimmedB...)
+			}
+			return err
 		}
 	}
 
@@ -118,6 +128,124 @@ func (e *Effects) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON marshals Effects to Block v2 array format [...].
+func (e Effects) MarshalJSON() ([]byte, error) {
+	if len(e.RawBlocks) > 0 {
+		trimmed := bytes.TrimSpace(e.RawBlocks)
+		if len(trimmed) > 0 && (trimmed[0] == '[' || bytes.Contains(trimmed, []byte(`"blocks"`))) {
+			return trimmed, nil
+		}
+	}
+	return json.Marshal(e.ToBlocks())
+}
+
+// ToBlocks converts the struct fields into a canonical Block v2 array.
+func (e Effects) ToBlocks() []any {
+	type target struct {
+		Selector string `json:"selector"`
+	}
+	type op struct {
+		Op     string         `json:"op"`
+		Code   string         `json:"code"`
+		Params map[string]any `json:"params"`
+	}
+	type blockItem struct {
+		ID         string   `json:"id"`
+		Trigger    string   `json:"trigger"`
+		Target     target   `json:"target"`
+		Operations []op     `json:"operations"`
+	}
+
+	blocks := make([]any, 0)
+	addBlock := func(id, code string, val any) {
+		blocks = append(blocks, blockItem{
+			ID:      id,
+			Trigger: "ALWAYS_ON",
+			Target:  target{Selector: "SELF"},
+			Operations: []op{{
+				Op:     "UNIQUE",
+				Code:   code,
+				Params: map[string]any{"value": val},
+			}},
+		})
+	}
+
+	if len(e.StatMods) > 0 {
+		addBlock("STAT_MODS", "STAT_MODS", e.StatMods)
+	}
+	if len(e.DaoNganBonus) > 0 {
+		addBlock("DAO_MARK_MODIFIER", "DAO_MARK_MODIFIER", e.DaoNganBonus)
+	}
+	if len(e.PathDamageBonus) > 0 {
+		addBlock("PATH_DAMAGE_MODIFIER", "PATH_DAMAGE_MODIFIER", e.PathDamageBonus)
+	}
+	if len(e.PathResistanceBonus) > 0 {
+		addBlock("PATH_RESISTANCE_MODIFIER", "PATH_RESISTANCE_MODIFIER", e.PathResistanceBonus)
+	}
+	if e.RefineBonus != 0 {
+		addBlock("REFINE_SUCCESS", "REFINE_SUCCESS", e.RefineBonus)
+	}
+	if e.LuckBonus != 0 {
+		addBlock("LUCK", "LUCK", e.LuckBonus)
+	}
+	if e.MaxManaBonus != 0 {
+		addBlock("MAX_MANA", "MAX_MANA", e.MaxManaBonus)
+	}
+	if e.ManaRegenBonus != 0 {
+		addBlock("MANA_REGEN", "MANA_REGEN", e.ManaRegenBonus)
+	}
+	if e.CultivationEfficiencyBonus != 0 {
+		addBlock("CULTIVATION_EFFICIENCY", "CULTIVATION_EFFICIENCY", e.CultivationEfficiencyBonus)
+	}
+	if e.DaoMarkGainBonus != 0 {
+		addBlock("DAO_MARK_GAIN", "DAO_MARK_GAIN", e.DaoMarkGainBonus)
+	}
+	if e.HealingReceivedBonus != 0 {
+		addBlock("HEALING_RECEIVED", "HEALING_RECEIVED", e.HealingReceivedBonus)
+	}
+	if e.HPRegenBonus != 0 {
+		addBlock("HP_REGEN", "HP_REGEN", e.HPRegenBonus)
+	}
+	if e.MentalResistanceBonus != 0 {
+		addBlock("MENTAL_RESISTANCE", "MENTAL_RESISTANCE", e.MentalResistanceBonus)
+	}
+	if e.SoulDefenseBonus != 0 {
+		addBlock("SOUL_DEFENSE", "SOUL_DEFENSE", e.SoulDefenseBonus)
+	}
+	if e.SoulRegenBonus != 0 {
+		addBlock("SOUL_REGEN", "SOUL_REGEN", e.SoulRegenBonus)
+	}
+	if e.Tenacity != 0 {
+		addBlock("TENACITY", "TENACITY", e.Tenacity)
+	}
+	if e.CCResist != 0 {
+		addBlock("CC_RESIST", "CC_RESIST", e.CCResist)
+	}
+	if e.ApertureStressBonus != 0 {
+		addBlock("APERTURE_STRESS", "APERTURE_STRESS", e.ApertureStressBonus)
+	}
+	if e.NonConflictingDaoMarks {
+		addBlock("NON_CONFLICTING_DAO_MARKS", "NON_CONFLICTING_DAO_MARKS", true)
+	}
+	if e.Immortal {
+		addBlock("IMMORTAL", "IMMORTAL", true)
+	}
+	if e.DisableHPRegen {
+		addBlock("DISABLE_HP_REGEN", "DISABLE_HP_REGEN", true)
+	}
+	if e.DisableManaRegen {
+		addBlock("DISABLE_MANA_REGEN", "DISABLE_MANA_REGEN", true)
+	}
+	if e.DisableResourceRegen {
+		addBlock("DISABLE_RESOURCE_REGEN", "DISABLE_RESOURCE_REGEN", true)
+	}
+	if e.DisableSoulRegen {
+		addBlock("DISABLE_SOUL_REGEN", "DISABLE_SOUL_REGEN", true)
+	}
+
+	return blocks
+}
+
 func (e *Effects) unmarshalBlocks(data []byte) error {
 	*e = Effects{
 		StatMods:            map[string]float64{},
@@ -127,9 +255,14 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 	}
 
 	type blockOp struct {
-		Op     string          `json:"op"`
-		Code   string          `json:"code"`
-		Params json.RawMessage `json:"params"`
+		Op      string          `json:"op"`
+		Code    string          `json:"code"`
+		Stat    string          `json:"stat"`
+		SubType string          `json:"sub_type"`
+		Path    string          `json:"path"`
+		Unit    string          `json:"unit"`
+		Value   any             `json:"value"`
+		Params  json.RawMessage `json:"params"`
 	}
 	type blockItem struct {
 		Operations []blockOp `json:"operations"`
@@ -140,101 +273,156 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 		return err
 	}
 
+	asFloat := func(v any) float64 {
+		switch n := v.(type) {
+		case float64:
+			return n
+		case int:
+			return float64(n)
+		default:
+			return 0
+		}
+	}
+	asBool := func(v any) bool {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+		return false
+	}
+	asMap := func(v any) map[string]float64 {
+		m := make(map[string]float64)
+		if rawMap, ok := v.(map[string]any); ok {
+			for k, val := range rawMap {
+				m[k] = asFloat(val)
+			}
+		}
+		return m
+	}
+
 	for _, b := range blocks {
 		for _, op := range b.Operations {
-			if op.Op != "UNIQUE" && op.Op != "" {
-				continue
-			}
 			var p struct {
 				Value any `json:"value"`
 			}
 			if len(op.Params) > 0 {
 				_ = json.Unmarshal(op.Params, &p)
 			}
+			val := p.Value
+			if val == nil && op.Value != nil {
+				val = op.Value
+			}
 
-			asFloat := func(v any) float64 {
-				switch n := v.(type) {
-				case float64:
-					return n
-				case int:
-					return float64(n)
-				default:
-					return 0
-				}
-			}
-			asBool := func(v any) bool {
-				if b, ok := v.(bool); ok {
-					return b
-				}
-				return false
-			}
-			asMap := func(v any) map[string]float64 {
-				m := make(map[string]float64)
-				if rawMap, ok := v.(map[string]any); ok {
-					for k, val := range rawMap {
-						m[k] = asFloat(val)
+			// 1. Direct STAT_MOD handling (canonical Block v2)
+			if strings.EqualFold(op.Op, "STAT_MOD") && op.Stat != "" {
+				statUpper := strings.ToUpper(op.Stat)
+				switch statUpper {
+				case "ATTACK", "DEFENSE", "SPEED", "HP":
+					e.StatMods[strings.ToLower(statUpper)] += asFloat(val)
+				case "DAO_MARK":
+					if op.Path != "" {
+						e.DaoNganBonus[strings.ToLower(op.Path)] += asFloat(val)
 					}
+				case "PATH_DAMAGE":
+					if op.Path != "" {
+						e.PathDamageBonus[strings.ToLower(op.Path)] += asFloat(val)
+					}
+				case "PATH_RESISTANCE":
+					if op.Path != "" {
+						e.PathResistanceBonus[strings.ToLower(op.Path)] += asFloat(val)
+					}
+				case "LUCK":
+					e.LuckBonus += asFloat(val)
+				case "REFINE_SUCCESS":
+					e.RefineBonus += asFloat(val)
+				case "CULTIVATION_EFFICIENCY":
+					e.CultivationEfficiencyBonus += asFloat(val)
+				case "DAO_MARK_GAIN":
+					e.DaoMarkGainBonus += asFloat(val)
+				case "APERTURE_STRESS":
+					e.ApertureStressBonus += asFloat(val)
+				case "TENACITY":
+					e.Tenacity += asFloat(val)
+				case "CC_RESIST":
+					e.CCResist += asFloat(val)
+				default:
+					e.StatMods[strings.ToLower(statUpper)] += asFloat(val)
 				}
-				return m
+				continue
 			}
 
-			switch strings.ToUpper(op.Code) {
+			// 2. Direct HEAL handling
+			if strings.EqualFold(op.Op, "HEAL") {
+				if strings.EqualFold(op.SubType, "MANA") {
+					e.ManaRegenBonus += asFloat(val)
+				} else if strings.EqualFold(op.SubType, "LIFESTEAL") {
+					e.HealingReceivedBonus += asFloat(val)
+				}
+				continue
+			}
+
+			// 3. UNIQUE op or code-based mapping (authoring format & CSV block v2)
+			code := op.Code
+			if code == "" && op.Op != "" && !strings.EqualFold(op.Op, "UNIQUE") {
+				code = op.Op
+			}
+
+			switch strings.ToUpper(code) {
 			case "STAT_MODS":
-				for k, v := range asMap(p.Value) {
+				for k, v := range asMap(val) {
 					e.StatMods[k] += v
 				}
 			case "REFINE_SUCCESS":
-				e.RefineBonus += asFloat(p.Value)
+				e.RefineBonus += asFloat(val)
 			case "DAO_MARK_MODIFIER":
-				for k, v := range asMap(p.Value) {
+				for k, v := range asMap(val) {
 					e.DaoNganBonus[k] += v
 				}
 			case "PATH_DAMAGE_MODIFIER":
-				for k, v := range asMap(p.Value) {
+				for k, v := range asMap(val) {
 					e.PathDamageBonus[k] += v
 				}
 			case "PATH_RESISTANCE_MODIFIER":
-				for k, v := range asMap(p.Value) {
+				for k, v := range asMap(val) {
 					e.PathResistanceBonus[k] += v
 				}
 			case "LUCK":
-				e.LuckBonus += asFloat(p.Value)
+				e.LuckBonus += asFloat(val)
 			case "MAX_MANA":
-				e.MaxManaBonus += asFloat(p.Value)
+				e.MaxManaBonus += asFloat(val)
 			case "MANA_REGEN":
-				e.ManaRegenBonus += asFloat(p.Value)
+				e.ManaRegenBonus += asFloat(val)
 			case "CULTIVATION_EFFICIENCY":
-				e.CultivationEfficiencyBonus += asFloat(p.Value)
+				e.CultivationEfficiencyBonus += asFloat(val)
 			case "DAO_MARK_GAIN":
-				e.DaoMarkGainBonus += asFloat(p.Value)
+				e.DaoMarkGainBonus += asFloat(val)
 			case "HEALING_RECEIVED":
-				e.HealingReceivedBonus += asFloat(p.Value)
+				e.HealingReceivedBonus += asFloat(val)
 			case "HP_REGEN":
-				e.HPRegenBonus += asFloat(p.Value)
+				e.HPRegenBonus += asFloat(val)
 			case "MENTAL_RESISTANCE":
-				e.MentalResistanceBonus += asFloat(p.Value)
+				e.MentalResistanceBonus += asFloat(val)
 			case "SOUL_DEFENSE":
-				e.SoulDefenseBonus += asFloat(p.Value)
+				e.SoulDefenseBonus += asFloat(val)
 			case "SOUL_REGEN":
-				e.SoulRegenBonus += asFloat(p.Value)
+				e.SoulRegenBonus += asFloat(val)
 			case "TENACITY":
-				e.Tenacity += asFloat(p.Value)
+				e.Tenacity += asFloat(val)
 			case "CC_RESIST":
-				e.CCResist += asFloat(p.Value)
+				e.CCResist += asFloat(val)
 			case "APERTURE_STRESS":
-				e.ApertureStressBonus += asFloat(p.Value)
+				e.ApertureStressBonus += asFloat(val)
 			case "NON_CONFLICTING_DAO_MARKS":
-				e.NonConflictingDaoMarks = asBool(p.Value)
+				e.NonConflictingDaoMarks = asBool(val)
 			case "IMMORTAL":
-				e.Immortal = asBool(p.Value)
+				e.Immortal = asBool(val)
 			case "DISABLE_HP_REGEN":
-				e.DisableHPRegen = asBool(p.Value)
+				e.DisableHPRegen = asBool(val)
 			case "DISABLE_MANA_REGEN":
-				e.DisableManaRegen = asBool(p.Value)
+				e.DisableManaRegen = asBool(val)
 			case "DISABLE_RESOURCE_REGEN":
-				e.DisableResourceRegen = asBool(p.Value)
+				e.DisableResourceRegen = asBool(val)
 			case "DISABLE_SOUL_REGEN":
-				e.DisableSoulRegen = asBool(p.Value)
+				e.DisableSoulRegen = asBool(val)
 			}
 		}
 	}

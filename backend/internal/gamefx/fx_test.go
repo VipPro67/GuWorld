@@ -259,3 +259,87 @@ func TestEffectsUnmarshalJSON_Blocks(t *testing.T) {
 		t.Errorf("expected immortal true, got false")
 	}
 }
+
+func TestEffectsMarshalJSON_Blocks(t *testing.T) {
+	eff := Effects{
+		StatMods:     map[string]float64{"speed": 0.2},
+		DaoNganBonus: map[string]float64{"lightning": 0.5},
+		ManaRegenBonus: 2,
+		Immortal: true,
+	}
+	data, err := json.Marshal(eff)
+	if err != nil {
+		t.Fatalf("failed to marshal effects: %v", err)
+	}
+	// Verify it's a JSON array
+	if len(data) == 0 || data[0] != '[' {
+		t.Fatalf("expected marshaled effects to be JSON array, got: %s", string(data))
+	}
+
+	var roundTripped Effects
+	if err := json.Unmarshal(data, &roundTripped); err != nil {
+		t.Fatalf("failed to unmarshal generated blocks: %v", err)
+	}
+	if roundTripped.StatMods["speed"] != 0.2 {
+		t.Errorf("expected speed 0.2, got: %v", roundTripped.StatMods)
+	}
+	if roundTripped.DaoNganBonus["lightning"] != 0.5 {
+		t.Errorf("expected lightning 0.5, got: %v", roundTripped.DaoNganBonus)
+	}
+	if roundTripped.ManaRegenBonus != 2 {
+		t.Errorf("expected mana regen 2, got: %v", roundTripped.ManaRegenBonus)
+	}
+	if !roundTripped.Immortal {
+		t.Errorf("expected immortal true, got false")
+	}
+}
+
+func TestEffectsUnmarshalJSON_CanonicalStatMod(t *testing.T) {
+	raw := `[
+		{"id":"SPEED_BUFF","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"SPEED","value":0.15}]},
+		{"id":"SPACE_DAO","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"DAO_MARK","path":"space","value":0.25}]},
+		{"id":"MANA_HEAL","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"HEAL","sub_type":"MANA","value":3}]}
+	]`
+	var eff Effects
+	if err := json.Unmarshal([]byte(raw), &eff); err != nil {
+		t.Fatalf("failed to unmarshal canonical blocks: %v", err)
+	}
+	if eff.StatMods["speed"] != 0.15 {
+		t.Errorf("expected speed 0.15, got: %v", eff.StatMods["speed"])
+	}
+	if eff.DaoNganBonus["space"] != 0.25 {
+		t.Errorf("expected space dao 0.25, got: %v", eff.DaoNganBonus["space"])
+	}
+	if eff.ManaRegenBonus != 3 {
+		t.Errorf("expected mana regen 3, got: %v", eff.ManaRegenBonus)
+	}
+}
+
+func TestDefJSONMarshaling(t *testing.T) {
+	c := ConstitutionDef{
+		Tier: 3,
+		Key:  "blazing_glory_lightning_brilliance_body",
+		Name: "Viêm Hoàng Lôi Trạch Thể",
+		Effects: Effects{
+			StatMods:     map[string]float64{"speed": 0.2},
+			DaoNganBonus: map[string]float64{"lightning": 0.5},
+		},
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatalf("failed to marshal ConstitutionDef: %v", err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		t.Fatalf("failed to unmarshal output: %v", err)
+	}
+	effectsList, ok := obj["effects"].([]any)
+	if !ok {
+		t.Fatalf("expected effects to be JSON array, got: %T (%+v)", obj["effects"], obj["effects"])
+	}
+	if len(effectsList) != 2 {
+		t.Errorf("expected 2 effect blocks, got %d", len(effectsList))
+	}
+}
+
+

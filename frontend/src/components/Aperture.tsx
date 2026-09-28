@@ -805,7 +805,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-900">
                       <div className="text-[10px] text-zinc-500 font-mono">Trạng Thái</div>
                       {player.statuses && player.statuses.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 mt-1">
+                        <div className="flex flex-col gap-1.5 mt-1">
                           {player.statuses.map((s: PlayerStatusInstance) => {
                             let displayName = statusDictionary?.[s.id]?.name || statusLabels[s.id] || s.id;
                             if (s.id.startsWith("cd_gu_")) {
@@ -816,10 +816,14 @@ export const Aperture: React.FC<ApertureProps> = ({
                             } else if (s.id.startsWith("cd_km_")) {
                               displayName = "Hồi chiêu Sát Chiêu";
                             }
+                            const statusEffects = statusDictionary?.[s.id]?.effects;
                             return (
-                              <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
-                                {displayName}{statusRemainLabel(s.expires_at)}
-                              </span>
+                              <div key={s.id} className="flex flex-col gap-1">
+                                <span className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold w-fit">
+                                  {displayName}{statusRemainLabel(s.expires_at)}
+                                </span>
+                                {statusEffects && <EffectEnvelopeView effects={statusEffects} />}
+                              </div>
                             );
                           })}
                         </div>

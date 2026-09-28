@@ -26,7 +26,7 @@ export interface EffectOperation {
   resource?: string;
   stack_policy?: string;
   code?: string;
-  params?: Record<string, EffectScalar>;
+  params?: Record<string, unknown>;
 }
 
 export interface EffectBlock {
@@ -79,8 +79,57 @@ export function effectEnvelope(value: EffectLike): EffectEnvelope {
   if (Array.isArray(candidate)) {
     return { blocks: candidate };
   }
-  if (candidate && "blocks" in candidate && Array.isArray(candidate.blocks)) {
-    return candidate as EffectEnvelope;
+  if (candidate && typeof candidate === "object") {
+    if ("blocks" in candidate && Array.isArray((candidate as EffectEnvelope).blocks)) {
+      return candidate as EffectEnvelope;
+    }
+    // Fallback: parse legacy/struct GameFX object if present
+    const obj = candidate as Record<string, unknown>;
+    const blocks: EffectBlock[] = [];
+    const addOp = (id: string, code: string, val: unknown) => {
+      blocks.push({
+        id,
+        trigger: "ALWAYS_ON",
+        target: { selector: "SELF" },
+        operations: [{ op: "UNIQUE", code, params: { value: val } }],
+      });
+    };
+    if (obj.stat_mods && typeof obj.stat_mods === "object" && Object.keys(obj.stat_mods).length > 0) {
+      addOp("STAT_MODS", "STAT_MODS", obj.stat_mods);
+    }
+    if (obj.dao_mark && typeof obj.dao_mark === "object" && Object.keys(obj.dao_mark).length > 0) {
+      addOp("DAO_MARK_MODIFIER", "DAO_MARK_MODIFIER", obj.dao_mark);
+    }
+    if (obj.path_damage && typeof obj.path_damage === "object" && Object.keys(obj.path_damage).length > 0) {
+      addOp("PATH_DAMAGE_MODIFIER", "PATH_DAMAGE_MODIFIER", obj.path_damage);
+    }
+    if (obj.path_resistance && typeof obj.path_resistance === "object" && Object.keys(obj.path_resistance).length > 0) {
+      addOp("PATH_RESISTANCE_MODIFIER", "PATH_RESISTANCE_MODIFIER", obj.path_resistance);
+    }
+    if (typeof obj.refine === "number" && obj.refine !== 0) addOp("REFINE_SUCCESS", "REFINE_SUCCESS", obj.refine);
+    if (typeof obj.luck === "number" && obj.luck !== 0) addOp("LUCK", "LUCK", obj.luck);
+    if (typeof obj.max_mana === "number" && obj.max_mana !== 0) addOp("MAX_MANA", "MAX_MANA", obj.max_mana);
+    if (typeof obj.mana_regen === "number" && obj.mana_regen !== 0) addOp("MANA_REGEN", "MANA_REGEN", obj.mana_regen);
+    if (typeof obj.cultivation_efficiency === "number" && obj.cultivation_efficiency !== 0) addOp("CULTIVATION_EFFICIENCY", "CULTIVATION_EFFICIENCY", obj.cultivation_efficiency);
+    if (typeof obj.dao_mark_gain === "number" && obj.dao_mark_gain !== 0) addOp("DAO_MARK_GAIN", "DAO_MARK_GAIN", obj.dao_mark_gain);
+    if (typeof obj.healing_received === "number" && obj.healing_received !== 0) addOp("HEALING_RECEIVED", "HEALING_RECEIVED", obj.healing_received);
+    if (typeof obj.hp_regen === "number" && obj.hp_regen !== 0) addOp("HP_REGEN", "HP_REGEN", obj.hp_regen);
+    if (typeof obj.mental_resistance === "number" && obj.mental_resistance !== 0) addOp("MENTAL_RESISTANCE", "MENTAL_RESISTANCE", obj.mental_resistance);
+    if (typeof obj.soul_defense === "number" && obj.soul_defense !== 0) addOp("SOUL_DEFENSE", "SOUL_DEFENSE", obj.soul_defense);
+    if (typeof obj.soul_regen === "number" && obj.soul_regen !== 0) addOp("SOUL_REGEN", "SOUL_REGEN", obj.soul_regen);
+    if (typeof obj.tenacity === "number" && obj.tenacity !== 0) addOp("TENACITY", "TENACITY", obj.tenacity);
+    if (typeof obj.cc_resist === "number" && obj.cc_resist !== 0) addOp("CC_RESIST", "CC_RESIST", obj.cc_resist);
+    if (typeof obj.aperture_stress_bonus === "number" && obj.aperture_stress_bonus !== 0) addOp("APERTURE_STRESS", "APERTURE_STRESS", obj.aperture_stress_bonus);
+    if (obj.non_conflicting_dao_marks) addOp("NON_CONFLICTING_DAO_MARKS", "NON_CONFLICTING_DAO_MARKS", true);
+    if (obj.immortal) addOp("IMMORTAL", "IMMORTAL", true);
+    if (obj.disable_hp_regen) addOp("DISABLE_HP_REGEN", "DISABLE_HP_REGEN", true);
+    if (obj.disable_mana_regen) addOp("DISABLE_MANA_REGEN", "DISABLE_MANA_REGEN", true);
+    if (obj.disable_resource_regen) addOp("DISABLE_RESOURCE_REGEN", "DISABLE_RESOURCE_REGEN", true);
+    if (obj.disable_soul_regen) addOp("DISABLE_SOUL_REGEN", "DISABLE_SOUL_REGEN", true);
+
+    if (blocks.length > 0) {
+      return { blocks };
+    }
   }
   return EMPTY_EFFECT_ENVELOPE;
 }
