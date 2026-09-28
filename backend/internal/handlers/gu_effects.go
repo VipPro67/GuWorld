@@ -541,12 +541,8 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if val <= 0 {
 			val = 3.0
 		}
-		boost := player.MaxMana * 0.10 * val
-		player.CurrentMana += boost
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
-		}
-		return fmt.Sprintf("%s gia tốc dòng chảy thời gian, hồi phục %.0f Chân Nguyên!", spec.Name, boost), nil
+		player.TimeSpeedMultiplier *= val
+		return fmt.Sprintf("%s hòa tan vào không khiếu, dòng thời gian tăng tốc x%.2f!", spec.Name, val), nil
 	case "RECORD", "RECORD_MESSAGE":
 		return fmt.Sprintf("%s ghi lại toàn bộ hình ảnh và âm thanh trong khu vực.", spec.Name), nil
 	case "CONTRACT_OATH", "POISON_VOW":

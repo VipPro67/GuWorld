@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
@@ -365,6 +367,16 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		}
 		if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
 			enemyShield += spec.Effects.Active.ShieldFlat
+		} else {
+			for _, block := range spec.Effects.Blocks {
+				if block.Trigger == gameplayeffects.TriggerOnAction {
+					for _, op := range block.Operations {
+						if op.Op == gameplayeffects.OpShield && (strings.EqualFold(op.SubType, "FLAT") || op.SubType == "") {
+							enemyShield += op.Value
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -960,6 +972,16 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	scanShield := func(spec models.GuDictionaryItem) {
 		if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
 			virtualShield += int(spec.Effects.Active.ShieldFlat)
+		} else {
+			for _, block := range spec.Effects.Blocks {
+				if block.Trigger == gameplayeffects.TriggerOnAction {
+					for _, op := range block.Operations {
+						if op.Op == gameplayeffects.OpShield && (strings.EqualFold(op.SubType, "FLAT") || op.SubType == "") {
+							virtualShield += int(op.Value)
+						}
+					}
+				}
+			}
 		}
 	}
 	for _, inst := range selectedGuInstances {

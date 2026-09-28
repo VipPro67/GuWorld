@@ -1,5 +1,5 @@
 import React from "react";
-import type { EffectBlock, EffectEnvelope, EffectOperation, EffectTarget } from "@/lib/effect-blocks";
+import type { EffectBlock, EffectEnvelope, EffectLike, EffectOperation, EffectTarget } from "@/lib/effect-blocks";
 import { translatePath } from "@/lib/translate";
 import { formatEffectTarget, renderableEffectBlocks } from "@/lib/effect-presentation";
 
@@ -269,7 +269,7 @@ export const EffectBlocksList: React.FC<{ blocks?: EffectBlock[] | null }> = ({ 
 };
 
 /** Canonical renderer. Unknown envelopes never throw and remain inspectable. */
-export const EffectEnvelopeView: React.FC<{ effects?: EffectEnvelope | null }> = ({ effects }) => {
+export const EffectEnvelopeView: React.FC<{ effects?: EffectLike | null }> = ({ effects }) => {
   const presentation = renderableEffectBlocks(effects);
   if (presentation.unsupportedSchema !== undefined) {
     return <div className="text-[10px] text-amber-400">Effect schema không được hỗ trợ: {String(presentation.unsupportedSchema)}</div>;

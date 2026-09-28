@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
@@ -28,6 +29,19 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	if guSpec.Effects.Active != nil {
 		baseDmg = guSpec.Effects.Active.DamageFlat
 		baseDef = guSpec.Effects.Active.ShieldFlat
+	} else {
+		for _, block := range guSpec.Effects.Blocks {
+			if block.Trigger == gameplayeffects.TriggerOnAction {
+				for _, op := range block.Operations {
+					if op.Op == gameplayeffects.OpDamage && (strings.EqualFold(op.SubType, "FLAT") || op.SubType == "") {
+						baseDmg += op.Value
+					}
+					if op.Op == gameplayeffects.OpShield && (strings.EqualFold(op.SubType, "FLAT") || op.SubType == "") {
+						baseDef += op.Value
+					}
+				}
+			}
+		}
 	}
 
 	attainmentLevel := 0
@@ -105,9 +119,24 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 					continue
 				}
 				spec, ok := models.GetGu(g.GuID, g.Rank)
-				if ok && spec.Effects.Passive != nil && spec.Effects.Passive.PathConflictReduction >= 100 {
-					hasNonConf = true
-					break
+				if ok {
+					if spec.Effects.Passive != nil && spec.Effects.Passive.PathConflictReduction >= 100 {
+						hasNonConf = true
+						break
+					}
+					for _, block := range spec.Effects.Blocks {
+						if block.Trigger == gameplayeffects.TriggerAlwaysOn {
+							for _, op := range block.Operations {
+								if op.Op == gameplayeffects.OpStatMod && strings.EqualFold(op.Stat, "PATH_CONFLICT_REDUCTION") && op.Value >= 100 {
+									hasNonConf = true
+									break
+								}
+							}
+						}
+					}
+					if hasNonConf {
+						break
+					}
 				}
 			}
 		}

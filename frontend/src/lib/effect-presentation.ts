@@ -1,4 +1,4 @@
-import type { EffectBlock, EffectEnvelope, EffectTarget } from "./effect-blocks";
+import { type EffectBlock, type EffectLike, type EffectTarget, effectEnvelope } from "./effect-blocks.ts";
 
 export function formatEffectTarget(target?: EffectTarget): string | null {
   if (!target?.selector) return null;
@@ -8,8 +8,10 @@ export function formatEffectTarget(target?: EffectTarget): string | null {
   return target.bypass_frontline ? (label ? `${label} (Xuyên hàng)` : "Xuyên hàng") : label;
 }
 
-export function renderableEffectBlocks(effects?: EffectEnvelope | null): { blocks: EffectBlock[]; unsupportedSchema?: number } {
+export function renderableEffectBlocks(effects?: EffectLike | null): { blocks: EffectBlock[]; unsupportedSchema?: number } {
   if (!effects) return { blocks: [] };
-  if (effects.schema_version !== 2) return { blocks: [], unsupportedSchema: effects.schema_version as number };
-  return { blocks: effects.blocks };
+  if (typeof effects === "object" && "schema_version" in effects && typeof effects.schema_version === "number" && effects.schema_version > 2) {
+    return { blocks: [], unsupportedSchema: effects.schema_version };
+  }
+  return { blocks: effectEnvelope(effects).blocks };
 }
