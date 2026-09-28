@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"math"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -72,14 +73,14 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY int, hasBypass bool) []int {
 	var targets []int
 
-	switch targetType {
+	switch strings.ToUpper(strings.TrimSpace(targetType)) {
 	case "ROW":
 		for idx, c := range team {
 			if c.HP > 0 && c.GridX == targetX {
 				targets = append(targets, idx)
 			}
 		}
-	case "COL":
+	case "COL", "COLUMN":
 		for idx, c := range team {
 			if c.HP > 0 && c.GridY == targetY {
 				targets = append(targets, idx)
@@ -96,7 +97,7 @@ func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY
 				targets = append(targets, idx)
 			}
 		}
-	case "ALL":
+	case "ALL", "ALL_ENEMIES":
 		for idx, c := range team {
 			if c.HP > 0 {
 				targets = append(targets, idx)

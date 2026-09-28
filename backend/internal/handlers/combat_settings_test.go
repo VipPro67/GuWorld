@@ -428,3 +428,68 @@ func TestBuildSimActionFromGu_BlockV2(t *testing.T) {
 	}
 }
 
+func TestResolveTargetsAllEnemies(t *testing.T) {
+	team := []models.Combatant{
+		{ID: "c1", GridX: 1, GridY: 1, HP: 100},
+		{ID: "c2", GridX: 2, GridY: 2, HP: 200},
+		{ID: "c3", GridX: 3, GridY: 3, HP: 0}, // dead
+	}
+
+	targets := ResolveTargets(team, "ALL_ENEMIES", 0, 0, false)
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 targets for ALL_ENEMIES, got %d", len(targets))
+	}
+	if targets[0] != 0 || targets[1] != 1 {
+		t.Errorf("expected targets [0, 1], got %v", targets)
+	}
+
+	// Also test op.Target overrides in buildSimActionFromGu
+	guSpecOpTarget := models.GuDictionaryItem{
+		ID:   "AOE_OP_GU",
+		Name: "Quần Công Cổ",
+		Rank: 1,
+		Effects: models.GuEffects{
+			Blocks: []gameplayeffects.Block{
+				{
+					ID:      "ACTIVE_SKILL",
+					Trigger: gameplayeffects.TriggerOnAction,
+					Target:  gameplayeffects.Target{Selector: gameplayeffects.TargetSingle},
+					Operations: []gameplayeffects.Operation{
+						{
+							Op:      gameplayeffects.OpDamage,
+							SubType: "FLAT",
+							Value:   100,
+							Target:  &gameplayeffects.Target{Selector: gameplayeffects.TargetAllEnemies, BypassFrontline: true},
+						},
+						{
+							Op:      gameplayeffects.OpDamage,
+							SubType: "MULTIPLIER",
+							Value:   2.0,
+						},
+					},
+				},
+			},
+		},
+	}
+	actor := &models.Combatant{
+		ID:         "actor_test",
+		Name:       "Actor",
+		Rank:       1,
+		BaseAttack: 50,
+	}
+	act, err := buildSimActionFromGu(actor, &guSpecOpTarget, "GU_SKILL")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if act.TargetType != "ALL_ENEMIES" {
+		t.Errorf("expected TargetType ALL_ENEMIES from op.Target, got %s", act.TargetType)
+	}
+	if !act.Bypass {
+		t.Errorf("expected Bypass == true from op.Target")
+	}
+	if act.DamageMult != 2.0 {
+		t.Errorf("expected DamageMult == 2.0, got %f", act.DamageMult)
+	}
+}
+
+

@@ -519,6 +519,12 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 					act.Bypass = true
 				}
 				for _, op := range block.Operations {
+					if op.Target != nil && op.Target.Selector != "" {
+						act.TargetType = string(op.Target.Selector)
+						if op.Target.BypassFrontline {
+							act.Bypass = true
+						}
+					}
 					switch op.Op {
 					case gameplayeffects.OpDamage:
 						if op.Path != "" {
