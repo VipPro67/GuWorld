@@ -277,6 +277,9 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 
 	initialized := InitializeCombatState(tx, base, player)
 
+	// Execute pre-combat steal mechanics (Vô Tướng Thủ & Ám Thâu Cổ) for open-world PvP
+	handlePreCombatSteal(tx, initialized, player)
+
 	// Fire ON_COMBAT_START on equipped ACTIVE Gus
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {

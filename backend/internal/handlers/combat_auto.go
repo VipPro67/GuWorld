@@ -1079,6 +1079,14 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		player.PathMasteries = make(models.PathMasteriesMap)
 	}
 
+	satKhiLevel := 0
+	for _, st := range player.Statuses {
+		if st.ID == "sat_khi" && st.Value > 0 {
+			satKhiLevel = int(st.Value)
+			break
+		}
+	}
+
 	simCombatant := &simulator.CombatantAuto{
 		ID:                   player.ID.String(),
 		Name:                 player.Username,
@@ -1088,6 +1096,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		GridX:                2,
 		GridY:                3,
 		MaxHP:                simMaxHP,
+		CustomState:          map[string]int{"sat_khi_level": satKhiLevel},
 		HP:                   simHP,
 		MaxMana:              player.MaxMana,
 		Mana:                 simMana,
