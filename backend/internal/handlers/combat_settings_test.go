@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
@@ -369,3 +370,61 @@ func TestBuildSimPlayerDefender_BailsOnNonPlayers(t *testing.T) {
 		t.Fatal("expected false for monster combatant")
 	}
 }
+
+func TestBuildSimActionFromGu_BlockV2(t *testing.T) {
+	guSpec := models.GuDictionaryItem{
+		ID:   "GU_BLOCK_V2_TEST",
+		Name: "Mộng Yểm Cổ",
+		Rank: 1,
+		Path: []string{"Dream Path"},
+		Effects: models.GuEffects{
+			Blocks: []gameplayeffects.Block{
+				{
+					ID:      "ACTIVE_SKILL",
+					Trigger: gameplayeffects.TriggerOnAction,
+					Target:  gameplayeffects.Target{Selector: gameplayeffects.TargetAllEnemies, BypassFrontline: true},
+					Operations: []gameplayeffects.Operation{
+						{Op: gameplayeffects.OpDamage, SubType: "FLAT", Value: 250, Path: "Dream Path"},
+						{Op: gameplayeffects.OpStatus, StatusID: "SLEEP", Turns: 5, Chance: 1.0},
+					},
+				},
+			},
+		},
+	}
+
+	if !hasCombatActiveEffects(&guSpec) {
+		t.Fatal("expected hasCombatActiveEffects == true for Block v2 active skill")
+	}
+	if !hasCombatEffects(&guSpec) {
+		t.Fatal("expected hasCombatEffects == true for Block v2 active skill")
+	}
+
+	actor := &models.Combatant{
+		ID:         "test_actor",
+		Name:       "Test Actor",
+		Rank:       1,
+		BaseAttack: 50,
+	}
+
+	act, err := buildSimActionFromGu(actor, &guSpec, "GU_SKILL")
+	if err != nil {
+		t.Fatalf("unexpected error building sim action: %v", err)
+	}
+
+	if act.TargetType != "ALL_ENEMIES" {
+		t.Errorf("expected TargetType ALL_ENEMIES, got %s", act.TargetType)
+	}
+	if !act.Bypass {
+		t.Errorf("expected Bypass == true")
+	}
+	if act.Damage <= 0 {
+		t.Errorf("expected Damage > 0, got %f", act.Damage)
+	}
+	if len(act.StatusOps) == 0 {
+		t.Fatal("expected StatusOps to be populated from Block v2")
+	}
+	if act.StatusOps[0].ID != "SLEEP" || act.StatusOps[0].Turns != 5 {
+		t.Errorf("expected SLEEP status for 5 turns, got %+v", act.StatusOps[0])
+	}
+}
+

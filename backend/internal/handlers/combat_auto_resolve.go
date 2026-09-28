@@ -12,6 +12,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
@@ -506,6 +507,88 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			act.TargetY = actor.GridY
 		}
 		act.Bypass = active.CurveAttack
+	} else if len(spec.Effects.Blocks) > 0 {
+		for _, block := range spec.Effects.Blocks {
+			if block.Trigger == gameplayeffects.TriggerOnAction {
+				if block.Target.Selector != "" {
+					act.TargetType = string(block.Target.Selector)
+					act.TargetX = actor.GridX
+					act.TargetY = actor.GridY
+				}
+				if block.Target.BypassFrontline {
+					act.Bypass = true
+				}
+				for _, op := range block.Operations {
+					switch op.Op {
+					case gameplayeffects.OpDamage:
+						if op.Path != "" {
+							act.Path = []string{op.Path}
+						}
+						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
+							act.DamageMult = op.Value
+						}
+					case gameplayeffects.OpShield:
+						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
+							act.ShieldMult = op.Value
+						}
+					case gameplayeffects.OpHeal:
+						if strings.EqualFold(op.SubType, "LIFESTEAL") {
+							act.LifeStealPct += op.Value
+						} else if strings.EqualFold(op.SubType, "FLAT") || op.SubType == "" {
+							act.Healing += op.Value
+						}
+					case gameplayeffects.OpDirectHP:
+						if strings.EqualFold(op.SubType, "MAX_HP_PERCENT") {
+							act.DamageHPPercent = op.Value
+						} else if strings.EqualFold(op.SubType, "SHIELD_STRIP") {
+							act.ShieldStripPercent = op.Value
+						}
+					case gameplayeffects.OpStatus:
+						turns := op.Turns
+						if turns <= 0 {
+							turns = 1
+						}
+						chance := op.Chance
+						if chance <= 0 {
+							chance = 1.0
+						}
+						if op.StatusID != "" {
+							if resolved, err := statusfx.ResolveStatus(op.StatusID, op.Value, turns); err == nil {
+								if chance > 0 && spec.Rank > 0 {
+									resolved.Chance = chance + 0.05*float64(spec.Rank-1)
+									if resolved.Chance > 0.95 {
+										resolved.Chance = 0.95
+									}
+									resolved.Turns += (spec.Rank - 1) / 3
+								} else {
+									resolved.Chance = chance
+								}
+								act.StatusOps = append(act.StatusOps, resolved)
+							}
+						}
+					case gameplayeffects.OpStatMod:
+						switch strings.ToUpper(op.Stat) {
+						case "ATTACK":
+							act.Damage += op.Value
+						case "DEFENSE":
+							act.Defense += op.Value
+						case "EVASION":
+							act.SelfEvasionPct = op.Value
+							act.BonusTurns = 2
+						}
+					case gameplayeffects.OpUnique:
+						switch strings.ToUpper(op.Code) {
+						case "SUMMON_PHANTOM":
+							act.PhantomDmg += actor.BaseAttack
+						case "WOOD_TRANSFORMATION":
+							act.Defense += 30.0
+						case "BYPASS_SHIELD":
+							act.Bypass = true
+						}
+					}
+				}
+			}
+		}
 	}
 
 	if act.TargetType == "" {
@@ -522,17 +605,35 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 			return true
 		}
 	}
-	if spec.Effects.Active == nil {
-		return false
+	if spec.Effects.Active != nil {
+		active := spec.Effects.Active
+		if active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 || active.ShieldMult > 0 ||
+			len(active.ApplyStatus) > 0 || active.LifeStealRate > 0 || active.HealFlat > 0 ||
+			active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
+			active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
+			active.SummonGrowthPhantoms || active.DamageHPPercent > 0 || active.ShieldFlatReducePercent > 0 ||
+			active.DisableGuNextTurn || active.ForgetRealityChance > 0 || active.SelfEvasionBoostPercent > 0 ||
+			active.TargetDamageReducePct > 0 || active.StatBaseAttackFlat > 0 || active.DamagePath != "" {
+			return true
+		}
 	}
-	active := spec.Effects.Active
-	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 || active.ShieldMult > 0 ||
-		len(active.ApplyStatus) > 0 || active.LifeStealRate > 0 || active.HealFlat > 0 ||
-		active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
-		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
-		active.SummonGrowthPhantoms || active.DamageHPPercent > 0 || active.ShieldFlatReducePercent > 0 ||
-		active.DisableGuNextTurn || active.ForgetRealityChance > 0 || active.SelfEvasionBoostPercent > 0 ||
-		active.TargetDamageReducePct > 0 || active.StatBaseAttackFlat > 0 || active.DamagePath != ""
+	for _, block := range spec.Effects.Blocks {
+		if block.Trigger == gameplayeffects.TriggerOnAction && len(block.Operations) > 0 {
+			for _, op := range block.Operations {
+				if op.Op == gameplayeffects.OpDamage || op.Op == gameplayeffects.OpShield || op.Op == gameplayeffects.OpHeal ||
+					op.Op == gameplayeffects.OpDirectHP || op.Op == gameplayeffects.OpStatus ||
+					op.Op == gameplayeffects.OpBarrier || op.Op == gameplayeffects.OpCleanse ||
+					(op.Op == gameplayeffects.OpStatMod && (strings.ToUpper(op.Stat) == "ATTACK" || strings.ToUpper(op.Stat) == "DEFENSE" || strings.ToUpper(op.Stat) == "EVASION")) ||
+					op.Op == gameplayeffects.OpUnique {
+					return true
+				}
+			}
+		}
+		if block.Trigger == gameplayeffects.TriggerOnCast || block.Trigger == gameplayeffects.TriggerOnHit {
+			return true
+		}
+	}
+	return false
 }
 
 // hasCombatEffects returns true if the Gu has any active action, passive mechanic, or combat-relevant passive stat.
@@ -558,6 +659,25 @@ func hasCombatEffects(spec *models.GuDictionaryItem) bool {
 			return true
 		}
 	}
+	for _, block := range spec.Effects.Blocks {
+		if block.Trigger == gameplayeffects.TriggerBeforeHit || block.Trigger == gameplayeffects.TriggerOnTurnStart ||
+			block.Trigger == gameplayeffects.TriggerOnDeath || block.Trigger == gameplayeffects.TriggerCombatPassive ||
+			block.Trigger == gameplayeffects.TriggerOnBattleStart || block.Trigger == gameplayeffects.TriggerBeforeEnemyAttack {
+			return true
+		}
+		if block.Trigger == gameplayeffects.TriggerAlwaysOn {
+			for _, op := range block.Operations {
+				if op.Op == gameplayeffects.OpStatMod {
+					stat := strings.ToUpper(op.Stat)
+					if stat == "ATTACK" || stat == "DEFENSE" || stat == "HP" || stat == "SPEED" ||
+						stat == "DAMAGE_DEALT" || stat == "EVASION" || stat == "PATH_CONFLICT_REDUCTION" ||
+						stat == "CRIT_RATE" || stat == "ALL" {
+						return true
+					}
+				}
+			}
+		}
+	}
 	return false
 }
 
@@ -570,11 +690,13 @@ func computeGlobalIgnoreDefense(selectedGuIDs []string, resolveSpec func(string)
 		}
 		seen[guID] = struct{}{}
 		spec, ok := resolveSpec(guID)
-		if !ok || spec.Effects.Active == nil {
+		if !ok {
 			continue
 		}
-		flat += spec.Effects.Active.IgnoreDefense
-		pct += spec.Effects.Active.IgnoreDefensePct
+		if spec.Effects.Active != nil {
+			flat += spec.Effects.Active.IgnoreDefense
+			pct += spec.Effects.Active.IgnoreDefensePct
+		}
 	}
 	if pct > 0.8 {
 		pct = 0.8
@@ -592,10 +714,22 @@ func computeGlobalCritRate(selectedGuIDs []string, resolveSpec func(string) (mod
 		}
 		seen[guID] = struct{}{}
 		spec, ok := resolveSpec(guID)
-		if !ok || spec.Effects.Active == nil {
+		if !ok {
 			continue
 		}
-		total += spec.Effects.Active.CritRateBoost
+		if spec.Effects.Active != nil {
+			total += spec.Effects.Active.CritRateBoost
+		} else {
+			for _, block := range spec.Effects.Blocks {
+				if block.Trigger == gameplayeffects.TriggerAlwaysOn || block.Trigger == gameplayeffects.TriggerOnAction {
+					for _, op := range block.Operations {
+						if op.Op == gameplayeffects.OpStatMod && strings.ToUpper(op.Stat) == "CRIT_RATE" {
+							total += op.Value
+						}
+					}
+				}
+			}
+		}
 	}
 	if total > 0.8 {
 		total = 0.8
@@ -613,10 +747,22 @@ func computeGlobalAllStatsBuff(selectedGuIDs []string, resolveSpec func(string) 
 		}
 		seen[guID] = struct{}{}
 		spec, ok := resolveSpec(guID)
-		if !ok || spec.Effects.Active == nil {
+		if !ok {
 			continue
 		}
-		total += spec.Effects.Active.AllStatsBuffPct
+		if spec.Effects.Active != nil {
+			total += spec.Effects.Active.AllStatsBuffPct
+		} else {
+			for _, block := range spec.Effects.Blocks {
+				if block.Trigger == gameplayeffects.TriggerAlwaysOn || block.Trigger == gameplayeffects.TriggerOnAction {
+					for _, op := range block.Operations {
+						if op.Op == gameplayeffects.OpStatMod && strings.ToUpper(op.Stat) == "ALL" {
+							total += op.Value
+						}
+					}
+				}
+			}
+		}
 	}
 	if total > 0.5 {
 		total = 0.5
