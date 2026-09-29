@@ -297,6 +297,43 @@ func schemaSects() error {
 		return err
 	}
 
+	if err := execSchema("sect_vault_gu_consolidate_mortal", `
+	DO $$
+	BEGIN
+		IF EXISTS (
+			SELECT 1 FROM sect_vault_gu
+			WHERE rank < 6
+			GROUP BY sect_id, gu_id, rank
+			HAVING COUNT(*) > 1 OR bool_or(id <> (sect_id || ':' || gu_id || ':' || rank))
+		) THEN
+			CREATE TEMP TABLE tmp_consolidate_vault_gu AS
+			SELECT 
+				(sect_id || ':' || gu_id || ':' || rank) AS canonical_id,
+				sect_id,
+				gu_id,
+				rank,
+				SUM(quantity) AS total_qty,
+				MAX(cost) AS max_cost,
+				MAX(hunger) AS max_hunger,
+				MIN(created_at) AS min_created_at,
+				MAX(updated_at) AS max_updated_at
+			FROM sect_vault_gu
+			WHERE rank < 6
+			GROUP BY sect_id, gu_id, rank;
+
+			DELETE FROM sect_vault_gu WHERE rank < 6;
+
+			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id, created_at, updated_at)
+			SELECT canonical_id, sect_id, gu_id, rank, total_qty, max_cost, max_hunger, '', min_created_at, max_updated_at
+			FROM tmp_consolidate_vault_gu
+			WHERE total_qty > 0;
+
+			DROP TABLE tmp_consolidate_vault_gu;
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
+
 	if err := execSchema("sect_vault_recipes", `
 	CREATE TABLE IF NOT EXISTS sect_vault_recipes (
 		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,

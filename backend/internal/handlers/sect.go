@@ -223,10 +223,27 @@ func LoadSectVaultJSON(ctx context.Context, runner QueryContextRunner, sectID st
 	if err == nil {
 		defer guRows.Close()
 		var gus []SectVaultGuItem
+		mortalIndex := make(map[string]int)
 		for guRows.Next() {
 			var g SectVaultGuItem
 			if err := guRows.Scan(&g.ID, &g.Rank, &g.Cost, &g.Quantity, &g.Hunger, &g.InstanceID); err == nil {
-				gus = append(gus, g)
+				if g.Rank < 6 {
+					key := fmt.Sprintf("%s:%d", g.ID, g.Rank)
+					if idx, ok := mortalIndex[key]; ok {
+						gus[idx].Quantity += g.Quantity
+						if g.Cost > gus[idx].Cost {
+							gus[idx].Cost = g.Cost
+						}
+						if g.Hunger > gus[idx].Hunger {
+							gus[idx].Hunger = g.Hunger
+						}
+					} else {
+						mortalIndex[key] = len(gus)
+						gus = append(gus, g)
+					}
+				} else {
+					gus = append(gus, g)
+				}
 			}
 		}
 		if gus == nil {

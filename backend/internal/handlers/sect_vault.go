@@ -23,6 +23,66 @@ type StockVaultRequest struct {
 	Quantity int64  `json:"quantity" binding:"required,min=1"`
 }
 
+type VaultGuRow struct {
+	ID         string
+	GuID       string
+	Rank       int
+	Cost       int64
+	Quantity   int64
+	Hunger     float64
+	InstanceID string
+}
+
+type VaultGuDeductionPlan struct {
+	ID     string
+	GuID   string
+	Rank   int
+	Cost   int64
+	Deduct int64
+	Del    bool
+	InstID string
+}
+
+func planVaultGuDeductions(matchedRows []VaultGuRow, quantity int64) ([]VaultGuDeductionPlan, int64, error) {
+	if quantity <= 0 {
+		return nil, 0, fmt.Errorf("Số lượng phải lớn hơn 0")
+	}
+	var totalAvailable int64
+	for _, r := range matchedRows {
+		totalAvailable += r.Quantity
+	}
+	if totalAvailable < quantity || len(matchedRows) == 0 {
+		return nil, 0, fmt.Errorf("Cổ trùng này không đủ số lượng hoặc không có sẵn trong Bảo khố!")
+	}
+	if matchedRows[0].Rank >= 6 && quantity > 1 {
+		return nil, 0, fmt.Errorf("Tiên Cổ (rank>=6) mỗi lần chỉ rút 1 instance")
+	}
+	remaining := quantity
+	var totalCost int64
+	var plans []VaultGuDeductionPlan
+	for _, r := range matchedRows {
+		if remaining <= 0 {
+			break
+		}
+		toTake := r.Quantity
+		if toTake > remaining {
+			toTake = remaining
+		}
+		totalCost += r.Cost * toTake
+		plans = append(plans, VaultGuDeductionPlan{
+			ID:     r.ID,
+			GuID:   r.GuID,
+			Rank:   r.Rank,
+			Cost:   r.Cost,
+			Deduct: toTake,
+			Del:    toTake >= r.Quantity,
+			InstID: r.InstanceID,
+		})
+		remaining -= toTake
+	}
+	return plans, totalCost, nil
+}
+
 // stockItemUnitCost computes the sect-funds unit cost for stocking an item and
 // enforces the rank gates (Gu: rank 1-5 & <= sect level; material: rank <= sect level).
 // Returns (unitCost, httpStatusOK, "") on success; otherwise (0, status, errorMessage).
@@ -176,7 +236,7 @@ func StockSectVault(c *gin.Context) {
 		maxHunger := vaultGuMaxHunger(req.ItemID, stockGuRank)
 		var stockInstID string
 		var rowID string
-		if req.Quantity == 1 {
+		if stockGuRank >= 6 {
 			stockInstID = uuid.New().String()
 			rowID = fmt.Sprintf("%s:%s", s.ID, stockInstID)
 		} else {
@@ -366,7 +426,7 @@ func StockSectVaultBulk(c *gin.Context) {
 			maxHunger := vaultGuMaxHunger(line.itemID, stockGuRank)
 			var stockInstID string
 			var rowID string
-			if line.quantity == 1 {
+			if stockGuRank >= 6 {
 				stockInstID = uuid.New().String()
 				rowID = fmt.Sprintf("%s:%s", s.ID, stockInstID)
 			} else {
@@ -483,76 +543,91 @@ func BuyFromSectVault(c *gin.Context) {
 
 	var cost int64
 	if strings.ToLower(req.ItemType) == "gu" {
-		var vgID string
-		var vgGuID string
-		var vgRank int
-		var vgCost int64
-		var vgQty int64
-		var vgHunger float64
-		var vgInstID string
+		if req.Rank >= 6 && quantity > 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cổ (rank>=6) mỗi lần chỉ rút 1 instance"})
+			return
+		}
 
-		guQuery := `
+		rows, err := tx.Query(`
 			SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '')
 			FROM sect_vault_gu
-			WHERE sect_id = $1 AND gu_id = $2 AND ($3 = 0 OR rank = $3) AND quantity >= $4
+			WHERE sect_id = $1 
+			  AND (gu_id = $2 OR LOWER(gu_id) = LOWER($2) OR id = $2 OR instance_id = $2)
+			  AND ($3 = 0 OR rank = $3)
+			  AND quantity > 0
+			ORDER BY cost ASC, id ASC
 			FOR UPDATE
-			LIMIT 1
-		`
-		err = tx.QueryRow(guQuery, m.SectID, req.ItemID, req.Rank, quantity).Scan(&vgID, &vgGuID, &vgRank, &vgCost, &vgQty, &vgHunger, &vgInstID)
+		`, m.SectID, req.ItemID, req.Rank)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không đủ số lượng hoặc không có sẵn trong Bảo khố!"})
-				return
-			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn bảo khố: " + err.Error()})
 			return
 		}
 
-		cost = vgCost * quantity
-		// Tiên Cổ rank>=6: 1 lần chỉ rút 1 instance, giữ nguyên instance_id kho.
-		if vgRank >= 6 && quantity > 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cổ (rank>=6) mỗi lần chỉ rút 1 instance"})
+		var matchedRows []VaultGuRow
+		for rows.Next() {
+			var r VaultGuRow
+			if err := rows.Scan(&r.ID, &r.GuID, &r.Rank, &r.Cost, &r.Quantity, &r.Hunger, &r.InstanceID); err != nil {
+				rows.Close()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu bảo khố: " + err.Error()})
+				return
+			}
+			matchedRows = append(matchedRows, r)
+		}
+		rows.Close()
+
+		plans, totalCost, planErr := planVaultGuDeductions(matchedRows, quantity)
+		if planErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": planErr.Error()})
 			return
 		}
+		cost = totalCost
+
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
 		}
 
 		m.ContributionPoints -= cost
-		if vgQty <= quantity {
-			_, err = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, vgID)
-		} else {
-			_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, quantity, vgID)
-		}
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct Gu from vault: " + err.Error()})
-			return
-		}
-
-		guSpec, _ := models.GetGuAny(req.ItemID)
-		actualRank := vgRank
-		if actualRank == 0 {
-			actualRank = guSpec.Rank
-		}
-		for i := int64(0); i < quantity; i++ {
-			newGu := createVaultWithdrawnGu(req.ItemID, actualRank, guSpec)
-			if vgInstID != "" && vgRank >= 6 {
-				newGu.InstanceID = vgInstID
+		for _, p := range plans {
+			if p.Del {
+				_, err = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, p.ID)
+			} else {
+				_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, p.Deduct, p.ID)
 			}
-			player.GuInventory = append(player.GuInventory, newGu)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct Gu from vault: " + err.Error()})
+				return
+			}
+		}
 
-			if vgRank >= 6 {
-				guName := req.ItemID
-				if guSpec.Name != "" {
-					guName = guSpec.Name
+		for _, p := range plans {
+			guSpec, ok := models.GetGu(p.GuID, p.Rank)
+			if !ok {
+				guSpec, _ = models.GetGuAny(p.GuID)
+			}
+			actualRank := p.Rank
+			if actualRank == 0 {
+				actualRank = guSpec.Rank
+			}
+			for i := int64(0); i < p.Deduct; i++ {
+				newGu := createVaultWithdrawnGu(p.GuID, actualRank, guSpec)
+				if p.InstID != "" && p.Rank >= 6 {
+					newGu.InstanceID = p.InstID
 				}
-				withdrawSummary := fmt.Sprintf("Cổ Sư [%s] rút/đổi Cổ trùng [%s] R%d từ Kho Tông Môn.", player.Username, guName, actualRank)
-				_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "SECT_VAULT_WITHDRAWN", nil, &player.ID, withdrawSummary, map[string]interface{}{
-					"sect_id": m.SectID,
-					"cost":    cost,
-					"gu_name": guName,
-				})
+				player.GuInventory = append(player.GuInventory, newGu)
+
+				if p.Rank >= 6 {
+					guName := p.GuID
+					if guSpec.Name != "" {
+						guName = guSpec.Name
+					}
+					withdrawSummary := fmt.Sprintf("Cổ Sư [%s] rút/đổi Cổ trùng [%s] R%d từ Kho Tông Môn.", player.Username, guName, actualRank)
+					_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "SECT_VAULT_WITHDRAWN", nil, &player.ID, withdrawSummary, map[string]interface{}{
+						"sect_id": m.SectID,
+						"cost":    cost,
+						"gu_name": guName,
+					})
+				}
 			}
 		}
 
@@ -677,8 +752,10 @@ func BuyFromSectVault(c *gin.Context) {
 	}
 
 	itemName := req.ItemID
-	if req.ItemType == "Gu" {
-		if spec, ok := models.GetGuAny(req.ItemID); ok {
+	if strings.EqualFold(req.ItemType, "gu") {
+		if spec, ok := models.GetGu(req.ItemID, req.Rank); ok && spec.Name != "" {
+			itemName = spec.Name
+		} else if spec, ok := models.GetGuAny(req.ItemID); ok && spec.Name != "" {
 			itemName = spec.Name
 		}
 	} else {
