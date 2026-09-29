@@ -196,6 +196,72 @@ func TestRebornInPlaceSingleUse(t *testing.T) {
 	}
 }
 
+// REBORN miss: chance 0 always fails the roll and logs REBORN_MISS.
+func TestRebornMissLogged(t *testing.T) {
+	ally := newTestCombatant("ally", "Player", 100, 0)
+	ally.Speed = 1
+	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Thủ", Damage: 0}}
+	ally.Mechanics = []CombatMechanic{mech("ON_DEATH", "REBORN",
+		`{"chance":0,"mode":"in_place","max_uses":1,"revive_hp_percent":0.5}`)}
+	enemy := newTestCombatant("enemy", "Enemy", 5000, 0)
+	enemy.Speed = 100
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Sát", Damage: 100}}
+
+	state := &CombatState{Seed: 13, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	if logCount(logs, "REBORN_MISS") == 0 {
+		t.Fatal("expected REBORN_MISS log when chance roll fails")
+	}
+	if logCount(logs, "TRIGGERED") != 0 {
+		t.Fatal("expected no REBORN trigger on failed roll")
+	}
+	if ally.HP != 0 {
+		t.Fatalf("ally HP = %v, want 0 (failed reborn stays dead)", ally.HP)
+	}
+}
+
+// FORGET_INTENT miss: chance 0 never seals and logs FORGET_INTENT_MISS.
+func TestForgetIntentMissLogged(t *testing.T) {
+	attacker := newTestCombatant("attacker", "Player", 1000, 0)
+	attacker.Speed = 100
+	attacker.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 10}}
+	defender := newTestCombatant("defender", "Enemy", 5000, 0)
+	defender.Speed = 1
+	defender.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Thủ", Damage: 0}}
+	defender.Mechanics = []CombatMechanic{mech("BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT",
+		`{"chance":0,"disable_target_gu_turns":1,"max_successful_activations":8}`)}
+
+	state := &CombatState{Seed: 7, Allies: []*CombatantAuto{attacker}, Enemies: []*CombatantAuto{defender}}
+	logs := Simulate(state)
+
+	if logCount(logs, "FORGET_INTENT_MISS") == 0 {
+		t.Fatal("expected FORGET_INTENT_MISS log when chance roll fails")
+	}
+	if logCount(logs, "FORGET_INTENT") != 0 {
+		t.Fatal("expected no FORGET_INTENT trigger on failed roll")
+	}
+}
+
+// FORGET_WILL activation miss: chance 0 never confuses and logs FORGET_WILL_INACTIVE.
+func TestForgetWillInactiveLogged(t *testing.T) {
+	attacker := newTestCombatant("attacker", "Player", 1000, 0)
+	attacker.Speed = 100
+	attacker.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 10}}
+	defender := newTestCombatant("defender", "Enemy", 5000, 0)
+	defender.Speed = 1
+	defender.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Thủ", Damage: 0}}
+	defender.Mechanics = []CombatMechanic{mech("BEFORE_ENEMY_ATTACK", "FORGET_WILL_CONFUSE",
+		`{"activation_chance":0,"hit_user_chance":0.15,"hit_self_chance":0.35}`)}
+
+	state := &CombatState{Seed: 9, Allies: []*CombatantAuto{attacker}, Enemies: []*CombatantAuto{defender}}
+	logs := Simulate(state)
+
+	if logCount(logs, "FORGET_WILL_INACTIVE") == 0 {
+		t.Fatal("expected FORGET_WILL_INACTIVE log when activation roll fails")
+	}
+}
+
 // REBORN legacy rewind still works and keeps default single use.
 func TestRebornRewindLegacy(t *testing.T) {
 	ally := newTestCombatant("ally", "Player", 100, 0)

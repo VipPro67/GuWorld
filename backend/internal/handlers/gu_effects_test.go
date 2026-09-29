@@ -353,3 +353,45 @@ func TestSoulRegenTickAndMigrateAliases(t *testing.T) {
 		t.Error("MAN_BEAST_BURIAL should still be unsupported")
 	}
 }
+
+func TestValidateGuUsablePortalAndIgnoreRange(t *testing.T) {
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 6},
+		ResourceState: models.ResourceState{
+			CurrentMana: 5000,
+			MaxMana:     10000,
+		},
+	}
+
+	spec := models.GuDictionaryItem{
+		ID:           "GU_FIXED_IMMORTAL_TRAVEL",
+		Name:         "Định Tiên Du",
+		Rank:         6,
+		BaseManaCost: 5.0,
+		Effects:      mustScanGuEffects(t, `[{"id":"SPACE_CAPABILITIES","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE"},{"op":"UNIQUE","code":"IGNORE_MOVEMENT_RANGE"}]}]`),
+	}
+	guInst := &models.GuInstance{
+		InstanceID: "inst_travel",
+		GuID:       "GU_FIXED_IMMORTAL_TRAVEL",
+		Rank:       6,
+		Hunger:     100,
+		Status:     "ACTIVE",
+		Equipped:   true,
+	}
+
+	if err := ValidateGuUsable(player, guInst, &spec, true); err != nil {
+		t.Fatalf("expected valid portal Gu, got error: %v", err)
+	}
+
+	// Lower rank Gu than player should fail portal validation
+	playerRank9 := &models.Player{
+		CultivationState: models.CultivationState{Rank: 9},
+		ResourceState: models.ResourceState{
+			CurrentMana: 5000,
+			MaxMana:     10000,
+		},
+	}
+	if err := ValidateGuUsable(playerRank9, guInst, &spec, true); err == nil {
+		t.Fatal("expected lower rank Gu to fail portal validation for higher rank player")
+	}
+}

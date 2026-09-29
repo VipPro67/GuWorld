@@ -94,20 +94,67 @@ func findStealGus(inventory models.GuInventory) (permStealGu *models.GuInstance,
 	return
 }
 
+// appendStealMiss records an explicit pre-combat steal failure/skip so the
+// replay can distinguish roll-miss from missing preconditions.
+func appendStealMiss(combat *models.CombatState, action, detail string) {
+	if combat == nil {
+		return
+	}
+	combat.StealMissLogs = append(combat.StealMissLogs, action+"|"+detail)
+}
+
+func guDisplayName(guID string, rank int) string {
+	if spec, ok := models.GetGu(guID, rank); ok {
+		return spec.Name
+	}
+	return guID
+}
+
+// openWorldSkipReason explains why steal is inactive for this combat.
+func openWorldSkipReason(combat *models.CombatState) string {
+	if combat == nil {
+		return "trận chiến không xác định"
+	}
+	if combat.EnemyType != "PVP" {
+		return fmt.Sprintf("loại trận %s không phải PVP", combat.EnemyType)
+	}
+	if combat.CombatMode != "real" {
+		return "đấu trường ảo (virtual) không cho cướp Cổ"
+	}
+	if combat.MineSlotID != 0 {
+		return "trận tranh mỏ không cho cướp Cổ"
+	}
+	if combat.TargetPlayerID == "" {
+		return "thiếu mục tiêu người chơi"
+	}
+	return "không đủ điều kiện PvP map"
+}
+
 // handlePreCombatSteal executes the pre-combat steal check for open-world PvP.
-// It activates once per combat at battle start.
+// It activates once per combat at battle start. All failures/skips are
+// recorded into combat.StealMissLogs so the replay shows them explicitly.
 func handlePreCombatSteal(tx *sql.Tx, combat *models.CombatState, attacker *models.Player) {
+	// 1. Check if attacker has a steal Gu
+	permGu, permSpec, tempGu, tempSpec := findStealGus(attacker.GuInventory)
+	attackerHasSteal := permGu != nil || tempGu != nil
+
 	if !isOpenWorldPvP(combat) {
+		if attackerHasSteal {
+			appendStealMiss(combat, "STEAL_SKIP",
+				fmt.Sprintf("[Cướp Cổ] không đủ điều kiện kích hoạt: %s (hiện tại EnemyType=%s CombatMode=%s). Vô Tướng Thủ/Ám Thâu Cổ chỉ chạy ở PvP map real.",
+					openWorldSkipReason(combat), combat.EnemyType, combat.CombatMode))
+		}
 		return
 	}
 
 	victimUUID, err := uuid.Parse(combat.TargetPlayerID)
 	if err != nil {
+		if attackerHasSteal {
+			appendStealMiss(combat, "STEAL_SKIP",
+				fmt.Sprintf("[Cướp Cổ] không đủ điều kiện kích hoạt: mục tiêu PvP không hợp lệ (%s).", combat.TargetPlayerID))
+		}
 		return
 	}
-
-	// 1. Check if attacker has a steal Gu
-	permGu, permSpec, tempGu, tempSpec := findStealGus(attacker.GuInventory)
 
 	// Attempt Permanent Steal from attacker first
 	if permGu != nil {
@@ -121,6 +168,16 @@ func handlePreCombatSteal(tx *sql.Tx, combat *models.CombatState, attacker *mode
 		if executeTempSteal(tx, combat, attacker, tempGu, tempSpec, victimUUID, combat.EnemyName, true) {
 			return
 		}
+		// Attacker owns both perm + temp but both missed: temp miss already
+		// logged inside executeTempSteal; note the priority rule once.
+		if permGu != nil {
+			appendStealMiss(combat, "STEAL_SKIP",
+				fmt.Sprintf("[Cướp Cổ] %s mang cả Vô Tướng Thủ + %s: ưu tiên cướp vĩnh viễn trước, cả 2 đều thất bại nên dừng trong trận này.", attacker.Username, tempSpec.Name))
+		}
+	} else if permGu != nil {
+		// Attacker only owns perm and it missed: executePermanentSteal
+		// already logged the miss detail.
+		_ = permSpec
 	}
 
 	// 2. If attacker has no steal Gu or neither succeeded, check defender Gus
@@ -136,12 +193,24 @@ func handlePreCombatSteal(tx *sql.Tx, combat *models.CombatState, attacker *mode
 		if executeTempSteal(tx, combat, attacker, defTempGu, defTempSpec, victimUUID, combat.EnemyName, false) {
 			return
 		}
+		_ = defTempSpec
 	}
 }
 
 // executePermanentSteal attempts to steal 1 Gu permanently.
 // isAttackerThief is true if attacker is stealing from defender, false if defender is stealing from attacker.
 func executePermanentSteal(tx *sql.Tx, combat *models.CombatState, attacker *models.Player, thiefGu *models.GuInstance, thiefSpec *models.GuDictionaryItem, defenderUUID uuid.UUID, defenderName string, isAttackerThief bool) bool {
+	thiefName := attacker.Username
+	victimName := defenderName
+	if !isAttackerThief {
+		thiefName = defenderName
+		victimName = attacker.Username
+	}
+	thiefLabel := "Vô Tướng Thủ"
+	if thiefSpec != nil && thiefSpec.Name != "" {
+		thiefLabel = thiefSpec.Name
+	}
+
 	var pool models.GuInventory
 	if isAttackerThief {
 		pool = combat.EnemyGuInventory
@@ -157,21 +226,32 @@ func executePermanentSteal(tx *sql.Tx, combat *models.CombatState, attacker *mod
 		}
 	}
 	if len(eligible) == 0 {
+		msg := fmt.Sprintf("[%s] của %s không đủ điều kiện kích hoạt: %s không có Cổ equipped/ACTIVE rank<=%d để cướp.", thiefLabel, thiefName, victimName, thiefGu.Rank)
+		appendStealMiss(combat, "PERM_STEAL_MISS", msg)
+		logger.S.Debugf("Permanent steal no eligible target for %s", thiefName)
 		return false
 	}
 
 	// Select random target Gu
 	targetGu := eligible[rand.Intn(len(eligible))]
 	chance := permanentStealChance(thiefGu.Rank, targetGu.Rank, targetGu.IsVital)
+	roll := rand.Float64()
 
-	if rand.Float64() >= chance {
-		logger.S.Debugf("Permanent steal missed: roll >= chance %.2f for target %s", chance, targetGu.GuID)
+	if roll >= chance {
+		targetGuName := guDisplayName(targetGu.GuID, targetGu.Rank)
+		vitalNote := ""
+		if targetGu.IsVital {
+			vitalNote = ", Bản Mệnh Cổ giảm nửa tỉ lệ"
+		}
+		msg := fmt.Sprintf("[%s] của %s kích hoạt thất bại: roll %.1f%% >= tỉ lệ %.1f%% khi nhắm [%s] Chuyển %d của %s%s.",
+			thiefLabel, thiefName, roll*100, chance*100, targetGuName, targetGu.Rank, victimName, vitalNote)
+		appendStealMiss(combat, "PERM_STEAL_MISS", msg)
+		logger.S.Debugf("Permanent steal missed: roll %.3f >= chance %.2f for target %s", roll, chance, targetGu.GuID)
 		return false
 	}
 
 	var thiefID, victimID string
 	var thiefUUID, victimUUID uuid.UUID
-	var thiefName, victimName string
 
 	if isAttackerThief {
 		thiefID = attacker.ID.String()
@@ -189,15 +269,14 @@ func executePermanentSteal(tx *sql.Tx, combat *models.CombatState, attacker *mod
 		victimName = attacker.Username
 	}
 
+	targetGuName := guDisplayName(targetGu.GuID, targetGu.Rank)
+
 	// Transfer ownership in DB immediately
 	if err := db.TransferGuOwnership(tx, targetGu.InstanceID, victimID, thiefID); err != nil {
 		logger.S.Errorf("Failed to transfer Gu %s ownership from %s to %s: %v", targetGu.InstanceID, victimID, thiefID, err)
+		appendStealMiss(combat, "PERM_STEAL_MISS",
+			fmt.Sprintf("[Vô Tướng Thủ] của %s kích hoạt nhưng lỗi chuyển quyền sở hữu [%s], giữ nguyên Cổ cho %s.", thiefName, targetGuName, victimName))
 		return false
-	}
-
-	targetGuName := targetGu.GuID
-	if spec, ok := models.GetGu(targetGu.GuID, targetGu.Rank); ok {
-		targetGuName = spec.Name
 	}
 
 	// Update in-memory inventories
@@ -251,6 +330,17 @@ func executePermanentSteal(tx *sql.Tx, combat *models.CombatState, attacker *mod
 
 // executeTempSteal attempts to temporarily steal 1 Gu for the duration of the combat.
 func executeTempSteal(tx *sql.Tx, combat *models.CombatState, attacker *models.Player, thiefGu *models.GuInstance, thiefSpec *models.GuDictionaryItem, defenderUUID uuid.UUID, defenderName string, isAttackerThief bool) bool {
+	thiefName := attacker.Username
+	victimName := defenderName
+	if !isAttackerThief {
+		thiefName = defenderName
+		victimName = attacker.Username
+	}
+	thiefLabel := "Ám Thâu Cổ"
+	if thiefSpec != nil && thiefSpec.Name != "" {
+		thiefLabel = thiefSpec.Name
+	}
+
 	var pool models.GuInventory
 	if isAttackerThief {
 		pool = combat.EnemyGuInventory
@@ -265,19 +355,30 @@ func executeTempSteal(tx *sql.Tx, combat *models.CombatState, attacker *models.P
 		}
 	}
 	if len(eligible) == 0 {
+		msg := fmt.Sprintf("[%s] của %s không đủ điều kiện kích hoạt: %s không có Cổ equipped/ACTIVE rank<=%d để phong tỏa.", thiefLabel, thiefName, victimName, thiefGu.Rank)
+		appendStealMiss(combat, "TEMP_STEAL_MISS", msg)
+		logger.S.Debugf("Temp steal no eligible target for %s", thiefName)
 		return false
 	}
 
 	targetGu := eligible[rand.Intn(len(eligible))]
 	chance := tempStealChance(thiefGu.Rank, targetGu.Rank, targetGu.IsVital)
+	roll := rand.Float64()
 
-	if rand.Float64() >= chance {
-		logger.S.Debugf("Temp steal missed: roll >= chance %.2f for target %s", chance, targetGu.GuID)
+	if roll >= chance {
+		targetGuName := guDisplayName(targetGu.GuID, targetGu.Rank)
+		vitalNote := ""
+		if targetGu.IsVital {
+			vitalNote = ", Bản Mệnh Cổ giảm nửa tỉ lệ"
+		}
+		msg := fmt.Sprintf("[%s] của %s kích hoạt thất bại: roll %.1f%% >= tỉ lệ %.1f%% khi nhắm [%s] Chuyển %d của %s%s.",
+			thiefLabel, thiefName, roll*100, chance*100, targetGuName, targetGu.Rank, victimName, vitalNote)
+		appendStealMiss(combat, "TEMP_STEAL_MISS", msg)
+		logger.S.Debugf("Temp steal missed: roll %.3f >= chance %.2f for target %s", roll, chance, targetGu.GuID)
 		return false
 	}
 
 	var thiefUUID, victimUUID uuid.UUID
-	var thiefName, victimName string
 
 	if isAttackerThief {
 		thiefUUID = attacker.ID
@@ -291,10 +392,7 @@ func executeTempSteal(tx *sql.Tx, combat *models.CombatState, attacker *models.P
 		victimName = attacker.Username
 	}
 
-	targetGuName := targetGu.GuID
-	if spec, ok := models.GetGu(targetGu.GuID, targetGu.Rank); ok {
-		targetGuName = spec.Name
-	}
+	targetGuName := guDisplayName(targetGu.GuID, targetGu.Rank)
 
 	combat.TempStolenGuInstanceID = targetGu.InstanceID
 	combat.TempStolenGuID = targetGu.GuID

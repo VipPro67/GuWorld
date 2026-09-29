@@ -119,6 +119,55 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 		})
 	}
 
+	// Inject explicit steal miss/skip logs so replay distinguishes
+	// "kích hoạt thất bại" from "không đủ điều kiện".
+	if player.ActiveCombat != nil {
+		for _, entry := range player.ActiveCombat.StealMissLogs {
+			action := "STEAL_MISS"
+			detail := entry
+			if idx := strings.Index(entry, "|"); idx >= 0 {
+				action = entry[:idx]
+				detail = entry[idx+1:]
+			}
+			simState.InitialLogs = append(simState.InitialLogs, simulator.CombatLog{
+				Turn:      0,
+				ActorId:   player.ID.String(),
+				ActorName: player.Username,
+				Action:    action,
+				Detail:    detail,
+			})
+		}
+	}
+
+	// Inject Tất Sát Cổ precondition logs for every sim combatant carrying
+	// the mechanic, so replay shows "đã kích hoạt" vs "không đủ sát khí".
+	for _, c := range append(append([]*simulator.CombatantAuto{}, simState.Allies...), simState.Enemies...) {
+		if !hasSatKhiMechanic(c) {
+			continue
+		}
+		level := 0
+		if c.CustomState != nil {
+			level = c.CustomState["sat_khi_level"]
+		}
+		if level > 10 {
+			simState.InitialLogs = append(simState.InitialLogs, simulator.CombatLog{
+				Turn:      0,
+				ActorId:   c.ID,
+				ActorName: c.Name,
+				Action:    "SAT_KHI_ACTIVE",
+				Detail:    fmt.Sprintf("[Tất Sát Cổ] của %s đã kích hoạt: sát khí %d > 10, đòn tấn công xuyên khiên/bỏ qua né trong trận này!", c.Name, level),
+			})
+		} else {
+			simState.InitialLogs = append(simState.InitialLogs, simulator.CombatLog{
+				Turn:      0,
+				ActorId:   c.ID,
+				ActorName: c.Name,
+				Action:    "SAT_KHI_INACTIVE",
+				Detail:    fmt.Sprintf("[Tất Sát Cổ] của %s không đủ điều kiện kích hoạt: sát khí %d <= 10 (cần > 10).", c.Name, level),
+			})
+		}
+	}
+
 	// For Temporary Steal: disable stolen Gu from victim, and grant skill to thief
 	if player.ActiveCombat != nil && player.ActiveCombat.TempStolenGuID != "" {
 		stolenGuID := player.ActiveCombat.TempStolenGuID
@@ -366,6 +415,20 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 		})
 	}
 	return
+}
+
+// hasSatKhiMechanic reports whether a sim combatant carries Tất Sát Cổ's
+// ON_BATTLE_START/SAT_KHI_GUARANTEE passive.
+func hasSatKhiMechanic(c *simulator.CombatantAuto) bool {
+	if c == nil {
+		return false
+	}
+	for _, m := range c.Mechanics {
+		if m.Trigger == "ON_BATTLE_START" && m.ActionCode == "SAT_KHI_GUARANTEE" {
+			return true
+		}
+	}
+	return false
 }
 
 // combatTypeLabel returns the human-readable enemy-type label used in the

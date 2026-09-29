@@ -74,7 +74,8 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 	cost := gamefx.EnergyCost(player, spec)
 	_, portal := models.GuSpecCapability(*spec, "PORTAL_CREATE")
 	_, randomPortal := models.GuSpecCapability(*spec, "RANDOM_PORTAL")
-	if portal || randomPortal {
+	_, ignoreRange := models.GuSpecCapability(*spec, "IGNORE_MOVEMENT_RANGE")
+	if portal || randomPortal || ignoreRange {
 		if spec.Rank < player.Rank {
 			return fmt.Errorf("Không thể thực hiện dịch chuyển: Cấp độ Cổ trùng (%d) thấp hơn tu vi bản thân (%d)!", spec.Rank, player.Rank)
 		}
