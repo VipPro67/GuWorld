@@ -268,6 +268,11 @@ func CompleteSectMission(c *gin.Context) {
 				itemInstID = uuid.New().String()
 			}
 			rowID := fmt.Sprintf("%s:%s", memberForVault.SectID, itemInstID)
+			instIDToStore := itemInstID
+			if donatedGuInstRank < 6 {
+				rowID = fmt.Sprintf("%s:%s:%d", memberForVault.SectID, donatedGuID, donatedGuInstRank)
+				instIDToStore = ""
+			}
 			normHunger := normalizeVaultGuHunger(donatedGuID, donatedGuInstRank, donatedGuHunger)
 			_, _ = tx.Exec(`
 				INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
@@ -277,7 +282,7 @@ func CompleteSectMission(c *gin.Context) {
 					cost = EXCLUDED.cost,
 					hunger = GREATEST(sect_vault_gu.hunger, EXCLUDED.hunger),
 					updated_at = NOW()
-			`, rowID, memberForVault.SectID, donatedGuID, donatedGuInstRank, vaultItemCost, normHunger, itemInstID)
+			`, rowID, memberForVault.SectID, donatedGuID, donatedGuInstRank, vaultItemCost, normHunger, instIDToStore)
 		}
 	}
 

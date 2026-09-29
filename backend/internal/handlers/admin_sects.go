@@ -470,7 +470,7 @@ func AdminStockSectVault(c *gin.Context) {
 		hunger := vaultGuMaxHunger(req.ItemID, req.Rank)
 		var stockInstID string
 		var rowID string
-		if req.Quantity == 1 {
+		if req.Rank >= 6 {
 			stockInstID = uuid.New().String()
 			rowID = fmt.Sprintf("%s:%s", sectID, stockInstID)
 		} else {
@@ -544,25 +544,61 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 
 	switch req.ItemType {
 	case "gu":
-		var vgID string
-		var vgQty int64
-		err = tx.QueryRow(`
+		rows, err := tx.Query(`
 			SELECT id, quantity FROM sect_vault_gu
-			WHERE sect_id = $1 AND gu_id = $2 AND ($3 = 0 OR rank = $3)
-			LIMIT 1 FOR UPDATE
-		`, sectID, req.ItemID, req.Rank).Scan(&vgID, &vgQty)
+			WHERE sect_id = $1 AND (gu_id = $2 OR LOWER(gu_id) = LOWER($2) OR id = $2 OR instance_id = $2) AND ($3 = 0 OR rank = $3) AND quantity > 0
+			ORDER BY id ASC FOR UPDATE
+		`, sectID, req.ItemID, req.Rank)
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn bảo khố"})
+			return
+		}
+		type guRemoval struct {
+			id       string
+			quantity int64
+		}
+		var removals []guRemoval
+		var totalQty int64
+		for rows.Next() {
+			var r guRemoval
+			if err := rows.Scan(&r.id, &r.quantity); err != nil {
+				rows.Close()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu"})
+				return
+			}
+			removals = append(removals, r)
+			totalQty += r.quantity
+		}
+		rows.Close()
+
+		if len(removals) == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm trong bảo khố"})
 			return
 		}
-		if vgQty < req.Quantity {
+		if totalQty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ số lượng trong bảo khố"})
 			return
 		}
-		if vgQty == req.Quantity {
-			_, err = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, vgID)
-		} else {
-			_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, req.Quantity, vgID)
+
+		remaining := req.Quantity
+		for _, r := range removals {
+			if remaining <= 0 {
+				break
+			}
+			toDeduct := r.quantity
+			if toDeduct > remaining {
+				toDeduct = remaining
+			}
+			if toDeduct >= r.quantity {
+				_, err = tx.Exec(`DELETE FROM sect_vault_gu WHERE id = $1`, r.id)
+			} else {
+				_, err = tx.Exec(`UPDATE sect_vault_gu SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2`, toDeduct, r.id)
+			}
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật bảo khố: " + err.Error()})
+				return
+			}
+			remaining -= toDeduct
 		}
 
 	case "material":

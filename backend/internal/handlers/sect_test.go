@@ -130,3 +130,74 @@ func TestSectVaultJSONSerialization(t *testing.T) {
 	}
 }
 
+func TestPlanVaultGuDeductionsMultiRow(t *testing.T) {
+	// Scenario: Player wants to buy 3 Gu, but vault has 3 separate rows with quantities [1, 1, 2]
+	rows := []VaultGuRow{
+		{ID: "row1", GuID: "GU_WOLF", Rank: 1, Cost: 100, Quantity: 1},
+		{ID: "row2", GuID: "GU_WOLF", Rank: 1, Cost: 100, Quantity: 1},
+		{ID: "row3", GuID: "GU_WOLF", Rank: 1, Cost: 120, Quantity: 2},
+	}
+
+	plans, totalCost, err := planVaultGuDeductions(rows, 3)
+	if err != nil {
+		t.Fatalf("expected plan to succeed, got error: %v", err)
+	}
+
+	if len(plans) != 3 {
+		t.Fatalf("expected 3 deduction plans, got %d", len(plans))
+	}
+
+	// Row 1: take 1, deleted
+	if plans[0].ID != "row1" || plans[0].Deduct != 1 || !plans[0].Del {
+		t.Errorf("row1 plan mismatch: %+v", plans[0])
+	}
+	// Row 2: take 1, deleted
+	if plans[1].ID != "row2" || plans[1].Deduct != 1 || !plans[1].Del {
+		t.Errorf("row2 plan mismatch: %+v", plans[1])
+	}
+	// Row 3: take 1, not deleted (1 left)
+	if plans[2].ID != "row3" || plans[2].Deduct != 1 || plans[2].Del {
+		t.Errorf("row3 plan mismatch: %+v", plans[2])
+	}
+
+	// Cost: 100*1 + 100*1 + 120*1 = 320
+	if totalCost != 320 {
+		t.Errorf("expected totalCost 320, got %d", totalCost)
+	}
+}
+
+func TestPlanVaultGuDeductionsInsufficient(t *testing.T) {
+	// Total available is 2, player requests 3
+	rows := []VaultGuRow{
+		{ID: "row1", GuID: "GU_WOLF", Rank: 1, Cost: 100, Quantity: 1},
+		{ID: "row2", GuID: "GU_WOLF", Rank: 1, Cost: 100, Quantity: 1},
+	}
+
+	_, _, err := planVaultGuDeductions(rows, 3)
+	if err == nil {
+		t.Fatal("expected error for insufficient vault quantity, got nil")
+	}
+}
+
+func TestPlanVaultGuDeductionsImmortalSingleOnly(t *testing.T) {
+	// Immortal Gu (Rank >= 6) must only be withdrawn 1 at a time
+	rows := []VaultGuRow{
+		{ID: "row1", GuID: "GU_SPRING_AUTUMN", Rank: 6, Cost: 5000, Quantity: 1, InstanceID: "inst-1"},
+	}
+
+	// Buying 1 should succeed
+	plans, cost, err := planVaultGuDeductions(rows, 1)
+	if err != nil {
+		t.Fatalf("expected immortal gu qty 1 to succeed, got %v", err)
+	}
+	if len(plans) != 1 || cost != 5000 {
+		t.Fatalf("unexpected plan or cost: %+v, %d", plans, cost)
+	}
+
+	// Buying > 1 should fail
+	_, _, err = planVaultGuDeductions(rows, 2)
+	if err == nil {
+		t.Fatal("expected error when buying immortal gu > 1, got nil")
+	}
+}
+
