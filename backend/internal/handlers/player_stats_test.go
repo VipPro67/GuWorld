@@ -201,6 +201,47 @@ func TestGetPassiveStats_SpeedIsolation(t *testing.T) {
 	}
 }
 
+func TestGetPassiveStatsLoadsBlockV2PassivesFromRegistry(t *testing.T) {
+	previous := models.GuRegistry
+	t.Cleanup(func() { models.GuRegistry = previous })
+
+	var lowEffects, highEffects models.GuEffects
+	lowRaw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":3}]}]`
+	highRaw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"ACCURACY","sub_type":"ADD_FLAT","value":5},{"op":"STAT_MOD","stat":"DAMAGE_DEALT","sub_type":"MULTIPLY_PERCENT","value":0.4}]}]`
+	if err := lowEffects.Scan(lowRaw); err != nil {
+		t.Fatalf("scan rank 1 effects: %v", err)
+	}
+	if err := highEffects.Scan(highRaw); err != nil {
+		t.Fatalf("scan rank 2 effects: %v", err)
+	}
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_BLOCK_PASSIVE": {
+			1: {ID: "GU_BLOCK_PASSIVE", Name: "Khối Bị Động", Rank: 1, Effects: lowEffects},
+			2: {ID: "GU_BLOCK_PASSIVE", Name: "Khối Bị Động", Rank: 2, Effects: highEffects},
+		},
+	}
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 1, SubRank: 1},
+		BodyState:        models.BodyState{BaseHP: 100, HP: 50},
+		GuInventory: models.GuInventory{
+			{InstanceID: "low", GuID: "GU_BLOCK_PASSIVE", Rank: 1, Status: "ACTIVE", Equipped: true},
+			{InstanceID: "high", GuID: "GU_BLOCK_PASSIVE", Rank: 2, Status: "ACTIVE", Equipped: true},
+			{InstanceID: "duplicate", GuID: "GU_BLOCK_PASSIVE", Rank: 2, Status: "ACTIVE", Equipped: true},
+		},
+	}
+
+	result := GetPassiveStats(player)
+	if got := result.Stats["attack"]; got != 22 { // base 10 + highest-rank passive 12 once
+		t.Fatalf("attack = %v, want 22", got)
+	}
+	if got := result.Stats["accuracy"]; got != 5 {
+		t.Fatalf("accuracy = %v, want 5", got)
+	}
+	if got := result.Stats["damage_multiplier"]; got != 0.2 {
+		t.Fatalf("damage multiplier = %v, want 0.2", got)
+	}
+}
+
 // setupTestGuRegistry installs a test Gu registry with passive and active speed effects.
 func setupTestGuRegistry(t *testing.T) {
 	t.Helper()

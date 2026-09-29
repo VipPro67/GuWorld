@@ -104,24 +104,24 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 			mult, daoMult := gamefx.GuStatMultipliers(player.PathMasteries, player.DaoMarks, spec.Path)
 
 			srcID := "gu:" + gu.GuID
-			if value := models.GuStatValue(spec, "ATTACK"); value > 0 {
+			if value := models.GuStatValue(spec, "ATTACK"); value != 0 {
 				addSrc("attack", srcID, spec.Name, value, mult, daoMult)
 			}
-			if value := models.GuStatValue(spec, "DEFENSE"); value > 0 {
+			if value := models.GuStatValue(spec, "DEFENSE"); value != 0 {
 				addSrc("defense", srcID, spec.Name, value, mult, daoMult)
 			}
-			if value := models.GuStatValue(spec, "SPEED"); value > 0 {
+			if value := models.GuStatValue(spec, "SPEED"); value != 0 {
 				addSrc("speed", srcID, spec.Name, value, mult, 1)
 			}
-			if value := models.GuStatValue(spec, "HP"); value > 0 {
+			if value := models.GuStatValue(spec, "HP"); value != 0 {
 				addSrc("hp", srcID, spec.Name, value, mult, daoMult)
 			}
-			if value := models.GuStatValue(spec, "DAMAGE_DEALT"); value > 0 && player.BaseHP > 0 {
+			if value := models.GuStatValueBySubtype(spec, "DAMAGE_DEALT", "MULTIPLY_PERCENT"); value > 0 && player.BaseHP > 0 {
 				missingHpRate := 1.0 - player.HP/player.BaseHP
 				addSrc("damage_multiplier", srcID, spec.Name, missingHpRate*value, 1, 1)
 			}
 			for _, entry := range []struct{ stat, key string }{{"SOUL_REFINEMENT", "soul"}, {"STORAGE", "storage"}, {"MOVEMENT", "movement"}, {"INVESTIGATION", "investigation"}, {"HEARING", "hearing"}, {"EVASION", "evasion"}, {"ACCURACY", "accuracy"}, {"CLEANSING_POWER", "cleansing_power"}, {"LUCK", "luck"}} {
-				if value := models.GuStatValue(spec, entry.stat); value > 0 {
+				if value := models.GuStatValue(spec, entry.stat); value != 0 {
 					addSrc(entry.key, srcID, spec.Name, value, 1, 1)
 				}
 			}
@@ -192,8 +192,10 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	// Apply all_stats_buff_percent from equipped Gu active effects
 	{
 		totalBuffPct := 0.0
+		seen := map[string]bool{}
 		for _, gu := range player.GuInventory {
-			if gu.Equipped && gu.Status == "ACTIVE" {
+			if gu.Equipped && gu.Status == "ACTIVE" && gu.Rank == guBestRank[gu.GuID] && !seen[gu.GuID] {
+				seen[gu.GuID] = true
 				spec, ok := models.GetGu(gu.GuID, gu.Rank)
 				if !ok {
 					continue
