@@ -187,4 +187,3 @@ func schemaWorld() error {
 
 	return nil
 }
-

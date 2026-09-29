@@ -200,4 +200,3 @@ func schemaTrade() error {
 
 	return nil
 }
-

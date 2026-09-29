@@ -262,10 +262,10 @@ func TestEffectsUnmarshalJSON_Blocks(t *testing.T) {
 
 func TestEffectsMarshalJSON_Blocks(t *testing.T) {
 	eff := Effects{
-		StatMods:     map[string]float64{"speed": 0.2},
-		DaoNganBonus: map[string]float64{"lightning": 0.5},
+		StatMods:       map[string]float64{"speed": 0.2},
+		DaoNganBonus:   map[string]float64{"lightning": 0.5},
 		ManaRegenBonus: 2,
-		Immortal: true,
+		Immortal:       true,
 	}
 	data, err := json.Marshal(eff)
 	if err != nil {
@@ -341,5 +341,3 @@ func TestDefJSONMarshaling(t *testing.T) {
 		t.Errorf("expected 2 effect blocks, got %d", len(effectsList))
 	}
 }
-
-

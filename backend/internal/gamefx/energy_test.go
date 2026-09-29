@@ -140,9 +140,13 @@ func TestRefineManaTier(t *testing.T) {
 	}
 
 	// Test 50% discount for Immortal player with active refine tier Gu
+	var refineEffects models.GuEffects
+	if err := refineEffects.Scan(`[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"REFINE_MANA_TIER","sub_type":"ADD_FLAT","value":1}]}]`); err != nil {
+		t.Fatalf("scan refine effects: %v", err)
+	}
 	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
 		"GU_REFINE": {
-			7: {ID: "GU_REFINE", Name: "Tinh Luyện Cổ", Rank: 7, Type: "Passive", Effects: models.GuEffects{Passive: &models.PassiveEffect{RefineManaTier: 1}}},
+			7: {ID: "GU_REFINE", Name: "Tinh Luyện Cổ", Rank: 7, Type: "Passive", Effects: refineEffects},
 		},
 	}
 	immortal := &models.Player{

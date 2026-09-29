@@ -536,10 +536,16 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
           )}
           {breakdown.support_bonus > 0 && (
             <div className="flex justify-between items-center text-zinc-400">
-              <span className="flex items-center gap-1">🛡️ Cổ trùng phụ trợ:</span>
+              <span className="flex items-center gap-1">🛡️ Hỗ trợ (chủng tộc/thể chất):</span>
               <span className="font-mono text-emerald-400">+{(breakdown.support_bonus * 100).toFixed(1)}%</span>
             </div>
           )}
+          {(breakdown.insight_stacks ?? 0) > 0 || (breakdown.insight_bonus ?? 0) > 0 ? (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">💎 Tâm Đắc pity ({breakdown.insight_stacks ?? 0} tầng):</span>
+              <span className="font-mono text-emerald-400">+{((breakdown.insight_bonus ?? 0) * 100).toFixed(1)}%</span>
+            </div>
+          ) : null}
           {breakdown.env_bonus > 0 && (
             <div className="flex justify-between items-center text-zinc-400">
               <span className="flex items-center gap-1">🗺️ Địa lợi (Môi trường):</span>

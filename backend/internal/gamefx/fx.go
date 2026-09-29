@@ -150,10 +150,10 @@ func (e Effects) ToBlocks() []any {
 		Params map[string]any `json:"params"`
 	}
 	type blockItem struct {
-		ID         string   `json:"id"`
-		Trigger    string   `json:"trigger"`
-		Target     target   `json:"target"`
-		Operations []op     `json:"operations"`
+		ID         string `json:"id"`
+		Trigger    string `json:"trigger"`
+		Target     target `json:"target"`
+		Operations []op   `json:"operations"`
 	}
 
 	blocks := make([]any, 0)

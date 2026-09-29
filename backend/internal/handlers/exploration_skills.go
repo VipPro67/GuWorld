@@ -258,22 +258,28 @@ func UseGuOnMap(c *gin.Context) {
 		}
 	}
 
-	// Apply Other Mechanics for World Map
-	if specs.Effects.Other != nil {
-		for _, mechanic := range specs.Effects.Other {
-			if mechanic.EventTrigger == "ON_WORLD_MAP" {
-				msg, err := HandleGuEvent(&player, specs, *targetGu, "ON_WORLD_MAP")
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-				if msg != "" {
-					logs = append(logs, msg)
-					applied = true
-					if effectType == "utility" {
-						effectType = "other"
-					}
-				}
+	// Apply Other Mechanics for World Map (Block v2 only: compiled native
+	// mechanics with the ON_WORLD_MAP trigger; legacy Other is never read).
+	hasWorldMapMechanic := false
+	if compiled := models.CompiledGuEffects(specs); compiled != nil {
+		for _, op := range compiled.NativeMechanics() {
+			if string(op.Trigger) == "ON_WORLD_MAP" {
+				hasWorldMapMechanic = true
+				break
+			}
+		}
+	}
+	if hasWorldMapMechanic {
+		msg, err := HandleGuEvent(&player, specs, *targetGu, "ON_WORLD_MAP")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if msg != "" {
+			logs = append(logs, msg)
+			applied = true
+			if effectType == "utility" {
+				effectType = "other"
 			}
 		}
 	}

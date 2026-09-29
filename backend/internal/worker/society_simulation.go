@@ -32,19 +32,19 @@ func StartSocietySimulationWorker(ctx context.Context, db *sql.DB, interval time
 }
 
 type societyVariant struct {
-	id                string
-	apertureID        string
-	race              string
-	population        int
-	happiness         float64
-	oppression        float64
-	rebellionRate     float64
-	laborIntensity    string
-	prosperity        float64
-	foodStored        float64
-	foodPerCapita     float64
-	populationGrowth  float64
-	mortalityRate     float64
+	id               string
+	apertureID       string
+	race             string
+	population       int
+	happiness        float64
+	oppression       float64
+	rebellionRate    float64
+	laborIntensity   string
+	prosperity       float64
+	foodStored       float64
+	foodPerCapita    float64
+	populationGrowth float64
+	mortalityRate    float64
 }
 
 func processSocietyTick(ctx context.Context, db *sql.DB) {

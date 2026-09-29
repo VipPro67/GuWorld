@@ -83,4 +83,3 @@ func TestDivineGuPayloadValidation(t *testing.T) {
 		t.Errorf("expected 400 Bad Request for empty gu query, got %d", w.Code)
 	}
 }
-

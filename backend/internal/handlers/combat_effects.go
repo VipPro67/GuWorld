@@ -120,21 +120,10 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 				}
 				spec, ok := models.GetGu(g.GuID, g.Rank)
 				if ok {
-					if spec.Effects.Passive != nil && spec.Effects.Passive.PathConflictReduction >= 100 {
+					// Block v2 only: PATH_CONFLICT_REDUCTION comes from compiled
+					// STAT_MOD, never the legacy Passive flat field.
+					if models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION") >= 100 {
 						hasNonConf = true
-						break
-					}
-					for _, block := range spec.Effects.Blocks {
-						if block.Trigger == gameplayeffects.TriggerAlwaysOn {
-							for _, op := range block.Operations {
-								if op.Op == gameplayeffects.OpStatMod && strings.EqualFold(op.Stat, "PATH_CONFLICT_REDUCTION") && op.Value >= 100 {
-									hasNonConf = true
-									break
-								}
-							}
-						}
-					}
-					if hasNonConf {
 						break
 					}
 				}

@@ -7,13 +7,13 @@ import (
 
 // MapCellProgress represents exploration data for a single map cell.
 type MapCellProgress struct {
-	PlayerID   string    `json:"player_id"`
-	RegionID   string    `json:"region_id"`
-	CellX      int       `json:"cell_x"`
-	CellY      int       `json:"cell_y"`
-	Explored   bool      `json:"explored"`
-	Cleared    bool      `json:"cleared"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	PlayerID  string    `json:"player_id"`
+	RegionID  string    `json:"region_id"`
+	CellX     int       `json:"cell_x"`
+	CellY     int       `json:"cell_y"`
+	Explored  bool      `json:"explored"`
+	Cleared   bool      `json:"cleared"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // MapService handles player map progress persistence.

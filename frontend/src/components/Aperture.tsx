@@ -815,6 +815,10 @@ export const Aperture: React.FC<ApertureProps> = ({
                               displayName = `Hồi chiêu: ${specName}`;
                             } else if (s.id.startsWith("cd_km_")) {
                               displayName = "Hồi chiêu Sát Chiêu";
+                            } else if (s.id.startsWith("refine_insight_")) {
+                              const r = s.id.substring("refine_insight_".length) || "?";
+                              const stacks = Math.floor(s.value ?? 0);
+                              displayName = `Tâm Đắc R${r} · ${stacks} tầng (+${stacks}% luyện R${r})`;
                             }
                             const statusEffects = statusDictionary?.[s.id]?.effects;
                             return (
@@ -901,7 +905,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                 const labels: Record<string, string> = {
                   attack: "Công Kích", defense: "Phòng Ngự", hp: "Máu",
                   speed: "Tốc Độ", healing: "Hồi Phục", soul_refinement: "Hồn Lực",
-                  storage: "Vật Chứa", movement: "Di Chuyển", evasion: "Né Tránh",
+                  storage: "Vật Chứa", movement: "Di Chuyển (ô)", evasion: "Né Tránh",
                   investigation: "Trinh Sát", hearing: "Thính Giác",
                   mana_regen_mult: "Hồi Pháp", damage_multiplier_on_hit: "Sát Thương Khi Mất Máu",
                   refine_mana_tier: "Tinh Luyện", cleansing_power: "Tẩy Trừ",

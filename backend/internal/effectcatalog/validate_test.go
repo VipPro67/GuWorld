@@ -87,9 +87,9 @@ func TestValidateOtherMechanicShape(t *testing.T) {
 
 func TestValidateApplyStatusAuthoringForms(t *testing.T) {
 	valid := []string{
-		`{"active":{"apply_status":"BIND","status_duration_ticks":6}}`,                  // legacy string
-		`{"active":{"apply_status":{"id":"BIND","turns":6}}}`,                            // single object
-		`{"active":{"apply_status":[{"id":"BLEED","value":10,"turns":3}]}}`,              // array of one
+		`{"active":{"apply_status":"BIND","status_duration_ticks":6}}`,                              // legacy string
+		`{"active":{"apply_status":{"id":"BIND","turns":6}}}`,                                       // single object
+		`{"active":{"apply_status":[{"id":"BLEED","value":10,"turns":3}]}}`,                         // array of one
 		`{"active":{"apply_status":[{"id":"BLEED","value":10,"turns":3},{"id":"BIND","turns":2}]}}`, // assembled
 	}
 	for _, raw := range valid {

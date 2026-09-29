@@ -569,6 +569,3 @@ func TestBuildSimActionFromGu_ExtendedOperations(t *testing.T) {
 		t.Errorf("expected CleanseDebuffs == true")
 	}
 }
-
-
-

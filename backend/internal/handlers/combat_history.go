@@ -94,15 +94,15 @@ func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP float64, ite
 // CombatHistoryListEntry is the list-view projection: the full logs and
 // combatants JSONB blobs are only fetched per entry via GET /combat/history/:id.
 type CombatHistoryListEntry struct {
-	ID        string    `json:"id"`
-	PlayerID  string    `json:"player_id"`
-	Winner    string    `json:"winner"`
+	ID        string          `json:"id"`
+	PlayerID  string          `json:"player_id"`
+	Winner    string          `json:"winner"`
 	Summary   json.RawMessage `json:"summary"`
-	EnemyName string    `json:"enemy_name"`
-	EnemyType string    `json:"enemy_type"`
-	Region    string    `json:"region"`
-	LogsCount int       `json:"logs_count"`
-	CreatedAt time.Time `json:"created_at"`
+	EnemyName string          `json:"enemy_name"`
+	EnemyType string          `json:"enemy_type"`
+	Region    string          `json:"region"`
+	LogsCount int             `json:"logs_count"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 // ListCombatHistory returns the player's last 20 combat history entries.

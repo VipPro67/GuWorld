@@ -121,7 +121,6 @@ func TestRefineInsightStatuses(t *testing.T) {
 	}
 }
 
-
 func TestEffectsForValueNegativeSeverity(t *testing.T) {
 	def, ok := effectiveStatuses()["regional_wall_suppression"]
 	if !ok {

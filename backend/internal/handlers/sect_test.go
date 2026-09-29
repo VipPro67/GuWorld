@@ -200,4 +200,3 @@ func TestPlanVaultGuDeductionsImmortalSingleOnly(t *testing.T) {
 		t.Fatal("expected error when buying immortal gu > 1, got nil")
 	}
 }
-

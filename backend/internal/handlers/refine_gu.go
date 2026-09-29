@@ -566,18 +566,22 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	// Per-rank pity (Tâm Đắc): fail +1 stack (+1% cho đúng rank, không cap),
-	// success rank đó reset về 0. Unique-fail không tích vì fail khách quan.
+	// Per-rank pity (Tâm Đắc): mọi fail +1 stack (+1% cho đúng rank, không cap),
+	// success rank đó reset về 0. Kể cả unique-fail (vẫn tốn nguyên liệu/mana).
 	insightKey := gamefx.RefineInsightKey(recipe.TargetRank)
 	if outcome == OutcomeSuccess {
 		if refineInsightStacks(&player, recipe.TargetRank) > 0 || player.Statuses.Has(insightKey) {
 			player.Statuses.Remove(insightKey)
 			statusMsg += " [Tâm Đắc viên mãn]: Luyện thành công, pity rank này reset về 0."
 		}
-	} else if !isUniqueImmortalFail {
+	} else {
 		newStacks := insightStacks + 1
 		player.Statuses.Add(insightKey, "refine", 0, float64(newStacks))
-		statusMsg += fmt.Sprintf(" [Tâm Đắc R%d]: Tích %d tầng (+%d%% tỉ lệ luyện R%d, không giới hạn).", recipe.TargetRank, newStacks, newStacks, recipe.TargetRank)
+		if isUniqueImmortalFail {
+			statusMsg += fmt.Sprintf(" [Tâm Đắc R%d]: Tích %d tầng (+%d%% tỉ lệ luyện R%d). Tiên cổ đã tồn tại nên lần này vẫn fail, tầng pity giữ cho lần sau.", recipe.TargetRank, newStacks, newStacks, recipe.TargetRank)
+		} else {
+			statusMsg += fmt.Sprintf(" [Tâm Đắc R%d]: Tích %d tầng (+%d%% tỉ lệ luyện R%d, không giới hạn).", recipe.TargetRank, newStacks, newStacks, recipe.TargetRank)
+		}
 	}
 
 	statusesRaw, err := player.Statuses.Value()

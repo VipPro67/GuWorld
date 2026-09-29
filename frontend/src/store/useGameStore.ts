@@ -63,6 +63,8 @@ export interface RefineRateBreakdown {
   support_bonus: number;
   status_penalty?: number;
   env_bonus: number;
+  insight_bonus?: number;
+  insight_stacks?: number;
   final_rate: number;
   refinement_realm: number;
 }

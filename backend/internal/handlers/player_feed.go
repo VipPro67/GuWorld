@@ -650,7 +650,7 @@ func FeedAll(c *gin.Context) {
 		return -1
 	}
 
-	consumedGuIDs := []string{} // Track Gu IDs consumed as food for explicit delete.
+	consumedGuIDs := []string{}  // Track Gu IDs consumed as food for explicit delete.
 	fedInstanceIDs := []string{} // Track instances actually fed, to stamp last_fed_at.
 
 	for i := 0; i < len(player.GuInventory); i++ {

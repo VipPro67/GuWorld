@@ -67,7 +67,7 @@ func TestCalculateRefinementPathGain(t *testing.T) {
 		{targetRank: 1, refinementRealm: 3, want: 0},
 		{targetRank: 2, refinementRealm: 3, want: 0},   // Rank 2 capped at realm 3 (>= 10000)
 		{targetRank: 3, refinementRealm: 3, want: 0},   // Rank 3 capped at realm 3 (>= 10000)
-		{targetRank: 4, refinementRealm: 3, want: 0},  // base 40 * 0.4 = 16
+		{targetRank: 4, refinementRealm: 3, want: 0},   // base 40 * 0.4 = 16
 		{targetRank: 5, refinementRealm: 3, want: 40},  // base 100 * 0.4 = 40
 		{targetRank: 6, refinementRealm: 3, want: 200}, // base 500 * 0.4 = 200
 

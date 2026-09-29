@@ -130,4 +130,3 @@ func TestFeedAllRequestFiltering(t *testing.T) {
 		})
 	}
 }
-

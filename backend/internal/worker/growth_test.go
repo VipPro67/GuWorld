@@ -7,6 +7,15 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func mustScanGuEffects(t *testing.T, raw string) models.GuEffects {
+	t.Helper()
+	var eff models.GuEffects
+	if err := eff.Scan(raw); err != nil {
+		t.Fatalf("scan test effects: %v", err)
+	}
+	return eff
+}
+
 func TestApplyGrowthProgressWorker(t *testing.T) {
 	now := time.Now().Add(-1 * time.Hour)
 	gu := &models.GuInstance{
@@ -20,17 +29,9 @@ func TestApplyGrowthProgressWorker(t *testing.T) {
 	}
 
 	spec := models.GuDictionaryItem{
-		ID:   "spring_autumn_cicada",
-		Rank: 6,
-		Effects: models.GuEffects{
-			Growth: &models.GrowthEffect{
-				HoursToMax: 100,
-				MaxAttack:  100,
-				MaxDefense: 50,
-				MaxHP:      500,
-				MaxSpeed:   20,
-			},
-		},
+		ID:      "spring_autumn_cicada",
+		Rank:    6,
+		Effects: mustScanGuEffects(t, `[{"id":"GROWTH","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":100},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"GROWTH_CAP","value":50},{"op":"STAT_MOD","stat":"HP","sub_type":"GROWTH_CAP","value":500},{"op":"STAT_MOD","stat":"SPEED","sub_type":"GROWTH_CAP","value":20},{"op":"UNIQUE","code":"GROWTH_DURATION_HOURS","params":{"value":100}}]}]`),
 	}
 
 	atk, def, hp, spd := ApplyGrowthProgressWorker(gu, spec, 10.0)

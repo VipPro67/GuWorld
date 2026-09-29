@@ -32,9 +32,9 @@ func StartGuMasterSpawningWorker(ctx context.Context, db *sql.DB, interval time.
 
 // Spawning thresholds per race.
 const (
-	spawnThresholdPop     = 10000  // minimum population to start spawning
-	spawnChanceBase       = 0.001  // 0.1% base chance per tick per 10k population
-	maxGuMastersPerRace   = 100    // cap per aperture per race
+	spawnThresholdPop   = 10000 // minimum population to start spawning
+	spawnChanceBase     = 0.001 // 0.1% base chance per tick per 10k population
+	maxGuMastersPerRace = 100   // cap per aperture per race
 )
 
 // processGuMasterSpawning checks all apertures and spawns Gu Masters as needed.
@@ -187,6 +187,5 @@ func generateNPCName(race string) string {
 
 	return fmt.Sprintf("%s%s", p[rand.Intn(len(p))], npcSuffixes[rand.Intn(len(npcSuffixes))])
 }
-
 
 // --- NPC API handlers are in handlers/variant_economy.go ---

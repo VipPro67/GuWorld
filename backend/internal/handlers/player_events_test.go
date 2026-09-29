@@ -36,18 +36,18 @@ func TestPlayerRealtimePayloadsCarryStateRevision(t *testing.T) {
 	}
 	if payload["state_revision"] != float64(43) {
 		t.Fatalf("delta state revision = %#v, want 43", payload["state_revision"])
-	got := normalizePlayerEventDomains([]PlayerEventDomain{
-		RecipesDomain, PlayerDomain, RecipesDomain, "",
-	}, PlayerDomain)
-	want := []PlayerEventDomain{PlayerDomain, RecipesDomain}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("normalizePlayerEventDomains() = %v, want %v", got, want)
-	}
+		got := normalizePlayerEventDomains([]PlayerEventDomain{
+			RecipesDomain, PlayerDomain, RecipesDomain, "",
+		}, PlayerDomain)
+		want := []PlayerEventDomain{PlayerDomain, RecipesDomain}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("normalizePlayerEventDomains() = %v, want %v", got, want)
+		}
 
-	got = normalizePlayerEventDomains(nil, GuInventoryDomain)
-	if !reflect.DeepEqual(got, []PlayerEventDomain{GuInventoryDomain}) {
-		t.Fatalf("fallback domains = %v", got)
-	}
+		got = normalizePlayerEventDomains(nil, GuInventoryDomain)
+		if !reflect.DeepEqual(got, []PlayerEventDomain{GuInventoryDomain}) {
+			t.Fatalf("fallback domains = %v", got)
+		}
 	}
 }
 func TestPlayerEventRevisionIsMonotonic(t *testing.T) {

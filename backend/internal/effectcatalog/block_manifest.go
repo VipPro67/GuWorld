@@ -39,7 +39,7 @@ var OperationCatalog = map[string]OperationDefinition{
 	"SHIELD":    {values("FLAT", "MULTIPLIER"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "turns"), []string{"value"}, true, false},
 	"HEAL":      {values("FLAT", "PERCENT", "LIFESTEAL", "RESOURCE"), anyTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "resource"), []string{"value"}, true, false},
 	"DIRECT_HP": {values("FLAT", "MAX_HP_PERCENT", "SHIELD_STRIP"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit"), []string{"value"}, true, false},
-	"STAT_MOD":  {values("ADD_FLAT", "MULTIPLY_PERCENT", "SET", "GROWTH_CAP"), anyTriggers, combatTargets, values("op", "sub_type", "target", "stat", "value", "unit", "turns", "stack_policy"), []string{"stat", "value"}, false, false},
+	"STAT_MOD":  {values("ADD_FLAT", "MULTIPLY_PERCENT", "SET", "GROWTH_CAP"), anyTriggers, combatTargets, values("op", "sub_type", "target", "stat", "value", "unit", "path", "turns", "stack_policy"), []string{"stat", "value"}, false, false},
 	"STATUS":    {nil, combatTriggers, combatTargets, values("op", "target", "status_id", "value", "turns", "chance", "stack_policy"), []string{"status_id", "turns", "chance"}, true, false},
 	"BARRIER":   {values("FLAT", "PERCENT"), combatTriggers, combatTargets, values("op", "sub_type", "target", "value", "unit", "turns", "stack_policy"), []string{"value", "turns"}, true, false},
 	"CLEANSE":   {values("ALL", "DEBUFF", "STATUS"), anyTriggers, combatTargets, values("op", "sub_type", "target", "status_id"), nil, true, false},
@@ -162,12 +162,22 @@ func init() {
 	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE")
 	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT")
 	register("CAPABILITY", "capability", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "CONCEAL_GU", "SEVER_CLUES", "ARENA_IDENTITY_MASK", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")
+	register("ALWAYS_ON", "derived_player", "IMMUNE_DREAM_STATUS")
 	// Schemas below describe parameters present in the authoritative CSV data.
 	// Hooks without parameters retain the closed EMPTY schema.
 	valueSchema := map[string]ParamSpec{"value": {Type: "number", Required: true}}
 	for _, code := range []string{"ADD_LIFESPAN_YEARS", "ADD_SOUL_MAX", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "GENERATE_IMMORTAL_STONES_TICK", "GENERATE_STONES_TICK", "GROWTH_DURATION_HOURS", "INCREASE_TIME_SPEED", "MANA_REGEN_TICK", "REDUCE_STRESS", "RESTORE_MENTAL", "RESTORE_SOUL_HP", "SOUL_REGEN_TICK", "THOUGHT_REGEN_TICK"} {
 		hook := NativeHooks[code]
 		hook.Params = valueSchema
+		NativeHooks[code] = hook
+	}
+	// Regen ticks keep an optional value: handlers default missing/zero to the
+	// historical rates (mana 0.5, thought/soul 1.0), matching the old
+	// import-time bridge. Authored blocks may omit it.
+	optionalValue := map[string]ParamSpec{"value": {Type: "number", Required: false}}
+	for _, code := range []string{"MANA_REGEN_TICK", "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK"} {
+		hook := NativeHooks[code]
+		hook.Params = optionalValue
 		NativeHooks[code] = hook
 	}
 	hook := NativeHooks["CAPTURE_BONUS"]
@@ -180,7 +190,7 @@ func init() {
 	hook.Params = map[string]ParamSpec{"sat_khi_threshold": {Type: "number", Required: true}}
 	NativeHooks["SAT_KHI_GUARANTEE"] = hook
 	hook = NativeHooks["RECORD_MESSAGE"]
-	hook.Params = map[string]ParamSpec{"range": {Type: "integer", Required: true}}
+	hook.Params = map[string]ParamSpec{"range": {Type: "integer", Required: false}}
 	NativeHooks["RECORD_MESSAGE"] = hook
 	hook = NativeHooks["PERM_STEAL_GU"]
 	hook.Params = map[string]ParamSpec{

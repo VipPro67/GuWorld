@@ -227,7 +227,7 @@ func formatChangedFields(sets []string, args []interface{}) string {
 						"painting":    "Họa đạo",
 						"weapon":      "Binh đạo",
 						"killing":     "Sát đạo",
-					"kill":        "Sát đạo",
+						"kill":        "Sát đạo",
 						"restriction": "Cấm đạo",
 						"pill":        "Đan đạo",
 					}

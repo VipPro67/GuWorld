@@ -32,17 +32,17 @@ type SectDefender struct {
 }
 
 type SectWarfareResponse struct {
-	ID                string             `json:"id"`
-	Name              string             `json:"name"`
-	Level             int                `json:"level"`
-	Region            string             `json:"region"`
-	MapX              int                `json:"map_x"`
-	MapY              int                `json:"map_y"`
-	ShieldUntil       *time.Time         `json:"shield_until"`
-	Defenders         []SectDefender     `json:"defenders"`
-	TotalDefensePower float64            `json:"total_defense_power"`
-	Buildings         map[string]int     `json:"buildings"`
-	DefenderCount     int                `json:"defender_count"`
+	ID                string         `json:"id"`
+	Name              string         `json:"name"`
+	Level             int            `json:"level"`
+	Region            string         `json:"region"`
+	MapX              int            `json:"map_x"`
+	MapY              int            `json:"map_y"`
+	ShieldUntil       *time.Time     `json:"shield_until"`
+	Defenders         []SectDefender `json:"defenders"`
+	TotalDefensePower float64        `json:"total_defense_power"`
+	Buildings         map[string]int `json:"buildings"`
+	DefenderCount     int            `json:"defender_count"`
 }
 
 func getBuildingLvl(buildingsJSON []byte, buildingName string) int {
@@ -96,19 +96,19 @@ func sectGuardianCombatant(sectName string, sectLevel int, defensiveArrayLvl int
 	baseSpeed := 8.0 + float64(rank)*2.0
 
 	return models.Combatant{
-		ID:          fmt.Sprintf("sect_guardian_%s", uuid.New().String()[:8]),
-		Name:        fmt.Sprintf("Hộ Sơn Thần Thú (%s)", sectName),
-		Kind:        "Boss",
-		Rank:        rank,
-		SubRank:     arrLvl,
-		HP:          baseHP,
-		MaxHP:       baseHP,
-		CurrentMana: baseMana,
-		MaxMana:     baseMana,
-		BaseAttack:  baseAtk,
-		BaseDefense: baseDef,
-		Speed:       baseSpeed,
-		AIProfile:   "aggressive",
+		ID:            fmt.Sprintf("sect_guardian_%s", uuid.New().String()[:8]),
+		Name:          fmt.Sprintf("Hộ Sơn Thần Thú (%s)", sectName),
+		Kind:          "Boss",
+		Rank:          rank,
+		SubRank:       arrLvl,
+		HP:            baseHP,
+		MaxHP:         baseHP,
+		CurrentMana:   baseMana,
+		MaxMana:       baseMana,
+		BaseAttack:    baseAtk,
+		BaseDefense:   baseDef,
+		Speed:         baseSpeed,
+		AIProfile:     "aggressive",
 		StatusEffects: []models.StatusEffect{},
 	}
 }

@@ -305,9 +305,12 @@ type GuEffects struct {
 }
 
 // GetBlocks exposes authoring definitions for migration tooling. Runtime callers use
-// Compiled, which is materialized during registry loading.
+// Compiled, which is materialized during registry loading. Block v2 is the
+// only runtime source: legacy Active/Passive/Growth/Other fields are never
+// merged here (see CompileLegacyToBlocks* + effectmigration for the one-way
+// import-time bridge).
 func (g *GuEffects) GetBlocks() []gameplayeffects.Block {
-	blocks := mergeEffectBlocks(g.Blocks, CompileLegacyToBlocksWithGrowth(g.Active, g.Passive, g.Growth, g.Other))
+	blocks := append([]gameplayeffects.Block(nil), g.Blocks...)
 	result := append([]gameplayeffects.Block(nil), blocks...)
 	for i := range result {
 		result[i].Conditions = append([]gameplayeffects.Condition(nil), blocks[i].Conditions...)
@@ -326,8 +329,7 @@ func (g *GuEffects) GetBlocks() []gameplayeffects.Block {
 func (g *GuEffects) Compiled() *gameplayeffects.Compiled { return g.compiled }
 
 func (g *GuEffects) compile() error {
-	blocks := mergeEffectBlocks(g.Blocks, CompileLegacyToBlocksWithGrowth(g.Active, g.Passive, g.Growth, g.Other))
-	compiled, err := (gameplayeffects.Compiler{}).Compile(blocks)
+	compiled, err := (gameplayeffects.Compiler{}).Compile(append([]gameplayeffects.Block(nil), g.Blocks...))
 	if err != nil {
 		return err
 	}
@@ -335,10 +337,9 @@ func (g *GuEffects) compile() error {
 	return nil
 }
 
-// mergeEffectBlocks keeps authored Block v2 operations authoritative while
-// compiling only missing legacy semantics during the shadow-parity window.
-// Once persisted catalogs have parity, the legacy side can be removed without
-// changing any runtime consumer.
+// mergeEffectBlocks is the one-way import-time bridge used by migration tooling
+// and legacy-compat tests. Runtime compile()/GetBlocks() use authored Block v2
+// only and never call this.
 func mergeEffectBlocks(authored, legacy []gameplayeffects.Block) []gameplayeffects.Block {
 	if len(authored) == 0 {
 		return legacy
@@ -447,6 +448,45 @@ func GuStatValueBySubtype(spec GuDictionaryItem, stat, subType string) float64 {
 		return 0
 	}
 	return compiled.StatValue(gameplayeffects.TriggerAlwaysOn, stat, subType)
+}
+
+// GuPathResistance reads per-path damage reduction from compiled Block v2
+// (ALWAYS_ON STAT_MOD PATH_RESISTANCE ADD_FLAT with path), keyed by lowercase
+// path ("heaven", "earth", "dream"). This replaces the legacy
+// PassiveEffect.AntiHeavenPct/AntiEarthPct/AntiDreamPct flat reads.
+func GuPathResistance(spec GuDictionaryItem) map[string]float64 {
+	out := map[string]float64{}
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return out
+	}
+	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
+		if op.Type != gameplayeffects.OpStatMod || op.Stat != "PATH_RESISTANCE" {
+			continue
+		}
+		path := strings.ToLower(strings.TrimSpace(op.Path))
+		if path == "" {
+			continue
+		}
+		out[path] += op.Value
+	}
+	return out
+}
+
+// GuImmuneDream reports whether the spec carries the compiled Block v2
+// UNIQUE IMMUNE_DREAM_STATUS mechanic. This replaces the legacy
+// PassiveEffect.ImmuneDreamStatus flat read.
+func GuImmuneDream(spec GuDictionaryItem) bool {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return false
+	}
+	for _, op := range compiled.NativeMechanics() {
+		if op.Code == "IMMUNE_DREAM_STATUS" {
+			return true
+		}
+	}
+	return false
 }
 
 // GuNativeMechanic returns the first compiled native operation with code.
@@ -774,35 +814,14 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		res["channel_time"] = 0 // default
 	}
-	if gu.Effects.Passive != nil {
-		if gu.Effects.Passive.StatBaseAttack > 0 {
-			res["flat_damage"] = gu.Effects.Passive.StatBaseAttack
-		}
-		if gu.Effects.Passive.StatBaseDefense > 0 {
-			res["flat_defense"] = gu.Effects.Passive.StatBaseDefense
-		}
-		if gu.Effects.Passive.Investigation > 0 {
-			res["success_rate_bonus"] = gu.Effects.Passive.Investigation
-		}
-		if gu.Effects.Passive.PathConflictReduction > 0 {
-			res["path_conflict_reduction"] = gu.Effects.Passive.PathConflictReduction
-		}
-		if gu.Effects.Passive.Accuracy > 0 {
-			res["accuracy"] = gu.Effects.Passive.Accuracy
-		}
-		if gu.Effects.Passive.Tenacity > 0 {
-			res["tenacity"] = gu.Effects.Passive.Tenacity
-		}
-		if gu.Effects.Passive.CCResist > 0 {
-			res["cc_resist"] = gu.Effects.Passive.CCResist
-		}
-	}
-	// Block v2 is the canonical runtime source. Overlay the passive projection
-	// so block-only catalog rows behave exactly like their legacy equivalents.
+	// Block v2 is the only passive source. Legacy PassiveEffect flat fields are
+	// never read here; overlay the compiled passive projection so block-only
+	// catalog rows resolve.
 	for stat, key := range map[string]string{
 		"ATTACK": "flat_damage", "DEFENSE": "flat_defense",
 		"INVESTIGATION": "success_rate_bonus", "PATH_CONFLICT_REDUCTION": "path_conflict_reduction",
 		"ACCURACY": "accuracy", "TENACITY": "tenacity", "CC_RESIST": "cc_resist",
+		"MOVEMENT": "movement", "SPEED": "speed", "EVASION": "evasion",
 	} {
 		if value := GuStatValue(gu, stat); value != 0 {
 			res[key] = value
@@ -1139,15 +1158,20 @@ func resourceRegenTickPerHour(inventory []GuInstance, playerRank int, defaultVal
 		if !ok {
 			continue
 		}
-		for _, mech := range spec.Effects.Other {
-			if mech.EventTrigger != "ON_TICK" || !wanted[mech.ActionCode] {
+		// Block v2 only: read compiled ON_TICK native mechanics, never the
+		// legacy Other flat list.
+		compiled := CompiledGuEffects(spec)
+		if compiled == nil {
+			continue
+		}
+		for _, mech := range compiled.NativeMechanics() {
+			if mech.Trigger != gameplayeffects.TriggerOnTick || !wanted[mech.Code] {
 				continue
 			}
-			var params map[string]interface{}
-			if len(mech.Params) > 0 {
-				json.Unmarshal(mech.Params, &params)
+			val := 0.0
+			if mech.Values != nil {
+				val, _ = mech.Values["value"].(float64)
 			}
-			val, _ := params["value"].(float64)
 			if val <= 0 {
 				val = defaultValue
 			}

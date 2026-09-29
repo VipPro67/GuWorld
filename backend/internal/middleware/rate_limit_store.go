@@ -108,10 +108,10 @@ func (s *MemoryStore) cleanup() {
 // ── Fallback Store (Redis primary → Memory) ──────────────────────────
 
 type FallbackStore struct {
-	redis   *RedisStore
-	memory  *MemoryStore
+	redis    *RedisStore
+	memory   *MemoryStore
 	useRedis bool
-	mu      sync.RWMutex
+	mu       sync.RWMutex
 }
 
 func NewFallbackStore() *FallbackStore {

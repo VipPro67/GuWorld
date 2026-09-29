@@ -311,7 +311,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 			if elapsedMin <= 0 {
 				continue
 			}
-			
+
 			trainingLvl := getBuildingLevel(sr.buildings, "training_ground")
 			trainingMult := 1.0 + float64(trainingLvl)*0.1
 
@@ -368,11 +368,11 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 			}
 
 			creditResults = append(creditResults, memberCreditResult{
-				playerID:         pid,
+				playerID:          pid,
 				contributionDelta: credit,
-				newPending:       newPending,
-				newCreditedToday: newCreditedToday,
-				newCreditedAt:    credDate,
+				newPending:        newPending,
+				newCreditedToday:  newCreditedToday,
+				newCreditedAt:     credDate,
 			})
 		}
 

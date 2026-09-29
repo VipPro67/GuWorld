@@ -6,7 +6,8 @@ import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type N
 import { guSpecFor, useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
 import { operationsBy } from "@/lib/effect-blocks";
 
-function computeMovementSpeed(gamePlayer: Player | null, guDictionary: Record<string, GuSpec>): number {
+// Tốc chạy map = MOVEMENT (số ô). SPEED chỉ dùng thứ tự đánh combat, không ảnh hưởng di chuyển.
+function computeMovementRange(gamePlayer: Player | null, guDictionary: Record<string, GuSpec>): number {
   if (!gamePlayer) return 1;
   let movement = 1.0;
   for (const gu of gamePlayer.gu_inventory) {
@@ -277,7 +278,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     }
   }, [skillFxEvents, appReady, clearSkillFx]);
 
-  const movementSpeed = useMemo(() => computeMovementSpeed(gamePlayer, guDictionary), [gamePlayer, guDictionary]);
+  const movementStat = useMemo(() => computeMovementRange(gamePlayer, guDictionary), [gamePlayer, guDictionary]);
 
   const displayObjects = useMemo(() => {
     const byKey = new Map<string, WorldObject>();
@@ -454,7 +455,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         // Start walking immediately along the same bounded Bresenham segment
         // as the backend. Network latency is hidden behind this visual tween;
         // the response below remains authoritative if an encounter stops early.
-        animateMove(predictedX, predictedY, Math.max(0.08, predictedDistance / movementSpeed), () => {
+        animateMove(predictedX, predictedY, Math.max(0.08, predictedDistance / movementStat), () => {
           predictionFinished = true;
           if (response !== undefined && response !== null) reconcile(response, predictedX, predictedY, tx, ty);
         });
@@ -499,7 +500,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             const predictionMatched = authoritativeX === expectedX && authoritativeY === expectedY;
             const duration = predictionMatched
               ? 0
-              : Math.min(0.2, Math.max(0.08, correctionDistance / movementSpeed));
+              : Math.min(0.2, Math.max(0.08, correctionDistance / movementStat));
 
             if (Array.isArray(res.synced_party_members)) {
               for (const sm of res.synced_party_members) {
@@ -575,7 +576,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       walk(targetX, targetY);
     },
-    [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject, upsertPlayerPosition],
+    [movementStat, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject, upsertPlayerPosition],
   );
 
   const handleObjectClick = useCallback(
@@ -1180,7 +1181,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             const currentX = existing.container.position.x;
             const currentY = existing.container.position.y;
             const animDist = Math.hypot(nx - currentX, ny - currentY);
-            const durMs = Math.max(200, Math.min(2000, (animDist / Math.max(1, movementSpeed)) * 1000));
+            const durMs = Math.max(200, Math.min(2000, (animDist / Math.max(1, movementStat)) * 1000));
             existing.fromX = currentX;
             existing.fromY = currentY;
             existing.toX = nx;
@@ -1205,7 +1206,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         }
       }
     },
-    [handleObjectClick, movementSpeed]
+    [handleObjectClick, movementStat]
   );
 
   const drawMonsterChunk = useCallback((container: Container, cells: NearbyCell[]) => {
@@ -2042,7 +2043,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
     if (dist > 0.05) {
       if (dist <= 25) {
-        const duration = Math.max(0.25, dist / Math.max(1, movementSpeed));
+        const duration = Math.max(0.25, dist / Math.max(1, movementStat));
         animateMove(targetX, targetY, duration, () => {
           fetchNearbyCells(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
           fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
@@ -2057,7 +2058,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
       }
     }
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, movementSpeed, animateMove, centerOnPlayer, setLivePosition, fetchNearbyCells, fetchNearbyPlayers]);
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, movementStat, animateMove, centerOnPlayer, setLivePosition, fetchNearbyCells, fetchNearbyPlayers]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;

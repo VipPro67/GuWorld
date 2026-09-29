@@ -24,9 +24,9 @@ func init() {
 
 // CustomClaims represents the JWT claims
 type CustomClaims struct {
-	PlayerID    string `json:"player_id"`
-	Username    string `json:"username"`
-	SessionID   string `json:"session_id"`
+	PlayerID  string `json:"player_id"`
+	Username  string `json:"username"`
+	SessionID string `json:"session_id"`
 	jwt.RegisteredClaims
 }
 

@@ -2,15 +2,18 @@ package models
 
 import (
 	"testing"
-
-	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 )
 
 func TestGetFlatGuEffectsPassiveOnlyDoesNotPanic(t *testing.T) {
-	gu := Gu{Effects: GuEffects{Passive: &PassiveEffect{StatBaseAttack: 10}}}
-	effects := GetFlatGuEffects(gu)
-	if effects["flat_damage"] != 10 {
-		t.Fatalf("flat_damage = %v, want 10", effects["flat_damage"])
+	var effects GuEffects
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":10}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan block effects: %v", err)
+	}
+	gu := Gu{Effects: effects}
+	effectsOut := GetFlatGuEffects(gu)
+	if effectsOut["flat_damage"] != 10 {
+		t.Fatalf("flat_damage = %v, want 10", effectsOut["flat_damage"])
 	}
 }
 
@@ -156,8 +159,13 @@ func TestResolveStatusRankScaling(t *testing.T) {
 	}
 }
 
-func TestGrowthProfileCompilesLegacyGrowth(t *testing.T) {
-	spec := Gu{Effects: GuEffects{Growth: &GrowthEffect{MaxAttack: 10, MaxHP: 20, HoursToMax: 24}}}
+func TestGrowthProfileReadsBlockGrowth(t *testing.T) {
+	var effects GuEffects
+	raw := `[{"id":"GROWTH","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":10},{"op":"STAT_MOD","stat":"HP","sub_type":"GROWTH_CAP","value":20},{"op":"UNIQUE","code":"GROWTH_DURATION_HOURS","params":{"value":24}}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan block effects: %v", err)
+	}
+	spec := Gu{Effects: effects}
 	profile, ok := GrowthProfile(spec)
 	if !ok {
 		t.Fatal("expected growth profile")
@@ -186,12 +194,13 @@ func TestItemEffectsScan_Blocks(t *testing.T) {
 	}
 }
 
-func TestCompiledProjectionSupplementsPartialAuthoredBlocks(t *testing.T) {
-	spec := Gu{Effects: GuEffects{
-		Blocks:  []gameplayeffects.Block{{Trigger: gameplayeffects.TriggerAlwaysOn, Target: gameplayeffects.Target{Selector: gameplayeffects.TargetSelf}, Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpStatMod, Stat: "ACCURACY", SubType: "ADD_FLAT", Value: 4}}}},
-		Passive: &PassiveEffect{Investigation: 7},
-		Growth:  &GrowthEffect{MaxAttack: 10, HoursToMax: 24},
-	}}
+func TestCompiledProjectionReadsAuthoredBlocksOnly(t *testing.T) {
+	var effects GuEffects
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ACCURACY","sub_type":"ADD_FLAT","value":4},{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":7},{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":10},{"op":"UNIQUE","code":"GROWTH_DURATION_HOURS","params":{"value":24}}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan block effects: %v", err)
+	}
+	spec := Gu{Effects: effects}
 	if got := GuStatValue(spec, "INVESTIGATION"); got != 7 {
 		t.Fatalf("investigation = %v", got)
 	}
@@ -241,13 +250,13 @@ func TestEquippedTimeSpeedBonusReadsBlockEffects(t *testing.T) {
 
 func TestGetFlatGuEffectsReadsBlockPassives(t *testing.T) {
 	var effects GuEffects
-	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"ADD_FLAT","value":34},{"op":"STAT_MOD","stat":"ACCURACY","sub_type":"ADD_FLAT","value":5}]}]`
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"ADD_FLAT","value":34},{"op":"STAT_MOD","stat":"ACCURACY","sub_type":"ADD_FLAT","value":5},{"op":"STAT_MOD","stat":"MOVEMENT","sub_type":"ADD_FLAT","value":2},{"op":"STAT_MOD","stat":"SPEED","sub_type":"ADD_FLAT","value":6},{"op":"STAT_MOD","stat":"EVASION","sub_type":"ADD_FLAT","value":15}]}]`
 	if err := effects.Scan(raw); err != nil {
 		t.Fatalf("scan block effects: %v", err)
 	}
 
 	flat := GetFlatGuEffects(Gu{Effects: effects})
-	if flat["flat_damage"] != 12 || flat["flat_defense"] != 34 || flat["accuracy"] != 5 {
+	if flat["flat_damage"] != 12 || flat["flat_defense"] != 34 || flat["accuracy"] != 5 || flat["movement"] != 2 || flat["speed"] != 6 || flat["evasion"] != 15 {
 		t.Fatalf("unexpected flat passive projection: %+v", flat)
 	}
 }

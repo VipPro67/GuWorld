@@ -50,12 +50,12 @@ type WikiMonsterSpawn struct {
 // IndexedDB from. Wiki-only sections (loot_tables, regions, monster_spawns)
 // are served by their dedicated /api/dictionary/* part endpoints instead.
 type DictionaryResponse struct {
-	Gu            interface{}              `json:"gu"`
-	Items         interface{}              `json:"items"`
+	Gu            interface{}                  `json:"gu"`
+	Items         interface{}                  `json:"items"`
 	Monsters      map[string]PublicMonsterView `json:"monsters"`
-	Constitutions []gamefx.ConstitutionDef `json:"constitutions"`
-	Races         []gamefx.RaceDef         `json:"races"`
-	Statuses      []gamefx.StatusDef       `json:"statuses"`
+	Constitutions []gamefx.ConstitutionDef     `json:"constitutions"`
+	Races         []gamefx.RaceDef             `json:"races"`
+	Statuses      []gamefx.StatusDef           `json:"statuses"`
 }
 
 // PublicMonsterView is the client-facing projection of a MonsterTemplate.

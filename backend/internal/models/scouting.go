@@ -156,9 +156,9 @@ type DaoPulsePing struct {
 
 // ResonanceScanResponse is returned by resonance scan
 type ResonanceScanResponse struct {
-	Pings            []ResonancePing `json:"pings"`
-	DaoPulses        []DaoPulsePing  `json:"dao_pulses"`
-	CooldownSeconds  int             `json:"cooldown_seconds"`
+	Pings           []ResonancePing `json:"pings"`
+	DaoPulses       []DaoPulsePing  `json:"dao_pulses"`
+	CooldownSeconds int             `json:"cooldown_seconds"`
 }
 
 // DivineGuRequest is used for deducing a Gu worm without needing a target player
@@ -213,4 +213,3 @@ type DivineGuResponse struct {
 	BackfireSoulDamage float64         `json:"backfire_soul_damage,omitempty"`
 	Message            string          `json:"message"`
 }
-

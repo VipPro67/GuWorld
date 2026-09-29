@@ -188,7 +188,7 @@ func PickDeterministicMonsterFromRegion(tx *sql.Tx, regionID string, seed int64)
 		WHERE region_id = $1 AND spawn_mode IN ('Roaming', 'Random') AND is_active = TRUE
 		ORDER BY monster_id ASC
 	`, regionID)
-	
+
 	if err == nil {
 		defer rows.Close()
 		type spawn struct {

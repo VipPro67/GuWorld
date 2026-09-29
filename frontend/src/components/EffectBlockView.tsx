@@ -34,7 +34,7 @@ const STAT_NAMES: Record<string, string> = {
   LUCK: "Vận Khí",
   ALL: "Toàn Chỉ Số",
   DAMAGE_DEALT: "Sát Thương Gây Ra",
-  MOVEMENT: "Di Chuyển",
+  MOVEMENT: "Di Chuyển (ô)",
   INVESTIGATION: "Điều Tra",
   HEARING: "Thính Giác",
   DISGUISE: "Ngụy Trang",

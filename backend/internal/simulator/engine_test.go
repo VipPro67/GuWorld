@@ -982,9 +982,6 @@ func TestGuHungerDeductionByInstanceID(t *testing.T) {
 	}
 }
 
-
-
-
 // TestItemHealAppliesHealingReceived verifies the auto item heal scales with
 // the healing_received modifier (e.g. Trọng Thương −50%) and records a
 // breakdown with the status provenance.
@@ -1392,6 +1389,3 @@ func TestManaRestoreAndCleanse(t *testing.T) {
 		}
 	}
 }
-
-
-

@@ -260,4 +260,3 @@ func TestScaleAndRandomizeMonsterDaoMarks(t *testing.T) {
 		t.Errorf("expected random dao marks to be generated for rank 6 boss, got empty")
 	}
 }
-

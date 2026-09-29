@@ -43,17 +43,17 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 	defer rows.Close()
 
 	type paidUpdate struct {
-		sectID string
+		sectID   string
 		newFunds int64
 	}
 	var paidUpdates []paidUpdate
 
 	type downgradeUpdate struct {
-		sectID    string
-		oldLevel  int
-		newLevel  int
-		funds     int64
-		level     int
+		sectID   string
+		oldLevel int
+		newLevel int
+		funds    int64
+		level    int
 	}
 	var downgrades []downgradeUpdate
 

@@ -368,7 +368,9 @@ func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks DaoM
 
 				if isMatch {
 					allGus = append(allGus, gu)
-					isPassive := gu.Effects.Passive != nil || strings.EqualFold(gu.Type, "PASSIVE")
+					// Block v2 only: passive pool = Type PASSIVE. Legacy
+					// Effects.Passive presence is never consulted.
+					isPassive := strings.EqualFold(gu.Type, "PASSIVE")
 					if isPassive {
 						passiveGus = append(passiveGus, gu)
 					} else {

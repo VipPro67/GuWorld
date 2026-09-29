@@ -708,12 +708,12 @@ func hasCombatEffects(spec *models.GuDictionaryItem) bool {
 			return true
 		}
 	}
-	if spec.Effects.Passive != nil {
-		p := spec.Effects.Passive
-		if p.StatBaseAttack > 0 || p.StatBaseDefense > 0 || p.StatBaseHP > 0 || p.StatBaseSpeed > 0 || p.DamageMultiplierOnHit > 0 || p.Evasion > 0 || p.PathConflictReduction > 0 ||
-			p.AntiHeavenPct > 0 || p.AntiEarthPct > 0 || p.AntiDreamPct > 0 || p.ImmuneDreamStatus {
-			return true
-		}
+	if models.GuStatValue(*spec, "ATTACK") > 0 || models.GuStatValue(*spec, "DEFENSE") > 0 ||
+		models.GuStatValue(*spec, "HP") > 0 || models.GuStatValue(*spec, "SPEED") > 0 ||
+		models.GuStatValueBySubtype(*spec, "DAMAGE_DEALT", "MULTIPLY_PERCENT") > 0 ||
+		models.GuStatValue(*spec, "EVASION") > 0 || models.GuStatValue(*spec, "PATH_CONFLICT_REDUCTION") > 0 ||
+		len(models.GuPathResistance(*spec)) > 0 || models.GuImmuneDream(*spec) {
+		return true
 	}
 	for _, block := range spec.Effects.Blocks {
 		if block.Trigger == gameplayeffects.TriggerBeforeHit || block.Trigger == gameplayeffects.TriggerOnTurnStart ||

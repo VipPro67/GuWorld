@@ -13,7 +13,6 @@ import (
 // ErrOptimisticLockConflict is returned when a player row update fails due to a version mismatch.
 var ErrOptimisticLockConflict = errors.New("concurrent update detected")
 
-
 // GuInstance represents an individual Gu bug owned by a player.
 type GuInstance struct {
 	InstanceID      string     `json:"instance_id"`
@@ -277,19 +276,19 @@ type CombatState struct {
 	EnemyStatusEffects  []StatusEffect `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects []StatusEffect `json:"player_status_effects,omitempty"`
 	// Defender-side character effects for PVP enemies (race/constitution/status).
-	EnemyPathResistance    map[string]float64 `json:"enemy_path_resistance,omitempty"`
-	EnemyMentalResistance  float64            `json:"enemy_mental_resistance,omitempty"`
-	EnemyTenacity          float64            `json:"enemy_tenacity,omitempty"`
-	EnemyCCResist          float64            `json:"enemy_cc_resist,omitempty"`
-	EnemyDaoBonus          map[string]float64 `json:"enemy_dao_bonus,omitempty"`
-	EnemyPathDamageBonus   map[string]float64 `json:"enemy_path_damage_bonus,omitempty"`
-	EnemyHealingReceived   float64            `json:"enemy_healing_received,omitempty"`
-	EnemySoulDefenseBonus  float64            `json:"enemy_soul_defense_bonus,omitempty"`
-	EnemyLuckBonus         float64            `json:"enemy_luck_bonus,omitempty"`
+	EnemyPathResistance   map[string]float64 `json:"enemy_path_resistance,omitempty"`
+	EnemyMentalResistance float64            `json:"enemy_mental_resistance,omitempty"`
+	EnemyTenacity         float64            `json:"enemy_tenacity,omitempty"`
+	EnemyCCResist         float64            `json:"enemy_cc_resist,omitempty"`
+	EnemyDaoBonus         map[string]float64 `json:"enemy_dao_bonus,omitempty"`
+	EnemyPathDamageBonus  map[string]float64 `json:"enemy_path_damage_bonus,omitempty"`
+	EnemyHealingReceived  float64            `json:"enemy_healing_received,omitempty"`
+	EnemySoulDefenseBonus float64            `json:"enemy_soul_defense_bonus,omitempty"`
+	EnemyLuckBonus        float64            `json:"enemy_luck_bonus,omitempty"`
 	EnemyCombatSettings   *AutoCombatConfig  `json:"enemy_combat_settings,omitempty"`
-	SkillCooldowns map[string]int `json:"skill_cooldowns,omitempty"`
-	ItemsUsedCount int            `json:"items_used_count"`
-	ItemCooldowns  map[string]int `json:"item_cooldowns,omitempty"`
+	SkillCooldowns        map[string]int     `json:"skill_cooldowns,omitempty"`
+	ItemsUsedCount        int                `json:"items_used_count"`
+	ItemCooldowns         map[string]int     `json:"item_cooldowns,omitempty"`
 	// PathMasteryGained tracks Chân Ý points already earned in this battle, so
 	// combat gains can be capped at PathMasteryBattleGainLimit(rank) per battle.
 	PathMasteryGained int         `json:"path_mastery_gained,omitempty"`
@@ -374,7 +373,7 @@ type Player struct {
 	GuInventory        GuInventory         `json:"gu_inventory"`
 	ActiveCombat       *CombatState        `json:"active_combat"`
 	GrowthData         GrowthData          `json:"growth_data"`
-	MaterialsInventory MaterialsInventory `json:"materials_inventory,omitempty"`
+	MaterialsInventory MaterialsInventory  `json:"materials_inventory,omitempty"`
 	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`
 	UnlockedRecipes    UnlockedRecipesList `json:"unlocked_recipes,omitempty"`
 

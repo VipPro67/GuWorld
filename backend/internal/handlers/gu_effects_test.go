@@ -7,6 +7,15 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func mustScanGuEffects(t *testing.T, raw string) models.GuEffects {
+	t.Helper()
+	var eff models.GuEffects
+	if err := eff.Scan(raw); err != nil {
+		t.Fatalf("scan test effects: %v", err)
+	}
+	return eff
+}
+
 func TestCleanupInvalidEquipped(t *testing.T) {
 	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
 		"GU_STRENGTH": {
@@ -18,7 +27,7 @@ func TestCleanupInvalidEquipped(t *testing.T) {
 		},
 		"GU_GROWTH": {
 			9: {ID: "GU_GROWTH", Name: "Trưởng Thành Cổ", Rank: 9, Type: "Passive",
-				Effects: models.GuEffects{Growth: &models.GrowthEffect{HoursToMax: 10, MaxAttack: 100}}},
+				Effects: mustScanGuEffects(t, `[{"id":"GROWTH","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":100},{"op":"UNIQUE","code":"GROWTH_DURATION_HOURS","params":{"value":10}}]}]`)},
 		},
 	}
 
@@ -303,7 +312,12 @@ func TestSoulRegenTickAndMigrateAliases(t *testing.T) {
 	guInst := models.GuInstance{InstanceID: "inst_1", GuID: "GU_X"}
 	run := func(p *models.Player, trigger, code, params string) (string, error) {
 		s := spec
-		s.Effects.Other = []models.SpecialMechanic{{EventTrigger: trigger, ActionCode: code, Params: []byte(params)}}
+		raw := `[{"id":"` + code + `","trigger":"` + trigger + `","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"` + code + `","params":` + params + `}]}]`
+		var eff models.GuEffects
+		if err := eff.Scan(raw); err != nil {
+			return "", err
+		}
+		s.Effects = eff
 		return HandleGuEvent(p, s, guInst, trigger)
 	}
 

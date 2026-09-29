@@ -11,7 +11,7 @@ import (
 // The in-memory registry is loaded from the constitution_dictionary table
 // (seeded from data/Constitution.csv) at startup and after admin imports.
 type ConstitutionDef struct {
-    Tier int `json:"tier"`
+	Tier    int     `json:"tier"`
 	Key     string  `json:"key"`
 	Name    string  `json:"name"`
 	Effects Effects `json:"effects"`
@@ -68,7 +68,7 @@ func LoadConstitutionRegistry(db *sql.DB) error {
 		var def ConstitutionDef
 		var effectsRaw string
 		var tier int
-if err := rows.Scan(&def.Key, &def.Name, &effectsRaw, &tier); err != nil {
+		if err := rows.Scan(&def.Key, &def.Name, &effectsRaw, &tier); err != nil {
 			return fmt.Errorf("scan constitution row: %w", err)
 		}
 		if err := json.Unmarshal([]byte(effectsRaw), &def.Effects); err != nil {
@@ -83,7 +83,7 @@ if err := rows.Scan(&def.Key, &def.Name, &effectsRaw, &tier); err != nil {
 	if len(newRegistry) == 0 {
 		for _, def := range defaultConstitutions() {
 
-		newRegistry[def.Key] = def
+			newRegistry[def.Key] = def
 		}
 	}
 	ConstitutionRegistry = newRegistry

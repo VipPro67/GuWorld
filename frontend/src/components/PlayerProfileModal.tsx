@@ -329,12 +329,16 @@ export const PlayerProfileModal: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Trạng thái</span>
               {statuses && statuses.length > 0 ? (
                 <div className="flex flex-col gap-1.5">
-                  {statuses.map((s: { id: string; expires_at?: string | null }) => {
+                  {statuses.map((s: { id: string; expires_at?: string | null; value?: number }) => {
                     let displayName = statusDictionary?.[s.id]?.name || statusLabels[s.id] || s.id;
                     if (s.id.startsWith("cd_gu_")) {
                       displayName = "Hồi chiêu Cổ Trùng";
                     } else if (s.id.startsWith("cd_km_")) {
                       displayName = "Hồi chiêu Sát Chiêu";
+                    } else if (s.id.startsWith("refine_insight_")) {
+                      const r = s.id.substring("refine_insight_".length) || "?";
+                      const stacks = Math.floor(s.value ?? 0);
+                      displayName = `Tâm Đắc R${r} · ${stacks} tầng (+${stacks}% luyện R${r})`;
                     }
                     const statusEffects = statusDictionary?.[s.id]?.effects;
                     return (

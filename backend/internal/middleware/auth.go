@@ -109,24 +109,24 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-// Verify player actually exists in the database
-	var exists bool
-	var dbSessionID string
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id=$1), COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&exists, &dbSessionID)
-	if err != nil || !exists {
-		// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
-		// Let's just return 401. The frontend interceptor will call logout().
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
-		c.Abort()
-		return
-	}
+		// Verify player actually exists in the database
+		var exists bool
+		var dbSessionID string
+		err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id=$1), COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&exists, &dbSessionID)
+		if err != nil || !exists {
+			// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
+			// Let's just return 401. The frontend interceptor will call logout().
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
+			c.Abort()
+			return
+		}
 
-	// Validate session_id matches the active session in database
-	if claims.SessionID != dbSessionID {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": SessionKickedError})
-		c.Abort()
-		return
-	}
+		// Validate session_id matches the active session in database
+		if claims.SessionID != dbSessionID {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": SessionKickedError})
+			c.Abort()
+			return
+		}
 
 		// Store variables in context
 		c.Set("player_id", playerID)

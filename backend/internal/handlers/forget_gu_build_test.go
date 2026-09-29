@@ -91,11 +91,15 @@ func TestBuildSimActionImmersionDamagePath(t *testing.T) {
 
 // Passive-only counter Gu must survive the combat loadout filter.
 func TestHasCombatEffectsForgetPassives(t *testing.T) {
-	cases := map[string]models.GuEffects{
-		"heaven": {Passive: &models.PassiveEffect{AntiHeavenPct: 0.65, ForgetHeavenProtection: true}},
-		"dream":  {Passive: &models.PassiveEffect{AntiDreamPct: 0.5, ImmuneDreamStatus: true}},
+	raws := map[string]string{
+		"heaven": `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"PATH_RESISTANCE","sub_type":"ADD_FLAT","path":"heaven","value":0.65}]}]`,
+		"dream":  `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"PATH_RESISTANCE","sub_type":"ADD_FLAT","path":"dream","value":0.5},{"op":"UNIQUE","code":"IMMUNE_DREAM_STATUS"}]}]`,
 	}
-	for name, eff := range cases {
+	for name, raw := range raws {
+		var eff models.GuEffects
+		if err := eff.Scan(raw); err != nil {
+			t.Fatalf("%s scan: %v", name, err)
+		}
 		spec := &models.GuDictionaryItem{ID: name, Effects: eff}
 		if !hasCombatEffects(spec) {
 			t.Fatalf("%s passive incorrectly filtered from combat", name)

@@ -7,13 +7,13 @@ const ImmortalRankThreshold = 6
 
 // IsImmortalRank returns true if the given rank meets or exceeds the immortal threshold.
 func IsImmortalRank(rank int) bool {
-    return rank >= ImmortalRankThreshold
+	return rank >= ImmortalRankThreshold
 }
 
 // IsImmortalPlayer returns true if the player is an immortal cultivator based on rank.
 func IsImmortalPlayer(p *models.Player) bool {
-    if p == nil {
-        return false
-    }
-    return IsImmortalRank(p.Rank)
+	if p == nil {
+		return false
+	}
+	return IsImmortalRank(p.Rank)
 }

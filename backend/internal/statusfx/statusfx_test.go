@@ -130,4 +130,3 @@ func TestTargetSuppressionFactor(t *testing.T) {
 		t.Fatalf("expected (0.0, 2) for gap 5, got (%f, %d)", factor, penalty)
 	}
 }
-

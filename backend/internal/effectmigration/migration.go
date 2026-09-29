@@ -247,6 +247,7 @@ var guFlat = map[string]operation{
 	"passive.refine_mana_tier": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "REFINE_MANA_TIER"}, "passive.storage_capacity": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "STORAGE"},
 	"passive.tenacity": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "TENACITY"}, "passive.cc_resist": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "CC_RESIST"},
 	"passive.dao_mark_multiplier": {Op: "STAT_MOD", SubType: "MULTIPLY_PERCENT", Stat: "DAO_MARK", Unit: "RATIO"}, "passive.path_conflict_reduction": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_CONFLICT_REDUCTION", Unit: "PERCENT"},
+	"passive.anti_heaven_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "heaven", Unit: "PERCENT"}, "passive.anti_earth_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "earth", Unit: "PERCENT"}, "passive.anti_dream_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "dream", Unit: "PERCENT"}, "passive.immune_dream_status": {Op: "UNIQUE", Code: "IMMUNE_DREAM_STATUS"},
 	"growth.max_attack": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "ATTACK"}, "growth.max_defense": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "DEFENSE"},
 	"growth.max_hp": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "HP"}, "growth.max_speed": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "SPEED"},
 	"growth.hours_to_max": {Op: "UNIQUE", Code: "GROWTH_DURATION_HOURS"},
@@ -303,7 +304,7 @@ func ConvertGu(id string, raw []byte) Result {
 			seen[bid] = true
 			value := decodeAny(fields[key])
 			if tmpl.Op == "UNIQUE" {
-				if (tmpl.Code == "PORTAL_CREATE" || tmpl.Code == "RANDOM_PORTAL") && value == false {
+				if (tmpl.Code == "PORTAL_CREATE" || tmpl.Code == "RANDOM_PORTAL" || tmpl.Code == "IMMUNE_DREAM_STATUS") && value == false {
 					continue
 				}
 				if tmpl.Code == "CAPTURE_BONUS" || tmpl.Code == "GROWTH_DURATION_HOURS" {

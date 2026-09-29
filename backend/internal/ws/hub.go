@@ -49,9 +49,9 @@ func InitHub() *Hub {
 	h := &Hub{
 		clients:    make(map[uuid.UUID]*Client),
 		channels:   make(map[ChannelName]map[uuid.UUID]*Client),
-register:   make(chan *Client, 128),
-	unregister: make(chan *Client, 128),
-	broadcast:  make(chan *BroadcastMsg, 4096),
+		register:   make(chan *Client, 128),
+		unregister: make(chan *Client, 128),
+		broadcast:  make(chan *BroadcastMsg, 4096),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
@@ -117,7 +117,7 @@ func (h *Hub) run() {
 				h.mu.RUnlock()
 				continue
 			}
-			
+
 			for pid, client := range subs {
 				if msg.Exclude != uuid.Nil && pid == msg.Exclude {
 					continue
@@ -142,7 +142,7 @@ func (h *Hub) run() {
 // Stop gracefully shuts down the hub and disconnects clients.
 func (h *Hub) Stop(ctx context.Context) error {
 	h.cancel()
-	
+
 	done := make(chan struct{})
 	go func() {
 		h.wg.Wait()
@@ -161,12 +161,12 @@ func (h *Hub) Stop(ctx context.Context) error {
 func (h *Hub) Subscribe(client *Client, channel ChannelName) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	if h.channels[channel] == nil {
 		h.channels[channel] = make(map[uuid.UUID]*Client)
 	}
 	h.channels[channel][client.playerID] = client
-	
+
 	client.mu.Lock()
 	client.subscriptions[string(channel)] = struct{}{}
 	client.mu.Unlock()
@@ -227,5 +227,3 @@ func (h *Hub) IsConnected(playerID uuid.UUID) bool {
 	_, ok := h.clients[playerID]
 	return ok
 }
-
-

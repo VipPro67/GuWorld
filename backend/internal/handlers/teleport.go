@@ -18,4 +18,3 @@ func TeleportToRegion(c *gin.Context) {
 		"error": "Cơ chế dịch chuyển bằng tiền (Linh Thạch / Nguyên Thạch) đã bị hủy bỏ. Hãy sử dụng Cổ trùng có khả năng dịch chuyển.",
 	})
 }
-

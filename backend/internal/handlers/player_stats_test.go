@@ -242,34 +242,38 @@ func TestGetPassiveStatsLoadsBlockV2PassivesFromRegistry(t *testing.T) {
 	}
 }
 
-// setupTestGuRegistry installs a test Gu registry with passive and active speed effects.
+// setupTestGuRegistry installs a test Gu registry with block v2 speed effects.
 func setupTestGuRegistry(t *testing.T) {
 	t.Helper()
+	passiveRaw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"SPEED","sub_type":"ADD_FLAT","value":5}]}]`
+	var passiveEffects models.GuEffects
+	if err := passiveEffects.Scan(passiveRaw); err != nil {
+		t.Fatalf("scan passive effects: %v", err)
+	}
+	// Combat-only speed boost lives in ON_ACTION so it never leaks into
+	// passive stats, mirroring the old speed_boost_flat semantics.
+	activeRaw := `[{"id":"ACTIVE_SKILL","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"STAT_MOD","stat":"SPEED","sub_type":"ADD_FLAT","value":20}]}]`
+	var activeEffects models.GuEffects
+	if err := activeEffects.Scan(activeRaw); err != nil {
+		t.Fatalf("scan active effects: %v", err)
+	}
 	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
 		"GU_PASSIVE_SPD": {
 			1: {
-				ID:   "GU_PASSIVE_SPD",
-				Name: "Bị Động Tốc Cổ",
-				Rank: 1,
-				Path: []string{"Cloud Path"},
-				Effects: models.GuEffects{
-					Passive: &models.PassiveEffect{
-						StatBaseSpeed: 5,
-					},
-				},
+				ID:      "GU_PASSIVE_SPD",
+				Name:    "Bị Động Tốc Cổ",
+				Rank:    1,
+				Path:    []string{"Cloud Path"},
+				Effects: passiveEffects,
 			},
 		},
 		"GU_ACTIVE_SPD": {
 			1: {
-				ID:   "GU_ACTIVE_SPD",
-				Name: "Chủ Động Tốc Cổ",
-				Rank: 1,
-				Path: []string{"Lightning Path"},
-				Effects: models.GuEffects{
-					Active: &models.ActiveEffect{
-						SpeedBoostFlat: 20,
-					},
-				},
+				ID:      "GU_ACTIVE_SPD",
+				Name:    "Chủ Động Tốc Cổ",
+				Rank:    1,
+				Path:    []string{"Lightning Path"},
+				Effects: activeEffects,
 			},
 		},
 	}

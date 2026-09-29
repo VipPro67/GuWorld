@@ -115,26 +115,26 @@ func TierToDuration(effectType string, tier int) int {
 // It is produced by the handler using CalculateGuEffectForCombatant + BuildCombatAction
 // and consumed by the simulator engine.
 type SimAction struct {
-	ActionType    string   // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
-	Name          string   // display name
-	SourceID      string   // GuID or KillerMoveID for tactic matching
-	InstanceID    string   // Gu instance ID (player_gu.id) when ActionType == "GU_SKILL"
-	Path          []string // dao paths used to compute the dao mark bonus in the engine
-	Rank          int      // rank of the Gu/Skill
-	Damage        float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
-	DamageMult    float64  // damage multiplier (applied on top of Damage)
-	ShieldMult    float64  // shield multiplier (applied on top of Defense)
-	Defense       float64  // shield value granted to self (excludes dao bonus)
-	Healing       float64  // HP restored to self (excludes dao bonus)
-	ManaCost      float64  // mana consumed on use
-	ManaRestore   float64  // mana restored to self
-	CleanseDebuffs bool    // purges debuffs/DoTs from self
-	BleedPerTurn  float64  // bleed DoT per turn (applied to target)
-	PoisonPerTurn float64  // poison DoT per turn (applied to target)
-	LifeStealPct  float64  // percentage of damage dealt healed back (0-1)
-	MultiHit      int      // number of hits (chain_damage compound)
-	PhantomDmg    float64  // bonus phantom damage
-	ThornsDmg     float64  // reflect damage to attacker
+	ActionType     string   // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
+	Name           string   // display name
+	SourceID       string   // GuID or KillerMoveID for tactic matching
+	InstanceID     string   // Gu instance ID (player_gu.id) when ActionType == "GU_SKILL"
+	Path           []string // dao paths used to compute the dao mark bonus in the engine
+	Rank           int      // rank of the Gu/Skill
+	Damage         float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
+	DamageMult     float64  // damage multiplier (applied on top of Damage)
+	ShieldMult     float64  // shield multiplier (applied on top of Defense)
+	Defense        float64  // shield value granted to self (excludes dao bonus)
+	Healing        float64  // HP restored to self (excludes dao bonus)
+	ManaCost       float64  // mana consumed on use
+	ManaRestore    float64  // mana restored to self
+	CleanseDebuffs bool     // purges debuffs/DoTs from self
+	BleedPerTurn   float64  // bleed DoT per turn (applied to target)
+	PoisonPerTurn  float64  // poison DoT per turn (applied to target)
+	LifeStealPct   float64  // percentage of damage dealt healed back (0-1)
+	MultiHit       int      // number of hits (chain_damage compound)
+	PhantomDmg     float64  // bonus phantom damage
+	ThornsDmg      float64  // reflect damage to attacker
 
 	// ── New status effect fields (tier-based) ──
 	StunTier       int // tier (1-5) for stun on target

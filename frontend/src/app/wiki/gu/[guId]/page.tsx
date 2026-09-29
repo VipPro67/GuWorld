@@ -70,7 +70,7 @@ function getGuTypeIcon(type: string): string {
 
 function renderSingleValue(key: string, value: number): string {
   const labels: Record<string, string> = {
-    movement: "Tốc độ di chuyển",
+    movement: "Phạm vi di chuyển (ô)",
     stun: "Choáng",
     storage: "Dung tích",
     generate_gu: "Sinh Cổ",
@@ -86,7 +86,7 @@ function renderSingleValue(key: string, value: number): string {
     stealth: "Tàng hình",
     force_rank_up: "Thăng cấp cưỡng chế",
     mana_pollution: "Ô nhiễm chân nguyên",
-    movement_bonus: "Hỗ trợ di chuyển",
+    movement_bonus: "Cộng phạm vi di chuyển",
     damage_multiplier: "Hệ số sát thương",
   };
   const label = labels[key] || key;

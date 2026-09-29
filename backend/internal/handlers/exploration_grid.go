@@ -192,15 +192,15 @@ func GetGrid(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"x":             player.X,
-		"y":             player.Y,
-		"vision_radius": visualVisionRadius,
-		"cells":         cells,
-		"stats":         gridStats,
+		"x":              player.X,
+		"y":              player.Y,
+		"vision_radius":  visualVisionRadius,
+		"cells":          cells,
+		"stats":          gridStats,
 		"players_on_map": nearbyPlayers,
-		"ground_drops":  groundDrops,
-		"world_width":   WorldWidth,
-		"world_height":  WorldHeight,
+		"ground_drops":   groundDrops,
+		"world_width":    WorldWidth,
+		"world_height":   WorldHeight,
 	})
 }
 

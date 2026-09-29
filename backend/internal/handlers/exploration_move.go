@@ -559,6 +559,7 @@ func MovePlayer(c *gin.Context) {
 	}
 
 	stats := CalculatePlayerStats(&player)
+	// Toc chay map = MOVEMENT (so o). SPEED chi dung thu tu danh combat, khong anh huong di chuyen.
 	movementRange := int(stats["movement"])
 	if movementRange < 1 {
 		movementRange = 1
@@ -842,6 +843,7 @@ func MovePlayerPath(c *gin.Context) {
 	}
 
 	stats := CalculatePlayerStats(&player)
+	// Toc chay map = MOVEMENT (so o). SPEED chi dung thu tu danh combat, khong anh huong di chuyen.
 	movementRange := int(stats["movement"])
 	if movementRange < 1 {
 		movementRange = 1

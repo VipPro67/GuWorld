@@ -9,11 +9,11 @@ import (
 
 // ConnectionLimiter enforces limits on WebSocket connections per player and per IP.
 type ConnectionLimiter struct {
-	mu                  sync.Mutex
-	playerConnections   map[uuid.UUID]int
-	ipConnections       map[string]int
-	maxPerPlayer        int
-	maxPerIP            int
+	mu                sync.Mutex
+	playerConnections map[uuid.UUID]int
+	ipConnections     map[string]int
+	maxPerPlayer      int
+	maxPerIP          int
 }
 
 var globalLimiter *ConnectionLimiter

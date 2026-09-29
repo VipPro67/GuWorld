@@ -67,6 +67,21 @@ func CompileLegacyToBlocksWithGrowth(active *ActiveEffect, passive *PassiveEffec
 				passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: entry.stat, SubType: "ADD_FLAT", Value: entry.value})
 			}
 		}
+		// Legacy anti-path counters map to per-path PATH_RESISTANCE so the
+		// import-time bridge preserves them as Block v2.
+		for _, entry := range []struct {
+			path  string
+			value float64
+		}{
+			{"heaven", passive.AntiHeavenPct}, {"earth", passive.AntiEarthPct}, {"dream", passive.AntiDreamPct},
+		} {
+			if entry.value != 0 {
+				passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: "PATH_RESISTANCE", SubType: "ADD_FLAT", Path: entry.path, Value: entry.value})
+			}
+		}
+		if passive.ImmuneDreamStatus {
+			passOps = append(passOps, effects.Operation{Op: effects.OpUnique, Code: "IMMUNE_DREAM_STATUS"})
+		}
 		if len(passOps) > 0 {
 			blocks = append(blocks, effects.Block{
 				ID:         "LEGACY_PASSIVE_STATS",

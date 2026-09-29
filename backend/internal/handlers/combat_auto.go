@@ -1007,20 +1007,16 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	immuneDream := false
 	for _, inst := range allEquippedActiveGus {
 		spec, ok := resolveGuSpec(inst)
-		if !ok || spec.Effects.Passive == nil {
+		if !ok {
 			continue
 		}
-		p := spec.Effects.Passive
-		if p.AntiHeavenPct > 0 {
-			pathResistance["heaven"] += p.AntiHeavenPct
+		// Block v2 only: per-path resistance + dream immunity come from
+		// compiled STAT_MOD PATH_RESISTANCE / UNIQUE IMMUNE_DREAM_STATUS.
+		// Legacy PassiveEffect.Anti* flat fields are never read.
+		for path, pct := range models.GuPathResistance(spec) {
+			pathResistance[path] += pct
 		}
-		if p.AntiEarthPct > 0 {
-			pathResistance["earth"] += p.AntiEarthPct
-		}
-		if p.AntiDreamPct > 0 {
-			pathResistance["dream"] += p.AntiDreamPct
-		}
-		if p.ImmuneDreamStatus {
+		if models.GuImmuneDream(spec) {
 			immuneDream = true
 		}
 	}

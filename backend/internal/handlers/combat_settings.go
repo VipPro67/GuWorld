@@ -60,9 +60,9 @@ func filterGuLoadout(inv models.GuInventory, cs models.AutoCombatConfig) models.
 }
 
 // filterCombatGuInventory restricts a player's Gu inventory for combat display & history.
-// 1. When explicit selectedGuIDs are provided (len > 0), only display those selected Gus.
-// 2. When no explicit selectedGuIDs are provided, display the Gus configured in combat settings (cs.GuPriorities).
-//    If settings is also empty, fall back to all equipped active combat Gus.
+//  1. When explicit selectedGuIDs are provided (len > 0), only display those selected Gus.
+//  2. When no explicit selectedGuIDs are provided, display the Gus configured in combat settings (cs.GuPriorities).
+//     If settings is also empty, fall back to all equipped active combat Gus.
 func filterCombatGuInventory(inv models.GuInventory, selectedGuIDs []string, cs models.AutoCombatConfig) models.GuInventory {
 	if len(inv) == 0 {
 		return inv

@@ -3,13 +3,13 @@ package worker
 import "sync/atomic"
 
 type BatchMetrics struct {
-	TotalFlushes     int64
+	TotalFlushes      int64
 	SuccessfulFlushes int64
-	FailedFlushes    int64
-	ItemsProcessed   int64
-	ItemsRetried     int64
-	ItemsDropped     int64
-	QueueDepth       int64
+	FailedFlushes     int64
+	ItemsProcessed    int64
+	ItemsRetried      int64
+	ItemsDropped      int64
+	QueueDepth        int64
 }
 
 var Metrics = &BatchMetrics{}
