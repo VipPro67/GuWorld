@@ -408,12 +408,12 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 			SELECT id, gu_id, gu_rank, state, is_vital, equipped, gu_name,
 				state_before, hunger_before, last_fed_at FROM upd WHERE state = 'DEAD'`, ticks, pq.Array(liveIDs[start:end]))
 		if err != nil {
-			if isHungerTransientErr(err) {
-				// Statement/lock timeout or deadlock: serve stale hunger so
-				// login (and combat) doesn't 500; the tick is NOT advanced so
-				// the next request retries the decay.
+			if IsHungerTransientError(err) {
+				// PostgreSQL aborts the transaction after these errors. Return
+				// the original code so the transaction owner can roll back and
+				// retry the complete operation; swallowing it would only defer
+				// failure until the next statement or commit.
 				logger.S.Warnf("Hunger decay skipped for player %s (transient, retry later): %v", playerID, err)
-				return nil
 			}
 			return err
 		}
@@ -585,10 +585,10 @@ func EvaluateSectVaultHungerTx(tx *sql.Tx, sectID string) error {
 	return nil
 }
 
-// isHungerTransientErr reports whether err is a transient Postgres condition
+// IsHungerTransientError reports whether err is a transient Postgres condition
 // (statement timeout 57014, deadlock 40P01, lock timeout 55P03) that the
-// hunger path may absorb by serving stale hunger and retrying next request.
-func isHungerTransientErr(err error) bool {
+// hunger path or its transaction owner may retry.
+func IsHungerTransientError(err error) bool {
 	var pqErr *pq.Error
 	if errors.As(err, &pqErr) {
 		switch pqErr.Code {
