@@ -99,6 +99,10 @@ func CreateBuybackOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ItemType phải là Gu, Material hoặc Recipe"})
 		return
 	}
+	if req.ItemType == "Recipe" && req.QuantityRequested != 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi đơn Bí phương chỉ được giao dịch số lượng 1"})
+		return
+	}
 	if req.DurationHours < 1 || req.DurationHours > 168 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Thời hạn đơn giao dịch từ 1 đến 168 giờ"})
 		return
@@ -201,16 +205,38 @@ func CreateBuybackOrder(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần chọn đúng %d Cổ trùng để đăng bán", req.QuantityRequested)})
 				return
 			}
+			if hasDuplicateGuInstanceIDs(guInstIDs) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Danh sách Cổ trùng không được chứa ID trùng lặp"})
+				return
+			}
+			var target struct {
+				GuID string `json:"gu_id"`
+				Rank int    `json:"rank"`
+			}
+			if err := json.Unmarshal(req.ItemTarget, &target); err != nil || target.GuID == "" || target.Rank < 1 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Mục tiêu Cổ trùng không hợp lệ"})
+				return
+			}
 			for _, instID := range guInstIDs {
 				var ownerID uuid.UUID
-				var isVital bool
-				err := tx.QueryRow(`SELECT player_id, is_vital FROM player_gu WHERE id = $1`, instID).Scan(&ownerID, &isVital)
+				var guID, state string
+				var rank int
+				var isVital, equipped, isLocked bool
+				err := tx.QueryRow(`SELECT player_id, gu_id, gu_rank, is_vital, equipped, is_locked, state FROM player_gu WHERE id = $1 FOR UPDATE`, instID).Scan(&ownerID, &guID, &rank, &isVital, &equipped, &isLocked, &state)
 				if err != nil || ownerID != creator.ID {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không sở hữu Cổ trùng đăng bán"})
 					return
 				}
 				if isVital {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đăng bán Bổn Mạng Cổ!"})
+					return
+				}
+				if guID != target.GuID || rank != target.Rank {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đăng bán không đúng loại hoặc hạng đã chọn"})
+					return
+				}
+				if equipped || isLocked || state == "DEAD" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đang trang bị, bị khóa hoặc đã chết không thể đăng bán"})
 					return
 				}
 				_, err = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, BHTHSystemUUID, instID)
@@ -259,7 +285,7 @@ func CreateBuybackOrder(c *gin.Context) {
 		PlayerID: &creator.ID, Action: "marketplace.create_order",
 		EntityType: "buyback_order", EntityID: orderID.String(),
 		RequestSummary: fmt.Sprintf("Tạo đơn %s %d %s (giá %.3f)", req.OrderType, req.QuantityRequested, req.ItemType, req.UnitPrice),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	tx2, _ := db.DB.Begin()
@@ -435,10 +461,24 @@ func SellToBuybackOrder(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần chọn đúng %d Cổ trùng để bán", tradeQty)})
 				return
 			}
+			if hasDuplicateGuInstanceIDs(guInstIDs) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Danh sách Cổ trùng không được chứa ID trùng lặp"})
+				return
+			}
+			var target struct {
+				GuID string `json:"gu_id"`
+				Rank int    `json:"rank"`
+			}
+			if err := json.Unmarshal(o.ItemTarget, &target); err != nil || target.GuID == "" || target.Rank < 1 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Mục tiêu Cổ trùng của đơn thu mua không hợp lệ"})
+				return
+			}
 			for _, instID := range guInstIDs {
 				var ownerID uuid.UUID
-				var isVital bool
-				err := tx.QueryRow(`SELECT player_id, is_vital FROM player_gu WHERE id = $1`, instID).Scan(&ownerID, &isVital)
+				var guID, state string
+				var rank int
+				var isVital, equipped, isLocked bool
+				err := tx.QueryRow(`SELECT player_id, gu_id, gu_rank, is_vital, equipped, is_locked, state FROM player_gu WHERE id = $1 FOR UPDATE`, instID).Scan(&ownerID, &guID, &rank, &isVital, &equipped, &isLocked, &state)
 				if err != nil || ownerID != actor.ID {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không sở hữu Cổ trùng này"})
 					return
@@ -447,7 +487,18 @@ func SellToBuybackOrder(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể bán Bổn Mạng Cổ!"})
 					return
 				}
-				_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, buyerUUID, instID)
+				if guID != target.GuID || rank != target.Rank {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không đúng loại hoặc hạng mà đơn thu mua yêu cầu"})
+					return
+				}
+				if equipped || isLocked || state == "DEAD" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đang trang bị, bị khóa hoặc đã chết không thể bán"})
+					return
+				}
+				if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2 AND player_id = $3`, buyerUUID, instID, actor.ID); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển giao Cổ trùng"})
+					return
+				}
 			}
 		} else if o.ItemType == "Recipe" {
 			var recTarget string
@@ -485,7 +536,7 @@ func SellToBuybackOrder(c *gin.Context) {
 			PlayerID: &actor.ID, Action: "marketplace.sell_buyback",
 			EntityType: "buyback_order", EntityID: orderUUID.String(),
 			RequestSummary: fmt.Sprintf("Bán %d vật phẩm vào đơn thu mua (nhận %.3f)", tradeQty, sellerPayout),
-			IPAddress: c.ClientIP(), Success: true,
+			IPAddress:      c.ClientIP(), Success: true,
 		})
 
 		// Notify the BUY order creator that their order was (partially) filled
@@ -538,7 +589,11 @@ func SellToBuybackOrder(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng Cổ trùng khóa không đủ"})
 				return
 			}
-			toDeliver := lockedGuIDs[:tradeQty]
+			toDeliver, ok := lockedGuIDsForFill(lockedGuIDs, o.QuantityFilled, tradeQty)
+			if !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng Cổ trùng khóa không đủ"})
+				return
+			}
 			for _, instID := range toDeliver {
 				_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, actor.ID, instID)
 			}
@@ -578,7 +633,7 @@ func SellToBuybackOrder(c *gin.Context) {
 			PlayerID: &actor.ID, Action: "marketplace.buy_sell_order",
 			EntityType: "buyback_order", EntityID: orderUUID.String(),
 			RequestSummary: fmt.Sprintf("Mua %d vật phẩm từ đơn rao bán (trả %.3f)", tradeQty, totalCost),
-			IPAddress: c.ClientIP(), Success: true,
+			IPAddress:      c.ClientIP(), Success: true,
 		})
 
 		// Notify the SELL order creator that their item was sold
@@ -598,6 +653,35 @@ func SellToBuybackOrder(c *gin.Context) {
 			"player":  updatedActor,
 		})
 	}
+}
+
+func hasDuplicateGuInstanceIDs(ids []string) bool {
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			return true
+		}
+		if _, exists := seen[id]; exists {
+			return true
+		}
+		seen[id] = struct{}{}
+	}
+	return false
+}
+
+func lockedGuIDsForFill(ids []string, filled, quantity int64) ([]string, bool) {
+	end := filled + quantity
+	if filled < 0 || quantity < 1 || end > int64(len(ids)) {
+		return nil, false
+	}
+	return ids[filled:end], true
+}
+
+func remainingLockedGuIDs(ids []string, filled int64) ([]string, bool) {
+	if filled < 0 || filled > int64(len(ids)) {
+		return nil, false
+	}
+	return ids[filled:], true
 }
 
 // CancelBuybackOrder cancels an active buyback or sell order and refunds remaining locked funds/items
@@ -675,7 +759,12 @@ func CancelBuybackOrder(c *gin.Context) {
 		} else if itemType == "Gu" {
 			var lockedGuIDs []string
 			_ = json.Unmarshal(itemData, &lockedGuIDs)
-			for _, instID := range lockedGuIDs {
+			remainingGuIDs, ok := remainingLockedGuIDs(lockedGuIDs, qtyFilled)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng khóa không hợp lệ"})
+				return
+			}
+			for _, instID := range remainingGuIDs {
 				_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1 WHERE id = $2`, creator.ID, instID)
 			}
 		} else if itemType == "Recipe" {
@@ -705,7 +794,7 @@ func CancelBuybackOrder(c *gin.Context) {
 		PlayerID: &creator.ID, Action: "marketplace.cancel_order",
 		EntityType: "buyback_order", EntityID: orderUUID.String(),
 		RequestSummary: fmt.Sprintf("Hủy đơn %s thành công", orderType),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	tx2, _ := db.DB.Begin()

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge } from "@/components/ui";
 import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
+import { buildBuyOrderExecution, reconcileGuSelection, toggleGuSelection } from "./marketplaceGuSelection";
 
 interface RecipeData {
   recipe_id: string;
@@ -121,7 +122,8 @@ export function BaoHoangMarket({
   // Sell Order Creation Form State
   const [sellItemType, setSellItemType] = useState<"Gu" | "Material" | "Recipe">("Material");
   const [sellMatID, setSellMatID] = useState("");
-  const [sellGuInstID, setSellGuInstID] = useState("");
+  const [sellGuInstIDs, setSellGuInstIDs] = useState<string[]>([]);
+  const [sellGuTarget, setSellGuTarget] = useState("");
   const [sellRecipeID, setSellRecipeID] = useState("");
   const [sellUnitPrice, setSellUnitPrice] = useState(10);
   const [sellQuantity, setSellQuantity] = useState(1);
@@ -131,6 +133,7 @@ export function BaoHoangMarket({
   // Modal state for Buy/Sell Interaction
   const [selectedBuybackOrder, setSelectedBuybackOrder] = useState<BuybackOrder | null>(null);
   const [sellQtyInput, setSellQtyInput] = useState(1);
+  const [selectedBuybackGuIDs, setSelectedBuybackGuIDs] = useState<string[]>([]);
 
   // Form state for Async Trade Offer Creation
   const [offeredStones, setOfferedStones] = useState(0);
@@ -266,22 +269,23 @@ export function BaoHoangMarket({
       if (!sellMatID) return;
       targetPayload = sellMatID;
     } else if (sellItemType === "Gu") {
-      if (!sellGuInstID) return;
-      const g = guInventory.find((inst) => inst.instance_id === sellGuInstID);
+      if (sellGuInstIDs.length === 0) return;
+      const g = guInventory.find((inst) => inst.instance_id === sellGuInstIDs[0]);
       if (!g) return;
       targetPayload = { gu_id: g.gu_id, rank: g.rank };
-      guInstIDs = [sellGuInstID];
+      guInstIDs = sellGuInstIDs;
     } else if (sellItemType === "Recipe") {
       if (!sellRecipeID) return;
       targetPayload = sellRecipeID;
     }
+    const quantityRequested = sellItemType === "Gu" ? sellGuInstIDs.length : sellItemType === "Recipe" ? 1 : sellQuantity;
     await createBuybackOrder({
       orderType: "SELL",
       itemType: sellItemType,
       itemTarget: targetPayload,
       guInstanceIds: guInstIDs,
       unitPrice: sellUnitPrice,
-      quantityRequested: sellQuantity,
+      quantityRequested,
       currency: sellCurrency,
       durationHours: sellDuration,
     });
@@ -412,6 +416,25 @@ export function BaoHoangMarket({
       requestedRecNames.some((n) => n.includes(q))
     );
   });
+
+  const sellableGus = guInventory.filter((g) => !g.is_vital && !g.equipped && !g.is_locked && g.status !== "DEAD");
+  const sellGuGroupMap = new Map<string, { key: string; guId: string; rank: number; gus: GuInstance[] }>();
+  for (const g of sellableGus) {
+    const key = `${g.gu_id}::${g.rank}`;
+    const group = sellGuGroupMap.get(key);
+    if (group) group.gus.push(g);
+    else sellGuGroupMap.set(key, { key, guId: g.gu_id, rank: g.rank, gus: [g] });
+  }
+  const sellGuGroups = Array.from(sellGuGroupMap.values());
+  const selectedSellGroup = sellGuGroups.find((group) => group.key === sellGuTarget);
+  const sellGuGroup = selectedSellGroup?.gus || [];
+  const effectiveSellQuantity = sellItemType === "Recipe" ? 1 : sellQuantity;
+
+  const eligibleGusForBuybackOrder = (order: BuybackOrder) => {
+    if (order.order_type === "SELL" || order.item_type !== "Gu") return [];
+    const target = order.item_target as { gu_id?: string; rank?: number };
+    return sellableGus.filter((g) => g.gu_id === target.gu_id && g.rank === Number(target.rank));
+  };
 
   const getListingDetails = (listing: Listing): { title: string; subtitle?: string } => {
     let parsedData: Record<string, unknown> | string | null = listing.item_data as Record<string, unknown> | string | null;
@@ -633,7 +656,9 @@ export function BaoHoangMarket({
                             variant="primary"
                             onClick={() => {
                               setSelectedBuybackOrder(order);
-                              setSellQtyInput(1);
+                              const initialGuIDs = reconcileGuSelection(eligibleGusForBuybackOrder(order).map((g) => g.instance_id), [], 1);
+                              setSellQtyInput(order.item_type === "Gu" && order.order_type !== "SELL" ? initialGuIDs.length : 1);
+                              setSelectedBuybackGuIDs(initialGuIDs);
                             }}
                             loading={actionLoading}
                             leftIcon={<ShoppingCart className="w-3.5 h-3.5" />}
@@ -646,7 +671,9 @@ export function BaoHoangMarket({
                             variant="primary"
                             onClick={() => {
                               setSelectedBuybackOrder(order);
-                              setSellQtyInput(1);
+                              const initialGuIDs = reconcileGuSelection(eligibleGusForBuybackOrder(order).map((g) => g.instance_id), [], 1);
+                              setSellQtyInput(order.item_type === "Gu" && order.order_type !== "SELL" ? initialGuIDs.length : 1);
+                              setSelectedBuybackGuIDs(initialGuIDs);
                             }}
                             loading={actionLoading}
                             leftIcon={<Tag className="w-3.5 h-3.5" />}
@@ -1117,7 +1144,12 @@ export function BaoHoangMarket({
                     <label className="text-xs text-zinc-400 block mb-1">Loại Vật Phẩm Bán</label>
                     <select
                       value={sellItemType}
-                      onChange={(e) => setSellItemType(e.target.value as "Gu" | "Material" | "Recipe")}
+                      onChange={(e) => {
+                        setSellItemType(e.target.value as "Gu" | "Material" | "Recipe");
+                        setSellGuInstIDs([]);
+                        setSellGuTarget("");
+                        setSellQuantity(1);
+                      }}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
                     >
                       <option value="Material">Nguyên Liệu / Tiên Tài</option>
@@ -1153,23 +1185,47 @@ export function BaoHoangMarket({
                     </select>
                   </div>
                 ) : sellItemType === "Gu" ? (
-                  <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Chọn Cổ Trùng Đăng Bán</label>
+                  <div className="space-y-2">
+                    <label className="text-xs text-zinc-400 block mb-1">Chọn loại Cổ Trùng Đăng Bán</label>
                     <select
-                      value={sellGuInstID}
-                      onChange={(e) => setSellGuInstID(e.target.value)}
+                      value={sellGuTarget}
+                      onChange={(e) => {
+                        const group = sellGuGroups.find((candidate) => candidate.key === e.target.value);
+                        const next = group ? group.gus.slice(0, 1).map((g) => g.instance_id) : [];
+                        setSellGuTarget(e.target.value);
+                        setSellGuInstIDs(next);
+                        setSellQuantity(next.length);
+                      }}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
                     >
                       <option value="">-- Chọn Cổ Trùng --</option>
-                      {guInventory.filter(g => !g.is_vital && g.status !== "DEAD").map((g) => {
-                        const spec = guSpecFor(g.gu_id, g.rank);
+                      {sellGuGroups.map((group) => {
+                        const spec = guSpecFor(group.guId, group.rank);
                         return (
-                          <option key={g.instance_id} value={g.instance_id}>
-                            {spec?.name || g.gu_id} (Hạng {g.rank})
+                          <option key={group.key} value={group.key}>
+                            {spec?.name || group.guId} (Hạng {group.rank}) — {group.gus.length} con
                           </option>
                         );
                       })}
                     </select>
+                    {selectedSellGroup && (
+                      <div className="max-h-40 overflow-y-auto space-y-1 rounded-xl border border-zinc-800 bg-zinc-950 p-2">
+                        {sellGuGroup.map((g) => {
+                          const checked = sellGuInstIDs.includes(g.instance_id);
+                          return (
+                            <label key={g.instance_id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-xs text-zinc-300 hover:bg-zinc-900">
+                              <input type="checkbox" checked={checked} onChange={() => {
+                                const next = toggleGuSelection(sellGuInstIDs, g.instance_id);
+                                setSellGuInstIDs(next);
+                                setSellQuantity(next.length);
+                              }} />
+                              <span>{guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Hạng {g.rank})</span>
+                              <span className="ml-auto font-mono text-zinc-600">{g.instance_id.slice(0, 8)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
@@ -1199,8 +1255,33 @@ export function BaoHoangMarket({
                     <GameInput type="number" min={1} value={sellUnitPrice} onChange={(e) => setSellUnitPrice(Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Số Lượng Bán</label>
-                    <GameInput type="number" min={1} value={sellQuantity} onChange={(e) => setSellQuantity(Number(e.target.value))} />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-zinc-400">Số Lượng Bán</label>
+                      {sellItemType === "Gu" && selectedSellGroup && (
+                        <button type="button" className="text-[10px] font-mono text-amber-400" onClick={() => {
+                          const ids = sellGuGroup.map((g) => g.instance_id);
+                          setSellGuInstIDs(ids);
+                          setSellQuantity(ids.length);
+                        }}>Tối Đa</button>
+                      )}
+                    </div>
+                    <GameInput
+                      type="number"
+                      min={sellItemType === "Gu" ? 0 : 1}
+                      max={sellItemType === "Gu" ? sellGuGroup.length : undefined}
+                      disabled={sellItemType === "Recipe" || (sellItemType === "Gu" && !selectedSellGroup)}
+                      value={sellItemType === "Recipe" ? 1 : sellQuantity}
+                      onChange={(e) => {
+                        const quantity = Math.max(0, Number(e.target.value) || 0);
+                        if (sellItemType === "Gu") {
+                          const next = reconcileGuSelection(sellGuGroup.map((g) => g.instance_id), sellGuInstIDs, quantity);
+                          setSellGuInstIDs(next);
+                          setSellQuantity(next.length);
+                        } else {
+                          setSellQuantity(quantity);
+                        }
+                      }}
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Thời Hạn (Giờ)</label>
@@ -1209,13 +1290,13 @@ export function BaoHoangMarket({
                 </div>
 
                 <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono text-zinc-400 space-y-1">
-                  <div>• Tổng giá trị rao bán: <strong className="text-amber-400">{sellUnitPrice * sellQuantity} {sellCurrency}</strong></div>
-                  <div>• Phí niêm yết (4% nộp trước): <strong className="text-amber-400">{(sellUnitPrice * sellQuantity * 0.04).toFixed(3)} {sellCurrency}</strong></div>
-                  <div>• Phí hoa hồng (6% khi bán thành công): <strong className="text-red-400">{(sellUnitPrice * sellQuantity * 0.06).toFixed(3)} {sellCurrency}</strong></div>
-                  <div>• Thực nhận dự kiến: <strong className="text-emerald-400 font-bold">{(sellUnitPrice * sellQuantity * 0.94).toFixed(3)} {sellCurrency}</strong></div>
+                  <div>• Tổng giá trị rao bán: <strong className="text-amber-400">{sellUnitPrice * effectiveSellQuantity} {sellCurrency}</strong></div>
+                  <div>• Phí niêm yết (4% nộp trước): <strong className="text-amber-400">{(sellUnitPrice * effectiveSellQuantity * 0.04).toFixed(3)} {sellCurrency}</strong></div>
+                  <div>• Phí hoa hồng (6% khi bán thành công): <strong className="text-red-400">{(sellUnitPrice * effectiveSellQuantity * 0.06).toFixed(3)} {sellCurrency}</strong></div>
+                  <div>• Thực nhận dự kiến: <strong className="text-emerald-400 font-bold">{(sellUnitPrice * effectiveSellQuantity * 0.94).toFixed(3)} {sellCurrency}</strong></div>
                 </div>
 
-                <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading}>
+                <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading} disabled={sellItemType === "Gu" && sellGuInstIDs.length === 0}>
                   Đăng Đơn Rao Bán
                 </GameButton>
               </form>
@@ -1856,8 +1937,8 @@ export function BaoHoangMarket({
 
       {/* MODAL: BUY/SELL INTERACTION FOR ORDER BOOK */}
       {selectedBuybackOrder && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <GameCard variant="vital" className="p-6 max-w-md w-full space-y-4 relative">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto p-4">
+          <GameCard variant="vital" className="p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto space-y-4 relative">
             <h3 className="text-lg font-bold font-serif text-amber-200">
               {selectedBuybackOrder.order_type === "SELL" ? "Mua Vật Phẩm Từ Đơn Rao Bán" : "Bán Vật Phẩm Vào Đơn Thu Mua"}
             </h3>
@@ -1880,14 +1961,15 @@ export function BaoHoangMarket({
                       const affordable = selectedBuybackOrder.currency === "immortal"
                         ? Math.floor(player.immortal_stones / selectedBuybackOrder.unit_price)
                         : Math.floor(player.primeval_stones / selectedBuybackOrder.unit_price);
-                      setSellQtyInput(Math.max(1, Math.min(maxOrder, affordable > 0 ? affordable : maxOrder)));
+                      setSellQtyInput(Math.max(0, Math.min(maxOrder, affordable)));
                     } else {
                       let owned = 0;
                       if (selectedBuybackOrder.item_type === "Gu") {
-                        const targetGuId = typeof selectedBuybackOrder.item_target === "object" && selectedBuybackOrder.item_target !== null
-                          ? (selectedBuybackOrder.item_target as { gu_id?: string }).gu_id
-                          : String(selectedBuybackOrder.item_target);
-                        owned = player.gu_inventory?.filter(g => g.gu_id === targetGuId && g.status !== "DEAD").length || 0;
+                        const eligibleIDs = eligibleGusForBuybackOrder(selectedBuybackOrder).map((g) => g.instance_id);
+                        const next = reconcileGuSelection(eligibleIDs, selectedBuybackGuIDs, Math.min(maxOrder, eligibleIDs.length));
+                        setSelectedBuybackGuIDs(next);
+                        setSellQtyInput(next.length);
+                        return;
                       } else if (selectedBuybackOrder.item_type === "Material") {
                         const matId = typeof selectedBuybackOrder.item_target === "string" ? selectedBuybackOrder.item_target : String(selectedBuybackOrder.item_target);
                         owned = player.materials_inventory?.[matId] || 0;
@@ -1902,12 +1984,56 @@ export function BaoHoangMarket({
               </div>
               <GameInput
                 type="number"
-                min={1}
+                min={0}
                 max={selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled}
                 value={sellQtyInput}
-                onChange={(e) => setSellQtyInput(Math.max(1, Number(e.target.value) || 1))}
+                onChange={(e) => {
+                  const maxOrder = selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled;
+                  const quantity = Math.max(0, Math.min(maxOrder, Number(e.target.value) || 0));
+                  if (selectedBuybackOrder.order_type !== "SELL" && selectedBuybackOrder.item_type === "Gu") {
+                    const eligibleIDs = eligibleGusForBuybackOrder(selectedBuybackOrder).map((g) => g.instance_id);
+                    const next = reconcileGuSelection(eligibleIDs, selectedBuybackGuIDs, quantity);
+                    setSelectedBuybackGuIDs(next);
+                    setSellQtyInput(next.length);
+                  } else setSellQtyInput(quantity);
+                }}
               />
             </div>
+
+            {selectedBuybackOrder.order_type !== "SELL" && selectedBuybackOrder.item_type === "Gu" && (() => {
+              const eligibleGus = eligibleGusForBuybackOrder(selectedBuybackOrder);
+              return (
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-400">
+                    Chọn đúng {sellQtyInput} Cổ trùng ({selectedBuybackGuIDs.length}/{sellQtyInput})
+                  </label>
+                  <div className="max-h-40 overflow-y-auto space-y-1 rounded-xl border border-zinc-800 bg-zinc-950 p-2">
+                    {eligibleGus.length === 0 ? (
+                      <p className="text-xs text-red-400">Không có Cổ trùng đúng loại và hạng để bán.</p>
+                    ) : eligibleGus.map((g) => {
+                      const checked = selectedBuybackGuIDs.includes(g.instance_id);
+                      return (
+                        <label key={g.instance_id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-xs text-zinc-300 hover:bg-zinc-900">
+                          <input type="checkbox" checked={checked} onChange={() => {
+                            const maxOrder = selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled;
+                            const toggled = toggleGuSelection(selectedBuybackGuIDs, g.instance_id);
+                            const next = reconcileGuSelection(
+                              eligibleGus.map((candidate) => candidate.instance_id),
+                              toggled,
+                              Math.min(toggled.length, maxOrder),
+                            );
+                            setSelectedBuybackGuIDs(next);
+                            setSellQtyInput(next.length);
+                          }} disabled={!checked && selectedBuybackGuIDs.length >= selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled} />
+                          <span>{guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Hạng {g.rank})</span>
+                          <span className="ml-auto font-mono text-zinc-600">{g.instance_id.slice(0, 8)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono space-y-1">
               {selectedBuybackOrder.order_type === "SELL" ? (
@@ -1927,7 +2053,10 @@ export function BaoHoangMarket({
               <GameButton
                 variant="ghost"
                 className="flex-1"
-                onClick={() => setSelectedBuybackOrder(null)}
+                onClick={() => {
+                  setSelectedBuybackOrder(null);
+                  setSelectedBuybackGuIDs([]);
+                }}
               >
                 Hủy Thao Tác
               </GameButton>
@@ -1935,12 +2064,19 @@ export function BaoHoangMarket({
                 variant="primary"
                 className="flex-1"
                 loading={actionLoading}
+                disabled={sellQtyInput < 1 || (selectedBuybackOrder.order_type !== "SELL" && selectedBuybackOrder.item_type === "Gu" && selectedBuybackGuIDs.length !== sellQtyInput)}
                 onClick={async () => {
-                  await sellToBuybackOrder({
-                    orderId: selectedBuybackOrder.id,
-                    quantity: sellQtyInput,
-                  });
-                  setSelectedBuybackOrder(null);
+                  const payload = buildBuyOrderExecution(
+                    selectedBuybackOrder.id,
+                    sellQtyInput,
+                    selectedBuybackOrder.item_type,
+                    selectedBuybackGuIDs,
+                    selectedBuybackOrder.order_type || "BUY",
+                  );
+                  if (await sellToBuybackOrder(payload)) {
+                    setSelectedBuybackOrder(null);
+                    setSelectedBuybackGuIDs([]);
+                  }
                 }}
               >
                 {selectedBuybackOrder.order_type === "SELL" ? "Xác Nhận Mua" : "Xác Nhận Bán"}

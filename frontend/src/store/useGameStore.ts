@@ -45,6 +45,7 @@ export interface GuInstance {
   status: string; // "ACTIVE", "SLEEPING", "DEAD"
   equipped: boolean;
   is_vital: boolean;
+  is_locked?: boolean;
   integration_time?: number;
   growth_hours?: number;
   equipped_at?: string;

@@ -76,6 +76,27 @@ func isTradeOfferEmpty(data models.TradeOfferData) bool {
 	return true
 }
 
+func validateTradeOfferData(data models.TradeOfferData) error {
+	if data.PrimevalStones < 0 || data.ImmortalStones < 0 ||
+		!pricing.IsValidAmount(data.PrimevalStones) || !pricing.IsValidAmount(data.ImmortalStones) {
+		return fmt.Errorf("số lượng đá trao đổi không hợp lệ")
+	}
+	if hasDuplicateGuInstanceIDs(data.Gus) {
+		return fmt.Errorf("danh sách Cổ trùng không được chứa ID trùng lặp hoặc rỗng")
+	}
+	for _, quantity := range data.Materials {
+		if quantity < 0 {
+			return fmt.Errorf("số lượng nguyên liệu trao đổi không hợp lệ")
+		}
+	}
+	for _, completionRate := range data.Recipes {
+		if completionRate < 0 || completionRate > 100 {
+			return fmt.Errorf("độ hoàn thiện Bí phương phải từ 0 đến 100")
+		}
+	}
+	return nil
+}
+
 // System BHTH UUID sentinel for locking offered Gu items
 var BHTHSystemUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
@@ -88,6 +109,14 @@ func CreateTradeOffer(c *gin.Context) {
 	}
 	if req.DurationHours < 1 || req.DurationHours > 168 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Thời hạn đơn trao đổi từ 1 đến 168 giờ"})
+		return
+	}
+	if err := validateTradeOfferData(req.Offered); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm đưa ra không hợp lệ: " + err.Error()})
+		return
+	}
+	if err := validateTradeOfferData(req.Requested); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm yêu cầu không hợp lệ: " + err.Error()})
 		return
 	}
 	if isTradeOfferEmpty(req.Offered) {
@@ -261,7 +290,7 @@ func CreateTradeOffer(c *gin.Context) {
 		PlayerID: &creator.ID, Action: "marketplace.create_trade_offer",
 		EntityType: "trade_offer", EntityID: offerID.String(),
 		RequestSummary: "Đăng đơn trao đổi tự động mới",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	updatedCreator := creator
@@ -506,6 +535,20 @@ func AcceptTradeOffer(c *gin.Context) {
 			return
 		}
 	}
+	for _, guInstID := range matchedAcceptorGus {
+		var ownerID uuid.UUID
+		var isVital, equipped, isLocked bool
+		var state string
+		if err := tx.QueryRow(`SELECT player_id, is_vital, equipped, is_locked, state FROM player_gu WHERE id = $1 FOR UPDATE`, guInstID).
+			Scan(&ownerID, &isVital, &equipped, &isLocked, &state); err != nil || ownerID != acceptor.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng yêu cầu không còn thuộc sở hữu của bạn"})
+			return
+		}
+		if isVital || equipped || isLocked || state == "DEAD" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng yêu cầu đang trang bị, bị khóa, là Bổn Mệnh Cổ hoặc đã chết"})
+			return
+		}
+	}
 	for reqRecID := range requested.Recipes {
 		recProgress, err := RecipeSvc.Get(tx, acceptor.ID.String(), reqRecID)
 		if err != nil || recProgress == nil {
@@ -539,7 +582,15 @@ func AcceptTradeOffer(c *gin.Context) {
 			_ = db.LogGuHistory(tx, guInstID, guID, rank, "bhth_trade_offer", &acceptor.ID, &creator.ID,
 				fmt.Sprintf("Trao đổi Bảo Hoàng Thiên từ %s sang %s", acceptor.Username, creator.Username), nil)
 		}
-		_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2`, creator.ID, guInstID)
+		result, err := tx.Exec(`UPDATE player_gu SET player_id = $1, equipped = false WHERE id = $2 AND player_id = $3`, creator.ID, guInstID, acceptor.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi chuyển giao Cổ trùng yêu cầu"})
+			return
+		}
+		if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cổ trùng yêu cầu đã thay đổi, vui lòng thử lại"})
+			return
+		}
 	}
 	for reqRecID := range requested.Recipes {
 		recProgress, _ := RecipeSvc.Get(tx, acceptor.ID.String(), reqRecID)
@@ -608,7 +659,7 @@ func AcceptTradeOffer(c *gin.Context) {
 		PlayerID: &acceptor.ID, Action: "marketplace.accept_trade_offer",
 		EntityType: "trade_offer", EntityID: offerUUID.String(),
 		RequestSummary: fmt.Sprintf("Chấp nhận đơn trao đổi của %s", creatorID.String()),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	// Notify the trade offer creator that their offer was accepted
@@ -700,7 +751,7 @@ func CancelTradeOffer(c *gin.Context) {
 		PlayerID: &creator.ID, Action: "marketplace.cancel_trade_offer",
 		EntityType: "trade_offer", EntityID: offerUUID.String(),
 		RequestSummary: "Hủy đơn trao đổi tự động",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	tx2, _ := db.DB.Begin()
