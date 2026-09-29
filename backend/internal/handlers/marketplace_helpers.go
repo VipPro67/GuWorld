@@ -191,8 +191,19 @@ func settleExpiredBuybackOrders() error {
 			continue
 		}
 		var currentStatus string
-		if err := tx.QueryRow(`SELECT status FROM buyback_orders WHERE id = $1 FOR UPDATE`, eb.id).Scan(&currentStatus); err != nil || currentStatus != "ACTIVE" {
+		if err := tx.QueryRow(`
+			SELECT buyer_id, order_type, item_type, item_target, COALESCE(item_data, 'null'::jsonb), unit_price,
+			       quantity_requested, quantity_filled, currency, status
+			FROM buyback_orders WHERE id = $1 FOR UPDATE`, eb.id,
+		).Scan(&eb.buyerID, &eb.orderType, &eb.itemType, &eb.itemTarget, &eb.itemData, &eb.unitPrice,
+			&eb.quantityRequested, &eb.quantityFilled, &eb.currency, &currentStatus); err != nil || currentStatus != "ACTIVE" {
 			tx.Rollback()
+			continue
+		}
+		unfilledQty = eb.quantityRequested - eb.quantityFilled
+		if unfilledQty <= 0 {
+			_, _ = tx.Exec(`UPDATE buyback_orders SET status = 'FILLED' WHERE id = $1`, eb.id)
+			_ = tx.Commit()
 			continue
 		}
 		if eb.orderType == "BUY" {
@@ -211,7 +222,12 @@ func settleExpiredBuybackOrders() error {
 			} else if eb.itemType == "Gu" {
 				var lockedGuIDs []string
 				_ = json.Unmarshal(eb.itemData, &lockedGuIDs)
-				for _, instID := range lockedGuIDs {
+				remainingGuIDs, ok := remainingLockedGuIDs(lockedGuIDs, eb.quantityFilled)
+				if !ok {
+					tx.Rollback()
+					continue
+				}
+				for _, instID := range remainingGuIDs {
 					_, _ = tx.Exec(`UPDATE player_gu SET player_id = $1 WHERE id = $2`, eb.buyerID, instID)
 				}
 			} else if eb.itemType == "Recipe" {
