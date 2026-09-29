@@ -74,11 +74,11 @@ export const equipmentJobsPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cơ chế Lò Luyện</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (không giới hạn, tăng chậm dần theo hàm căn bậc hai, nhân hệ số Chân Ý lưu phái đích và chia theo hệ số Rank P), Cảnh giới Luyện Đạo (lên tới +25%), Cảnh giới Lưu Phái của Cổ (max +10%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
+            Tỉ lệ Luyện Cổ thành công được quyết định bởi: Tỷ lệ gốc của bí phương (phải thôi diễn 100% mới được luyện), Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (không giới hạn, tăng chậm dần theo hàm căn bậc hai, nhân hệ số Chân Ý lưu phái đích và chia theo hệ số Rank P), Cảnh giới Luyện Đạo (lên tới +25%), Cảnh giới Lưu Phái của Cổ (max +10%), Khí vận (max +10%), Hỗ trợ chủng tộc/thể chất, Tâm Đắc pity theo rank (+1%/tầng fail, không cap), và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%. Bonus Cổ phụ trợ đã bị loại bỏ.
             <br /><br />
             <strong className="text-cyan-400">Tiêu hao Năng Lượng:</strong> Cổ sư luyện Cổ đồng cấp tốn 20 Chân Nguyên (hoặc 10 Tiên Nguyên nếu là Tiên Cổ). Chi phí này nhân lên hoặc giảm đi 10 lần (với Phàm) và 100 lần (với Tiên) cho mỗi bậc chênh lệch. Phàm nhân không thể luyện Tiên Cổ vì tiêu hao lập tức cạn kiệt khiếu.
             <br /><br />
-            <strong className="text-cyan-400">Tiên Cổ Giảm Trừ:</strong> Khi luyện Tiên Cổ (Rank 6 - 9), các chỉ số cộng thẳng ngoại vật (Chất lượng vật liệu, Cảnh giới, Khí vận, Phụ trợ, Môi trường) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100.
+            <strong className="text-cyan-400">Tiên Cổ Giảm Trừ:</strong> Khi luyện Tiên Cổ (Rank 6 - 9), các chỉ số cộng thẳng ngoại vật (Chất lượng vật liệu, Cảnh giới, Khí vận, Hỗ trợ, Tâm Đắc, Môi trường) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100.
           </p>
 
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono mt-6">Suy Diễn Bí Phương</h3>

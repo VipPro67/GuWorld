@@ -387,14 +387,14 @@ Cổ sư có thể:
 - Luyện Cổ dùng `/api/refine` với recipe và selected Gu instances.
 - Cổ nguyên liệu trong công thức yêu cầu **bằng hoặc cao hơn bậc quy định**. Dùng Cổ nguyên liệu bậc cao hơn sẽ tăng thêm tỉ lệ thành công (Chất lượng nguyên liệu).
 - Có thể kéo-thả Cổ bất kỳ vào ô nguyên liệu (kể cả ô "Cổ Trùng Ẩn"). Nếu bộ Cổ không khớp công thức, khi Luyện sẽ **thất bại chắc chắn** — nguyên liệu, tài nguyên vẫn bị tiêu hao.
-- Tàn phương (recipe chưa unlock 100%) có thể dùng `/api/refine/deduce` để suy diễn tăng % độ hoàn thiện. Tiêu hao 15 Niệm Lực và Nguyên Thạch mỗi lần.
+- Tàn phương (recipe chưa 100%) phải dùng `/api/refine/deduce` để suy diễn lên 100% mới được luyện (không còn Ép Luyện). Tiêu hao 15 Niệm Lực và Nguyên Thạch mỗi lần.
   - **Độ khó suy diễn:** Tiến độ (Improvement %) mỗi lần bấm sẽ bị chia cho hệ số Rank của Cổ (Rank 5 chia 100, Rank 6 chia 1.000, Rank 9 chia 10.000.000). Phàm nhân gần như không thể cày chay Tiên Cổ Phương.
   - **Chìa khóa (Cảnh Giới & Đạo Ngân):** Bù đắp độ khó khổng lồ này bằng Cảnh Giới Trí Đạo (x3), Luyện Đạo (x2), Hệ đích (x1) và Đạo Ngân Trí Đạo (Tăng tiến độ theo hàm Căn bậc hai). Trí Đạo Vô Thượng Đại Tông Sư có thể suy tính nhanh gấp hàng vạn lần kẻ phàm. Mức Cảnh Giới Trí Đạo cũng gia tăng tỷ lệ Linh quang chớp lóe (Inspiration Flash - Lập tức hoàn thiện 100%).
 ### Tỉ lệ Luyện Cổ và Hệ quả (MỚI)
 
 Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên 10 yếu tố:
 1. **Tỷ lệ gốc:** Từ bí phương.
-2. **Độ hoàn thiện:** Ép luyện khi bí phương chưa 100% sẽ bị giảm tỉ lệ tương ứng.
+2. **Độ hoàn thiện:** Bí phương phải thôi diễn lên 100% mới được luyện (không còn Ép Luyện).
 3. **Độ chính xác tổ hợp:** Lắp sai Cổ nguyên liệu lập tức tỷ lệ về 0%.
 4. **Chất lượng nguyên liệu:** Dùng Cổ nguyên liệu bậc cao hơn bậc yêu cầu (+2% mỗi bậc chênh lệch).
 5. **Đạo Ngân Luyện Đạo:** Tích lũy từ Tiên Khiếu. Không giới hạn hiệu quả (unlimit), tăng theo hàm căn bậc hai (càng nhiều càng tăng chậm dần), nhân với hệ số cảnh giới lưu phái đích của Cổ đang luyện (`1.0 + Điểm Chân Ý`) và chia cho hệ số scale bậc Cổ tương ứng. Công thức: `(0.632% * √Đạo Ngân * (1.0 + Điểm Chân Ý)) / Hệ số Rank`.

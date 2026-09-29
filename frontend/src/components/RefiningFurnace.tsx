@@ -1102,33 +1102,11 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         </button>
                       </div>
 
-                      {/* Forced Refine section */}
+                      {/* Ép luyện đã bị loại bỏ: phải thôi diễn lên 100% mới được luyện */}
                       <div className="space-y-1">
-                        <div className="text-[9px] text-rose-400 font-mono text-center bg-rose-950/20 border border-rose-900/20 py-1.5 px-2 rounded-lg leading-snug">
-                          ⚠️ Ép Luyện có phản phệ cực lớn nếu thất bại (Sát thương HP, trừ Max Mana)!
+                        <div className="text-[9px] text-amber-400 font-mono text-center bg-amber-950/20 border border-amber-900/20 py-1.5 px-2 rounded-lg leading-snug">
+                          🔒 Bí phương chưa hoàn thiện 100%. Hãy THÔI DIỄN cho hoàn chỉnh rồi mới luyện — không còn Ép Luyện.
                         </div>
-                        <button
-                          type="button"
-                          onClick={handleRefine}
-                          disabled={!canRefine}
-                          className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold tracking-wide font-serif transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                            canRefine
-                              ? "bg-gradient-to-r from-rose-600 to-red-650 hover:from-rose-500 hover:to-red-600 text-zinc-100 shadow-md active:scale-[0.98]"
-                              : "bg-zinc-900 border border-zinc-800 text-zinc-650 cursor-not-allowed"
-                          }`}
-                        >
-                          {isRefining ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin text-zinc-100" />
-                              <span>{furnaceStage}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Flame className="w-4 h-4 text-rose-300 animate-pulse" />
-                              <span>ÉP LUYỆN (RỦI RO CAO)</span>
-                            </>
-                          )}
-                        </button>
                       </div>
                     </div>
                   ) : (

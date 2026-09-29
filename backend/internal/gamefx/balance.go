@@ -114,7 +114,8 @@ const (
 	RefineBackfireHPLossRatio = 0.50
 	// RefineBackfireSoulLossRatio is the fraction of max Soul lost on backfire.
 	RefineBackfireSoulLossRatio = 0.30
-	// RefineForcedFailHPLoss is the fixed HP damage taken when forced refining fails.
+	// RefineForcedFailHPLoss is deprecated (ép luyện đã bị loại bỏ:
+	// luyện cổ yêu cầu bí phương 100%). Kept for backward compatibility.
 	RefineForcedFailHPLoss = 30.0
 )
 

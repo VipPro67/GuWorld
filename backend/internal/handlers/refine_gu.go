@@ -59,15 +59,16 @@ func RefineGu(c *gin.Context) {
 		return
 	}
 
-	// 2b. Verify player has unlocked the recipe
-	var unlockedRate float64 = 0.0
+	// 2b. Verify player has unlocked the recipe at 100% (ép luyện đã bị loại bỏ).
 	recipeProgress, err := RecipeSvc.Get(tx, player.ID.String(), req.RecipeID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở công thức này!"})
 		return
 	}
-	unlockedRate = recipeProgress.CompletionRate
-	isForcedRefine := unlockedRate < 100.0
+	if recipeProgress.CompletionRate < 100.0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí phương chưa hoàn thiện 100%! Hãy thôi diễn cho hoàn chỉnh rồi mới luyện."})
+		return
+	}
 
 	// 3. Fetch Recipe
 	targetGuID, targetRank, variant, err := ParseRecipeID(req.RecipeID)
@@ -300,16 +301,12 @@ func RefineGu(c *gin.Context) {
 		insightBonus /= immortalPenalty
 	}
 
-	// Final Rate Calculation
+	// Final Rate Calculation (ép luyện đã bỏ: công thức luôn 100% mới được luyện).
 	baseRate := recipe.SuccessRate
 	sumPositiveBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus + insightBonus
 
 	rawPositiveRate := baseRate + sumPositiveBonus
 	completionPenalty := 1.0
-	if isForcedRefine {
-		completionPenalty = unlockedRate / 100.0
-		rawPositiveRate = rawPositiveRate * completionPenalty
-	}
 
 	// Cap positive rate at 1.0 (100%) BEFORE applying negative debuff penalties
 	cappedPositiveRate := rawPositiveRate
@@ -529,12 +526,6 @@ func RefineGu(c *gin.Context) {
 				player.SoulHP = 1
 			}
 			statusMsg += fmt.Sprintf(" Luyện cổ CHÁY NỔ (Backfire)! Phản phệ dữ dội, tổn thất %d Hồn Phách và %.0f HP.", soulLoss, hpLoss)
-		} else if isForcedRefine {
-			player.HP -= 30.0
-			if player.HP < 10.0 {
-				player.HP = 10.0
-			}
-			statusMsg += " Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
 		}
 
 		if hasVitalSurvived {
@@ -643,14 +634,14 @@ func RefineGu(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "refine.gu", EntityType: "refining_recipe",
 		EntityID:       req.RecipeID,
-		RequestSummary: fmt.Sprintf("Luyện Cổ: công thức %s -> %s | Thành công: %v | Ép luyện: %v | Outcome: %s", req.RecipeID, targetName, isSuccess, isForcedRefine, outcome),
+		RequestSummary: fmt.Sprintf("Luyện Cổ: công thức %s -> %s | Thành công: %v | Outcome: %s", req.RecipeID, targetName, isSuccess, outcome),
 		Metadata: map[string]interface{}{
 			"recipe_id":      req.RecipeID,
 			"target_gu_id":   recipe.TargetGuID,
 			"target_gu_name": targetName,
 			"success":        isSuccess,
 			"outcome":        outcome,
-			"is_forced":      isForcedRefine,
+			"is_forced":      false,
 		},
 		IPAddress: c.ClientIP(), Success: isSuccess,
 	})

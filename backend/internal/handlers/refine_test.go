@@ -87,60 +87,16 @@ func TestCalculateRefinementPathGain(t *testing.T) {
 }
 
 func TestCollectRefineSupportBonus(t *testing.T) {
-	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
-		"GU_LITTLE_CARE": {
-			1: {
-				ID:   "GU_LITTLE_CARE",
-				Name: "Tiểu Tâm Cổ R1",
-				Rank: 1,
-				Effects: models.GuEffects{
-					Passive: &models.PassiveEffect{
-						SuccessRateBonus: 6.0,
-					},
-				},
-			},
-			2: {
-				ID:   "GU_LITTLE_CARE",
-				Name: "Tiểu Tâm Cổ R2",
-				Rank: 2,
-				Effects: models.GuEffects{
-					Passive: &models.PassiveEffect{
-						SuccessRateBonus: 10.0,
-					},
-				},
-			},
-		},
-		"GU_ICE_MUSCLE": {
-			1: {
-				ID:   "GU_ICE_MUSCLE",
-				Name: "Băng Cơ Cổ R1",
-				Rank: 1,
-				Effects: models.GuEffects{
-					Passive: &models.PassiveEffect{
-						SuccessRateBonus: 6.0,
-					},
-				},
-			},
-		},
-	}
-
+	// Bonus Cổ phụ trợ đã bị loại bỏ: stub luôn trả 0 kể cả khi có Cổ success_rate_bonus.
 	p := &models.Player{
 		GuInventory: models.GuInventory{
-			// Two copies of GU_LITTLE_CARE (R1 and R2) equipped
-			{InstanceID: "care-1", GuID: "GU_LITTLE_CARE", Rank: 1, Status: "ACTIVE", Equipped: true},
 			{InstanceID: "care-2", GuID: "GU_LITTLE_CARE", Rank: 2, Status: "ACTIVE", Equipped: true},
-			// One copy of GU_ICE_MUSCLE equipped
 			{InstanceID: "ice-1", GuID: "GU_ICE_MUSCLE", Rank: 1, Status: "ACTIVE", Equipped: true},
-			// Unequipped or dead copies
-			{InstanceID: "ice-2", GuID: "GU_ICE_MUSCLE", Rank: 1, Status: "DEAD", Equipped: true},
-			{InstanceID: "ice-3", GuID: "GU_ICE_MUSCLE", Rank: 1, Status: "ACTIVE", Equipped: false},
 		},
 	}
 
-	// Should only take GU_LITTLE_CARE R2 (+10%) and GU_ICE_MUSCLE R1 (+6%) = 16% total -> 0.16
 	got := collectRefineSupportBonus(p)
-	want := 0.16
-	if got != want {
-		t.Errorf("collectRefineSupportBonus() = %v, want %v", got, want)
+	if got != 0.0 {
+		t.Errorf("collectRefineSupportBonus() = %v, want 0 (bonus Cổ phụ trợ đã bỏ)", got)
 	}
 }
