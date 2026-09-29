@@ -102,8 +102,9 @@ export const equipmentJobsPages: WikiPage[] = [
             💤 <strong>Mệt Mỏi & Phản Phệ khi Luyện Cổ:</strong>
             <ul className="list-disc list-inside mt-2 space-y-1">
               <li><strong>Điều kiện:</strong> Chỉ bị ảnh hưởng khi <em>Luyện Tiên Cổ (Rank 6+)</em> hoặc <em>Luyện Cổ Rank &ge; Rank Cảnh Giới bản thân</em>. Luyện Cổ bậc thấp hơn bản thân ("cổ cùi") không làm tổn hao tâm thần.</li>
-              <li><strong>Tâm Thần Mệt Mỏi (refine_fatigue):</strong> Giảm <strong>25%</strong> tỉ lệ Luyện Cổ thành công trong 10 phút.</li>
-              <li><strong>Luyện Cổ Phản Phệ (refine_backfire):</strong> Xuất hiện khi cố Luyện Cổ trong lúc đang mệt mỏi hoặc bị nổ lò. Giảm <strong>50%</strong> tỉ lệ Luyện Cổ thành công trong 20 phút (tiếp tục luyện sẽ gia hạn 20 phút).</li>
+              <li><strong>Tâm Thần Mệt Mỏi (refine_fatigue):</strong> Giảm <strong>50%</strong> tỉ lệ Luyện Cổ thành công trong 10 phút.</li>
+              <li><strong>Luyện Cổ Phản Phệ (refine_backfire):</strong> Xuất hiện khi cố Luyện Cổ trong lúc đang mệt mỏi hoặc bị nổ lò. Giảm <strong>95%</strong> tỉ lệ Luyện Cổ thành công trong 20 phút (tiếp tục luyện sẽ gia hạn 20 phút).</li>
+              <li><strong>Tâm Đắc (refine_insight_R):</strong> Mỗi lần luyện rank R thất bại +1 tầng (+1%/tầng, không giới hạn, chỉ buff đúng rank R). Luyện thành công rank R reset về 0.</li>
             </ul>
           </div>
         </div>

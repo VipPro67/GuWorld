@@ -6,6 +6,33 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func TestRefineInsightStacksPerRank(t *testing.T) {
+	p := &models.Player{
+		CharacterState: models.CharacterState{
+			Statuses: models.StatusList{
+				{ID: "refine_insight_3", Value: 5},
+				{ID: "refine_insight_4", Value: 2},
+			},
+		},
+	}
+	if got := refineInsightStacks(p, 3); got != 5 {
+		t.Errorf("refineInsightStacks(R3) = %d, want 5", got)
+	}
+	if got := refineInsightStacks(p, 4); got != 2 {
+		t.Errorf("refineInsightStacks(R4) = %d, want 2", got)
+	}
+	if got := refineInsightStacks(p, 5); got != 0 {
+		t.Errorf("refineInsightStacks(R5) = %d, want 0 (rank khác không ké)", got)
+	}
+	// Bonus 1%/stack, không cap.
+	if bonus := float64(refineInsightStacks(p, 3)) * RefineInsightBonusPerStack; bonus != 0.05 {
+		t.Errorf("insight bonus R3 = %v, want 0.05", bonus)
+	}
+	if RefineInsightBonusPerStack != 0.01 {
+		t.Errorf("RefineInsightBonusPerStack = %v, want 0.01", RefineInsightBonusPerStack)
+	}
+}
+
 func TestCalculateRefinementPathGain(t *testing.T) {
 	tests := []struct {
 		targetRank      int

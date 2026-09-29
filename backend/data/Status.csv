@@ -9,3 +9,12 @@ refine_backfire,Luyện Cổ Phản Phệ,"[{""id"":""REFINE_SUCCESS"",""trigger
 sat_khi,Sát Khí Đồ Sát,[],120,[],Tích tụ oán khí đồ sát. Khi bị đánh bại sẽ rơi thêm từ 50% đến 250% số lượng tài sản (tùy tầng Sát Khí).
 regional_wall_suppression,Áp Chế Giới Vực,"[{""id"":""STAT_MODS"",""trigger"":""ALWAYS_ON"",""target"":{""selector"":""SELF""},""operations"":[{""op"":""UNIQUE"",""code"":""STAT_MODS"",""params"":{""value"":{""attack"":-0.2,""defense"":-0.2,""speed"":-0.2}}}]}]",15,[],Chịu áp chế của Giới Vực Bích khi di chuyển giữa các Đại Vực. Tu vi rank càng cao bị áp chế càng nặng.
 pvp_immunity,Miễn Chiến Hồi Sinh,[],10,[],"Được Thiên Đạo che chở sau khi hồi sinh, miễn nhiễm mọi đòn tấn công PvP. Chủ động khai chiến sẽ phá vỡ trạng thái này."
+refine_insight_1,Luyện Cổ Tâm Đắc R1,[],0,[],"Mỗi lần luyện cổ R1 thất bại tích 1 tầng (+1% tỉ lệ luyện R1, không giới hạn). Luyện thành công R1 thì reset về 0."
+refine_insight_2,Luyện Cổ Tâm Đắc R2,[],0,[],"Mỗi lần luyện cổ R2 thất bại tích 1 tầng (+1% tỉ lệ luyện R2, không giới hạn). Luyện thành công R2 thì reset về 0."
+refine_insight_3,Luyện Cổ Tâm Đắc R3,[],0,[],"Mỗi lần luyện cổ R3 thất bại tích 1 tầng (+1% tỉ lệ luyện R3, không giới hạn). Luyện thành công R3 thì reset về 0."
+refine_insight_4,Luyện Cổ Tâm Đắc R4,[],0,[],"Mỗi lần luyện cổ R4 thất bại tích 1 tầng (+1% tỉ lệ luyện R4, không giới hạn). Luyện thành công R4 thì reset về 0."
+refine_insight_5,Luyện Cổ Tâm Đắc R5,[],0,[],"Mỗi lần luyện cổ R5 thất bại tích 1 tầng (+1% tỉ lệ luyện R5, không giới hạn). Luyện thành công R5 thì reset về 0."
+refine_insight_6,Luyện Cổ Tâm Đắc R6,[],0,[],"Mỗi lần luyện cổ R6 thất bại tích 1 tầng (+1% tỉ lệ luyện R6, không giới hạn). Luyện thành công R6 thì reset về 0."
+refine_insight_7,Luyện Cổ Tâm Đắc R7,[],0,[],"Mỗi lần luyện cổ R7 thất bại tích 1 tầng (+1% tỉ lệ luyện R7, không giới hạn). Luyện thành công R7 thì reset về 0."
+refine_insight_8,Luyện Cổ Tâm Đắc R8,[],0,[],"Mỗi lần luyện cổ R8 thất bại tích 1 tầng (+1% tỉ lệ luyện R8, không giới hạn). Luyện thành công R8 thì reset về 0."
+refine_insight_9,Luyện Cổ Tâm Đắc R9,[],0,[],"Mỗi lần luyện cổ R9 thất bại tích 1 tầng (+1% tỉ lệ luyện R9, không giới hạn). Luyện thành công R9 thì reset về 0."

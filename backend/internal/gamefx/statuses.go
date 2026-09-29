@@ -44,7 +44,7 @@ var StatusRegistry = make(map[string]StatusDef)
 // status_dictionary table is empty (e.g. in tests or before a CSV import).
 // CSV/DB rows are the source of truth once loaded.
 func defaultStatuses() []StatusDef {
-	return []StatusDef{
+	defs := []StatusDef{
 		{
 			Key:  "severely_wounded",
 			Name: "Trọng Thương",
@@ -99,19 +99,19 @@ func defaultStatuses() []StatusDef {
 			Key:  "refine_fatigue",
 			Name: "Tâm Thần Mệt Mỏi",
 			Effects: Effects{
-				RefineBonus: -0.25,
+				RefineBonus: -0.50,
 			},
 			DefaultDurationMinutes: 10,
-			Description:            "Luyện cổ khiến tâm thần mệt mỏi, giảm 25% tỉ lệ luyện cổ thành công.",
+			Description:            "Luyện cổ khiến tâm thần mệt mỏi, giảm 50% tỉ lệ luyện cổ thành công.",
 		},
 		{
 			Key:  "refine_backfire",
 			Name: "Luyện Cổ Phản Phệ",
 			Effects: Effects{
-				RefineBonus: -0.50,
+				RefineBonus: -0.95,
 			},
 			DefaultDurationMinutes: 20,
-			Description:            "Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 50% tỉ lệ luyện cổ thành công.",
+			Description:            "Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 95% tỉ lệ luyện cổ thành công.",
 		},
 		{
 			Key:  "regional_wall_suppression",
@@ -127,6 +127,28 @@ func defaultStatuses() []StatusDef {
 			Description:            "Chịu áp chế khi xuyên qua Giới Vực Bích giữa các Đại Vực. Công thủ tốc đều suy giảm (tu vi rank càng cao bị áp chế càng nặng).",
 		},
 	}
+	for rank := 1; rank <= 9; rank++ {
+		defs = append(defs, StatusDef{
+			Key:                    RefineInsightKey(rank),
+			Name:                   "Luyện Cổ Tâm Đắc",
+			Effects:                Effects{},
+			DefaultDurationMinutes: 0,
+			Description:            "Mỗi lần luyện cổ thất bại tích 1 tầng (+1% tỉ lệ cho đúng rank đó, không giới hạn). Luyện thành công rank đó thì reset về 0.",
+		})
+	}
+	return defs
+}
+
+// RefineInsightKey returns the per-rank pity status key.
+// Each rank has its own stack: fail rank R only buffs rank R.
+func RefineInsightKey(rank int) string {
+	if rank < 1 {
+		rank = 1
+	}
+	if rank > 9 {
+		rank = 9
+	}
+	return fmt.Sprintf("refine_insight_%d", rank)
 }
 
 // EffectsForValue returns the status effects adjusted for the instance's

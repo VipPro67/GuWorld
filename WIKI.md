@@ -421,8 +421,9 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 
 Để mô phỏng tiêu hao Thần Hồn và hạn chế việc spam Luyện Cổ liên tục:
 - **Điều kiện kích hoạt:** Chỉ bị ảnh hưởng khi **Luyện Tiên Cổ (Rank 6 trở lên)** hoặc **Luyện Cổ có Rank $\ge$ Rank Cảnh Giới của bản thân**. Luyện Cổ bậc thấp hơn bản thân ("cổ cùi") không làm tổn hao tâm thần và không làm dính mệt mỏi.
-- **[Tâm Thần Mệt Mỏi] (`refine_fatigue`):** Nhận được sau khi Luyện Cổ thỏa điều kiện trên. Giảm **25%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **10 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực).
-- **[Luyện Cổ Phản Phệ] (`refine_backfire`):** Xuất hiện khi người chơi **vẫn cố gắng Luyện Cổ** trong lúc đang bị `refine_fatigue` (tự động leo thang) hoặc khi Luyện Cổ bị **Cháy Nổ (Backfire)**. Giảm **50%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **20 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực). Tiếp tục luyện khi đang bị Phản Phệ sẽ gia hạn thêm 20 phút.
+- **[Tâm Thần Mệt Mỏi] (`refine_fatigue`):** Nhận được sau khi Luyện Cổ thỏa điều kiện trên. Giảm **50%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **10 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực).
+- **[Luyện Cổ Phản Phệ] (`refine_backfire`):** Xuất hiện khi người chơi **vẫn cố gắng Luyện Cổ** trong lúc đang bị `refine_fatigue` (tự động leo thang) hoặc khi Luyện Cổ bị **Cháy Nổ (Backfire)**. Giảm **95%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **20 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực). Tiếp tục luyện khi đang bị Phản Phệ sẽ gia hạn thêm 20 phút.
+- **[Tâm Đắc Luyện Cổ] (`refine_insight_1..9`):** Pity theo từng rank. Mỗi lần luyện rank R thất bại (trừ fail do Tiên Cổ duy nhất đã tồn tại) tích 1 tầng `refine_insight_R` (`+1%/tầng`, không giới hạn, vĩnh viễn). Bonus chỉ cộng khi luyện đúng rank đó (chịu Immortal Penalty như các bonus dương khác). Luyện thành công rank R thì reset tầng rank đó về 0.
 
 ## 7. Sát chiêu
 

@@ -42,8 +42,30 @@ type RefineRateBreakdown struct {
 	SupportBonus       float64 `json:"support_bonus"`
 	StatusPenalty      float64 `json:"status_penalty"`
 	EnvBonus           float64 `json:"env_bonus"`
+	InsightBonus       float64 `json:"insight_bonus"`
+	InsightStacks      int     `json:"insight_stacks"`
 	FinalRate          float64 `json:"final_rate"`
 	RefinementRealm    int     `json:"refinement_realm"`
+}
+
+// RefineInsightBonusPerStack is the pity bonus per failed attempt (+1%/stack, no cap).
+const RefineInsightBonusPerStack = 0.01
+
+// refineInsightStacks returns active pity stacks for the exact target rank.
+func refineInsightStacks(player *models.Player, targetRank int) int {
+	if player == nil || targetRank < 1 || targetRank > 9 {
+		return 0
+	}
+	key := gamefx.RefineInsightKey(targetRank)
+	for _, st := range player.Statuses.Active() {
+		if st.ID == key {
+			if st.Value < 0 {
+				return 0
+			}
+			return int(st.Value)
+		}
+	}
+	return 0
 }
 
 func determineRefineOutcome(roll, finalRate float64, refinementRealm, targetRank int) RefineOutcome {

@@ -282,6 +282,11 @@ func RefineGu(c *gin.Context) {
 	}
 	supportBonus := supportGuBonus + posRefineBonus
 
+	// Per-rank pity: fail rank R stacks only buff rank R (+1%/stack, no cap).
+	// Success on that rank resets its stacks to 0 (handled after outcome).
+	insightStacks := refineInsightStacks(&player, recipe.TargetRank)
+	insightBonus := float64(insightStacks) * RefineInsightBonusPerStack
+
 	// Apply Immortal Penalty to flat bonuses for Rank 6+
 	immortalPenalty := gamefx.RefinementImmortalPenalty(recipe.TargetRank)
 
@@ -292,11 +297,12 @@ func RefineGu(c *gin.Context) {
 		supportBonus /= immortalPenalty
 		envBonus /= immortalPenalty
 		materialQualityBonus /= immortalPenalty
+		insightBonus /= immortalPenalty
 	}
 
 	// Final Rate Calculation
 	baseRate := recipe.SuccessRate
-	sumPositiveBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus
+	sumPositiveBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus + insightBonus
 
 	rawPositiveRate := baseRate + sumPositiveBonus
 	completionPenalty := 1.0
@@ -335,6 +341,8 @@ func RefineGu(c *gin.Context) {
 		SupportBonus:       supportBonus,
 		StatusPenalty:      negRefinePenalty,
 		EnvBonus:           envBonus,
+		InsightBonus:       insightBonus,
+		InsightStacks:      insightStacks,
 		FinalRate:          finalSuccessRate,
 		RefinementRealm:    refinementRealm,
 	}
@@ -555,17 +563,31 @@ func RefineGu(c *gin.Context) {
 		if hasFatigue {
 			player.Statuses.Remove("refine_fatigue")
 			player.Statuses.Add("refine_backfire", "refine", 20*time.Minute, 0)
-			statusMsg += " [Luyện Cổ Phản Phệ]: Tỉ lệ Luyện Cổ giảm 50% trong 20 phút do cố luyện khi tâm thần mệt mỏi!"
+			statusMsg += " [Luyện Cổ Phản Phệ]: Tỉ lệ Luyện Cổ giảm 95% trong 20 phút do cố luyện khi tâm thần mệt mỏi!"
 		} else if hasBackfire {
 			player.Statuses.Add("refine_backfire", "refine", 20*time.Minute, 0)
-			statusMsg += " Trạng thái [Luyện Cổ Phản Phệ] (giảm 50% tỉ lệ) đã được gia hạn thêm 20 phút."
+			statusMsg += " Trạng thái [Luyện Cổ Phản Phệ] (giảm 95% tỉ lệ) đã được gia hạn thêm 20 phút."
 		} else if outcome == OutcomeFailBackfire {
 			player.Statuses.Add("refine_backfire", "refine", 20*time.Minute, 0)
-			statusMsg += " [Luyện Cổ Phản Phệ]: Thất bại cháy nổ khiến bạn bị Phản Phệ! Tỉ lệ Luyện Cổ giảm 50% trong 20 phút."
+			statusMsg += " [Luyện Cổ Phản Phệ]: Thất bại cháy nổ khiến bạn bị Phản Phệ! Tỉ lệ Luyện Cổ giảm 95% trong 20 phút."
 		} else {
 			player.Statuses.Add("refine_fatigue", "refine", 10*time.Minute, 0)
-			statusMsg += " [Tâm Thần Mệt Mỏi]: Tỉ lệ Luyện Cổ lượt tiếp theo giảm 25% trong 10 phút."
+			statusMsg += " [Tâm Thần Mệt Mỏi]: Tỉ lệ Luyện Cổ lượt tiếp theo giảm 50% trong 10 phút."
 		}
+	}
+
+	// Per-rank pity (Tâm Đắc): fail +1 stack (+1% cho đúng rank, không cap),
+	// success rank đó reset về 0. Unique-fail không tích vì fail khách quan.
+	insightKey := gamefx.RefineInsightKey(recipe.TargetRank)
+	if outcome == OutcomeSuccess {
+		if refineInsightStacks(&player, recipe.TargetRank) > 0 || player.Statuses.Has(insightKey) {
+			player.Statuses.Remove(insightKey)
+			statusMsg += " [Tâm Đắc viên mãn]: Luyện thành công, pity rank này reset về 0."
+		}
+	} else if !isUniqueImmortalFail {
+		newStacks := insightStacks + 1
+		player.Statuses.Add(insightKey, "refine", 0, float64(newStacks))
+		statusMsg += fmt.Sprintf(" [Tâm Đắc R%d]: Tích %d tầng (+%d%% tỉ lệ luyện R%d, không giới hạn).", recipe.TargetRank, newStacks, newStacks, recipe.TargetRank)
 	}
 
 	statusesRaw, err := player.Statuses.Value()

@@ -208,8 +208,9 @@ Danh sách hiện tại (7 trạng thái):
 | `exhausted` | Kiệt Sức | -30% speed, -50% hiệu suất tu luyện | 10 phút | `cultivate` |
 | `blessed` | Phúc Trạch | +5 may mắn, +10% hiệu suất tu luyện | 60 phút | — |
 | `death_penalty` | Hình Phạt Tử Vong | -50% attack/defense/speed | 30 phút | — |
-| `refine_fatigue` | Tâm Thần Mệt Mỏi | -25% tỉ lệ Luyện Cổ | 10 phút | — |
-| `refine_backfire` | Luyện Cổ Phản Phệ | -50% tỉ lệ Luyện Cổ | 20 phút | — |
+| `refine_fatigue` | Tâm Thần Mệt Mỏi | -50% tỉ lệ Luyện Cổ | 10 phút | — |
+| `refine_backfire` | Luyện Cổ Phản Phệ | -95% tỉ lệ Luyện Cổ | 20 phút | — |
+| `refine_insight_1..9` | Luyện Cổ Tâm Đắc R1..R9 | +1%/tầng cho đúng rank đó, không cap (Value = số tầng) | Vĩnh viễn (reset về 0 khi luyện thành công rank đó) | — |
 
 Helper dùng chung: `gamefx.Get(player)` (resolve effects + BlockedActions), `gamefx.HasBlockedAction(player, action)`, `gamefx.BlockingStatuses(player, action)`, `handlers.GrantPlayerStatus/RevokePlayerStatus/CleanExpiredPlayerStatuses` (cấp/gỡ/dọn trạng thái trong transaction), worker `worker.StartStatusExpiryWorker` (dọn hết hạn mỗi phút).
 

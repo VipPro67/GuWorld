@@ -93,15 +93,31 @@ func TestRefineStatuses(t *testing.T) {
 	pFatigue := &models.Player{}
 	pFatigue.Statuses = models.StatusList{{ID: "refine_fatigue"}}
 	fxFatigue := Get(pFatigue)
-	if fxFatigue.RefineBonus != -0.25 {
-		t.Fatalf("refine_fatigue RefineBonus = %v, want -0.25", fxFatigue.RefineBonus)
+	if fxFatigue.RefineBonus != -0.50 {
+		t.Fatalf("refine_fatigue RefineBonus = %v, want -0.50", fxFatigue.RefineBonus)
 	}
 
 	pBackfire := &models.Player{}
 	pBackfire.Statuses = models.StatusList{{ID: "refine_backfire"}}
 	fxBackfire := Get(pBackfire)
-	if fxBackfire.RefineBonus != -0.50 {
-		t.Fatalf("refine_backfire RefineBonus = %v, want -0.50", fxBackfire.RefineBonus)
+	if fxBackfire.RefineBonus != -0.95 {
+		t.Fatalf("refine_backfire RefineBonus = %v, want -0.95", fxBackfire.RefineBonus)
+	}
+}
+
+func TestRefineInsightStatuses(t *testing.T) {
+	for rank := 1; rank <= 9; rank++ {
+		key := RefineInsightKey(rank)
+		if !ValidStatuses()[key] {
+			t.Fatalf("insight status %s missing from fallback registry", key)
+		}
+	}
+	// Insight statuses carry no global RefineBonus; bonus is computed
+	// per-rank in the refine handler from the status Value.
+	p := &models.Player{}
+	p.Statuses = models.StatusList{{ID: "refine_insight_3", Value: 7}}
+	if fx := Get(p); fx.RefineBonus != 0 {
+		t.Fatalf("insight status must not contribute global RefineBonus, got %v", fx.RefineBonus)
 	}
 }
 
