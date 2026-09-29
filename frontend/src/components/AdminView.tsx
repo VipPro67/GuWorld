@@ -4583,7 +4583,7 @@ export const AdminView: React.FC = () => {
       {/* Gu Edit Modal */}
       {guEdit !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setGuEdit(null)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-3xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-6xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{guEdit.id ? "Sửa" : "Thêm"} Cổ Trùng</h3>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={guEdit.id || ""} onChange={e => setGuEdit({...guEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
@@ -4652,6 +4652,8 @@ export const AdminView: React.FC = () => {
             {/* Gu Effects - Composable Blocks */}
             <GuEffectsEditor
               effects={guEdit.effects || {}}
+              source="gu"
+              effectKey={`${guEdit.id || "new"}:${guEdit.rank || 1}`}
               onChange={(newEffects) => setGuEdit({ ...guEdit, effects: newEffects })}
             />
             <div className="flex justify-end gap-3 mt-6">

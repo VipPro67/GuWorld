@@ -200,3 +200,54 @@ func TestCompiledProjectionSupplementsPartialAuthoredBlocks(t *testing.T) {
 		t.Fatalf("growth = %+v, %v", profile, ok)
 	}
 }
+
+func TestGuStatValueReadsOnlyFlatAlwaysOnPassives(t *testing.T) {
+	var effects GuEffects
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":100}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan block effects: %v", err)
+	}
+
+	if got := GuStatValue(Gu{Effects: effects}, "ATTACK"); got != 12 {
+		t.Fatalf("attack passive = %v, want 12 (growth cap must not be loaded as a passive)", got)
+	}
+}
+
+func TestEquippedTimeSpeedBonusReadsBlockEffects(t *testing.T) {
+	previous := GuRegistry
+	t.Cleanup(func() { GuRegistry = previous })
+
+	var effects GuEffects
+	raw := `[{"id":"PASSIVE_TIME","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"TIME_SPEED","sub_type":"ADD_FLAT","value":2.5}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan block effects: %v", err)
+	}
+	GuRegistry = map[string]map[int]GuDictionaryItem{
+		"GU_TIME": {
+			1: {ID: "GU_TIME", Rank: 1, Effects: effects},
+			2: {ID: "GU_TIME", Rank: 2, Effects: effects},
+		},
+	}
+
+	inventory := []GuInstance{
+		{GuID: "GU_TIME", Rank: 1, Equipped: true, Status: "ACTIVE"},
+		{GuID: "GU_TIME", Rank: 2, Equipped: true, Status: "ACTIVE"},
+		{GuID: "GU_TIME", Rank: 2, Equipped: true, Status: "ACTIVE"},
+	}
+	if got := EquippedTimeSpeedBonus(inventory); got != 2.5 {
+		t.Fatalf("time speed bonus = %v, want 2.5", got)
+	}
+}
+
+func TestGetFlatGuEffectsReadsBlockPassives(t *testing.T) {
+	var effects GuEffects
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"ADD_FLAT","value":34},{"op":"STAT_MOD","stat":"ACCURACY","sub_type":"ADD_FLAT","value":5}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan block effects: %v", err)
+	}
+
+	flat := GetFlatGuEffects(Gu{Effects: effects})
+	if flat["flat_damage"] != 12 || flat["flat_defense"] != 34 || flat["accuracy"] != 5 {
+		t.Fatalf("unexpected flat passive projection: %+v", flat)
+	}
+}

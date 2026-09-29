@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EMPTY_EFFECT_ENVELOPE, captureBonus, combatCategory, disguiseLevel, effectEnvelope, growthConfig, hasCapability, investigation, isCombatEligible, operationsBy, statModifier, type EffectEnvelope } from "./effect-blocks.ts";
+import { EMPTY_EFFECT_ENVELOPE, captureBonus, combatCategory, disguiseLevel, effectEnvelope, growthConfig, hasCapability, investigation, isCombatEligible, normalizeEffectEnvelope, operationsBy, statModifier, type EffectEnvelope } from "./effect-blocks.ts";
 const effects: EffectEnvelope = { schema_version: 2, blocks: [
   { id: "passive", trigger: "ALWAYS_ON", target: { selector: "SELF" }, operations: [
     { op: "STAT_MOD", stat: "INVESTIGATION", value: 2 }, { op: "STAT_MOD", stat: "INVESTIGATION", value: 3 },
@@ -14,6 +14,12 @@ const effects: EffectEnvelope = { schema_version: 2, blocks: [
     { op: "STAT_MOD", sub_type: "GROWTH_CAP", stat: "ATTACK", value: 12 }, { op: "UNIQUE", code: "GROWTH_DURATION_HOURS", params: { value: 48 } },
   ] },
 ] };
-test("effectEnvelope requires schema_version 2", () => { assert.equal(effectEnvelope({ blocks: effects.blocks } as never), EMPTY_EFFECT_ENVELOPE); assert.equal(effectEnvelope(effects), effects); assert.equal(effectEnvelope({ effects }), effects); });
+test("effectEnvelope accepts block envelopes with or without an explicit schema version", () => { assert.deepEqual(effectEnvelope({ blocks: effects.blocks }), { blocks: effects.blocks }); assert.equal(effectEnvelope(effects), effects); assert.equal(effectEnvelope({ effects }), effects); assert.equal(effectEnvelope(null), EMPTY_EFFECT_ENVELOPE); });
+test("normalizeEffectEnvelope loads Gu.csv arrays, API envelopes, and JSON strings", () => {
+  assert.deepEqual(normalizeEffectEnvelope(effects.blocks), effects);
+  assert.deepEqual(normalizeEffectEnvelope(effects), effects);
+  assert.deepEqual(normalizeEffectEnvelope(JSON.stringify(effects.blocks)), effects);
+  assert.deepEqual(normalizeEffectEnvelope("not json"), { schema_version: 2, blocks: [] });
+});
 test("modifier selectors sum canonical operations", () => { assert.equal(investigation(effects), 5); assert.equal(disguiseLevel(effects), 4); assert.equal(statModifier(effects, "speed"), 0.2); assert.equal(operationsBy(effects, { op: "damage" }).length, 1); });
 test("domain selectors read block operations", () => { assert.equal(hasCapability(effects, "disguise"), true); assert.equal(isCombatEligible(effects), true); assert.equal(captureBonus(effects), 0.25); assert.equal(combatCategory(effects), "attack"); assert.deepEqual(growthConfig(effects), { max_attack: 12, max_defense: 0, max_hp: 0, max_speed: 0, hours_to_max: 48 }); });
