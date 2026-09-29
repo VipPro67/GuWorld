@@ -70,6 +70,29 @@ export interface EffectCatalogMetadata {
 
 export const EMPTY_EFFECT_ENVELOPE: EffectEnvelope = { blocks: [] };
 
+/**
+ * Accepts both the database API envelope and the bare block array used by
+ * Gu.csv. Keeping this conversion in one place prevents the admin editor from
+ * silently showing an empty effect when it opens CSV-shaped data.
+ */
+export function normalizeEffectEnvelope(value: unknown): EffectEnvelope {
+  let candidate = value;
+  if (typeof candidate === "string") {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch {
+      return { schema_version: 2, blocks: [] };
+    }
+  }
+  if (Array.isArray(candidate)) {
+    return { schema_version: 2, blocks: candidate as EffectBlock[] };
+  }
+  if (candidate && typeof candidate === "object" && Array.isArray((candidate as Partial<EffectEnvelope>).blocks)) {
+    return { schema_version: 2, blocks: (candidate as Partial<EffectEnvelope>).blocks as EffectBlock[] };
+  }
+  return { schema_version: 2, blocks: [] };
+}
+
 export type EffectLike = EffectEnvelope | EffectBlock[] | { effects?: EffectEnvelope | EffectBlock[] | null } | null | undefined;
 
 export function effectEnvelope(value: EffectLike): EffectEnvelope {
