@@ -402,7 +402,7 @@ Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên
 6. **Cảnh giới Luyện Đạo:** Tăng tỉ lệ thành công (+5%, +10%, +18%, +25% tương ứng với cảnh giới từ Đại Sư đến Vô Thượng Đại Tông Sư).
 7. **Cảnh giới Lưu Phái đích:** Cảnh giới lưu phái của Cổ đang luyện (tối đa +10% ở Vô Thượng Đại Tông Sư, cụ thể: +2%, +5%, +8%, +10% ở các cấp cảnh giới tương ứng).
 8. **Khí vận:** Dựa trên Đạo Ngân Vận Đạo và hiệu ứng Phúc Trạch (tối đa +10%).
-9. **Hỗ trợ:** Cổ Trí Tuệ Đạo/Luyện Đạo đang kích hoạt (có dòng `success_rate_bonus`).
+9. **Hỗ trợ:** Chủng tộc/thể chất dương (vd Người Lông +10%). Bonus Cổ phụ trợ (`success_rate_bonus`) đã bị loại bỏ, Cổ trang bị không còn cộng tỉ lệ luyện.
 10. **Môi trường:** Luyện Cổ tại Đại Vực có thuộc tính phù hợp (+5%).
 11. **Tiên Cổ Giảm Trừ (Immortal Penalty):** Khi luyện Tiên Cổ (Rank 6 - 9), toàn bộ các gia thành cộng thẳng ở trên (Mục 4, 6, 7, 8, 9, 10) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100. Việc này khiến ngoại vật trở nên yếu ớt ở cấp độ Tiên Cổ, buộc Cổ Tiên phải dựa hoàn toàn vào Đạo Ngân Luyện Đạo (Mục 5) khổng lồ để chống lại độ khó kinh khủng này.
 12. **Tiêu hao Năng Lượng:** Luyện Cổ tiêu tốn sinh lực khiếu. Tiêu hao 20 Chân Nguyên đối với đồng cấp Phàm và 10 Tiên Nguyên đối với đồng cấp Tiên. Số lượng này nhân lên hoặc giảm đi (x10 lần với Phàm, x100 lần với Tiên) cho mỗi bậc chênh lệch. Phàm nhân không thể luyện Tiên Cổ do lập tức cạn kiệt Chân Nguyên.

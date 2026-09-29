@@ -86,35 +86,10 @@ func determineRefineOutcome(roll, finalRate float64, refinementRealm, targetRank
 	return OutcomeFailNormal
 }
 
+// collectRefineSupportBonus đã bị loại bỏ cùng bonus Cổ phụ trợ.
+// Giữ stub trả về 0 để tương thích ngược (không còn được gọi trong RefineGu).
 func collectRefineSupportBonus(player *models.Player) float64 {
-	totalBonus := 0.0
-	bestRank := map[string]int{}
-	for _, gu := range player.GuInventory {
-		if !gu.Equipped || gu.Status != "ACTIVE" {
-			continue
-		}
-		if r, ok := bestRank[gu.GuID]; !ok || gu.Rank > r {
-			bestRank[gu.GuID] = gu.Rank
-		}
-	}
-
-	applied := map[string]bool{}
-	for _, gu := range player.GuInventory {
-		if !gu.Equipped || gu.Status != "ACTIVE" {
-			continue
-		}
-		if gu.Rank != bestRank[gu.GuID] || applied[gu.GuID] {
-			continue
-		}
-		applied[gu.GuID] = true
-
-		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok {
-			continue
-		}
-		totalBonus += models.GuStatValue(spec, "REFINE_SUCCESS")
-	}
-	return totalBonus / 100.0
+	return 0.0
 }
 
 // ParseRecipeID parses recipe_GU_ID_RANK_VARIANT into components.

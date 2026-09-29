@@ -1105,7 +1105,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       {/* Ép luyện đã bị loại bỏ: phải thôi diễn lên 100% mới được luyện */}
                       <div className="space-y-1">
                         <div className="text-[9px] text-amber-400 font-mono text-center bg-amber-950/20 border border-amber-900/20 py-1.5 px-2 rounded-lg leading-snug">
-                          🔒 Bí phương chưa hoàn thiện 100%. Hãy THÔI DIỄN cho hoàn chỉnh rồi mới luyện — không còn Ép Luyện.
+                          🔒 Bí phương chưa hoàn thiện 100%. Hãy THÔI DIỄN cho hoàn chỉnh rồi mới luyện.
                         </div>
                       </div>
                     </div>

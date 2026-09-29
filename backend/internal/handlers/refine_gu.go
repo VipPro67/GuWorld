@@ -272,8 +272,7 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	// Support Bonus & Status/Race Refine Effects
-	supportGuBonus := collectRefineSupportBonus(&player)
+	// Support Bonus: chỉ từ chủng tộc/thể chất dương (bonus Cổ phụ trợ đã bị loại bỏ).
 	posRefineBonus := 0.0
 	negRefinePenalty := 0.0
 	if fx.RefineBonus > 0 {
@@ -281,7 +280,7 @@ func RefineGu(c *gin.Context) {
 	} else if fx.RefineBonus < 0 {
 		negRefinePenalty = -fx.RefineBonus
 	}
-	supportBonus := supportGuBonus + posRefineBonus
+	supportBonus := posRefineBonus
 
 	// Per-rank pity: fail rank R stacks only buff rank R (+1%/stack, no cap).
 	// Success on that rank resets its stacks to 0 (handled after outcome).
