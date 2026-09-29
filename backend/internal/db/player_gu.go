@@ -514,14 +514,23 @@ func EquippedTimeSpeedBonus(q Queryer, playerID string) (float64, error) {
 	}
 	defer rows.Close()
 
-	var total float64
+	bestRank := make(map[string]int)
 	for rows.Next() {
 		var guID string
 		var rank int
 		if err := rows.Scan(&guID, &rank); err == nil {
-			if spec, ok := models.GetGu(guID, rank); ok {
-				total += models.GuStatValue(spec, "TIME_SPEED")
+			if rank > bestRank[guID] {
+				bestRank[guID] = rank
 			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	var total float64
+	for guID, rank := range bestRank {
+		if spec, ok := models.GetGu(guID, rank); ok {
+			total += models.GuStatValue(spec, "TIME_SPEED")
 		}
 	}
 	return total, nil

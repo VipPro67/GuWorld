@@ -433,13 +433,20 @@ func CompiledGuEffects(spec GuDictionaryItem) *gameplayeffects.Compiled {
 	return compiledGuDefinition(&spec.Effects)
 }
 
-// GuStatValue reads an ALWAYS_ON typed stat projection.
+// GuStatValue reads the flat ALWAYS_ON passive projection. Other STAT_MOD
+// subtypes (for example GROWTH_CAP or MULTIPLY_PERCENT) belong to separate
+// runtime projections and must not be folded into a player's flat stats.
 func GuStatValue(spec GuDictionaryItem, stat string) float64 {
+	return GuStatValueBySubtype(spec, stat, "ADD_FLAT")
+}
+
+// GuStatValueBySubtype reads one typed ALWAYS_ON stat projection.
+func GuStatValueBySubtype(spec GuDictionaryItem, stat, subType string) float64 {
 	compiled := CompiledGuEffects(spec)
 	if compiled == nil {
 		return 0
 	}
-	return compiled.StatValue(gameplayeffects.TriggerAlwaysOn, stat, "")
+	return compiled.StatValue(gameplayeffects.TriggerAlwaysOn, stat, subType)
 }
 
 // GuNativeMechanic returns the first compiled native operation with code.
@@ -790,6 +797,17 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 			res["cc_resist"] = gu.Effects.Passive.CCResist
 		}
 	}
+	// Block v2 is the canonical runtime source. Overlay the passive projection
+	// so block-only catalog rows behave exactly like their legacy equivalents.
+	for stat, key := range map[string]string{
+		"ATTACK": "flat_damage", "DEFENSE": "flat_defense",
+		"INVESTIGATION": "success_rate_bonus", "PATH_CONFLICT_REDUCTION": "path_conflict_reduction",
+		"ACCURACY": "accuracy", "TENACITY": "tenacity", "CC_RESIST": "cc_resist",
+	} {
+		if value := GuStatValue(gu, stat); value != 0 {
+			res[key] = value
+		}
+	}
 	return res
 }
 
@@ -1046,11 +1064,11 @@ func AllGuPaths() []string {
 	pathSet := make(map[string]struct{})
 	for _, ranks := range GuRegistry {
 		for _, item := range ranks {
-		for _, p := range item.Path {
-			normalized := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
-			pathSet[normalized] = struct{}{}
+			for _, p := range item.Path {
+				normalized := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
+				pathSet[normalized] = struct{}{}
+			}
 		}
-	}
 	}
 	allPathsCache = make([]string, 0, len(pathSet))
 	for p := range pathSet {
@@ -1069,16 +1087,24 @@ var ManaRegenScale = []float64{1, 2, 5, 20, 100, 10000, 1000000, 100000000, 1000
 // time_speed_multiplier and applies to all time flows (mana/hp/soul/thought
 // regen, lifespan decay, aperture internal years, Gu growth).
 func EquippedTimeSpeedBonus(inventory []GuInstance) float64 {
-	var total float64
+	bestRank := make(map[string]int)
 	for _, gu := range inventory {
-		if !gu.Equipped || gu.Status != "ACTIVE" {
+		if gu.Equipped && gu.Status == "ACTIVE" && gu.Rank > bestRank[gu.GuID] {
+			bestRank[gu.GuID] = gu.Rank
+		}
+	}
+	var total float64
+	applied := make(map[string]bool)
+	for _, gu := range inventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" || gu.Rank != bestRank[gu.GuID] || applied[gu.GuID] {
 			continue
 		}
+		applied[gu.GuID] = true
 		spec, ok := GetGu(gu.GuID, gu.Rank)
-		if !ok || spec.Effects.Passive == nil {
+		if !ok {
 			continue
 		}
-		total += spec.Effects.Passive.TimeSpeedMultiplier
+		total += GuStatValue(spec, "TIME_SPEED")
 	}
 	return total
 }
