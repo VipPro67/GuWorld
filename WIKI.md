@@ -639,6 +639,7 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 ### Bảo Hoàng Thiên chợ trời
 
 - Hỗ trợ niêm yết kiểu chợ, đấu giá và giao dịch/mục tiêu người mua.
+- Khi bán Cổ vào đơn thu mua, người bán phải chọn đủ các cá thể Cổ đúng loại và đúng hạng; Cổ bản mệnh, đang trang bị, bị khóa hoặc đã chết không thể giao dịch. Đơn Bí phương chỉ giao dịch từng bản một.
 - Có đặt giá, mua, hủy và kết toán đấu giá hết hạn.
 - Có chat Bảo Hoàng và tin nhắn real-time qua WebSocket.
 

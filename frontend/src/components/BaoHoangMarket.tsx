@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge } from "@/components/ui";
 import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
+import { buildBuyOrderExecution } from "./marketplaceGuSelection";
 
 interface RecipeData {
   recipe_id: string;
@@ -131,6 +132,7 @@ export function BaoHoangMarket({
   // Modal state for Buy/Sell Interaction
   const [selectedBuybackOrder, setSelectedBuybackOrder] = useState<BuybackOrder | null>(null);
   const [sellQtyInput, setSellQtyInput] = useState(1);
+  const [selectedBuybackGuIDs, setSelectedBuybackGuIDs] = useState<string[]>([]);
 
   // Form state for Async Trade Offer Creation
   const [offeredStones, setOfferedStones] = useState(0);
@@ -275,13 +277,14 @@ export function BaoHoangMarket({
       if (!sellRecipeID) return;
       targetPayload = sellRecipeID;
     }
+    const quantityRequested = sellItemType === "Gu" || sellItemType === "Recipe" ? 1 : sellQuantity;
     await createBuybackOrder({
       orderType: "SELL",
       itemType: sellItemType,
       itemTarget: targetPayload,
       guInstanceIds: guInstIDs,
       unitPrice: sellUnitPrice,
-      quantityRequested: sellQuantity,
+      quantityRequested,
       currency: sellCurrency,
       durationHours: sellDuration,
     });
@@ -634,6 +637,7 @@ export function BaoHoangMarket({
                             onClick={() => {
                               setSelectedBuybackOrder(order);
                               setSellQtyInput(1);
+                              setSelectedBuybackGuIDs([]);
                             }}
                             loading={actionLoading}
                             leftIcon={<ShoppingCart className="w-3.5 h-3.5" />}
@@ -647,6 +651,7 @@ export function BaoHoangMarket({
                             onClick={() => {
                               setSelectedBuybackOrder(order);
                               setSellQtyInput(1);
+                              setSelectedBuybackGuIDs([]);
                             }}
                             loading={actionLoading}
                             leftIcon={<Tag className="w-3.5 h-3.5" />}
@@ -1161,7 +1166,7 @@ export function BaoHoangMarket({
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200"
                     >
                       <option value="">-- Chọn Cổ Trùng --</option>
-                      {guInventory.filter(g => !g.is_vital && g.status !== "DEAD").map((g) => {
+                      {guInventory.filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD").map((g) => {
                         const spec = guSpecFor(g.gu_id, g.rank);
                         return (
                           <option key={g.instance_id} value={g.instance_id}>
@@ -1200,7 +1205,7 @@ export function BaoHoangMarket({
                   </div>
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Số Lượng Bán</label>
-                    <GameInput type="number" min={1} value={sellQuantity} onChange={(e) => setSellQuantity(Number(e.target.value))} />
+                    <GameInput type="number" min={1} disabled={sellItemType === "Gu" || sellItemType === "Recipe"} value={sellItemType === "Gu" || sellItemType === "Recipe" ? 1 : sellQuantity} onChange={(e) => setSellQuantity(Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Thời Hạn (Giờ)</label>
@@ -1884,10 +1889,11 @@ export function BaoHoangMarket({
                     } else {
                       let owned = 0;
                       if (selectedBuybackOrder.item_type === "Gu") {
-                        const targetGuId = typeof selectedBuybackOrder.item_target === "object" && selectedBuybackOrder.item_target !== null
-                          ? (selectedBuybackOrder.item_target as { gu_id?: string }).gu_id
-                          : String(selectedBuybackOrder.item_target);
-                        owned = player.gu_inventory?.filter(g => g.gu_id === targetGuId && g.status !== "DEAD").length || 0;
+                        const target = selectedBuybackOrder.item_target as { gu_id?: string; rank?: number };
+                        owned = guInventory.filter((g) =>
+                          g.gu_id === target.gu_id && g.rank === Number(target.rank) &&
+                          g.status !== "DEAD" && !g.is_vital && !g.equipped
+                        ).length;
                       } else if (selectedBuybackOrder.item_type === "Material") {
                         const matId = typeof selectedBuybackOrder.item_target === "string" ? selectedBuybackOrder.item_target : String(selectedBuybackOrder.item_target);
                         owned = player.materials_inventory?.[matId] || 0;
@@ -1905,9 +1911,43 @@ export function BaoHoangMarket({
                 min={1}
                 max={selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled}
                 value={sellQtyInput}
-                onChange={(e) => setSellQtyInput(Math.max(1, Number(e.target.value) || 1))}
+                onChange={(e) => setSellQtyInput(Math.max(1, Math.min(
+                  selectedBuybackOrder.quantity_requested - selectedBuybackOrder.quantity_filled,
+                  Number(e.target.value) || 1,
+                )))}
               />
             </div>
+
+            {selectedBuybackOrder.order_type !== "SELL" && selectedBuybackOrder.item_type === "Gu" && (() => {
+              const target = selectedBuybackOrder.item_target as { gu_id?: string; rank?: number };
+              const eligibleGus = guInventory.filter((g) =>
+                g.gu_id === target.gu_id && g.rank === Number(target.rank) &&
+                g.status !== "DEAD" && !g.is_vital && !g.equipped
+              );
+              return (
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-400">
+                    Chọn đúng {sellQtyInput} Cổ trùng ({selectedBuybackGuIDs.length}/{sellQtyInput})
+                  </label>
+                  <div className="max-h-40 overflow-y-auto space-y-1 rounded-xl border border-zinc-800 bg-zinc-950 p-2">
+                    {eligibleGus.length === 0 ? (
+                      <p className="text-xs text-red-400">Không có Cổ trùng đúng loại và hạng để bán.</p>
+                    ) : eligibleGus.map((g) => {
+                      const checked = selectedBuybackGuIDs.includes(g.instance_id);
+                      return (
+                        <label key={g.instance_id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-xs text-zinc-300 hover:bg-zinc-900">
+                          <input type="checkbox" checked={checked} onChange={() => setSelectedBuybackGuIDs((current) =>
+                            checked ? current.filter((id) => id !== g.instance_id) : [...current, g.instance_id]
+                          )} />
+                          <span>{guSpecFor(g.gu_id, g.rank)?.name || g.gu_id} (Hạng {g.rank})</span>
+                          <span className="ml-auto font-mono text-zinc-600">{g.instance_id.slice(0, 8)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono space-y-1">
               {selectedBuybackOrder.order_type === "SELL" ? (
@@ -1927,7 +1967,10 @@ export function BaoHoangMarket({
               <GameButton
                 variant="ghost"
                 className="flex-1"
-                onClick={() => setSelectedBuybackOrder(null)}
+                onClick={() => {
+                  setSelectedBuybackOrder(null);
+                  setSelectedBuybackGuIDs([]);
+                }}
               >
                 Hủy Thao Tác
               </GameButton>
@@ -1935,12 +1978,18 @@ export function BaoHoangMarket({
                 variant="primary"
                 className="flex-1"
                 loading={actionLoading}
+                disabled={selectedBuybackOrder.order_type !== "SELL" && selectedBuybackOrder.item_type === "Gu" && selectedBuybackGuIDs.length !== sellQtyInput}
                 onClick={async () => {
-                  await sellToBuybackOrder({
-                    orderId: selectedBuybackOrder.id,
-                    quantity: sellQtyInput,
-                  });
-                  setSelectedBuybackOrder(null);
+                  const payload = buildBuyOrderExecution(
+                    selectedBuybackOrder.id,
+                    sellQtyInput,
+                    selectedBuybackOrder.item_type,
+                    selectedBuybackGuIDs,
+                  );
+                  if (await sellToBuybackOrder(payload)) {
+                    setSelectedBuybackOrder(null);
+                    setSelectedBuybackGuIDs([]);
+                  }
                 }}
               >
                 {selectedBuybackOrder.order_type === "SELL" ? "Xác Nhận Mua" : "Xác Nhận Bán"}

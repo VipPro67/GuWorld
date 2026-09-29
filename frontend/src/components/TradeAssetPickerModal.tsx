@@ -150,7 +150,7 @@ export function TradeAssetPickerModal({
     if (mode === "offer") {
       // From player's guInventory
       return guInventory
-        .filter((g) => !g.is_vital && g.status !== "DEAD")
+        .filter((g) => !g.is_vital && !g.equipped && g.status !== "DEAD")
         .map((g) => {
           const spec = guSpecFor(g.gu_id, g.rank);
           const name = spec?.name || g.gu_id;
