@@ -1,16 +1,20 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"golang.org/x/crypto/bcrypt"
@@ -25,6 +29,58 @@ type LoginRequest struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	Fingerprint string `json:"fingerprint"`
+}
+
+const loginEvaluationAttempts = 3
+
+// evaluateLoginPlayer retries the complete status transaction when lazy hunger
+// evaluation loses a short-lived PostgreSQL lock race. A lock timeout aborts
+// the transaction, so retrying only the hunger statement is not safe.
+func evaluateLoginPlayer(c *gin.Context, playerID uuid.UUID) (models.Player, error) {
+	return retryLoginEvaluation(c.Request.Context(), func() (models.Player, error) {
+		tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+		if err != nil {
+			return models.Player{}, err
+		}
+
+		// Login should retry quickly rather than spending the connection-wide
+		// ten-second lock timeout on every attempt.
+		if _, err = tx.ExecContext(c.Request.Context(), `SET LOCAL lock_timeout = '1500ms'`); err == nil {
+			var player models.Player
+			player, err = evaluateManaTxEquipped(tx, playerID)
+			if err == nil {
+				err = tx.Commit()
+				if err == nil {
+					return player, nil
+				}
+			}
+		}
+		_ = tx.Rollback()
+		return models.Player{}, err
+	})
+}
+
+func retryLoginEvaluation(ctx context.Context, evaluate func() (models.Player, error)) (models.Player, error) {
+	var lastErr error
+	for attempt := 0; attempt < loginEvaluationAttempts; attempt++ {
+		player, err := evaluate()
+		if err == nil {
+			return player, nil
+		}
+		lastErr = err
+		if !worker.IsHungerTransientError(err) || attempt == loginEvaluationAttempts-1 {
+			break
+		}
+
+		timer := time.NewTimer(time.Duration(attempt+1) * 100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return models.Player{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return models.Player{}, lastErr
 }
 
 // LoginPlayer validates cultivator credentials and signs a JWT token
@@ -68,25 +124,13 @@ func LoginPlayer(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTxEquipped(tx, targetPlayerID)
+	player, err := evaluateLoginPlayer(c, targetPlayerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
 		}
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
 		return
 	}
 
@@ -153,7 +197,6 @@ func LoginPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên đăng nhập"})
 		return
 	}
-
 
 	sessionID := uuid.New().String()
 	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)
