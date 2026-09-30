@@ -100,3 +100,22 @@ func TestManaRegenBonusAppliedOnce(t *testing.T) {
 		t.Fatalf("mana regen = %v, want 20", rates.mana)
 	}
 }
+
+func TestImmortalManaRegenProducesAnnualApertureEssence(t *testing.T) {
+	p := regenTestPlayer()
+	p.Rank = 6
+	p.SubRank = 4
+
+	rates := calculateAutomaticRegenRates(&p, 20)
+	if rates.mana != 2 {
+		t.Fatalf("immortal mana regen = %v/hour before time rate, want 2", rates.mana)
+	}
+
+	now := time.Now()
+	p.LastManaUpdate = now.Add(-24 * time.Minute) // 10 hours / time_rate 25
+	p.CurrentMana = 0
+	applyProjectedStatus(&p, 20, 25, now)
+	if p.CurrentMana != 20 {
+		t.Fatalf("mana after one internal year = %v, want annual production 20", p.CurrentMana)
+	}
+}
