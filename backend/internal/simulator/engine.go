@@ -927,9 +927,7 @@ func Simulate(state *CombatState) []CombatLog {
 					if len(a.Path) > 0 {
 						cleanPath = gamefx.CleanPath(a.Path[0])
 					}
-					if guRank >= 6 {
-						baseGain = 10
-					}
+					baseGain = gamefx.PathMasteryGuUseBaseGain(guRank)
 				} else if a.ActionType == "KILLER_MOVE" {
 					guRank = a.Rank
 					if guRank < 1 {

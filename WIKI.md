@@ -101,10 +101,10 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 
 - Trong quá trình tu hành, Cổ sư có thể tích luỹ điểm **Chân Ý** của các lưu phái (ví dụ: Kiếm Đạo, Hỏa Đạo, Trí Đạo...) để thăng tiến cảnh giới lưu phái.
 - **Cách nhận điểm Chân Ý:**
-  - **Sử dụng Cổ tiêu hao/Sát chiêu trong chiến đấu:** (Bao gồm cả đánh tay và đánh tự động/Simulator như khai thác mỏ, tàn tích). Mỗi lần thi triển thành công tốn Chân Nguyên: Cổ phàm +1 điểm, Tiên Cổ +10 điểm hệ tương ứng. (Lưu ý: Đánh Đấu Trường Ảo không được cộng điểm).
+  - **Sử dụng Cổ tiêu hao/Cổ trong chiến đấu:** (Bao gồm cả đánh tay và đánh tự động/Simulator như khai thác mỏ, tàn tích). Mỗi lần thi triển thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận còn phụ thuộc hiệu suất cảnh giới và giới hạn của rank Cổ. (Lưu ý: Đấu Trường Ảo không cộng điểm).
   - **Giới hạn mỗi trận:** điểm Chân Ý nhận từ chiến đấu đối với Cổ phàm và Sát chiêu phàm bị chặn ở **Rank × 10 điểm/trận** (đánh tay, đánh tự động và sát chiêu phàm đều tính chung). Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** không bị giới hạn tối đa trong trận chiến, thỏa sức ngộ đạo không có trần giới hạn. Thưởng phó bản và luyện Cổ không tính vào giới hạn này.
   - *(Tương lai)* Sẽ có thêm cơ chế Dung luyện Cổ, Khám phá tàn tích đặc thù hoặc đọc truyền thừa.
-- **Các mốc cảnh giới:** Sơ Học (< 100) -> Đại Sư (100) -> Tông Sư (500) -> Đại Tông Sư (2500) -> Vô Thượng Tông Sư (10000).
+- **Các mốc cảnh giới:** Phàm Thai (< 10.000) -> Đại Sư (10.000) -> Tông Sư (100.000) -> Đại Tông Sư (1.000.000) -> Vô Thượng Đại Tông Sư (10.000.000).
 - **Tác dụng:**
   - Là **điều kiện bắt buộc để đột phá tu vi Cổ Tiên** (VD: Đột phá Thất Chuyển cần ít nhất 1 lưu phái đạt Tông Sư; Bát Chuyển cần Đại Tông Sư).
   - Khi không đủ điều kiện, vượt kiếp thành công vẫn được tính số lần tai kiếp nhưng **không được thăng Chuyển**.

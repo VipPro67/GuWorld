@@ -118,13 +118,13 @@ func UseConsumableGu(c *gin.Context) {
 	}
 	if len(specs.Path) > 0 {
 		cleanPath := strings.TrimSuffix(strings.ToLower(specs.Path[0]), " path")
-		pathGain := 1
-		if guRank >= 6 {
-			pathGain = 10
+		currentLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+		pathGain := gamefx.CalculatePathMasteryGain(guRank, currentLevel, gamefx.PathMasteryGuUseBaseGain(guRank))
+		if pathGain > 0 {
+			player.PathMasteries[cleanPath] += pathGain
+			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+			logMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
 		}
-		player.PathMasteries[cleanPath] += pathGain
-		newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
-		logMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
 	}
 	// SACRIFICE_APTITUDE doubles as the keep-the-Gu flag: a sacrifice drains
 	// hunger instead of consuming the instance. Any other ON_CONSUME deletes it.
