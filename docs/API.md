@@ -299,7 +299,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/sects/donate/materials` |
 | POST | `/sects/donate/gu` | Quyên góp Cổ (giữ nguyên `instance_id`). Tiên Cổ đã tồn tại ở nơi khác → **409**; rút Tiên Cổ mỗi lần 1 instance. |
 | POST | `/sects/donate/recipe` | Quyên góp một Bí phương đã học. Body: `{"recipe_id": "..."}`. Nhận điểm cống hiến theo hạng Cổ trùng mục tiêu.
-| POST | `/sects/donate/bulk` | Quyên góp hàng loạt linh tài, cổ trùng và bí phương. Body: `{"materials": [{"material_id": "...", "amount": 5}], "gus": [{"gu_instance_id": "..."}], "recipes": [{"recipe_id": "..."}]}`.
+| POST | `/sects/donate/bulk` | Quyên góp hàng loạt linh tài, cổ trùng, bí phương và Nguyên Thạch. Body: `{"materials": [{"material_id": "...", "amount": 5}], "gus": [{"gu_instance_id": "..."}], "recipes": [{"recipe_id": "..."}], "stones": 100}`. Chat Tông Môn gộp 1 tin `[Quyên Góp]`.
 | POST | `/sects/vault/buy` | Đổi vật phẩm từ bảo khố. Body: `{"item_type": "gu|material|recipe", "item_id": "...", "quantity": 5}` (`quantity` mặc định 1; recipe chỉ nhận 1).
 | GET | `/sects/missions` | Danh sách nhiệm vụ trên bảng (đã lọc nhiệm vụ hết hạn). Trả về `expires_at` mỗi nhiệm vụ. |
 | POST | `/sects/missions/:missionId/accept` | Nhận nhiệm vụ. Copy `expires_at` sang nhiệm vụ cá nhân. |
@@ -321,7 +321,9 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/sects/promotion-requests` |
 | POST | `/sects/promotion-requests/:requestId/action` |
 | GET | `/sects/mines` | Danh sách Lãnh địa + phòng thủ (`defenders`), `total_defense_power`, `output_per_hour`. |
-| POST | `/sects/attack` | Khiêu chiến Tông Môn (SECT_WAR) tại tọa độ tông môn. Body: `{"target_sect_id": "..."}`. Thắng: cướp Quỹ/linh tài/Cổ trùng/Bí phương kho tông chia cho đội — một phần chiến lợi phẩm bị Thiên Đạo tiêu hủy vĩnh viễn (40%, tương tự khi tử đạo); tông môn bị đánh nhận Hộ Sơn Đại Trận bảo hộ. Thua: đệ tử trấn thủ nhận cống hiến, tông môn được bảo hộ ngắn. |
+| POST | `/sects/attack` | Khiêu chiến Tông Môn (SECT_WAR) tại tọa độ tông môn. Body: `{"target_sect_id": "..."}`. Thắng: cướp Quỹ/linh tài/Cổ trùng/Bí phương kho tông chia cho đội (một phần bị Thiên Đạo tiêu hủy); sơn môn thất thủ bị cưỡng chế lưu vong đến tọa độ ngẫu nhiên không đè lấn trong Đại Vực và nhận 1 giờ chấn chỉnh sơn môn. Thua: đệ tử trấn thủ nhận cống hiến, bảo hộ 4 giờ. |
+| GET | `/sects/relocate/estimate` | Chưởng Môn xem dự toán chi phí di dời sơn môn, kiểm tra địa thế phong thủy (không HUB/SAFE_ZONE, không đè lấn lãnh địa tông môn khác) và thời gian hồi (cooldown 72h). |
+| POST | `/sects/relocate` | Chưởng Môn kích hoạt đại điển di dời sơn môn đến tọa độ dã ngoại hiện tại của bản thân. Khấu trừ Quỹ Tông Môn theo số thành viên & bảo khố, cập nhật tọa độ căn cứ và phát thông báo kênh Tông Môn. |
 | POST | `/sects/mines/defend` | Bố trí phòng thủ (Trưởng Lão/Hộ Pháp/Chưởng Môn). Body: `{"mine_id": 1, "defender_type": "member|beast", "player_id": "...", "monster_id": "...", "monster_rank": 3}`. `beast` tốn `hạng × 500` Quỹ. |
 | POST | `/sects/mines/undefend` | Rút phòng thủ. Body: `{"defender_id": "uuid"}`. |
 | POST | `/sects/mines/attack` | Công kích Lãnh địa — **chỉ Trưởng Lão/Hộ Pháp/Chưởng Môn**. Body: `{"mine_id": 1, "attacker_id": "uuid (rỗng = người phát động)"}`. So sánh sức mạnh, trả `won`, `attacker_power`, `defense_power`. Nhân Khí thuộc về đệ tử được chọn ra trận. |

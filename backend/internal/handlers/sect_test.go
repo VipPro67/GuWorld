@@ -112,6 +112,76 @@ func TestIsInsideSquareTerritory(t *testing.T) {
 	}
 }
 
+func TestTerritoriesOverlap(t *testing.T) {
+	tests := []struct {
+		name     string
+		x1, y1   int
+		r1       int
+		x2, y2   int
+		r2       int
+		expected bool
+	}{
+		{
+			name:     "identical center",
+			x1: 50, y1: 50, r1: 6,
+			x2: 50, y2: 50, r2: 6,
+			expected: true,
+		},
+		{
+			name:     "far away no overlap",
+			x1: 20, y1: 20, r1: 6,
+			x2: 80, y2: 80, r2: 6,
+			expected: false,
+		},
+		{
+			name:     "adjacent sharing border tiles dx = r1+r2 dy = 0",
+			x1: 50, y1: 50, r1: 6,
+			x2: 62, y2: 50, r2: 6, // dx = 12 <= 6+6 => overlap
+			expected: true,
+		},
+		{
+			name:     "just 1 tile beyond border dx = r1+r2+1",
+			x1: 50, y1: 50, r1: 6,
+			x2: 63, y2: 50, r2: 6, // dx = 13 > 12 => separated
+			expected: false,
+		},
+		{
+			name:     "separated in Y even if X overlaps",
+			x1: 50, y1: 50, r1: 6,
+			x2: 50, y2: 70, r2: 6, // dx = 0, dy = 20 > 12 => separated
+			expected: false,
+		},
+		{
+			name:     "separated in X even if Y overlaps",
+			x1: 50, y1: 50, r1: 6,
+			x2: 70, y2: 50, r2: 6, // dx = 20 > 12, dy = 0 => separated
+			expected: false,
+		},
+		{
+			name:     "different radii overlap",
+			x1: 30, y1: 30, r1: 10, // Main Hall lvl 5 (radius 10)
+			x2: 45, y2: 30, r2: 6,  // Main Hall lvl 1 (radius 6) -> dx = 15 <= 16
+			expected: true,
+		},
+		{
+			name:     "different radii separated",
+			x1: 30, y1: 30, r1: 10,
+			x2: 47, y2: 30, r2: 6, // dx = 17 > 16
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := TerritoriesOverlap(tc.x1, tc.y1, tc.r1, tc.x2, tc.y2, tc.r2)
+			if actual != tc.expected {
+				t.Errorf("TerritoriesOverlap(%d,%d,%d vs %d,%d,%d): expected %v, got %v",
+					tc.x1, tc.y1, tc.r1, tc.x2, tc.y2, tc.r2, tc.expected, actual)
+			}
+		})
+	}
+}
+
 func TestSectVaultJSONSerialization(t *testing.T) {
 	// Verify SectVaultGuItem structure serialization matches client expectations
 	guItem := SectVaultGuItem{

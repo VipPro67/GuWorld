@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 )
 
 type Sect struct {
@@ -33,6 +34,7 @@ type Sect struct {
 	MapY                     *int            `json:"map_y,omitempty"`
 	ShieldUntil              *time.Time      `json:"shield_until,omitempty"`
 	Buildings                json.RawMessage `json:"buildings,omitempty"`
+	LastRelocatedAt          *time.Time      `json:"last_relocated_at,omitempty"`
 }
 
 type SectJoinRequest struct {
@@ -314,7 +316,7 @@ func GetSects(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, shield_until 
+		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, shield_until, last_relocated_at 
 		FROM sects 
 		ORDER BY level DESC, funds DESC
 	`)
@@ -331,7 +333,7 @@ func GetSects(c *gin.Context) {
 		s.VaultMaterials = json.RawMessage("{}")
 		s.VaultRecipes = json.RawMessage("[]")
 		s.Buildings = json.RawMessage("{}")
-		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.ShieldUntil); err == nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &s.ShieldUntil, &s.LastRelocatedAt); err == nil {
 			sects = append(sects, s)
 		}
 	}
@@ -543,10 +545,10 @@ func GetMySectStatus(c *gin.Context) {
 	var s Sect
 	var mapX, mapY int
 	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings
+		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings, last_relocated_at
 		FROM sects
 		WHERE id = $1
-	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &mapX, &mapY, &s.ShieldUntil, &s.Buildings)
+	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &mapX, &mapY, &s.ShieldUntil, &s.Buildings, &s.LastRelocatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return
@@ -610,17 +612,21 @@ func GetMySectStatus(c *gin.Context) {
 		hasPendingPromotion = true
 	}
 
+	dailyMaintFee, maintBreakdown, _ := worker.CalculateSectMaintenanceFee(c.Request.Context(), db.DB, s.ID, s.Level)
+
 	c.JSON(http.StatusOK, gin.H{
-		"in_sect":                  true,
-		"member":                   m,
-		"sect":                     s,
-		"has_active":               hasActive,
-		"active_mission":           activeMission,
-		"active_progress":          activeProgress,
-		"active_pm_id":             activePMId,
-		"leaderboard":              leaderboard,
-		"has_pending_promotion":    hasPendingPromotion,
-		"pending_promotion_target": pendingPromoTarget,
+		"in_sect":                     true,
+		"member":                      m,
+		"sect":                        s,
+		"has_active":                  hasActive,
+		"active_mission":              activeMission,
+		"active_progress":             activeProgress,
+		"active_pm_id":                activePMId,
+		"leaderboard":                 leaderboard,
+		"has_pending_promotion":       hasPendingPromotion,
+		"pending_promotion_target":    pendingPromoTarget,
+		"estimated_daily_maintenance": dailyMaintFee,
+		"maintenance_breakdown":       maintBreakdown,
 	})
 }
 

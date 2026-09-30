@@ -3,16 +3,120 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
-	"github.com/lib/pq"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-const (
-	maintenanceFeePerLevel = int64(5000)
-	maxSectLevel           = 1
-)
+type QueryContextRunner interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+type SectMaintenanceBreakdown struct {
+	LevelFee        int64 `json:"level_fee"`
+	SectLevel       int   `json:"sect_level"`
+	MemberFee       int64 `json:"member_fee"`
+	MemberCount     int   `json:"member_count"`
+	MaterialsFee    int64 `json:"materials_fee"`
+	MaterialsCount  int64 `json:"materials_count"`
+	MortalGuFee     int64 `json:"mortal_gu_fee"`
+	MortalGuCount   int64 `json:"mortal_gu_count"`
+	ImmortalGuFee   int64 `json:"immortal_gu_fee"`
+	ImmortalGuCount int64 `json:"immortal_gu_count"`
+	RecipesFee      int64 `json:"recipes_fee"`
+	RecipesCount    int   `json:"recipes_count"`
+	TotalFee        int64 `json:"total_fee"`
+}
+
+// CalculateSectMaintenanceFee calculates the daily maintenance fee:
+// Phí Bảo Trì = (Cấp TM * 2.000) + (Số TV * 200) + Phí Kho Tàng
+// Trong đó Phí Kho Tàng:
+// - Linh tài: sum(Rank * 5 * Số lượng)
+// - Cổ phàm (Rank 1-5): sum(Rank * 10 * Số lượng)
+// - Tiên Cổ (Rank 6-9): sum(Rank * 200 * Số lượng)
+// - Bí phương: sum(TargetRank * 50 * Số lượng)
+func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sectID string, sectLevel int) (int64, SectMaintenanceBreakdown, error) {
+	if sectLevel < 1 {
+		sectLevel = 1
+	}
+
+	var breakdown SectMaintenanceBreakdown
+	breakdown.SectLevel = sectLevel
+	breakdown.LevelFee = int64(sectLevel) * 2000
+
+	// 1. Members
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM sect_members WHERE sect_id = $1`, sectID).Scan(&breakdown.MemberCount)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, breakdown, fmt.Errorf("failed to count sect members: %w", err)
+	}
+	breakdown.MemberFee = int64(breakdown.MemberCount) * 200
+
+	// 2. Materials
+	matRows, err := q.QueryContext(ctx, `SELECT item_id, quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0`, sectID)
+	if err == nil {
+		for matRows.Next() {
+			var itemID string
+			var qty int64
+			if err := matRows.Scan(&itemID, &qty); err == nil {
+				rank := 1
+				if spec, ok := models.ItemRegistry[itemID]; ok && spec.Rank > 0 {
+					rank = spec.Rank
+				}
+				breakdown.MaterialsFee += int64(rank) * 5 * qty
+				breakdown.MaterialsCount += qty
+			}
+		}
+		matRows.Close()
+	}
+
+	// 3. Gu
+	guRows, err := q.QueryContext(ctx, `SELECT rank, quantity FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0`, sectID)
+	if err == nil {
+		for guRows.Next() {
+			var rank int
+			var qty int64
+			if err := guRows.Scan(&rank, &qty); err == nil {
+				if rank <= 0 {
+					rank = 1
+				}
+				if rank < 6 {
+					breakdown.MortalGuFee += int64(rank) * 10 * qty
+					breakdown.MortalGuCount += qty
+				} else {
+					breakdown.ImmortalGuFee += int64(rank) * 200 * qty
+					breakdown.ImmortalGuCount += qty
+				}
+			}
+		}
+		guRows.Close()
+	}
+
+	// 4. Recipes
+	recRows, err := q.QueryContext(ctx, `SELECT recipe_id FROM sect_vault_recipes WHERE sect_id = $1`, sectID)
+	if err == nil {
+		for recRows.Next() {
+			var recID string
+			if err := recRows.Scan(&recID); err == nil {
+				targetRank := 1
+				if _, tr, _, parseErr := models.ParseRecipeID(recID); parseErr == nil && tr > 0 {
+					targetRank = tr
+				} else if guDef, ok := models.GetGuAny(recID); ok && guDef.Rank > 0 {
+					targetRank = guDef.Rank
+				}
+				breakdown.RecipesFee += int64(targetRank) * 50
+				breakdown.RecipesCount++
+			}
+		}
+		recRows.Close()
+	}
+
+	breakdown.TotalFee = breakdown.LevelFee + breakdown.MemberFee + breakdown.MaterialsFee + breakdown.MortalGuFee + breakdown.ImmortalGuFee + breakdown.RecipesFee
+	return breakdown.TotalFee, breakdown, nil
+}
 
 func StartSectMaintenanceWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
 	ticker := time.NewTicker(interval)
@@ -42,118 +146,86 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	type paidUpdate struct {
-		sectID   string
-		newFunds int64
+	type sectRecord struct {
+		id              string
+		level           int
+		funds           int64
+		lastMaintenance sql.NullTime
 	}
-	var paidUpdates []paidUpdate
-
-	type downgradeUpdate struct {
-		sectID   string
-		oldLevel int
-		newLevel int
-		funds    int64
-		level    int
-	}
-	var downgrades []downgradeUpdate
+	var sectsToProcess []sectRecord
 
 	for rows.Next() {
-		var sectID string
-		var level int
-		var funds int64
-		var lastMaintenance sql.NullTime
-		if err := rows.Scan(&sectID, &level, &funds, &lastMaintenance); err != nil {
+		var s sectRecord
+		if err := rows.Scan(&s.id, &s.level, &s.funds, &s.lastMaintenance); err != nil {
 			logger.S.Errorf("SectMaintenanceWorker: failed to scan sect: %v", err)
 			continue
 		}
+		if s.lastMaintenance.Valid && s.lastMaintenance.Time.After(time.Now().Add(-24*time.Hour)) {
+			continue
+		}
+		sectsToProcess = append(sectsToProcess, s)
+	}
+	rows.Close()
 
-		if lastMaintenance.Valid && lastMaintenance.Time.After(time.Now().Add(-24*time.Hour)) {
+	for _, s := range sectsToProcess {
+		fee, breakdown, err := CalculateSectMaintenanceFee(ctx, db, s.id, s.level)
+		if err != nil {
+			logger.S.Errorf("SectMaintenanceWorker: error calculating fee for sect %s: %v", s.id, err)
 			continue
 		}
 
-		fee := calculateMaintenanceFee(int64(level))
-
-		if fee == 0 {
-			// No fee needed - just update timestamp
-			_, _ = db.ExecContext(ctx, `UPDATE sects SET last_maintenance_at = now() WHERE id = $1`, sectID)
-			continue
-		}
-
-		if funds >= fee {
-			newFunds := funds - fee
-			paidUpdates = append(paidUpdates, paidUpdate{sectID: sectID, newFunds: newFunds})
-		} else {
-			newLevel := level - 1
-			if newLevel < maxSectLevel {
-				newLevel = maxSectLevel
-			}
-			downgrades = append(downgrades, downgradeUpdate{sectID: sectID, oldLevel: level, newLevel: newLevel, funds: funds, level: level})
-		}
-	}
-
-	// Batch UPDATE for paid maintenance
-	if len(paidUpdates) > 0 {
-		ids := make([]string, len(paidUpdates))
-		fundsArr := make([]int64, len(paidUpdates))
 		now := time.Now()
-		timestamps := make([]time.Time, len(paidUpdates))
-		for i, u := range paidUpdates {
-			ids[i] = u.sectID
-			fundsArr[i] = u.newFunds
-			timestamps[i] = now
-		}
-
-		_, err := db.ExecContext(ctx, `
-			WITH updates(id, funds, last_maintenance_at) AS (
-				SELECT unnest($1::text[]), unnest($2::int8[]), unnest($3::timestamptz[])
-			)
-			UPDATE sects s SET funds = u.funds, last_maintenance_at = u.last_maintenance_at
-			FROM updates u WHERE s.id = u.id
-		`, pq.Array(ids), pq.Array(fundsArr), pq.Array(timestamps))
-		if err != nil {
-			logger.S.Errorf("SectMaintenanceWorker: failed batch update for paid maintenance: %v", err)
-		} else {
-			logger.S.Infof("SectMaintenanceWorker: %d sect(s) paid maintenance", len(paidUpdates))
-		}
-	}
-
-	// Batch UPDATE for downgrades
-	if len(downgrades) > 0 {
-		ids := make([]string, len(downgrades))
-		levels := make([]int, len(downgrades))
-		now := time.Now()
-		timestamps := make([]time.Time, len(downgrades))
-		for i, u := range downgrades {
-			ids[i] = u.sectID
-			levels[i] = u.newLevel
-			timestamps[i] = now
-		}
-
-		_, err := db.ExecContext(ctx, `
-			WITH updates(id, level, last_maintenance_at) AS (
-				SELECT unnest($1::text[]), unnest($2::int[]), unnest($3::timestamptz[])
-			)
-			UPDATE sects s SET level = u.level, last_maintenance_at = u.last_maintenance_at
-			FROM updates u WHERE s.id = u.id
-		`, pq.Array(ids), pq.Array(levels), pq.Array(timestamps))
-		if err != nil {
-			logger.S.Errorf("SectMaintenanceWorker: failed batch update for downgrades: %v", err)
-		} else {
-			logger.S.Infof("SectMaintenanceWorker: %d sect(s) downgraded", len(downgrades))
-			for _, u := range downgrades {
-				notifySectLeader(ctx, db, u.sectID, u.oldLevel, u.newLevel, u.funds, maintenanceFeePerLevel*int64(u.level))
+		if s.funds >= fee {
+			newFunds := s.funds - fee
+			_, err := db.ExecContext(ctx, `
+				UPDATE sects SET funds = $1, last_maintenance_at = $2
+				WHERE id = $3
+			`, newFunds, now, s.id)
+			if err != nil {
+				logger.S.Errorf("SectMaintenanceWorker: failed to deduct fee for sect %s: %v", s.id, err)
+				continue
 			}
+
+			vaultSlots := breakdown.MaterialsCount + breakdown.MortalGuCount + breakdown.ImmortalGuCount + int64(breakdown.RecipesCount)
+			chatMsg := fmt.Sprintf("[Bảo Trì] Tông môn đã thanh toán %d Quỹ duy trì hôm nay (Thành viên: %d, Kho: %d). Quỹ còn lại: %d Quỹ.",
+				fee, breakdown.MemberCount, vaultSlots, newFunds)
+			sendSectSystemChatMessage(ctx, db, s.id, chatMsg)
+		} else {
+			newLevel := s.level - 1
+			if newLevel < 1 {
+				newLevel = 1
+			}
+			_, err := db.ExecContext(ctx, `
+				UPDATE sects SET level = $1, last_maintenance_at = $2
+				WHERE id = $3
+			`, newLevel, now, s.id)
+			if err != nil {
+				logger.S.Errorf("SectMaintenanceWorker: failed to downgrade sect %s: %v", s.id, err)
+				continue
+			}
+
+			alertChat := fmt.Sprintf("[Bảo Trì] CẢNH BÁO: Tông môn không đủ quỹ duy trì (%d/%d), cấp bậc bị giáng xuống Cấp %d!",
+				s.funds, fee, newLevel)
+			sendSectSystemChatMessage(ctx, db, s.id, alertChat)
+
+			notifySectLeader(ctx, db, s.id, s.level, newLevel, s.funds, fee)
 		}
 	}
 }
 
-func calculateMaintenanceFee(level int64) int64 {
-	return level * maintenanceFeePerLevel
-}
+func sendSectSystemChatMessage(ctx context.Context, db *sql.DB, sectID, content string) {
+	globalUUID := "00000000-0000-0000-0000-000000000000"
+	systemUUID := "11111111-1111-1111-1111-111111111111"
 
-func updateLastMaintenance(ctx context.Context, db *sql.DB, sectID string) error {
-	_, err := db.ExecContext(ctx, `UPDATE sects SET last_maintenance_at = now() WHERE id = $1`, sectID)
-	return err
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO messages (sender_id, receiver_id, content, channel, sect_id)
+		VALUES ($1, $2, $3, 'sect', $4)
+	`, systemUUID, globalUUID, content, sectID)
+	if err != nil {
+		logger.S.Errorf("sendSectSystemChatMessage failed for sect %s: %v", sectID, err)
+		return
+	}
+	_ = cache.PublishEventQuick("chat:sect:"+sectID, map[string]any{"type": "new_message"})
 }
 
 func notifySectLeader(ctx context.Context, db *sql.DB, sectID string, oldLevel, newLevel int, funds, fee int64) {
@@ -163,20 +235,16 @@ func notifySectLeader(ctx context.Context, db *sql.DB, sectID string, oldLevel, 
 		WHERE sect_id = $1 AND member_rank = 'CHUONG_MON'
 		LIMIT 1
 	`).Scan(&leaderID)
-	if err != nil {
-		logger.S.Debugf("SectMaintenanceWorker: no leader found for sect %s: %v", sectID, err)
+	if err != nil || !leaderID.Valid {
+		logger.S.Debugf("SectMaintenanceWorker: no leader found for sect %s", sectID)
 		return
 	}
 
-	if !leaderID.Valid {
-		return
-	}
-
-	message := "Tông môn bị trừ cấp do không đủ quỹ duy trì!"
+	content := fmt.Sprintf("Tông môn không đủ ngân quỹ chi trả phí bảo trì định kỳ (Cần %d Quỹ nhưng hiện chỉ có %d Quỹ)! Sơn môn đã bị giáng từ Cấp %d xuống Cấp %d. Hãy sớm quyên góp và bổ sung quỹ để tránh tiếp tục suy thoái.", fee, funds, oldLevel, newLevel)
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO system_messages (player_id, type, title, content)
-		VALUES ($1, 'SECT_MAINTENANCE', 'CẢNH BÁO TỔNG MÔN', $2)
-	`, leaderID.String, message)
+		VALUES ($1, 'SECT_MAINTENANCE', 'CẢNH BÁO TÔNG MÔN SUY THOÁI', $2)
+	`, leaderID.String, content)
 	if err != nil {
 		logger.S.Errorf("SectMaintenanceWorker: failed to notify sect leader %s: %v", leaderID.String, err)
 	}

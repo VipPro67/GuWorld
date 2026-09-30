@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName, guSpecFor } from "@/store/useGameStore";
+import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName, guSpecFor, SectRelocationEstimate } from "@/store/useGameStore";
 import { translatePath, parsePaths } from "@/lib/translate";
 import {
   Shield,
@@ -26,6 +26,9 @@ import {
   Check,
   Trash2,
   Ban,
+  MapPin,
+  Navigation,
+  Crown,
 } from "lucide-react";
 import { GamePanel, GameButton, GameCard, GameTabs, GameModal, GameInput, GameSelect, GameBadge, GameProgressBar, GameSection } from "@/components/ui";
 // UI migrated to shared components
@@ -104,7 +107,9 @@ export const SectView: React.FC = () => {
   showConfirm,
   recipes,
   paySectSalary,
-
+  getRelocationEstimate,
+  relocateSect,
+  claimSectLeadership,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "territory" | "manage">("lobby");
@@ -253,7 +258,9 @@ export const SectView: React.FC = () => {
   }, [donateType, activeTab]);
 
   // Sect management sub-tab
-  const [mgmtTab, setMgmtTab] = useState<"members" | "missions" | "stock" | "requests"| "salary">("members");
+  const [mgmtTab, setMgmtTab] = useState<"members" | "missions" | "stock" | "requests" | "salary" | "relocate">("members");
+  const [relocationEstimate, setRelocationEstimate] = useState<SectRelocationEstimate | null>(null);
+  const [loadingEstimate, setLoadingEstimate] = useState(false);
 
   // Custom mission creation form state
   const [mTitle, setMTitle] = useState("");
@@ -309,6 +316,12 @@ export const SectView: React.FC = () => {
   }, [activeTab, fetchSectsMap]);
 
   useEffect(() => {
+    if (mySectStatus?.in_sect) {
+      fetchSectMembers();
+    }
+  }, [mySectStatus?.in_sect, fetchSectMembers]);
+
+  useEffect(() => {
     if (activeTab === "manage") {
       fetchSectMembers();
       const isLeaderOrElder = mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP";
@@ -318,6 +331,16 @@ export const SectView: React.FC = () => {
       }
     }
   }, [activeTab, fetchSectMembers, fetchJoinRequests, fetchPromotionRequests, mySectStatus?.member?.member_rank]);
+
+  useEffect(() => {
+    if (activeTab === "manage" && mgmtTab === "relocate") {
+      setLoadingEstimate(true);
+      getRelocationEstimate().then((res) => {
+        setRelocationEstimate(res);
+        setLoadingEstimate(false);
+      });
+    }
+  }, [activeTab, mgmtTab, getRelocationEstimate]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -922,6 +945,25 @@ export const SectView: React.FC = () => {
   const { member, sect, leaderboard } = mySectStatus;
   const isLeaderOrElder = member?.member_rank === "CHUONG_MON" || member?.member_rank === "TRUONG_LAO" || member?.member_rank === "HO_PHAP";
 
+  // Check if sect leader is missing or inactive for >= 5 days
+  const currentLeader = (sectMembers || []).find((m) => m.member_rank === "CHUONG_MON");
+  const nowMs = Date.now();
+  const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+  const isLeaderInactive = !currentLeader || (
+    currentLeader.last_activity ? (nowMs - new Date(currentLeader.last_activity).getTime() >= fiveDaysMs) : true
+  );
+
+  // Find candidate with top seniority
+  const nonLeaderCandidates = (sectMembers || [])
+    .filter((m) => m.member_rank !== "CHUONG_MON")
+    .sort((a, b) => {
+      const diff = rankValue(b.member_rank) - rankValue(a.member_rank);
+      if (diff !== 0) return diff;
+      return b.contribution_points - a.contribution_points;
+    });
+  const topCandidate = nonLeaderCandidates[0];
+  const isEligibleToClaim = isLeaderInactive && topCandidate && topCandidate.player_id === player?.id;
+
   // 2. STATE: MEMBER PANEL
   return (
     <GamePanel variant="default" className="w-full mx-auto px-2 py-4 flex flex-col gap-6 animate-fade-in">
@@ -944,8 +986,16 @@ export const SectView: React.FC = () => {
                 </span>
               )}
             </div>
-            <p className="text-xs text-zinc-500 font-mono mt-0.5">
-              Địa Khu: {getRegionName(sect?.region || "")}{sect?.map_x !== undefined && sect?.map_y !== undefined ? ` (${sect.map_x}, ${sect.map_y})` : ""} | {getRankName(member?.member_rank || "")}
+            <p className="text-xs text-zinc-500 font-mono mt-0.5 flex items-center flex-wrap gap-1">
+              <span>Địa Khu: {getRegionName(sect?.region || "")}{sect?.map_x !== undefined && sect?.map_y !== undefined ? ` (${sect.map_x}, ${sect.map_y})` : ""} | {getRankName(member?.member_rank || "")}</span>
+              {member?.member_rank === "CHUONG_MON" && (
+                <button
+                  onClick={() => { setActiveTab("manage"); setMgmtTab("relocate"); }}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 underline font-mono cursor-pointer ml-1"
+                >
+                  [Di dời sơn môn]
+                </button>
+              )}
             </p>
           </div>
         </div>
@@ -959,6 +1009,11 @@ export const SectView: React.FC = () => {
                 <Coins className="w-4.5 h-4.5 text-cyan-400" />
                 {sect.funds.toLocaleString()}
               </span>
+              {mySectStatus?.estimated_daily_maintenance !== undefined && (
+                <span className="text-[10px] font-mono text-zinc-400 mt-0.5" title="Phí duy trì mỗi 24h khấu trừ vào Quỹ tông môn">
+                  Duy trì: <span className="text-amber-400">-{mySectStatus.estimated_daily_maintenance.toLocaleString()}</span>/ngày
+                </span>
+              )}
             </div>
           )}
 
@@ -996,6 +1051,53 @@ export const SectView: React.FC = () => {
     >
 </GameTabs>
       {/* Tab Panels */}
+      {/* Succession Banner when leader is inactive or missing */}
+      {isLeaderInactive && (
+        <div className="bg-amber-950/30 border border-amber-500/40 rounded-3xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg backdrop-blur-md">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+              <Crown className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-serif font-bold text-amber-200 flex items-center gap-2">
+                Sơn Môn Đại Sự: Kế Vị Chưởng Môn
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {currentLeader ? "Chưởng Môn Vắng Bóng 5+ Ngày" : "Khuyết Chưởng Môn"}
+                </span>
+              </h4>
+              <p className="text-xs text-amber-300/80 font-mono mt-1 leading-relaxed">
+                {currentLeader
+                  ? `Chưởng Môn (${currentLeader.username}) đã không đăng nhập hoặc vận công trong hơn 5 ngày. Tông môn đang đình trệ!`
+                  : "Tông môn hiện không có ai đảm đương chức vụ Chưởng Môn!"}
+                {" "}Người có tư cách kế vị ưu tiên cao nhất: <strong className="text-amber-200 underline font-bold">{topCandidate ? `${topCandidate.username} (${getRankName(topCandidate.member_rank)}, ${topCandidate.contribution_points} Pts)` : "Không có"}</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full md:w-auto shrink-0 flex justify-end">
+            {isEligibleToClaim ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (await showConfirm("Đạo hữu có tư cách cao nhất hiện tại! Đạo hữu có chắc chắn muốn tiến hành đại điển kế vị, chính thức đăng cơ Chưởng Môn tông môn?")) {
+                    await claimSectLeadership();
+                  }
+                }}
+                disabled={actionLoading}
+                className="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-serif font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 border border-amber-400/30"
+              >
+                <Crown className="w-4 h-4 text-yellow-200" />
+                Tiếp Quản Chưởng Môn
+              </button>
+            ) : (
+              <div className="text-[11px] font-mono text-zinc-500 bg-zinc-900/60 border border-zinc-800 px-3 py-2 rounded-xl">
+                Chưa đủ tư cách kế vị (Cần thứ bậc/cống hiến cao nhất)
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {activeTab === "lobby" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-slide-up">
           {/* Main Info & Promotion Exam */}
@@ -1011,6 +1113,63 @@ export const SectView: React.FC = () => {
                 <span className="text-zinc-300 font-semibold">Bậc {player.rank}</span>
               </div>
             </div>
+
+            {/* Sect Maintenance Status Card */}
+            {mySectStatus?.maintenance_breakdown && (
+              <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 backdrop-blur-md flex flex-col gap-3">
+                <div className="flex justify-between items-center border-b border-zinc-900/60 pb-2.5">
+                  <h3 className="text-base font-serif font-bold text-zinc-200 flex items-center gap-2">
+                    <Hourglass className="w-5 h-5 text-amber-400" />
+                    Phí Duy Trì Sơn Môn (Mỗi 24 Giờ)
+                  </h3>
+                  <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${
+                    (sect?.funds || 0) >= (mySectStatus.maintenance_breakdown.total_fee || 0)
+                      ? "text-emerald-400 bg-emerald-950/30 border-emerald-500/30"
+                      : "text-red-400 bg-red-950/30 border-red-500/30 animate-pulse"
+                  }`}>
+                    {(sect?.funds || 0) >= (mySectStatus.maintenance_breakdown.total_fee || 0) ? "Đủ Ngân Quỹ" : "Nguy Cơ Giáng Cấp!"}
+                  </span>
+                </div>
+
+                <p className="text-xs text-zinc-400 font-mono leading-relaxed">
+                  Định kỳ mỗi 24 giờ, hệ thống sẽ tự động trích Quỹ Tông Môn để bảo trì sơn môn theo quy mô thực tế. Nếu không đủ quỹ, tông môn sẽ bị giáng 1 cấp.
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono mt-1">
+                  <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
+                    <span className="text-[10px] text-zinc-500">Cấp Tông Môn (Cấp {mySectStatus.maintenance_breakdown.sect_level}):</span>
+                    <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.level_fee.toLocaleString()} Quỹ</span>
+                  </div>
+                  <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
+                    <span className="text-[10px] text-zinc-500">Môn nhân ({mySectStatus.maintenance_breakdown.member_count} TV):</span>
+                    <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.member_fee.toLocaleString()} Quỹ</span>
+                  </div>
+                  <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
+                    <span className="text-[10px] text-zinc-500">Linh tài ({mySectStatus.maintenance_breakdown.materials_count} món):</span>
+                    <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.materials_fee.toLocaleString()} Quỹ</span>
+                  </div>
+                  <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
+                    <span className="text-[10px] text-zinc-500">Phàm Cổ ({mySectStatus.maintenance_breakdown.mortal_gu_count} con):</span>
+                    <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.mortal_gu_fee.toLocaleString()} Quỹ</span>
+                  </div>
+                  <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
+                    <span className="text-[10px] text-zinc-500">Tiên Cổ ({mySectStatus.maintenance_breakdown.immortal_gu_count} con):</span>
+                    <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.immortal_gu_fee.toLocaleString()} Quỹ</span>
+                  </div>
+                  <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
+                    <span className="text-[10px] text-zinc-500">Bí phương ({mySectStatus.maintenance_breakdown.recipes_count} quyển):</span>
+                    <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.recipes_fee.toLocaleString()} Quỹ</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center bg-amber-950/20 border border-amber-500/30 p-3 rounded-xl mt-1">
+                  <span className="text-xs font-serif font-bold text-amber-200">Dự kiến phí bảo trì ngày:</span>
+                  <span className="text-sm font-mono font-bold text-amber-400">
+                    {mySectStatus.maintenance_breakdown.total_fee.toLocaleString()} Quỹ Tông Môn
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Promotion Exam Panel */}
             <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 backdrop-blur-md flex flex-col gap-4">
@@ -3044,6 +3203,16 @@ export const SectView: React.FC = () => {
                   Phát Lương
                 </button>
               )}
+              {mySectStatus?.member?.member_rank === "CHUONG_MON" && (
+                <button
+                  onClick={() => setMgmtTab("relocate")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${mgmtTab === "relocate" ? "bg-amber-900/60 border border-amber-600/50 text-amber-200" : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                >
+                  <Navigation className="w-3.5 h-3.5 text-amber-400" />
+                  Di Dời Sơn Môn
+                </button>
+              )}
             </div>
           </div>
 
@@ -3091,6 +3260,21 @@ export const SectView: React.FC = () => {
                             <span className={`px-2 py-0.5 text-[9px] font-mono rounded border ${getRankColor(mInfo.member_rank)}`}>
                               {getRankName(mInfo.member_rank)}
                             </span>
+                            {mInfo.is_online ? (
+                              <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Online
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-800">
+                                {mInfo.last_activity
+                                  ? (() => {
+                                      const days = Math.floor((nowMs - new Date(mInfo.last_activity).getTime()) / (24 * 3600 * 1000));
+                                      return days > 0 ? `Offline ${days} ngày` : "Offline";
+                                    })()
+                                  : "Offline"}
+                              </span>
+                            )}
                             {isSelf && <span className="text-[9px] text-blue-400 font-mono font-semibold">(Đạo hữu)</span>}
                           </div>
                           <div className="text-[10px] text-zinc-500 font-mono">
@@ -3099,6 +3283,23 @@ export const SectView: React.FC = () => {
                         </div>
 
                         {/* Action buttons */}
+                        {isSelf && isEligibleToClaim && (
+                          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (await showConfirm("Đạo hữu có tư cách cao nhất hiện tại! Đạo hữu có chắc chắn muốn tiến hành đại điển kế vị, chính thức đăng cơ Chưởng Môn tông môn?")) {
+                                  await claimSectLeadership();
+                                }
+                              }}
+                              disabled={actionLoading}
+                              className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-serif font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                            >
+                              <Crown className="w-3.5 h-3.5" />
+                              Tiếp Quản Chưởng Môn
+                            </button>
+                          </div>
+                        )}
                         {!isSelf && (
                           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
                             {/* Promote rank select (Chưởng môn only) */}
@@ -3806,6 +4007,178 @@ const rank = spec.rank || 1;
                 })()}
               </div>}
 
+            </div>
+          )}
+          {mgmtTab === "relocate" && (
+            <div className="flex flex-col gap-5">
+              <div className="flex justify-between items-center bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    <Navigation className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold font-serif text-zinc-100 flex items-center gap-2">
+                      Đại Điển Di Dời Sơn Môn
+                    </h4>
+                    <p className="text-xs text-zinc-400 font-mono mt-0.5">
+                      Chưởng Môn xuất hành đến tọa độ dã ngoại mới để dời toàn bộ căn cứ Tông Môn.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    setLoadingEstimate(true);
+                    const res = await getRelocationEstimate();
+                    setRelocationEstimate(res);
+                    setLoadingEstimate(false);
+                  }}
+                  disabled={loadingEstimate || actionLoading}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-mono flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingEstimate ? "animate-spin" : ""}`} />
+                  Cập Nhật Dự Toán
+                </button>
+              </div>
+
+              {loadingEstimate && !relocationEstimate && (
+                <div className="flex items-center justify-center p-12 text-zinc-500 font-mono text-xs">
+                  <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                  Đang tính toán chi phí và kiểm tra phong thủy địa lý...
+                </div>
+              )}
+
+              {relocationEstimate && (
+                <div className="flex flex-col gap-4">
+                  {/* Status Banner */}
+                  {relocationEstimate.can_relocate ? (
+                    <div className="bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-2xl flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                      <div className="text-xs text-emerald-200">
+                        <span className="font-bold">Địa thế hợp lệ!</span> Tọa độ dã ngoại hiện tại của Chưởng Môn không bị trùng lấn lãnh địa, không thuộc Khu An Toàn và Quỹ Tông Môn đã sẵn sàng.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-red-950/40 border border-red-500/30 p-3.5 rounded-2xl flex items-center gap-3">
+                      <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                      <div className="text-xs text-red-200">
+                        <span className="font-bold">Chưa thể di dời: </span>
+                        {relocationEstimate.reason || "Vị trí hoặc điều kiện chưa thỏa mãn."}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Coordinates Comparison Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-zinc-900/30 border border-zinc-800/80 p-3.5 rounded-2xl flex flex-col gap-2">
+                      <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-zinc-500" />
+                        Vị Trí Sơn Môn Hiện Tại
+                      </div>
+                      <div className="text-base font-serif font-bold text-zinc-200">
+                        {relocationEstimate.current_sect_location.region}
+                      </div>
+                      <div className="text-xs font-mono text-zinc-400">
+                        Tọa độ: <span className="text-amber-400 font-bold">({relocationEstimate.current_sect_location.x}, {relocationEstimate.current_sect_location.y})</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900/30 border border-amber-500/20 p-3.5 rounded-2xl flex flex-col gap-2">
+                      <div className="text-[11px] font-mono text-amber-400/90 flex items-center gap-1.5">
+                        <Navigation className="w-3.5 h-3.5 text-amber-400" />
+                        Tọa Độ Mới (Vị Trí Chưởng Môn)
+                      </div>
+                      <div className="text-base font-serif font-bold text-zinc-100">
+                        {relocationEstimate.target_location.region}
+                      </div>
+                      <div className="text-xs font-mono text-zinc-300">
+                        Tọa độ: <span className="text-emerald-400 font-bold">({relocationEstimate.target_location.x}, {relocationEstimate.target_location.y})</span>
+                        <span className="text-zinc-500 ml-2">(Bán kính {relocationEstimate.target_location.radius} ô)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cooldown Information */}
+                  {relocationEstimate.cooldown_remaining_seconds > 0 && (
+                    <div className="bg-zinc-900/40 border border-zinc-800 p-3.5 rounded-2xl flex items-center justify-between text-xs font-mono">
+                      <span className="text-zinc-400 flex items-center gap-2">
+                        <Hourglass className="w-4 h-4 text-amber-400 animate-pulse" />
+                        Thời gian hồi di dời (3 ngày / 72h):
+                      </span>
+                      <span className="text-amber-400 font-bold">
+                        {Math.floor(relocationEstimate.cooldown_remaining_seconds / 3600)} giờ {Math.floor((relocationEstimate.cooldown_remaining_seconds % 3600) / 60)} phút
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Cost Breakdown */}
+                  <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-3">
+                    <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                      <span className="text-xs font-bold text-zinc-300 font-serif">Chi Tiết Dự Toán Quỹ Di Dời</span>
+                      <span className="text-xs font-mono text-zinc-400">
+                        Quỹ hiện có: <span className={relocationEstimate.current_funds >= relocationEstimate.funds_needed ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                          {relocationEstimate.current_funds.toLocaleString()}
+                        </span> Quỹ
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
+                        <span className="text-zinc-400">Khởi tạo đại điển:</span>
+                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.base_cost.toLocaleString()} Quỹ</span>
+                      </div>
+                      <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
+                        <span className="text-zinc-400">Di dời môn nhân ({relocationEstimate.cost_breakdown.member_count} TV):</span>
+                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.member_cost.toLocaleString()} Quỹ</span>
+                      </div>
+                      <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
+                        <span className="text-zinc-400">Linh tài kho ({relocationEstimate.cost_breakdown.materials_count} món):</span>
+                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.materials_cost.toLocaleString()} Quỹ</span>
+                      </div>
+                      <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
+                        <span className="text-zinc-400">Phàm Cổ kho ({relocationEstimate.cost_breakdown.mortal_gu_count} con):</span>
+                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.mortal_gu_cost.toLocaleString()} Quỹ</span>
+                      </div>
+                      <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
+                        <span className="text-zinc-400">Tiên Cổ bảo khố ({relocationEstimate.cost_breakdown.immortal_gu_count} con):</span>
+                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.immortal_gu_cost.toLocaleString()} Quỹ</span>
+                      </div>
+                      <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
+                        <span className="text-zinc-400">Bí phương ({relocationEstimate.cost_breakdown.recipes_count} quyển):</span>
+                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.recipes_cost.toLocaleString()} Quỹ</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 mt-1">
+                      <span className="text-xs font-serif font-bold text-amber-200">Tổng Chi Phí Di Dời:</span>
+                      <span className="text-sm font-mono font-bold text-amber-400">
+                        {relocationEstimate.cost_breakdown.total_cost.toLocaleString()} Quỹ Tông Môn
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <button
+                    onClick={async () => {
+                      const confirmed = await showConfirm(
+                        `Đạo hữu có chắc chắn muốn dời căn cứ Tông Môn đến tọa độ (${relocationEstimate.target_location.x}, ${relocationEstimate.target_location.y}) thuộc ${relocationEstimate.target_location.region}? Hành động này tiêu hao ${relocationEstimate.cost_breakdown.total_cost.toLocaleString()} Quỹ Tông Môn và kích hoạt thời gian hồi 3 ngày (72 giờ).`
+                      );
+                      if (!confirmed) return;
+                      const ok = await relocateSect();
+                      if (ok) {
+                        setLoadingEstimate(true);
+                        const res = await getRelocationEstimate();
+                        setRelocationEstimate(res);
+                        setLoadingEstimate(false);
+                      }
+                    }}
+                    disabled={!relocationEstimate.can_relocate || actionLoading}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-serif font-bold text-sm shadow-lg shadow-amber-950/40 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
+                  >
+                    <Navigation className="w-4 h-4 text-amber-200" />
+                    TIẾN HÀNH ĐẠI ĐIỂN DI DỜI SƠN MÔN
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

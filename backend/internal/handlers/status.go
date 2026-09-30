@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -177,30 +178,11 @@ func maybeGrantSinhKhiTan(tx *sql.Tx, player *models.Player, loadout *simulator.
 	if defenderID == "" || defenderID == "dummy" {
 		return false, 0
 	}
-	bringsKillEnergy := false
-	for _, guID := range loadout.GuIds {
-		if guID == SinhKhiTanGuID {
-			bringsKillEnergy = true
-			break
-		}
-	}
-	if !bringsKillEnergy {
-		return false, 0
-	}
-	allyIDs := make(map[string]bool, len(simState.Allies))
-	for _, a := range simState.Allies {
-		if a != nil {
-			allyIDs[a.ID] = true
-		}
-	}
-	hitLanded := false
-	for _, l := range logs {
-		if l.Damage > 0 && allyIDs[l.ActorId] {
-			hitLanded = true
-			break
-		}
-	}
-	if !hitLanded {
+	// Loadout settings-based (AutoResolveCombat) không có GuIds: quét action
+	// phe ta tìm SourceID của Sát Sinh Khí Cổ, đồng thời lấy tên đòn để match
+	// chính xác hit gây damage (tránh cộng khi damage từ Cổ khác).
+	bringsKillEnergy, hitLanded := sinhKhiTanHitLanded(loadout, simState, logs)
+	if !bringsKillEnergy || !hitLanded {
 		return false, 0
 	}
 	defenderUUID, err := uuid.Parse(defenderID)
@@ -212,6 +194,57 @@ func maybeGrantSinhKhiTan(tx *sql.Tx, player *models.Player, loadout *simulator.
 		return false, 0
 	}
 	return true, tier
+}
+
+// sinhKhiTanHitLanded pure: attacker có mang Sát Sinh Khí Cổ (theo loadout
+// hoặc SourceID action phe ta) và có hit damage của phe ta từ đúng đòn đó.
+// Trả (bringsGu, hitLanded).
+func sinhKhiTanHitLanded(loadout *simulator.CombatLoadout, simState *simulator.CombatState, logs []simulator.CombatLog) (bool, bool) {
+	if simState == nil {
+		return false, false
+	}
+	bringsKillEnergy := false
+	if loadout != nil {
+		for _, guID := range loadout.GuIds {
+			if guID == SinhKhiTanGuID {
+				bringsKillEnergy = true
+				break
+			}
+		}
+	}
+	var killEnergyNames []string
+	allyIDs := make(map[string]bool, len(simState.Allies))
+	for _, a := range simState.Allies {
+		if a == nil {
+			continue
+		}
+		allyIDs[a.ID] = true
+		for _, act := range a.Actions {
+			if act.SourceID == SinhKhiTanGuID {
+				bringsKillEnergy = true
+				if act.Name != "" {
+					killEnergyNames = append(killEnergyNames, "["+act.Name+"]")
+				}
+			}
+		}
+	}
+	if !bringsKillEnergy {
+		return false, false
+	}
+	for _, l := range logs {
+		if l.Damage <= 0 || !allyIDs[l.ActorId] {
+			continue
+		}
+		if len(killEnergyNames) == 0 {
+			return true, true // loadout có Cổ nhưng không resolve được tên đòn: nới lỏng
+		}
+		for _, n := range killEnergyNames {
+			if strings.Contains(l.Detail, n) {
+				return true, true
+			}
+		}
+	}
+	return true, false
 }
 
 // RevokePlayerStatus removes every instance of a status id. Returns whether

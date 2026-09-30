@@ -276,6 +276,18 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		return "", nil, nil, fmt.Errorf("failed to update human_qi: %w", err)
 	}
 
+	// Sát Sinh Khí Cổ: đánh trúng ở PvP thật thì defender nhận +1 tầng Sinh Khí Tàn
+	// (persistent, refresh 5h). Chung helper với AutoCombatStart.
+	if sinhKhiTanPvPGrant, grantTier := maybeGrantSinhKhiTan(tx, player, &loadout, simState, logs); sinhKhiTanPvPGrant {
+		logs = append(logs, simulator.CombatLog{
+			Turn:   simState.Turn,
+			Action: "SINH_KHI_TAN_APPLIED",
+			Detail: fmt.Sprintf("Sát khí tàn lụi xâm nhập! Kẻ địch nhận [%s] (công/thủ/tốc giảm %.0f%% trong %d giờ).",
+				gamefx.SinhKhiTanTierName(grantTier),
+				-gamefx.SinhKhiTanValueForTier(grantTier)*100, gamefx.SinhKhiTanDurationMinutes/60),
+		})
+	}
+
 	winner := "Phe Địch"
 	if alliesAlive {
 		winner = "Phe Ta"

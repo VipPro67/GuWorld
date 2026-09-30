@@ -81,7 +81,9 @@ func UpgradeSectBuilding(c *gin.Context) {
 	var level int
 	var funds int64
 	var buildingsJSON []byte
-	err = tx.QueryRow(`SELECT level, funds, buildings FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&level, &funds, &buildingsJSON)
+	var sectRegion string
+	var mapX, mapY int
+	err = tx.QueryRow(`SELECT level, funds, buildings, region, map_x, map_y FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&level, &funds, &buildingsJSON, &sectRegion, &mapX, &mapY)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn!"})
 		return
@@ -110,6 +112,21 @@ func UpgradeSectBuilding(c *gin.Context) {
 	}
 
 	targetLevel := currentLevel + 1
+
+	// When upgrading main_hall, verify expanded territory does not overlap neighboring sects
+	if req.BuildingName == "main_hall" {
+		newRadius := 5 + targetLevel
+		hasOverlap, conflictingSect, errOverlap := CheckTerritoryOverlap(tx, sectRegion, mapX, mapY, newRadius, sectID)
+		if errOverlap != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Kiểm tra mở rộng lãnh địa thất bại: " + errOverlap.Error()})
+			return
+		}
+		if hasOverlap {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Lãnh địa sau khi nâng cấp Chính Điện (bán kính %d ô) sẽ xâm lấn tông môn \"%s\", không thể mở rộng!", newRadius, conflictingSect)})
+			return
+		}
+	}
+
 	reqFunds := getBuildingCost(req.BuildingName, targetLevel)
 
 	if funds < reqFunds {

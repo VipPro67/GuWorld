@@ -6,6 +6,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
 
 func TestApplySinhKhiTanHitStacksToCap(t *testing.T) {
@@ -64,8 +65,7 @@ func TestSinhKhiTanIgnoresExpiredEntry(t *testing.T) {
 	}
 }
 
-func TestMaybeGrantSinhKhiTanRejectsNonPVP(t *testing.T) {
-	// Nil player must not touch the DB.
+func TestMaybeGrantSinhKhiTanRejectsNonPVP(t *testing.T) { // Nil player must not touch the DB.
 	if granted, _ := maybeGrantSinhKhiTan(nil, nil, nil, nil, nil); granted {
 		t.Fatal("nil player must not grant")
 	}
@@ -74,5 +74,40 @@ func TestMaybeGrantSinhKhiTanRejectsNonPVP(t *testing.T) {
 	p.ActiveCombat = &models.CombatState{EnemyType: "Monster"}
 	if granted, _ := maybeGrantSinhKhiTan(nil, p, nil, nil, nil); granted {
 		t.Fatal("non-PVP combat must not grant")
+	}
+}
+
+func TestSinhKhiTanHitLandedMatchesGuAction(t *testing.T) {
+	newState := func() *simulator.CombatState {
+		return &simulator.CombatState{
+			Allies: []*simulator.CombatantAuto{
+				{ID: "attacker", Actions: []simulator.SimAction{
+					{ActionType: "GU_SKILL", Name: "Sát Sinh Khí Cổ", SourceID: "GU_KILL_ENERGY"},
+					{ActionType: "GU_SKILL", Name: "Cổ Khác", SourceID: "GU_OTHER"},
+				}},
+			},
+		}
+	}
+	hitGu := []simulator.CombatLog{{ActorId: "attacker", Damage: 100,
+		Detail: "admin dùng [Sát Sinh Khí Cổ] lên Clone Gmail, gây 100 sát thương (còn 0 HP)"}}
+	hitOther := []simulator.CombatLog{{ActorId: "attacker", Damage: 100,
+		Detail: "admin dùng [Cổ Khác] lên Clone Gmail, gây 100 sát thương (còn 0 HP)"}}
+
+	// Không loadout (flow AutoResolveCombat): detect qua SourceID + tên đòn.
+	if b, h := sinhKhiTanHitLanded(&simulator.CombatLoadout{}, newState(), hitGu); !b || !h {
+		t.Fatalf("expected (true,true) for Gu hit without loadout, got (%v,%v)", b, h)
+	}
+	if b, h := sinhKhiTanHitLanded(&simulator.CombatLoadout{}, newState(), hitOther); !b || h {
+		t.Fatalf("damage từ Cổ khác không được tính hit, got (%v,%v)", b, h)
+	}
+	// Loadout có Gu nhưng sim không có action: nới lỏng, damage phe ta vẫn tính.
+	emptyState := &simulator.CombatState{Allies: []*simulator.CombatantAuto{{ID: "attacker"}}}
+	loadout := &simulator.CombatLoadout{GuIds: []string{"GU_KILL_ENERGY"}}
+	if b, h := sinhKhiTanHitLanded(loadout, emptyState, hitOther); !b || !h {
+		t.Fatalf("loadout fallback expected (true,true), got (%v,%v)", b, h)
+	}
+	// Không mang Cổ: không grant dù có damage.
+	if b, h := sinhKhiTanHitLanded(&simulator.CombatLoadout{}, emptyState, hitOther); b || h {
+		t.Fatalf("no Gu expected (false,false), got (%v,%v)", b, h)
 	}
 }

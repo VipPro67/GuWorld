@@ -764,6 +764,7 @@ func BuyFromSectVault(c *gin.Context) {
 	if itemName == "" {
 		itemName = req.ItemID
 	}
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Bảo Khố] Đạo hữu %s đã đổi %s (x%d) từ Bảo khố (tiêu hao %d Điểm cống hiến).", player.Username, itemName, quantity, cost))
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.buy_vault", EntityType: "sect",
 		EntityID:       m.SectID,

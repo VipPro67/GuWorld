@@ -837,6 +837,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			sect.POST("/toggle-defend", handlers.ToggleDefendSect)
 			sect.POST("/attack", handlers.AttackSect)
 			sect.POST("/building/upgrade", handlers.UpgradeSectBuilding)
+			sect.GET("/relocate/estimate", handlers.GetSectRelocationEstimate)
+			sect.POST("/relocate", handlers.RelocateSect)
+			sect.POST("/claim-leadership", handlers.ClaimSectLeadership)
 		}
 
 		// Feedback — group: 30/min, per player: 20/min

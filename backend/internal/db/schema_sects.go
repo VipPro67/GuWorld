@@ -22,8 +22,15 @@ func schemaSects() error {
 		last_maintenance_at TIMESTAMP WITH TIME ZONE,
 		last_salary_paid_at TIMESTAMP WITH TIME ZONE,
 		last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		last_territory_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		last_territory_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		last_relocated_at TIMESTAMP WITH TIME ZONE
 	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("sects_last_relocated_at_column", `
+	ALTER TABLE sects ADD COLUMN IF NOT EXISTS last_relocated_at TIMESTAMP WITH TIME ZONE;
+	`); err != nil {
 		return err
 	}
 

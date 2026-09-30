@@ -921,6 +921,42 @@ export interface Sect {
   shield_until?: string;
   require_approval?: boolean;
   require_promotion_approval?: boolean;
+  last_relocated_at?: string;
+}
+
+export interface SectRelocationEstimate {
+  can_relocate: boolean;
+  reason?: string;
+  is_leader: boolean;
+  cooldown_remaining_seconds: number;
+  cooldown_total_seconds: number;
+  current_funds: number;
+  funds_needed: number;
+  cost_breakdown: {
+    base_cost: number;
+    member_count: number;
+    member_cost: number;
+    materials_count: number;
+    materials_cost: number;
+    mortal_gu_count: number;
+    mortal_gu_cost: number;
+    immortal_gu_count: number;
+    immortal_gu_cost: number;
+    recipes_count: number;
+    recipes_cost: number;
+    total_cost: number;
+  };
+  current_sect_location: {
+    region: string;
+    x: number;
+    y: number;
+  };
+  target_location: {
+    region: string;
+    x: number;
+    y: number;
+    radius: number;
+  };
 }
 
 export interface SectJoinRequest {
@@ -992,6 +1028,22 @@ export interface MySectStatus {
   pending_sect_name?: string;
   has_pending_promotion?: boolean;
   pending_promotion_target?: string;
+  estimated_daily_maintenance?: number;
+  maintenance_breakdown?: {
+    level_fee: number;
+    sect_level: number;
+    member_fee: number;
+    member_count: number;
+    materials_fee: number;
+    materials_count: number;
+    mortal_gu_fee: number;
+    mortal_gu_count: number;
+    immortal_gu_fee: number;
+    immortal_gu_count: number;
+    recipes_fee: number;
+    recipes_count: number;
+    total_fee: number;
+  };
 }
 
 export interface SectMemberInfo {
@@ -1003,6 +1055,8 @@ export interface SectMemberInfo {
   joined_at: string;
   player_rank: number;
   power?: number;
+  last_activity?: string;
+  is_online?: boolean;
 }
 
 export interface Feedback {
