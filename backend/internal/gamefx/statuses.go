@@ -126,6 +126,25 @@ func defaultStatuses() []StatusDef {
 			DefaultDurationMinutes: 15,
 			Description:            "Chịu áp chế khi xuyên qua Giới Vực Bích giữa các Đại Vực. Công thủ tốc đều suy giảm (tu vi rank càng cao bị áp chế càng nặng).",
 		},
+		{
+			// Sinh Khí Tàn: persistent PvP debuff do Sát Sinh Khí Cổ (GU_KILL_ENERGY) gây ra.
+			// Cường độ nằm ở StatusInstance.Value (âm) và được EffectsForValue dùng để
+			// ghi đè toàn bộ stat_mods — cùng cơ chế với Áp Chế Giới Vực.
+			// Giá trị mặc định -0.10 tương ứng tầng I. Duration tạm 300 phút (5h);
+			// spec gốc 50h (3000 phút) đang tạm giảm để cân bằng, mở lại bằng cách
+			// đổi DefaultDurationMinutes và SinhKhiTanDuration.
+			Key:  StatusSinhKhiTan,
+			Name: "Sinh Khí Tàn",
+			Effects: Effects{
+				StatMods: map[string]float64{
+					"attack":  -0.10,
+					"defense": -0.10,
+					"speed":   -0.10,
+				},
+			},
+			DefaultDurationMinutes: 300,
+			Description:            "Trúng Sát Sinh Khí Cổ, sinh cơ tàn lụi theo tầng (I -10%, II -25%, III -35%, IV -50%, V -99% công/thủ/tốc). Mỗi lần đánh trúng +1 tầng, thanh tẩy -1 tầng.",
+		},
 	}
 	for rank := 1; rank <= 9; rank++ {
 		defs = append(defs, StatusDef{
@@ -137,6 +156,76 @@ func defaultStatuses() []StatusDef {
 		})
 	}
 	return defs
+}
+
+// SinhKhiTan là key persistent của trạng thái Sinh Khí Tàn (Sát Sinh Khí Cổ).
+const StatusSinhKhiTan = "sinh_khi_tan"
+
+// SinhKhiTanDuration là thời hạn mỗi lần đánh trúng refresh (tạm 5h, spec gốc 50h).
+const SinhKhiTanDurationMinutes = 300
+
+// SinhKhiTanTierValues maps tầng 1..5 sang cường độ âm (dùng cho StatusInstance.Value).
+var SinhKhiTanTierValues = map[int]float64{
+	1: -0.10,
+	2: -0.25,
+	3: -0.35,
+	4: -0.50,
+	5: -0.99,
+}
+
+// SinhKhiTanMaxTier là số tầng tối đa.
+const SinhKhiTanMaxTier = 5
+
+// SinhKhiTanTierFromValue maps cường độ Value hiện tại về tầng 0..5 (0 = chưa có).
+// So sánh theo ngưỡng giữa các tầng để chịu được sai số float.
+func SinhKhiTanTierFromValue(value float64) int {
+	if value >= 0 {
+		return 0
+	}
+	v := -value
+	switch {
+	case v >= 0.99:
+		return 5
+	case v >= 0.50:
+		return 4
+	case v >= 0.35:
+		return 3
+	case v >= 0.25:
+		return 2
+	case v >= 0.10:
+		return 1
+	default:
+		return 1
+	}
+}
+
+// SinhKhiTanValueForTier trả cường độ của tầng, clamp 1..5.
+func SinhKhiTanValueForTier(tier int) float64 {
+	if tier < 1 {
+		tier = 1
+	}
+	if tier > SinhKhiTanMaxTier {
+		tier = SinhKhiTanMaxTier
+	}
+	return SinhKhiTanTierValues[tier]
+}
+
+// SinhKhiTanTierName trả tên hiển thị La Mã của tầng.
+func SinhKhiTanTierName(tier int) string {
+	switch tier {
+	case 1:
+		return "Sinh Khí Tàn I"
+	case 2:
+		return "Sinh Khí Tàn II"
+	case 3:
+		return "Sinh Khí Tàn III"
+	case 4:
+		return "Sinh Khí Tàn IV"
+	case 5:
+		return "Sinh Khí Tàn V"
+	default:
+		return "Sinh Khí Tàn"
+	}
 }
 
 // RefineInsightKey returns the per-rank pity status key.

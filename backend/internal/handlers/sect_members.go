@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
@@ -134,6 +135,17 @@ func CreateSect(c *gin.Context) {
 		}
 	}
 
+	// Verify territory does not overlap with any existing sect (initial radius = 5 + 1 = 6)
+	hasOverlap, conflictingSect, errOverlap := CheckTerritoryOverlap(tx, currentRegion, player.X, player.Y, 6, "")
+	if errOverlap != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Kiểm tra lãnh địa thất bại: " + errOverlap.Error()})
+		return
+	}
+	if hasOverlap {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vị trí này quá gần tông môn \"%s\"! Lãnh địa sơn môn bị chồng lấn, không thể lập phái tại đây.", conflictingSect)})
+		return
+	}
+
 	// Insert new sect at player's current location (region, map_x, map_y)
 	_, err = tx.Exec(`
 		INSERT INTO sects (id, name, description, region, map_x, map_y)
@@ -183,7 +195,8 @@ func GetSectMembers(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT sm.player_id, p.username, p.avatar_url, sm.member_rank, sm.contribution_points, sm.joined_at, p.rank
+		SELECT sm.player_id, p.username, p.avatar_url, sm.member_rank, sm.contribution_points, sm.joined_at, p.rank,
+		       p.last_activity, p.last_mana_update
 		FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
 		WHERE sm.sect_id = $1
@@ -205,20 +218,30 @@ func GetSectMembers(c *gin.Context) {
 	defer rows.Close()
 
 	type MemberInfo struct {
-		PlayerID     uuid.UUID `json:"player_id"`
-		Username     string    `json:"username"`
-		AvatarURL    string    `json:"avatar_url"`
-		MemberRank   string    `json:"member_rank"`
-		Contribution int64     `json:"contribution_points"`
-		JoinedAt     time.Time `json:"joined_at"`
-		PlayerRank   int       `json:"player_rank"`
-		Power        float64   `json:"power"`
+		PlayerID     uuid.UUID  `json:"player_id"`
+		Username     string     `json:"username"`
+		AvatarURL    string     `json:"avatar_url"`
+		MemberRank   string     `json:"member_rank"`
+		Contribution int64      `json:"contribution_points"`
+		JoinedAt     time.Time  `json:"joined_at"`
+		PlayerRank   int        `json:"player_rank"`
+		Power        float64    `json:"power"`
+		LastActivity *time.Time `json:"last_activity,omitempty"`
+		IsOnline     bool       `json:"is_online"`
 	}
 
 	var members []MemberInfo
+	now := time.Now()
 	for rows.Next() {
 		var mi MemberInfo
-		if err := rows.Scan(&mi.PlayerID, &mi.Username, &mi.AvatarURL, &mi.MemberRank, &mi.Contribution, &mi.JoinedAt, &mi.PlayerRank); err == nil {
+		var la, lmu *time.Time
+		if err := rows.Scan(&mi.PlayerID, &mi.Username, &mi.AvatarURL, &mi.MemberRank, &mi.Contribution, &mi.JoinedAt, &mi.PlayerRank, &la, &lmu); err == nil {
+			mi.LastActivity = la
+			if la != nil && now.Sub(*la) <= 5*time.Minute {
+				mi.IsOnline = true
+			} else if lmu != nil && now.Sub(*lmu) <= 5*time.Minute {
+				mi.IsOnline = true
+			}
 			if p, err := PlayerSvc.LoadEquipped(db.DB, mi.PlayerID); err == nil {
 				mi.Power = computeMemberPower(&p)
 			}
@@ -413,3 +436,191 @@ func KickMember(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã trục xuất thành viên ra khỏi tông môn!"})
 }
+
+// ClaimSectLeadership allows a qualified senior member to succeed as leader
+// when the current CHUONG_MON has been inactive for 5+ days or is missing.
+func ClaimSectLeadership(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khởi tạo giao dịch"})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Get caller's membership
+	var callerSectID string
+	var callerRank string
+	var callerContrib int64
+	var callerUsername string
+	err = tx.QueryRow(`
+		SELECT sm.sect_id, sm.member_rank, sm.contribution_points, p.username
+		FROM sect_members sm
+		JOIN players p ON sm.player_id = p.id
+		WHERE sm.player_id = $1
+		FOR UPDATE OF sm
+	`, playerID).Scan(&callerSectID, &callerRank, &callerContrib, &callerUsername)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào!"})
+		return
+	}
+
+	if callerRank == "CHUONG_MON" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu hiện đang là Chưởng Môn rồi, không cần tiếp quản!"})
+		return
+	}
+
+	// 2. Check current CHUONG_MON status
+	type LeaderRow struct {
+		PlayerID     uuid.UUID
+		Username     string
+		LastActivity *time.Time
+		LastMana     *time.Time
+	}
+	var leaders []LeaderRow
+	rows, err := tx.Query(`
+		SELECT sm.player_id, p.username, p.last_activity, p.last_mana_update
+		FROM sect_members sm
+		JOIN players p ON sm.player_id = p.id
+		WHERE sm.sect_id = $1 AND sm.member_rank = 'CHUONG_MON'
+		FOR UPDATE OF sm
+	`, callerSectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Chưởng Môn: " + err.Error()})
+		return
+	}
+	for rows.Next() {
+		var lr LeaderRow
+		if err := rows.Scan(&lr.PlayerID, &lr.Username, &lr.LastActivity, &lr.LastMana); err == nil {
+			leaders = append(leaders, lr)
+		}
+	}
+	rows.Close()
+
+	now := time.Now()
+	inactiveThreshold := 5 * 24 * time.Hour
+
+	if len(leaders) > 0 {
+		leader := leaders[0]
+		isInactive := true
+
+		if leader.LastActivity != nil && now.Sub(*leader.LastActivity) < inactiveThreshold {
+			isInactive = false
+		}
+		if leader.LastMana != nil && now.Sub(*leader.LastMana) < inactiveThreshold {
+			isInactive = false
+		}
+
+		if !isInactive {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("Chưởng Môn %s vẫn đang tại vị và hoạt động trong vòng 5 ngày qua! Không thể tiếp quản vị trí.", leader.Username),
+			})
+			return
+		}
+	}
+
+	// 3. Find top candidate among non-leaders
+	// Priority: Rank Seniority DESC (HO_PHAP > TRUONG_LAO > CHAN_TRUYEN > TINH_ANH > NOI_MON > NGOAI_MON)
+	// Then: contribution_points DESC
+	// Then: joined_at ASC
+	type Candidate struct {
+		PlayerID     uuid.UUID
+		Username     string
+		MemberRank   string
+		Contribution int64
+		JoinedAt     time.Time
+	}
+
+	candidateRows, err := tx.Query(`
+		SELECT sm.player_id, p.username, sm.member_rank, sm.contribution_points, sm.joined_at
+		FROM sect_members sm
+		JOIN players p ON sm.player_id = p.id
+		WHERE sm.sect_id = $1 AND sm.member_rank != 'CHUONG_MON'
+		ORDER BY 
+			CASE sm.member_rank
+				WHEN 'HO_PHAP' THEN 1
+				WHEN 'TRUONG_LAO' THEN 2
+				WHEN 'CHAN_TRUYEN' THEN 3
+				WHEN 'TINH_ANH' THEN 4
+				WHEN 'NOI_MON' THEN 5
+				WHEN 'NGOAI_MON' THEN 6
+				ELSE 7
+			END ASC,
+			sm.contribution_points DESC,
+			sm.joined_at ASC
+		FOR UPDATE OF sm
+	`, callerSectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn danh sách kế vị: " + err.Error()})
+		return
+	}
+
+	var candidates []Candidate
+	for candidateRows.Next() {
+		var cand Candidate
+		if err := candidateRows.Scan(&cand.PlayerID, &cand.Username, &cand.MemberRank, &cand.Contribution, &cand.JoinedAt); err == nil {
+			candidates = append(candidates, cand)
+		}
+	}
+	candidateRows.Close()
+
+	if len(candidates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy đệ tử nào đủ điều kiện kế vị!"})
+		return
+	}
+
+	topCandidate := candidates[0]
+	if topCandidate.PlayerID != playerID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": fmt.Sprintf("Đạo hữu chưa đủ tư cách kế vị! Quyền ưu tiên cao nhất hiện tại thuộc về %s (%s, %d Điểm cống hiến).",
+				topCandidate.Username, topCandidate.MemberRank, topCandidate.Contribution),
+		})
+		return
+	}
+
+	// 4. Perform succession
+	// Demote existing leaders to TRUONG_LAO
+	for _, oldLeader := range leaders {
+		_, err = tx.Exec(`UPDATE sect_members SET member_rank = 'TRUONG_LAO' WHERE player_id = $1`, oldLeader.PlayerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giáng chức Chưởng Môn cũ: " + err.Error()})
+			return
+		}
+	}
+
+	// Promote caller to CHUONG_MON
+	_, err = tx.Exec(`UPDATE sect_members SET member_rank = 'CHUONG_MON' WHERE player_id = $1 AND sect_id = $2`, playerID, callerSectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tấn phong Chưởng Môn: " + err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Hoàn tất giao dịch thất bại: " + err.Error()})
+		return
+	}
+
+	_ = cache.Delete(sectsListCacheKey)
+
+	// 5. Broadcast notification to sect chat
+	var oldLeaderNote string
+	if len(leaders) > 0 {
+		oldLeaderNote = fmt.Sprintf("Do tiền nhiệm Chưởng Môn %s vắng bóng lâu ngày, ", leaders[0].Username)
+	} else {
+		oldLeaderNote = "Trước tình thế sơn môn vô chủ, "
+	}
+	chatMsg := fmt.Sprintf("[Sơn Môn] %sđạo hữu %s (%s) đã chính thức kế vị, tiếp quản chức vụ Chưởng Môn tông môn!",
+		oldLeaderNote, callerUsername, callerRank)
+	_ = SendSystemMessage("sect", sql.NullString{String: callerSectID, Valid: true}, chatMsg)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Đạo hữu đã tiếp quản chức vụ Chưởng Môn thành công!",
+		"new_rank": "CHUONG_MON",
+	})
+}
+

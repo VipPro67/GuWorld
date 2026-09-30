@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -654,6 +655,9 @@ func AttackSect(c *gin.Context) {
 	}
 	msg += ". Nhân Khí +5."
 
+	_ = SendSystemMessage("sect", sql.NullString{String: req.TargetSectID, Valid: true},
+		fmt.Sprintf("[Chiến Báo] Kẻ địch %s đã phát động tấn công Sơn Môn!", attacker.Username))
+
 	respondActionOnly(c, http.StatusOK, attacker, gin.H{"message": msg})
 }
 
@@ -708,16 +712,15 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 
 	var targetFunds int64
 	var targetBuildings []byte
-	var targetName string
+	var targetName, targetRegion string
 	err := tx.QueryRow(`
-		SELECT name, funds, buildings
+		SELECT name, region, funds, buildings
 		FROM sects WHERE id = $1 FOR UPDATE
-	`, combat.TargetSectID).Scan(&targetName, &targetFunds, &targetBuildings)
+	`, combat.TargetSectID).Scan(&targetName, &targetRegion, &targetFunds, &targetBuildings)
 	if err != nil {
 		return logs
 	}
 
-	arrLvl := getBuildingLvl(targetBuildings, "defensive_array")
 	treasuryLvl := getBuildingLvl(targetBuildings, "treasury")
 
 	// Calculate plunder percentage (higher treasury = less plunder)
@@ -1005,18 +1008,36 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 	}
 
 	now := time.Now()
-	shieldHours := time.Duration(12 + arrLvl*2)
-	newShield := now.Add(shieldHours * time.Hour)
+	graceShield := now.Add(1 * time.Hour)
 
-	// Update target sect in DB
-	_, _ = tx.Exec(`
-		UPDATE sects SET
-			funds = GREATEST(0, funds - $1),
-			shield_until = $2
-		WHERE id = $3
-	`, stolenFunds, newShield, combat.TargetSectID)
+	// Forced exile teleport: find a valid random outdoor location that does not overlap any sect
+	targetMainHallLvl := getBuildingLvl(targetBuildings, "main_hall")
+	targetRadius := 5 + targetMainHallLvl
+	newExileX, newExileY, errExile := FindValidExileCoordinates(tx, targetRegion, targetRadius, combat.TargetSectID)
 
-	// Reset defending status for all target sect members
+	// Update target sect in DB: deduct plundered funds, grant 1h grace shield, and exile if new coords found
+	if errExile == nil {
+		_, _ = tx.Exec(`
+			UPDATE sects SET
+				funds = GREATEST(0, funds - $1),
+				shield_until = $2,
+				map_x = $3,
+				map_y = $4
+			WHERE id = $5
+		`, stolenFunds, graceShield, newExileX, newExileY, combat.TargetSectID)
+	} else {
+		logger.S.Warnf("ApplySectWarVictory: failed to find valid exile coordinates for sect %s: %v", combat.TargetSectID, errExile)
+		_, _ = tx.Exec(`
+			UPDATE sects SET
+				funds = GREATEST(0, funds - $1),
+				shield_until = $2
+			WHERE id = $3
+		`, stolenFunds, graceShield, combat.TargetSectID)
+	}
+
+	_ = cache.Delete(sectsListCacheKey)
+
+	// Reset defending status for all target sect members (members stay at their current location)
 	_, _ = tx.Exec(`UPDATE sect_members SET is_defending = false WHERE sect_id = $1`, combat.TargetSectID)
 
 	// Award attacker
@@ -1095,13 +1116,21 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		logs = append(logs, "Thiên Đạo tiêu hủy vĩnh viễn bí phương kho tông: "+joinDropList(recDestroyed))
 	}
 
-	// Notifications
+	// Notifications — full losses summary for victim sect channel
+	var totalStolenMats int64
+	for _, m := range matsList {
+		totalStolenMats += m.stolen
+	}
 	if mySectID != "" {
 		_ = SendSystemMessage("sect", sql.NullString{String: mySectID, Valid: true},
-			fmt.Sprintf("Tông môn ta đã đánh chiếm %s! Cướp được %d Quỹ.", targetName, stolenFunds))
+			fmt.Sprintf("[Chiến Báo] Tông môn ta đã đại phá sơn môn %s! Cướp được %d Quỹ Tông Môn.", targetName, stolenFunds))
+	}
+	exileNotice := ""
+	if errExile == nil {
+		exileNotice = fmt.Sprintf(" Tông môn buộc phải dời đến tọa độ mới (%d, %d) thuộc %s!", newExileX, newExileY, targetRegion)
 	}
 	_ = SendSystemMessage("sect", sql.NullString{String: combat.TargetSectID, Valid: true},
-		fmt.Sprintf("Tông môn bị đạo hữu %s và đội ngũ tấn công và thất thủ! Mất %d Quỹ cùng Cổ trùng, linh tài kho (một phần bị Thiên Đạo tiêu hủy vĩnh viễn). Hộ Sơn Đại Trận bảo hộ trong %d giờ.", player.Username, stolenFunds, shieldHours))
+		fmt.Sprintf("[Chiến Báo] Sơn Môn bị %s công phá! Tổn thất %d Quỹ, %d Linh tài.%s Toàn tông bế môn chấn chỉnh sơn môn trong 1 giờ.", player.Username, stolenFunds, totalStolenMats, exileNotice))
 
 	return logs
 }
@@ -1128,7 +1157,7 @@ func ApplySectWarDefeat(tx *sql.Tx, player *models.Player, combat *models.Combat
 	_ = tx.QueryRow(`SELECT name FROM sects WHERE id = $1`, combat.TargetSectID).Scan(&targetName)
 
 	_ = SendSystemMessage("sect", sql.NullString{String: combat.TargetSectID, Valid: true},
-		fmt.Sprintf("Tông môn đã chống lại cuộc tấn công của đạo hữu %s! Tất cả đệ tử trấn thủ nhận thưởng 100 Điểm Cống Hiến.", player.Username))
+		fmt.Sprintf("[Chiến Báo] Sơn Môn đã đánh lui cuộc tập kích của %s! Môn nhân trấn thủ được ban thưởng cống hiến.", player.Username))
 
 	logs = append(logs, fmt.Sprintf("Khiêu chiến Tông Môn %s thất bại! Hộ Sơn Đại Trận quá vững chãi.", targetName))
 	return logs

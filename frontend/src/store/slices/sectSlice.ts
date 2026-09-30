@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
-import type { Sect, MySectStatus, SectMission, SectMemberInfo, SectJoinRequest, SectPromotionRequest, SectMine } from "@/store/useGameStore";
+import type { Sect, MySectStatus, SectMission, SectMemberInfo, SectJoinRequest, SectPromotionRequest, SectMine, SectRelocationEstimate } from "@/store/useGameStore";
 
 let fetchMySectStatusPromise: Promise<void> | null = null;
 let lastMySectFetchPlayerId: string | null = null;
@@ -67,6 +67,9 @@ export interface SectSlice {
   undefendSect: (defenderId: string) => Promise<boolean>;
   toggleDefendSect: () => Promise<boolean>;
   upgradeSectBuilding: (buildingName: string) => Promise<boolean>;
+  getRelocationEstimate: () => Promise<SectRelocationEstimate | null>;
+  relocateSect: () => Promise<boolean>;
+  claimSectLeadership: () => Promise<boolean>;
 }
 
 export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, SectSlice> = (set, get) => ({
@@ -974,6 +977,77 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       addToast(err.message || "Lỗi nâng cấp", "error");
+      return false;
+    } finally {
+      get().endAction("sect");
+    }
+  },
+
+  getRelocationEstimate: async () => {
+    const { token, logout, addToast } = get();
+    if (!token) return null;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/relocate/estimate`);
+      if (response.status === 401) { logout(); return null; }
+      const data = await response.json();
+      if (!response.ok) {
+        addToast(data.error || "Không thể tải dự toán di dời", "error");
+        return null;
+      }
+      return data as SectRelocationEstimate;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      addToast(err.message || "Lỗi tải thông tin di dời", "error");
+      return null;
+    }
+  },
+
+  relocateSect: async () => {
+    const { token, logout, addToast, addLog } = get();
+    if (!token || !get().beginAction("sect")) return false;
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/relocate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Di dời sơn môn thất bại.");
+      addToast(data.message || "Di dời sơn môn thành công!", "success");
+      addLog(data.message || "Di dời sơn môn thành công!");
+      await get().fetchMySectStatus(true);
+      await get().fetchSectsMap();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      addToast(err.message || "Lỗi di dời sơn môn", "error");
+      return false;
+    } finally {
+      get().endAction("sect");
+    }
+  },
+
+  claimSectLeadership: async () => {
+    const { token, logout, addToast, addLog } = get();
+    if (!token || !get().beginAction("sect")) return false;
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/claim-leadership`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Tiếp quản Chưởng Môn thất bại.");
+      addToast(data.message || "Tiếp quản chức vụ Chưởng Môn thành công!", "success");
+      addLog(data.message || "Tiếp quản chức vụ Chưởng Môn.");
+      await get().fetchMySectStatus(true);
+      await get().fetchSectMembers();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      addToast(err.message || "Lỗi tiếp quản Chưởng Môn", "error");
       return false;
     } finally {
       get().endAction("sect");

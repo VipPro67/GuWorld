@@ -91,7 +91,7 @@ func DonateStones(c *gin.Context) {
 	}
 
 	// Trigger System Chat Notification on Sect channel
-	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp %d Nguyên Thạch cho tông môn.", player.Username, req.Amount))
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: %d Nguyên Thạch.", player.Username, req.Amount))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_stones", EntityType: "sect",
@@ -273,7 +273,7 @@ func DonateMaterials(c *gin.Context) {
 	}
 
 	// Trigger System Chat Notification on Sect channel
-	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp %d %s cho tông môn.", player.Username, req.Amount, materialName))
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: %s (x%d).", player.Username, materialName, req.Amount))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_material", EntityType: "sect",
@@ -472,7 +472,7 @@ func DonateGu(c *gin.Context) {
 	}
 
 	// Trigger System Chat Notification on Sect channel
-	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp Cổ trùng %s cho tông môn.", player.Username, guName))
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: Cổ trùng %s (x1).", player.Username, guName))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_gu", EntityType: "sect",
@@ -599,7 +599,7 @@ func DonateRecipe(c *gin.Context) {
 	}
 
 	// Trigger System Chat Notification on Sect channel
-	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp Bí phương %s cho tông môn.", player.Username, itemName))
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: Bí phương %s (x1).", player.Username, itemName))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_recipe", EntityType: "sect",
@@ -617,6 +617,31 @@ type BulkDonateRequest struct {
 	Materials []DonateMaterialsRequest `json:"materials"`
 	Gus       []DonateGuRequest        `json:"gus"`
 	Recipes   []DonateRecipeRequest    `json:"recipes"`
+	Stones    int64                    `json:"stones"`
+}
+
+// aggregateDonateSummary merges duplicate item names into "Tên (xN)" entries,
+// preserving first-seen order to avoid spam when donating many same-name items.
+func aggregateDonateSummary() (add func(name string, qty int64), build func() []string) {
+	counts := make(map[string]int64)
+	var order []string
+	add = func(name string, qty int64) {
+		if name == "" || qty <= 0 {
+			return
+		}
+		if _, ok := counts[name]; !ok {
+			order = append(order, name)
+		}
+		counts[name] += qty
+	}
+	build = func() []string {
+		out := make([]string, 0, len(order))
+		for _, name := range order {
+			out = append(out, fmt.Sprintf("%s (x%d)", name, counts[name]))
+		}
+		return out
+	}
+	return add, build
 }
 
 // DonateBulk converts multiple player materials and Gu bugs to contribution points in a single transaction
@@ -658,7 +683,27 @@ func DonateBulk(c *gin.Context) {
 	}
 
 	totalGainedContribution := int64(0)
-	var auditSummaries []string
+	addSummary, buildSummary := aggregateDonateSummary()
+
+	// 0. Process Primeval Stones (Nguyên Thạch) if included in bulk
+	if req.Stones > 0 {
+		if player.PrimevalStones < float64(req.Stones) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Nguyên Thạch!"})
+			return
+		}
+		res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1`, req.Stones, player.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
+			return
+		}
+		if rows, _ := res.RowsAffected(); rows == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
+			return
+		}
+		player.PrimevalStones -= float64(req.Stones)
+		totalGainedContribution += req.Stones
+		addSummary("Nguyên Thạch", req.Stones)
+	}
 
 	// 1. Process Materials
 	if len(req.Materials) > 0 {
@@ -767,7 +812,7 @@ func DonateBulk(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials: " + err.Error()})
 				return
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d", materialName, matReq.Amount))
+			addSummary(materialName, matReq.Amount)
 		}
 	}
 
@@ -843,7 +888,7 @@ func DonateBulk(c *gin.Context) {
 					return
 				}
 
-				auditSummaries = append(auditSummaries, guName)
+				addSummary(guName, 1)
 			} else {
 				newGuInventory = append(newGuInventory, gi)
 			}
@@ -917,7 +962,7 @@ func DonateBulk(c *gin.Context) {
 			if spec, ok := models.GetGuAny(recipeReq.RecipeID); ok {
 				recipeName = spec.Name
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s (%.0f%%)", recipeName, progress.CompletionRate))
+			addSummary(recipeName, 1)
 		}
 	}
 
@@ -956,9 +1001,9 @@ func DonateBulk(c *gin.Context) {
 		return
 	}
 
-	// Trigger System Chat Notification on Sect channel
-	summaryStr := strings.Join(auditSummaries, ", ")
-	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp hàng loạt vật phẩm: %s cho tông môn.", player.Username, summaryStr))
+	// Trigger System Chat Notification on Sect channel — single grouped message, no spam
+	summaryStr := strings.Join(buildSummary(), ", ")
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: %s.", player.Username, summaryStr))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_bulk", EntityType: "sect",

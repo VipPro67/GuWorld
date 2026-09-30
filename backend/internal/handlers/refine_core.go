@@ -95,23 +95,7 @@ func collectRefineSupportBonus(player *models.Player) float64 {
 // ParseRecipeID parses recipe_GU_ID_RANK_VARIANT into components.
 // E.g., recipe_GU_BIG_BELLY_TOAD_1_1 -> target_gu_id = "GU_BIG_BELLY_TOAD", target_rank = 1, variant = 1
 func ParseRecipeID(recipeID string) (string, int, int, error) {
-	s := strings.TrimPrefix(recipeID, "recipe_")
-	parts := strings.Split(s, "_")
-	if len(parts) < 3 {
-		return "", 0, 0, fmt.Errorf("invalid recipe id format: %s", recipeID)
-	}
-	variantStr := parts[len(parts)-1]
-	rankStr := parts[len(parts)-2]
-	targetGuID := strings.Join(parts[:len(parts)-2], "_")
-
-	var rank, variant int
-	if _, err := fmt.Sscanf(rankStr, "%d", &rank); err != nil {
-		return "", 0, 0, fmt.Errorf("invalid rank in recipe id: %s", recipeID)
-	}
-	if _, err := fmt.Sscanf(variantStr, "%d", &variant); err != nil {
-		return "", 0, 0, fmt.Errorf("invalid variant in recipe id: %s", recipeID)
-	}
-	return targetGuID, rank, variant, nil
+	return models.ParseRecipeID(recipeID)
 }
 
 type RefineRequest struct {
