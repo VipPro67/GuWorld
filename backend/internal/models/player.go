@@ -315,6 +315,10 @@ type CombatState struct {
 	PermStolenGuRank       int    `json:"perm_stolen_gu_rank,omitempty"`
 	PermStolenGuName       string `json:"perm_stolen_gu_name,omitempty"`
 	StealLogMessage        string `json:"steal_log_message,omitempty"`
+	// StealMissLogs records explicit pre-combat steal failures/skips so the
+	// combat replay can distinguish "thất bại roll" from "không đủ điều kiện".
+	// Each entry is "ACTION|detail", e.g. "PERM_STEAL_MISS|...".
+	StealMissLogs []string `json:"steal_miss_logs,omitempty"`
 }
 
 // ImmortalState groups immortal expansion data.

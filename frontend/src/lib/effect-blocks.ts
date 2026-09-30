@@ -223,7 +223,8 @@ export function growthConfig(value: EffectLike): GrowthConfig | null {
   return { max_attack: cap("ATTACK"), max_defense: cap("DEFENSE"), max_hp: cap("HP"), max_speed: cap("SPEED"), hours_to_max: hours };
 }
 
-export const canCreatePortal = (value: EffectLike) => hasCapability(value, "PORTAL_CREATE");
+export const canCreatePortal = (value: EffectLike) =>
+  hasCapability(value, "PORTAL_CREATE") || hasCapability(value, "IGNORE_MOVEMENT_RANGE");
 export const usesRandomPortal = (value: EffectLike) => hasCapability(value, "RANDOM_PORTAL");
 export const captureBonus = (value: EffectLike) => operationsBy(value, { code: "CAPTURE_BONUS" })
   .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op).value), 0);

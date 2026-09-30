@@ -92,8 +92,22 @@ func UseGuOnMap(c *gin.Context) {
 		}
 	}
 
+	_, hasPortalCreate := models.GuSpecCapability(specs, "PORTAL_CREATE")
+	_, hasRandomPortal := models.GuSpecCapability(specs, "RANDOM_PORTAL")
+	if _, hasIgnoreRange := models.GuSpecCapability(specs, "IGNORE_MOVEMENT_RANGE"); hasIgnoreRange {
+		hasPortalCreate = true
+	}
+	if specs.Effects.Active != nil {
+		if specs.Effects.Active.PortalCreate {
+			hasPortalCreate = true
+		}
+		if specs.Effects.Active.RandomPortal {
+			hasRandomPortal = true
+		}
+	}
+
 	cost := gamefx.EnergyCost(&player, &specs)
-	if specs.Effects.Active != nil && (specs.Effects.Active.PortalCreate || specs.Effects.Active.RandomPortal) {
+	if hasPortalCreate || hasRandomPortal {
 		cost = GetPortalManaCost(&player, &specs)
 	}
 	logs := []string{}
@@ -102,77 +116,23 @@ func UseGuOnMap(c *gin.Context) {
 	effectType := "utility"
 	effectValue := 0.0
 
-	// Apply effects from Active (Combat mapping to World Map)
-	if specs.Effects.Active != nil {
-		active := specs.Effects.Active
-
-		if active.HealFlat > 0 {
-			maxHP := gamefx.EffectiveMaxHP(&player)
-			healVal := active.HealFlat
-			player.HP += healVal
-			if player.HP > maxHP {
-				player.HP = maxHP
-			}
-			logs = append(logs, fmt.Sprintf("%s điều trị thương thế, phục hồi %.0f Sinh Lực.", specs.Name, healVal))
-			applied = true
-			cdDuration = 45 * time.Second
-			effectType = "heal"
-			effectValue = healVal
+	// Apply Portal / Teleport effects
+	if hasPortalCreate {
+		if targetGu.Rank < player.Rank {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("Không thể thực hiện dịch chuyển: Cổ trùng dịch chuyển (%s Rank %d) thấp hơn tu vi bản thân (Rank %d)!", specs.Name, targetGu.Rank, player.Rank),
+			})
+			return
 		}
-		if active.ManaRegen > 0 {
-			player.CurrentMana += active.ManaRegen
-			if player.CurrentMana > player.MaxMana {
-				player.CurrentMana = player.MaxMana
-			}
-			logs = append(logs, fmt.Sprintf("%s hồi phục %.1f Chân Nguyên.", specs.Name, active.ManaRegen))
-			applied = true
-			cdDuration = 30 * time.Second
-			effectType = "mana_regen"
-			effectValue = active.ManaRegen
-		}
-		if active.PortalCreate {
-			if targetGu.Rank < player.Rank {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"error": fmt.Sprintf("Không thể thực hiện dịch chuyển: Cổ trùng dịch chuyển (%s Rank %d) thấp hơn tu vi bản thân (Rank %d)!", specs.Name, targetGu.Rank, player.Rank),
-				})
-				return
-			}
-			// We can teleport to TargetX, TargetY if within bounds
-			if inWorld(req.TargetX, req.TargetY) {
-				oldX := player.X
-				oldY := player.Y
-				oldRegion := player.CurrentRegion
-				player.X = req.TargetX
-				player.Y = req.TargetY
-				player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-				teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-				if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
-					teleportMsg += " " + debuffMsg
-				}
-				logs = append(logs, teleportMsg)
-				applied = true
-				cdDuration = 120 * time.Second
-				effectType = "teleport"
-				logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
-			} else {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
-				return
-			}
-		}
-		if active.RandomPortal {
-			if targetGu.Rank < player.Rank {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"error": fmt.Sprintf("Không thể thực hiện dịch chuyển: Cổ trùng dịch chuyển (%s Rank %d) thấp hơn tu vi bản thân (Rank %d)!", specs.Name, targetGu.Rank, player.Rank),
-				})
-				return
-			}
+		// We can teleport to TargetX, TargetY if within bounds
+		if inWorld(req.TargetX, req.TargetY) {
 			oldX := player.X
 			oldY := player.Y
 			oldRegion := player.CurrentRegion
-			player.X = rand.Intn(WorldWidth)
-			player.Y = rand.Intn(WorldHeight)
+			player.X = req.TargetX
+			player.Y = req.TargetY
 			player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 			if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
 				teleportMsg += " " + debuffMsg
 			}
@@ -180,8 +140,38 @@ func UseGuOnMap(c *gin.Context) {
 			applied = true
 			cdDuration = 120 * time.Second
 			effectType = "teleport"
-			logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+			logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
+			return
 		}
+	} else if hasRandomPortal {
+		if targetGu.Rank < player.Rank {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("Không thể thực hiện dịch chuyển: Cổ trùng dịch chuyển (%s Rank %d) thấp hơn tu vi bản thân (Rank %d)!", specs.Name, targetGu.Rank, player.Rank),
+			})
+			return
+		}
+		oldX := player.X
+		oldY := player.Y
+		oldRegion := player.CurrentRegion
+		player.X = rand.Intn(WorldWidth)
+		player.Y = rand.Intn(WorldHeight)
+		player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+		teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+		if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
+			teleportMsg += " " + debuffMsg
+		}
+		logs = append(logs, teleportMsg)
+		applied = true
+		cdDuration = 120 * time.Second
+		effectType = "teleport"
+		logger.S.Infof("[Dịch Chuyển Cổ] Người chơi %s (ID: %s) kích hoạt %s (Rank %d) dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s]", player.Username, player.ID, specs.Name, targetGu.Rank, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
+	}
+
+	// Apply effects from Active (Combat mapping to World Map)
+	if specs.Effects.Active != nil {
+		active := specs.Effects.Active
 		// HOT tick -> heal
 		if op, ok := active.StatusOp("REGEN"); ok {
 			healVal := op.Value * float64(op.Turns)

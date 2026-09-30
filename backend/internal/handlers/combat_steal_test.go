@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"math"
+	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/simulator"
 )
 
 func TestStealChanceFormulas(t *testing.T) {
@@ -156,5 +159,90 @@ func TestFindStealGus(t *testing.T) {
 	}
 	if tempSpec == nil || tempSpec.Name != "Ám Thâu Cổ" {
 		t.Errorf("expected tempSpec Ám Thâu Cổ, got %v", tempSpec)
+	}
+}
+
+func seedStealRegistry() {
+	models.GuRegistry["GU_FORMLESS_THIEF_9"] = map[int]models.GuDictionaryItem{
+		9: {ID: "GU_FORMLESS_THIEF_9", Rank: 9, Name: "Vô Tướng Thủ"},
+	}
+	models.GuRegistry["GU_SHADOW_STEAL_8"] = map[int]models.GuDictionaryItem{
+		8: {ID: "GU_SHADOW_STEAL_8", Rank: 8, Name: "Ám Thâu Cổ"},
+	}
+}
+
+func TestStealSkipLoggedInArena(t *testing.T) {
+	seedStealRegistry()
+	attacker := &models.Player{
+		Account: models.Account{ID: uuid.New(), Username: "admin"},
+		GuInventory: models.GuInventory{
+			{InstanceID: "perm-1", GuID: "GU_FORMLESS_THIEF_9", Rank: 9, Equipped: true, Status: "ACTIVE"},
+		},
+	}
+	combat := &models.CombatState{
+		EnemyType:      "PVP",
+		CombatMode:     "virtual",
+		MineSlotID:     0,
+		TargetPlayerID: "11111111-1111-1111-1111-111111111111",
+		EnemyName:      "Clone Gmail",
+	}
+	handlePreCombatSteal(nil, combat, attacker)
+	if len(combat.StealMissLogs) == 0 {
+		t.Fatal("expected STEAL_SKIP log in arena, got none")
+	}
+	if !strings.HasPrefix(combat.StealMissLogs[0], "STEAL_SKIP|") {
+		t.Errorf("expected STEAL_SKIP prefix, got %q", combat.StealMissLogs[0])
+	}
+	if !strings.Contains(combat.StealMissLogs[0], "không đủ điều kiện") {
+		t.Errorf("expected precondition reason, got %q", combat.StealMissLogs[0])
+	}
+}
+
+func TestPermStealNoEligibleLogged(t *testing.T) {
+	seedStealRegistry()
+	attacker := &models.Player{Account: models.Account{ID: uuid.New(), Username: "admin"}}
+	combat := &models.CombatState{EnemyGuInventory: models.GuInventory{}}
+	thiefGu := &models.GuInstance{InstanceID: "perm-1", GuID: "GU_FORMLESS_THIEF_9", Rank: 9}
+	thiefSpec := &models.GuDictionaryItem{ID: "GU_FORMLESS_THIEF_9", Rank: 9, Name: "Vô Tướng Thủ"}
+	if executePermanentSteal(nil, combat, attacker, thiefGu, thiefSpec, uuid.New(), "Clone Gmail", true) {
+		t.Fatal("expected steal to fail with empty pool")
+	}
+	if len(combat.StealMissLogs) != 1 || !strings.HasPrefix(combat.StealMissLogs[0], "PERM_STEAL_MISS|") {
+		t.Fatalf("expected PERM_STEAL_MISS log, got %v", combat.StealMissLogs)
+	}
+	if !strings.Contains(combat.StealMissLogs[0], "không đủ điều kiện") {
+		t.Errorf("expected precondition detail, got %q", combat.StealMissLogs[0])
+	}
+}
+
+func TestTempStealNoEligibleLogged(t *testing.T) {
+	seedStealRegistry()
+	attacker := &models.Player{Account: models.Account{ID: uuid.New(), Username: "admin"}}
+	combat := &models.CombatState{EnemyGuInventory: models.GuInventory{}}
+	thiefGu := &models.GuInstance{InstanceID: "temp-1", GuID: "GU_SHADOW_STEAL_8", Rank: 8}
+	thiefSpec := &models.GuDictionaryItem{ID: "GU_SHADOW_STEAL_8", Rank: 8, Name: "Ám Thâu Cổ"}
+	if executeTempSteal(nil, combat, attacker, thiefGu, thiefSpec, uuid.New(), "Clone Gmail", true) {
+		t.Fatal("expected temp steal to fail with empty pool")
+	}
+	if len(combat.StealMissLogs) != 1 || !strings.HasPrefix(combat.StealMissLogs[0], "TEMP_STEAL_MISS|") {
+		t.Fatalf("expected TEMP_STEAL_MISS log, got %v", combat.StealMissLogs)
+	}
+}
+
+func TestHasSatKhiMechanic(t *testing.T) {
+	with := &simulator.CombatantAuto{
+		Mechanics: []simulator.CombatMechanic{{Trigger: "ON_BATTLE_START", ActionCode: "SAT_KHI_GUARANTEE"}},
+	}
+	if !hasSatKhiMechanic(with) {
+		t.Error("expected hasSatKhiMechanic true")
+	}
+	without := &simulator.CombatantAuto{
+		Mechanics: []simulator.CombatMechanic{{Trigger: "ON_BATTLE_START", ActionCode: "SEIZE_INITIATIVE"}},
+	}
+	if hasSatKhiMechanic(without) {
+		t.Error("expected hasSatKhiMechanic false")
+	}
+	if hasSatKhiMechanic(nil) {
+		t.Error("expected hasSatKhiMechanic false for nil")
 	}
 }

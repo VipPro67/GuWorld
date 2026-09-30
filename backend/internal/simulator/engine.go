@@ -794,7 +794,15 @@ func Simulate(state *CombatState) []CombatLog {
 						continue
 					}
 					chance := mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "chance", 0)
-					if rng.Float64() >= chance {
+					intentRoll := rng.Float64()
+					if intentRoll >= chance {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   d.ID,
+							ActorName: d.Name,
+							Action:    "FORGET_INTENT_MISS",
+							Detail:    fmt.Sprintf("[Lãng Quên Ý Niệm] của %s không kích hoạt: roll %.0f%% >= tỉ lệ %.0f%%!", d.Name, intentRoll*100, chance*100),
+						})
 						continue
 					}
 					if d.CustomState == nil {
@@ -1002,7 +1010,16 @@ func Simulate(state *CombatState) []CombatLog {
 					if !hasMechanic(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_WILL_CONFUSE") {
 						continue
 					}
-					if rng.Float64() >= mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_WILL_CONFUSE", "activation_chance", 0.35) {
+					willChance := mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_WILL_CONFUSE", "activation_chance", 0.35)
+					willRoll := rng.Float64()
+					if willRoll >= willChance {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   d.ID,
+							ActorName: d.Name,
+							Action:    "FORGET_WILL_INACTIVE",
+							Detail:    fmt.Sprintf("[Lãng Quên Chí] của %s không kích hoạt: roll %.0f%% >= tỉ lệ %.0f%%!", d.Name, willRoll*100, willChance*100),
+						})
 						continue
 					}
 					if bf := mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_WILL_CONFUSE", "backfire_chance", 0.2); rng.Float64() < bf {
@@ -1916,6 +1933,7 @@ func Simulate(state *CombatState) []CombatLog {
 				var costLog *CombatLog
 				var gainLog *CombatLog
 				var resultLogs []CombatLog
+				var preservedLogs []CombatLog
 				var extraBreakdown *DamageBreakdown
 
 				for i := range logs {
@@ -1926,6 +1944,10 @@ func Simulate(state *CombatState) []CombatLog {
 						costLog = log
 					} else if log.Action == "PATH_MASTERY_GAIN" {
 						gainLog = log
+					} else if log.Action == "FORGET_WILL_INACTIVE" {
+						// Pre-attack proc miss must stay a separate entry so
+						// the replay can filter "đã kích hoạt hay chưa".
+						preservedLogs = append(preservedLogs, *log)
 					} else if log.Action == "SHIELD_ABSORB" || log.Action == "SHIELD_BREAK" || log.Action == "SHIELD_BYPASS_ATTACK" || log.Action == "PATH_MASTERY_CAP" {
 						// Skip redundant damage outcome logs already detailed in useLog
 						continue
@@ -1972,6 +1994,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 					useLog.Detail = mergedDetail
 					turnLogs = append(turnLogs[:actionStartIndex], *useLog)
+					turnLogs = append(turnLogs, preservedLogs...)
 				}
 			}
 			return res
@@ -2332,7 +2355,17 @@ func Simulate(state *CombatState) []CombatLog {
 				return false
 			}
 			guaranteed := turn == 1 && mechanicBool(mechs, "ON_DEATH", "REBORN", "turn1_guaranteed", false)
-			if !guaranteed && rng.Float64() >= mechanicFloat(mechs, "ON_DEATH", "REBORN", "chance", 0) {
+			rebornChance := mechanicFloat(mechs, "ON_DEATH", "REBORN", "chance", 0)
+			rebornRoll := rng.Float64()
+			if !guaranteed && rebornRoll >= rebornChance {
+				logs = append(logs, CombatLog{
+					Turn:      turn,
+					ActorId:   c.ID,
+					ActorName: c.Name,
+					Action:    "REBORN_MISS",
+					Trigger:   "REBORN",
+					Detail:    fmt.Sprintf("%s kích hoạt [Xuân Thu Thiền] thất bại: roll %.0f%% >= tỉ lệ %.0f%%!", c.Name, rebornRoll*100, rebornChance*100),
+				})
 				return false
 			}
 			rebornUses[c.ID]++
