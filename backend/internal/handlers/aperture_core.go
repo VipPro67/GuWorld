@@ -25,16 +25,9 @@ func GetImmortalAperture(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// 1. Fetch player
+	// 1. Fetch player (read-only query)
 	var player models.Player
-	err = tx.QueryRow(`
+	err := db.DB.QueryRow(`
 		SELECT id, rank, aptitude_percent, human_qi, primeval_stones, immortal_stones, current_mana, time_speed_multiplier
 		FROM players WHERE id = $1
 	`, playerID).Scan(&player.ID, &player.Rank, &player.AptitudePercent, &player.HumanQi, &player.PrimevalStones, &player.ImmortalStones, &player.CurrentMana, &player.TimeSpeedMultiplier)
@@ -48,44 +41,57 @@ func GetImmortalAperture(c *gin.Context) {
 		return
 	}
 
-	// 2. Fetch aperture
+	// 2. Fetch aperture (read-only query)
 	var ap models.ImmortalAperture
 	var createdAt, updatedAt time.Time
-	err = tx.QueryRow(`
+	err = db.DB.QueryRow(`
 		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, dao_marks, created_at, updated_at
 		FROM immortal_apertures WHERE player_id = $1
 	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &ap.DaoMarks, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		// Auto-create aperture (fallback for legacy players) — grade rolled from current Nhân Khí
+		tx, txErr := db.DB.Begin()
+		if txErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+		defer tx.Rollback()
+
 		ap, err = createAperture(tx, playerID.String(), player.HumanQi, player.CurrentMana)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khai mở Tiên Khiếu: " + err.Error()})
 			return
 		}
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Tiên Khiếu: " + err.Error()})
+			return
+		}
 		createdAt = ap.CreatedAt
 		updatedAt = ap.UpdatedAt
 	} else if err != nil {
-		logger.S.Errorf("Error fetching aperture: %v", err)
+		logger.S.Errorf("Error fetching aperture for player %s: %v", playerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Tiên Khiếu"})
 		return
-	} else {
-		// Sync current mana to database
-		ap.ImmortalEssence = int(player.CurrentMana)
-		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE id = $2`, ap.ImmortalEssence, ap.ID)
 	}
+
 	ap.TribulationCount = ap.TotalTribulationCount()
+
+	originalState := ap.State
+	originalEssence := ap.ImmortalEssence
+	originalYears := ap.InternalYearsPassed
+
+	// Sync current mana in-memory
+	ap.ImmortalEssence = int(player.CurrentMana)
 
 	// Verify state consistency: aperture can ONLY be STABLE if there are no active tribulation events
 	// and no living tribulation enemies.
-	hasActiveTrib, errActive := db.HasActiveTribulationOrEnemies(tx, ap.ID)
+	hasActiveTrib, errActive := db.HasActiveTribulationOrEnemies(db.DB, ap.ID)
 	if errActive == nil {
 		if hasActiveTrib && ap.State == "STABLE" {
 			ap.State = "TRIBULATION_ACTIVE"
-			_, _ = tx.Exec(`UPDATE immortal_apertures SET state = 'TRIBULATION_ACTIVE' WHERE id = $1`, ap.ID)
 		} else if !hasActiveTrib && ap.State == "TRIBULATION_ACTIVE" && ap.ApertureHP >= ap.MaxApertureHP {
 			ap.State = "STABLE"
-			_, _ = tx.Exec(`UPDATE immortal_apertures SET state = 'STABLE' WHERE id = $1`, ap.ID)
 		}
 	}
 
@@ -98,7 +104,7 @@ func GetImmortalAperture(c *gin.Context) {
 		if tsm <= 0 {
 			tsm = 1.0
 		}
-		if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
+		if bonus, err := db.EquippedTimeSpeedBonus(db.DB, playerID.String()); err == nil {
 			tsm += bonus
 		}
 		effectiveTimeRate = ap.TimeRate * tsm
@@ -107,24 +113,26 @@ func GetImmortalAperture(c *gin.Context) {
 	// Project internal_years_passed forward based on real time elapsed since updated_at.
 	// This ensures the frontend always gets accurate time values even if other handlers
 	// (e.g. SetApertureTimeRate) update updated_at without projecting internal years.
+	now := time.Now()
 	if ap.State == "STABLE" || ap.State == "DAMAGED" {
-		now := time.Now()
 		elapsedSec := now.Sub(updatedAt).Seconds()
 		if elapsedSec > 0 && effectiveTimeRate > 0 {
 			elapsedInternalYears := elapsedSec * effectiveTimeRate / 36000.0
 			ap.InternalYearsPassed += elapsedInternalYears
 			ap.UpdatedAt = now
-			_, _ = tx.Exec(`
-				UPDATE immortal_apertures
-				SET internal_years_passed = $1, updated_at = $2
-				WHERE id = $3
-			`, ap.InternalYearsPassed, now, ap.ID)
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failure"})
-		return
+	// Consolidate updates into a single query only if changed
+	if ap.State != originalState || ap.ImmortalEssence != originalEssence || ap.InternalYearsPassed != originalYears {
+		_, errUpd := db.DB.Exec(`
+			UPDATE immortal_apertures
+			SET state = $1, immortal_essence = $2, internal_years_passed = $3, updated_at = $4
+			WHERE id = $5
+		`, ap.State, ap.ImmortalEssence, ap.InternalYearsPassed, ap.UpdatedAt, ap.ID)
+		if errUpd != nil {
+			logger.S.Warnf("GetImmortalAperture: failed to sync aperture update for %s: %v", ap.ID, errUpd)
+		}
 	}
 
 	isImmortalPlayer := gamefx.Get(&player).Immortal
