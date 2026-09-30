@@ -229,7 +229,7 @@ Danh sách hiện tại (11 chủng tộc):
 | Key | Tên Việt | Hiệu ứng |
 | --- | --- | --- |
 | `human` | Nhân Tộc | Không bonus đặc biệt (mặc định) |
-| `cuong_thi` | Cương Thi | Bất tử tuổi thọ (không giảm thọ); Cấm hồi HP, Mana, Nguyên Lực, Thần Hồn |
+| `cuong_thi` | Cương Thi | Bất tử tuổi thọ (không giảm thọ); các block `DISABLE_*_REGEN` đặt hệ số hồi tự động HP, Mana, Niệm Lực và Thần Hồn về 0; hồi chủ động có tiêu hao vẫn dùng được |
 | `fur_people` | Người Lông | +10% tỉ lệ Luyện Cổ thành công |
 | `merman` | Nhân Ngư | Thủy Đạo +10% affinity, +5% sát thương Thủy Đạo |
 | `feathered` | Vũ Dân | +10% tốc độ, Không Gian Đạo +5% affinity |
@@ -412,6 +412,7 @@ Các trường quan trọng trong dictionary:
     - `REBORN.params.chance` là xác suất chuẩn trong catalog (0..1); runtime không còn dùng tỷ lệ hard-code theo ID.
     - Action code liên quan Hồn Phách:
     - `SOUL_REGEN_TICK` (`event_trigger: ON_TICK`): hồi `soul_hp` theo giờ từ mỗi Cổ trang bị ACTIVE (`params.value` = số điểm/giờ, scale theo rank qua `ManaRegenTickFactor`; xử lý ở `models.SoulRegenTickPerHour`).
+    - Ba nguồn `*_REGEN_TICK` là hồi thụ động: chúng được cộng với hồi nền trước khi áp dụng chính sách `DISABLE_HP_REGEN`, `DISABLE_MANA_REGEN`, `DISABLE_RESOURCE_REGEN` (Mana + Niệm Lực) và `DISABLE_SOUL_REGEN`. Item/Cổ `ON_CONSUME` là hồi chủ động nên không bị hệ số hồi tự động này chặn.
     - `RESTORE_SOUL_HP` (`event_trigger: ON_CONSUME`): hồi ngay `soul_hp` khi sử dụng Cổ tiêu hao (`params.value` mặc định 10, cap tại `max_soul`).
     - `ADD_SOUL_MAX` (`ON_CONSUME`): tăng `max_soul`; `SOUL_BOOST` (`ON_CONSUME`): cộng Hồn Đạo đạo ngân.
     - Action code liên quan dòng thời gian:

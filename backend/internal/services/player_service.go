@@ -319,12 +319,19 @@ func normalizeEnergyPool(player *models.Player) bool {
 	return false
 }
 
-// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay,
-func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float64, now time.Time) (poolChanged, stressChanged bool) {
-	poolChanged = normalizeEnergyPool(player)
-	stressChanged = false
+type automaticRegenRates struct {
+	mana    float64
+	hp      float64
+	thought float64
+	soul    float64
+}
 
-	var regenRatePerHour float64
+// calculateAutomaticRegenRates resolves every passive recovery source once,
+// then applies the final 0/1 policy supplied by Block-v2 character effects.
+// Consumable and other explicit recovery actions do not use these rates, so a
+// race that cannot recover naturally can still spend an item to recover.
+func calculateAutomaticRegenRates(player *models.Player, essenceProd int) automaticRegenRates {
+	var mana float64
 	if player.Rank >= 6 {
 		subRank := player.SubRank
 		if subRank < 1 {
@@ -333,29 +340,52 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		if subRank > 4 {
 			subRank = 4
 		}
-		subRankFactor := 1.0 + float64(subRank-1)*0.15
-		regenRatePerHour = (float64(essenceProd) / 120.0) * subRankFactor
+		mana = (float64(essenceProd) / 120.0) * (1.0 + float64(subRank-1)*0.15)
 	} else {
-		regenRatePerHour = energyRegenRatePerHour(player)
+		mana = energyRegenRatePerHour(player)
 	}
-
 	if player.Lifespan <= 0 {
-		regenRatePerHour = regenRatePerHour * 0.5
+		mana *= 0.5
 	}
 
-	regenRatePerHour += models.ManaRegenTickPerHour(player.GuInventory, player.Rank)
+	fx := gamefx.Get(player)
+	rates := automaticRegenRates{
+		mana:    (mana + models.ManaRegenTickPerHour(player.GuInventory, player.Rank)) * (1.0 + fx.ManaRegenBonus),
+		hp:      (gamefx.EffectiveMaxHP(player)*0.05 + fx.HPRegenBonus) * (1.0 + fx.HealingReceivedBonus),
+		thought: player.RegenRate + models.ThoughtRegenTickPerHour(player.GuInventory, player.Rank),
+		soul:    (float64(player.MaxSoul)*0.10)*(1.0+fx.SoulRegenBonus) + models.SoulRegenTickPerHour(player.GuInventory, player.Rank),
+	}
+	if fx.DisableManaRegen || fx.DisableResourceRegen {
+		rates.mana = 0
+	}
+	if fx.DisableHPRegen {
+		rates.hp = 0
+	}
+	if fx.DisableResourceRegen {
+		rates.thought = 0
+	}
+	if fx.DisableSoulRegen {
+		rates.soul = 0
+	}
+	return rates
+}
 
-	player.RegenRate += models.ThoughtRegenTickPerHour(player.GuInventory, player.Rank)
-
-	player.ManaRegenRate = regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
-
+// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay,
+func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float64, now time.Time) (poolChanged, stressChanged bool) {
+	poolChanged = normalizeEnergyPool(player)
+	stressChanged = false
+	rates := calculateAutomaticRegenRates(player, essenceProd)
+	player.ManaRegenRate = rates.mana
+	player.HPRegenRate = rates.hp
+	player.SoulRegenRate = rates.soul
+	player.ThoughtRegenRate = rates.thought
 	effMaxHP := gamefx.EffectiveMaxHP(player)
-	player.HPRegenRate = (effMaxHP*0.05 + gamefx.Get(player).HPRegenBonus) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
-
-	player.SoulRegenRate = (float64(player.MaxSoul)*0.10)*(1.0+gamefx.Get(player).SoulRegenBonus) + models.SoulRegenTickPerHour(player.GuInventory, player.Rank)
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
+		// Consume the interval even when every automatic rate is zero, so
+		// disabled time cannot be paid retroactively after an effect changes.
+		poolChanged = true
 		equippedBonus := models.EquippedTimeSpeedBonus(player.GuInventory)
 		effectiveBase := player.TimeSpeedMultiplier + equippedBonus
 		if effectiveBase <= 0 {
@@ -366,7 +396,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			effectiveMultiplier = effectiveBase * timeRate
 		}
 		subjectiveSeconds := secondsPassed * effectiveMultiplier
-		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
+		earnedMana := (subjectiveSeconds / 3600.0) * rates.mana
 		effMaxMana := gamefx.EffectiveMaxMana(player)
 		newMana := player.CurrentMana + earnedMana
 		if newMana > effMaxMana {
@@ -407,7 +437,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		}
 
 		if player.CurrentThought < player.MaxThought {
-			earnedThought := (secondsPassed * effectiveBase / 3600.0) * player.RegenRate
+			earnedThought := (secondsPassed * effectiveBase / 3600.0) * rates.thought
 			newThought := player.CurrentThought + earnedThought
 			if newThought > player.MaxThought {
 				newThought = player.MaxThought
@@ -417,7 +447,6 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 				poolChanged = true
 			}
 		}
-
 		dummyP := models.Player{}
 		dummyP.Race = player.Race
 		if !gamefx.Get(&dummyP).Immortal {
@@ -465,7 +494,7 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 			rate = 4.0
 		}
 	}
-	return rate * (1.0 + gamefx.Get(player).ManaRegenBonus)
+	return rate
 }
 
 // ProjectStatus computes the read-only projected status for UI refreshes.
