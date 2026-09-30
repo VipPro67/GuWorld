@@ -63,6 +63,7 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 | Hình Phạt Tử Vong (`death_penalty`) | **-50%** tấn công, phòng thủ, tốc độ | 30 phút |
 | Tâm Thần Mệt Mỏi (`refine_fatigue`) | **-25%** tỉ lệ Luyện Cổ thành công (khi Luyện Tiên Cổ hoặc Cổ $\ge$ Rank bản thân) | 10 phút |
 | Luyện Cổ Phản Phệ (`refine_backfire`) | **-50%** tỉ lệ Luyện Cổ thành công (khi cố luyện lúc mệt mỏi hoặc bị nổ lò) | 20 phút |
+| Sinh Khí Tàn (`sinh_khi_tan`) | Trúng Sát Sinh Khí Cổ: tầng I **-10%**, II **-25%**, III **-35%**, IV **-50%**, V **-99%** tấn công/phòng thủ/tốc độ. Đánh trúng +1 tầng (tối đa V, refresh 5h); thanh tẩy -1 tầng | 5 giờ (refresh mỗi hit; spec gốc 50h đang tạm giảm cân bằng) |
 
 Quy tắc áp dụng trạng thái:
 
@@ -686,29 +687,193 @@ Khu vực thư giãn cho các đạo hữu đọ vận may và tranh đoạt Ngu
 
 > **Đơn vị tiền tệ:** Nguyên Thạch, Tiên Nguyên Thạch và giá vật phẩm hỗ trợ tối đa 3 chữ số thập phân; `0.001` là đơn vị nhỏ nhất.
 
-## 13. Môn phái
+## 13. Môn phái (Tông Môn)
 
-Hệ thống môn phái hiện có:
+Thay thế cho chế độ gia tộc dựa trên huyết thống cổ xưa, Tông Môn là tổ chức thế lực tuyển chọn đệ tử dựa trên năng lực, phẩm hạnh và lòng trung thành, vận hành bằng hệ thống phân cấp, sư đồ, điểm cống hiến, ngân quỹ và căn cứ lãnh địa trên bản đồ thế giới.
 
-- Xem/tạo/gia nhập/rời môn phái.
-- Duyệt đơn gia nhập nếu môn phái bật yêu cầu duyệt.
-- Thành viên, ban bậc, trục xuất.
-- Xin/thẩm định thăng chức.
-- **Cấp bậc:** Ngoại Môn → Nội Môn → Tinh Anh → Chân Truyền → Trưởng Lão → **Hộ Pháp** → Chưởng Môn. Chi phí thăng cấp bằng Điểm cống hiến: 100 / 500 / 2.000 / 10.000 / 30.000.
-- **Duyệt lên cấp:** Trưởng Lão/Chưởng Môn có thể bật tùy chọn "Duyệt Lên Cấp" (mặc định tắt). Khi bật, **mọi** thăng cấp của đệ tử đều tạo yêu cầu chờ duyệt thay vì tự động. Khi tắt, đệ tử tự thăng cấp theo tiêu chuẩn (trừ bậc Chân Truyền/Trưởng Lão/Hộ Pháp vẫn cần duyệt).
-- Đóng góp nguyên thạch/vật liệu/Cổ/**Bí phương**.
-- Bảo khố môn phái, mua vật phẩm từ kho, stock kho (hỗ trợ cả Bí phương).
-- Nhiệm vụ mặc định và nhiệm vụ custom:
-  - **Hạn tự xóa:** Nhiệm vụ trên bảng có thời hạn (mặc định 24h, Trưởng Lão/Chưởng Môn tùy chỉnh khi phát hành; `-1` = không hết hạn). Hết hạn nhiệm vụ tự biến mất khỏi bảng, nhiệm vụ của đệ tử đang làm cũng bị hủy theo.
-  - **Hủy nhiệm vụ:** Đệ tử có thể hủy bỏ nhiệm vụ đang thực hiện để nhận nhiệm vụ khác. Trưởng Lão/Chưởng Môn có thể xóa nhiệm vụ đã phát hành khỏi bảng.
-- Nâng cấp môn phái: chi phí `Cấp² × 5.000` Quỹ.
-- Mỏ môn phái: xem, tấn công, nhận thưởng.
-- **Lãnh địa (mỏ tông môn):**
-  - **Phòng thủ:** Trưởng Lão/Hộ Pháp/Chưởng Môn bố trí đệ tử hoặc thuê thần thú canh giữ (phí `hạng × 500` Quỹ). Mỗi đệ tử chỉ giữ 1 mỏ. Slot theo rarity: Thường 1 · Hiếm 2 · Sử Thi 3 · Truyền Thuyết 3 · Siêu Cấp 4.
-  - **Sinh tài nguyên theo giờ:** mỏ đang chiếm giữ tự sinh **Quỹ** và **Linh tài** vào bảo khố, tỉ lệ theo rarity × cấp TM × số phòng thủ.
-  - **Điểm cống hiến theo giờ:** đệ tử phòng thủ +20 pts/h, các đệ tử khác +2 pts/h, cap 200 pts/ngày (chống AFK).
-  - **Công kích có chiến đấu:** tấn công mỏ đang bị chiếm sẽ so sánh sức mạnh của bạn vs tổng phòng thủ (được củng cố bởi người giữ). Thắng → chiếm + bảo hộ 4h; thua → trận pháp hộ sơn 15 phút và người phòng thủ được thưởng +20 cống hiến.
-  - **Chỉ lãnh đạo phát động tấn công:** Trưởng Lão/Hộ Pháp/Chưởng Môn chọn đệ tử ra trận (Ngoại Môn không tham gia); sức mạnh của người được chọn sẽ được so sánh với phòng thủ, và Nhân Khí khi thắng thuộc về đệ tử ra trận đó.
+### 1. Khai Tông Lập Phái (Thành lập Tông Môn)
+
+- **Điều kiện thành lập**:
+  - Tu vi Cổ sư đạt tối thiểu **Tam Chuyển (Rank 3)**.
+  - Chi phí: **30.000 Nguyên Thạch** làm ngân quỹ khai sơn.
+  - Phải là Cổ sư tự do (chưa gia nhập tông môn nào, nếu có phải rời/phản môn trước).
+  - Tên tông môn từ 3 đến 50 ký tự (hệ thống tự chuẩn hóa thành ID duy nhất, cấm trùng lặp).
+- **Vị trí Căn cứ Tông Môn**:
+  - **Bắt buộc dã ngoại (`KHU_VUC`)**: Không thể lập phái trong An Toàn Khu / Điểm tập kết / Trấn (`HUB`, `SAFE_ZONE`, `hub_nam_cuong`, `Lobby`). Cổ sư phải di chuyển ra ngoài dã ngoại.
+  - Tọa độ thực tế của người sáng lập (`current_region`, `x`, `y`) sẽ trở thành **Tọa độ Căn cứ Tông Môn** (`region`, `map_x`, `map_y`) cố định trên bản đồ thế giới.
+- **Đặc quyền Người sáng lập**:
+  - Tự động đảm nhiệm vị trí **Chưởng Môn (`CHUONG_MON`)**.
+  - Nhận ngay **10.000 Điểm Cống Hiến** ban đầu.
+
+---
+
+### 2. Cấu Trúc Thành Viên & Chức Vụ (Hệ Thống Phân Cấp)
+
+Hệ thống môn phái chia thành 7 cấp bậc rõ rệt:
+
+| Cấp bậc | Mã hiệu | Yêu cầu Tu vi | Phí Thăng cấp (Điểm Cống Hiến) | Đặc quyền & Quyền hạn |
+| :--- | :--- | :--- | :--- | :--- |
+| **Ngoại Môn** | `NGOAI_MON` | Nhất Chuyển (Rank 1) | Mặc định khi gia nhập | Thành viên sơ cấp, làm nhiệm vụ, quyên góp, đổi kho |
+| **Nội Môn** | `NOI_MON` | Nhị Chuyển (Rank 2) | **100** Điểm | Nhận nhiệm vụ cấp cao hơn |
+| **Tinh Anh** | `TINH_ANH` | Tam Chuyển (Rank 3) | **500** Điểm | Nhận nhiệm vụ Tinh Anh, tăng phụ cấp bổng lộc |
+| **Chân Truyền** | `CHAN_TRUYEN` | Tứ Chuyển (Rank 4) | **2.000** Điểm | Mặc định cần lãnh đạo phê duyệt thăng cấp |
+| **Trưởng Lão** | `TRUONG_LAO` | Ngũ Chuyển (Rank 5) | **10.000** Điểm | **Thuộc Lãnh Đạo**: Có quyền quản trị tông môn |
+| **Hộ Pháp** | `HO_PHAP` | Lục Chuyển (Rank 6 - Cổ Tiên) | **30.000** Điểm | **Thuộc Lãnh Đạo**: Trụ cột chiến lực tông môn |
+| **Chưởng Môn** | `CHUONG_MON` | — | Không thể tự thăng cấp | Lãnh tụ tối cao, định đoạt mọi việc lớn nhỏ |
+
+- **Quyền Quản Lý Tông Môn (`canManageSect`)**: Dành riêng cho **Trưởng Lão**, **Hộ Pháp**, **Chưởng Môn**:
+  - Xem và phê duyệt / từ chối đơn xin gia nhập tông môn.
+  - Khảo hạch và duyệt yêu cầu thăng chức của môn nhân.
+  - Ban hành nhiệm vụ tùy biến (`CreateCustomMission`) và xóa nhiệm vụ trên bảng.
+  - Bố trí đệ tử trấn thủ hoặc chi ngân quỹ thuê thần thú hộ sơn.
+  - Nhập hàng (stocking) Linh tài và Bí phương vào Bảo khố bằng Quỹ tông môn.
+  - Nâng cấp Ngũ Đại Kiến Trúc tông môn.
+  - Phát bổng lộc hàng ngày cho toàn thể thành viên.
+  - Thay đổi cấp bậc đệ tử và Trục xuất thành viên (chỉ trục xuất người có cấp bậc thấp hơn mình; Chưởng Môn không thể bị trục xuất).
+- **Chuyển Giao Quyền Lực (Nhường ngôi Chưởng Môn)**:
+  - Chưởng Môn có thể phong một thành viên khác làm Chưởng Môn mới.
+  - Khi nhường ngôi, Chưởng Môn tiền nhiệm sẽ tự động thoái vị chuyển thành **Trưởng Lão**.
+- **Cơ chế Khảo Hạch & Duyệt Lên Cấp**:
+  - Khi bật thiết lập **"Duyệt Lên Cấp"** (`require_promotion_approval`): **Tất cả** thăng cấp từ Ngoại Môn trở lên đều phải tạo đơn chờ lãnh đạo phê duyệt. Điểm cống hiến bị trừ ngay khi nộp đơn.
+  - Khi tắt thiết lập: Đệ tử tự động thăng lên Nội Môn và Tinh Anh ngay khi đủ điều kiện. Riêng các bậc **Chân Truyền, Trưởng Lão, Hộ Pháp** luôn bắt buộc phải qua phê duyệt nếu tông môn có Chưởng Môn.
+- **Gia Nhập & Rời Tông Môn**:
+  - **Gia nhập**: Nếu tông môn bật "Duyệt gia nhập" (`require_approval`, yêu cầu tông môn từ Cấp 10 trở lên mới được bật), người chơi gửi đơn chờ duyệt (Nhân Khí +2). Nếu tắt, người chơi gia nhập ngay lập tức (Nhân Khí +3).
+  - **Rời tông môn (`LeaveSect`)**: Xóa toàn bộ tư cách thành viên, hủy toàn bộ nhiệm vụ đang làm và **mất trắng toàn bộ Điểm cống hiến tích lũy**.
+
+---
+
+### 3. Ngân Quỹ, Bổng Lộc & Chi Phí Bảo Trì
+
+- **Quỹ Tông Môn (`funds`)**: Đơn vị ngân sách tính bằng Nguyên Thạch của tông môn, dùng cho: nâng cấp kiến trúc, thuê thần thú hộ sơn, nhập hàng bảo khố, phát lương đệ tử và trả phí duy trì hàng ngày.
+- **Nguồn Thu Quỹ Tông Môn**:
+  - Đệ tử quyên góp Nguyên Thạch (tỉ lệ 1:1).
+  - Sản lượng tự động từ **Linh Mạch** mỗi phút (gia tăng theo số lượng đệ tử và thần thú canh giữ).
+  - Cướp phá từ ngân quỹ của tông môn khác khi công sơn thắng lợi.
+- **Phát Bổng Lộc Hàng Ngày (`PaySectSalary`)**:
+  - Trưởng Lão, Hộ Pháp hoặc Chưởng Môn có thể kích hoạt phát bổng lộc **1 lần mỗi 24 giờ**.
+  - Toàn bộ bổng lộc được khấu trừ từ Quỹ tông môn và chuyển trực tiếp thành **Nguyên Thạch** vào túi của từng thành viên:
+    $$\text{Bổng Lộc} = (\text{Cấp Tông Môn} \times 100) + \text{Phụ Cấp Chức Vụ}$$
+  - **Phụ cấp chức vụ**: Ngoại Môn: `+0` | Nội Môn: `+50` | Tinh Anh: `+150` | Chân Truyền: `+400` | Trưởng Lão: `+1.000` | Hộ Pháp: `+2.000` | Chưởng Môn: `+5.000` Nguyên Thạch.
+- **Phí Duy Trì Tông Môn Hàng Ngày (`SectMaintenanceWorker`)**:
+  - Hệ thống chạy ngầm tự động mỗi 24 giờ.
+  - Chi phí bảo trì:
+    $$\text{Phí Duy Trì} = \text{Cấp Tông Môn} \times 5.000 \text{ Quỹ}$$
+  - **Hệ quả thiếu quỹ**: Nếu Quỹ tông môn không đủ thanh toán phí bảo trì, tông môn **bị giáng 1 cấp** (`Level - 1`, tối thiểu Cấp 1) và Thiên Đạo lập tức gửi thư thông báo cảnh báo đến Chưởng Môn.
+
+---
+
+### 4. Quyên Góp & Bảo Khố Tông Môn (Vault & Donations)
+
+Bảo khố tông môn gồm 3 khoang riêng biệt: **Cổ Trùng (`sect_vault_gu`)**, **Linh Tài (`sect_vault_materials`)** và **Bí Phương (`sect_vault_recipes`)**.
+
+#### Quy Tắc Quyên Góp (Nhận Điểm Cống Hiến):
+- **Nguyên Thạch**: 1 Nguyên Thạch $\to$ 1 Điểm cống hiến + 1 Quỹ tông môn.
+- **Linh Tài**: Nhận Điểm cống hiến $= \text{BasePrice} \times 50\%$ (tối thiểu 1 điểm). Linh tài được lưu trữ vào kho nguyên liệu.
+- **Cổ Trùng**: Nhận Điểm cống hiến $= \text{EffectiveBasePrice} \times 50\%$.
+  - Rank 1: **100** | Rank 2: **250** | Rank 3: **600** | Rank 4: **1.250** | Rank 5: **2.500** Điểm cống hiến.
+  - Tiên Cổ: Rank 6: **100** | Rank 7: **250** | Rank 8: **600** | Rank 9: **1.250** Điểm cống hiến.
+- **Bí Phương**: Nhận Điểm cống hiến $= \text{RecipeCost} / 1.5$ (Rank 1: 13, Rank 2: 33, Rank 3: 80, Rank 4: 166, Rank 5: 333 Điểm).
+- Hỗ trợ tính năng **Quyên Góp Hàng Loạt (Bulk Donate)** nhanh chóng.
+
+#### Quy Tắc Đổi & Mua Từ Bảo Khố:
+- **Chi phí bằng Điểm Cống Hiến**: Giá đổi vật phẩm từ bảo khố luôn nhân hệ số Markup $1.5\times$ so với điểm khi quyên góp ($\text{Giá Đổi} = \text{BasePrice} \times 75\%$), đảm bảo triệt tiêu hoàn toàn khả năng cày điểm xoay vòng.
+- **Bí Phương Luyện Cổ**: Học trực tiếp từ bảo khố, chi phí tính theo Rank của Cổ mục tiêu ($\text{GuBasePrice} / 10$, tối thiểu 20 Điểm).
+- **Tiên Cổ (Rank 6+) Độc Nhất Toàn Thiên Hạ**:
+  - Mỗi Tiên Cổ trong bảo khố là độc nhất toàn server, giữ nguyên mã số sinh mệnh `instance_id`. Mỗi lần chỉ được rút 1 instance.
+  - Thao tác rút Tiên Cổ được ghi chép vĩnh viễn vào **Lịch Sử Đời Cổ (`gu_history`)** kèm tên Cổ sư, tên tông môn và giá trị điểm tiêu hao.
+- **Hao Đói & Rủi Ro Tử Vong Của Cổ Trong Kho**:
+  - Cổ trùng nằm trong Bảo khố **vẫn liên tục tiêu hao Độ No mỗi 3 giờ** như trong túi Cổ sư! Nếu để Độ No tụt về 0, Cổ sẽ **chết và vĩnh viễn biến mất khỏi kho**.
+  - Khi đệ tử đổi Cổ từ kho ra, nếu là loại Cổ có tiêu hao thức ăn (`hunger_rate > 0`), Cổ nhận về có **Độ No khởi đầu = 1** (cần cho ăn gấp, không được reset đầy).
+
+#### Nhập Hàng Vào Kho (Stocking):
+- Lãnh đạo có thể dùng Quỹ tông môn để nhập sẵn Linh tài & Bí phương vào kho cho đệ tử đổi:
+  - **Linh tài**: Hạng tối đa $= \lfloor\text{Cấp TM} / 10\rfloor + 1$ (tối đa Rank 5). Chi phí nhập: $\text{Hạng} \times 50$ Quỹ/đơn vị.
+  - **Bí phương**: Hạng tối đa $= \lfloor\text{Cấp TM} / 10\rfloor + 1$ (tối đa Rank 5). Chi phí nhập: $\text{Hạng Cổ} \times 500$ Quỹ/bản.
+  - **Cấm nhập Tiên phẩm**: Tuyệt đối không thể dùng quỹ nhập Linh tài hoặc Bí phương Tiên cấp (Rank 6+).
+  - **Cổ trùng**: **Không thể nhập bằng quỹ tông môn** (chỉ có thể thu nạp qua sự tự nguyện quyên góp của môn nhân).
+
+---
+
+### 5. Nhiệm Vụ Tông Môn (Sect Missions)
+
+- **Bảng Nhiệm Vụ**:
+  - Gồm 4 phân loại: Thu thập vật liệu (`GATHER`), Quyên góp Cổ (`DONATE`), Tiêu diệt yêu thú (`COMBAT`), Luyện chế Cổ trùng (`REFINE`).
+  - Mỗi nhiệm vụ quy định cấp bậc môn nhân tối thiểu được phép tiếp nhận.
+  - Mỗi đệ tử tại một thời điểm chỉ được thực hiện tối đa 1 nhiệm vụ tông môn. Đệ tử có thể chủ động **Hủy bỏ nhiệm vụ** (`AbandonSectMission`) đang làm để nhận nhiệm vụ khác.
+- **Nhiệm Vụ Tùy Biến (Custom Mission)**:
+  - Lãnh đạo tông môn có thể tự phát hành nhiệm vụ mới: đặt tên, mô tả, chỉ định vật phẩm/mục tiêu, số lượng cần nộp, số Điểm cống hiến ban thưởng và thời hạn.
+- **Cơ Chế Hết Hạn Tự Động (`SectMissionWorker`)**:
+  - Nhiệm vụ trên bảng có thời hạn (mặc định 24 giờ; Trưởng Lão/Chưởng Môn có thể tùy chỉnh khi phát hành; đặt `-1` là vô thời hạn).
+  - Worker định kỳ quét: Nhiệm vụ hết hạn sẽ tự biến mất khỏi bảng, tiến độ của đệ tử đang thực hiện dở dang cũng chuyển thành trạng thái thất bại (`EXPIRED`).
+
+---
+
+### 6. Ngũ Đại Kiến Trúc Tông Môn (Buildings)
+
+Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông môn:
+
+| Kiến trúc | Mã hiệu | Chi phí nâng cấp | Tác dụng vận hành |
+| :--- | :--- | :--- | :--- |
+| **Chính Điện** | `main_hall` | $5.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Định đoạt **Cấp bậc Tông Môn** (`sects.level`). Là trần giới hạn: cấp của 4 kiến trúc còn lại không được vượt quá Chính Điện. Mở rộng bán kính lãnh địa ($\text{Radius} = 5 + \text{Cấp}$). |
+| **Hộ Sơn Trận Pháp** | `defensive_array` | $2.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng cường toàn diện chỉ số HP, Công, Thủ, Mana của **Hộ Sơn Thần Thú**. Kéo dài thời gian bảo hộ sau khi sơn môn bị công phá ($12 + \text{Cấp} \times 2$ giờ). |
+| **Linh Mạch** | `spirit_vein` | $3.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng sản lượng tự sinh Quỹ tông môn: $(10 + \text{Cấp} \times 10)$ Quỹ/phút. Tự động thu thập và bổ sung Linh tài phàm phẩm vào kho mỗi phút. |
+| **Tàng Bảo Các** | `treasury` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Gia cố kho tàng, giảm tỉ lệ tài nguyên bị cướp đoạt khi thất thủ: từ 20% giảm dần xuống tối thiểu 5% theo công thức $20\% - (\text{Cấp} \times 2\%)$. |
+| **Diễn Võ Trường** | `training_ground` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng hiệu suất thu hoạch Điểm cống hiến thụ động theo giờ của toàn bộ môn nhân ($+10\%$ mỗi cấp kiến trúc). |
+
+---
+
+### 7. Lãnh Địa & Hiệu Ứng Trận Pháp Sơn Môn (Territory Mechanics)
+
+- **Tọa độ & Bán Kính Lãnh Địa**:
+  - Căn cứ tông môn tọa lạc cố định tại `(map_x, map_y)` dã ngoại.
+  - Phạm vi lãnh địa hình vuông: $|x - \text{map\_x}| \le \text{Radius}$ và $|y - \text{map\_y}| \le \text{Radius}$, với:
+    $$\text{Radius} = 5 + \text{Cấp Chính Điện}$$
+- **Hiệu Ứng Hộ Sơn Trận Pháp (Territory AoE Buff)**:
+  - Thành viên đứng trong phạm vi lãnh địa của tông môn mình nhận **$+10\%$ Tấn Công và $+10\%$ Phòng Thủ** cơ bản ($+2\%$ công/thủ cho mỗi cấp Chính Điện).
+- **Trận Pháp Che Chở (Chống Đồ Sát Ngoài Dã Ngoại)**:
+  - Khi Hộ Sơn Trận Pháp còn hiệu lực (chưa bị công phá), đệ tử đứng trong phạm vi lãnh địa tông môn được đại trận che chở: **người chơi khác ngoài dã ngoại không thể phát động tấn công PvP**.
+- **Cấm Tuyệt Đối Đồng Môn Tương Tàn**:
+  - Hai Cổ sư cùng thuộc một tông môn không thể tấn công lẫn nhau ngoài dã ngoại ("Đồng môn tương tàn là điều đại kỵ trong Tông Môn!").
+- **Thu Hoạch Thụ Động Theo Phút (`SectTerritoryWorker`)**:
+  - Hệ thống tự động vận hành định kỳ mỗi phút:
+    - **Quỹ tông môn**: Tự động tích lũy vào ngân quỹ dựa theo cấp Linh Mạch và nhân thêm hệ số thủ hộ ($+10\%$ mỗi thủ hộ).
+    - **Linh tài**: Tự sinh các loại Linh tài có phẩm cấp phù hợp với cấp tông môn vào kho nguyên liệu.
+    - **Điểm cống hiến thụ động cho thành viên**:
+      - Đệ tử bình thường: $+2$ điểm/giờ ($2.0 / 60$ mỗi phút).
+      - Đệ tử Trấn Thủ: $+20$ điểm/giờ ($20.0 / 60$ mỗi phút).
+      - Tỷ lệ trên được nhân thêm hệ số từ **Diễn Võ Trường** ($1.0 + \text{Cấp Diễn Võ Trường} \times 0.1$).
+      - **Giới hạn trần ngày**: Mỗi đệ tử tối đa nhận **200 Điểm cống hiến thụ động/ngày** (chống treo máy vô tận), tự động làm mới vào ngày hôm sau.
+
+---
+
+### 8. Thủ Hộ, Trấn Thủ & Công Phá Sơn Môn (Warfare & Siege)
+
+- **Bố Trí Thủ Hộ Tông Môn (`DefendSect`)**:
+  - Trưởng Lão, Hộ Pháp, Chưởng Môn có thể phân công đệ tử làm Thủ hộ hoặc thuê Thần Thú canh giữ (chi phí thuê: $\text{Rank} \times 500$ Quỹ).
+  - Số lượng thủ hộ tối đa $= \text{Cấp Tông Môn} + 1$.
+  - Mỗi thủ hộ đang canh giữ tăng thêm $+10\%$ tổng sản lượng thu hoạch Quỹ và Linh tài của tông môn.
+- **Trấn Thủ Sơn Môn Cá Nhân (`ToggleDefendSect`)**:
+  - Đệ tử đứng trực tiếp tại tọa độ căn cứ tông môn có thể bật/tắt trạng thái **Trấn Thủ** (`is_defending`).
+  - Đệ tử trấn thủ nhận tốc độ tích lũy Điểm cống hiến thụ động gấp 10 lần bình thường (20 điểm/giờ).
+  - Khi sơn môn bị tấn công, tối đa **8 đệ tử Trấn Thủ** đang có mặt tại chỗ sẽ trực tiếp xuất trận cùng Hộ Sơn Thần Thú để nghênh chiến.
+- **Khiêu Chiến & Công Phá Tông Môn (`AttackSect`)**:
+  - **Khoảng cách tiếp cận**: Người tấn công phải di chuyển đến vị trí cách căn cứ mục tiêu **trong vòng 2 ô** trên bản đồ thế giới. Không thể tấn công tông môn của chính mình.
+  - **Thời gian bảo hộ**: Nếu tông môn mục tiêu đang có Hộ Sơn Đại Trận bảo vệ (`shield_until > now`), kẻ địch bất khả xâm phạm.
+  - **Đội hình Phòng thủ Sơn Môn (Tối đa 9 thực thể)**:
+    - 1 **Hộ Sơn Thần Thú (Boss)**: Rank bằng Cấp Tông Môn, SubRank bằng Cấp Hộ Sơn Trận Pháp. Chỉ số HP, Tấn công, Phòng thủ, Mana cực lớn tỷ lệ thuận với cấp trận và cấp tông môn.
+    - Tối đa **8 Đệ tử Trấn Thủ** còn sống và đang đứng tại sơn môn.
+- **Kết Quả: Công Phá Thành Công (Kẻ Tấn Công Thắng)**:
+  - **Cướp phá Kho Tàng**: Đoạt lấy Quỹ, Linh tài, Cổ trùng và Bí phương từ bảo khố đối phương theo tỉ lệ:
+    $$\text{Tỉ lệ cướp} = 20\% - (\text{Cấp Tàng Bảo Các} \times 2\%) \quad (\text{Tối thiểu } 5\%)$$
+  - **Thiên Đạo Tiêu Hủy (Void Destruction - 40%)**: Thuận theo ý trời trong tranh đoạt khốc liệt, **40% toàn bộ chiến lợi phẩm cướp được sẽ bị chấn nát, tiêu biến vĩnh viễn vào hư vô**! 60% còn lại được chia cho đội tấn công / chuyển vào Quỹ tông môn phe thắng.
+  - **Kích Hoạt Hộ Sơn Đại Trận Bảo Hộ**: Tông môn thất thủ rơi vào trạng thái bế môn bảo hộ trong **$12 + (\text{Cấp Hộ Sơn Trận Pháp} \times 2)$ giờ** (miễn nhiễm mọi đợt khiêu chiến tiếp theo). Toàn bộ cờ Trấn Thủ của môn nhân bị giải trừ.
+  - **Chiến công**: Người tấn công nhận $+10$ Nhân Khí và $+200$ Điểm cống hiến (nếu có tông môn).
+- **Kết Quả: Công Phá Thất Bại (Sơn Môn Phòng Thủ Thắng)**:
+  - Sơn môn phòng thủ thành công nhận ngay **4 giờ** Hộ Sơn Đại Trận bảo hộ.
+  - Toàn thể đệ tử Trấn Thủ tham chiến nhận thưởng **$+100$ Điểm Cống Hiến**.
+  - Phát thông cáo chiến thắng oanh liệt trên kênh chat Tông Môn.
+
+---
 
 ## 14. Mỏ cá nhân
 

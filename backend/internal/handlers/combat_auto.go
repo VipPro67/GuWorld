@@ -293,6 +293,19 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
+	// Sát Sinh Khí Cổ: đánh trúng ở PvP thật thì defender nhận +1 tầng Sinh Khí Tàn
+	// (persistent, refresh 5h). Vẫn cộng ở tầng V, không phụ thuộc thắng thua —
+	// chỉ cần 1 hit gây damage của phe ta. Arena virtual (dummy) bỏ qua.
+	if sinhKhiTanPvPGrant, grantTier := maybeGrantSinhKhiTan(tx, &player, &req.Loadout, simState, logs); sinhKhiTanPvPGrant {
+		logs = append(logs, simulator.CombatLog{
+			Turn:   simState.Turn,
+			Action: "SINH_KHI_TAN_APPLIED",
+			Detail: fmt.Sprintf("Sát khí tàn lụi xâm nhập! Kẻ địch nhận [%s] (công/thủ/tốc giảm %.0f%% trong %d giờ).",
+				gamefx.SinhKhiTanTierName(grantTier),
+				-gamefx.SinhKhiTanValueForTier(grantTier)*100, gamefx.SinhKhiTanDurationMinutes/60),
+		})
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat transaction"})
 		return
