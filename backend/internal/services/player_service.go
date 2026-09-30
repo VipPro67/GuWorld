@@ -326,6 +326,11 @@ type automaticRegenRates struct {
 	soul    float64
 }
 
+// worldYearHours is the number of real-world hours in one outside-world year
+// when time_speed_multiplier is 1. An immortal aperture advances time_rate
+// internal years during that period.
+const worldYearHours = 10.0
+
 // calculateAutomaticRegenRates resolves every passive recovery source once,
 // then applies the final 0/1 policy supplied by Block-v2 character effects.
 // Consumable and other explicit recovery actions do not use these rates, so a
@@ -333,14 +338,9 @@ type automaticRegenRates struct {
 func calculateAutomaticRegenRates(player *models.Player, essenceProd int) automaticRegenRates {
 	var mana float64
 	if player.Rank >= 6 {
-		subRank := player.SubRank
-		if subRank < 1 {
-			subRank = 1
-		}
-		if subRank > 4 {
-			subRank = 4
-		}
-		mana = (float64(essenceProd) / 120.0) * (1.0 + float64(subRank-1)*0.15)
+		// essenceProd is the amount generated per internal aperture year. The
+		// aperture time rate is applied later when wall-clock time is projected.
+		mana = float64(essenceProd) / worldYearHours
 	} else {
 		mana = energyRegenRatePerHour(player)
 	}

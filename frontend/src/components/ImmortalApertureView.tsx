@@ -316,12 +316,10 @@ export const ImmortalApertureView: React.FC = () => {
 
   const essenceProd = aperture?.essence_production_per_year ?? 10;
   const rank = player?.rank ?? 6;
-  const subRank = player?.sub_rank ?? 1;
-  const subRankFactor = 1.0 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15;
   const timeRate = aperture?.time_rate ?? 10;
   const timeSpeedMultiplier = player?.time_speed_multiplier ?? 1;
   const effectiveTimeRate = timeRate * timeSpeedMultiplier;
-  const hourlyRegen = (essenceProd / 120.0) * subRankFactor * effectiveTimeRate;
+  const hourlyRegen = (essenceProd / 10.0) * effectiveTimeRate;
   const dailyRegen = Math.round(hourlyRegen * 24);
 
   const MANA_QUALITY_NAMES: Record<number, string> = {
