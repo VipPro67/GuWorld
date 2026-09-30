@@ -21,14 +21,9 @@ func GetGrid(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTx(tx, authID)
+	// Lock-free projection for viewport polls. Persist throttled in a short
+	// Tx; viewport generation itself must not hold the players row lock.
+	player, err := PlayerSvc.ProjectAndPersistBestEffort(authID, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
@@ -36,7 +31,7 @@ func GetGrid(c *gin.Context) {
 
 	cleaned := cleanupExpiredClearedCells(&player, clearedCellCooldown)
 	if cleaned {
-		_, err = tx.Exec("UPDATE players SET cleared_cells = $1 WHERE id = $2", player.ClearedCells, player.ID)
+		_, err = db.DB.Exec("UPDATE players SET cleared_cells = $1 WHERE id = $2", player.ClearedCells, player.ID)
 		if err != nil {
 			logger.S.Error("Failed to save cleaned up cleared_cells:", err)
 		}
@@ -95,7 +90,7 @@ func GetGrid(c *gin.Context) {
 
 	// Always include party members regardless of distance for position sync
 	if player.PartyID != nil {
-		partyRows, errParty := tx.Query(`
+		partyRows, errParty := db.DB.Query(`
 			SELECT id, username, avatar_url, x, y
 			FROM players
 			WHERE party_id = $1
@@ -138,7 +133,7 @@ func GetGrid(c *gin.Context) {
 	minY := player.Y - visualVisionRadius
 	maxY := player.Y + visualVisionRadius
 
-	dropRows, errDrops := tx.Query(`
+	dropRows, errDrops := db.DB.Query(`
 		SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
 		       loot_data, protected_until, expires_at, created_at
 		FROM map_ground_drops
@@ -184,10 +179,6 @@ func GetGrid(c *gin.Context) {
 				groundDrops = append(groundDrops, d)
 			}
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		logger.S.Error("GetGrid commit warning:", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

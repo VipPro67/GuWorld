@@ -109,6 +109,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const isMovingRef = useRef(false);
   const walkVersionRef = useRef(0);
   const movementDirectionRef = useRef({ x: 0, y: 0 });
+  const isFineMovementRef = useRef(false);
   const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
   const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk; px: number; py: number }>>(new Map());
@@ -533,9 +534,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
               const direction = movementDirectionRef.current;
               if (!res.combat_triggered && (direction.x !== 0 || direction.y !== 0)) {
+                const stepSize = isFineMovementRef.current ? 1 : directionSegmentCells;
                 moveTargetRef.current = {
-                  x: Math.max(0, Math.min(WORLD_W - 1, np.x + direction.x * directionSegmentCells)),
-                  y: Math.max(0, Math.min(WORLD_H - 1, np.y + direction.y * directionSegmentCells)),
+                  x: Math.max(0, Math.min(WORLD_W - 1, np.x + direction.x * stepSize)),
+                  y: Math.max(0, Math.min(WORLD_H - 1, np.y + direction.y * stepSize)),
                 };
               }
               const desired = moveTargetRef.current;
@@ -593,12 +595,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           }
           return;
         }
+        moveTargetRef.current = { x: obj.x, y: obj.y };
+        performMove(obj.x, obj.y);
         return;
       } else {
         selectObject(obj);
       }
     },
-    [selectObject, gamePlayer],
+    [performMove, selectObject, gamePlayer],
   );
 
   const handleBackgroundClick = useCallback(
@@ -698,8 +702,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       s.selectObject(null);
 
+      // Tap on empty terrain inside investigation range to move there
+      const px = gamePlayer?.x ?? 0;
+      const py = gamePlayer?.y ?? 0;
+      const dist = Math.hypot(tx - px, ty - py);
+      if (dist <= s.investigationRange) {
+        moveTargetRef.current = { x: tx, y: ty };
+        performMove(tx, ty);
+      }
     },
-    [gamePlayer, handleObjectClick, monsterDictionary],
+    [performMove, gamePlayer, handleObjectClick, monsterDictionary],
   );
 
   useEffect(() => {
@@ -707,7 +719,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     let keyboardDirection = { x: 0, y: 0 };
     let joystickDirection = { x: 0, y: 0 };
 
-    const applyDirection = () => {
+    const applyDirection = (fineOverride?: boolean) => {
+      const isFine = fineOverride ?? isFineMovementRef.current;
+      isFineMovementRef.current = isFine;
+
       const source = joystickDirection.x !== 0 || joystickDirection.y !== 0
         ? joystickDirection
         : keyboardDirection;
@@ -733,17 +748,18 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const confirmed = isMovingRef.current ? confirmedPositionRef.current : null;
       const originX = confirmed ? Math.round(confirmed.x - 0.5) : player.x;
       const originY = confirmed ? Math.round(confirmed.y - 0.5) : player.y;
+      const stepSize = isFine ? 1 : directionSegmentCells;
       performMove(
-        Math.max(0, Math.min(WORLD_W - 1, originX + dx * directionSegmentCells)),
-        Math.max(0, Math.min(WORLD_H - 1, originY + dy * directionSegmentCells)),
+        Math.max(0, Math.min(WORLD_W - 1, originX + dx * stepSize)),
+        Math.max(0, Math.min(WORLD_H - 1, originY + dy * stepSize)),
       );
     };
 
-    const applyKeyboardDirection = () => {
+    const applyKeyboardDirection = (isArrowKey: boolean) => {
       const x = Number(pressed.has("d") || pressed.has("arrowright")) - Number(pressed.has("a") || pressed.has("arrowleft"));
       const y = Number(pressed.has("s") || pressed.has("arrowdown")) - Number(pressed.has("w") || pressed.has("arrowup"));
       keyboardDirection = { x, y };
-      applyDirection();
+      applyDirection(isArrowKey);
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -758,35 +774,49 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       e.preventDefault();
       if (pressed.has(key)) return;
       pressed.add(key);
-      applyKeyboardDirection();
+      const isArrow = key.startsWith("arrow");
+      applyKeyboardDirection(isArrow);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (!pressed.delete(key)) return;
-      applyKeyboardDirection();
+      applyKeyboardDirection(false);
     };
     const stopMovement = () => {
       pressed.clear();
       keyboardDirection = { x: 0, y: 0 };
       joystickDirection = { x: 0, y: 0 };
-      applyDirection();
+      isFineMovementRef.current = false;
+      applyDirection(false);
     };
     const handleJoystick = (e: Event) => {
-      const detail = (e as CustomEvent<{ x?: number; y?: number }>).detail;
+      const detail = (e as CustomEvent<{ x?: number; y?: number; fine?: boolean }>).detail;
       joystickDirection = { x: Math.sign(detail?.x ?? 0), y: Math.sign(detail?.y ?? 0) };
-      applyDirection();
+      applyDirection(Boolean(detail?.fine));
+    };
+
+    const handleCustomMove = (e: Event) => {
+      const detail = (e as CustomEvent<{ x?: number; y?: number }>).detail;
+      if (detail && typeof detail.x === "number" && typeof detail.y === "number") {
+        isFineMovementRef.current = false;
+        movementDirectionRef.current = { x: 0, y: 0 };
+        moveTargetRef.current = { x: detail.x, y: detail.y };
+        performMove(detail.x, detail.y);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("blur", stopMovement);
     window.addEventListener("gu_world_direction", handleJoystick);
+    window.addEventListener("gu_world_move", handleCustomMove);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", stopMovement);
       window.removeEventListener("gu_world_direction", handleJoystick);
+      window.removeEventListener("gu_world_move", handleCustomMove);
     };
   }, [directionSegmentCells, performMove]);
 

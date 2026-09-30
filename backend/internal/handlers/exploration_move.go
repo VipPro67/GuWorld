@@ -351,17 +351,18 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			}
 			var targetUUID uuid.UUID
 			err := tx.QueryRow(`
-				SELECT p.id
-				FROM players p
-				WHERE p.id != $1 
-				ORDER BY RANDOM()
-				LIMIT 1`, player.ID,
+				SELECT p.id FROM players p
+				WHERE p.id != $1
+				ORDER BY p.last_login_at DESC NULLS LAST
+				LIMIT 1 OFFSET floor(random() * 50)::int`, player.ID,
 			).Scan(&targetUUID)
 
 			var targetPlayer models.Player
 			var errLoad error
 			if err == nil {
-				targetPlayer, errLoad = evaluateManaTxEquippedReadonly(tx, targetUUID)
+				// Lock-free snapshot: PvP preview must not FOR UPDATE a random
+				// victim row inside the mover Tx (cross-player deadlock source).
+				targetPlayer, errLoad = PlayerSvc.ProjectStatusEquipped(tx, targetUUID)
 			}
 
 			combatTriggered = true

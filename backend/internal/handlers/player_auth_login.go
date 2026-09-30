@@ -235,25 +235,16 @@ func GetCurrentPlayer(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTxEquipped(tx, playerID)
+	// Lock-free polling path: project without FOR UPDATE, persist at most
+	// once per 45s in a short Tx. Contended persists are skipped so reads
+	// never queue behind statement_timeout.
+	player, err := PlayerSvc.ProjectAndPersistBestEffort(playerID, true)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to evaluate player status: " + err.Error()})
 		}
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to persist mana update"})
 		return
 	}
 

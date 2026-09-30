@@ -686,7 +686,7 @@ export function WorldPage() {
                           if (inPvPRange) {
                             movePlayer(gamePlayer!.x, gamePlayer!.y, selectedObject.id);
                           } else {
-                            useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận mục tiêu.", "info");
+                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
                           }
                         }}
                         className={`flex-1 flex items-center justify-center py-2.5 rounded-xl ${
@@ -746,7 +746,7 @@ export function WorldPage() {
                     disabled={isMoving}
                     title="Tiếp Cận Chiến Lợi Phẩm"
                     onClick={() => {
-                      useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận chiến lợi phẩm.", "info");
+                      window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 shadow-amber-950/30 text-white text-sm font-bold font-serif transition-all cursor-pointer shadow-lg"
                   >
@@ -788,11 +788,12 @@ onClick={() => {
                         disabled={isMoving}
                         title="Tiếp Cận Tông Môn"
                         onClick={() => {
-                          useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận Tông Môn.", "info");
+                          window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
                         }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
                       >
                         <span>🏃</span>
+                        <span>Tiếp Cận</span>
                       </button>
                     </>
                   );
@@ -828,7 +829,7 @@ onClick={() => {
                           disabled={isMoving}
                           title="Tiếp Cận Truyền Tống Trận"
                           onClick={() => {
-                            useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận Truyền Tống Trận.", "info");
+                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
                           }}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
                         >
@@ -844,7 +845,7 @@ onClick={() => {
                   disabled={isMoving || !!selectedObject.cleared}
                   title={isMoving ? "Đang di chuyển..." : selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss" ? "Chiến Đấu" : "Tiếp Cận"}
                   onClick={() => {
-                    useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận mục tiêu.", "info");
+                    window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
                   }}
                   className={`flex-1 flex items-center justify-center py-2.5 rounded-xl ${
                     selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss"

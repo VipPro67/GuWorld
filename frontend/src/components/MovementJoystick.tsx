@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const RADIUS = 40;
 const DEAD_ZONE = 0.22;
 
-function emitDirection(x: number, y: number) {
-  window.dispatchEvent(new CustomEvent("gu_world_direction", { detail: { x, y } }));
+function emitDirection(x: number, y: number, fine: boolean = false) {
+  window.dispatchEvent(new CustomEvent("gu_world_direction", { detail: { x, y, fine } }));
 }
 
 function quantizeDirection(x: number, y: number) {
@@ -22,13 +22,15 @@ export function MovementJoystick() {
   const baseRef = useRef<HTMLDivElement>(null);
   const activePointerRef = useRef<number | null>(null);
   const emittedDirectionRef = useRef({ x: 0, y: 0 });
+  const lastFineRef = useRef(false);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
 
-  const emitChangedDirection = useCallback((x: number, y: number) => {
+  const emitChangedDirection = useCallback((x: number, y: number, fine: boolean = false) => {
     const next = x === 0 && y === 0 ? { x: 0, y: 0 } : quantizeDirection(x, y);
-    if (next.x === emittedDirectionRef.current.x && next.y === emittedDirectionRef.current.y) return;
+    if (next.x === emittedDirectionRef.current.x && next.y === emittedDirectionRef.current.y && lastFineRef.current === fine) return;
     emittedDirectionRef.current = next;
-    emitDirection(next.x, next.y);
+    lastFineRef.current = fine;
+    emitDirection(next.x, next.y, fine);
   }, []);
 
   const update = useCallback((clientX: number, clientY: number) => {
@@ -42,15 +44,19 @@ export function MovementJoystick() {
     const y = rawY * scale;
     setKnob({ x, y });
 
-    if (distance < RADIUS * DEAD_ZONE) emitChangedDirection(0, 0);
-    else emitChangedDirection(x, y);
+    if (distance < RADIUS * DEAD_ZONE) {
+      emitChangedDirection(0, 0, false);
+    } else {
+      const fine = distance < RADIUS * 0.65;
+      emitChangedDirection(x, y, fine);
+    }
   }, [emitChangedDirection]);
 
   const release = useCallback((pointerId?: number) => {
     if (pointerId !== undefined && activePointerRef.current !== null && activePointerRef.current !== pointerId) return;
     activePointerRef.current = null;
     setKnob({ x: 0, y: 0 });
-    emitChangedDirection(0, 0);
+    emitChangedDirection(0, 0, false);
   }, [emitChangedDirection]);
 
   useEffect(() => {

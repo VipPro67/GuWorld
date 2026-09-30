@@ -532,8 +532,12 @@ func AttackSect(c *gin.Context) {
 		return
 	}
 
-	if attacker.CurrentRegion != targetRegion || attacker.X != targetMapX || attacker.Y != targetMapY {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu phải di chuyển đến Tông Môn mục tiêu mới có thể khiêu chiến!"})
+	distX := math.Abs(float64(attacker.X - targetMapX))
+	distY := math.Abs(float64(attacker.Y - targetMapY))
+	dist := int(math.Max(distX, distY))
+	const maxSectAttackRange = 2
+	if dist > maxSectAttackRange {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Khoảng cách quá xa (%d ô)! Cần tiếp cận Tông Môn trong vòng %d ô mới có thể khiêu chiến!", dist, maxSectAttackRange)})
 		return
 	}
 
