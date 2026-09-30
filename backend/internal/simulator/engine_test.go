@@ -1274,6 +1274,26 @@ func TestPathMasteryCombat_MortalCapped_ImmortalUncapped(t *testing.T) {
 	}
 }
 
+func TestPathMasteryCombat_RankNineGuGrantsThreeHundredBasePoints(t *testing.T) {
+	player := newTestCombatant("rank_nine", "Player", 5000, 10)
+	player.Rank = 9
+	player.PathMasteries = map[string]int{"heaven": 0}
+	player.Actions = []SimAction{{
+		ActionType: "GU_SKILL",
+		Name:       "Cửu Chuyển Thiên Đạo Cổ",
+		Rank:       9,
+		Path:       []string{"heaven"},
+		Damage:     1000,
+	}}
+	enemy := newTestCombatant("dummy", "Enemy", 1, 0)
+
+	_ = Simulate(&CombatState{Seed: 123, Allies: []*CombatantAuto{player}, Enemies: []*CombatantAuto{enemy}})
+
+	if got := player.PathMasteries["heaven"]; got != 300 {
+		t.Fatalf("rank 9 Gu mastery gain = %d, want 300", got)
+	}
+}
+
 func TestTargetAllEnemiesWithMultiplier(t *testing.T) {
 	// 1. Verify resolveTargets returns all alive enemies when TargetType is "ALL_ENEMIES"
 	e1 := newTestCombatant("e1", "Enemy", 1000, 0)

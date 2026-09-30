@@ -36,11 +36,34 @@ const (
 	PathMasteryBattleGainPerRankMultiplier = 10
 	// PathMasteryKillerMoveBaseGain is the base mastery points earned when casting a killer move.
 	PathMasteryKillerMoveBaseGain = 2
-	// PathMasteryCombatMortalGuBaseGain is the base mastery points earned in combat with mortal Gu.
-	PathMasteryCombatMortalGuBaseGain = 1
-	// PathMasteryCombatImmortalGuBaseGain is the base mastery points earned in combat with immortal Gu.
-	PathMasteryCombatImmortalGuBaseGain = 10
 )
+
+// PathMasteryGuUseBaseGains defines the base Chân Ý earned each time a Gu is
+// successfully used. Higher-rank Gu grant more points to keep progression in
+// step with the path-mastery milestones.
+var PathMasteryGuUseBaseGains = [10]int{
+	0: 0,
+	1: 1,
+	2: 2,
+	3: 5,
+	4: 10,
+	5: 20,
+	6: 50,
+	7: 100,
+	8: 200,
+	9: 300,
+}
+
+// PathMasteryGuUseBaseGain returns the rank-scaled base Chân Ý gain for
+// using a Gu. Ranks outside the supported range are clamped to ranks 1..9.
+func PathMasteryGuUseBaseGain(rank int) int {
+	if rank < 1 {
+		rank = 1
+	} else if rank > 9 {
+		rank = 9
+	}
+	return PathMasteryGuUseBaseGains[rank]
+}
 
 // ========================================================================
 // 2. BẬC QUY MÔ / RANK SCALE & MANA TABLE (CHUẨN HÓA 9 CHUYỂN)
