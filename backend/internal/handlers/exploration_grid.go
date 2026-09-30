@@ -84,9 +84,9 @@ func GetGrid(c *gin.Context) {
 
 	// Radius-based nearby players come from the in-memory position index
 	// (fast path). SQL fallback only while the index is cold.
-	entries := worldPosIndex.Nearby(player.CurrentRegion, player.X, player.Y, visualVisionRadius, player.ID.String())
+	entries := worldPosIndex.Nearby(player.X, player.Y, visualVisionRadius, player.ID.String())
 	if worldPosIndex.Len() == 0 {
-		entries = queryNearbyPlayersSQL(c, player.ID, player.CurrentRegion, player.X, player.Y, visualVisionRadius)
+		entries = queryNearbyPlayersSQL(c, player.ID, player.X, player.Y, visualVisionRadius)
 	}
 	for _, e := range entries {
 		seenIDs[e.ID] = true
@@ -100,8 +100,7 @@ func GetGrid(c *gin.Context) {
 			FROM players
 			WHERE party_id = $1
 			  AND id != $2
-			  AND current_region = $3
-		`, player.PartyID, player.ID, player.CurrentRegion)
+		`, player.PartyID, player.ID)
 		if errParty == nil {
 			defer partyRows.Close()
 			for partyRows.Next() {

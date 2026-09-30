@@ -188,9 +188,9 @@ func GetNearbyPlayers(c *gin.Context) {
 	// Fast path: serve from the in-memory position index. Fall back to SQL only
 	// while the index is still cold (e.g. very early startup before the first
 	// sync worker reconcile).
-	entries := worldPosIndex.Nearby(region, x, y, r, authID.String())
+	entries := worldPosIndex.Nearby(x, y, r, authID.String())
 	if worldPosIndex.Len() == 0 {
-		entries = queryNearbyPlayersSQL(c, authID, region, x, y, r)
+		entries = queryNearbyPlayersSQL(c, authID, x, y, r)
 	}
 
 	nearbyPlayers := make([]NearbyPlayer, 0, len(entries))
@@ -209,7 +209,7 @@ func GetNearbyPlayers(c *gin.Context) {
 
 // queryNearbyPlayersSQL is the legacy SQL path for nearby players, kept as a
 // cold-start fallback for the in-memory position index.
-func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, region string, x, y, r int) []WorldPosEntry {
+func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int) []WorldPosEntry {
 	entries := []WorldPosEntry{}
 	rows, errQuery := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, '')
@@ -218,8 +218,7 @@ func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, region string, x, y
 		  AND (last_activity >= NOW() - INTERVAL '5 minutes' OR last_mana_update >= NOW() - INTERVAL '5 minutes')
 		  AND x >= $2 AND x <= $3
 		  AND y >= $4 AND y <= $5
-		  AND current_region = $6
-	`, authID, x-r, x+r, y-r, y+r, region)
+	`, authID, x-r, x+r, y-r, y+r)
 	if errQuery != nil {
 		logger.S.Error("Failed to fetch nearby players:", errQuery)
 		return entries

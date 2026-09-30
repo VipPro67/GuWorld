@@ -111,7 +111,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const movementDirectionRef = useRef({ x: 0, y: 0 });
   const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
-  const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk }>>(new Map());
+  const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk; px: number; py: number }>>(new Map());
   const monsterLabelRenderKeyRef = useRef("");
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
   const nextRenderObjectIdRef = useRef(1);
@@ -156,6 +156,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const sectMap = useGameStore((s) => s.sectMap);
   const fetchSectsMap = useGameStore((s) => s.fetchSectsMap);
   const myTeleportArrays = useGameStore((s) => s.myTeleportArrays);
+  const fetchMyTeleportArrays = useGameStore((s) => s.fetchMyTeleportArrays);
   const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
   const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
   const selectedTarget = useWorldStore((s) => s.selectedTarget);
@@ -281,7 +282,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       byKey.set(`${obj.x},${obj.y}`, obj);
     }
     for (const cell of nearbyCells) {
-      if (cell.cell_type !== "Boss" && cell.cell_type !== "Resource" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray") continue;
+      if (cell.cell_type !== "Boss" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray") continue;
       const key = `${cell.x},${cell.y}`;
       if (!byKey.has(key)) {
         byKey.set(key, {
@@ -296,7 +297,6 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     }
     if (myTeleportArrays) {
       for (const t of myTeleportArrays) {
-        if (gamePlayer?.current_region && t.region_id !== gamePlayer.current_region) continue;
         const key = `${t.x},${t.y}`;
         byKey.set(key, {
           id: t.id,
@@ -315,7 +315,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   useEffect(() => {
     if (!regionsLoaded) fetchRegions();
     fetchObjects();
-  }, [regionsLoaded, fetchRegions, fetchObjects]);
+    fetchMyTeleportArrays();
+  }, [regionsLoaded, fetchRegions, fetchObjects, fetchMyTeleportArrays]);
 
   // Sync explored sub-zones from the game player
   useEffect(() => {
@@ -867,10 +868,17 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const container = objectsContainerRef.current;
       clearContainer(container);
       labelRenderStateRef.current = "";
+      const player = useGameStore.getState().player;
+      const invR = useWorldStore.getState().investigationRange;
+      const px = player?.x ?? 0;
+      const py = player?.y ?? 0;
+
       for (const o of obs) {
         const isBoss = o.cell_type === "Boss";
         const isResource = o.cell_type === "Resource";
         const isTeleport = o.cell_type === "TeleportArray";
+        if (isResource && player && Math.hypot(o.x + 0.5 - px, o.y + 0.5 - py) > invR) continue;
+
         const g = new Graphics();
         const size = isBoss ? 0.8 : isTeleport ? 0.75 : 0.6;
         if (isBoss) {
@@ -935,7 +943,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           text = `🌀 ${o.content_id || "Trận Pháp"}`;
         }
 
-        const showBossLabel = isBoss && !!labelSettingsRef.current.bossNearby && !!gamePlayer && Math.hypot(o.x - gamePlayer.x, o.y - gamePlayer.y) <= useWorldStore.getState().investigationRange;
+        const showBossLabel = isBoss && !!labelSettingsRef.current.bossNearby && !!player && Math.hypot(o.x - px, o.y - py) <= invR;
+        const isResourceOrMob = isResource || o.cell_type === "Monster" || o.cell_type === "WildGu";
+        const showResourceOrMobLabel = isResourceOrMob && !!labelSettingsRef.current.monster && !!player && Math.hypot(o.x + 0.5 - px, o.y + 0.5 - py) <= invR;
         const label = new Text({
           text: text,
           style: { fontSize: 12, fill: labelColor, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 3 } },
@@ -943,7 +953,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         label.anchor.set(0.5, 1);
         label.y = -size - 0.8;
         label.name = "object-label-text";
-        label.visible = !isBoss || showBossLabel;
+        label.visible = isBoss ? showBossLabel : isResourceOrMob ? showResourceOrMobLabel : true;
         g.addChild(label);
         g.position.set(o.x + 0.5, o.y + 0.5);
       }
@@ -956,12 +966,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const container = sectsContainerRef.current;
       clearContainer(container);
       labelRenderStateRef.current = "";
-      const currentRegion = gamePlayer?.current_region;
-      if (!sects || !currentRegion) return;
+      if (!sects || !Array.isArray(sects)) return;
 
       const mySectId = useGameStore.getState().mySectStatus?.sect?.id;
       for (const s of sects) {
-        if (s.region !== currentRegion) continue;
+        if (s.map_x === undefined || s.map_y === undefined) continue;
 
         const sectGroup = new Container();
 
@@ -1231,7 +1240,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     [handleObjectClick, movementStat]
   );
 
-  const drawMonsterChunk = useCallback((container: Container, cells: NearbyCell[]) => {
+  const drawMonsterChunk = useCallback((container: Container, cells: NearbyCell[], px: number, py: number, visionRadius: number) => {
     clearContainer(container);
 
     // Each visible 64x64 chunk owns only its marker geometry. A cell delta
@@ -1245,13 +1254,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
     for (const c of cells) {
       if (c.cell_type === "Monster") {
+        if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
         batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
         monsterCount++;
       } else if (c.cell_type === "Resource") {
+        if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
         batchResource.circle(c.x + 0.5, c.y + 0.6, 0.3);
         batchResource.circle(c.x + 0.5, c.y + 0.4, 0.2);
         resourceCount++;
       } else if (c.cell_type === "WildGu") {
+        if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
         batchWild.poly([c.x + 0.5, c.y + 0.1, c.x + 0.8, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.2, c.y + 0.5]);
         wildCount++;
       } else if (c.cell_type === "Boss") {
@@ -1307,10 +1319,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     }
 
     if (!settings.monster) return;
+    const invR = useWorldStore.getState().investigationRange;
     const labelCells = cells
-      .filter((c) => c.cell_type === "Monster" || c.cell_type === "Resource" || c.cell_type === "WildGu")
+      .filter((c) => (c.cell_type === "Monster" || c.cell_type === "Resource" || c.cell_type === "WildGu") && Math.hypot(c.x + 0.5 - player.x, c.y + 0.5 - player.y) <= invR)
       .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
-      .slice(0, 250);
+      .slice(0, 100);
 
     for (const c of labelCells) {
       let text = "";
@@ -1351,6 +1364,22 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     const app = appRef.current;
     const stage = stageRef.current;
     const scale = scaleRef.current;
+
+    // Level of Detail: When zoomed out wide (scale < 8), hide small procedural trash mobs/resources
+    // so macro landmarks (Sects, Hubs, Teleport Arrays, Bosses) are clearly legible without clutter.
+    if (scale < 8) {
+      monstersContainerRef.current.visible = false;
+      monsterLabelsContainerRef.current.visible = false;
+      return;
+    }
+    monstersContainerRef.current.visible = true;
+    monsterLabelsContainerRef.current.visible = true;
+
+    const player = useGameStore.getState().player;
+    const px = Math.round(player?.x ?? useWorldStore.getState().liveX);
+    const py = Math.round(player?.y ?? useWorldStore.getState().liveY);
+    const visionRadius = useWorldStore.getState().investigationRange;
+
     const overscan = CELL_CHUNK_SIZE;
     const minWorldX = app ? Math.max(0, (-stage.position.x / scale) - overscan) : window.x - window.r;
     const maxWorldX = app ? Math.min(WORLD_W - 1, ((app.screen.width - stage.position.x) / scale) + overscan) : window.x + window.r;
@@ -1376,14 +1405,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           objectId = nextRenderObjectIdRef.current++;
           renderObjectIdsRef.current.set(chunk, objectId);
         }
-        visibleChunkVersions.push(`${key}@${objectId}`);
+        visibleChunkVersions.push(`${key}@${objectId}@${px},${py}`);
         const existing = rendered.get(key);
-        if (existing?.source === chunk) continue;
+        if (existing?.source === chunk && existing?.px === px && existing?.py === py) continue;
 
         const chunkContainer = existing?.container ?? new Container();
         if (!existing) monstersContainerRef.current.addChild(chunkContainer);
-        drawMonsterChunk(chunkContainer, Object.values(chunk.cells));
-        rendered.set(key, { container: chunkContainer, source: chunk });
+        drawMonsterChunk(chunkContainer, Object.values(chunk.cells), px, py, visionRadius);
+        rendered.set(key, { container: chunkContainer, source: chunk, px, py });
       }
     }
 
@@ -1934,7 +1963,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const store = useWorldStore.getState();
       const px = store.liveX;
       const py = store.liveY;
-      const tile = Math.max(150, investigationRange);
+      const tile = Math.max(48, Math.min(80, investigationRange * 2));
       const region = useGameStore.getState().player?.current_region ?? "";
       const want = new Set<string>();
       const addTile = (wx: number, wy: number) => {
@@ -1951,7 +1980,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       if (dist > tile * 0.5) {
         const ux = (gx - px) / dist;
         const uy = (gy - py) / dist;
-        for (let k = 1; k <= 3; k++) addTile(px + ux * k * tile, py + uy * k * tile);
+        addTile(px + ux * tile, py + uy * tile);
       }
       // Drop the "loaded" watermark for tiles far away so returning players
       // re-fetch (their cells may have been pruned from the client cache).
@@ -1960,7 +1989,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       for (const key of Array.from(loadedTilesRef.current)) {
         const [keyRegion, coords] = key.split("|");
         const [tx, ty] = coords.split(",").map(Number);
-        if (keyRegion !== region || Math.abs(tx - pt) > 7 || Math.abs(ty - qy) > 7) loadedTilesRef.current.delete(key);
+        if (keyRegion !== region || Math.abs(tx - pt) > 4 || Math.abs(ty - qy) > 4) loadedTilesRef.current.delete(key);
       }
       let scheduled = 0;
       for (const key of want) {
@@ -1980,13 +2009,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     };
     const onWorldPos = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      const currentRegion = useGameStore.getState().player?.current_region;
       if (
         detail &&
         detail.id &&
         detail.x !== undefined &&
         detail.y !== undefined &&
-        (!detail.region_id || detail.region_id === currentRegion) &&
         detail.id !== useGameStore.getState().player?.id
       ) {
         upsertPlayerPosition(detail);
@@ -2034,7 +2061,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         lastCellsPoll = now;
         pollCells();
       }
-      if (now - lastPlayersPoll >= 30000) {
+      if (now - lastPlayersPoll >= 10000) {
         lastPlayersPoll = now;
         pollPlayers();
       }

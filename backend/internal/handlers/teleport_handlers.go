@@ -189,7 +189,7 @@ func GetMyTeleportArrays(c *gin.Context) {
 		JOIN players p ON p.id = t.owner_id
 		LEFT JOIN sects s ON s.id = t.sect_id
 		JOIN regions r ON r.id = t.region_id
-		WHERE t.owner_id = $1
+		WHERE t.is_active = TRUE AND (t.owner_id = $1 OR t.access_policy = 'PUBLIC'
 	`
 	args := []interface{}{authID}
 
@@ -197,7 +197,7 @@ func GetMyTeleportArrays(c *gin.Context) {
 		query += " OR (t.sect_id = $2 AND t.access_policy = 'SECT')"
 		args = append(args, *sectIDPtr)
 	}
-	query += " ORDER BY t.created_at DESC"
+	query += ") ORDER BY t.created_at DESC"
 
 	rows, err := db.DB.Query(query, args...)
 	if err != nil {

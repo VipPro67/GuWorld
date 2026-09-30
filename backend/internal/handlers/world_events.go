@@ -74,7 +74,7 @@ func broadcastWorldPos(payload WorldPosEvent) {
 		TS:        payload.TS,
 	})
 
-	nearby := worldPosIndex.Nearby(payload.Region, payload.X, payload.Y, WorldPosInterestRadius, payload.ID)
+	nearby := worldPosIndex.Nearby(payload.X, payload.Y, WorldPosInterestRadius, payload.ID)
 
 	if WorldPosBroadcaster != nil {
 		targets := make(map[uuid.UUID]struct{}, len(nearby))
