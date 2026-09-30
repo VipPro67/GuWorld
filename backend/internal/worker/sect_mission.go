@@ -29,9 +29,15 @@ func StartSectMissionWorker(ctx context.Context, db *sql.DB, interval time.Durat
 }
 
 func processSectMissionTick(db *sql.DB) {
+	// Batched by ctid so each statement locks at most 500 rows instead of
+	// scanning and locking the whole table under one statement_timeout.
 	expired, err := db.Exec(`
 		UPDATE player_sect_missions SET status = 'EXPIRED'
-		WHERE status = 'IN_PROGRESS' AND expires_at IS NOT NULL AND expires_at <= now()
+		WHERE ctid IN (
+			SELECT ctid FROM player_sect_missions
+			WHERE status = 'IN_PROGRESS' AND expires_at IS NOT NULL AND expires_at <= now()
+			LIMIT 500
+		)
 	`)
 	if err != nil {
 		logger.S.Errorf("Sect Mission Worker Error expiring player missions: %v", err)
@@ -41,7 +47,11 @@ func processSectMissionTick(db *sql.DB) {
 
 	deleted, err := db.Exec(`
 		DELETE FROM sect_missions
-		WHERE expires_at IS NOT NULL AND expires_at <= now()
+		WHERE ctid IN (
+			SELECT ctid FROM sect_missions
+			WHERE expires_at IS NOT NULL AND expires_at <= now()
+			LIMIT 200
+		)
 	`)
 	if err != nil {
 		logger.S.Errorf("Sect Mission Worker Error deleting expired missions: %v", err)

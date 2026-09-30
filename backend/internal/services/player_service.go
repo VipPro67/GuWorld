@@ -511,9 +511,137 @@ func (s *PlayerService) ProjectStatus(q QueryRower, id uuid.UUID) (models.Player
 	return player, nil
 }
 
+// isLockContention reports Postgres lock/statement timeouts and deadlocks.
+// Callers use it to skip best-effort persists instead of failing reads.
+func isLockContention(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return containsAny(msg, []string{"55P03", "57014", "40P01", "could not obtain lock", "canceling statement due to"})
+}
+
+func containsAny(s string, subs []string) bool {
+	for _, sub := range subs {
+		if len(sub) == 0 {
+			continue
+		}
+		if searchSubstr(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func searchSubstr(s, sub string) bool {
+	if len(s) < len(sub) {
+		return false
+	}
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
+// setFastFailTimeouts bounds lock waits inside an open transaction so one
+// contended row fails fast instead of queueing behind statement_timeout (15s).
+func setFastFailTimeouts(tx *sql.Tx) {
+	tryFastFail(tx)
+}
+
+// tryFastFail applies per-Tx timeouts, ignoring errors and panics from
+// minimal test doubles that only implement the queries they stub.
+func tryFastFail(tx *sql.Tx) {
+	if tx == nil {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	_, _ = tx.Exec(`SELECT set_config('lock_timeout', '2000', true), set_config('statement_timeout', '8000', true)`)
+}
+
+// ProjectAndPersistBestEffort serves polling reads without holding a write
+// lock across the whole request. It projects status lock-free, then attempts a
+// short persist; on lock contention the projected values are returned anyway.
+func (s *PlayerService) ProjectAndPersistBestEffort(id uuid.UUID, equippedOnly bool) (models.Player, error) {
+	if s == nil {
+		return models.Player{}, sql.ErrNoRows
+	}
+	handle := s.db
+	if handle == nil {
+		handle = db.DB
+	}
+	if handle == nil {
+		return models.Player{}, sql.ErrNoRows
+	}
+	var player models.Player
+	var err error
+	if equippedOnly {
+		player, err = s.ProjectStatusEquipped(handle, id)
+	} else {
+		player, err = s.ProjectStatus(handle, id)
+	}
+	if err != nil {
+		return player, err
+	}
+	// Throttle persists: frontend polls /auth/me and /explore/grid at high
+	// frequency; persisting every poll fans out UPDATE players + version bumps
+	// that serialize on the same row. Only persist if >45s since last update.
+	if time.Since(player.LastManaUpdate) < 45*time.Second {
+		return player, nil
+	}
+	tx, err := handle.Begin()
+	if err != nil {
+		return player, nil
+	}
+	defer tx.Rollback()
+	setFastFailTimeouts(tx)
+	if equippedOnly {
+		_, err = s.EvaluateAndPersistManaEquipped(tx, id)
+	} else {
+		_, err = s.EvaluateAndPersistMana(tx, id)
+	}
+	if err != nil {
+		if isLockContention(err) {
+			return player, nil
+		}
+		return player, nil
+	}
+	if err := tx.Commit(); err != nil {
+		return player, nil
+	}
+	// Re-project so response reflects persisted timestamps without another lock.
+	if equippedOnly {
+		if p2, err2 := s.ProjectStatusEquipped(handle, id); err2 == nil {
+			return p2, nil
+		}
+	} else {
+		if p2, err2 := s.ProjectStatus(handle, id); err2 == nil {
+			return p2, nil
+		}
+	}
+	return player, nil
+}
+
+// ProjectStatusEquipped is the equipped-only counterpart of ProjectStatus.
+func (s *PlayerService) ProjectStatusEquipped(q QueryRower, id uuid.UUID) (models.Player, error) {
+	player, err := s.LoadEquipped(q, id)
+	if err != nil {
+		return player, err
+	}
+	s.setDefaults(&player)
+	timeRate, essenceProd := s.applyApertureProjection(q, &player)
+	applyProjectedStatus(&player, essenceProd, timeRate, time.Now())
+	return player, nil
+}
+
 // EvaluateAndPersistMana is the authoritative status evaluator for mutation flows.
 // It loads with FOR UPDATE, projects time-variant fields, and persists changes.
 func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	setFastFailTimeouts(tx)
 	if err := worker.EvaluatePlayerHungerTx(tx, id); err != nil {
 		return models.Player{}, fmt.Errorf("evaluate player hunger: %w", err)
 	}
@@ -599,6 +727,7 @@ func (s *PlayerService) evaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.P
 // shipping the full 12k+ inventory is unnecessary — the frontend fetches it
 // lazily via the dedicated inventory endpoint.
 func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	setFastFailTimeouts(tx)
 	player, err := s.evaluateManaEquipped(tx, id)
 	if err != nil {
 		return player, err

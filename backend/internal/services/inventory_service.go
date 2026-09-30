@@ -320,7 +320,8 @@ func (s *InventoryService) DeleteAll(tx *sql.Tx, playerID string) error {
 }
 
 // BulkAddItems upserts multiple items in a single query using unnest.
-// items maps itemID → total quantity to add.
+// items maps itemID → total quantity to add. Large maps are chunked so one
+// request never holds a long multi-row INSERT that blocks concurrent removes.
 func (s *InventoryService) BulkAddItems(tx *sql.Tx, playerID, category string, items map[string]int64) error {
 	if len(items) == 0 {
 		return nil
@@ -338,6 +339,21 @@ func (s *InventoryService) BulkAddItems(tx *sql.Tx, playerID, category string, i
 	if len(ids) == 0 {
 		return nil
 	}
+
+	const chunkSize = 50
+	for start := 0; start < len(ids); start += chunkSize {
+		end := start + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		if err := s.bulkAddChunk(tx, playerID, category, ids[start:end], qtys[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *InventoryService) bulkAddChunk(tx *sql.Tx, playerID, category string, ids []string, qtys []int64) error {
 
 	// Build a VALUES list for INSERT ... ON CONFLICT
 	valueStrings := make([]string, len(ids))
