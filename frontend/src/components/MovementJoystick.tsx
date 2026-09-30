@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const RADIUS = 40;
 const DEAD_ZONE = 0.22;
@@ -47,11 +47,25 @@ export function MovementJoystick() {
   }, [emitChangedDirection]);
 
   const release = useCallback((pointerId?: number) => {
-    if (pointerId !== undefined && activePointerRef.current !== pointerId) return;
+    if (pointerId !== undefined && activePointerRef.current !== null && activePointerRef.current !== pointerId) return;
     activePointerRef.current = null;
     setKnob({ x: 0, y: 0 });
     emitChangedDirection(0, 0);
   }, [emitChangedDirection]);
+
+  useEffect(() => {
+    const handleGlobalPointerUp = (event: PointerEvent) => {
+      if (activePointerRef.current !== null && (event.pointerId === activePointerRef.current || event.pointerType === "touch")) {
+        release();
+      }
+    };
+    window.addEventListener("pointerup", handleGlobalPointerUp);
+    window.addEventListener("pointercancel", handleGlobalPointerUp);
+    return () => {
+      window.removeEventListener("pointerup", handleGlobalPointerUp);
+      window.removeEventListener("pointercancel", handleGlobalPointerUp);
+    };
+  }, [release]);
 
   return (
     <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-[calc(env(safe-area-inset-left)+1rem)] z-30 pointer-events-auto md:hidden">
@@ -77,8 +91,8 @@ export function MovementJoystick() {
         <span className="absolute left-1 top-1/2 -translate-y-1/2 text-xs text-white/35">◀</span>
         <span className="absolute right-1 top-1/2 -translate-y-1/2 text-xs text-white/35">▶</span>
         <div
-          className="absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-300/60 bg-emerald-500/35 shadow-lg shadow-emerald-950/60"
-          style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
+          className="absolute left-1/2 top-1/2 h-11 w-11 -ml-[22px] -mt-[22px] rounded-full border border-emerald-300/60 bg-emerald-500/35 shadow-lg shadow-emerald-950/60"
+          style={{ transform: `translate3d(${knob.x}px, ${knob.y}px, 0)` }}
         />
       </div>
     </div>

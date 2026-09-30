@@ -100,7 +100,7 @@ func TestWorldPosIndex_ImmediatePresenceAndNearby(t *testing.T) {
 	idx.Set(playerC)
 
 	// Nearby for playerA with radius 300 should find playerB but not playerC or playerA itself
-	nearby := idx.Nearby("hub_nam_cuong", 100, 100, 300, "player-a")
+	nearby := idx.Nearby(100, 100, 300, "player-a")
 	if len(nearby) != 1 {
 		t.Fatalf("expected 1 nearby player, got %d", len(nearby))
 	}

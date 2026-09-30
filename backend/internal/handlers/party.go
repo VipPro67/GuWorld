@@ -176,7 +176,7 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
-	nearby := worldPosIndex.Nearby(player.CurrentRegion, player.X, player.Y, PartyInviteRange, player.ID.String())
+	nearby := worldPosIndex.Nearby(player.X, player.Y, PartyInviteRange, player.ID.String())
 	targetFound := false
 	for _, n := range nearby {
 		if n.Username == req.Username {
