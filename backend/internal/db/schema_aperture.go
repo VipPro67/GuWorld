@@ -373,6 +373,19 @@ func schemaAperture() error {
 		return err
 	}
 
+	if err := execSchema("tribulation_events_aperture_idx", `
+	CREATE INDEX IF NOT EXISTS idx_tribulation_events_aperture ON tribulation_events (aperture_id);`); err != nil {
+		return err
+	}
+	if err := execSchema("tribulation_events_aperture_status_idx", `
+	CREATE INDEX IF NOT EXISTS idx_tribulation_events_aperture_status ON tribulation_events (aperture_id, status);`); err != nil {
+		return err
+	}
+	if err := execSchema("tribulation_enemies_event_dead_idx", `
+	CREATE INDEX IF NOT EXISTS idx_tribulation_enemies_event_dead ON tribulation_enemies (event_id, is_dead);`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -160,7 +160,9 @@ func CheckAndTriggerTribulations() error {
 			for i, ap := range apertures {
 				pids[i] = ap.PlayerID
 			}
-			if pRows, qErr := db.DB.Query(`SELECT id, lifespan, time_speed_multiplier, rank, COALESCE(race, ''), COALESCE(is_dead, false) FROM players WHERE id = ANY($1::text[])`, pq.Array(pids)); qErr == nil {
+			if pRows, qErr := db.DB.Query(`SELECT id, lifespan, time_speed_multiplier, rank, COALESCE(race, ''), COALESCE(is_dead, false) FROM players WHERE id = ANY($1::uuid[])`, pq.Array(pids)); qErr != nil {
+				logger.S.Errorf("CheckAndTriggerTribulations: batch-read players error: %v", qErr)
+			} else {
 				defer pRows.Close()
 				for pRows.Next() {
 					var id string
@@ -182,8 +184,10 @@ func CheckAndTriggerTribulations() error {
 			if nRows, qErr := db.DB.Query(`
 				SELECT aperture_id, id, node_type, name, path, hp, max_hp, x, y, is_destroyed, zone_type, production_amount
 				FROM aperture_resource_nodes
-				WHERE aperture_id = ANY($1::text[]) AND is_destroyed = false
-			`, pq.Array(aids)); qErr == nil {
+				WHERE aperture_id = ANY($1::uuid[]) AND is_destroyed = false
+			`, pq.Array(aids)); qErr != nil {
+				logger.S.Errorf("CheckAndTriggerTribulations: batch-read resource nodes error: %v", qErr)
+			} else {
 				defer nRows.Close()
 				for nRows.Next() {
 					var nd models.ApertureResourceNode
@@ -211,8 +215,10 @@ func CheckAndTriggerTribulations() error {
 			if vRows, qErr := db.DB.Query(`
 				SELECT aperture_id, id, race, population, happiness, oppression, labor_intensity
 				FROM aperture_variant_humans
-				WHERE aperture_id = ANY($1::text[])
-			`, pq.Array(aids)); qErr == nil {
+				WHERE aperture_id = ANY($1::uuid[])
+			`, pq.Array(aids)); qErr != nil {
+				logger.S.Errorf("CheckAndTriggerTribulations: batch-read variant humans error: %v", qErr)
+			} else {
 				defer vRows.Close()
 				for vRows.Next() {
 					var v vhRow
@@ -220,6 +226,48 @@ func CheckAndTriggerTribulations() error {
 					if err := vRows.Scan(&aid, &v.id, &v.race, &v.population, &v.happiness, &v.oppression, &v.laborIntensity); err == nil {
 						vhByAperture[aid] = append(vhByAperture[aid], v)
 					}
+				}
+			}
+		}
+
+		// ── Batch-read: equipped time speed bonuses (1 query) ─────────────────
+		equippedBonusMap := make(map[string]float64, len(apertures))
+		{
+			pids := make([]string, len(apertures))
+			for i, ap := range apertures {
+				pids[i] = ap.PlayerID
+			}
+			if bRows, bErr := db.DB.Query(`
+				SELECT player_id, gu_id, gu_rank
+				FROM player_gu
+				WHERE player_id = ANY($1::uuid[]) AND equipped = true AND state = 'ACTIVE'
+			`, pq.Array(pids)); bErr != nil {
+				logger.S.Errorf("CheckAndTriggerTribulations: batch-read equipped Gus error: %v", bErr)
+			} else {
+				defer bRows.Close()
+				bestRankByPlayer := make(map[string]map[string]int)
+				for bRows.Next() {
+					var pid, guID string
+					var rank int
+					if err := bRows.Scan(&pid, &guID, &rank); err == nil {
+						m, ok := bestRankByPlayer[pid]
+						if !ok {
+							m = make(map[string]int)
+							bestRankByPlayer[pid] = m
+						}
+						if rank > m[guID] {
+							m[guID] = rank
+						}
+					}
+				}
+				for pid, bestRank := range bestRankByPlayer {
+					var total float64
+					for guID, rank := range bestRank {
+						if spec, ok := models.GetGu(guID, rank); ok {
+							total += models.GuStatValue(spec, "TIME_SPEED")
+						}
+					}
+					equippedBonusMap[pid] = total
 				}
 			}
 		}
@@ -281,7 +329,7 @@ func CheckAndTriggerTribulations() error {
 				if timeSpeedMultiplier <= 0 {
 					timeSpeedMultiplier = 1.0
 				}
-				if bonus, err := db.EquippedTimeSpeedBonus(db.DB, ap.PlayerID); err == nil {
+				if bonus, ok := equippedBonusMap[ap.PlayerID]; ok {
 					timeSpeedMultiplier += bonus
 				}
 			}
@@ -538,7 +586,9 @@ func CheckAndTriggerTribulations() error {
 						ids[i] = u.id
 						vals[i] = u.decay
 					}
-					_, _ = tx.Exec(`UPDATE players AS p SET lifespan = GREATEST(0.0, p.lifespan - v.decay) FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS decay) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
+					if _, err := tx.Exec(`UPDATE players AS p SET lifespan = GREATEST(0.0, p.lifespan - v.decay) FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::float8[]) AS decay) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals)); err != nil {
+						logger.S.Errorf("CheckAndTriggerTribulations: batch update lifespans failed: %v", err)
+					}
 				}
 
 				// Batch UPDATE player mana
@@ -557,7 +607,9 @@ func CheckAndTriggerTribulations() error {
 						vals = append(vals, u.val)
 					}
 					if len(ids) > 0 {
-						_, _ = tx.Exec(`UPDATE players AS p SET current_mana = LEAST(p.max_mana, p.current_mana + v.val), last_mana_update = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS val) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals))
+						if _, err := tx.Exec(`UPDATE players AS p SET current_mana = LEAST(p.max_mana, p.current_mana + v.val), last_mana_update = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::float8[]) AS val) AS v WHERE p.id = v.id`, pq.Array(ids), pq.Array(vals)); err != nil {
+							logger.S.Errorf("CheckAndTriggerTribulations: batch update mana failed: %v", err)
+						}
 					}
 				}
 
@@ -571,7 +623,9 @@ func CheckAndTriggerTribulations() error {
 						hps[i] = u.hp
 						dest[i] = u.destroyed
 					}
-					_, _ = tx.Exec(`UPDATE aperture_resource_nodes AS n SET hp = v.hp, is_destroyed = v.destroyed, updated_at = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS hp, unnest($3::bool[]) AS destroyed) AS v WHERE n.id = v.id`, pq.Array(ids), pq.Array(hps), pq.Array(dest))
+					if _, err := tx.Exec(`UPDATE aperture_resource_nodes AS n SET hp = v.hp, is_destroyed = v.destroyed, updated_at = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS hp, unnest($3::bool[]) AS destroyed) AS v WHERE n.id = v.id`, pq.Array(ids), pq.Array(hps), pq.Array(dest)); err != nil {
+						logger.S.Errorf("CheckAndTriggerTribulations: batch update nodes failed: %v", err)
+					}
 				}
 
 				// Batch UPDATE variant humans
@@ -586,7 +640,9 @@ func CheckAndTriggerTribulations() error {
 						happys[i] = u.happy
 						oppresses[i] = u.oppress
 					}
-					_, _ = tx.Exec(`UPDATE aperture_variant_humans AS v SET population = d.pop, happiness = d.happy, oppression = d.oppress, updated_at = NOW() FROM (SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS pop, unnest($3::float8[]) AS happy, unnest($4::float8[]) AS oppress) AS d WHERE v.id = d.id`, pq.Array(ids), pq.Array(pops), pq.Array(happys), pq.Array(oppresses))
+					if _, err := tx.Exec(`UPDATE aperture_variant_humans AS v SET population = d.pop, happiness = d.happy, oppression = d.oppress, updated_at = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS pop, unnest($3::float8[]) AS happy, unnest($4::float8[]) AS oppress) AS d WHERE v.id = d.id`, pq.Array(ids), pq.Array(pops), pq.Array(happys), pq.Array(oppresses)); err != nil {
+						logger.S.Errorf("CheckAndTriggerTribulations: batch update variant humans failed: %v", err)
+					}
 				}
 
 				// Batch INSERT messages
@@ -597,10 +653,16 @@ func CheckAndTriggerTribulations() error {
 						receivers[i] = m.receiver
 						contents[i] = m.content
 					}
-					_, _ = tx.Exec(`INSERT INTO messages (sender_id, receiver_id, content, channel) SELECT '11111111-1111-1111-1111-111111111111', v.receiver, v.content, 'private' FROM (SELECT unnest($1::text[]) AS receiver, unnest($2::text[]) AS content) AS v`, pq.Array(receivers), pq.Array(contents))
+					if _, err := tx.Exec(`INSERT INTO messages (sender_id, receiver_id, content, channel) SELECT '11111111-1111-1111-1111-111111111111'::uuid, v.receiver, v.content, 'private' FROM (SELECT unnest($1::uuid[]) AS receiver, unnest($2::text[]) AS content) AS v`, pq.Array(receivers), pq.Array(contents)); err != nil {
+						logger.S.Errorf("CheckAndTriggerTribulations: batch insert messages failed: %v", err)
+					}
 				}
 
-				_ = tx.Commit()
+				if err := tx.Commit(); err != nil {
+					logger.S.Errorf("CheckAndTriggerTribulations: commit batch writes failed: %v", err)
+				}
+			} else {
+				logger.S.Errorf("CheckAndTriggerTribulations: begin tx for batch writes failed: %v", txErr)
 			}
 		}
 
