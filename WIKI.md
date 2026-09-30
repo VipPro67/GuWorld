@@ -232,6 +232,7 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 
 - `time_rate` (1.0x - 100.0x) điều chỉnh tốc độ thời gian bên trong Tiên Khiếu. Phẩm cấp Tiên Khiếu quyết định `time_rate` khởi tạo: **LOW 10–15×, MID 20–28×, HIGH 30–40×, EXTREME 40–55×**.
 - **1 năm nội bộ = 36.000 giây đời thật ÷ `time_rate`** (hằng số 36.000 giây/năm trong `tribulation.go` / `aperture.go`).
+- **Hồi Tiên Nguyên nền:** mỗi năm nội bộ, Tiên Khiếu sản xuất lượng `essence_production_per_year` theo phẩm cấp. Với `time_speed_multiplier = 1`, tốc độ nền mỗi giờ đời thật là `essence_production_per_year ÷ 10 × time_rate`; không có hệ số tiểu cảnh giới. Cổ, thể chất, tuổi thọ và hiệu ứng khóa hồi phục có thể thay đổi lượng thực nhận.
 - **Kiếp nạn đầu tiên** giáng lâm vào năm nội bộ thứ 10 → thời gian đời thật chờ = `10 × 36.000 ÷ time_rate` giây:
 
 | Phẩm cấp Tiên Khiếu | `time_rate` | Kiếp đầu tiên (đời thật) |

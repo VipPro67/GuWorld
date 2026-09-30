@@ -354,7 +354,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const aperture = store.aperture;
   const essenceProd = aperture?.essence_production_per_year ?? 10;
-  const immortalRegen = (essenceProd / 120.0) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
+  const immortalRegen = essenceProd / 10.0;
   const mortalRegen = aptitudeType === "Giáp" ? 8 : aptitudeType === "Ất" ? 6 : aptitudeType === "Bính" ? 4 : 2;
   const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(2);
 
