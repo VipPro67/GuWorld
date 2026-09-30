@@ -124,15 +124,17 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 
 | Level | Tên | Hệ số | Mốc điểm |
 |-------|-----|-------|----------|
-| 0 | Ordinary (Phàm Thai) | ×1.0 | < 100 |
-| 1 | Master (Đại Sư) | ×1.1 | ≥ 100 |
-| 2 | Grandmaster (Tông Sư) | ×1.25 | ≥ 500 |
-| 3 | Great Grandmaster (Đại Tông Sư) | ×1.4 | ≥ 2.500 |
-| 4 | Supreme Grandmaster (Vô Thượng Đại Tông Sư) | ×1.5 | ≥ 10.000 |
+| 0 | Ordinary (Phàm Thai) | ×1.0 | < 10.000 |
+| 1 | Master (Đại Sư) | ×1.1 | ≥ 10.000 |
+| 2 | Grandmaster (Tông Sư) | ×1.25 | ≥ 100.000 |
+| 3 | Great Grandmaster (Đại Tông Sư) | ×1.4 | ≥ 1.000.000 |
+| 4 | Supreme Grandmaster (Vô Thượng Đại Tông Sư) | ×1.5 | ≥ 10.000.000 |
 
-Điểm nhận từ: sát chiêu thành công (+2/path hạch tâm), luyện cổ thành công (+2, +10 nếu Cổ Tiên rank ≥ 6), thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
+Điểm nhận từ: dùng Cổ (theo bảng rank bên dưới), sát chiêu thành công, luyện Cổ thành công (theo rank Cổ đích), và thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
 
 **Giới hạn điểm Chân Ý mỗi trận:** các nguồn trong trận chiến thường từ Cổ phàm và Sát chiêu phàm (đánh tay, đánh tự động/Simulator, sát chiêu phàm) bị chặn ở `gamefx.PathMasteryBattleGainLimit(rank)` = **Rank × 10 điểm/trận**. Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** không bị giới hạn tối đa trong trận chiến, thỏa sức ngộ đạo (uncapped). Counter lưu trong `players.active_combat.path_mastery_gained`, tự reset khi trận mới bắt đầu. Thưởng từ phó bản (attainment) và luyện cổ không tính vào giới hạn này.
+
+**Chân Ý khi dùng Cổ:** mỗi lần thôi động Cổ thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận vẫn chịu hiệu suất theo cảnh giới hiện tại và giới hạn cảnh giới của rank Cổ.
 
 ### Phó Bản — bảng `instance_templates`
 

@@ -175,6 +175,15 @@ func TestCalculateRefinementPathGain(t *testing.T) {
 	}
 }
 
+func TestPathMasteryGuUseBaseGain(t *testing.T) {
+	wants := []int{1, 1, 2, 5, 10, 20, 50, 100, 200, 300, 300}
+	for rank, want := range wants {
+		if got := PathMasteryGuUseBaseGain(rank); got != want {
+			t.Errorf("PathMasteryGuUseBaseGain(%d) = %d, want %d", rank, got, want)
+		}
+	}
+}
+
 func TestDeductionRealmMultiplier(t *testing.T) {
 	// wisdom=2, refine=1, target=3
 	// 1 + 2*3.0 + 1*2.0 + 3*1.0 = 1 + 6 + 2 + 3 = 12.0

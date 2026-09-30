@@ -124,10 +124,12 @@ Ví dụ JSON:
 | Nguồn | Handler | Điểm |
 |-------|---------|------|
 | **Sát Chiêu thành công** | `killer_move.go` CastKillerMove | +2 điểm cho path hạch tâm |
-| **Luyện Cổ thành công** | `refine.go` | +2 điểm cho path Cổ đích; **+10 điểm nếu Cổ Tiên (rank ≥ 6)** |
+| **Luyện Cổ thành công** | `refine_gu.go` | Theo rank Cổ đích: 2 / 5 / 15 / 40 / 100 / 500 / 2.500 / 15.000 / 50.000, sau đó áp dụng hiệu suất cảnh giới |
 | **Chân Ý từ phó bản** | `instance.go` | cộng thẳng `amount` điểm vào path |
 
 > **Giới hạn mỗi trận (battle cap):** các nguồn trong trận chiến thường từ Cổ phàm và Sát chiêu phàm — đánh tự động/Simulator (`simulator/engine.go`), sát chiêu phàm (`killer_move.go`) — bị chặn ở **`PathMasteryBattleGainLimit(rank)` = Rank × 10 điểm/trận** (`gamefx/path_mastery.go`). Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** được giải phóng hoàn toàn giới hạn (uncapped), không có tối đa điểm Chân Ý nhận trong 1 trận. Counter lưu trong `players.active_combat.path_mastery_gained` (JSONB, reset mỗi trận); với auto-combat, cap được áp dụng ngay trong vòng lặp simulator qua `CombatantAuto.PathMasteryGainLimit`. Khi nguồn phàm chạm trần, điểm Chân Ý phàm không cộng thêm và log có ghi `PATH_MASTERY_CAP`. Luyện cổ và thưởng phó bản không tính vào giới hạn này.
+
+Mỗi lần dùng Cổ thành công có Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Sau đó `CalculatePathMasteryGain` áp dụng hiệu suất theo cảnh giới hiện tại và giới hạn cảnh giới của rank Cổ; Cổ tiêu hao ngoài chiến đấu và Cổ trong simulator dùng chung công thức này.
 
 ### 2.3 Công Thức Ảnh Hưởng
 
