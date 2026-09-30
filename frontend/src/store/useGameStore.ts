@@ -399,6 +399,7 @@ export interface ManaSnapshot {
   hp: number;
   base_hp: number;
   hp_regen_rate: number;
+  mana_regen_rate?: number;
   mana_regen_tick_per_hour?: number;
   mana_regen_mult?: number;
 }
@@ -431,6 +432,8 @@ const manaRegenTickPerHour = (player: Player, guDictionary: Record<string, GuSpe
 };
 
 const getManaRegenRatePerHour = (snapshot: ManaSnapshot): number => {
+  if (snapshot.mana_regen_rate !== undefined) return snapshot.mana_regen_rate;
+
   let rate: number;
   if (snapshot.rank >= 6) {
     const subRank = Math.min(4, Math.max(1, snapshot.sub_rank || 1));
@@ -525,6 +528,7 @@ export const createManaSnapshotFromPlayer = (player: Player, guDictionary: Recor
   hp: player.hp,
   base_hp: player.base_hp,
   hp_regen_rate: player.hp_regen_rate || 0,
+  mana_regen_rate: player.mana_regen_rate,
   mana_regen_tick_per_hour: manaRegenTickPerHour(player, guDictionary),
   mana_regen_mult: 1 + (player.constitution ? nativeNumericValue(constitutionDictionary?.[player.constitution], "MANA_REGEN") : 0),
 });

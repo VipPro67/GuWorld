@@ -152,6 +152,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 
 - Sinh lực hồi liên tục theo thời gian thực, được cộng dồn cả khi offline (tính từ `last_mana_update`, áp dụng khi đạo hữu tương tác).
 - **Tốc độ hồi:** `HP/giờ = (HP tối đa hiệu dụng × 5% + hp_regen từ effect) × (1 + healing_received)`, cap tại HP tối đa hiệu dụng (`base_hp` + `stat_base_hp` thụ động từ Cổ).
+- Toàn bộ hồi tự động HP, Chân/Tiên Nguyên, Niệm Lực và Thần Hồn được tổng hợp từ các block của Chủng tộc, Thể chất, Trạng thái và Cổ `ON_TICK`, rồi mới áp dụng hệ số cho phép hồi. Với Cương Thi hệ số cuối bằng `0`, nên cả hồi nền lẫn Cổ hồi thụ động đều không sinh tài nguyên; hồi chủ động bằng vật phẩm/Cổ tiêu hao vẫn hoạt động.
 - `hp_regen` (số phẳng HP/giờ) và `healing_received` (% nhân) đến từ thể chất/chủng tộc/trạng thái qua hệ thống effects (xem `docs/GAME_DATA.md`).
 - Tốc độ hồi nhân thêm `TimeSpeedMultiplier` (KHÔNG nhân `time_rate` Tiên khiếu — khác với hồi Chân Nguyên).
 
