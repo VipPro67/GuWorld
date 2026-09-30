@@ -7,6 +7,7 @@ import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import TeleportModal from "./TeleportModal";
 import type { TeleportArray } from "@/store/slices/teleportSlice";
 import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users } from "lucide-react";
+import { MovementJoystick } from "./MovementJoystick";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
   ssr: false,
@@ -423,14 +424,14 @@ export function WorldPage() {
         <div className="flex flex-col gap-1.5 p-1.5 bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 shadow-lg pointer-events-auto w-fit">
           <button
             onClick={() => setMapMode(mapMode === "select" ? "drag" : "select")}
-            title={mapMode === "select" ? "Chế độ: Di chuyển (Click để đổi sang Kéo bản đồ)" : "Chế độ: Kéo bản đồ (Click để đổi sang Di chuyển)"}
+            title={mapMode === "select" ? "Chế độ: Tương tác bản đồ" : "Chế độ: Kéo bản đồ"}
             className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
               mapMode === "select"
                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-inner"
                 : "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-inner"
             }`}
           >
-            <span className="text-lg">{mapMode === "select" ? "🎯" : "🖐️"}</span>
+            <span className="text-lg">{mapMode === "select" ? "👆" : "🖐️"}</span>
           </button>
           <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
           <button
@@ -685,7 +686,7 @@ export function WorldPage() {
                           if (inPvPRange) {
                             movePlayer(gamePlayer!.x, gamePlayer!.y, selectedObject.id);
                           } else {
-                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                            useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận mục tiêu.", "info");
                           }
                         }}
                         className={`flex-1 flex items-center justify-center py-2.5 rounded-xl ${
@@ -745,7 +746,7 @@ export function WorldPage() {
                     disabled={isMoving}
                     title="Tiếp Cận Chiến Lợi Phẩm"
                     onClick={() => {
-                      window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                      useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận chiến lợi phẩm.", "info");
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 shadow-amber-950/30 text-white text-sm font-bold font-serif transition-all cursor-pointer shadow-lg"
                   >
@@ -787,7 +788,7 @@ onClick={() => {
                         disabled={isMoving}
                         title="Tiếp Cận Tông Môn"
                         onClick={() => {
-                          window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                          useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận Tông Môn.", "info");
                         }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
                       >
@@ -827,7 +828,7 @@ onClick={() => {
                           disabled={isMoving}
                           title="Tiếp Cận Truyền Tống Trận"
                           onClick={() => {
-                            window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                            useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận Truyền Tống Trận.", "info");
                           }}
                           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-serif transition-all cursor-pointer shadow-lg"
                         >
@@ -843,7 +844,7 @@ onClick={() => {
                   disabled={isMoving || !!selectedObject.cleared}
                   title={isMoving ? "Đang di chuyển..." : selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss" ? "Chiến Đấu" : "Tiếp Cận"}
                   onClick={() => {
-                    window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
+                    useGameStore.getState().addToast("Dùng WASD hoặc joystick để tiếp cận mục tiêu.", "info");
                   }}
                   className={`flex-1 flex items-center justify-center py-2.5 rounded-xl ${
                     selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss"
@@ -919,6 +920,7 @@ onClick={() => {
         </div>
       )}
 
+      <MovementJoystick />
       <GuQuickBar />
     </div>
   );

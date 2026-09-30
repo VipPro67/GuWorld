@@ -3,21 +3,7 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
 import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
-import { guSpecFor, useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
-import { operationsBy } from "@/lib/effect-blocks";
-
-// Tốc chạy map = MOVEMENT (số ô). SPEED chỉ dùng thứ tự đánh combat, không ảnh hưởng di chuyển.
-function computeMovementRange(gamePlayer: Player | null, guDictionary: Record<string, GuSpec>): number {
-  if (!gamePlayer) return 1;
-  let movement = 1.0;
-  for (const gu of gamePlayer.gu_inventory) {
-    if (!gu.equipped || gu.status !== "ACTIVE") continue;
-    const spec = guSpecFor(gu.gu_id, gu.rank);
-    movement += operationsBy(spec?.effects, { trigger: "ALWAYS_ON", op: "STAT_MOD", stat: "MOVEMENT" })
-      .reduce((sum, operation) => sum + (operation.value || 0), 0);
-  }
-  return Math.max(1, movement);
-}
+import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 const BG_COLOR = 0x1d1e2c;
 
@@ -47,6 +33,7 @@ const CELL_AOI_DIAMETER = 254;
 // Must match MovePlayerPath's bounded server segment. Prediction only affects
 // presentation; every resulting position is still reconciled with the server.
 const MOVE_PATH_SEGMENT_CELLS = 5;
+const DIRECTION_SEGMENT_SECONDS = 0.4;
 
 function predictedSegmentEnd(x0: number, y0: number, x1: number, y1: number): { x: number; y: number } {
   let x = x0;
@@ -121,6 +108,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const lastCameraSyncRef = useRef(0);
   const isMovingRef = useRef(false);
   const walkVersionRef = useRef(0);
+  const movementDirectionRef = useRef({ x: 0, y: 0 });
   const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
   const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk }>>(new Map());
@@ -278,7 +266,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     }
   }, [skillFxEvents, appReady, clearSkillFx]);
 
-  const movementStat = useMemo(() => computeMovementRange(gamePlayer, guDictionary), [gamePlayer, guDictionary]);
+  // This value comes from CalculatePlayerStats through /explore/grid. Keeping
+  // one authoritative value avoids client-only Gu calculations disagreeing
+  // with race, constitution, duplicate-Gu, or future MOVEMENT effects.
+  const movementStat = Math.max(1, movementRange);
+  const directionSegmentCells = Math.min(
+    MOVE_PATH_SEGMENT_CELLS,
+    Math.max(1, Math.ceil(movementStat * DIRECTION_SEGMENT_SECONDS)),
+  );
 
   const displayObjects = useMemo(() => {
     const byKey = new Map<string, WorldObject>();
@@ -400,7 +395,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const startX = playerRef.current.position.x;
       const startY = playerRef.current.position.y;
       const dist = Math.hypot(targetX + 0.5 - startX, targetY + 0.5 - startY);
-      const confirmed = confirmedPositionRef.current;
+      const confirmed = isMovingRef.current ? confirmedPositionRef.current : null;
       const confirmedDist = confirmed
         ? Math.hypot(targetX + 0.5 - confirmed.x, targetY + 0.5 - confirmed.y)
         : dist;
@@ -455,7 +450,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         // Start walking immediately along the same bounded Bresenham segment
         // as the backend. Network latency is hidden behind this visual tween;
         // the response below remains authoritative if an encounter stops early.
-        animateMove(predictedX, predictedY, Math.max(0.08, predictedDistance / movementStat), () => {
+        animateMove(predictedX, predictedY, predictedDistance / movementStat, () => {
           predictionFinished = true;
           if (response !== undefined && response !== null) reconcile(response, predictedX, predictedY, tx, ty);
         });
@@ -535,6 +530,13 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
                 }
               }
 
+              const direction = movementDirectionRef.current;
+              if (!res.combat_triggered && (direction.x !== 0 || direction.y !== 0)) {
+                moveTargetRef.current = {
+                  x: Math.max(0, Math.min(WORLD_W - 1, np.x + direction.x * directionSegmentCells)),
+                  y: Math.max(0, Math.min(WORLD_H - 1, np.y + direction.y * directionSegmentCells)),
+                };
+              }
               const desired = moveTargetRef.current;
               const hasAnotherDestination = Boolean(
                 desired && (desired.x !== np.x || desired.y !== np.y),
@@ -576,7 +578,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       walk(targetX, targetY);
     },
-    [movementStat, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject, upsertPlayerPosition],
+    [movementStat, directionSegmentCells, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject, upsertPlayerPosition],
   );
 
   const handleObjectClick = useCallback(
@@ -590,13 +592,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           }
           return;
         }
-        moveTargetRef.current = { x: obj.x, y: obj.y };
-        performMove(obj.x, obj.y);
+        return;
       } else {
         selectObject(obj);
       }
     },
-    [performMove, selectObject, gamePlayer],
+    [selectObject, gamePlayer],
   );
 
   const handleBackgroundClick = useCallback(
@@ -659,11 +660,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           });
         }
 
-        if (s.selectedObject && s.selectedObject.x === tx && s.selectedObject.y === ty) {
-          // Already selected, proceed to move
-          moveTargetRef.current = { x: tx, y: ty };
-          performMove(tx, ty);
-        } else if (dropOnTile) {
+        if (dropOnTile) {
           s.selectObject({
             id: dropOnTile.id,
             region_id: dropOnTile.region_id,
@@ -700,25 +697,52 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       s.selectObject(null);
 
-      // Ignore clicks outside the investigation (scout) range
-      const px = gamePlayer?.x ?? 0;
-      const py = gamePlayer?.y ?? 0;
-      const dist = Math.hypot(tx - px, ty - py);
-      if (dist > s.investigationRange) return;
-
-      moveTargetRef.current = { x: tx, y: ty };
-      performMove(tx, ty);
     },
-    [performMove, gamePlayer, handleObjectClick, monsterDictionary, guDictionary],
+    [gamePlayer, handleObjectClick, monsterDictionary],
   );
 
   useEffect(() => {
-    const handleCustomMove = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail && detail.x !== undefined && detail.y !== undefined) {
-        moveTargetRef.current = { x: detail.x, y: detail.y };
-        performMove(detail.x, detail.y);
+    const pressed = new Set<string>();
+    let keyboardDirection = { x: 0, y: 0 };
+    let joystickDirection = { x: 0, y: 0 };
+
+    const applyDirection = () => {
+      const source = joystickDirection.x !== 0 || joystickDirection.y !== 0
+        ? joystickDirection
+        : keyboardDirection;
+      const { x: dx, y: dy } = source;
+      const currentParty = useGameStore.getState().party;
+      const currentPlayer = useGameStore.getState().player;
+      const cannotLead = Boolean(currentPlayer?.party_id)
+        && (currentParty === null || currentParty.leader_id !== currentPlayer?.id);
+      if (cannotLead && (dx !== 0 || dy !== 0)) {
+        movementDirectionRef.current = { x: 0, y: 0 };
+        moveTargetRef.current = null;
+        useGameStore.getState().addToast("Chỉ có Trưởng nhóm mới có quyền di chuyển trên bản đồ!", "error");
+        return;
       }
+      movementDirectionRef.current = { x: dx, y: dy };
+      if (dx === 0 && dy === 0) {
+        moveTargetRef.current = null;
+        return;
+      }
+
+      const player = useGameStore.getState().player;
+      if (!player) return;
+      const confirmed = isMovingRef.current ? confirmedPositionRef.current : null;
+      const originX = confirmed ? Math.round(confirmed.x - 0.5) : player.x;
+      const originY = confirmed ? Math.round(confirmed.y - 0.5) : player.y;
+      performMove(
+        Math.max(0, Math.min(WORLD_W - 1, originX + dx * directionSegmentCells)),
+        Math.max(0, Math.min(WORLD_H - 1, originY + dy * directionSegmentCells)),
+      );
+    };
+
+    const applyKeyboardDirection = () => {
+      const x = Number(pressed.has("d") || pressed.has("arrowright")) - Number(pressed.has("a") || pressed.has("arrowleft"));
+      const y = Number(pressed.has("s") || pressed.has("arrowdown")) - Number(pressed.has("w") || pressed.has("arrowup"));
+      keyboardDirection = { x, y };
+      applyDirection();
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -727,45 +751,43 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         return;
       }
 
-      let dx = 0;
-      let dy = 0;
       const key = e.key.toLowerCase();
-
-      if (key === "w" || key === "arrowup") {
-        dy = -1;
-      } else if (key === "s" || key === "arrowdown") {
-        dy = 1;
-      } else if (key === "a" || key === "arrowleft") {
-        dx = -1;
-      } else if (key === "d" || key === "arrowright") {
-        dx = 1;
-      } else {
-        return;
-      }
+      if (!["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright"].includes(key)) return;
 
       e.preventDefault();
-
-      const curPlayer = useGameStore.getState().player;
-      if (!curPlayer) return;
-
-      const queuedTarget = moveTargetRef.current;
-      const confirmed = confirmedPositionRef.current;
-      const currentX = queuedTarget?.x ?? (confirmed ? Math.round(confirmed.x - 0.5) : curPlayer.x);
-      const currentY = queuedTarget?.y ?? (confirmed ? Math.round(confirmed.y - 0.5) : curPlayer.y);
-
-      const targetX = Math.max(0, Math.min(WORLD_W - 1, currentX + dx));
-      const targetY = Math.max(0, Math.min(WORLD_H - 1, currentY + dy));
-
-      performMove(targetX, targetY);
+      if (pressed.has(key)) return;
+      pressed.add(key);
+      applyKeyboardDirection();
     };
 
-    window.addEventListener("gu_world_move", handleCustomMove);
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (!pressed.delete(key)) return;
+      applyKeyboardDirection();
+    };
+    const stopMovement = () => {
+      pressed.clear();
+      keyboardDirection = { x: 0, y: 0 };
+      joystickDirection = { x: 0, y: 0 };
+      applyDirection();
+    };
+    const handleJoystick = (e: Event) => {
+      const detail = (e as CustomEvent<{ x?: number; y?: number }>).detail;
+      joystickDirection = { x: Math.sign(detail?.x ?? 0), y: Math.sign(detail?.y ?? 0) };
+      applyDirection();
+    };
+
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", stopMovement);
+    window.addEventListener("gu_world_direction", handleJoystick);
     return () => {
-      window.removeEventListener("gu_world_move", handleCustomMove);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", stopMovement);
+      window.removeEventListener("gu_world_direction", handleJoystick);
     };
-  }, [performMove]);
+  }, [directionSegmentCells, performMove]);
 
   const drawRegions = useCallback((regs: typeof regions) => {
     const container = regionsContainerRef.current;
