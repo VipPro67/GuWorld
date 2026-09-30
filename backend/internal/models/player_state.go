@@ -241,17 +241,19 @@ func (s SoulState) Apply(p *Player) {
 
 // ThoughtPool groups thought-related fields (replaces old Wisdom stat).
 type ThoughtPool struct {
-	CurrentThought float64 `json:"current_thought"`
-	MaxThought     float64 `json:"max_thought"`
-	RegenRate      float64 `json:"thought_regen_rate"`
+	CurrentThought   float64 `json:"current_thought"`
+	MaxThought       float64 `json:"max_thought"`
+	RegenRate        float64 `json:"-"`
+	ThoughtRegenRate float64 `json:"thought_regen_rate"`
 }
 
 // NewThoughtPool extracts thought data from a Player.
 func NewThoughtPool(p *Player) ThoughtPool {
 	return ThoughtPool{
-		CurrentThought: p.CurrentThought,
-		MaxThought:     p.MaxThought,
-		RegenRate:      p.RegenRate,
+		CurrentThought:   p.CurrentThought,
+		MaxThought:       p.MaxThought,
+		RegenRate:        p.RegenRate,
+		ThoughtRegenRate: p.RegenRate,
 	}
 }
 
