@@ -248,6 +248,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Admin endpoints — group: 80/min per IP
 		admin := api.Group("/admin")
 		admin.Use(middleware.AuthRequired())
+		admin.Use(middleware.AdminRequired())
 		admin.Use(middleware.RateLimitByGroup("admin", 80, time.Minute))
 		{
 			// Application Monitoring & Tracing endpoints

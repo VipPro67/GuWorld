@@ -152,3 +152,30 @@ func GetPlayerID(c *gin.Context) (uuid.UUID, bool) {
 	id, ok := val.(uuid.UUID)
 	return id, ok
 }
+
+// AdminRequired rejects authenticated requests from players without admin access.
+// Keep handler-level authorization checks during the RBAC transition as defense in depth.
+func AdminRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		playerID, ok := GetPlayerID(c)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			c.Abort()
+			return
+		}
+		if db.DB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
+			c.Abort()
+			return
+		}
+
+		var isAdmin bool
+		if err := db.DB.QueryRow(`SELECT COALESCE(is_admin, false) FROM players WHERE id=$1`, playerID).Scan(&isAdmin); err != nil || !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}

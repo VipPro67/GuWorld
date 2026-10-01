@@ -260,6 +260,9 @@ func formatChangedFields(sets []string, args []interface{}) string {
 
 // GetBatchMetrics returns metrics about the batch persister worker.
 func GetBatchMetrics(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"total_flushes":      atomic.LoadInt64(&worker.Metrics.TotalFlushes),
 		"successful_flushes": atomic.LoadInt64(&worker.Metrics.SuccessfulFlushes),
