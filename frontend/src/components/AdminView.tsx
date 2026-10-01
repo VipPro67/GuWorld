@@ -75,6 +75,7 @@ import type { AdminModuleKey } from "./admin/navigation";
 import { useAdminAccess } from "./admin/AdminAccessContext";
 import { canPerformAdminAction, prepareAdminAction } from "./admin/actions";
 import { DataImportWorkflow } from "./admin/DataImportWorkflow";
+import { PlayerRolesEditor } from "./admin/PlayerRolesEditor";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
@@ -455,6 +456,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
   // Edit player modal
   const [showEditPlayer, setShowEditPlayer] = useState(false);
+  const [showRolesEditor, setShowRolesEditor] = useState(false);
   const [editPlayerForm, setEditPlayerForm] = useState<Record<string, string>>({});
 
   const [showAddItem, setShowAddItem] = useState(false);
@@ -1265,6 +1267,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <Globe className="w-3.5 h-3.5 text-amber-500" />
               Xem Tiên Khiếu
             </button>
+            {(adminAccess.effective_permissions.includes("admin.*") || adminAccess.effective_permissions.includes("admin_roles.read") || canAdminAction("assignPlayerRoles")) && <button onClick={() => setShowRolesEditor(true)} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              Vai trò
+            </button>}
             <button onClick={() => { setSelectedId(null); setDetail(null); }} disabled={actionLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <X className="w-3.5 h-3.5" />
               Đóng
@@ -2443,6 +2449,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               </div>
             </div>
           </div>
+        )}
+        {showRolesEditor && detail && selectedId && (
+          <PlayerRolesEditor playerId={selectedId} username={detail.username} canAssign={canAdminAction("assignPlayerRoles")} addToast={addToast} onClose={() => setShowRolesEditor(false)} onSaved={() => { fetchDetail(selectedId); fetchPlayers(); }} />
         )}
         {renderItemPicker()}
       </div>
