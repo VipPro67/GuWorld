@@ -10,6 +10,7 @@ import (
 	"github.com/aurowora/compress"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
@@ -248,7 +249,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Admin endpoints — group: 80/min per IP
 		admin := api.Group("/admin")
 		admin.Use(middleware.AuthRequired())
-		admin.Use(middleware.AdminRequired())
+		admin.Use(middleware.RequirePermission(authz.AdminAccessPermission))
 		admin.Use(middleware.RateLimitByGroup("admin", 80, time.Minute))
 		{
 			// Application Monitoring & Tracing endpoints
@@ -421,7 +422,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			player.GET("/referrals", handlers.GetReferralStats)
 			player.POST("/referrals/claim", handlers.ClaimReferralReward)
 			player.POST("/referrals/bind", handlers.BindReferralCode)
-			player.POST("/simulate-deposit", handlers.SimulateDeposit)
+			player.POST("/simulate-deposit", middleware.RequirePermission(authz.AdminAccessPermission), handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
 			player.POST("/redeem-gift-code", handlers.RedeemGiftCode)
 			player.POST("/complete-onboarding", handlers.CompleteOnboarding)
