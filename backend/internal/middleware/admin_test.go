@@ -13,12 +13,39 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 )
 
 type stubPrincipalResolver struct {
 	principal authz.AdminPrincipal
 	err       error
 	called    bool
+}
+
+func TestRequirePermissionRecordsDenialAndResolutionError(t *testing.T) {
+	monitor.GlobalAdminOperations.Reset()
+	defer monitor.GlobalAdminOperations.Reset()
+	playerID := uuid.New()
+
+	run := func(resolver PrincipalResolver) *httptest.ResponseRecorder {
+		router := gin.New()
+		router.Use(func(c *gin.Context) { c.Set("player_id", playerID) })
+		router.GET("/", requirePermission(resolver, "players.update"), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+		return response
+	}
+
+	if response := run(&stubPrincipalResolver{principal: authz.AdminPrincipal{PlayerID: playerID, Permissions: map[string]struct{}{}}}); response.Code != http.StatusForbidden {
+		t.Fatalf("denial status = %d", response.Code)
+	}
+	if response := run(&stubPrincipalResolver{err: errors.New("db down")}); response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("resolution error status = %d", response.Code)
+	}
+	snapshot := monitor.GlobalAdminOperations.Snapshot()
+	if snapshot.ForbiddenByPermission["players.update"] != 1 || snapshot.PermissionResolveErrors != 1 {
+		t.Fatalf("unexpected operation metrics: %#v", snapshot)
+	}
 }
 
 func TestAdminReasonRequired(t *testing.T) {

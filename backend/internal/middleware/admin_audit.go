@@ -10,14 +10,17 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 const redactedAuditValue = "[REDACTED]"
 
 // AdminMutationAudit records one canonical event for an admin mutation,
 // including failures. Request data is recursively redacted before persistence.
-func AdminMutationAudit(action, targetType, permission string) gin.HandlerFunc {
+func AdminMutationAudit(action, targetType, permission string, destructive bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := readAndRestoreAuditBody(c)
 		before, reason := sanitizedAuditChange(body, c)
@@ -51,6 +54,16 @@ func AdminMutationAudit(action, targetType, permission string) gin.HandlerFunc {
 		errorMessage := ""
 		if !success {
 			errorMessage = fmt.Sprintf("HTTP %d %s", status, http.StatusText(status))
+			monitor.GlobalAdminOperations.RecordFailedMutation(action)
+			logger.L.Warn("admin_mutation_failed", zap.String("action", action), zap.String("permission", permission), zap.Int("status", status), zap.Any("trace_id", traceID), zap.String("player_id", actorID.String()))
+			if strings.Contains(action, "import_") {
+				monitor.GlobalAdminOperations.RecordImportFailure(action)
+				logger.L.Error("admin_import_failed", zap.String("action", action), zap.Int("status", status), zap.Any("trace_id", traceID), zap.String("player_id", actorID.String()))
+			}
+		}
+		if destructive {
+			monitor.GlobalAdminOperations.RecordDestructiveAction(action)
+			logger.L.Warn("admin_destructive_action", zap.String("action", action), zap.Bool("success", success), zap.Int("status", status), zap.Any("trace_id", traceID), zap.String("player_id", actorID.String()))
 		}
 
 		auditlog.Log(nil, auditlog.Entry{

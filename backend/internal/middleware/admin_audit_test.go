@@ -2,12 +2,34 @@ package middleware
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 )
+
+func TestAdminMutationAuditRecordsFailureAndDestructiveAction(t *testing.T) {
+	monitor.GlobalAdminOperations.Reset()
+	defer monitor.GlobalAdminOperations.Reset()
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("player_id", uuid.New()); c.Next() })
+	router.POST("/", AdminMutationAudit("admin.commit_import_table", "game_data", "game_data.import", true), func(c *gin.Context) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid data"})
+	})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`)))
+
+	snapshot := monitor.GlobalAdminOperations.Snapshot()
+	if snapshot.FailedMutationsByAction["admin.commit_import_table"] != 1 ||
+		snapshot.ImportFailuresByAction["admin.commit_import_table"] != 1 ||
+		snapshot.DestructiveByAction["admin.commit_import_table"] != 1 {
+		t.Fatalf("unexpected operation metrics: %#v", snapshot)
+	}
+}
 
 func TestSanitizedAuditChangeRedactsSecretsRecursively(t *testing.T) {
 	gin.SetMode(gin.TestMode)

@@ -6,7 +6,9 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 const (
@@ -97,7 +99,8 @@ func (r *Resolver) Resolve(ctx context.Context, playerID uuid.UUID) (AdminPrinci
 	}
 
 	if applyLegacyAdminFallback(&principal, foundPlayer, isAdmin) {
-		logger.S.Warnf("authorization legacy is_admin fallback used for player %s; backfill super_admin role", playerID)
+		monitor.GlobalAdminOperations.RecordLegacyAdminFallback()
+		logger.L.Warn("authorization_legacy_is_admin_fallback", zap.String("player_id", playerID.String()), zap.String("remediation", "backfill super_admin role"))
 	}
 
 	return principal, nil

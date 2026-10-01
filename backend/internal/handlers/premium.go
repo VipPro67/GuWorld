@@ -27,8 +27,10 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 const (
@@ -933,6 +935,8 @@ func requireAdmin(c *gin.Context) (uuid.UUID, bool) {
 		return uuid.Nil, false
 	}
 	if !principal.HasPermission(authz.AdminAccessPermission) {
+		monitor.GlobalAdminOperations.RecordForbidden(authz.AdminAccessPermission)
+		logger.L.Warn("admin_permission_denied", zap.String("permission", authz.AdminAccessPermission), zap.String("player_id", principal.PlayerID.String()))
 		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
 		return uuid.Nil, false
 	}

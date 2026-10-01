@@ -8,7 +8,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type Querier interface {
@@ -34,9 +36,12 @@ type Entry struct {
 }
 
 func Log(q Querier, entry Entry) {
-	if err := LogChecked(q, entry); err != nil {
-		logger.S.Warnf("auditlog: failed to insert action=%s player=%v: %v", entry.Action, entry.PlayerID, err)
-	}
+	_ = LogChecked(q, entry)
+}
+
+func recordWriteFailure(entry Entry, err error) {
+	monitor.GlobalAdminOperations.RecordAuditWriteFailure()
+	logger.L.Error("audit_write_failed", zap.String("action", entry.Action), zap.Any("player_id", entry.PlayerID), zap.Error(err))
 }
 
 // LogChecked records an audit entry and returns persistence failures to
@@ -47,7 +52,9 @@ func LogChecked(q Querier, entry Entry) error {
 		var err error
 		metaBytes, err = json.Marshal(entry.Metadata)
 		if err != nil {
-			return fmt.Errorf("marshal audit metadata: %w", err)
+			err = fmt.Errorf("marshal audit metadata: %w", err)
+			recordWriteFailure(entry, err)
+			return err
 		}
 	}
 	metaJSON := string(metaBytes)
@@ -60,11 +67,15 @@ func LogChecked(q Querier, entry Entry) error {
 	}
 	rolesJSON, err := json.Marshal(entry.EffectiveRoles)
 	if err != nil {
-		return fmt.Errorf("marshal audit roles: %w", err)
+		err = fmt.Errorf("marshal audit roles: %w", err)
+		recordWriteFailure(entry, err)
+		return err
 	}
 	changeJSON, err := json.Marshal(entry.ChangeData)
 	if err != nil {
-		return fmt.Errorf("marshal audit change: %w", err)
+		err = fmt.Errorf("marshal audit change: %w", err)
+		recordWriteFailure(entry, err)
+		return err
 	}
 	if string(changeJSON) == "null" {
 		changeJSON = []byte("{}")
@@ -75,7 +86,9 @@ func LogChecked(q Querier, entry Entry) error {
 		execDB = db.DB
 	}
 	if execDB == nil {
-		return fmt.Errorf("auditlog: nil querier for action=%s", entry.Action)
+		err := fmt.Errorf("auditlog: nil querier for action=%s", entry.Action)
+		recordWriteFailure(entry, err)
+		return err
 	}
 
 	_, err = execDB.Exec(
@@ -83,6 +96,7 @@ func LogChecked(q Querier, entry Entry) error {
 		pid, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
 	)
 	if err != nil {
+		recordWriteFailure(entry, err)
 		return err
 	}
 	return nil

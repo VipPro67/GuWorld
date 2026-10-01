@@ -172,6 +172,15 @@ func AdminGetRequestSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, summary)
 }
 
+// AdminGetOperationMetrics returns counters for privileged authorization,
+// mutation, import, and audit events since process start or the last reset.
+func AdminGetOperationMetrics(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	c.JSON(http.StatusOK, monitor.GlobalAdminOperations.Snapshot())
+}
+
 // AdminGetRequestTraces handles GET /api/admin/monitor/requests/traces.
 func AdminGetRequestTraces(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
@@ -228,5 +237,6 @@ func AdminResetRequestMetrics(c *gin.Context) {
 		return
 	}
 	monitor.GlobalTracker.Reset()
+	monitor.GlobalAdminOperations.Reset()
 	c.JSON(http.StatusOK, gin.H{"message": "Request metrics and traces reset successfully"})
 }

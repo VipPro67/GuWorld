@@ -17,6 +17,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -212,6 +215,8 @@ func PermissionRequired(permission string) gin.HandlerFunc {
 			return
 		}
 		if db.DB == nil {
+			monitor.GlobalAdminOperations.RecordPermissionResolveError()
+			logger.L.Error("admin_permission_resolution_error", zap.String("permission", permission), zap.String("player_id", playerID.String()), zap.String("error", "database unavailable"))
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
 			c.Abort()
 			return
@@ -224,7 +229,16 @@ func PermissionRequired(permission string) gin.HandlerFunc {
 			c.Set(adminPrincipalKey, principal)
 			c.Request = c.Request.WithContext(authz.WithPrincipal(c.Request.Context(), principal))
 		}
-		if err != nil || !principal.HasPermission(permission) {
+		if err != nil {
+			monitor.GlobalAdminOperations.RecordPermissionResolveError()
+			logger.L.Error("admin_permission_resolution_error", zap.String("permission", permission), zap.String("player_id", playerID.String()), zap.Error(err))
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Permission service unavailable"})
+			c.Abort()
+			return
+		}
+		if !principal.HasPermission(permission) {
+			monitor.GlobalAdminOperations.RecordForbidden(permission)
+			logger.L.Warn("admin_permission_denied", zap.String("permission", permission), zap.String("player_id", playerID.String()))
 			c.JSON(http.StatusForbidden, gin.H{"error": "Permission required", "permission": permission})
 			c.Abort()
 			return
