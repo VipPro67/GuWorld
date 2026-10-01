@@ -108,17 +108,17 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-xs min-w-max">
               <thead>
                 <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
-                  <th className="py-2.5 px-3">Mã đơn</th>
-                  <th className="py-2.5 px-3">User ID</th>
-                  <th className="py-2.5 px-3">Số tiền (VND)</th>
-                  <th className="py-2.5 px-3">Tiên Ngọc nhận</th>
-                  <th className="py-2.5 px-3">Cổng thanh toán</th>
-                  <th className="py-2.5 px-3">Trạng thái</th>
-                  <th className="py-2.5 px-3">Ngày tạo</th>
-                  <th className="py-2.5 px-3">Ngày thanh toán</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Mã đơn</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">User ID</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Số tiền (VND)</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Tiên Ngọc nhận</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Cổng thanh toán</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Trạng thái</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Ngày tạo</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Ngày thanh toán</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
@@ -131,16 +131,16 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
                 ) : (
                   orders.map((o, idx) => (
                     <tr key={idx} className="hover:bg-zinc-900/50">
-                      <td className="py-2.5 px-3 font-mono text-amber-400/90">{o.orderCode}</td>
-                      <td className="py-2.5 px-3 font-mono text-zinc-400">{o.userId}</td>
-                      <td className="py-2.5 px-3 font-mono text-emerald-400">
+                      <td className="py-2.5 px-3 font-mono text-amber-400/90 whitespace-nowrap">{o.orderCode}</td>
+                      <td className="py-2.5 px-3 font-mono text-zinc-400 whitespace-nowrap">{o.userId}</td>
+                      <td className="py-2.5 px-3 font-mono text-emerald-400 whitespace-nowrap">
                         {Number(o.amountVnd).toLocaleString("vi-VN")} đ
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-sky-400 font-bold">
+                      <td className="py-2.5 px-3 font-mono text-sky-400 font-bold whitespace-nowrap">
                         +{Number(o.jadeAmount).toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 uppercase text-zinc-400">{o.provider || "payos"}</td>
-                      <td className="py-2.5 px-3">
+                      <td className="py-2.5 px-3 uppercase text-zinc-400 whitespace-nowrap">{o.provider || "payos"}</td>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
                         {o.status === "PAID" ? (
                           <span className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded text-[10px] font-bold">
                             <CheckCircle className="w-3 h-3" /> Đã TT
@@ -155,10 +155,10 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-zinc-400 font-mono">
+                      <td className="py-2.5 px-3 text-zinc-400 font-mono whitespace-nowrap">
                         {o.createdAt ? new Date(o.createdAt).toLocaleString("vi-VN") : "-"}
                       </td>
-                      <td className="py-2.5 px-3 text-zinc-400 font-mono">
+                      <td className="py-2.5 px-3 text-zinc-400 font-mono whitespace-nowrap">
                         {o.paidAt ? new Date(o.paidAt).toLocaleString("vi-VN") : "-"}
                       </td>
                     </tr>
@@ -198,16 +198,16 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-xs min-w-max">
               <thead>
                 <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
-                  <th className="py-2.5 px-3">Loại GD</th>
-                  <th className="py-2.5 px-3">User ID</th>
-                  <th className="py-2.5 px-3">Loại tiền</th>
-                  <th className="py-2.5 px-3">Số lượng</th>
-                  <th className="py-2.5 px-3">Số dư Trước &rarr; Sau</th>
-                  <th className="py-2.5 px-3">Ghi chú</th>
-                  <th className="py-2.5 px-3">Thời gian</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Loại GD</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">User ID</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Loại tiền</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Số lượng</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Số dư Trước &rarr; Sau</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Ghi chú</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Thời gian</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
@@ -222,7 +222,7 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
                     const isPositive = Number(t.amount) > 0;
                     return (
                       <tr key={idx} className="hover:bg-zinc-900/50">
-                        <td className="py-2.5 px-3 font-mono font-bold">
+                        <td className="py-2.5 px-3 font-mono font-bold whitespace-nowrap">
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${
                               isPositive
@@ -234,16 +234,16 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
                             {t.type}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-zinc-400">{t.userId}</td>
-                        <td className="py-2.5 px-3 uppercase text-amber-400 font-mono">{t.currency}</td>
-                        <td className={`py-2.5 px-3 font-mono font-bold ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>
+                        <td className="py-2.5 px-3 font-mono text-zinc-400 whitespace-nowrap">{t.userId}</td>
+                        <td className="py-2.5 px-3 uppercase text-amber-400 font-mono whitespace-nowrap">{t.currency}</td>
+                        <td className={`py-2.5 px-3 font-mono font-bold whitespace-nowrap ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>
                           {isPositive ? "+" : ""}{Number(t.amount).toLocaleString()}
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-zinc-400">
+                        <td className="py-2.5 px-3 font-mono text-zinc-400 whitespace-nowrap">
                           {Number(t.balanceBefore).toLocaleString()} → {Number(t.balanceAfter).toLocaleString()}
                         </td>
-                        <td className="py-2.5 px-3 text-zinc-300 max-w-xs truncate">{t.note || "-"}</td>
-                        <td className="py-2.5 px-3 text-zinc-400 font-mono">
+                        <td className="py-2.5 px-3 text-zinc-300 max-w-xs truncate whitespace-nowrap" title={t.note || ""}>{t.note || "-"}</td>
+                        <td className="py-2.5 px-3 text-zinc-400 font-mono whitespace-nowrap">
                           {t.createdAt ? new Date(t.createdAt).toLocaleString("vi-VN") : "-"}
                         </td>
                       </tr>

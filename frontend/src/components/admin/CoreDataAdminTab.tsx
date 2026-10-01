@@ -35,6 +35,7 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
       { key: "name", label: "Tên", value: (row) => row.name, className: "font-semibold text-zinc-200" },
       { key: "rank", label: "Rank", value: (row) => row.rank },
       { key: "gu_type", label: "Loại", value: (row) => row.gu_type },
+      { key: "description", label: "Mô tả", value: (row) => row.description ?? "", render: (row) => <span className="truncate max-w-[200px] block text-zinc-400 text-[11px]" title={row.description}>{row.description || "—"}</span> },
       { key: "base_price", label: "Giá", value: (row) => row.base_price, render: (row) => Number(row.base_price ?? 0).toLocaleString("vi-VN"), className: "text-right font-mono text-yellow-500" },
     ],
   },
@@ -57,6 +58,10 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
     columns: [
       { key: "id", label: "ID", value: (row) => row.id, className: "font-mono text-zinc-500" },
       { key: "target", label: "Cổ trùng đích", value: (row) => row.target_gu_name || row.target_gu_id, className: "font-semibold text-zinc-200" },
+      { key: "materials", label: "Nguyên liệu", value: (row) => row.required_materials || row.required_gus, render: (row) => {
+        const matStr = typeof row.required_materials === "string" ? row.required_materials : JSON.stringify(row.required_materials || row.required_gus || []);
+        return <span className="truncate max-w-[240px] block font-mono text-[10px] text-zinc-400" title={matStr}>{matStr}</span>;
+      } },
       { key: "success_rate", label: "Tỉ lệ", value: (row) => row.success_rate, render: (row) => `${Math.round(Number(row.success_rate ?? 0) * 100)}%` },
       { key: "primeval_stones_cost", label: "Nguyên thạch", value: (row) => row.primeval_stones_cost, render: (row) => Number(row.primeval_stones_cost ?? 0).toLocaleString("vi-VN"), className: "text-right font-mono text-yellow-500" },
     ],
@@ -82,7 +87,14 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
     columns: [
       { key: "id", label: "ID", value: (row) => row.id, className: "font-mono text-zinc-500" },
       { key: "name", label: "Tên", value: (row) => row.name, className: "font-semibold text-zinc-200" },
-      { key: "entries", label: "Số loot", value: (row) => arrayLength(row.entries) },
+      { key: "entries", label: "Số loot / Chi tiết", value: (row) => arrayLength(row.entries), render: (row) => {
+        const count = arrayLength(row.entries);
+        const detailStr = typeof row.entries === "string" ? row.entries : JSON.stringify(row.entries || []);
+        return <div className="flex items-center gap-2">
+          <span className="font-mono font-bold text-amber-400">{count} món</span>
+          <span className="truncate max-w-[260px] text-[10px] font-mono text-zinc-500" title={detailStr}>{detailStr}</span>
+        </div>;
+      } },
     ],
   },
 };

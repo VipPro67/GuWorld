@@ -598,8 +598,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [sectAddPlayerRank, setSectAddPlayerRank] = useState("NGOAI_MON");
   const [sectEditName, setSectEditName] = useState("");
   const [sectEditDesc, setSectEditDesc] = useState("");
+  const [sectEditRegion, setSectEditRegion] = useState("");
   const [sectEditLevel, setSectEditLevel] = useState("");
   const [sectEditFunds, setSectEditFunds] = useState("");
+  const [sectEditRequireApproval, setSectEditRequireApproval] = useState(false);
+  const [sectEditRequirePromotionApproval, setSectEditRequirePromotionApproval] = useState(false);
   const [sectDetailTab, setSectDetailTab] = useState<"members" | "vault" | "missions">("members");
 
   const [sectMissions, setSectMissions] = useState<ApiResponseData[]>([]);
@@ -2379,6 +2382,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     <input type="checkbox" checked={editPlayerForm.needs_onboarding === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, needs_onboarding: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
                     Cần Onboarding
                   </label>
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
+                    <input type="checkbox" checked={editPlayerForm.needs_soul_refine === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, needs_soul_refine: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
+                    Tôi Luyện Linh Hồn
+                  </label>
                 </div>
               </div>
               <div>
@@ -2478,7 +2485,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => { if (selectedSect) { setSectEditName(selectedSect.name); setSectEditDesc(selectedSect.description || ""); setSectEditLevel(String(selectedSect.level)); setSectEditFunds(String(selectedSect.funds)); setShowSectEdit(true); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
+            <button onClick={() => { if (selectedSect) { setSectEditName(selectedSect.name); setSectEditDesc(selectedSect.description || ""); setSectEditRegion(selectedSect.region || ""); setSectEditLevel(String(selectedSect.level)); setSectEditFunds(String(selectedSect.funds)); setSectEditRequireApproval(Boolean(selectedSect.require_approval)); setSectEditRequirePromotionApproval(Boolean(selectedSect.require_promotion_approval)); setShowSectEdit(true); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <Edit3 className="w-3.5 h-3.5" /> Sửa
             </button>
             <button onClick={() => { setSectAddPlayerId(""); setSectAddPlayerRank("NGOAI_MON"); setShowSectAddMember(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs text-zinc-100 transition-colors cursor-pointer">
@@ -2734,6 +2741,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Mô tả</label>
                   <textarea value={sectEditDesc} onChange={e => setSectEditDesc(e.target.value)} rows={3} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Khu vực</label>
+                  <input type="text" value={sectEditRegion} onChange={e => setSectEditRegion(e.target.value)} placeholder="Southern_Border..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-zinc-500 font-mono">Cấp</label>
@@ -2744,6 +2755,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     <input type="number" min={0} value={sectEditFunds} onChange={e => setSectEditFunds(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                   </div>
                 </div>
+                <div className="flex flex-col gap-2 pt-1">
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 font-mono cursor-pointer">
+                    <input type="checkbox" checked={sectEditRequireApproval} onChange={e => setSectEditRequireApproval(e.target.checked)} className="accent-amber-500 w-4 h-4" />
+                    Cần phê duyệt khi gia nhập Tông môn
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 font-mono cursor-pointer">
+                    <input type="checkbox" checked={sectEditRequirePromotionApproval} onChange={e => setSectEditRequirePromotionApproval(e.target.checked)} className="accent-amber-500 w-4 h-4" />
+                    Cần phê duyệt khi thăng cấp chức vụ
+                  </label>
+                </div>
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowSectEdit(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
@@ -2751,11 +2772,14 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   const body: ApiResponseData = {};
                   if (sectEditName !== selectedSect.name) body.name = sectEditName;
                   if (sectEditDesc !== (selectedSect.description || "")) body.description = sectEditDesc;
+                  if (sectEditRegion !== (selectedSect.region || "")) body.region = sectEditRegion;
                   if (Number(sectEditLevel) !== selectedSect.level) body.level = Number(sectEditLevel);
                   if (Number(sectEditFunds) !== selectedSect.funds) body.funds = Number(sectEditFunds);
+                  if (sectEditRequireApproval !== Boolean(selectedSect.require_approval)) body.require_approval = sectEditRequireApproval;
+                  if (sectEditRequirePromotionApproval !== Boolean(selectedSect.require_promotion_approval)) body.require_promotion_approval = sectEditRequirePromotionApproval;
                   if (Object.keys(body).length === 0) { setShowSectEdit(false); return; }
                   const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}`, "PUT", body);
-                  if (ok) { fetchSectDetail(selectedSectId); setShowSectEdit(false); }
+                  if (ok) { fetchSectDetail(selectedSectId); fetchSects(); setShowSectEdit(false); }
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Lưu"}
                 </button>
@@ -3026,36 +3050,36 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
           ) : (
             <>
               <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs min-w-max">
                   <thead>
                     <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                      <th className="px-3 py-2.5 font-semibold">ID</th>
-                      <th className="px-3 py-2.5 font-semibold">Tên</th>
-                      <th className="px-3 py-2.5 font-semibold">Email</th>
-                      <th className="px-3 py-2.5 font-semibold">Tu vi</th>
-                      <th className="px-3 py-2.5 font-semibold">Sinh lực</th>
-                      <th className="px-3 py-2.5 font-semibold">Chân nguyên</th>
-                      <th className="px-3 py-2.5 font-semibold">Nguyên Thạch</th>
-                      <th className="px-3 py-2.5 font-semibold">Tiên Nguyên</th>
-                      <th className="px-3 py-2.5 font-semibold">Admin</th>
-                      <th className="px-3 py-2.5 font-semibold">Khu vực</th>
-                      <th className="px-3 py-2.5 font-semibold">Ngày tạo</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ID</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tên</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Email</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tu vi</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Sinh lực</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Chân nguyên</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Nguyên Thạch</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tiên Nguyên</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Admin</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Khu vực</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Ngày tạo</th>
                     </tr>
                   </thead>
                   <tbody>
                     {players.map((p) => (
                       <tr key={p.id} onClick={() => setSelectedId(p.id)} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
-                        <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate" title={p.id}>{p.id.slice(0, 8)}...</td>
-                        <td className="px-3 py-2.5 font-semibold text-zinc-200">{p.username}</td>
-                        <td className="px-3 py-2.5 text-zinc-400">{p.email}</td>
-                        <td className={`px-3 py-2.5 font-bold ${rankColor(p.rank)}`}>{getRankName(p.rank, p.sub_rank)}</td>
-                        <td className="px-3 py-2.5 font-mono text-zinc-300">{Math.round(p.hp)}/{Math.round(p.base_hp)}</td>
-                        <td className="px-3 py-2.5 font-mono text-zinc-300">{Math.round(p.current_mana)}/{Math.round(p.max_mana)}</td>
-                        <td className="px-3 py-2.5 font-mono text-yellow-500">{p.primeval_stones.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 font-mono text-purple-400">{p.immortal_stones.toLocaleString()}</td>
-                        <td className="px-3 py-2.5">{p.is_admin ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 border border-amber-500/40 text-amber-400">ADMIN</span> : <span className="text-zinc-600">–</span>}</td>
-                        <td className="px-3 py-2.5 text-zinc-400 max-w-[100px] truncate">{p.current_region}</td>
-                        <td className="px-3 py-2.5 text-zinc-500 font-mono text-[10px]">{formatDate(p.created_at)}</td>
+                        <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate whitespace-nowrap" title={p.id}>{p.id.slice(0, 8)}...</td>
+                        <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{p.username}</td>
+                        <td className="px-3 py-2.5 text-zinc-400 whitespace-nowrap">{p.email}</td>
+                        <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${rankColor(p.rank)}`}>{getRankName(p.rank, p.sub_rank)}</td>
+                        <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{Math.round(p.hp)}/{Math.round(p.base_hp)}</td>
+                        <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{Math.round(p.current_mana)}/{Math.round(p.max_mana)}</td>
+                        <td className="px-3 py-2.5 font-mono text-yellow-500 whitespace-nowrap">{p.primeval_stones.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 font-mono text-purple-400 whitespace-nowrap">{p.immortal_stones.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{p.is_admin ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 border border-amber-500/40 text-amber-400">ADMIN</span> : <span className="text-zinc-600">–</span>}</td>
+                        <td className="px-3 py-2.5 text-zinc-400 max-w-[120px] truncate whitespace-nowrap" title={p.current_region}>{p.current_region}</td>
+                        <td className="px-3 py-2.5 text-zinc-500 font-mono text-[10px] whitespace-nowrap">{formatDate(p.created_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -3939,32 +3963,32 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-max">
                 <thead>
                   <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                    <th className="px-3 py-2.5 font-semibold">ID</th>
-                    <th className="px-3 py-2.5 font-semibold">Tên</th>
-                    <th className="px-3 py-2.5 font-semibold">Khu vực</th>
-                    <th className="px-3 py-2.5 font-semibold">Cấp</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Quỹ</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Thành viên</th>
-                    <th className="px-3 py-2.5 font-semibold">Chưởng môn</th>
-                    <th className="px-3 py-2.5 font-semibold">Phê duyệt</th>
-                    <th className="px-3 py-2.5 font-semibold">Duyệt lên cấp</th>
+                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ID</th>
+                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tên</th>
+                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Khu vực</th>
+                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Cấp</th>
+                    <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Quỹ</th>
+                    <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Thành viên</th>
+                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Chưởng môn</th>
+                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Phê duyệt</th>
+                    <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Duyệt lên cấp</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sects.map((s: ApiResponseData) => (
                     <tr key={s.id} onClick={() => { setSelectedSectId(s.id); }} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
-                      <td className="px-3 py-2.5 text-zinc-500 font-mono">{s.id}</td>
-                      <td className="px-3 py-2.5 font-semibold text-zinc-200">{s.name}</td>
-                      <td className="px-3 py-2.5 text-zinc-400">{s.region}</td>
-                      <td className="px-3 py-2.5 font-bold text-zinc-300">{s.level}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{s.funds?.toLocaleString() || 0}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{s.member_count}</td>
-                      <td className="px-3 py-2.5 text-zinc-300">{s.leader_name || <span className="text-zinc-600 italic">Trống</span>}</td>
-                      <td className="px-3 py-2.5">{s.require_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
-                      <td className="px-3 py-2.5">{s.require_promotion_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                      <td className="px-3 py-2.5 text-zinc-500 font-mono whitespace-nowrap">{s.id}</td>
+                      <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{s.name}</td>
+                      <td className="px-3 py-2.5 text-zinc-400 whitespace-nowrap">{s.region}</td>
+                      <td className="px-3 py-2.5 font-bold text-zinc-300 whitespace-nowrap">{s.level}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-yellow-500 whitespace-nowrap">{s.funds?.toLocaleString() || 0}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{s.member_count}</td>
+                      <td className="px-3 py-2.5 text-zinc-300 whitespace-nowrap">{s.leader_name || <span className="text-zinc-600 italic">Trống</span>}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">{s.require_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">{s.require_promotion_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -4005,33 +4029,33 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
           ) : (
             <>
               <div className="overflow-x-auto rounded-xl border border-zinc-800/80 bg-zinc-950/20">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs min-w-max">
                   <thead>
                     <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                      <th className="px-3 py-2.5 font-semibold">Người chơi</th>
-                      <th className="px-3 py-2.5 font-semibold">Phẩm cấp</th>
-                      <th className="px-3 py-2.5 font-semibold">Trạng thái</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Tốc độ TG</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">HP Tiên Khiếu</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Diện tích</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Tiên Nguyên</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Thiên Kiếp Kế</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Số Kiếp Nạn</th>
-                      <th className="px-3 py-2.5 font-semibold text-center">Hành động</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Người chơi</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Phẩm cấp</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Trạng thái</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Tốc độ TG</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">HP Tiên Khiếu</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Diện tích</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Tiên Nguyên</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Thiên Kiếp Kế</th>
+                      <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Số Kiếp Nạn</th>
+                      <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">Hành động</th>
                     </tr>
                   </thead>
                   <tbody>
                     {apertures.map((ap: ApiResponseData) => (
                       <tr key={ap.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2.5 whitespace-nowrap">
                           <span className="font-semibold text-zinc-200 block">{ap.username}</span>
-                          <span className="text-[10px] text-zinc-500 font-mono">{ap.id}</span>
+                          <span className="text-[10px] text-zinc-500 font-mono block max-w-[140px] truncate" title={ap.id}>{ap.id}</span>
                         </td>
-                        <td className="px-3 py-2.5 font-bold text-zinc-300">
+                        <td className="px-3 py-2.5 font-bold text-zinc-300 whitespace-nowrap">
                           {ap.grade === "LOW" ? "Hạ Phẩm" : ap.grade === "MID" ? "Trung Phẩm" : ap.grade === "HIGH" ? "Thượng Phẩm" : ap.grade === "EXTREME" ? "Chí Tôn" : ap.grade}
                         </td>
-                        <td className="px-3 py-2.5 font-semibold">
-                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono ${
+                        <td className="px-3 py-2.5 font-semibold whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono whitespace-nowrap inline-block ${
                             ap.state === "STABLE" ? "bg-emerald-950/55 text-emerald-400 border border-emerald-800/30" :
                             ap.state === "TRIBULATION_PENDING" ? "bg-amber-950/55 text-amber-400 border border-amber-800/30" :
                             ap.state === "TRIBULATION_ACTIVE" ? "bg-red-950/55 text-red-400 border border-red-800/30 animate-pulse" :
@@ -4040,13 +4064,13 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                             {ap.state === "STABLE" ? "Ổn định" : ap.state === "TRIBULATION_PENDING" ? "Đợi Kiếp" : ap.state === "TRIBULATION_ACTIVE" ? "Đang Kiếp" : ap.state}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.time_rate}x</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.aperture_hp?.toLocaleString()}/{ap.max_aperture_hp?.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.area_size?.toLocaleString()} mẫu</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 font-bold">{ap.immortal_essence?.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">Năm {Math.round(ap.next_tribulation_year || 0)}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.tribulation_count}</td>
-                        <td className="px-3 py-2.5 text-center">
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.time_rate}x</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.aperture_hp?.toLocaleString()}/{ap.max_aperture_hp?.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.area_size?.toLocaleString()} mẫu</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 font-bold whitespace-nowrap">{ap.immortal_essence?.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">Năm {Math.round(ap.next_tribulation_year || 0)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.tribulation_count}</td>
+                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
                           <button onClick={() => setSelectedApertureId(ap.id)} className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 rounded text-[10px] font-bold cursor-pointer transition-colors">
                             Sửa
                           </button>
