@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -9,6 +10,23 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 )
+
+// PlayerHasAdminAccess checks RBAC first and preserves players.is_admin as a
+// rollout fallback for legacy administrators.
+func PlayerHasAdminAccess(ctx context.Context, playerID uuid.UUID) (bool, error) {
+	var hasRBACRole, isLegacyAdmin bool
+	err := db.DB.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM player_admin_roles par
+			JOIN admin_roles ar ON ar.id = par.role_id
+			JOIN admin_role_permissions arp ON arp.role_id = ar.id
+			WHERE par.player_id = $1 AND arp.permission_key = 'admin.*'
+		), COALESCE(is_admin, false)
+		FROM players
+		WHERE id = $1`, playerID).Scan(&hasRBACRole, &isLegacyAdmin)
+	return hasRBACRole || isLegacyAdmin, err
+}
 
 const (
 	// SessionKickedError is returned when the session has been invalidated by a newer login
@@ -169,8 +187,10 @@ func AdminRequired() gin.HandlerFunc {
 			return
 		}
 
-		var isAdmin bool
-		if err := db.DB.QueryRow(`SELECT COALESCE(is_admin, false) FROM players WHERE id=$1`, playerID).Scan(&isAdmin); err != nil || !isAdmin {
+		// Prefer RBAC membership. The legacy flag remains a fallback during the
+		// first rollout so an incomplete backfill cannot lock existing admins out.
+		isAdmin, err := PlayerHasAdminAccess(c.Request.Context(), playerID)
+		if err != nil || !isAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
 			c.Abort()
 			return
