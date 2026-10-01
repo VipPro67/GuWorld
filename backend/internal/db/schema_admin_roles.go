@@ -14,6 +14,18 @@ func schemaAdminRoles() error {
 		return err
 	}
 
+	// Forward-patch databases created before name/level existed (e.g. by the
+	// legacy authorization step which only declared key/description).
+	if err := execSchema("admin_roles_patch_columns", `
+	ALTER TABLE admin_roles ADD COLUMN IF NOT EXISTS name VARCHAR(100) NOT NULL DEFAULT '';
+	ALTER TABLE admin_roles ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+	ALTER TABLE admin_roles ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 50;
+	UPDATE admin_roles SET name = key WHERE name = '';
+	UPDATE admin_roles SET level = 100 WHERE key = 'super_admin' AND (level IS NULL OR level <> 100);
+	UPDATE admin_roles SET level = 50 WHERE key = 'admin' AND (level IS NULL OR level <> 50);`); err != nil {
+		return err
+	}
+
 	if err := execSchema("player_admin_roles", `
 	CREATE TABLE IF NOT EXISTS player_admin_roles (
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
