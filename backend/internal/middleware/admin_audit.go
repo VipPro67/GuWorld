@@ -38,6 +38,7 @@ func AdminMutationAudit(action, targetType, permission string) gin.HandlerFunc {
 		}
 		username, _ := c.Get("username")
 		traceID, _ := c.Get("trace_id")
+		idempotencyKey, _ := c.Get("admin_idempotency_key")
 		roles := []string{}
 		legacyFallback := false
 		if principal, ok := GetAdminPrincipal(c); ok {
@@ -69,6 +70,7 @@ func AdminMutationAudit(action, targetType, permission string) gin.HandlerFunc {
 			Metadata: map[string]interface{}{
 				"route": c.FullPath(), "method": c.Request.Method,
 				"legacy_admin_fallback": legacyFallback,
+				"idempotency_key":       fmt.Sprint(idempotencyKey),
 			},
 		})
 	}

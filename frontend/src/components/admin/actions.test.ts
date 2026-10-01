@@ -18,6 +18,10 @@ test("known sensitive actions have the expected policies", () => {
   assert.equal(ADMIN_ACTIONS.importAllGameData.permission, "game_data.import_all");
   assert.equal(ADMIN_ACTIONS.importGameDataset.permission, "game_data.import");
   assert.equal(ADMIN_ACTIONS.flushRedis.permission, "cache.flush");
+	assert.equal(ADMIN_ACTIONS.flushRedis.reauthenticationRequired, true);
+	assert.equal(ADMIN_ACTIONS.adjustPlayerResources.permission, "players.resources.adjust");
+	assert.equal(ADMIN_ACTIONS.assignPlayerRoles.permission, "admin_roles.assign");
+	assert.equal(ADMIN_ACTIONS.mutatePayment.permission, "billing.mutate");
 });
 
 test("visibility accepts exact permissions and the admin wildcard", () => {

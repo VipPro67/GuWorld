@@ -257,6 +257,8 @@ func TestAdminRoutePermissionsUseExpectedSensitivePolicies(t *testing.T) {
 		http.MethodPost + " /data/export/:table":        "game_data.export",
 		http.MethodPost + " /clear-cache":               "cache.reload",
 		http.MethodPost + " /clear-redis-cache":         "cache.flush",
+		http.MethodPut + " /players/:id/stones":         "players.resources.adjust",
+		http.MethodPut + " /players/:id/roles":          "admin_roles.assign",
 		http.MethodGet + " /audit-logs":                 "audit.read",
 	}
 
@@ -271,5 +273,34 @@ func TestAdminRoutePermissionsUseExpectedSensitivePolicies(t *testing.T) {
 	}
 	for key, permission := range want {
 		t.Errorf("missing sensitive route permission %s = %s", key, permission)
+	}
+}
+
+func TestSensitiveAdminRoutesDeclareSafetyCeremony(t *testing.T) {
+	want := map[string]struct{ reason, reauth, idempotency bool }{
+		http.MethodPost + " /clear-redis-cache":         {true, true, true},
+		http.MethodPost + " /data/import/commit":        {true, false, true},
+		http.MethodPost + " /data/import/:table/commit": {true, false, true},
+		http.MethodPut + " /players/:id/stones":         {true, false, true},
+		http.MethodPut + " /players/:id/roles":          {true, true, true},
+	}
+	for _, route := range adminRouteSpecs() {
+		key := route.method + " " + route.path
+		expected, ok := want[key]
+		if !ok {
+			continue
+		}
+		if route.reasonRequired != expected.reason || route.reauthenticationRequired != expected.reauth || route.idempotencyKeyRequired != expected.idempotency || route.confirmationTarget == "" {
+			t.Errorf("%s has incomplete safety policy: %+v", key, route)
+		}
+		delete(want, key)
+	}
+	for key := range want {
+		t.Errorf("missing sensitive route %s", key)
+	}
+	for _, route := range adminRouteSpecs() {
+		if route.method == http.MethodDelete && (!route.reasonRequired || route.confirmationTarget == "" || !strings.HasSuffix(route.permission, ".delete")) {
+			t.Errorf("DELETE %s lacks delete permission/reason/target confirmation", route.path)
+		}
 	}
 }

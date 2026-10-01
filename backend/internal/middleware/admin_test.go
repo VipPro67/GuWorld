@@ -46,6 +46,49 @@ func TestAdminReasonRequired(t *testing.T) {
 			}
 		})
 	}
+	t.Run("header", func(t *testing.T) {
+		router := gin.New()
+		router.POST("/action", AdminReasonRequired(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+		request := httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(`{}`))
+		request.Header.Set("X-Admin-Reason", "cleanup")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
+}
+
+func TestAdminConfirmationAndIdempotencyRequired(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/players/:id", func(c *gin.Context) {
+		c.Set("player_id", uuid.MustParse("00000000-0000-0000-0000-000000000001"))
+		c.Next()
+	}, AdminConfirmationRequired(func(c *gin.Context) string { return c.Param("id") }), AdminIdempotencyKeyRequired(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	request := httptest.NewRequest(http.MethodPost, "/players/player-7", strings.NewReader(`{"confirmation_target":"player-7"}`))
+	request.Header.Set("Idempotency-Key", "change-player-7-1")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("valid ceremony status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/players/player-7", strings.NewReader(`{"confirmation_target":"player-8"}`))
+	request.Header.Set("Idempotency-Key", "change-player-7-2")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("mismatched target status=%d, want 400", response.Code)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/players/player-7", strings.NewReader(`{"confirmation_target":"player-7"}`))
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("missing idempotency key status=%d, want 400", response.Code)
+	}
 }
 
 func TestAuthRequiredReturnsServiceUnavailableWithoutDatabase(t *testing.T) {

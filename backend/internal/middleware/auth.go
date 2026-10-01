@@ -3,18 +3,21 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // PlayerHasAdminAccess checks RBAC first and preserves players.is_admin as a
@@ -244,12 +247,140 @@ func AdminReasonRequired() gin.HandlerFunc {
 		var payload struct {
 			Reason string `json:"reason"`
 		}
-		if json.Unmarshal(body, &payload) != nil || strings.TrimSpace(payload.Reason) == "" {
+		_ = json.Unmarshal(body, &payload)
+		reason := strings.TrimSpace(payload.Reason)
+		if reason == "" {
+			reason = strings.TrimSpace(c.GetHeader("X-Admin-Reason"))
+		}
+		if reason == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Lý do thao tác là bắt buộc"})
 			c.Abort()
 			return
 		}
-		c.Set("admin_action_reason", strings.TrimSpace(payload.Reason))
+		c.Set("admin_action_reason", reason)
+		c.Next()
+	}
+}
+
+// AdminConfirmationRequired makes the client echo the human-readable target
+// shown in its confirmation dialog. This prevents a stale dialog from being
+// submitted against a different route target.
+func AdminConfirmationRequired(target func(*gin.Context) string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Không thể đọc xác nhận thao tác"})
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		var payload struct {
+			ConfirmationTarget string `json:"confirmation_target"`
+		}
+		_ = json.Unmarshal(body, &payload)
+		actual := strings.TrimSpace(payload.ConfirmationTarget)
+		if actual == "" {
+			actual = strings.TrimSpace(c.GetHeader("X-Admin-Confirmation-Target"))
+		}
+		expected := strings.TrimSpace(target(c))
+		if expected == "" || actual != expected {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Target xác nhận không khớp", "confirmation_target": expected})
+			return
+		}
+		c.Next()
+	}
+}
+
+// AdminIdempotencyKeyRequired requires a caller-generated key for mutations
+// which clients may retry. Individual handlers retain their domain-level
+// idempotency (for example import preflight IDs and absolute-balance PUTs).
+func AdminIdempotencyKeyRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+		if key == "" || len(key) > 128 {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Idempotency-Key hợp lệ là bắt buộc"})
+			return
+		}
+		c.Set("admin_idempotency_key", key)
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Không thể đọc mutation idempotent"})
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		actorID, ok := GetPlayerID(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		digest := sha256.Sum256(append([]byte(c.Request.Method+"\x00"+c.FullPath()+"\x00"), body...))
+		cacheKey := actorID.String() + "\x00" + c.FullPath() + "\x00" + key
+		entry := &adminIdempotencyEntry{hash: digest, done: make(chan struct{})}
+		adminIdempotencyMu.Lock()
+		existing, exists := adminIdempotencyEntries[cacheKey]
+		if !exists {
+			adminIdempotencyEntries[cacheKey] = entry
+		}
+		adminIdempotencyMu.Unlock()
+		if exists {
+			if existing.hash != digest {
+				c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "Idempotency-Key đã được dùng với payload khác"})
+				return
+			}
+			select {
+			case <-existing.done:
+			case <-c.Request.Context().Done():
+				c.AbortWithStatusJSON(http.StatusRequestTimeout, gin.H{"error": "Request cancelled"})
+				return
+			}
+			c.Data(existing.status, existing.contentType, existing.body)
+			c.Abort()
+			return
+		}
+		capture := &auditResponseWriter{ResponseWriter: c.Writer}
+		c.Writer = capture
+		c.Next()
+		entry.status, entry.contentType, entry.body = c.Writer.Status(), c.Writer.Header().Get("Content-Type"), append([]byte(nil), capture.body.Bytes()...)
+		close(entry.done)
+	}
+}
+
+type adminIdempotencyEntry struct {
+	hash        [32]byte
+	done        chan struct{}
+	status      int
+	contentType string
+	body        []byte
+}
+
+var (
+	adminIdempotencyMu      sync.Mutex
+	adminIdempotencyEntries = map[string]*adminIdempotencyEntry{}
+)
+
+// AdminPasswordReauthentication requires the actor's current password for the
+// most sensitive operations. The field is redacted by the audit middleware.
+func AdminPasswordReauthentication() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actorID, ok := GetPlayerID(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Không thể đọc thông tin xác thực"})
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		var payload struct {
+			ReauthPassword string `json:"reauth_password"`
+		}
+		_ = json.Unmarshal(body, &payload)
+		var hash string
+		if strings.TrimSpace(payload.ReauthPassword) == "" || db.DB.QueryRowContext(c.Request.Context(), `SELECT password_hash FROM players WHERE id=$1`, actorID).Scan(&hash) != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(payload.ReauthPassword)) != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Xác thực lại thất bại"})
+			return
+		}
 		c.Next()
 	}
 }

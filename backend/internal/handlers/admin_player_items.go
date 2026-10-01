@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -451,8 +452,10 @@ func AdminChangePlayerStones(c *gin.Context) {
 	}
 
 	var req struct {
-		PrimevalStones *float64 `json:"primeval_stones"`
-		ImmortalStones *float64 `json:"immortal_stones"`
+		PrimevalStones     *float64 `json:"primeval_stones"`
+		ImmortalStones     *float64 `json:"immortal_stones"`
+		Reason             string   `json:"reason"`
+		ConfirmationTarget string   `json:"confirmation_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
@@ -491,15 +494,23 @@ func AdminChangePlayerStones(c *gin.Context) {
 	}
 	args = append(args, playerID)
 
-	if _, err := tx.Exec(`UPDATE players SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(argIdx), args...); err != nil {
+	var username string
+	if err := tx.QueryRow(`UPDATE players SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(argIdx)+` RETURNING username`, args...).Scan(&username); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tài nguyên"})
 		return
 	}
-
-	tx.Commit()
-
-	var username string
-	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	if err := auditlog.LogChecked(tx, auditlog.Entry{PlayerID: &adminID, Action: "admin.change_stones", EntityType: "player", EntityID: playerID.String(), Reason: strings.TrimSpace(req.Reason), RequestSummary: "absolute balance adjustment", IPAddress: c.ClientIP(), Success: true}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi audit; transaction đã rollback"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất cập nhật tài nguyên"})
+		return
+	}
 	msgContent := fmt.Sprintf("Admin đã điều chỉnh tài nguyên của đạo hữu %s: ", username)
 	msgParts := []string{}
 	if req.PrimevalStones != nil {
@@ -511,18 +522,5 @@ func AdminChangePlayerStones(c *gin.Context) {
 	msgContent += strings.Join(msgParts, ", ")
 	_ = SendSystemMessage("world", sql.NullString{}, msgContent)
 
-	summary := ""
-	if req.PrimevalStones != nil {
-		summary += fmt.Sprintf("primeval_stones=%.0f ", *req.PrimevalStones)
-	}
-	if req.ImmortalStones != nil {
-		summary += fmt.Sprintf("immortal_stones=%.0f ", *req.ImmortalStones)
-	}
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &adminID, Action: "admin.change_stones",
-		EntityType: "player", EntityID: playerID.String(),
-		RequestSummary: summary,
-		IPAddress:      c.ClientIP(), Success: true,
-	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tài nguyên thành công"})
 }
