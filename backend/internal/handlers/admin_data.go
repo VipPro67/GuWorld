@@ -18,8 +18,10 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 func writeImportError(c *gin.Context, prefix string, err error) {
@@ -186,6 +188,10 @@ func commitImport(c *gin.Context, table string) {
 		return
 	}
 	warnings := reloadImportedData()
+	if len(warnings) > 0 {
+		monitor.GlobalAdminOperations.RecordImportFailure(action)
+		logger.L.Error("admin_import_failed", zap.String("action", action), zap.String("stage", "runtime_reload"), zap.String("table", entityID), zap.Strings("warnings", warnings), zap.String("player_id", adminID.String()))
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Import đã commit", "committed": true, "plan": plan, "reload_ok": len(warnings) == 0, "reload_warnings": warnings, "restart_required": len(warnings) > 0})
 }
 

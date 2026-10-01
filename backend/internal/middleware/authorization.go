@@ -8,6 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 const adminPrincipalKey = "admin_principal"
@@ -34,10 +37,14 @@ func requirePermission(resolver PrincipalResolver, permissionKey string) gin.Han
 
 		principal, err := resolver.Resolve(c.Request.Context(), playerID)
 		if err != nil {
+			monitor.GlobalAdminOperations.RecordPermissionResolveError()
+			logger.L.Error("admin_permission_resolution_error", zap.String("permission", permissionKey), zap.String("player_id", playerID.String()), zap.Error(err))
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authorization service unavailable"})
 			return
 		}
 		if !principal.HasPermission(permissionKey) {
+			monitor.GlobalAdminOperations.RecordForbidden(permissionKey)
+			logger.L.Warn("admin_permission_denied", zap.String("permission", permissionKey), zap.String("player_id", playerID.String()))
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
 			return
 		}

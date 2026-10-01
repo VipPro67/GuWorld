@@ -242,6 +242,31 @@ func TestAdminMutationRoutesDeclareAuditAction(t *testing.T) {
 	}
 }
 
+func TestDestructiveAdminRoutesAreExplicitlyClassified(t *testing.T) {
+	for _, route := range adminRouteSpecs() {
+		if route.method == http.MethodDelete && !route.destructive {
+			t.Errorf("DELETE %s must be classified destructive", route.path)
+		}
+	}
+	want := map[string]bool{
+		http.MethodPost + " /data/import/commit":        true,
+		http.MethodPost + " /data/import/:table/commit": true,
+		http.MethodPost + " /clear-redis-cache":         true,
+		http.MethodPut + " /players/:id/stones":         true,
+		http.MethodPut + " /players/:id/roles":          true,
+	}
+	for _, route := range adminRouteSpecs() {
+		key := route.method + " " + route.path
+		if want[key] && !route.destructive {
+			t.Errorf("%s must be classified destructive", key)
+		}
+		delete(want, key)
+	}
+	for key := range want {
+		t.Errorf("missing destructive route %s", key)
+	}
+}
+
 func TestAdminRoutePermissionsUseExpectedSensitivePolicies(t *testing.T) {
 	want := map[string]string{
 		http.MethodGet + " /monitor/system":             "monitoring.read",

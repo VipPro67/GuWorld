@@ -317,7 +317,8 @@ func backfillLeaderboardSettings() error {
 	return nil
 }
 
-// ensureAdmin promotes the reserved admin accounts when no admin exists yet.
+// ensureAdmin creates the reserved bootstrap account once. Its privilege state
+// is not restored on later startups, so operators can safely retire it.
 func ensureAdmin() error {
 	var adminCount int
 	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
@@ -341,10 +342,6 @@ func ensureAdmin() error {
 				100, 100, 'hub_nam_cuong', 50, 50, 'REF-ADMIN', true,
 				0, 0
 			)`, string(hash)); err != nil {
-			return err
-		}
-	} else {
-		if _, err := DB.Exec(`UPDATE players SET is_admin = true WHERE username = 'admin'`); err != nil {
 			return err
 		}
 	}
