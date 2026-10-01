@@ -159,6 +159,14 @@ func init() {
 	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU")
 	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE")
 	register("ON_HIT", "combat", "BYPASS_SHIELD")
+	NativeHooks["PERSIST_STATUS_ON_HIT"] = NativeHook{
+		Triggers: values("ON_HIT", "ON_ACTION"),
+		Params: map[string]ParamSpec{
+			"status_key": {Type: "string", Required: true},
+			"pvp_only":   {Type: "bool", Required: false},
+		},
+		Domain: "combat",
+	}
 	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE")
 	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT")
 	register("CAPABILITY", "capability", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "CONCEAL_GU", "SEVER_CLUES", "ARENA_IDENTITY_MASK", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")

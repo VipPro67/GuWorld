@@ -336,7 +336,10 @@ func RunImportPlanSources(ctx context.Context, table string, sources map[string]
 			return plan, nil, fmt.Errorf("missing staged source %s", dataset.filename)
 		}
 		rowCount, issues := validateImportCSV(dataset, content)
-		result := ImportDatasetResult{Key: dataset.key, Filename: dataset.filename, Rows: rowCount, ValidationErrors: issues, ReloadRequired: dataset.reload, RestartRequired: dataset.restart}
+		if issues == nil {
+			issues = []ImportValidationIssue{}
+		}
+		result := ImportDatasetResult{Key: dataset.key, Filename: dataset.filename, Rows: rowCount, ValidationErrors: issues, Diffs: []ImportRowDiff{}, ReloadRequired: dataset.reload, RestartRequired: dataset.restart}
 		if len(issues) > 0 {
 			plan.CanCommit = false
 			plan.ValidationErrors = append(plan.ValidationErrors, issues...)
@@ -370,6 +373,12 @@ func RunImportPlanSources(ctx context.Context, table string, sources map[string]
 		plan.Datasets = append(plan.Datasets, result)
 	}
 	sort.SliceStable(plan.Datasets, func(i, j int) bool { return plan.Datasets[i].Key < plan.Datasets[j].Key })
+	if plan.Datasets == nil {
+		plan.Datasets = []ImportDatasetResult{}
+	}
+	if plan.ValidationErrors == nil {
+		plan.ValidationErrors = []ImportValidationIssue{}
+	}
 	if dryRun || !plan.CanCommit {
 		tx.Rollback()
 		return plan, nil, nil

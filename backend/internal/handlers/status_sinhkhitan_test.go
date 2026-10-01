@@ -65,49 +65,72 @@ func TestSinhKhiTanIgnoresExpiredEntry(t *testing.T) {
 	}
 }
 
-func TestMaybeGrantSinhKhiTanRejectsNonPVP(t *testing.T) { // Nil player must not touch the DB.
-	if granted, _ := maybeGrantSinhKhiTan(nil, nil, nil, nil, nil); granted {
+func TestMaybeGrantPersistentHitRejectsNonPVP(t *testing.T) { // Nil player must not touch the DB.
+	if grants := maybeGrantPersistentHitStatuses(nil, nil, nil, nil); len(grants) != 0 {
 		t.Fatal("nil player must not grant")
 	}
 	// Non-PVP combat must not grant either.
 	p := &models.Player{}
 	p.ActiveCombat = &models.CombatState{EnemyType: "Monster"}
-	if granted, _ := maybeGrantSinhKhiTan(nil, p, nil, nil, nil); granted {
+	st := &simulator.CombatState{
+		Allies: []*simulator.CombatantAuto{{ID: "attacker", Actions: []simulator.SimAction{
+			{ActionType: "GU_SKILL", Name: "Sát Sinh Khí Cổ", SourceID: "GU_KILL_ENERGY", PersistentStatusKey: "sinh_khi_tan", PersistentPvPOnly: true},
+		}}},
+	}
+	logs := []simulator.CombatLog{{ActorId: "attacker", Damage: 100, SourceGuID: "GU_KILL_ENERGY", HitLanded: true}}
+	if grants := maybeGrantPersistentHitStatuses(nil, p, st, logs); len(grants) != 0 {
 		t.Fatal("non-PVP combat must not grant")
 	}
 }
 
-func TestSinhKhiTanHitLandedMatchesGuAction(t *testing.T) {
+func TestPersistentHitStatusKeysFromSpec(t *testing.T) {
 	newState := func() *simulator.CombatState {
 		return &simulator.CombatState{
 			Allies: []*simulator.CombatantAuto{
 				{ID: "attacker", Actions: []simulator.SimAction{
-					{ActionType: "GU_SKILL", Name: "Sát Sinh Khí Cổ", SourceID: "GU_KILL_ENERGY"},
+					{ActionType: "GU_SKILL", Name: "Sát Sinh Khí Cổ", SourceID: "GU_KILL_ENERGY", PersistentStatusKey: "sinh_khi_tan", PersistentPvPOnly: true},
 					{ActionType: "GU_SKILL", Name: "Cổ Khác", SourceID: "GU_OTHER"},
 				}},
 			},
 		}
 	}
-	hitGu := []simulator.CombatLog{{ActorId: "attacker", Damage: 100,
-		Detail: "admin dùng [Sát Sinh Khí Cổ] lên Clone Gmail, gây 100 sát thương (còn 0 HP)"}}
-	hitOther := []simulator.CombatLog{{ActorId: "attacker", Damage: 100,
-		Detail: "admin dùng [Cổ Khác] lên Clone Gmail, gây 100 sát thương (còn 0 HP)"}}
 
-	// Không loadout (flow AutoResolveCombat): detect qua SourceID + tên đòn.
-	if b, h := sinhKhiTanHitLanded(&simulator.CombatLoadout{}, newState(), hitGu); !b || !h {
-		t.Fatalf("expected (true,true) for Gu hit without loadout, got (%v,%v)", b, h)
+	// Spec trên Cổ resolve ra status key, Cổ khác không có.
+	keys := persistentHitStatusKeys(newState())
+	if keys["GU_KILL_ENERGY"] != "sinh_khi_tan" {
+		t.Fatalf("expected sinh_khi_tan for GU_KILL_ENERGY, got %q", keys["GU_KILL_ENERGY"])
 	}
-	if b, h := sinhKhiTanHitLanded(&simulator.CombatLoadout{}, newState(), hitOther); !b || h {
-		t.Fatalf("damage từ Cổ khác không được tính hit, got (%v,%v)", b, h)
+	if _, dup := keys["GU_OTHER"]; dup {
+		t.Fatal("Gu without hook must not appear in persistent keys")
 	}
-	// Loadout có Gu nhưng sim không có action: nới lỏng, damage phe ta vẫn tính.
-	emptyState := &simulator.CombatState{Allies: []*simulator.CombatantAuto{{ID: "attacker"}}}
-	loadout := &simulator.CombatLoadout{GuIds: []string{"GU_KILL_ENERGY"}}
-	if b, h := sinhKhiTanHitLanded(loadout, emptyState, hitOther); !b || !h {
-		t.Fatalf("loadout fallback expected (true,true), got (%v,%v)", b, h)
+
+	// Hit thật (kể cả khiên hấp thụ, Damage>0) match theo SourceGuID;
+	// Cổ khác đánh trúng không match.
+	hitGu := []simulator.CombatLog{{ActorId: "attacker", Damage: 100, SourceGuID: "GU_KILL_ENERGY", HitLanded: true,
+		Detail: "admin dùng [Sát Sinh Khí Cổ] lên Clone Gmail, gây 100 sát thương (còn 0 HP)"}}
+	hitOther := []simulator.CombatLog{{ActorId: "attacker", Damage: 100, SourceGuID: "GU_OTHER", HitLanded: true,
+		Detail: "admin dùng [Cổ Khác] lên Clone Gmail, gây 100 sát thương (còn 0 HP)"}}
+	countHits := func(logs []simulator.CombatLog) int {
+		n := 0
+		ally := map[string]bool{"attacker": true}
+		for _, l := range logs {
+			if l.HitLanded && ally[l.ActorId] {
+				if _, ok := keys[l.SourceGuID]; ok {
+					n++
+				}
+			}
+		}
+		return n
 	}
-	// Không mang Cổ: không grant dù có damage.
-	if b, h := sinhKhiTanHitLanded(&simulator.CombatLoadout{}, emptyState, hitOther); b || h {
-		t.Fatalf("no Gu expected (false,false), got (%v,%v)", b, h)
+	if countHits(hitGu) != 1 {
+		t.Fatal("Gu hit must match by SourceGuID")
+	}
+	if countHits(hitOther) != 0 {
+		t.Fatal("damage từ Cổ khác không được tính hit")
+	}
+	// Miss (né/mù) có SourceGuID nhưng HitLanded=false → không grant.
+	miss := []simulator.CombatLog{{ActorId: "attacker", SourceGuID: "GU_KILL_ENERGY", HitLanded: false}}
+	if countHits(miss) != 0 {
+		t.Fatal("missed strike must not count as hit")
 	}
 }

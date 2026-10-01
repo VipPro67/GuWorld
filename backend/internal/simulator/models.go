@@ -186,6 +186,15 @@ type SimAction struct {
 	// infer gameplay behavior from it.
 	Mechanics []CombatMechanic
 
+	// PersistentStatusKey declares a post-combat persistent player status
+	// (gamefx/Status.csv key, e.g. "sinh_khi_tan") granted to the PvP defender
+	// when this action lands a hit. Data-driven: authored on the Gu as a
+	// UNIQUE PERSIST_STATUS_ON_HIT native hook (ON_HIT or ON_ACTION), resolved
+	// by handlers at combat build time. Empty means no persistent effect.
+	PersistentStatusKey string
+	// PersistentPvPOnly restricts the persistent grant to real PvP hits.
+	PersistentPvPOnly bool
+
 	// CompiledOperations is the temporary v2 adapter payload. Legacy fields
 	// above remain populated until simulator parity is complete.
 	CompiledOperations []gameplayeffects.CompiledOperation
@@ -484,15 +493,23 @@ type DamageBreakdown struct {
 
 // CombatLog represents a granular event to be stringified as JSON.
 type CombatLog struct {
-	Turn      int              `json:"turn"`
-	ActorId   string           `json:"actor_id"`
-	ActorName string           `json:"actor_name"`
-	Action    string           `json:"action"` // e.g. "CAST_KILLER_MOVE", "BASIC_ATTACK", "TRIGGERED", "PHASE_TRANSITION"
-	TargetId  string           `json:"target_id,omitempty"`
-	Damage    float64          `json:"damage,omitempty"`
-	IsCrit    bool             `json:"is_crit,omitempty"`
-	Trigger   string           `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
-	Detail    string           `json:"detail,omitempty"`  // Human readable flavor text
+	Turn      int     `json:"turn"`
+	ActorId   string  `json:"actor_id"`
+	ActorName string  `json:"actor_name"`
+	Action    string  `json:"action"` // e.g. "CAST_KILLER_MOVE", "BASIC_ATTACK", "TRIGGERED", "PHASE_TRANSITION"
+	TargetId  string  `json:"target_id,omitempty"`
+	Damage    float64 `json:"damage,omitempty"`
+	IsCrit    bool    `json:"is_crit,omitempty"`
+	Trigger   string  `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
+	Detail    string  `json:"detail,omitempty"`  // Human readable flavor text
+	// SourceGuID is the Gu (or killer-move) ID of the action that produced
+	// this log. Lets post-combat hooks attribute hits to data-driven Gu
+	// effects without parsing Detail strings.
+	SourceGuID string `json:"source_gu_id,omitempty"`
+	// HitLanded marks a strike that made contact with the target — including
+	// hits fully absorbed by VirtualShield (shield-absorb counts as a hit).
+	// Misses (evade/blind), immunes and dead-target swings leave it false.
+	HitLanded bool             `json:"hit_landed,omitempty"`
 	Breakdown *DamageBreakdown `json:"breakdown,omitempty"`
 	Snapshot  *CombatSnapshot  `json:"snapshot,omitempty"`
 }
