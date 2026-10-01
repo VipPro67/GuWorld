@@ -178,8 +178,7 @@ func AdminGetRequestTraces(c *gin.Context) {
 		return
 	}
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	paging := parseAdminPageQuery(c, 50, map[string]string{"timestamp": "timestamp", "duration_ms": "duration_ms", "status": "status", "method": "method", "path": "path"}, "timestamp")
 	statusStr := strings.TrimSpace(c.Query("status"))
 	method := c.Query("method")
 	path := c.Query("path")
@@ -194,17 +193,19 @@ func AdminGetRequestTraces(c *gin.Context) {
 	}
 
 	opts := monitor.FilterOptions{
-		Limit:         limit,
-		Offset:        offset,
+		Limit:         paging.PageSize,
+		Offset:        paging.Offset,
 		Method:        method,
 		Status:        status,
 		Path:          path,
 		MinDurationMs: minDur,
 		Search:        search,
+		Sort:          paging.Sort,
+		Direction:     paging.Direction,
 	}
 
 	result := monitor.GlobalTracker.FilterTraces(opts)
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"data": result.Traces, "traces": result.Traces, "total": result.Total, "page": paging.Page, "page_size": paging.PageSize})
 }
 
 // AdminGetRequestTraceDetail handles GET /api/admin/monitor/requests/traces/:id.

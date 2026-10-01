@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/auth";
 import { Activity, ChevronLeft, ChevronRight, Copy, RefreshCw, RotateCcw, Server } from "lucide-react";
+import { useAdminUrlState } from "../useAdminUrlState";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const TRACE_DEFAULTS = { page: "1", page_size: "25", method: "", status: "", path: "", search: "", min_duration_ms: "", sort: "timestamp", direction: "desc" };
+const TRACE_KEYS = Object.keys(TRACE_DEFAULTS);
 
 interface Endpoint { method: string; path: string; count: number; error_count: number; avg_duration_ms: number; max_duration_ms: number }
 interface Summary {
@@ -37,15 +40,18 @@ export function MonitoringAdminTab({ addToast }: { addToast: (msg: string, type:
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [filters, setFilters] = useState({ method: "", status: "", path: "", search: "", min_duration_ms: "" });
+  const [query, updateQuery] = useAdminUrlState(TRACE_DEFAULTS, TRACE_KEYS);
+  const page = Math.max(1, Number(query.page) || 1);
+  const filters = useMemo(() => ({ method: query.method, status: query.status, path: query.path, search: query.search, min_duration_ms: query.min_duration_ms }), [query.method, query.min_duration_ms, query.path, query.search, query.status]);
+  const setPage = (value: number | ((page: number) => number)) => updateQuery({ page: String(typeof value === "function" ? value(page) : value) });
+  const setFilters = (next: typeof filters) => updateQuery({ ...next, page: "1" });
   const requestSequence = useRef(0);
-  const limit = 25;
+  const limit = Math.max(1, Number(query.page_size) || 25);
 
   const load = useCallback(async (quiet = false) => {
     const sequence = ++requestSequence.current;
     if (!quiet) setLoading(true);
-    const params = new URLSearchParams({ limit: String(limit), offset: String(page * limit) });
+    const params = new URLSearchParams({ page: String(page), page_size: String(limit), sort: query.sort, direction: query.direction });
     Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
     try {
       const [systemRes, summaryRes, tracesRes] = await Promise.all([
@@ -60,7 +66,7 @@ export function MonitoringAdminTab({ addToast }: { addToast: (msg: string, type:
     } catch (error) {
       if (!quiet) addToast(error instanceof Error ? error.message : "Lỗi tải monitoring", "error");
     } finally { if (!quiet && sequence === requestSequence.current) setLoading(false); }
-  }, [addToast, filters, page]);
+  }, [addToast, filters, page, limit, query.direction, query.sort]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -76,7 +82,7 @@ export function MonitoringAdminTab({ addToast }: { addToast: (msg: string, type:
     if (!window.confirm("Xóa toàn bộ request metrics và trace đang lưu trong bộ nhớ?")) return;
     const response = await authFetch(`${BACKEND_URL}/api/admin/monitor/requests/reset`, { method: "POST" });
     if (!response.ok) return addToast("Không thể reset metrics", "error");
-    addToast("Đã reset request metrics", "success"); setPage(0); await load();
+    addToast("Đã reset request metrics", "success"); setPage(1); await load();
   };
 
   const card = (label: string, value: React.ReactNode, hint?: string) => <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3"><div className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</div><div className="mt-1 text-xl font-mono font-semibold text-zinc-100">{value}</div>{hint && <div className="mt-1 text-[10px] text-zinc-500">{hint}</div>}</div>;
@@ -95,9 +101,9 @@ export function MonitoringAdminTab({ addToast }: { addToast: (msg: string, type:
     {summary && <div className="grid gap-4 lg:grid-cols-2">{endpointTable("Endpoint nhiều request nhất", summary.top_endpoints)}{endpointTable("Endpoint chậm nhất", summary.slowest_endpoints)}</div>}
 
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"><div className="mb-3 flex items-center gap-2"><Server className="h-4 w-4 text-amber-400" /><h3 className="text-sm font-bold text-zinc-200">Request traces</h3></div>
-      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5"><select value={filters.method} onChange={(e) => { setPage(0); setFilters({ ...filters, method: e.target.value }); }} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs"><option value="">Mọi method</option>{["GET","POST","PUT","DELETE","PATCH"].map(x => <option key={x}>{x}</option>)}</select><select value={filters.status} onChange={(e) => { setPage(0); setFilters({ ...filters, status: e.target.value }); }} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs"><option value="">Mọi status</option><option value="errors">Chỉ lỗi</option><option value="200">200</option><option value="400">400</option><option value="401">401</option><option value="403">403</option><option value="404">404</option><option value="500">500</option></select><input value={filters.path} onChange={(e) => { setPage(0); setFilters({ ...filters, path: e.target.value }); }} placeholder="Path..." className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs" /><input value={filters.search} onChange={(e) => { setPage(0); setFilters({ ...filters, search: e.target.value }); }} placeholder="User / player / IP..." className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs" /><input type="number" value={filters.min_duration_ms} onChange={(e) => { setPage(0); setFilters({ ...filters, min_duration_ms: e.target.value }); }} placeholder="Latency tối thiểu (ms)" className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs" /></div>
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5"><select value={filters.method} onChange={(e) => { setFilters({ ...filters, method: e.target.value }); }} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs"><option value="">Mọi method</option>{["GET","POST","PUT","DELETE","PATCH"].map(x => <option key={x}>{x}</option>)}</select><select value={filters.status} onChange={(e) => { setFilters({ ...filters, status: e.target.value }); }} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs"><option value="">Mọi status</option><option value="errors">Chỉ lỗi</option><option value="200">200</option><option value="400">400</option><option value="401">401</option><option value="403">403</option><option value="404">404</option><option value="500">500</option></select><input value={filters.path} onChange={(e) => { setFilters({ ...filters, path: e.target.value }); }} placeholder="Path..." className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs" /><input value={filters.search} onChange={(e) => { setFilters({ ...filters, search: e.target.value }); }} placeholder="User / player / IP..." className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs" /><input type="number" value={filters.min_duration_ms} onChange={(e) => { setFilters({ ...filters, min_duration_ms: e.target.value }); }} placeholder="Latency tối thiểu (ms)" className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs" /></div>
       <div className="space-y-1">{traces.map(trace => <div key={trace.id}><button onClick={() => setExpanded(expanded === trace.id ? null : trace.id)} className="grid w-full grid-cols-[70px_1fr_55px_70px] items-center gap-2 rounded-lg bg-zinc-800/40 px-3 py-2 text-left text-xs hover:bg-zinc-800 md:grid-cols-[145px_70px_1fr_65px_85px_150px]"><span className="hidden font-mono text-zinc-500 md:block">{new Date(trace.timestamp).toLocaleString("vi-VN")}</span><span className={`font-bold ${methodColor(trace.method)}`}>{trace.method}</span><span className="truncate font-mono text-zinc-300">{trace.path}</span><span className={`rounded px-1.5 py-0.5 text-center ${badge(trace.status)}`}>{trace.status}</span><span className={trace.duration_ms >= 500 ? "text-amber-400" : "text-zinc-400"}>{trace.duration_ms}ms</span><span className="hidden truncate text-zinc-500 md:block">{trace.username || trace.player_id || trace.client_ip}</span></button>{expanded === trace.id && <div className="mx-2 mb-2 rounded-b-lg border border-zinc-800 bg-black/30 p-3"><div className="mb-2 flex justify-end"><button onClick={async () => { try { await navigator.clipboard.writeText(JSON.stringify(trace, null, 2)); addToast("Đã copy trace JSON", "success"); } catch { addToast("Không thể copy trace JSON", "error"); } }} className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-zinc-200"><Copy className="h-3 w-3" />Copy JSON</button></div><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-[11px] text-zinc-400">{JSON.stringify(trace, null, 2)}</pre></div>}</div>)}{!loading && traces.length === 0 && <div className="py-10 text-center text-xs text-zinc-600">Không có request phù hợp.</div>}</div>
-      <div className="mt-4 flex items-center justify-between border-t border-zinc-800 pt-3"><span className="text-[11px] text-zinc-500">{total} traces</span><div className="flex gap-2"><button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="rounded bg-zinc-800 p-1.5 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button><span className="px-2 py-1 text-xs text-zinc-500">{page + 1}</span><button disabled={(page + 1) * limit >= total} onClick={() => setPage(p => p + 1)} className="rounded bg-zinc-800 p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button></div></div>
+      <div className="mt-4 flex items-center justify-between border-t border-zinc-800 pt-3"><span className="text-[11px] text-zinc-500">{total} traces</span><div className="flex gap-2"><button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="rounded bg-zinc-800 p-1.5 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button><span className="px-2 py-1 text-xs text-zinc-500">{page}</span><button disabled={page * limit >= total} onClick={() => setPage(p => p + 1)} className="rounded bg-zinc-800 p-1.5 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button></div></div>
     </div>
   </div>;
 }

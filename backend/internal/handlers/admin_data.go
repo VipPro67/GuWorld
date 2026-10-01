@@ -315,17 +315,9 @@ func AdminGetAuditLogs(c *gin.Context) {
 	playerIDStr := c.Query("player_id")
 	successStr := c.Query("success")
 	search := c.Query("search")
-	limitStr := c.DefaultQuery("limit", "50")
-	offsetStr := c.DefaultQuery("offset", "0")
-
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 50
-	}
-	offset, err := strconv.Atoi(offsetStr)
-	if err != nil || offset < 0 {
-		offset = 0
-	}
+	paging := parseAdminPageQuery(c, 50, map[string]string{
+		"created_at": "created_at", "action": "action", "entity_type": "entity_type", "success": "success",
+	}, "created_at")
 
 	query := `SELECT id, player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at FROM audit_logs WHERE 1=1`
 	args := []interface{}{}
@@ -363,8 +355,8 @@ func AdminGetAuditLogs(c *gin.Context) {
 		args = append(args, "%"+search+"%")
 	}
 
-	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)
-	args = append(args, limit, offset)
+	query += " ORDER BY " + paging.Sort + " " + paging.Direction + ", id DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)
+	args = append(args, paging.PageSize, paging.Offset)
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
@@ -429,12 +421,15 @@ func AdminGetAuditLogs(c *gin.Context) {
 	}
 
 	var total int
-	_ = db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total)
+	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm nhật ký"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":   logs,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"data":      logs,
+		"total":     total,
+		"page":      paging.Page,
+		"page_size": paging.PageSize,
 	})
 }

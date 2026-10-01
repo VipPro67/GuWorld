@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { authFetch } from "@/lib/auth";
 import { BookOpen, RefreshCw } from "lucide-react";
+import { useAdminUrlState } from "../useAdminUrlState";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-const AUDIT_LOG_LIMIT = 50;
+const AUDIT_DEFAULTS = { page: "1", page_size: "50", search: "", action: "", player_id: "", success: "", sort: "created_at", direction: "desc" };
+const AUDIT_KEYS = Object.keys(AUDIT_DEFAULTS);
 function formatAdminLogTime(timeStr: string): string {
   if (!timeStr) return "—";
   const d = new Date(timeStr);
@@ -176,12 +178,14 @@ export function AuditLogsAdminTab() {
   const [auditLogs, setAuditLogs] = useState<ApiResponseData[]>([]);
   const [auditLogTotal, setAuditLogTotal] = useState(0);
   const [auditLogLoading, setAuditLogLoading] = useState(false);
-  const [auditLogPage, setAuditLogPage] = useState(0);
-  const [auditLogFilterAction, setAuditLogFilterAction] = useState("");
-  const [auditLogFilterPlayer, setAuditLogFilterPlayer] = useState("");
-  const [auditLogFilterSuccess, setAuditLogFilterSuccess] = useState("");
-  const [auditLogFilterSearch, setAuditLogFilterSearch] = useState("");
-  const [auditLogSearchDebounce, setAuditLogSearchDebounce] = useState("");
+  const [query, updateQuery] = useAdminUrlState(AUDIT_DEFAULTS, AUDIT_KEYS);
+  const auditLogPage = Math.max(1, Number(query.page) || 1);
+  const auditLogFilterAction = query.action;
+  const auditLogFilterPlayer = query.player_id;
+  const auditLogFilterSuccess = query.success;
+  const auditLogFilterSearch = query.search;
+  const [auditLogSearchDebounce, setAuditLogSearchDebounce] = useState(query.search);
+  const setAuditLogPage = (value: number | ((page: number) => number)) => updateQuery({ page: String(typeof value === "function" ? value(auditLogPage) : value) });
   const [auditLogExpandId, setAuditLogExpandId] = useState<string | null>(null);
   const [auditLogActionOpen, setAuditLogActionOpen] = useState(false);
   const [auditLogActionSearch, setAuditLogActionSearch] = useState("");
@@ -190,8 +194,8 @@ export function AuditLogsAdminTab() {
     setAuditLogLoading(true);
     try {
       const params = new URLSearchParams({
-        limit: String(AUDIT_LOG_LIMIT),
-        offset: String(auditLogPage * AUDIT_LOG_LIMIT),
+        page_size: query.page_size,
+        page: String(auditLogPage), sort: query.sort, direction: query.direction,
       });
       if (auditLogFilterAction) params.set("action", auditLogFilterAction);
       if (auditLogFilterPlayer) params.set("player_id", auditLogFilterPlayer);
@@ -215,7 +219,7 @@ export function AuditLogsAdminTab() {
     auditLogFilterAction,
     auditLogFilterPlayer,
     auditLogFilterSuccess,
-    auditLogFilterSearch,
+    auditLogFilterSearch, query.direction, query.page_size, query.sort,
   ]);
 
   useEffect(() => {
@@ -224,15 +228,13 @@ export function AuditLogsAdminTab() {
 
   useEffect(() => {
     const timer = window.setTimeout(
-      () => setAuditLogFilterSearch(auditLogSearchDebounce),
+      () => updateQuery({ search: auditLogSearchDebounce, page: "1" }, true),
       400,
     );
     return () => window.clearTimeout(timer);
-  }, [auditLogSearchDebounce]);
+  }, [auditLogSearchDebounce, updateQuery]);
 
-  useEffect(() => {
-    setAuditLogPage(0);
-  }, [auditLogFilterSearch]);
+  useEffect(() => setAuditLogSearchDebounce(query.search), [query.search]);
 
   useEffect(() => {
     if (!auditLogActionOpen) return;
@@ -317,10 +319,9 @@ export function AuditLogsAdminTab() {
                   <div className="overflow-y-auto max-h-[230px]">
                     <button
                       onClick={() => {
-                        setAuditLogFilterAction("");
+                        updateQuery({ action: "", page: "1" });
                         setAuditLogActionOpen(false);
                         setAuditLogActionSearch("");
-                        setAuditLogPage(0);
                       }}
                       className="w-full text-left px-3 py-1.5 text-xs hover:bg-amber-600/20 text-zinc-400 hover:text-amber-400 cursor-pointer"
                     >
@@ -337,10 +338,9 @@ export function AuditLogsAdminTab() {
                       <button
                         key={a.action}
                         onClick={() => {
-                          setAuditLogFilterAction(a.action);
+                          updateQuery({ action: a.action, page: "1" });
                           setAuditLogActionOpen(false);
                           setAuditLogActionSearch("");
-                          setAuditLogPage(0);
                         }}
                         className={`w-full text-left px-3 py-1.5 text-xs hover:bg-amber-600/20 cursor-pointer flex items-center gap-2 ${auditLogFilterAction === a.action ? "text-amber-400 bg-amber-600/10" : "text-zinc-300"}`}
                       >
@@ -362,7 +362,7 @@ export function AuditLogsAdminTab() {
             </label>
             <input
               value={auditLogFilterPlayer}
-              onChange={(e) => setAuditLogFilterPlayer(e.target.value)}
+              onChange={(e) => updateQuery({ player_id: e.target.value, page: "1" })}
               placeholder="UUID..."
               className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
             />
@@ -374,8 +374,7 @@ export function AuditLogsAdminTab() {
             <select
               value={auditLogFilterSuccess}
               onChange={(e) => {
-                setAuditLogFilterSuccess(e.target.value);
-                setAuditLogPage(0);
+                updateQuery({ success: e.target.value, page: "1" });
               }}
               className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50"
             >
@@ -475,14 +474,14 @@ export function AuditLogsAdminTab() {
               </span>
               <div className="flex gap-2">
                 <button
-                  disabled={auditLogPage <= 0}
-                  onClick={() => setAuditLogPage((p) => Math.max(0, p - 1))}
+                  disabled={auditLogPage <= 1}
+                  onClick={() => setAuditLogPage((p) => Math.max(1, p - 1))}
                   className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded-lg text-[11px] font-semibold cursor-pointer"
                 >
                   Trước
                 </button>
                 <button
-                  disabled={(auditLogPage + 1) * AUDIT_LOG_LIMIT >= auditLogTotal}
+                  disabled={auditLogPage * Number(query.page_size) >= auditLogTotal}
                   onClick={() => setAuditLogPage((p) => p + 1)}
                   className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded-lg text-[11px] font-semibold cursor-pointer"
                 >

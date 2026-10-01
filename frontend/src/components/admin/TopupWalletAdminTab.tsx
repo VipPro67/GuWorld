@@ -1,24 +1,35 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { authFetch } from "@/lib/auth";
 import { Coins, RefreshCw, Search, CheckCircle, Clock, XCircle, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { AdminServerPagination } from "./AdminServerPagination";
+import { useAdminUrlState } from "./useAdminUrlState";
+import { AdminServerSort } from "./AdminServerSort";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const BILLING_DEFAULTS = { tab: "orders", page: "1", page_size: "25", search: "", status: "", user_id: "", sort: "created_at", direction: "desc" };
+const BILLING_KEYS = Object.keys(BILLING_DEFAULTS);
 
 export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "success" | "error" | "info") => void }> = ({ addToast }) => {
-  const [subTab, setSubTab] = useState<"orders" | "transactions">("orders");
+  const [query, updateQuery] = useAdminUrlState(BILLING_DEFAULTS, BILLING_KEYS);
+  const subTab = query.tab === "transactions" ? "transactions" : "orders";
+  const page = Math.max(1, Number(query.page) || 1);
+  const pageSize = Math.max(1, Number(query.page_size) || 25);
+  const [total, setTotal] = useState(0);
   const [orders, setOrders] = useState<ApiResponseData[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
   const [transactions, setTransactions] = useState<ApiResponseData[]>([]);
   const [txLoading, setTxLoading] = useState(false);
-  const [userFilter, setUserFilter] = useState("");
+  const userFilter = query.user_id;
 
   const fetchOrders = useCallback(async () => {
     setOrdersLoading(true);
     try {
-      const res = await authFetch(`${BACKEND_URL}/api/admin/topup-orders`);
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize), search: query.search, sort: query.sort, direction: query.direction });
+      if (query.status) params.set("status", query.status);
+      const res = await authFetch(`${BACKEND_URL}/api/admin/topup-orders?${params}`);
       if (res.ok) {
-        setOrders(await res.json());
+        const body = await res.json(); setOrders(body.data || []); setTotal(body.total || 0);
       } else {
         addToast("Không thể tải đơn nạp tiền", "error");
       }
@@ -28,15 +39,17 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
     } finally {
       setOrdersLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, page, pageSize, query.direction, query.search, query.sort, query.status]);
 
   const fetchTransactions = useCallback(async () => {
     setTxLoading(true);
     try {
-      const url = userFilter ? `${BACKEND_URL}/api/admin/wallet-transactions?userId=${encodeURIComponent(userFilter)}` : `${BACKEND_URL}/api/admin/wallet-transactions`;
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize), search: query.search, sort: query.sort, direction: query.direction });
+      if (userFilter) params.set("user_id", userFilter);
+      const url = `${BACKEND_URL}/api/admin/wallet-transactions?${params}`;
       const res = await authFetch(url);
       if (res.ok) {
-        setTransactions(await res.json());
+        const body = await res.json(); setTransactions(body.data || []); setTotal(body.total || 0);
       } else {
         addToast("Không thể tải lịch sử ví", "error");
       }
@@ -46,7 +59,7 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
     } finally {
       setTxLoading(false);
     }
-  }, [userFilter, addToast]);
+  }, [userFilter, addToast, page, pageSize, query.direction, query.search, query.sort]);
 
   useEffect(() => {
     if (subTab === "orders") fetchOrders();
@@ -55,10 +68,14 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-56"><Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-500" /><input value={query.search} onChange={(event) => updateQuery({ search: event.target.value, page: "1" }, true)} placeholder="Tìm mã đơn, người chơi, ghi chú..." className="w-full rounded-lg border border-zinc-800 bg-zinc-950 py-2 pl-8 pr-3 text-xs" /></div>
+        <AdminServerSort sort={query.sort} direction={query.direction} options={subTab === "orders" ? [{ value: "created_at", label: "Ngày tạo" }, { value: "amount_vnd", label: "Số tiền" }, { value: "status", label: "Trạng thái" }] : [{ value: "created_at", label: "Thời gian" }, { value: "amount", label: "Số lượng" }, { value: "type", label: "Loại" }]} onChange={(sort, direction) => updateQuery({ sort, direction, page: "1" })} />
+      </div>
       {/* Sub-tabs nav */}
       <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap">
         <button
-          onClick={() => setSubTab("orders")}
+          onClick={() => updateQuery({ tab: "orders", page: "1" })}
           className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${
             subTab === "orders" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"
           }`}
@@ -66,7 +83,7 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
           <Coins className="w-3.5 h-3.5 inline mr-1.5" />Đơn Nạp Tiền
         </button>
         <button
-          onClick={() => setSubTab("transactions")}
+          onClick={() => updateQuery({ tab: "transactions", page: "1" })}
           className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${
             subTab === "transactions" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"
           }`}
@@ -167,7 +184,7 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
                   type="text"
                   placeholder="Lọc theo Player UUID..."
                   value={userFilter}
-                  onChange={(e) => setUserFilter(e.target.value)}
+                  onChange={(e) => updateQuery({ user_id: e.target.value, page: "1" }, true)}
                   className="pl-8 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 w-64"
                 />
               </div>
@@ -238,6 +255,9 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
           </div>
         </div>
       )}
+      <AdminServerPagination page={page} pageSize={pageSize} total={total} loading={ordersLoading || txLoading}
+        onPageChange={(next) => updateQuery({ page: String(next) })}
+        onPageSizeChange={(next) => updateQuery({ page: "1", page_size: String(next) })} />
     </div>
   );
 };
