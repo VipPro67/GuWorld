@@ -252,6 +252,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		admin.Use(middleware.RequirePermission(authz.AdminAccessPermission))
 		admin.Use(middleware.RateLimitByGroup("admin", 80, time.Minute))
 		{
+			admin.GET("/me", handlers.AdminGetMe)
+			admin.GET("/resources", handlers.AdminGetResources)
+
 			// Application Monitoring & Tracing endpoints
 			adminMonitor := admin.Group("/monitor")
 			{
