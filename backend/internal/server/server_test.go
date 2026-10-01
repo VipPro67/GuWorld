@@ -210,6 +210,38 @@ func TestAdminRoutePermissionInventory(t *testing.T) {
 	}
 }
 
+func TestAdminMutationRoutesDeclareAuditAction(t *testing.T) {
+	mutationMethods := map[string]bool{
+		http.MethodPost: true, http.MethodPut: true,
+		http.MethodPatch: true, http.MethodDelete: true,
+	}
+	declared := make(map[string]string)
+	for _, route := range adminRouteSpecs() {
+		if !mutationMethods[route.method] {
+			continue
+		}
+		key := route.method + " /api/admin" + route.path
+		if strings.TrimSpace(route.auditAction) == "" {
+			t.Errorf("%s has no declared audit action", key)
+		}
+		if !strings.HasPrefix(route.auditAction, "admin.") {
+			t.Errorf("%s audit action %q must use admin. namespace", key, route.auditAction)
+		}
+		if strings.TrimSpace(route.auditTargetType) == "" {
+			t.Errorf("%s has no declared audit target type", key)
+		}
+		declared[key] = route.auditAction
+	}
+	for _, route := range SetupRouter(nil).Routes() {
+		if strings.HasPrefix(route.Path, "/api/admin/") && mutationMethods[route.Method] {
+			key := route.Method + " " + route.Path
+			if _, ok := declared[key]; !ok {
+				t.Errorf("registered mutation %s has no audit declaration", key)
+			}
+		}
+	}
+}
+
 func TestAdminRoutePermissionsUseExpectedSensitivePolicies(t *testing.T) {
 	want := map[string]string{
 		http.MethodGet + " /monitor/system":             "monitoring.read",

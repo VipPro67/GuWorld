@@ -215,13 +215,17 @@ func PermissionRequired(permission string) gin.HandlerFunc {
 		}
 
 		principal, err := resolveAdminPrincipal(c.Request.Context(), playerID)
+		if err == nil {
+			// Attach the resolved principal before the decision so the enclosing
+			// audit middleware can snapshot denied attempts as well as successes.
+			c.Set(adminPrincipalKey, principal)
+			c.Request = c.Request.WithContext(authz.WithPrincipal(c.Request.Context(), principal))
+		}
 		if err != nil || !principal.HasPermission(permission) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Permission required", "permission": permission})
 			c.Abort()
 			return
 		}
-		c.Set(adminPrincipalKey, principal)
-		c.Request = c.Request.WithContext(authz.WithPrincipal(c.Request.Context(), principal))
 		c.Next()
 	}
 }

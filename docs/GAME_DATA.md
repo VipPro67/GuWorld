@@ -1130,3 +1130,12 @@ transaction. Runtime execution contexts carry deterministic RNG, actor/target
 snapshots, rank, mastery, Dao marks, paths, and catalog revision, and enforce event,
 trigger-depth, repeat, and summon budgets. During migration, compiled combat
 operations are attached to `simulator.SimAction` alongside its legacy fields.
+
+## Admin audit log fields
+
+`audit_logs` stores immutable admin mutation context in dedicated columns:
+`actor_username`, `effective_roles`, `effective_permission`, `entity_type`, `entity_id`,
+`change_data`, `reason`, and `request_id`, in addition to actor `player_id`, IP, outcome,
+sanitized error, and `created_at`. Existing databases receive these columns through
+idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements during schema startup.
+Sensitive request fields and multipart bodies are excluded from `change_data`.

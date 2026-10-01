@@ -513,3 +513,17 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 - `GET /api/admin/effect-catalog/audit` audits Gu, Item, Race, Constitution, and Status definitions in the database.
 - Validation responses contain `source`, `row` (for CSV), `key`, `block_id`, `operation_index`, `path`, `error_code`, and `message`. CSV import returns HTTP 400 with the same `issues` payload and completes validation for the whole effect-bearing batch before the first database write.
 - The older `/api/admin/gu-effects/validate` and `/api/admin/gu-effects/audit` route names remain as aliases during the endpoint migration; validation payloads follow the strict Block v2 contract above.
+
+### Admin mutation audit contract
+
+Every `POST`, `PUT`, `PATCH`, and `DELETE` route below `/api/admin` declares a canonical
+`admin.*` audit action. The server writes an audit event for successful and failed
+handler/authorization outcomes. Events contain the actor ID and username snapshot,
+effective roles and required permission, target type and ID, recursively redacted
+request/response before-and-after data, reason, trace/request ID, client IP, result, sanitized HTTP error, and UTC
+timestamp. If callers omit `reason`, the server records the declared action as the
+operational reason. `X-Admin-Reason` may be used for requests without a JSON body.
+
+Audit payloads never persist credential fields whose names identify passwords, tokens,
+cookies, OTPs, authorization/CSRF values, card verification values, or payment/client/API
+secrets. Multipart bodies are not captured.

@@ -40,15 +40,15 @@ func TestLog_UsesPassedQuerier(t *testing.T) {
 		t.Fatalf("expected Exec to be called on passed Querier")
 	}
 
-	if len(mock.lastArgs) < 10 {
-		t.Fatalf("expected at least 10 args, got %d", len(mock.lastArgs))
+	if len(mock.lastArgs) < 16 {
+		t.Fatalf("expected at least 16 args, got %d", len(mock.lastArgs))
 	}
 
 	if mock.lastArgs[0] != pID {
 		t.Errorf("expected player ID %v, got %v", pID, mock.lastArgs[0])
 	}
-	if mock.lastArgs[1] != "gu.starve_death" {
-		t.Errorf("expected action gu.starve_death, got %v", mock.lastArgs[1])
+	if mock.lastArgs[2] != "gu.starve_death" {
+		t.Errorf("expected action gu.starve_death, got %v", mock.lastArgs[2])
 	}
 }
 
@@ -62,11 +62,11 @@ func TestLogf_UsesPassedQuerier(t *testing.T) {
 		t.Fatalf("expected Exec to be called on passed Querier")
 	}
 
-	if mock.lastArgs[1] != "admin.test_action" {
-		t.Errorf("expected action admin.test_action, got %v", mock.lastArgs[1])
+	if mock.lastArgs[2] != "admin.test_action" {
+		t.Errorf("expected action admin.test_action, got %v", mock.lastArgs[2])
 	}
-	if mock.lastArgs[4] != "item_id=item-123" {
-		t.Errorf("expected summary item_id=item-123, got %v", mock.lastArgs[4])
+	if mock.lastArgs[10] != "item_id=item-123" {
+		t.Errorf("expected summary item_id=item-123, got %v", mock.lastArgs[10])
 	}
 }
 

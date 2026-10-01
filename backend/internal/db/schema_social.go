@@ -86,9 +86,15 @@ func schemaSocial() error {
 	CREATE TABLE IF NOT EXISTS audit_logs (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+		actor_username TEXT NOT NULL DEFAULT '',
 		action TEXT NOT NULL,
+		effective_roles JSONB NOT NULL DEFAULT '[]',
+		effective_permission TEXT NOT NULL DEFAULT '',
 		entity_type TEXT,
 		entity_id TEXT,
+		change_data JSONB NOT NULL DEFAULT '{}',
+		reason TEXT NOT NULL DEFAULT '',
+		request_id TEXT NOT NULL DEFAULT '',
 		request_summary TEXT,
 		metadata JSONB DEFAULT '{}',
 		ip_address TEXT,
@@ -96,6 +102,15 @@ func schemaSocial() error {
 		error_message TEXT,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("audit_logs_patch_columns", `
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_username TEXT NOT NULL DEFAULT '';
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS effective_roles JSONB NOT NULL DEFAULT '[]';
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS effective_permission TEXT NOT NULL DEFAULT '';
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS change_data JSONB NOT NULL DEFAULT '{}';
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS reason TEXT NOT NULL DEFAULT '';
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS request_id TEXT NOT NULL DEFAULT '';`); err != nil {
 		return err
 	}
 	if err := execSchema("audit_logs_player_idx", `
