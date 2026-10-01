@@ -30,7 +30,7 @@ export const authHeaders = (method?: string): Record<string, string> => {
  */
 export const authFetch = async (
   input: RequestInfo | URL,
-  init: RequestInit & { timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMs?: number; onForbiddenRollback?: () => void } = {},
 ): Promise<Response> => {
   const csrfToken = getCookie("gu_csrf_token");
   const headers: Record<string, string> = {};
@@ -54,7 +54,7 @@ export const authFetch = async (
       headers["Authorization"] = `Bearer ${token}`;
     }
   }
-  const { timeoutMs = 30000, signal: callerSignal, ...fetchInit } = init;
+  const { timeoutMs = 30000, signal: callerSignal, onForbiddenRollback, ...fetchInit } = init;
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const signal = callerSignal
     ? AbortSignal.any([callerSignal, timeoutSignal])
@@ -66,8 +66,14 @@ export const authFetch = async (
     credentials: "include",
     signal,
   });
-  if (response.status === 403 && typeof window !== "undefined" && String(input).includes("/api/admin/")) {
-    window.dispatchEvent(new CustomEvent("admin:forbidden"));
+  const requestURL = String(input);
+  if (response.status === 403 && typeof window !== "undefined" && requestURL.includes("/api/admin/") && !requestURL.includes("/api/admin/me")) {
+    const denied = await response.clone().json().catch(() => null) as { permission?: unknown } | null;
+    if (typeof denied?.permission === "string") {
+      // Rollback is deliberately synchronous and precedes the access refresh event.
+      onForbiddenRollback?.();
+      window.dispatchEvent(new CustomEvent("admin:permission-denied", { detail: { url: requestURL, permission: denied.permission } }));
+    }
   }
   return response;
 };

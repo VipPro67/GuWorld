@@ -1,9 +1,12 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -219,6 +222,30 @@ func PermissionRequired(permission string) gin.HandlerFunc {
 		}
 		c.Set(adminPrincipalKey, principal)
 		c.Request = c.Request.WithContext(authz.WithPrincipal(c.Request.Context(), principal))
+		c.Next()
+	}
+}
+
+// AdminReasonRequired rejects sensitive operations without an auditable reason
+// while restoring the body for the downstream handler.
+func AdminReasonRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đọc lý do thao tác"})
+			c.Abort()
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		var payload struct {
+			Reason string `json:"reason"`
+		}
+		if json.Unmarshal(body, &payload) != nil || strings.TrimSpace(payload.Reason) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Lý do thao tác là bắt buộc"})
+			c.Abort()
+			return
+		}
+		c.Set("admin_action_reason", strings.TrimSpace(payload.Reason))
 		c.Next()
 	}
 }

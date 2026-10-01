@@ -11,7 +11,7 @@ import (
 
 // Bump this marker whenever the legacy permission grant or resource catalog
 // changes so clients can invalidate their cached access snapshot.
-const legacyAdminPermissionVersion = "legacy-admin-v1"
+const legacyAdminPermissionVersion = "legacy-admin-v2"
 
 type adminResource struct {
 	Key                 string   `json:"key"`

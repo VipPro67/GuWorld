@@ -28,6 +28,7 @@ func schemaAuthorization() error {
 	INSERT INTO admin_permissions (key, description)
 	VALUES
 		('admin.dashboard.access', 'Access the administration dashboard'),
+		('players.inventory.grant', 'Grant inventory resources to players'),
 		('admin.*', 'All administration permissions')
 	ON CONFLICT (key) DO NOTHING;
 	INSERT INTO admin_role_permissions (role_key, permission_key)

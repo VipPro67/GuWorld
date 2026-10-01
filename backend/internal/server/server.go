@@ -59,9 +59,9 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodGet, "/gus/search", "gus.read", handlers.AdminSearchGus},
 		{http.MethodGet, "/gu-history", "gus.read", handlers.AdminListGuHistory},
 		// players
-		{http.MethodPost, "/players/:id/items", "players.update", handlers.AdminAddPlayerItems},
+		{http.MethodPost, "/players/:id/items", "players.inventory.grant", handlers.AdminAddPlayerItems},
 		{http.MethodDelete, "/players/:id/items", "players.update", handlers.AdminRemovePlayerItems},
-		{http.MethodPost, "/players/:id/gus", "players.update", handlers.AdminAddPlayerGus},
+		{http.MethodPost, "/players/:id/gus", "players.inventory.grant", handlers.AdminAddPlayerGus},
 		{http.MethodDelete, "/players/:id/gus/:instance_id", "players.update", handlers.AdminRemovePlayerGu},
 		{http.MethodGet, "/players/:id/pets", "players.read", handlers.AdminListPlayerPets},
 		{http.MethodDelete, "/players/:id/pets/:pet_id", "players.update", handlers.AdminDeletePlayerPet},
@@ -428,7 +428,12 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		admin.Use(middleware.AuthRequired())
 		admin.Use(middleware.RateLimitByGroup("admin", 80, time.Minute))
 		for _, route := range adminRouteSpecs() {
-			admin.Handle(route.method, route.path, middleware.PermissionRequired(route.permission), route.handler)
+			handlers := []gin.HandlerFunc{middleware.PermissionRequired(route.permission)}
+			if (route.method == http.MethodPost && route.path == "/data/import") || route.permission == "cache.flush" {
+				handlers = append(handlers, middleware.AdminReasonRequired())
+			}
+			handlers = append(handlers, route.handler)
+			admin.Handle(route.method, route.path, handlers...)
 		}
 
 		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)

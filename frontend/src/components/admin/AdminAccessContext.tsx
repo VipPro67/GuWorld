@@ -11,11 +11,13 @@ export type AdminAccess = {
   permission_version: string;
 };
 
-const AdminAccessContext = createContext<AdminAccess | null>(null);
+export type AdminAccessContextValue = AdminAccess & { refreshAccess: () => Promise<void> };
+
+const AdminAccessContext = createContext<AdminAccessContextValue | null>(null);
 
 export const AdminAccessProvider = AdminAccessContext.Provider;
 
-export function useAdminAccess(): AdminAccess {
+export function useAdminAccess(): AdminAccessContextValue {
   const access = useContext(AdminAccessContext);
   if (!access) {
     throw new Error("useAdminAccess must be used inside the admin layout");

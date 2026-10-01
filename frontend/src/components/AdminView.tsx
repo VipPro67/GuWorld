@@ -71,6 +71,8 @@ import { CoreDataAdminTab } from "./admin/CoreDataAdminTab";
 import { AdminDataGrid } from "./admin/AdminDataGrid";
 import { GuEffectsEditor, validateAllEffectEditors } from "./admin/GuEffectsEditor";
 import type { AdminModuleKey } from "./admin/navigation";
+import { useAdminAccess } from "./admin/AdminAccessContext";
+import { canPerformAdminAction, prepareAdminAction } from "./admin/actions";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -389,6 +391,8 @@ function guLocationLabel(loc: string): string {
 }
 
 export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; initialSection?: AdminModuleKey }> = ({ authorized = false, embedded = false, initialSection = "players" }) => {
+  const adminAccess = useAdminAccess();
+  const canAdminAction = (action: Parameters<typeof canPerformAdminAction>[1]) => canPerformAdminAction(adminAccess.effective_permissions, action);
   const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
   const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "combat">("items");
   const [isCombatEquippedExpanded, setIsCombatEquippedExpanded] = useState(true);
@@ -1187,11 +1191,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowStones(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
+            {canAdminAction("updatePlayer") && <button onClick={() => setShowStones(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <Coins className="w-3.5 h-3.5" />
               Điều chỉnh tài nguyên
-            </button>
-            <button onClick={() => {
+            </button>}
+              {canAdminAction("updatePlayer") && <button onClick={() => {
               if (detail) {
                 setEditPlayerForm({
                   rank: String(detail.rank), sub_rank: String(detail.sub_rank),
@@ -1220,7 +1224,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             }} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
               <Edit3 className="w-3.5 h-3.5" />
               Sửa thông tin
-            </button>
+            </button>}
             <button onClick={() => {
               if (detail) {
                 window.location.assign("/admin/apertures");
@@ -1295,9 +1299,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <button onClick={() => { setPlayerItemsPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
                     <Search className="w-3.5 h-3.5" /> Tìm
                   </button>
-                  <button onClick={() => { setAddItemId(""); setAddItemQty(1); setShowAddItem(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
+                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddItemId(""); setAddItemQty(1); setShowAddItem(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
-                  </button>
+                  </button>}
                 </div>
 
                 {playerItemsLoading ? (
@@ -1374,9 +1378,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <button onClick={() => { setPlayerGusPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
                     <Search className="w-3.5 h-3.5" /> Tìm
                   </button>
-                  <button onClick={() => { setAddGuId(""); setAddGuRank(""); setAddGuQty(1); setShowAddGu(true); ensureShopSearchLoaded(); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
+                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddGuId(""); setAddGuRank(""); setAddGuQty(1); setShowAddGu(true); ensureShopSearchLoaded(); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
-                  </button>
+                  </button>}
                 </div>
 
                 {playerGusLoading ? (
@@ -2070,7 +2074,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddItem(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !addItemId} onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "POST", { item_id: addItemId, quantity: addItemQty });
+                  const prepared = prepareAdminAction("grantPlayerInventory", "cấp vật phẩm cho người chơi");
+                  if (!prepared) return;
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "POST", { item_id: addItemId, quantity: addItemQty, ...prepared });
                   if (ok) setShowAddItem(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Thêm"}
@@ -2151,7 +2157,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddGu(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !addGuId || rankRequired} onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty, ...(submitRank ? { rank: submitRank } : {}) });
+                  const prepared = prepareAdminAction("grantPlayerInventory", "cấp Cổ trùng cho người chơi");
+                  if (!prepared) return;
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty, ...(submitRank ? { rank: submitRank } : {}), ...prepared });
                   if (ok) setShowAddGu(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Thêm"}
@@ -3160,10 +3168,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 Import dữ liệu từ file CSV vào database, hoặc export dữ liệu từ database ra file CSV.
               </p>
               <div className="flex flex-wrap gap-4">
-                <button disabled={actionLoading} onClick={async () => { if (!confirm("Import sẽ ghi đè dữ liệu hiện tại theo cơ chế UPSERT. Tiếp tục?")) return; const ok = await exec(`${BACKEND_URL}/api/admin/data/import`, "POST", {}); if (ok) addToast("Import thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                {canAdminAction("importAllGameData") && <button disabled={actionLoading} onClick={async () => { const prepared = prepareAdminAction("importAllGameData", "import toàn bộ dữ liệu"); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/data/import`, "POST", prepared); if (ok) addToast("Import thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
                   <Database className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Import CSV → Database"}
-                </button>
+                </button>}
                 <button disabled={actionLoading} onClick={async () => { const ok = await exec(`${BACKEND_URL}/api/admin/data/export`, "POST", {}); if (ok) addToast("Export thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
                   <RefreshCw className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Export Database → CSV"}
@@ -3172,10 +3180,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Dictionary"}
                 </button>
-                <button disabled={actionLoading} onClick={async () => { if (!confirm("Thao tác này sẽ xóa toàn bộ cache Redis (bao gồm session, cooldown...). Tiếp tục?")) return; const ok = await exec(`${BACKEND_URL}/api/admin/clear-redis-cache`, "POST", {}); if (ok) addToast("Toàn bộ cache Redis đã được xóa!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                {canAdminAction("flushRedis") && <button disabled={actionLoading} onClick={async () => { const prepared = prepareAdminAction("flushRedis", "xóa toàn bộ Redis cache"); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/clear-redis-cache`, "POST", prepared); if (ok) addToast("Toàn bộ cache Redis đã được xóa!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Redis"}
-                </button>
+                </button>}
               </div>
             </div>
           )}
