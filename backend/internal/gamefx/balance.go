@@ -96,6 +96,20 @@ func RankScale(rank int) float64 {
 	return RankScaleTable[rank]
 }
 
+// InstantDeductionChance calculates the probability of instantly completing
+// a recipe based on the Gu's rank and the target recipe's rank.
+// chance = base + (guRank - targetRank) * per_rank_step, clamped to [min, max]
+func InstantDeductionChance(guRank, targetRank int, base, perRankStep, minChance, maxChance float64) float64 {
+	chance := base + float64(guRank-targetRank)*perRankStep
+	if chance < minChance {
+		chance = minChance
+	}
+	if chance > maxChance {
+		chance = maxChance
+	}
+	return chance
+}
+
 // SealingStoneCostByRank returns the number of sealing stones (Phong Ấn Thạch)
 // required to seal a Gu of the given rank (1-9).
 func SealingStoneCostByRank(rank int) int64 {

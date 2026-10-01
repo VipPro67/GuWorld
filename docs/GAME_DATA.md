@@ -546,6 +546,9 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | Trigger | Action code | Target / unit & scaling | Executor; persistence owner | Test |
 |---|---|---|---|---|
 | `ON_CONSUME` | `SACRIFICE_APTITUDE`, `RANK_PROGRESS`, `ADD_SOUL_MAX`, `ADD_LIFESPAN_YEARS`, `RESTORE_SOUL_HP`, `RESTORE_MENTAL`, `INCREASE_TIME_SPEED`, `REDUCE_STRESS`, `ADD_THOUGHT_MAX`, `DECREASE_TIME_SPEED` | self; typed flat/rank/year/multiplier theo params | `gu-consume`; `players`/aperture | `handlers/gu_effects_test.go` + catalog |
+| `ALWAYS_ON` | `DEDUCTION_INSTANT_FINISH` | self; `base_chance + (guRank - targetRank) * per_rank_step`, clamp `[min_chance, max_chance]`; 1 roll/lần thôi diễn, Cổ rank cao nhất thắng, cost vẫn trừ | `DeduceRecipe`; `player_recipe_progress` | `gamefx/balance_test.go` + catalog |
+| `COMBAT_PASSIVE` | `REVERSE_CALAMITY` | self; đảo nghịch mọi trạng thái bất lợi nguồn địch về hư vô (mất lượt, cướp Cổ, phong ấn, debuff); chỉ sát thương xuyên qua | simulator (`status_apply`, interrupt/seal gates) + `handlePreCombatSteal`; combat state | simulator + catalog |
+| `ON_BATTLE_START` | `SUPPRESS_PRIORITY` | self/side; vô hiệu `SEIZE_INITIATIVE` + `FIRST_TURN_EVADE` của địch, so tốc bình thường; mirror triệt tiêu | simulator (`seizeInitiative`, evade gate); combat state | simulator + catalog |
 | `ON_CONSUME` | `MAN_BEAST_BURIAL`, `POISON_VOW`, `SPRING_EGG_HATCH`, `STONE_APERTURE`, `THIRD_WATCH` | self/world; params legacy | chưa đầy đủ, migrate v2; không được silent no-op | catalog only |
 | `ON_USE` | `RECORD_MESSAGE` | selected message target; text payload | support endpoint alias `RECORD`; persistent support state | handler + catalog |
 | `ON_TICK` | `MANA_REGEN_TICK`, `THOUGHT_REGEN_TICK`, `SOUL_REGEN_TICK` | self; resource points/hour | resource regen worker; `players` | worker/model tests + catalog |

@@ -52,6 +52,8 @@ func FieldTiming(section, key string) (Timing, bool) {
 // MechanicTiming maps an event_trigger to its firing timing.
 func MechanicTiming(trigger string) (Timing, bool) {
 	switch trigger {
+	case "ALWAYS_ON":
+		return TimingAlwaysOn, true
 	case "ON_CONSUME", "ON_USE":
 		return TimingOnAction, true
 	case "ON_TICK":

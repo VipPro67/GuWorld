@@ -11,7 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
@@ -90,6 +92,40 @@ func DeduceRecipe(c *gin.Context) {
 	player.CurrentThought -= thoughtCost
 	player.PrimevalStones -= float64(stoneCost)
 
+	// 2b. Gu instant-finish: one roll per deduce, best equipped Gu wins.
+	// Chance scales with (guRank - targetRank); cost is always deducted.
+	bestInstantChance := 0.0
+	bestInstantGu := ""
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		if gu.Hunger <= 0 {
+			continue
+		}
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if !ok {
+			continue
+		}
+		mech, ok := models.GuNativeMechanic(spec, "DEDUCTION_INSTANT_FINISH")
+		if !ok || mech.Trigger != gameplayeffects.TriggerAlwaysOn {
+			continue
+		}
+		base, _ := mech.Values["base_chance"].(float64)
+		step, _ := mech.Values["per_rank_step"].(float64)
+		minC, _ := mech.Values["min_chance"].(float64)
+		maxC, _ := mech.Values["max_chance"].(float64)
+		if base == 0 && step == 0 && minC == 0 && maxC == 0 {
+			base, step, maxC = 0.05, 0.02, 0.5
+		}
+		if maxC <= 0 {
+			maxC = 1.0
+		}
+		chance := gamefx.InstantDeductionChance(gu.Rank, targetRank, base, step, minC, maxC)
+		if chance > bestInstantChance {
+			bestInstantChance = chance
+			bestInstantGu = spec.Name
+		}
+	}
+	guInstantFinish := bestInstantChance > 0 && rand.Float64() < bestInstantChance
+
 	// 3. Deduction Calculation (Wisdom + Refinement + Target Path)
 	getPathPoints := func(p string) int {
 		if player.PathMasteries == nil {
@@ -134,7 +170,17 @@ func DeduceRecipe(c *gin.Context) {
 	var newRate float64
 	var message string
 
-	if inspirationFlash {
+	if guInstantFinish {
+		improvement = 100.0 - currentRate
+		newRate = 100.0
+		RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			PlayerID:       player.ID.String(),
+			RecipeID:       req.RecipeID,
+			CompletionRate: 100.0,
+			IsUnlocked:     true,
+		})
+		message = fmt.Sprintf("Cổ trùng [%s] cộng hưởng! Đạo hữu lập tức hoàn thiện 100%% công thức!", bestInstantGu)
+	} else if inspirationFlash {
 		improvement = 100.0 - currentRate
 		RecipeSvc.Upsert(tx, &services.RecipeProgress{
 			PlayerID:       player.ID.String(),
@@ -191,20 +237,24 @@ func DeduceRecipe(c *gin.Context) {
 		EntityID:       req.RecipeID,
 		RequestSummary: fmt.Sprintf("Thôi diễn bí phương %s: %s (Hoàn thiện: %.1f%%)", req.RecipeID, message, newRate),
 		Metadata: map[string]interface{}{
-			"recipe_id":       req.RecipeID,
-			"improvement":     improvement,
-			"completion_rate": newRate,
-			"inspiration":     inspirationFlash,
+			"recipe_id":         req.RecipeID,
+			"improvement":       improvement,
+			"completion_rate":   newRate,
+			"inspiration":       inspirationFlash,
+			"gu_instant_finish": guInstantFinish,
+			"proc_gu":           bestInstantGu,
 		},
 		IPAddress: c.ClientIP(),
 		Success:   true,
 	})
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
-		"message":         message + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
-		"inspiration":     inspirationFlash,
-		"improvement":     improvement,
-		"completion_rate": newRate,
+		"message":           message + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+		"inspiration":       inspirationFlash,
+		"gu_instant_finish": guInstantFinish,
+		"proc_gu":           bestInstantGu,
+		"improvement":       improvement,
+		"completion_rate":   newRate,
 	})
 }
 

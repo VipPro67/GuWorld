@@ -238,3 +238,26 @@ func TestRegionalWallDebuff(t *testing.T) {
 		t.Errorf("RegionalWallDebuff(6, 2) = (%v, %v), want (-0.47, 20h)", pct, dur)
 	}
 }
+
+func TestInstantDeductionChance(t *testing.T) {
+	tests := []struct {
+		name                   string
+		guRank, targetRank     int
+		base, step, minC, maxC float64
+		want                   float64
+	}{
+		{"equal rank", 3, 3, 0.05, 0.02, 0.01, 0.2, 0.05},
+		{"higher gu rank", 5, 3, 0.05, 0.02, 0.01, 0.2, 0.09},
+		{"lower gu rank", 3, 5, 0.05, 0.02, 0.01, 0.2, 0.01},
+		{"clamp max", 9, 1, 0.05, 0.02, 0.01, 0.2, 0.2},
+		{"clamp min", 1, 9, 0.05, 0.02, 0.01, 0.2, 0.01},
+	}
+
+	for _, tt := range tests {
+		got := InstantDeductionChance(tt.guRank, tt.targetRank, tt.base, tt.step, tt.minC, tt.maxC)
+		if math.Abs(got-tt.want) > 1e-9 {
+			t.Errorf("%s: InstantDeductionChance(%d, %d, %v, %v, %v, %v) = %v, want %v",
+				tt.name, tt.guRank, tt.targetRank, tt.base, tt.step, tt.minC, tt.maxC, got, tt.want)
+		}
+	}
+}

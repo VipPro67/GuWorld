@@ -100,8 +100,12 @@ func opponentPrimary(state *CombatState, isAlly bool) *CombatantAuto {
 
 // seizeInitiative scans for a combatant that, on turn 1, may act before everyone
 // else via ON_BATTLE_START/SEIZE_INITIATIVE when the opposing primary's lifespan
-// does not exceed lifespan_ratio × its own. Returns the winner (or nil).
-func seizeInitiative(state *CombatState, allActors []*CombatantAuto) *CombatantAuto {
+// does not exceed lifespan_ratio × its own. A seizer opposed by Cấm Cổ
+// (ON_BATTLE_START/SUPPRESS_PRIORITY) is skipped and reported in suppressed so
+// the caller can log it; turn order then falls back to normal speed.
+// Returns the winner (or nil) plus the names of suppressed seizers.
+func seizeInitiative(state *CombatState, allActors []*CombatantAuto) (*CombatantAuto, []string) {
+	var suppressed []string
 	for _, actor := range allActors {
 		if !hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SEIZE_INITIATIVE") {
 			continue
@@ -113,6 +117,10 @@ func seizeInitiative(state *CombatState, allActors []*CombatantAuto) *CombatantA
 				break
 			}
 		}
+		if sideHasPrioritySuppressor(state, allActors, !isAlly) {
+			suppressed = append(suppressed, actor.Name)
+			continue
+		}
 		opp := opponentPrimary(state, isAlly)
 		selfLife := combatantLifespan(actor)
 		if opp == nil || selfLife <= 0 {
@@ -120,10 +128,51 @@ func seizeInitiative(state *CombatState, allActors []*CombatantAuto) *CombatantA
 		}
 		ratio := mechanicFloat(actor.Mechanics, "ON_BATTLE_START", "SEIZE_INITIATIVE", "lifespan_ratio", 3)
 		if combatantLifespan(opp) <= ratio*selfLife {
-			return actor
+			return actor, suppressed
 		}
 	}
-	return nil
+	return nil, suppressed
+}
+
+// sideHasPrioritySuppressor reports whether any combatant on the given side
+// carries Cấm Cổ (ON_BATTLE_START/SUPPRESS_PRIORITY).
+func sideHasPrioritySuppressor(state *CombatState, allActors []*CombatantAuto, isAlly bool) bool {
+	for _, actor := range allActors {
+		inSide := false
+		if isAlly {
+			for _, a := range state.Allies {
+				if a.ID == actor.ID {
+					inSide = true
+					break
+				}
+			}
+		} else {
+			for _, e := range state.Enemies {
+				if e.ID == actor.ID {
+					inSide = true
+					break
+				}
+			}
+		}
+		if inSide && suppressesPriority(actor) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasReverseCalamity reports whether a combatant carries Nghịch Chuyển Cổ's
+// absolute reversal (COMBAT_PASSIVE/REVERSE_CALAMITY): every hostile effect
+// aimed at the holder is undone, only raw damage passes through.
+func hasReverseCalamity(c *CombatantAuto) bool {
+	return c != nil && hasMechanic(c.Mechanics, "COMBAT_PASSIVE", "REVERSE_CALAMITY")
+}
+
+// suppressesPriority reports whether a combatant carries Cấm Cổ
+// (ON_BATTLE_START/SUPPRESS_PRIORITY): enemy action-priority effects
+// (seize initiative, first-turn evade) are ignored against its side.
+func suppressesPriority(c *CombatantAuto) bool {
+	return c != nil && hasMechanic(c.Mechanics, "ON_BATTLE_START", "SUPPRESS_PRIORITY")
 }
 
 // sealGuTurns seals a combatant's Gu for n full turns. Duration is n+1
@@ -714,7 +763,15 @@ func Simulate(state *CombatState) []CombatLog {
 		// Once, on turn 1, the seizer moves ahead of everyone else (enemies act
 		// after it, in normal speed order). Not a lockout.
 		if turn == 1 {
-			if seizer := seizeInitiative(state, allActors); seizer != nil {
+			seizer, suppressed := seizeInitiative(state, allActors)
+			for _, name := range suppressed {
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:   turn,
+					Action: "PRIORITY_SUPPRESSED",
+					Detail: fmt.Sprintf("Cấm Cổ trấn áp tiên thủ của %s — thứ tự hành động so tốc như bình thường!", name),
+				})
+			}
+			if seizer != nil {
 				reordered := make([]*CombatantAuto, 0, len(allActors))
 				reordered = append(reordered, seizer)
 				for _, a := range allActors {
@@ -791,6 +848,18 @@ func Simulate(state *CombatState) []CombatLog {
 						continue
 					}
 					if !hasMechanic(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT") {
+						continue
+					}
+					// Nghịch Chuyển Cổ: hostile Gu effects aimed at the holder
+					// are reversed — the interrupt fizzles, the strike lands.
+					if hasReverseCalamity(actor) {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "REVERSE_NEGATE",
+							Detail:    fmt.Sprintf("Nghịch Chuyển Cổ đảo nghịch [Lãng Quên Ý Niệm] của %s về hư vô!", d.Name),
+						})
 						continue
 					}
 					chance := mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_INTENT_INTERRUPT", "chance", 0)
@@ -1008,6 +1077,18 @@ func Simulate(state *CombatState) []CombatLog {
 						continue
 					}
 					if !hasMechanic(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_WILL_CONFUSE") {
+						continue
+					}
+					// Nghịch Chuyển Cổ: hostile Gu effects aimed at the holder
+					// are reversed — the confusion fizzles, the strike lands.
+					if hasReverseCalamity(actor) {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "REVERSE_NEGATE",
+							Detail:    fmt.Sprintf("Nghịch Chuyển Cổ đảo nghịch [Lãng Quên Chí] của %s về hư vô!", d.Name),
+						})
 						continue
 					}
 					willChance := mechanicFloat(d.Mechanics, "BEFORE_ENEMY_ATTACK", "FORGET_WILL_CONFUSE", "activation_chance", 0.35)
@@ -1920,6 +2001,17 @@ func Simulate(state *CombatState) []CombatLog {
 								turns = 1
 							}
 						}
+						// Nghịch Chuyển Cổ: hostile seal aimed at the holder is reversed.
+						if hasReverseCalamity(target) {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   target.ID,
+								ActorName: target.Name,
+								Action:    "REVERSE_NEGATE",
+								Detail:    fmt.Sprintf("Nghịch Chuyển Cổ đảo nghịch phong ấn Cổ của [%s] về hư vô!", a.Name),
+							})
+							continue
+						}
 						sealGuTurns(target, turns)
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
@@ -1931,7 +2023,6 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 				}
 			}
-
 			// Merge action logs into a single consolidated log entry for this Gu/Action
 			if len(turnLogs) > actionStartIndex {
 				logs := make([]CombatLog, len(turnLogs)-actionStartIndex)
@@ -2528,7 +2619,16 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	// Định Tiên Du first turn evade: dodges the FIRST strike on turn 1 only.
 	// Multi-hit/AoE follow-ups land normally, as do percent riders attached
 	// to the evaded strike (skipped via evadedThisStrike in runOne).
-	if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") {
+	// Cấm Cổ suppresses this priority effect: the strike lands in normal order.
+	if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") && suppressesPriority(actor) {
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   actor.ID,
+			ActorName: actor.Name,
+			Action:    "PRIORITY_SUPPRESSED",
+			Detail:    fmt.Sprintf("Cấm Cổ trấn áp [Định Tiên Du] của %s — đòn đánh trúng như bình thường!", target.Name),
+		})
+	} else if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") {
 		if target.CustomState == nil {
 			target.CustomState = make(map[string]int)
 		}

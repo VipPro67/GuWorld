@@ -156,7 +156,7 @@ func init() {
 	register("ALWAYS_ON", "growth", "GROWTH_DURATION_HOURS")
 	register("ON_USE", "world", "RECORD_MESSAGE")
 	register("ON_TURN_START", "combat", "POEM_INTENT")
-	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU")
+	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY")
 	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE")
 	register("ON_HIT", "combat", "BYPASS_SHIELD")
 	NativeHooks["PERSIST_STATUS_ON_HIT"] = NativeHook{
@@ -168,9 +168,19 @@ func init() {
 		Domain: "combat",
 	}
 	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE")
-	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT")
+	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY")
 	register("CAPABILITY", "capability", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "CONCEAL_GU", "SEVER_CLUES", "ARENA_IDENTITY_MASK", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")
 	register("ALWAYS_ON", "derived_player", "IMMUNE_DREAM_STATUS")
+	NativeHooks["DEDUCTION_INSTANT_FINISH"] = NativeHook{
+		Triggers: values("ALWAYS_ON"),
+		Params: map[string]ParamSpec{
+			"base_chance":   number(false, 0, 1),
+			"per_rank_step": number(false, 0, 1),
+			"min_chance":    number(false, 0, 1),
+			"max_chance":    number(false, 0, 1),
+		},
+		Domain: "deduction",
+	}
 	// Schemas below describe parameters present in the authoritative CSV data.
 	// Hooks without parameters retain the closed EMPTY schema.
 	valueSchema := map[string]ParamSpec{"value": {Type: "number", Required: true}}

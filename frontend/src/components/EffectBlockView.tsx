@@ -124,6 +124,9 @@ const UNIQUE_NAMES: Record<string, string> = {
   PORTAL_CREATE: "Tạo Cổng Dịch Chuyển",
   RANDOM_PORTAL: "Cổng Dịch Chuyển Ngẫu Nhiên",
   CAPTURE_BONUS: "Tăng Tỷ Lệ Thu Phục",
+  DEDUCTION_INSTANT_FINISH: "Đốn Ngộ Thôi Diễn Bí Phương",
+  REVERSE_CALAMITY: "Nghịch Chuyển Càn Khôn",
+  SUPPRESS_PRIORITY: "Cấm Tuyệt Tiên Thủ",
   GROWTH_DURATION_HOURS: "Thời Gian Trưởng Thành Cổ",
   IMMUNE_PATH_STATUS: "Miễn Nhiễm Trạng Thái Lưu Phái",
 };
@@ -292,6 +295,18 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
       }
       if (code === "DISABLE_SOUL_REGEN") {
         return { text: `Không Thể Phục Hồi Hồn Phách`, color: "text-rose-400", icon: "🚫" };
+      }
+      if (code === "DEDUCTION_INSTANT_FINISH") {
+        const p = op.params || {};
+        const base = Number(p.base_chance ?? 0.05);
+        const step = Number(p.per_rank_step ?? 0.02);
+        return { text: `Đốn ngộ hoàn thành thôi diễn ngay (${Math.round(base * 100)}% + ${Math.round(step * 100)}%/rank chênh lệch)`, color: "text-amber-300", icon: "💡" };
+      }
+      if (code === "REVERSE_CALAMITY") {
+        return { text: `Đảo nghịch mọi trạng thái bất lợi về hư vô (chỉ nhận sát thương)`, color: "text-slate-200 font-semibold", icon: "☯️" };
+      }
+      if (code === "SUPPRESS_PRIORITY") {
+        return { text: `Trấn áp hiệu ứng ưu tiên hành động của địch (so tốc bình thường)`, color: "text-red-300 font-semibold", icon: "⛔" };
       }
 
       const codeName = UNIQUE_NAMES[code] || code;

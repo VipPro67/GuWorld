@@ -929,6 +929,9 @@ Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `pas
 2. `ON_CONSUME / SACRIFICE_NPC + CAPABILITY / SACRIFICE_APTITUDE` — hiến tế để tăng vĩnh viễn tư chất Không khiếu (mỗi lần +5, trần 99). VD: Huyết Sọ Cổ.
 3. `CAPABILITY / LOOT_PREVIEW` (+ `active.range`) — hiển thị tỉ lệ rớt đồ của quái trên bản đồ và mở rộng tầm khám phá. VD: Cổ Thiên Cơ (`range: 1000`).
 4. `ON_TICK / THOUGHT_REGEN_TICK (params.value)` — hồi Niệm lực mỗi giờ cho Cổ sư trang bị. VD: Trí Tuệ Cổ.
+5. `ALWAYS_ON / DEDUCTION_INSTANT_FINISH` — Cổ trang bị có tỉ lệ đốn ngộ, lập tức hoàn thành thôi diễn bí phương (100%). Tỉ lệ = `base_chance + (rank Cổ - rank đích) * per_rank_step`, chặn trong `[min_chance, max_chance]`; mỗi lần thôi diễn chỉ roll 1 lần. VD: Đốn Ngộ Cổ.
+6. `COMBAT_PASSIVE / REVERSE_CALAMITY` — miễn nhiễm tuyệt đối mọi trạng thái bất lợi từ địch (choáng/ngủ/phong ấn/cướp Cổ...), damage vẫn nhận. VD: Nghịch Chuyển Cổ.
+7. `ON_BATTLE_START / SUPPRESS_PRIORITY` — trấn áp hiệu ứng ưu tiên hành động của địch (`SEIZE_INITIATIVE`, né đòn đầu Định Tiên Du), sau đó so tốc bình thường. VD: Cấm Cổ.
 
 ## 18. Bối cảnh & Cốt truyện nguyên tác (Cổ Chân Nhân)
 
