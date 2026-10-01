@@ -28,12 +28,20 @@ type Entry struct {
 }
 
 func Log(q Querier, entry Entry) {
+	if err := LogChecked(q, entry); err != nil {
+		logger.S.Warnf("auditlog: failed to insert action=%s player=%v: %v", entry.Action, entry.PlayerID, err)
+	}
+}
+
+// LogChecked records an audit entry and returns persistence failures to
+// callers that require the audit write to be atomic with their transaction.
+func LogChecked(q Querier, entry Entry) error {
 	var metaBytes []byte
 	if entry.Metadata != nil {
 		var err error
 		metaBytes, err = json.Marshal(entry.Metadata)
 		if err != nil {
-			logger.S.Errorf("auditlog: failed to marshal metadata for action=%s: %v", entry.Action, err)
+			return fmt.Errorf("marshal audit metadata: %w", err)
 		}
 	}
 	metaJSON := string(metaBytes)
@@ -50,8 +58,7 @@ func Log(q Querier, entry Entry) {
 		execDB = db.DB
 	}
 	if execDB == nil {
-		logger.S.Errorf("auditlog: nil querier, skipping action=%s", entry.Action)
-		return
+		return fmt.Errorf("auditlog: nil querier for action=%s", entry.Action)
 	}
 
 	_, err := execDB.Exec(
@@ -59,8 +66,9 @@ func Log(q Querier, entry Entry) {
 		pid, entry.Action, entry.EntityType, entry.EntityID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
 	)
 	if err != nil {
-		logger.S.Warnf("auditlog: failed to insert action=%s player=%v: %v", entry.Action, entry.PlayerID, err)
+		return err
 	}
+	return nil
 }
 
 func Logf(q Querier, playerID *uuid.UUID, action, format string, args ...interface{}) {
