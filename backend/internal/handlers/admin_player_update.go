@@ -57,6 +57,7 @@ type AdminUpdatePlayerRequest struct {
 	IsDisguised         *bool              `json:"is_disguised"`
 	NeedsOnboarding     *bool              `json:"needs_onboarding"`
 	ImmortalJade        *float64           `json:"immortal_jade"`
+	IsAdmin             *bool              `json:"is_admin"`
 }
 
 // AdminUpdatePlayer allows admins to edit a wide range of player attributes in one call.

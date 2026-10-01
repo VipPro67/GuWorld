@@ -26,10 +26,15 @@ func schemaAuthorization() error {
 	VALUES ('super_admin', 'Full administrative access')
 	ON CONFLICT (key) DO NOTHING;
 	INSERT INTO admin_permissions (key, description)
-	VALUES ('admin.access', 'Access administrative APIs')
+	VALUES
+		('admin.dashboard.access', 'Access the administration dashboard'),
+		('admin.*', 'All administration permissions')
 	ON CONFLICT (key) DO NOTHING;
 	INSERT INTO admin_role_permissions (role_key, permission_key)
-	VALUES ('super_admin', 'admin.access')
+	VALUES
+		('admin', 'admin.dashboard.access'),
+		('super_admin', 'admin.dashboard.access'),
+		('super_admin', 'admin.*')
 	ON CONFLICT (role_key, permission_key) DO NOTHING;
 	`)
 }

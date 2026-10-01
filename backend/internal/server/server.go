@@ -34,6 +34,7 @@ type adminRouteSpec struct {
 // Keeping registration and authorization metadata together makes missing permissions impossible.
 func adminRouteSpecs() []adminRouteSpec {
 	return []adminRouteSpec{
+		{http.MethodGet, "/me", authz.AdminAccessPermission, handlers.AdminGetMe},
 		// monitoring
 		{http.MethodGet, "/monitor/system", "monitoring.read", handlers.AdminGetSystemStats},
 		{http.MethodGet, "/monitor/requests/summary", "monitoring.read", handlers.AdminGetRequestSummary},

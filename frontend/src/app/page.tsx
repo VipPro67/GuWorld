@@ -43,7 +43,6 @@ const WikiView = dynamic(() => import("@/components/WikiView").then(m => m.WikiV
 const CombatHistoryView = dynamic(() => import("@/components/CombatHistoryView").then(m => m.CombatHistoryView), { ssr: false });
 const FeedbackView = dynamic(() => import("@/components/FeedbackView").then(m => m.FeedbackView), { ssr: false });
 const AuditLogsView = dynamic(() => import("@/components/AuditLogsView").then(m => m.AuditLogsView), { ssr: false });
-const AdminView = dynamic(() => import("@/components/AdminView").then(m => m.AdminView), { ssr: false });
 const LeaderboardView = dynamic(() => import("@/components/LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
 const TrainingRoom = dynamic(() => import("@/components/TrainingRoom").then(m => m.TrainingRoom), { ssr: false });
 const UtilitiesView = dynamic(() => import("@/components/UtilitiesView").then(m => m.UtilitiesView), { ssr: false });
@@ -508,10 +507,6 @@ export default function Home() {
         ) : currentView === "feedback" ? (
           <div className="w-full">
             <FeedbackView />
-          </div>
-        ) : currentView === "admin" ? (
-          <div className="w-full">
-            <AdminView />
           </div>
         ) : currentView === "audit-logs" ? (
           <div className="w-full">

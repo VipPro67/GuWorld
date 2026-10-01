@@ -376,7 +376,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là d
 
 ### Admin — nhóm quản trị còn lại
 
-Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission theo domain. Middleware kiểm tra `players.is_admin` cùng `players.admin_permissions`; giá trị `*` giữ quyền đầy đủ cho admin hiện hữu trong giai đoạn chuyển đổi. Handler vẫn có thể kiểm tra admin như lớp phòng vệ bổ sung.
+Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission RBAC theo domain. `GET /api/admin/me` yêu cầu `admin.dashboard.access`; wildcard `admin.*` cấp toàn bộ quyền cho `super_admin`. Handler vẫn có thể kiểm tra principal quản trị như lớp phòng vệ bổ sung.
 
 Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
 

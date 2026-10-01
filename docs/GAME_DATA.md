@@ -118,14 +118,15 @@ RBAC quản trị được lưu trong bốn bảng:
 - `admin_role_permissions`: ánh xạ nhiều-nhiều giữa vai trò và quyền.
 - `player_admin_roles`: gán nhiều-nhiều vai trò cho `players`.
 
-Khi khởi tạo schema, hệ thống seed idempotent role hệ thống `super_admin`,
-permission wildcard `admin.*` và quan hệ giữa chúng. Sau khi tài khoản admin mặc
-định được bảo đảm tồn tại, mọi player có `COALESCE(players.is_admin, false) =
-true` được backfill idempotent vào role `super_admin`.
+Khi khởi tạo schema, hệ thống seed idempotent các role `admin`, `super_admin`,
+permission vào dashboard `admin.dashboard.access`, wildcard `admin.*` và các
+quan hệ tương ứng. `super_admin` nhận wildcard; role `admin` nhận quyền vào
+dashboard và có thể được cấp thêm quyền domain. Sau khi tài khoản admin mặc định
+được bảo đảm tồn tại, các tài khoản admin cũ được backfill idempotent vào RBAC.
 
-Trong rollout đầu tiên, authorization ưu tiên quyền RBAC nhưng vẫn fallback sang
-`players.is_admin` để admin cũ không bị khóa ngoài nếu backfill chưa hoàn tất.
-Cột `players.is_admin` được giữ nguyên trong giai đoạn chuyển đổi này.
+Authorization của dashboard và API quản trị được resolve từ các role/quyền
+RBAC. Cột `players.is_admin` được giữ như projection tương thích cho client cũ,
+nhưng không phải nguồn quyết định hiển thị entry Admin ở Lobby.
 
 ### Bảng `immortal_apertures` (Tiên Khiếu)
 
@@ -196,7 +197,9 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
-Quyền quản trị lưu trong `players.admin_permissions` (`TEXT[]`). Middleware `/api/admin/*` yêu cầu đồng thời `is_admin = true` và permission của route có trong mảng; `*` là grant tương thích cho admin toàn quyền hiện hữu.
+Quyền quản trị hiệu lực được resolve qua `player_admin_roles` và
+`admin_role_permissions`. Permission `admin.dashboard.access` điều khiển quyền
+vào dashboard; `admin.*` là wildcard dành cho `super_admin`.
 
 `players.state_revision` cùng tổng counter trong `player_collection_revisions`
 tạo bộ đếm tăng đơn điệu cho trạng thái người chơi. Trigger trên `players` ghi
