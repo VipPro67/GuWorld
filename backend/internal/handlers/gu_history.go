@@ -36,6 +36,9 @@ func GetGuHistory(c *gin.Context) {
 
 // AdminListGuHistory lists gu_history_logs with pagination and search for the Admin panel.
 func AdminListGuHistory(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
 		page = 1

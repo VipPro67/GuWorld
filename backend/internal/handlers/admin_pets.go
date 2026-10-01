@@ -10,6 +10,9 @@ import (
 )
 
 func AdminListPlayerPets(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	playerID := c.Param("id")
 	if playerID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing player ID"})
@@ -58,6 +61,9 @@ func AdminListPlayerPets(c *gin.Context) {
 }
 
 func AdminDeletePlayerPet(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	playerID := c.Param("id")
 	petID := c.Param("pet_id")
 	if playerID == "" || petID == "" {
@@ -109,6 +115,9 @@ type AdminPetInput struct {
 }
 
 func AdminCreatePlayerPet(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	playerID := c.Param("id")
 	if playerID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing player ID"})
@@ -154,6 +163,9 @@ func AdminCreatePlayerPet(c *gin.Context) {
 }
 
 func AdminUpdatePlayerPet(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	playerID := c.Param("id")
 	petID := c.Param("pet_id")
 	if playerID == "" || petID == "" {
