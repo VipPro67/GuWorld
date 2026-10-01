@@ -944,6 +944,8 @@ export interface SectRelocationEstimate {
     immortal_gu_cost: number;
     recipes_count: number;
     recipes_cost: number;
+    treasury_level: number;
+    treasury_discount: number;
     total_cost: number;
   };
   current_sect_location: {
@@ -1042,6 +1044,8 @@ export interface MySectStatus {
     immortal_gu_count: number;
     recipes_fee: number;
     recipes_count: number;
+    treasury_level: number;
+    treasury_discount: number;
     total_fee: number;
   };
 }

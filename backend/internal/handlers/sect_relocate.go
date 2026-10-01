@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
 )
 
 const SectRelocationCooldown = 72 * time.Hour
@@ -27,6 +28,8 @@ type SectRelocationCostBreakdown struct {
 	ImmortalGuCost   int64 `json:"immortal_gu_cost"`
 	RecipesCount     int   `json:"recipes_count"`
 	RecipesCost      int64 `json:"recipes_cost"`
+	TreasuryLevel    int   `json:"treasury_level"`
+	TreasuryDiscount int64 `json:"treasury_discount"`
 	TotalCost        int64 `json:"total_cost"`
 }
 
@@ -36,6 +39,7 @@ type SectRelocationCostBreakdown struct {
 // - Mortal Gu (Rank 1-5): sum(Rank * 20 * Qty)
 // - Immortal Gu (Rank 6-9): sum(Rank * 500 * Qty)
 // - Recipes: sum(TargetRank * 100 * Qty)
+// Bảo Khố giảm 50%-90% riêng tổng phí vận chuyển tài sản trong kho.
 func CalculateSectRelocationCost(q dbQueryRunner, sectID string) (int64, SectRelocationCostBreakdown, error) {
 	if q == nil {
 		q = db.DB
@@ -43,6 +47,11 @@ func CalculateSectRelocationCost(q dbQueryRunner, sectID string) (int64, SectRel
 
 	var breakdown SectRelocationCostBreakdown
 	breakdown.BaseCost = 10000
+	var treasuryLevel int
+	if err := q.QueryRow(`SELECT COALESCE((buildings->>'treasury')::int, 1) FROM sects WHERE id = $1`, sectID).Scan(&treasuryLevel); err != nil {
+		return 0, breakdown, fmt.Errorf("failed to load treasury level: %w", err)
+	}
+	breakdown.TreasuryLevel = treasuryLevel
 
 	// 1. Members
 	err := q.QueryRow(`SELECT COUNT(*) FROM sect_members WHERE sect_id = $1`, sectID).Scan(&breakdown.MemberCount)
@@ -110,6 +119,15 @@ func CalculateSectRelocationCost(q dbQueryRunner, sectID string) (int64, SectRel
 		recRows.Close()
 	}
 
+	var saved int64
+	breakdown.MaterialsCost, saved = sectmechanics.DiscountVaultFee(breakdown.MaterialsCost, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
+	breakdown.MortalGuCost, saved = sectmechanics.DiscountVaultFee(breakdown.MortalGuCost, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
+	breakdown.ImmortalGuCost, saved = sectmechanics.DiscountVaultFee(breakdown.ImmortalGuCost, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
+	breakdown.RecipesCost, saved = sectmechanics.DiscountVaultFee(breakdown.RecipesCost, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
 	breakdown.TotalCost = breakdown.BaseCost + breakdown.MemberCost + breakdown.MaterialsCost + breakdown.MortalGuCost + breakdown.ImmortalGuCost + breakdown.RecipesCost
 	return breakdown.TotalCost, breakdown, nil
 }
@@ -229,14 +247,14 @@ func GetSectRelocationEstimate(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"can_relocate":                canRelocate,
-		"reason":                      reason,
-		"is_leader":                   m.MemberRank == "CHUONG_MON",
-		"cooldown_remaining_seconds":  cooldownRemainingSeconds,
-		"cooldown_total_seconds":      int64(SectRelocationCooldown.Seconds()),
-		"current_funds":               sectFunds,
-		"funds_needed":                totalCost,
-		"cost_breakdown":              breakdown,
+		"can_relocate":               canRelocate,
+		"reason":                     reason,
+		"is_leader":                  m.MemberRank == "CHUONG_MON",
+		"cooldown_remaining_seconds": cooldownRemainingSeconds,
+		"cooldown_total_seconds":     int64(SectRelocationCooldown.Seconds()),
+		"current_funds":              sectFunds,
+		"funds_needed":               totalCost,
+		"cost_breakdown":             breakdown,
 		"current_sect_location": gin.H{
 			"region": sectRegion,
 			"x":      sectX,

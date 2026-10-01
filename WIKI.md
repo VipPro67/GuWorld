@@ -815,9 +815,9 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 | Kiến trúc | Mã hiệu | Chi phí nâng cấp | Tác dụng vận hành |
 | :--- | :--- | :--- | :--- |
 | **Chính Điện** | `main_hall` | $5.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Định đoạt **Cấp bậc Tông Môn** (`sects.level`). Là trần giới hạn: cấp của 4 kiến trúc còn lại không được vượt quá Chính Điện. Mở rộng bán kính lãnh địa ($\text{Radius} = 5 + \text{Cấp}$). |
-| **Hộ Sơn Trận Pháp** | `defensive_array` | $2.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng cường toàn diện chỉ số HP, Công, Thủ, Mana của **Hộ Sơn Thần Thú**. Kéo dài thời gian bảo hộ sau khi sơn môn bị công phá ($12 + \text{Cấp} \times 2$ giờ). |
+| **Hộ Sơn Trận Pháp** | `defensive_array` | $2.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng cường toàn diện chỉ số HP, Công, Thủ, Mana của **Hộ Sơn Thần Thú**. Khi kỹ năng sẵn sàng, chặn lần công kích đầu và mở 10 phút tập hợp; kỹ năng hồi cố định 12 giờ. |
 | **Linh Mạch** | `spirit_vein` | $3.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng sản lượng tự sinh Quỹ tông môn: $(10 + \text{Cấp} \times 10)$ Quỹ/phút. Tự động thu thập và bổ sung Linh tài phàm phẩm vào kho mỗi phút. |
-| **Tàng Bảo Các** | `treasury` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Gia cố kho tàng, giảm tỉ lệ tài nguyên bị cướp đoạt khi thất thủ: từ 20% giảm dần xuống tối thiểu 5% theo công thức $20\% - (\text{Cấp} \times 2\%)$. |
+| **Tàng Bảo Các** | `treasury` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Giảm tỉ lệ từng tài nguyên/Cổ/Bí phương rơi khi thất thủ: từ 20% xuống tối thiểu 5%. Đồng thời giảm 50% phí kho trong duy trì/di dời ở cấp 1, tăng dần đến tối đa 90%. |
 | **Diễn Võ Trường** | `training_ground` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng hiệu suất thu hoạch Điểm cống hiến thụ động theo giờ của toàn bộ môn nhân ($+10\%$ mỗi cấp kiến trúc). |
 
 ---
@@ -866,7 +866,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
   - **Cướp phá Kho Tàng**: Đoạt lấy Quỹ, Linh tài, Cổ trùng và Bí phương từ bảo khố đối phương theo tỉ lệ:
     $$\text{Tỉ lệ cướp} = 20\% - (\text{Cấp Tàng Bảo Các} \times 2\%) \quad (\text{Tối thiểu } 5\%)$$
   - **Thiên Đạo Tiêu Hủy (Void Destruction - 40%)**: Thuận theo ý trời trong tranh đoạt khốc liệt, **40% toàn bộ chiến lợi phẩm cướp được sẽ bị chấn nát, tiêu biến vĩnh viễn vào hư vô**! 60% còn lại được chia cho đội tấn công / chuyển vào Quỹ tông môn phe thắng.
-  - **Kích Hoạt Hộ Sơn Đại Trận Bảo Hộ**: Tông môn thất thủ rơi vào trạng thái bế môn bảo hộ trong **$12 + (\text{Cấp Hộ Sơn Trận Pháp} \times 2)$ giờ** (miễn nhiễm mọi đợt khiêu chiến tiếp theo). Toàn bộ cờ Trấn Thủ của môn nhân bị giải trừ.
+  - **Kích Hoạt Hộ Sơn Đại Trận**: khi kỹ năng sẵn sàng, lần công kích đầu tiên bị hủy và toàn bộ môn nhân nhận cảnh báo tập hợp. Sơn môn bất khả xâm phạm trong **10 phút**; kỹ năng chặn này hồi **12 giờ**, không cộng thêm thời gian theo cấp công trình.
   - **Chiến công**: Người tấn công nhận $+10$ Nhân Khí và $+200$ Điểm cống hiến (nếu có tông môn).
 - **Kết Quả: Công Phá Thất Bại (Sơn Môn Phòng Thủ Thắng)**:
   - Sơn môn phòng thủ thành công nhận ngay **4 giờ** Hộ Sơn Đại Trận bảo hộ.

@@ -857,6 +857,12 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
+      if (response.status === 409 && data.formation_cancelled) {
+        addToast(data.error || "Hộ Sơn Đại Trận đã chặn cuộc tấn công.", "info");
+        addLog(data.error || "Hộ Sơn Đại Trận đã chặn cuộc tấn công.");
+        get().fetchSectsMap();
+        return false;
+      }
       if (!response.ok) throw new Error(data.error || "Lỗi khi tấn công Tông môn");
       addToast(data.message || "Đã tấn công Tông môn!", data.won ? "success" : "info");
       addLog(data.message || "Tấn công Tông môn.");
