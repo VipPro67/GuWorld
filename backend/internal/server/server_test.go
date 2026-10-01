@@ -176,3 +176,63 @@ func TestRequestLogging_ErrorResponseBody(t *testing.T) {
 		t.Error("expected request_body in http_request_completed")
 	}
 }
+
+func TestAdminRoutePermissionInventory(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	declared := make(map[string]string)
+	for _, route := range adminRouteSpecs() {
+		key := route.method + " /api/admin" + route.path
+		if route.permission == "" {
+			t.Errorf("%s has no declared permission", key)
+		}
+		if route.permission == "admin" {
+			t.Errorf("%s uses the forbidden catch-all admin permission", key)
+		}
+		if previous, exists := declared[key]; exists {
+			t.Errorf("%s is declared more than once (%q and %q)", key, previous, route.permission)
+		}
+		declared[key] = route.permission
+	}
+
+	for _, route := range SetupRouter(nil).Routes() {
+		if !strings.HasPrefix(route.Path, "/api/admin/") {
+			continue
+		}
+		key := route.Method + " " + route.Path
+		if _, exists := declared[key]; !exists {
+			t.Errorf("%s is registered without a permission declaration", key)
+		}
+		delete(declared, key)
+	}
+	for key, permission := range declared {
+		t.Errorf("permission inventory contains unregistered route %s (%s)", key, permission)
+	}
+}
+
+func TestAdminRoutePermissionsUseExpectedSensitivePolicies(t *testing.T) {
+	want := map[string]string{
+		http.MethodGet + " /monitor/system":          "monitoring.read",
+		http.MethodPost + " /monitor/requests/reset": "monitoring.reset",
+		http.MethodGet + " /players/:id":             "players.read",
+		http.MethodPut + " /players/:id":             "players.update",
+		http.MethodPost + " /data/import/:table":     "game_data.import",
+		http.MethodPost + " /data/export/:table":     "game_data.export",
+		http.MethodPost + " /clear-cache":            "cache.reload",
+		http.MethodPost + " /clear-redis-cache":      "cache.flush",
+		http.MethodGet + " /audit-logs":              "audit.read",
+	}
+
+	for _, route := range adminRouteSpecs() {
+		key := route.method + " " + route.path
+		if permission, exists := want[key]; exists {
+			if route.permission != permission {
+				t.Errorf("%s permission = %q, want %q", key, route.permission, permission)
+			}
+			delete(want, key)
+		}
+	}
+	for key, permission := range want {
+		t.Errorf("missing sensitive route permission %s = %s", key, permission)
+	}
+}

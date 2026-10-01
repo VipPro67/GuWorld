@@ -167,6 +167,8 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
+Quyền quản trị lưu trong `players.admin_permissions` (`TEXT[]`). Middleware `/api/admin/*` yêu cầu đồng thời `is_admin = true` và permission của route có trong mảng; `*` là grant tương thích cho admin toàn quyền hiện hữu.
+
 `players.state_revision` cùng tổng counter trong `player_collection_revisions`
 tạo bộ đếm tăng đơn điệu cho trạng thái người chơi. Trigger trên `players` ghi
 trực tiếp vào dòng người chơi; trigger trên bảng con tăng một trong 64 counter

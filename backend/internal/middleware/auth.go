@@ -12,7 +12,8 @@ import (
 
 const (
 	// SessionKickedError is returned when the session has been invalidated by a newer login
-	SessionKickedError = "Phiên đăng nhập đã hết hạn"
+	SessionKickedError   = "Phiên đăng nhập đã hết hạn"
+	permissionContextKey = "required_permission"
 )
 
 func csrfProtection(c *gin.Context) {
@@ -178,4 +179,52 @@ func AdminRequired() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// PermissionRequired declares and enforces the permission required by an admin
+// route. Admins receive only exact grants from admin_permissions, while the
+// transitional wildcard keeps existing full-access administrators working.
+// The context value also gives auditing code the policy decision to record.
+func PermissionRequired(permission string) gin.HandlerFunc {
+	if strings.TrimSpace(permission) == "" || permission == "admin" {
+		panic("admin routes require a specific named permission")
+	}
+
+	return func(c *gin.Context) {
+		c.Set(permissionContextKey, permission)
+		playerID, ok := GetPlayerID(c)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			c.Abort()
+			return
+		}
+		if db.DB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
+			c.Abort()
+			return
+		}
+
+		var allowed bool
+		err := db.DB.QueryRow(`
+			SELECT COALESCE(is_admin, false)
+				AND ($2 = ANY(COALESCE(admin_permissions, ARRAY[]::TEXT[]))
+					OR '*' = ANY(COALESCE(admin_permissions, ARRAY[]::TEXT[])))
+			FROM players WHERE id=$1`, playerID, permission).Scan(&allowed)
+		if err != nil || !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Permission required", "permission": permission})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// GetRequiredPermission returns the permission declared by the matched route.
+func GetRequiredPermission(c *gin.Context) (string, bool) {
+	permission, ok := c.Get(permissionContextKey)
+	if !ok {
+		return "", false
+	}
+	value, ok := permission.(string)
+	return value, ok
 }

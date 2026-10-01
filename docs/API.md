@@ -362,7 +362,9 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 ### Admin — nhóm quản trị còn lại
 
-Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth/admin và rate limit nhóm:
+Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission theo domain. Middleware kiểm tra `players.is_admin` cùng `players.admin_permissions`; giá trị `*` giữ quyền đầy đủ cho admin hiện hữu trong giai đoạn chuyển đổi. Handler vẫn có thể kiểm tra admin như lớp phòng vệ bổ sung.
+
+Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
 
 | Nhóm | Routes hiện có |
 | --- | --- |
