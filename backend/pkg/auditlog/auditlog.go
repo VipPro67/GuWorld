@@ -16,15 +16,21 @@ type Querier interface {
 }
 
 type Entry struct {
-	PlayerID       *uuid.UUID
-	Action         string
-	EntityType     string
-	EntityID       string
-	RequestSummary string
-	Metadata       map[string]interface{}
-	IPAddress      string
-	Success        bool
-	ErrorMessage   string
+	PlayerID            *uuid.UUID
+	ActorUsername       string
+	Action              string
+	EffectiveRoles      []string
+	EffectivePermission string
+	EntityType          string
+	EntityID            string
+	ChangeData          interface{}
+	Reason              string
+	RequestID           string
+	RequestSummary      string
+	Metadata            map[string]interface{}
+	IPAddress           string
+	Success             bool
+	ErrorMessage        string
 }
 
 func Log(q Querier, entry Entry) {
@@ -52,6 +58,17 @@ func LogChecked(q Querier, entry Entry) error {
 	if entry.PlayerID != nil {
 		pid = *entry.PlayerID
 	}
+	rolesJSON, err := json.Marshal(entry.EffectiveRoles)
+	if err != nil {
+		return fmt.Errorf("marshal audit roles: %w", err)
+	}
+	changeJSON, err := json.Marshal(entry.ChangeData)
+	if err != nil {
+		return fmt.Errorf("marshal audit change: %w", err)
+	}
+	if string(changeJSON) == "null" {
+		changeJSON = []byte("{}")
+	}
 
 	execDB := q
 	if execDB == nil && db.DB != nil {
@@ -61,9 +78,9 @@ func LogChecked(q Querier, entry Entry) error {
 		return fmt.Errorf("auditlog: nil querier for action=%s", entry.Action)
 	}
 
-	_, err := execDB.Exec(
-		`INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)`,
-		pid, entry.Action, entry.EntityType, entry.EntityID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
+	_, err = execDB.Exec(
+		`INSERT INTO audit_logs (player_id, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb,$9,$10,$11,$12::jsonb,$13,$14,$15,$16)`,
+		pid, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
 	)
 	if err != nil {
 		return err

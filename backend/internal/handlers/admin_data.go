@@ -465,7 +465,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 		"created_at": "created_at", "action": "action", "entity_type": "entity_type", "success": "success",
 	}, "created_at")
 
-	query := `SELECT id, player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at FROM audit_logs WHERE 1=1`
+	query := `SELECT id, COALESCE(player_id::text, ''), actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, COALESCE(request_summary, ''), metadata, ip_address, success, error_message, created_at FROM audit_logs WHERE 1=1`
 	args := []interface{}{}
 	argCount := 0
 
@@ -514,10 +514,10 @@ func AdminGetAuditLogs(c *gin.Context) {
 	logs := []AuditLogResponse{}
 	for rows.Next() {
 		var logRow AuditLogResponse
-		var metaJSON []byte
+		var metaJSON, rolesJSON, changeJSON []byte
 		err := rows.Scan(
-			&logRow.ID, &logRow.PlayerID, &logRow.Action, &logRow.EntityType,
-			&logRow.EntityID, &logRow.RequestSummary, &metaJSON, &logRow.IPAddress,
+			&logRow.ID, &logRow.PlayerID, &logRow.ActorUsername, &logRow.Action, &rolesJSON, &logRow.Permission, &logRow.EntityType,
+			&logRow.EntityID, &changeJSON, &logRow.Reason, &logRow.RequestID, &logRow.RequestSummary, &metaJSON, &logRow.IPAddress,
 			&logRow.Success, &logRow.ErrorMessage, &logRow.CreatedAt,
 		)
 		if err != nil {
@@ -527,6 +527,8 @@ func AdminGetAuditLogs(c *gin.Context) {
 		if len(metaJSON) > 0 {
 			_ = json.Unmarshal(metaJSON, &logRow.Metadata)
 		}
+		_ = json.Unmarshal(rolesJSON, &logRow.EffectiveRoles)
+		_ = json.Unmarshal(changeJSON, &logRow.ChangeData)
 		logs = append(logs, logRow)
 	}
 
