@@ -164,14 +164,14 @@ export const GuHistoryAdminTab: React.FC<{
 
         {/* Log Table */}
         <div className="overflow-x-auto border border-zinc-800 rounded-xl bg-zinc-950/40">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="border-b border-zinc-800/80 bg-zinc-900/60 text-[11px] font-mono text-zinc-400 uppercase tracking-wider">
-                <th className="px-3 py-2.5">Thời Gian</th>
-                <th className="px-3 py-2.5">Sự Kiện</th>
-                <th className="px-3 py-2.5">Instance ID / Cổ Trùng</th>
-                <th className="px-3 py-2.5">Cổ Sư Thực Hiện / Nhận</th>
-                <th className="px-3 py-2.5">Mô Tả Lịch Sử</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">Thời Gian</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">Sự Kiện</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">Instance ID / Cổ Trùng</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">Cổ Sư Thực Hiện / Nhận</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">Mô Tả Lịch Sử</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
@@ -205,7 +205,7 @@ export const GuHistoryAdminTab: React.FC<{
                           {badge.label}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 whitespace-nowrap">
                         <div className="flex flex-col gap-0.5">
                           <div className="flex items-center gap-1">
                             <span className="font-semibold text-zinc-200">{log.gu_id}</span>
@@ -242,10 +242,10 @@ export const GuHistoryAdminTab: React.FC<{
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-zinc-300">
-                        <div>{log.summary}</div>
+                      <td className="px-3 py-2.5 text-zinc-300 max-w-md">
+                        <div className="truncate max-w-md text-xs whitespace-nowrap" title={log.summary}>{log.summary}</div>
                         {log.metadata && Object.keys(log.metadata).length > 0 && (
-                          <div className="text-[10px] font-mono text-zinc-500 mt-0.5 truncate max-w-[320px]">
+                          <div className="text-[10px] font-mono text-zinc-500 mt-0.5 truncate max-w-md whitespace-nowrap" title={JSON.stringify(log.metadata)}>
                             {JSON.stringify(log.metadata)}
                           </div>
                         )}

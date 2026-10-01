@@ -71,16 +71,16 @@ export const SectMinesAdminTab: React.FC<{
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse text-xs">
+        <table className="w-full text-left border-collapse text-xs min-w-max">
           <thead>
             <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
-              <th className="py-2.5 px-3">Mã mỏ</th>
-              <th className="py-2.5 px-3">Tên mỏ</th>
-              <th className="py-2.5 px-3">Phẩm chất (Rarity)</th>
-              <th className="py-2.5 px-3">Tông môn chiếm giữ</th>
-              <th className="py-2.5 px-3">Thời gian bảo vệ Khiên</th>
-              <th className="py-2.5 px-3">Quỹ linh thạch tích lũy</th>
-              <th className="py-2.5 px-3 text-right">Thao tác</th>
+              <th className="py-2.5 px-3 whitespace-nowrap">Mã mỏ</th>
+              <th className="py-2.5 px-3 whitespace-nowrap">Tên mỏ</th>
+              <th className="py-2.5 px-3 whitespace-nowrap">Phẩm chất (Rarity)</th>
+              <th className="py-2.5 px-3 whitespace-nowrap">Tông môn chiếm giữ</th>
+              <th className="py-2.5 px-3 whitespace-nowrap">Thời gian bảo vệ Khiên</th>
+              <th className="py-2.5 px-3 whitespace-nowrap">Quỹ linh thạch tích lũy</th>
+              <th className="py-2.5 px-3 text-right whitespace-nowrap">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
@@ -93,15 +93,15 @@ export const SectMinesAdminTab: React.FC<{
             ) : (
               mines.map((m) => (
                 <tr key={m.id} className="hover:bg-zinc-900/50">
-                  <td className="py-2.5 px-3 font-mono text-amber-400 font-bold">{m.id}</td>
-                  <td className="py-2.5 px-3 font-semibold text-zinc-200">{m.name}</td>
-                  <td className="py-2.5 px-3 uppercase text-purple-400 font-bold font-mono">{m.rarity}</td>
-                  <td className="py-2.5 px-3 text-emerald-400 font-medium">
+                  <td className="py-2.5 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">{m.id}</td>
+                  <td className="py-2.5 px-3 font-semibold text-zinc-200 whitespace-nowrap">{m.name}</td>
+                  <td className="py-2.5 px-3 uppercase text-purple-400 font-bold font-mono whitespace-nowrap">{m.rarity}</td>
+                  <td className="py-2.5 px-3 text-emerald-400 font-medium whitespace-nowrap">
                     {m.occupier_sect_name ? `${m.occupier_sect_name} (${m.occupier_sect_id})` : <span className="text-zinc-500 italic">Chưa ai chiếm</span>}
                   </td>
-                  <td className="py-2.5 px-3 font-mono text-zinc-400">{m.shield_until || "Không có"}</td>
-                  <td className="py-2.5 px-3 font-mono text-sky-400">+{Number(m.pending_funds).toLocaleString()}</td>
-                  <td className="py-2.5 px-3 text-right">
+                  <td className="py-2.5 px-3 font-mono text-zinc-400 whitespace-nowrap">{m.shield_until || "Không có"}</td>
+                  <td className="py-2.5 px-3 font-mono text-sky-400 whitespace-nowrap">+{Number(m.pending_funds).toLocaleString()}</td>
+                  <td className="py-2.5 px-3 text-right whitespace-nowrap">
                     <button
                       onClick={() => setEditMine({ ...m })}
                       className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-amber-400 cursor-pointer"

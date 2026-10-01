@@ -106,24 +106,24 @@ export function AdminDataGrid<T>({
         <table className="w-full min-w-max border-collapse text-left text-xs">
           <thead className="sticky top-0 z-10 bg-zinc-900 text-[10px] uppercase tracking-wider text-zinc-400">
             <tr>
-              <th className="px-3 py-2.5"><input aria-label="Chọn tất cả dòng trên trang" type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} /></th>
+              <th className="px-3 py-2.5 whitespace-nowrap"><input aria-label="Chọn tất cả dòng trên trang" type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} /></th>
               {columns.map((column) => <th key={column.key} onClick={() => {
                 if (!sortable || column.sortable === false) return;
                 if (sortKey === column.key) setSortDirection((direction) => direction === "asc" ? "desc" : "asc");
                 else { setSortKey(column.key); setSortDirection("asc"); }
-              }} className={`px-3 py-2.5 font-semibold ${!sortable || column.sortable === false ? "" : "cursor-pointer select-none hover:text-zinc-200"} ${sortable && sortKey === column.key ? "text-amber-400" : ""}`}>
+              }} className={`px-3 py-2.5 font-semibold whitespace-nowrap ${!sortable || column.sortable === false ? "" : "cursor-pointer select-none hover:text-zinc-200"} ${sortable && sortKey === column.key ? "text-amber-400" : ""}`}>
                 {column.label}{sortable && sortKey === column.key ? (sortDirection === "asc" ? " ▲" : " ▼") : ""}
               </th>)}
-              {(onEdit || onCopy || onDelete) && <th className="px-3 py-2.5 text-right">Thao tác</th>}
+              {(onEdit || onCopy || onDelete) && <th className="px-3 py-2.5 text-right whitespace-nowrap">Thao tác</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
             {visibleRows.map((row) => {
               const key = rowKey(row);
               return <tr key={key} className={`hover:bg-zinc-900/60 ${selected.has(key) ? "bg-amber-950/20" : ""}`}>
-                <td className="px-3 py-2.5"><input aria-label={`Chọn ${key}`} type="checkbox" checked={selected.has(key)} onChange={() => setSelected((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} /></td>
-                {columns.map((column) => <td key={column.key} className={`px-3 py-2.5 ${column.className ?? ""}`}>{column.render ? column.render(row) : String(column.value(row) ?? "—")}</td>)}
-                {(onEdit || onCopy || onDelete) && <td className="px-3 py-2.5"><div className="flex justify-end gap-1">
+                <td className="px-3 py-2.5 whitespace-nowrap"><input aria-label={`Chọn ${key}`} type="checkbox" checked={selected.has(key)} onChange={() => setSelected((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} /></td>
+                {columns.map((column) => <td key={column.key} className={`px-3 py-2.5 ${column.className ? column.className : "whitespace-nowrap"}`}>{column.render ? column.render(row) : String(column.value(row) ?? "—")}</td>)}
+                {(onEdit || onCopy || onDelete) && <td className="px-3 py-2.5 whitespace-nowrap"><div className="flex justify-end gap-1">
                   {onEdit && <button aria-label={`Sửa ${key}`} title="Sửa" onClick={() => onEdit(row)} className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-amber-400"><Edit3 className="h-3.5 w-3.5" /></button>}
                   {onCopy && <button aria-label={`Sao chép ${key}`} title="Sao chép để tạo mới" onClick={() => onCopy(row)} className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-sky-400"><Copy className="h-3.5 w-3.5" /></button>}
                   {onDelete && <button aria-label={`Xóa ${key}`} title="Xóa" onClick={() => onDelete(row)} className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-rose-400"><Trash2 className="h-3.5 w-3.5" /></button>}
