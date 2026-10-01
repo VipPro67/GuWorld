@@ -35,6 +35,7 @@ type adminRouteSpec struct {
 func adminRouteSpecs() []adminRouteSpec {
 	return []adminRouteSpec{
 		{http.MethodGet, "/me", authz.AdminAccessPermission, handlers.AdminGetMe},
+		{http.MethodGet, "/resources", authz.AdminAccessPermission, handlers.AdminGetResources},
 		// monitoring
 		{http.MethodGet, "/monitor/system", "monitoring.read", handlers.AdminGetSystemStats},
 		{http.MethodGet, "/monitor/requests/summary", "monitoring.read", handlers.AdminGetRequestSummary},
