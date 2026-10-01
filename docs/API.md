@@ -347,9 +347,9 @@ Hai endpoint sau thuộc nhóm protected `/api/admin`; chúng yêu cầu JWT/coo
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | GET | `/admin/me` | Trả snapshot quyền thực tế của actor từ RBAC: `{actor_id, username, roles, effective_permissions, legacy_fallback, permission_version}`. `permission_version` là marker opaque để client invalidation cache quyền. Tài khoản `is_admin` cũ chưa được gán role nhận `super_admin`, wildcard `admin.*` và `legacy_fallback=true`. Frontend dùng permission key (không dùng tên role) để bảo vệ module. |
-| GET | `/admin/resources` | Trả `{resources, permission_version}`; `resources` chỉ gồm module actor được nhìn thấy. Mỗi phần tử có đúng metadata ứng dụng `{key, label, category, frontend_route, capabilities, required_permissions, risk_level}`. Catalog không trả database schema, tên bảng/cột hoặc SQL metadata. `frontend_route` hiện trỏ tới entrypoint `/` của Admin single-view. |
+| GET | `/admin/resources` | Trả `{resources, permission_version}` từ allowlist compile-time và chỉ gồm resource mà actor có ít nhất một quyền. Mỗi phần tử có metadata `{key, domain, label, capabilities, read_permissions, write_permissions, risk_level, cache_invalidation, registry_reload, restart_required, audit_action_prefix, frontend_route}`. Catalog không dùng `information_schema`, không trả database schema/tên bảng/cột/SQL, và không dùng resource key từ client để sinh SQL. |
 
-Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là deterministic. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
+Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là deterministic. `read_permissions` và `write_permissions` là các permission thực tế được route backend dùng; metadata cache/registry mô tả tác động vận hành của thao tác ghi. Hiện mọi thao tác hỗ trợ đều reload trong process nên `restart_required=false`. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
 
 ## Admin — players & gus
 
@@ -378,16 +378,27 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là d
 
 Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission RBAC theo domain. `GET /api/admin/me` yêu cầu `admin.dashboard.access`; wildcard `admin.*` cấp toàn bộ quyền cho `super_admin`. Handler vẫn có thể kiểm tra principal quản trị như lớp phòng vệ bổ sung.
 
-Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
+Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.import_all`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. `game_data.import` chỉ cho phép một dataset; import toàn bộ có mức rủi ro cao hơn và bắt buộc `game_data.import_all`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
 
-Các thao tác phá hủy `POST /admin/data/import` và `POST /admin/clear-redis-cache` bắt buộc body JSON có `reason` khác rỗng. Frontend khai báo permission, risk, confirmation, reason và re-authentication trong action policy; khi backend trả 403 kèm `permission`, client rollback optimistic state (nếu có), tải lại `/admin/me` rồi thông báo quyền đã thay đổi.
+Các endpoint commit import và `POST /admin/clear-redis-cache` bắt buộc body JSON có `reason` khác rỗng. Frontend khai báo permission, risk, confirmation, reason và re-authentication trong action policy; khi backend trả 403 kèm `permission`, client rollback optimistic state (nếu có), tải lại `/admin/me` rồi thông báo quyền đã thay đổi.
+
+#### Workflow import CSV
+
+| Method | Path | Permission | Mô tả |
+| --- | --- | --- | --- |
+| POST | `/admin/data/import` | `game_data.import_all` | Preflight read-only toàn bộ CSV trên server. |
+| POST | `/admin/data/import/:table` | `game_data.import` | Preflight một dataset; nhận multipart field `file` tùy chọn, nếu thiếu dùng CSV trên server. Upload tối đa 10 MiB. |
+| POST | `/admin/data/import/commit` | `game_data.import_all` | Commit preflight toàn bộ với JSON `{preflight_id, reason}`. |
+| POST | `/admin/data/import/:table/commit` | `game_data.import` | Commit preflight một dataset với JSON `{preflight_id, reason}`. |
+
+Preflight parse/validate CSV, chạy UPSERT trong transaction rồi rollback và trả `plan` gồm `totals`/từng dataset với `rows`, `inserts`, `updates`, `unchanged`, diff mẫu, `validation_errors`, cờ reload/restart và `can_commit`. Lỗi nghiêm trọng đặt `can_commit=false` và không ghi database. `preflight_id` hết hạn sau 15 phút, chỉ dùng một lần, gắn với admin/phạm vi/hash nguồn. Commit chạy lại cùng nguồn trong một transaction, ghi audit cùng transaction, sau đó reload registry và invalidate cache; response nêu rõ `reload_ok`, `reload_warnings` và `restart_required`.
 
 | Nhóm | Routes hiện có |
 | --- | --- |
 | Tiên khiếu | `GET /apertures`, `GET/PUT /apertures/:id`; CRUD node và xem/tạo/xóa quần thể dị nhân theo aperture. |
 | Cổ/pet/history | cập nhật cá thể Cổ; tạo/cập nhật pet; `GET /gu-history`; `GET /batch-metrics`. |
 | Môn phái | list/detail/update/delete sect; thêm/xóa/đặt chưởng môn; CRUD mission; nhập/xóa hàng kho; quản lý sect mine. |
-| Dữ liệu & cache | `GET /data/tables`, import/export toàn bộ hoặc `/:table`, clear application cache và Redis cache. |
+| Dữ liệu & cache | `GET /data/tables`, workflow preflight/commit import toàn bộ hoặc `/:table`, export và clear application/Redis cache. |
 | World/activity | CRUD region, map cell, monster spawn, dungeon; list/update/reset mine slot. |
 | Dictionary/shop | CRUD shop, arena shop, Gu, item, recipe, monster, loot table, constitution, race, status và quest. |
 | Hệ thống | gift code list/create, upload image, top-up order, wallet transaction và monitoring/traces. |

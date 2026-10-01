@@ -13,7 +13,8 @@ export const ADMIN_ACTIONS = {
   viewPlayer: { permission: "players.read", riskLevel: "low", confirmationRequired: false, reasonRequired: false, reauthenticationRequired: false },
   updatePlayer: { permission: "players.update", riskLevel: "medium", confirmationRequired: true, reasonRequired: false, reauthenticationRequired: false },
   grantPlayerInventory: { permission: "players.inventory.grant", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
-  importAllGameData: { permission: "game_data.import", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+  importGameDataset: { permission: "game_data.import", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+  importAllGameData: { permission: "game_data.import_all", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
   flushRedis: { permission: "cache.flush", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
 } as const satisfies Record<string, AdminActionPolicy>;
 

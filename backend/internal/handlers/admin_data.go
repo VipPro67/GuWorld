@@ -3,8 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -80,7 +85,7 @@ func applyDatasetRuntimeBehavior(datasets []db.Dataset) {
 
 // AdminImportData seeds all dictionary tables from CSV files.
 // POST /api/admin/data/import
-func AdminImportData(c *gin.Context) {
+func adminImportDataLegacy(c *gin.Context) {
 	adminID, ok := requireAdmin(c)
 	if !ok {
 		return
@@ -135,7 +140,7 @@ func AdminListTables(c *gin.Context) {
 
 // AdminImportTable imports a single table from its CSV file.
 // POST /api/admin/data/import/:table
-func AdminImportTable(c *gin.Context) {
+func adminImportTableLegacy(c *gin.Context) {
 	adminID, ok := requireAdmin(c)
 	if !ok {
 		return

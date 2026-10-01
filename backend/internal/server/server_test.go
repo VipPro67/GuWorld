@@ -212,17 +212,20 @@ func TestAdminRoutePermissionInventory(t *testing.T) {
 
 func TestAdminRoutePermissionsUseExpectedSensitivePolicies(t *testing.T) {
 	want := map[string]string{
-		http.MethodGet + " /monitor/system":          "monitoring.read",
-		http.MethodPost + " /monitor/requests/reset": "monitoring.reset",
-		http.MethodGet + " /players/:id":             "players.read",
-		http.MethodPut + " /players/:id":             "players.update",
-		http.MethodPost + " /players/:id/items":      "players.inventory.grant",
-		http.MethodPost + " /players/:id/gus":        "players.inventory.grant",
-		http.MethodPost + " /data/import/:table":     "game_data.import",
-		http.MethodPost + " /data/export/:table":     "game_data.export",
-		http.MethodPost + " /clear-cache":            "cache.reload",
-		http.MethodPost + " /clear-redis-cache":      "cache.flush",
-		http.MethodGet + " /audit-logs":              "audit.read",
+		http.MethodGet + " /monitor/system":             "monitoring.read",
+		http.MethodPost + " /monitor/requests/reset":    "monitoring.reset",
+		http.MethodGet + " /players/:id":                "players.read",
+		http.MethodPut + " /players/:id":                "players.update",
+		http.MethodPost + " /players/:id/items":         "players.inventory.grant",
+		http.MethodPost + " /players/:id/gus":           "players.inventory.grant",
+		http.MethodPost + " /data/import":               "game_data.import_all",
+		http.MethodPost + " /data/import/commit":        "game_data.import_all",
+		http.MethodPost + " /data/import/:table":        "game_data.import",
+		http.MethodPost + " /data/import/:table/commit": "game_data.import",
+		http.MethodPost + " /data/export/:table":        "game_data.export",
+		http.MethodPost + " /clear-cache":               "cache.reload",
+		http.MethodPost + " /clear-redis-cache":         "cache.flush",
+		http.MethodGet + " /audit-logs":                 "audit.read",
 	}
 
 	for _, route := range adminRouteSpecs() {

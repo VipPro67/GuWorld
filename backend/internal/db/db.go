@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -21,6 +22,28 @@ import (
 )
 
 var DB *sql.DB
+
+type csvImportExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// CSV imports can be pointed at a transaction while retaining the existing
+// parsers. The mutex also prevents one admin import from changing the source
+// file/executor used by another concurrent import.
+var csvImportState struct {
+	sync.Mutex
+	executor csvImportExecutor
+	override map[string]string
+}
+
+func activeCSVImportDB() csvImportExecutor {
+	if csvImportState.executor != nil {
+		return csvImportState.executor
+	}
+	return DB
+}
 
 // baseRankCache memoizes the minimum dictionary rank of each Gu id, used when
 // upgrading legacy recipe required_gus values to the ranked format.
@@ -410,6 +433,9 @@ func csvPath(filename string) string {
 
 // openCSV opens a CSV file and returns the file, reader, and header row.
 func openCSV(filename string) (*os.File, *csv.Reader, []string, error) {
+	if override := csvImportState.override[filename]; override != "" {
+		filename = override
+	}
 	path := csvPath(filename)
 	f, err := os.Open(path)
 	if err != nil {
@@ -660,7 +686,7 @@ func seedItemsFromCSV(filename string) error {
 			path = strings.TrimSpace(row[pathIdx])
 		}
 
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price, image_url, rarity, path)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)
 			ON CONFLICT (id) DO UPDATE
@@ -858,7 +884,7 @@ func seedGusFromCSV(filename string) error {
 			targetType = "SINGLE"
 		}
 
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url)
 			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19, $20)
 			ON CONFLICT (id, rank) DO UPDATE
@@ -937,7 +963,7 @@ func seedConstitutionsFromCSV(filename string) error {
 				tierVal = v
 			}
 		}
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 		INSERT INTO constitution_dictionary (key, name, effects, tier)
 		VALUES ($1, $2, $3::jsonb, $4)
 		ON CONFLICT (key) DO UPDATE
@@ -1000,7 +1026,7 @@ func seedRacesFromCSV(filename string) error {
 		row := seen[key]
 		name := get(row, nameIdx)
 		effects := safeJSON(get(row, effectsIdx), "[]", fmt.Sprintf("%s effects", key))
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO race_dictionary (key, name, effects)
 			VALUES ($1, $2, $3::jsonb)
 			ON CONFLICT (key) DO UPDATE
@@ -1072,7 +1098,7 @@ func seedStatusesFromCSV(filename string) error {
 			fmt.Sscanf(d, "%d", &duration)
 		}
 		description := get(row, descIdx)
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO status_dictionary (key, name, effects, default_duration_minutes, blocked_actions, description)
 			VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6)
 			ON CONFLICT (key) DO UPDATE
@@ -1177,13 +1203,13 @@ func seedRecipesFromCSV(filename string) error {
 
 		// Skip if target Gu doesn't exist (FK constraint)
 		var exists bool
-		if err = DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, targetGuID, targetRank).Scan(&exists); err != nil || !exists {
+		if err = activeCSVImportDB().QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, targetGuID, targetRank).Scan(&exists); err != nil || !exists {
 			logger.S.Warnf("Recipe %s skipped: target %s rank %d not in gu_dictionary", id, targetGuID, targetRank)
 			skipped++
 			continue
 		}
 
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO refining_recipes (target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost)
 			VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8)
 			ON CONFLICT (target_gu_id, target_rank, variant) DO UPDATE
@@ -1252,7 +1278,7 @@ func baseGuRank(guID string) int {
 		return r
 	}
 	var r int
-	if err := DB.QueryRow(`SELECT MIN(rank) FROM gu_dictionary WHERE id = $1`, guID).Scan(&r); err != nil || r <= 0 {
+	if err := activeCSVImportDB().QueryRow(`SELECT MIN(rank) FROM gu_dictionary WHERE id = $1`, guID).Scan(&r); err != nil || r <= 0 {
 		r = 1
 	}
 	baseRankCache[guID] = r
@@ -1312,7 +1338,7 @@ func seedShopItemsFromCSV(filename string) error {
 				isDefault = false
 			}
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO caravan_shop_items (id, rank, price, stock, is_default, sort_order, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NOW())
 			ON CONFLICT (id, rank) DO UPDATE
@@ -1381,7 +1407,7 @@ func seedArenaShopItemsFromCSV(filename string) error {
 				isDefault = false
 			}
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO arena_shop_items (id, price, qty, stock, is_default, sort_order, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NOW())
 			ON CONFLICT (id) DO UPDATE
@@ -1475,7 +1501,7 @@ func seedQuestsFromCSV() error {
 			}
 		}
 
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO quests (id, title, description, req_desc, message, rewards)
 			VALUES ($1, $2, $3, $4, $5, $6::jsonb)
 			ON CONFLICT (id) DO UPDATE
@@ -1579,7 +1605,7 @@ func seedRegionsFromCSV(filename string) error {
 	// Pass 1: Upsert all rows with parent_id = NULL to ensure all region IDs exist in table
 	seeded := 0
 	for _, item := range rowsToInsert {
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
@@ -1598,7 +1624,7 @@ func seedRegionsFromCSV(filename string) error {
 	// Pass 2: Update parent_id for rows that specify a parent
 	for _, item := range rowsToInsert {
 		if item.parentID != nil {
-			_, err = DB.Exec(`UPDATE regions SET parent_id = $1 WHERE id = $2`, item.parentID, item.id)
+			_, err = activeCSVImportDB().Exec(`UPDATE regions SET parent_id = $1 WHERE id = $2`, item.parentID, item.id)
 			if err != nil {
 				return fmt.Errorf("update region parent_id %s -> %v: %w", item.id, item.parentID, err)
 			}
@@ -1641,7 +1667,7 @@ func seedLootTablesFromCSV(filename string) error {
 		}
 		entries := safeJSONArray(get(row, entriesIdx), "[]", fmt.Sprintf("loot table %s entries", id))
 		entries = FilterImmortalLootEntries(entries)
-		_, err = DB.Exec(`INSERT INTO loot_tables (id, name, entries, updated_at) VALUES ($1,$2,$3::jsonb,NOW()) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, entries=EXCLUDED.entries, updated_at=NOW()`, id, get(row, nameIdx), entries)
+		_, err = activeCSVImportDB().Exec(`INSERT INTO loot_tables (id, name, entries, updated_at) VALUES ($1,$2,$3::jsonb,NOW()) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, entries=EXCLUDED.entries, updated_at=NOW()`, id, get(row, nameIdx), entries)
 		if err != nil {
 			return fmt.Errorf("upsert loot table %s: %w", id, err)
 		}
@@ -1785,7 +1811,7 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 		if v := strings.TrimSpace(get(row, lootIdx)); v != "" {
 			lootTableID = v
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, is_capturable, capture_chance, pet_hunger_per_hour, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, type=EXCLUDED.type,
@@ -1872,7 +1898,7 @@ func seedMonsterSpawnsFromCSV(filename string) error {
 		if av == "false" || av == "0" || av == "no" {
 			active = false
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO monster_spawns (region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, min_rank, max_rank, is_boss_spawn, is_active)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 			ON CONFLICT DO NOTHING
@@ -1938,7 +1964,7 @@ func seedMapCellsFromCSV(filename string) error {
 		if av == "false" || av == "0" || av == "no" {
 			active = false
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO map_cells (region_id, x, y, cell_type, content_id, metadata, respawn_seconds, is_active)
 			VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
 			ON CONFLICT (x, y) DO UPDATE SET region_id=EXCLUDED.region_id, cell_type=EXCLUDED.cell_type,
@@ -2193,7 +2219,7 @@ func seedDreamRealmsFromCSV(filename string) error {
 		if rtype == "" {
 			rtype = "DREAM_REALM"
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours)
 			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
 			ON CONFLICT (id) DO UPDATE SET
@@ -2334,7 +2360,7 @@ func SeedInstanceTemplates() error {
 	}
 
 	for _, t := range templates {
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours)
 			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
 			ON CONFLICT (id) DO UPDATE SET
@@ -2368,7 +2394,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 		if err := json.Unmarshal([]byte(vaultMat), &mats); err == nil {
 			for itemID, qty := range mats {
 				if qty > 0 {
-					_, _ = DB.Exec(`
+					_, _ = activeCSVImportDB().Exec(`
 						INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
 						VALUES ($1, $2, $3)
 						ON CONFLICT (sect_id, item_id) DO UPDATE SET
@@ -2420,7 +2446,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 				if instID != "" {
 					rowID = fmt.Sprintf("%s:%s", sectID, instID)
 				}
-				_, _ = DB.Exec(`
+				_, _ = activeCSVImportDB().Exec(`
 					INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
 					VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 					ON CONFLICT (id) DO UPDATE SET
@@ -2447,7 +2473,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 				if rate <= 0 {
 					rate = 100.0
 				}
-				_, _ = DB.Exec(`
+				_, _ = activeCSVImportDB().Exec(`
 					INSERT INTO sect_vault_recipes (sect_id, recipe_id, completion_rate)
 					VALUES ($1, $2, $3)
 					ON CONFLICT (sect_id, recipe_id) DO UPDATE SET
@@ -2460,7 +2486,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 }
 
 func backfillSectVaultTables() error {
-	rows, err := DB.Query(`SELECT id, COALESCE(vault_gu::text, '[]'), COALESCE(vault_materials::text, '{}'), COALESCE(vault_recipes::text, '[]') FROM sects`)
+	rows, err := activeCSVImportDB().Query(`SELECT id, COALESCE(vault_gu::text, '[]'), COALESCE(vault_materials::text, '{}'), COALESCE(vault_recipes::text, '[]') FROM sects`)
 	if err != nil {
 		return err
 	}
@@ -2484,9 +2510,9 @@ func backfillSectVaultTables() error {
 		// Chỉ backfill nếu tông môn này chưa có bất kỳ dữ liệu kho nào trong các bảng mới.
 		// Tránh ghi đè dữ liệu gameplay mới bằng dữ liệu JSONB cũ khi server restart lại nhiều lần.
 		var matCount, guCount, recCount int
-		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_materials WHERE sect_id = $1`, s.id).Scan(&matCount)
-		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_gu WHERE sect_id = $1`, s.id).Scan(&guCount)
-		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_recipes WHERE sect_id = $1`, s.id).Scan(&recCount)
+		_ = activeCSVImportDB().QueryRow(`SELECT COUNT(*) FROM sect_vault_materials WHERE sect_id = $1`, s.id).Scan(&matCount)
+		_ = activeCSVImportDB().QueryRow(`SELECT COUNT(*) FROM sect_vault_gu WHERE sect_id = $1`, s.id).Scan(&guCount)
+		_ = activeCSVImportDB().QueryRow(`SELECT COUNT(*) FROM sect_vault_recipes WHERE sect_id = $1`, s.id).Scan(&recCount)
 
 		if matCount == 0 && guCount == 0 && recCount == 0 {
 			_ = syncSectVaultFromJSON(s.id, s.vaultGu, s.vaultMat, s.vaultRec)
@@ -2537,7 +2563,7 @@ func seedSectMissionsFromCSV(filename string) error {
 		if sectId == "" {
 			continue
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT DO NOTHING
@@ -2679,7 +2705,7 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 
 func seedNPCs() error {
 	var count int
-	err := DB.QueryRow("SELECT COUNT(*) FROM npcs").Scan(&count)
+	err := activeCSVImportDB().QueryRow("SELECT COUNT(*) FROM npcs").Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -2698,7 +2724,7 @@ func seedNPCs() error {
 			{"npc_clansman_2", "Cổ Nguyệt Đạo (Tộc nhân)", "gu_yue_clan", "CLANSMAN", 50},
 		}
 		for _, npc := range npcs {
-			_, err = DB.Exec(`
+			_, err = activeCSVImportDB().Exec(`
 				INSERT INTO npcs (id, name, sect_id, role, aptitude_percent)
 				VALUES ($1, $2, $3, $4, $5)
 				ON CONFLICT (id) DO NOTHING
