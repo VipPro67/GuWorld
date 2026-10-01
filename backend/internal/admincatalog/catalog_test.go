@@ -2,8 +2,11 @@ package admincatalog
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/authz"
 )
 
 func TestCatalogIsCompleteSafeAllowlist(t *testing.T) {
@@ -41,6 +44,52 @@ func TestCatalogIsCompleteSafeAllowlist(t *testing.T) {
 			t.Fatalf("catalog exposes forbidden database/SQL metadata %q", forbidden)
 		}
 	}
+}
+
+func TestBuiltinRoleResourceMatrix(t *testing.T) {
+	tests := []struct {
+		role string
+		want []string
+	}{
+		{"player", []string{}},
+		{"observer", []string{"apertures", "arena_shop", "audit", "constitution_dictionary", "dungeons", "game_data", "gift_codes", "gu_dictionary", "gus", "item_dictionary", "loot_tables", "map_cells", "mine_slots", "monitoring", "monster_spawns", "monsters", "players", "quests", "race_dictionary", "recipes", "regions", "sect_mines", "sects", "shop", "status_dictionary"}},
+		{"support_admin", []string{"audit", "gus", "players"}},
+		{"content_admin", []string{"cache", "constitution_dictionary", "game_data", "gu_dictionary", "images", "item_dictionary", "loot_tables", "monsters", "quests", "race_dictionary", "recipes", "status_dictionary"}},
+		{"game_admin", []string{"apertures", "arena_shop", "audit", "dungeons", "gift_codes", "gus", "map_cells", "mine_slots", "monitoring", "monster_spawns", "players", "regions", "sect_mines", "sects", "shop"}},
+		{"finance_viewer", []string{"billing"}},
+		{"super_admin", resourceKeys(All())},
+	}
+	for _, tt := range tests {
+		t.Run(tt.role, func(t *testing.T) {
+			permissions := authz.PermissionsForRole(tt.role)
+			allowed := func(permission string) bool {
+				return contains(permissions, "admin.*") || contains(permissions, permission)
+			}
+			got := resourceKeys(Visible(allowed))
+			sort.Strings(got)
+			sort.Strings(tt.want)
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Fatalf("visible resources = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func contains(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+func resourceKeys(resources []Resource) []string {
+	keys := make([]string, len(resources))
+	for i := range resources {
+		keys[i] = resources[i].Key
+	}
+	return keys
 }
 
 func TestVisibleUsesDeclaredPermissionsAndCopiesSlices(t *testing.T) {

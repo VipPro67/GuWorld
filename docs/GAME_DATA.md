@@ -118,10 +118,13 @@ RBAC quản trị được lưu trong bốn bảng:
 - `admin_role_permissions`: ánh xạ nhiều-nhiều giữa vai trò và quyền.
 - `player_admin_roles`: gán nhiều-nhiều vai trò cho `players`.
 
-Khi khởi tạo schema, hệ thống seed idempotent các role `admin`, `super_admin`,
+Khi khởi tạo schema, hệ thống seed idempotent các role `admin`, `observer`,
+`support_admin`, `content_admin`, `game_admin`, `finance_viewer`, `super_admin`,
 permission vào dashboard `admin.dashboard.access`, wildcard `admin.*` và các
-quan hệ tương ứng. `super_admin` nhận wildcard; role `admin` nhận quyền vào
-dashboard và có thể được cấp thêm quyền domain. Sau khi tài khoản admin mặc định
+quan hệ tương ứng. `observer` chỉ đọc dữ liệu vận hành; `support_admin` xử lý
+người chơi; `content_admin` quản lý nội dung; `game_admin` vận hành game/world;
+`finance_viewer` chỉ đọc billing; `super_admin` nhận wildcard. Role tương thích
+`admin` chỉ nhận quyền vào dashboard và có thể được cấp thêm quyền domain. Sau khi tài khoản admin mặc định
 được bảo đảm tồn tại, các tài khoản admin cũ được backfill idempotent vào RBAC.
 
 Authorization của dashboard và API quản trị được resolve từ các role/quyền

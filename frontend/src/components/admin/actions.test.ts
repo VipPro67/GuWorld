@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ADMIN_ACTIONS, canPerformAdminAction } from "./actions.ts";
+import { ADMIN_NAVIGATION } from "./navigation.ts";
 
 test("every admin action explicitly declares the complete safety policy", () => {
   for (const [key, action] of Object.entries(ADMIN_ACTIONS)) {
@@ -28,4 +29,41 @@ test("visibility accepts exact permissions and the admin wildcard", () => {
   assert.equal(canPerformAdminAction(["players.read"], "viewPlayer"), true);
   assert.equal(canPerformAdminAction(["players.read"], "updatePlayer"), false);
   assert.equal(canPerformAdminAction(["admin.*"], "flushRedis"), true);
+});
+
+const rolePermissions: Record<string, readonly string[]> = {
+  anonymous: [],
+  player: [],
+  observer: ADMIN_NAVIGATION.filter((item) => item.permission !== "billing.read").map((item) => item.permission),
+  support_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "gus.read", "audit.read"],
+  content_admin: ["game_data.read", "game_data.import", "game_data.import_all", "cache.reload"],
+  game_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "sects.read", "apertures.read", "gus.read", "shop.read", "mine_slots.read", "gift_codes.read", "audit.read", "monitoring.read"],
+  finance_viewer: ["billing.read"],
+  super_admin: ["admin.*"],
+};
+
+test("role matrix exposes only permitted navigation resources", () => {
+  const expected: Record<string, readonly string[]> = {
+    anonymous: [], player: [],
+    observer: ["players", "sects", "apertures", "gu_history", "data", "shop", "mines", "gift_codes", "logs", "monitoring"],
+    support_admin: ["players", "gu_history", "logs"],
+    content_admin: ["data"],
+    game_admin: ["players", "sects", "apertures", "gu_history", "shop", "mines", "gift_codes", "logs", "monitoring"],
+    finance_viewer: ["topup_wallet"],
+    super_admin: ADMIN_NAVIGATION.map((item) => item.key),
+  };
+  for (const [role, permissions] of Object.entries(rolePermissions)) {
+    const visible = ADMIN_NAVIGATION.filter((item) => permissions.includes("admin.*") || permissions.includes(item.permission)).map((item) => item.key);
+    assert.deepEqual(visible, expected[role], role);
+  }
+});
+
+test("UI action policy hides forbidden actions for every role", () => {
+  assert.equal(canPerformAdminAction(rolePermissions.observer, "updatePlayer"), false);
+  assert.equal(canPerformAdminAction(rolePermissions.finance_viewer, "adjustPlayerResources"), false);
+  assert.equal(canPerformAdminAction(rolePermissions.support_admin, "updatePlayer"), true);
+  assert.equal(canPerformAdminAction(rolePermissions.support_admin, "importGameDataset"), false);
+  assert.equal(canPerformAdminAction(rolePermissions.content_admin, "importGameDataset"), true);
+  assert.equal(canPerformAdminAction(rolePermissions.game_admin, "grantPlayerInventory"), true);
+  assert.equal(canPerformAdminAction(rolePermissions.super_admin, "assignPlayerRoles"), true);
 });

@@ -136,7 +136,7 @@ func AdminUpdatePlayerRoles(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra super admin"})
 			return
 		}
-		if count <= 1 {
+		if wouldRemoveLastSuperAdmin(before, after, count) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Không thể xóa super admin cuối cùng"})
 			return
 		}
@@ -165,6 +165,10 @@ func AdminUpdatePlayerRoles(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"player_id": targetID, "roles": after})
+}
+
+func wouldRemoveLastSuperAdmin(before, after []adminRole, currentSuperAdmins int) bool {
+	return containsRole(before, "super_admin") && !containsRole(after, "super_admin") && currentSuperAdmins <= 1
 }
 
 type roleQuerier interface {
