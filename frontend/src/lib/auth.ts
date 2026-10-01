@@ -53,6 +53,13 @@ export const authFetch = async (
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
+	if (init.method === "DELETE" && String(input).includes("/api/admin/")) {
+	  const target = decodeURIComponent(new URL(String(input), window.location.origin).pathname);
+	  const reason = window.prompt(`Lý do xóa target “${target}”:`)?.trim();
+	  if (!reason) throw new Error("Lý do xóa dữ liệu là bắt buộc");
+	  headers["X-Admin-Reason"] = reason;
+	  headers["X-Admin-Confirmation-Target"] = target;
+	}
   }
   const { timeoutMs = 30000, signal: callerSignal, onForbiddenRollback, ...fetchInit } = init;
   const timeoutSignal = AbortSignal.timeout(timeoutMs);

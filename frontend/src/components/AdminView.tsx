@@ -1094,9 +1094,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const exec = async (url: string, method: string, body?: ApiResponseData) => {
     setActionLoading(true);
     try {
+	  const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey : undefined;
       const res = await authFetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+		headers: { "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
         body: body ? JSON.stringify(body) : undefined,
       });
       const data = await res.json().catch(() => ({ error: "Lỗi không xác định" }));
@@ -2070,6 +2071,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   if (stonesPrimeval) body.primeval_stones = parseFloat(stonesPrimeval);
                   if (stonesImmortal) body.immortal_stones = parseFloat(stonesImmortal);
                   if (Object.keys(body).length === 0) return;
+				  const prepared = prepareAdminAction("adjustPlayerResources", `điều chỉnh tài nguyên của ${detail.username}`, selectedId || "player");
+				  if (!prepared) return;
+				  Object.assign(body, prepared);
                   const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/stones`, "PUT", body);
                   if (ok) setShowStones(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
@@ -2102,7 +2106,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddItem(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !addItemId} onClick={async () => {
-                  const prepared = prepareAdminAction("grantPlayerInventory", "cấp vật phẩm cho người chơi");
+				  const prepared = prepareAdminAction("grantPlayerInventory", "cấp vật phẩm cho người chơi", detail?.username || selectedId || "player");
                   if (!prepared) return;
                   const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "POST", { item_id: addItemId, quantity: addItemQty, ...prepared });
                   if (ok) setShowAddItem(false);
@@ -2185,7 +2189,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddGu(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !addGuId || rankRequired} onClick={async () => {
-                  const prepared = prepareAdminAction("grantPlayerInventory", "cấp Cổ trùng cho người chơi");
+				  const prepared = prepareAdminAction("grantPlayerInventory", "cấp Cổ trùng cho người chơi", detail?.username || selectedId || "player");
                   if (!prepared) return;
                   const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty, ...(submitRank ? { rank: submitRank } : {}), ...prepared });
                   if (ok) setShowAddGu(false);
@@ -3206,7 +3210,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Dictionary"}
                 </button>
-                {canAdminAction("flushRedis") && <button disabled={actionLoading} onClick={async () => { const prepared = prepareAdminAction("flushRedis", "xóa toàn bộ Redis cache"); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/clear-redis-cache`, "POST", prepared); if (ok) addToast("Toàn bộ cache Redis đã được xóa!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                {canAdminAction("flushRedis") && <button disabled={actionLoading} onClick={async () => { const prepared = prepareAdminAction("flushRedis", "xóa toàn bộ Redis cache", "Redis"); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/clear-redis-cache`, "POST", prepared); if (ok) addToast("Toàn bộ cache Redis đã được xóa!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Redis"}
                 </button>}

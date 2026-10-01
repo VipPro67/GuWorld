@@ -24,182 +24,189 @@ import (
 const slowRequestThreshold = 5 * time.Second
 
 type adminRouteSpec struct {
-	method          string
-	path            string
-	permission      string
-	handler         gin.HandlerFunc
-	auditAction     string
-	auditTargetType string
+	method                   string
+	path                     string
+	permission               string
+	handler                  gin.HandlerFunc
+	auditAction              string
+	auditTargetType          string
+	reasonRequired           bool
+	confirmationTarget       string
+	reauthenticationRequired bool
+	idempotencyKeyRequired   bool
 }
 
 // adminRouteSpecs is the permission inventory for every /api/admin endpoint.
 // Keeping registration and authorization metadata together makes missing permissions impossible.
 func adminRouteSpecs() []adminRouteSpec {
 	return []adminRouteSpec{
-		{http.MethodGet, "/me", authz.AdminAccessPermission, handlers.AdminGetMe, "", ""},
-		{http.MethodGet, "/resources", authz.AdminAccessPermission, handlers.AdminGetResources, "", ""},
+		{http.MethodGet, "/me", authz.AdminAccessPermission, handlers.AdminGetMe, "", "", false, "", false, false},
+		{http.MethodGet, "/resources", authz.AdminAccessPermission, handlers.AdminGetResources, "", "", false, "", false, false},
 		// monitoring
-		{http.MethodGet, "/monitor/system", "monitoring.read", handlers.AdminGetSystemStats, "", ""},
-		{http.MethodGet, "/monitor/requests/summary", "monitoring.read", handlers.AdminGetRequestSummary, "", ""},
-		{http.MethodGet, "/monitor/requests/traces", "monitoring.read", handlers.AdminGetRequestTraces, "", ""},
-		{http.MethodGet, "/monitor/requests/traces/:id", "monitoring.read", handlers.AdminGetRequestTraceDetail, "", ""},
-		{http.MethodPost, "/monitor/requests/reset", "monitoring.reset", handlers.AdminResetRequestMetrics, "admin.reset_request_metrics", "request_metrics"},
+		{http.MethodGet, "/monitor/system", "monitoring.read", handlers.AdminGetSystemStats, "", "", false, "", false, false},
+		{http.MethodGet, "/monitor/requests/summary", "monitoring.read", handlers.AdminGetRequestSummary, "", "", false, "", false, false},
+		{http.MethodGet, "/monitor/requests/traces", "monitoring.read", handlers.AdminGetRequestTraces, "", "", false, "", false, false},
+		{http.MethodGet, "/monitor/requests/traces/:id", "monitoring.read", handlers.AdminGetRequestTraceDetail, "", "", false, "", false, false},
+		{http.MethodPost, "/monitor/requests/reset", "monitoring.reset", handlers.AdminResetRequestMetrics, "admin.reset_request_metrics", "request_metrics", false, "", false, false},
 		// billing
-		{http.MethodGet, "/topup-orders", "billing.read", handlers.AdminListTopupOrders, "", ""},
-		{http.MethodGet, "/wallet-transactions", "billing.read", handlers.AdminListWalletTransactions, "", ""},
+		{http.MethodGet, "/topup-orders", "billing.read", handlers.AdminListTopupOrders, "", "", false, "", false, false},
+		{http.MethodGet, "/wallet-transactions", "billing.read", handlers.AdminListWalletTransactions, "", "", false, "", false, false},
 		// players
-		{http.MethodGet, "/players/online", "players.read", handlers.AdminListOnlinePlayers, "", ""},
-		{http.MethodGet, "/players", "players.read", handlers.AdminListPlayers, "", ""},
-		{http.MethodGet, "/players/:id", "players.read", handlers.AdminGetPlayerDetail, "", ""},
-		{http.MethodGet, "/players/:id/items", "players.read", handlers.AdminListPlayerItems, "", ""},
-		{http.MethodGet, "/players/:id/gus", "players.read", handlers.AdminListPlayerGus, "", ""},
-		{http.MethodPut, "/players/:id", "players.update", handlers.AdminUpdatePlayer, "admin.update_player", "player"},
+		{http.MethodGet, "/players/online", "players.read", handlers.AdminListOnlinePlayers, "", "", false, "", false, false},
+		{http.MethodGet, "/players", "players.read", handlers.AdminListPlayers, "", "", false, "", false, false},
+		{http.MethodGet, "/players/:id", "players.read", handlers.AdminGetPlayerDetail, "", "", false, "", false, false},
+		{http.MethodGet, "/players/:id/items", "players.read", handlers.AdminListPlayerItems, "", "", false, "", false, false},
+		{http.MethodGet, "/players/:id/gus", "players.read", handlers.AdminListPlayerGus, "", "", false, "", false, false},
+		{http.MethodPut, "/players/:id", "players.update", handlers.AdminUpdatePlayer, "admin.update_player", "player", false, "", false, false},
 		// apertures
-		{http.MethodGet, "/apertures", "apertures.read", handlers.AdminListApertures, "", ""},
-		{http.MethodGet, "/apertures/:id", "apertures.read", handlers.AdminGetApertureDetail, "", ""},
-		{http.MethodPut, "/apertures/:id", "apertures.update", handlers.AdminUpdateAperture, "admin.update_aperture", "aperture"},
+		{http.MethodGet, "/apertures", "apertures.read", handlers.AdminListApertures, "", "", false, "", false, false},
+		{http.MethodGet, "/apertures/:id", "apertures.read", handlers.AdminGetApertureDetail, "", "", false, "", false, false},
+		{http.MethodPut, "/apertures/:id", "apertures.update", handlers.AdminUpdateAperture, "admin.update_aperture", "aperture", false, "", false, false},
 		// gus
-		{http.MethodGet, "/gus/search", "gus.read", handlers.AdminSearchGus, "", ""},
-		{http.MethodGet, "/gu-history", "gus.read", handlers.AdminListGuHistory, "", ""},
+		{http.MethodGet, "/gus/search", "gus.read", handlers.AdminSearchGus, "", "", false, "", false, false},
+		{http.MethodGet, "/gu-history", "gus.read", handlers.AdminListGuHistory, "", "", false, "", false, false},
 		// players
-		{http.MethodPost, "/players/:id/items", "players.inventory.grant", handlers.AdminAddPlayerItems, "admin.add_player_items", "player"},
-		{http.MethodDelete, "/players/:id/items", "players.update", handlers.AdminRemovePlayerItems, "admin.remove_player_items", "player"},
-		{http.MethodPost, "/players/:id/gus", "players.inventory.grant", handlers.AdminAddPlayerGus, "admin.add_player_gus", "player"},
-		{http.MethodDelete, "/players/:id/gus/:instance_id", "players.update", handlers.AdminRemovePlayerGu, "admin.remove_player_gu", "player"},
-		{http.MethodGet, "/players/:id/pets", "players.read", handlers.AdminListPlayerPets, "", ""},
-		{http.MethodDelete, "/players/:id/pets/:pet_id", "players.update", handlers.AdminDeletePlayerPet, "admin.delete_player_pet", "player"},
-		{http.MethodPut, "/players/:id/stones", "players.update", handlers.AdminChangePlayerStones, "admin.change_player_stones", "player"},
+		{http.MethodPost, "/players/:id/items", "players.inventory.grant", handlers.AdminAddPlayerItems, "admin.add_player_items", "player", false, "", false, false},
+		{http.MethodDelete, "/players/:id/items", "players.delete", handlers.AdminRemovePlayerItems, "admin.remove_player_items", "player", true, "path", false, false},
+		{http.MethodPost, "/players/:id/gus", "players.inventory.grant", handlers.AdminAddPlayerGus, "admin.add_player_gus", "player", false, "", false, false},
+		{http.MethodDelete, "/players/:id/gus/:instance_id", "players.delete", handlers.AdminRemovePlayerGu, "admin.remove_player_gu", "player", true, "path", false, false},
+		{http.MethodGet, "/players/:id/pets", "players.read", handlers.AdminListPlayerPets, "", "", false, "", false, false},
+		{http.MethodDelete, "/players/:id/pets/:pet_id", "players.delete", handlers.AdminDeletePlayerPet, "admin.delete_player_pet", "player", true, "path", false, false},
+		{http.MethodPut, "/players/:id/stones", "players.resources.adjust", handlers.AdminChangePlayerStones, "admin.change_player_stones", "player", true, "id", false, true},
+		{http.MethodGet, "/roles", "admin_roles.read", handlers.AdminListRoles, "", "", false, "", false, false},
+		{http.MethodGet, "/players/:id/roles", "admin_roles.read", handlers.AdminGetPlayerRoles, "", "", false, "", false, false},
+		{http.MethodPut, "/players/:id/roles", "admin_roles.assign", handlers.AdminUpdatePlayerRoles, "admin.update_player_roles", "player", true, "id", true, true},
 		// sects
-		{http.MethodGet, "/sects", "sects.read", handlers.AdminListSects, "", ""},
-		{http.MethodGet, "/sects/:id", "sects.read", handlers.AdminGetSectDetail, "", ""},
-		{http.MethodPut, "/sects/:id", "sects.update", handlers.AdminUpdateSect, "admin.update_sect", "sect"},
-		{http.MethodPost, "/sects/:id/members/:memberId/leader", "sects.update", handlers.AdminSetSectLeader, "admin.set_sect_leader", "sect"},
-		{http.MethodDelete, "/sects/:id/members/:memberId", "sects.update", handlers.AdminKickSectMember, "admin.kick_sect_member", "sect"},
-		{http.MethodPost, "/sects/:id/members", "sects.update", handlers.AdminAddToSect, "admin.add_to_sect", "sect"},
-		{http.MethodDelete, "/sects/:id", "sects.update", handlers.AdminDeleteSect, "admin.delete_sect", "sect"},
-		{http.MethodGet, "/sects/:id/missions", "sects.read", handlers.AdminListSectMissions, "", ""},
-		{http.MethodPost, "/sects/:id/missions", "sects.update", handlers.AdminCreateSectMission, "admin.create_sect_mission", "sect"},
-		{http.MethodDelete, "/sects/:id/missions/:missionId", "sects.update", handlers.AdminDeleteSectMission, "admin.delete_sect_mission", "sect"},
-		{http.MethodPost, "/sects/:id/vault/stock", "sects.update", handlers.AdminStockSectVault, "admin.stock_sect_vault", "sect"},
-		{http.MethodDelete, "/sects/:id/vault/stock", "sects.update", handlers.AdminRemoveSectVaultItem, "admin.remove_sect_vault_item", "sect"},
+		{http.MethodGet, "/sects", "sects.read", handlers.AdminListSects, "", "", false, "", false, false},
+		{http.MethodGet, "/sects/:id", "sects.read", handlers.AdminGetSectDetail, "", "", false, "", false, false},
+		{http.MethodPut, "/sects/:id", "sects.update", handlers.AdminUpdateSect, "admin.update_sect", "sect", false, "", false, false},
+		{http.MethodPost, "/sects/:id/members/:memberId/leader", "sects.update", handlers.AdminSetSectLeader, "admin.set_sect_leader", "sect", false, "", false, false},
+		{http.MethodDelete, "/sects/:id/members/:memberId", "sects.delete", handlers.AdminKickSectMember, "admin.kick_sect_member", "sect", true, "path", false, false},
+		{http.MethodPost, "/sects/:id/members", "sects.update", handlers.AdminAddToSect, "admin.add_to_sect", "sect", false, "", false, false},
+		{http.MethodDelete, "/sects/:id", "sects.delete", handlers.AdminDeleteSect, "admin.delete_sect", "sect", true, "path", false, false},
+		{http.MethodGet, "/sects/:id/missions", "sects.read", handlers.AdminListSectMissions, "", "", false, "", false, false},
+		{http.MethodPost, "/sects/:id/missions", "sects.update", handlers.AdminCreateSectMission, "admin.create_sect_mission", "sect", false, "", false, false},
+		{http.MethodDelete, "/sects/:id/missions/:missionId", "sects.delete", handlers.AdminDeleteSectMission, "admin.delete_sect_mission", "sect", true, "path", false, false},
+		{http.MethodPost, "/sects/:id/vault/stock", "sects.update", handlers.AdminStockSectVault, "admin.stock_sect_vault", "sect", false, "", false, false},
+		{http.MethodDelete, "/sects/:id/vault/stock", "sects.delete", handlers.AdminRemoveSectVaultItem, "admin.remove_sect_vault_item", "sect", true, "path", false, false},
 		// game_data
-		{http.MethodPost, "/data/import", "game_data.import_all", handlers.AdminImportData, "admin.import_data", "game_data"},
-		{http.MethodPost, "/data/import/commit", "game_data.import_all", handlers.AdminCommitImportData, "admin.commit_import_data", "game_data"},
-		{http.MethodPost, "/data/export", "game_data.export", handlers.AdminExportData, "admin.export_data", "game_data"},
-		{http.MethodGet, "/data/tables", "game_data.read", handlers.AdminListTables, "", ""},
-		{http.MethodPost, "/data/import/:table", "game_data.import", handlers.AdminImportTable, "admin.import_table", "game_data"},
-		{http.MethodPost, "/data/import/:table/commit", "game_data.import", handlers.AdminCommitImportTable, "admin.commit_import_table", "game_data"},
-		{http.MethodPost, "/data/export/:table", "game_data.export", handlers.AdminExportTable, "admin.export_table", "game_data"},
+		{http.MethodPost, "/data/import", "game_data.import_all", handlers.AdminImportData, "admin.import_data", "game_data", false, "", false, false},
+		{http.MethodPost, "/data/import/commit", "game_data.import_all", handlers.AdminCommitImportData, "admin.commit_import_data", "game_data", true, "all", false, true},
+		{http.MethodPost, "/data/export", "game_data.export", handlers.AdminExportData, "admin.export_data", "game_data", false, "", false, false},
+		{http.MethodGet, "/data/tables", "game_data.read", handlers.AdminListTables, "", "", false, "", false, false},
+		{http.MethodPost, "/data/import/:table", "game_data.import", handlers.AdminImportTable, "admin.import_table", "game_data", false, "", false, false},
+		{http.MethodPost, "/data/import/:table/commit", "game_data.import", handlers.AdminCommitImportTable, "admin.commit_import_table", "game_data", true, "table", false, true},
+		{http.MethodPost, "/data/export/:table", "game_data.export", handlers.AdminExportTable, "admin.export_table", "game_data", false, "", false, false},
 		// cache
-		{http.MethodPost, "/clear-cache", "cache.reload", handlers.AdminClearCache, "admin.clear_cache", "cache"},
-		{http.MethodPost, "/clear-redis-cache", "cache.flush", handlers.AdminClearRedisCache, "admin.clear_redis_cache", "redis_cache"},
+		{http.MethodPost, "/clear-cache", "cache.reload", handlers.AdminClearCache, "admin.clear_cache", "cache", false, "", false, false},
+		{http.MethodPost, "/clear-redis-cache", "cache.flush", handlers.AdminClearRedisCache, "admin.clear_redis_cache", "redis_cache", true, "Redis", true, true},
 		// audit
-		{http.MethodGet, "/audit-logs", "audit.read", handlers.AdminGetAuditLogs, "", ""},
+		{http.MethodGet, "/audit-logs", "audit.read", handlers.AdminGetAuditLogs, "", "", false, "", false, false},
 		// regions
-		{http.MethodGet, "/regions", "regions.read", handlers.AdminListRegions, "", ""},
-		{http.MethodPost, "/regions", "regions.update", handlers.AdminCreateRegion, "admin.create_region", "region"},
-		{http.MethodPut, "/regions/:id", "regions.update", handlers.AdminUpdateRegion, "admin.update_region", "region"},
-		{http.MethodDelete, "/regions/:id", "regions.update", handlers.AdminDeleteRegion, "admin.delete_region", "region"},
+		{http.MethodGet, "/regions", "regions.read", handlers.AdminListRegions, "", "", false, "", false, false},
+		{http.MethodPost, "/regions", "regions.update", handlers.AdminCreateRegion, "admin.create_region", "region", false, "", false, false},
+		{http.MethodPut, "/regions/:id", "regions.update", handlers.AdminUpdateRegion, "admin.update_region", "region", false, "", false, false},
+		{http.MethodDelete, "/regions/:id", "regions.delete", handlers.AdminDeleteRegion, "admin.delete_region", "region", true, "path", false, false},
 		// map_cells
-		{http.MethodGet, "/map-cells", "map_cells.read", handlers.AdminListMapCells, "", ""},
-		{http.MethodPost, "/map-cells", "map_cells.update", handlers.AdminCreateMapCell, "admin.create_map_cell", "map_cell"},
-		{http.MethodPut, "/map-cells/:id", "map_cells.update", handlers.AdminUpdateMapCell, "admin.update_map_cell", "map_cell"},
-		{http.MethodDelete, "/map-cells/:id", "map_cells.update", handlers.AdminDeleteMapCell, "admin.delete_map_cell", "map_cell"},
+		{http.MethodGet, "/map-cells", "map_cells.read", handlers.AdminListMapCells, "", "", false, "", false, false},
+		{http.MethodPost, "/map-cells", "map_cells.update", handlers.AdminCreateMapCell, "admin.create_map_cell", "map_cell", false, "", false, false},
+		{http.MethodPut, "/map-cells/:id", "map_cells.update", handlers.AdminUpdateMapCell, "admin.update_map_cell", "map_cell", false, "", false, false},
+		{http.MethodDelete, "/map-cells/:id", "map_cells.delete", handlers.AdminDeleteMapCell, "admin.delete_map_cell", "map_cell", true, "path", false, false},
 		// shop
-		{http.MethodGet, "/shop", "shop.read", handlers.AdminListShopItems, "", ""},
-		{http.MethodPost, "/shop", "shop.update", handlers.AdminCreateShopItem, "admin.create_shop_item", "shop_item"},
-		{http.MethodPut, "/shop/:id/:rank", "shop.update", handlers.AdminUpdateShopItem, "admin.update_shop_item", "shop_item"},
-		{http.MethodDelete, "/shop/:id/:rank", "shop.update", handlers.AdminDeleteShopItem, "admin.delete_shop_item", "shop_item"},
+		{http.MethodGet, "/shop", "shop.read", handlers.AdminListShopItems, "", "", false, "", false, false},
+		{http.MethodPost, "/shop", "shop.update", handlers.AdminCreateShopItem, "admin.create_shop_item", "shop_item", false, "", false, false},
+		{http.MethodPut, "/shop/:id/:rank", "shop.update", handlers.AdminUpdateShopItem, "admin.update_shop_item", "shop_item", false, "", false, false},
+		{http.MethodDelete, "/shop/:id/:rank", "shop.delete", handlers.AdminDeleteShopItem, "admin.delete_shop_item", "shop_item", true, "path", false, false},
 		// arena_shop
-		{http.MethodGet, "/arena-shop", "arena_shop.read", handlers.AdminListArenaShopItems, "", ""},
-		{http.MethodPost, "/arena-shop", "arena_shop.update", handlers.AdminCreateArenaShopItem, "admin.create_arena_shop_item", "arena_shop_item"},
-		{http.MethodPut, "/arena-shop/:id", "arena_shop.update", handlers.AdminUpdateArenaShopItem, "admin.update_arena_shop_item", "arena_shop_item"},
-		{http.MethodDelete, "/arena-shop/:id", "arena_shop.update", handlers.AdminDeleteArenaShopItem, "admin.delete_arena_shop_item", "arena_shop_item"},
+		{http.MethodGet, "/arena-shop", "arena_shop.read", handlers.AdminListArenaShopItems, "", "", false, "", false, false},
+		{http.MethodPost, "/arena-shop", "arena_shop.update", handlers.AdminCreateArenaShopItem, "admin.create_arena_shop_item", "arena_shop_item", false, "", false, false},
+		{http.MethodPut, "/arena-shop/:id", "arena_shop.update", handlers.AdminUpdateArenaShopItem, "admin.update_arena_shop_item", "arena_shop_item", false, "", false, false},
+		{http.MethodDelete, "/arena-shop/:id", "arena_shop.delete", handlers.AdminDeleteArenaShopItem, "admin.delete_arena_shop_item", "arena_shop_item", true, "path", false, false},
 		// mine_slots
-		{http.MethodGet, "/mine-slots", "mine_slots.read", handlers.AdminListMineSlots, "", ""},
-		{http.MethodPut, "/mine-slots/:id", "mine_slots.update", handlers.AdminUpdateMineSlot, "admin.update_mine_slot", "mine_slot"},
-		{http.MethodPost, "/mine-slots/:id/reset", "mine_slots.update", handlers.AdminResetMineSlot, "admin.reset_mine_slot", "mine_slot"},
+		{http.MethodGet, "/mine-slots", "mine_slots.read", handlers.AdminListMineSlots, "", "", false, "", false, false},
+		{http.MethodPut, "/mine-slots/:id", "mine_slots.update", handlers.AdminUpdateMineSlot, "admin.update_mine_slot", "mine_slot", false, "", false, false},
+		{http.MethodPost, "/mine-slots/:id/reset", "mine_slots.update", handlers.AdminResetMineSlot, "admin.reset_mine_slot", "mine_slot", false, "", false, false},
 		// gu_dictionary
-		{http.MethodGet, "/gu-dictionary", "gu_dictionary.read", handlers.AdminListGuItems, "", ""},
-		{http.MethodPost, "/gu-effects/validate", "gu_dictionary.update", handlers.AdminValidateGuEffects, "admin.validate_gu_effects", "gu_effect"},
-		{http.MethodGet, "/gu-effects/audit", "gu_dictionary.read", handlers.AdminAuditGuEffects, "", ""},
-		{http.MethodPost, "/effect-catalog/validate", "gu_dictionary.update", handlers.AdminValidateGuEffects, "admin.validate_gu_effects", "effect_catalog"},
-		{http.MethodGet, "/effect-catalog/metadata", "gu_dictionary.read", handlers.AdminEffectCatalogMetadata, "", ""},
-		{http.MethodGet, "/effect-catalog/audit", "gu_dictionary.read", handlers.AdminAuditEffectCatalog, "", ""},
-		{http.MethodPost, "/gu-dictionary", "gu_dictionary.update", handlers.AdminCreateGuItem, "admin.create_gu_item", "gu_dictionary"},
-		{http.MethodPut, "/gu-dictionary/:id", "gu_dictionary.update", handlers.AdminUpdateGuItem, "admin.update_gu_item", "gu_dictionary"},
-		{http.MethodDelete, "/gu-dictionary/:id", "gu_dictionary.update", handlers.AdminDeleteGuItem, "admin.delete_gu_item", "gu_dictionary"},
+		{http.MethodGet, "/gu-dictionary", "gu_dictionary.read", handlers.AdminListGuItems, "", "", false, "", false, false},
+		{http.MethodPost, "/gu-effects/validate", "gu_dictionary.update", handlers.AdminValidateGuEffects, "admin.validate_gu_effects", "gu_effect", false, "", false, false},
+		{http.MethodGet, "/gu-effects/audit", "gu_dictionary.read", handlers.AdminAuditGuEffects, "", "", false, "", false, false},
+		{http.MethodPost, "/effect-catalog/validate", "gu_dictionary.update", handlers.AdminValidateGuEffects, "admin.validate_gu_effects", "effect_catalog", false, "", false, false},
+		{http.MethodGet, "/effect-catalog/metadata", "gu_dictionary.read", handlers.AdminEffectCatalogMetadata, "", "", false, "", false, false},
+		{http.MethodGet, "/effect-catalog/audit", "gu_dictionary.read", handlers.AdminAuditEffectCatalog, "", "", false, "", false, false},
+		{http.MethodPost, "/gu-dictionary", "gu_dictionary.update", handlers.AdminCreateGuItem, "admin.create_gu_item", "gu_dictionary", false, "", false, false},
+		{http.MethodPut, "/gu-dictionary/:id", "gu_dictionary.update", handlers.AdminUpdateGuItem, "admin.update_gu_item", "gu_dictionary", false, "", false, false},
+		{http.MethodDelete, "/gu-dictionary/:id", "gu_dictionary.delete", handlers.AdminDeleteGuItem, "admin.delete_gu_item", "gu_dictionary", true, "path", false, false},
 		// item_dictionary
-		{http.MethodGet, "/item-dictionary", "item_dictionary.read", handlers.AdminListItemItems, "", ""},
-		{http.MethodPost, "/item-dictionary", "item_dictionary.update", handlers.AdminCreateItemItem, "admin.create_item_item", "item_dictionary"},
-		{http.MethodPut, "/item-dictionary/:id", "item_dictionary.update", handlers.AdminUpdateItemItem, "admin.update_item_item", "item_dictionary"},
-		{http.MethodDelete, "/item-dictionary/:id", "item_dictionary.update", handlers.AdminDeleteItemItem, "admin.delete_item_item", "item_dictionary"},
+		{http.MethodGet, "/item-dictionary", "item_dictionary.read", handlers.AdminListItemItems, "", "", false, "", false, false},
+		{http.MethodPost, "/item-dictionary", "item_dictionary.update", handlers.AdminCreateItemItem, "admin.create_item_item", "item_dictionary", false, "", false, false},
+		{http.MethodPut, "/item-dictionary/:id", "item_dictionary.update", handlers.AdminUpdateItemItem, "admin.update_item_item", "item_dictionary", false, "", false, false},
+		{http.MethodDelete, "/item-dictionary/:id", "item_dictionary.delete", handlers.AdminDeleteItemItem, "admin.delete_item_item", "item_dictionary", true, "path", false, false},
 		// recipes
-		{http.MethodGet, "/recipes", "recipes.read", handlers.AdminListRecipes, "", ""},
-		{http.MethodPost, "/recipes", "recipes.update", handlers.AdminCreateRecipe, "admin.create_recipe", "recipe"},
-		{http.MethodPut, "/recipes/:id", "recipes.update", handlers.AdminUpdateRecipe, "admin.update_recipe", "recipe"},
-		{http.MethodDelete, "/recipes/:id", "recipes.update", handlers.AdminDeleteRecipe, "admin.delete_recipe", "recipe"},
+		{http.MethodGet, "/recipes", "recipes.read", handlers.AdminListRecipes, "", "", false, "", false, false},
+		{http.MethodPost, "/recipes", "recipes.update", handlers.AdminCreateRecipe, "admin.create_recipe", "recipe", false, "", false, false},
+		{http.MethodPut, "/recipes/:id", "recipes.update", handlers.AdminUpdateRecipe, "admin.update_recipe", "recipe", false, "", false, false},
+		{http.MethodDelete, "/recipes/:id", "recipes.delete", handlers.AdminDeleteRecipe, "admin.delete_recipe", "recipe", true, "path", false, false},
 		// monsters
-		{http.MethodGet, "/monsters", "monsters.read", handlers.AdminListMonsters, "", ""},
-		{http.MethodPost, "/monsters", "monsters.update", handlers.AdminCreateMonster, "admin.create_monster", "monster"},
-		{http.MethodPut, "/monsters/:id", "monsters.update", handlers.AdminUpdateMonster, "admin.update_monster", "monster"},
-		{http.MethodDelete, "/monsters/:id", "monsters.update", handlers.AdminDeleteMonster, "admin.delete_monster", "monster"},
+		{http.MethodGet, "/monsters", "monsters.read", handlers.AdminListMonsters, "", "", false, "", false, false},
+		{http.MethodPost, "/monsters", "monsters.update", handlers.AdminCreateMonster, "admin.create_monster", "monster", false, "", false, false},
+		{http.MethodPut, "/monsters/:id", "monsters.update", handlers.AdminUpdateMonster, "admin.update_monster", "monster", false, "", false, false},
+		{http.MethodDelete, "/monsters/:id", "monsters.delete", handlers.AdminDeleteMonster, "admin.delete_monster", "monster", true, "path", false, false},
 		// loot_tables
-		{http.MethodGet, "/loot-tables", "loot_tables.read", handlers.AdminListLootTables, "", ""},
-		{http.MethodPost, "/loot-tables", "loot_tables.update", handlers.AdminCreateLootTable, "admin.create_loot_table", "loot_table"},
-		{http.MethodPut, "/loot-tables/:id", "loot_tables.update", handlers.AdminUpdateLootTable, "admin.update_loot_table", "loot_table"},
-		{http.MethodDelete, "/loot-tables/:id", "loot_tables.update", handlers.AdminDeleteLootTable, "admin.delete_loot_table", "loot_table"},
+		{http.MethodGet, "/loot-tables", "loot_tables.read", handlers.AdminListLootTables, "", "", false, "", false, false},
+		{http.MethodPost, "/loot-tables", "loot_tables.update", handlers.AdminCreateLootTable, "admin.create_loot_table", "loot_table", false, "", false, false},
+		{http.MethodPut, "/loot-tables/:id", "loot_tables.update", handlers.AdminUpdateLootTable, "admin.update_loot_table", "loot_table", false, "", false, false},
+		{http.MethodDelete, "/loot-tables/:id", "loot_tables.delete", handlers.AdminDeleteLootTable, "admin.delete_loot_table", "loot_table", true, "path", false, false},
 		// gift_codes
-		{http.MethodPost, "/gift-codes", "gift_codes.update", handlers.AdminCreateGiftCode, "admin.create_gift_code", "gift_code"},
-		{http.MethodGet, "/gift-codes", "gift_codes.read", handlers.AdminListGiftCodes, "", ""},
+		{http.MethodPost, "/gift-codes", "gift_codes.update", handlers.AdminCreateGiftCode, "admin.create_gift_code", "gift_code", false, "", false, false},
+		{http.MethodGet, "/gift-codes", "gift_codes.read", handlers.AdminListGiftCodes, "", "", false, "", false, false},
 		// images
-		{http.MethodPost, "/upload-image", "images.update", handlers.AdminUploadImage, "admin.upload_image", "image"},
+		{http.MethodPost, "/upload-image", "images.update", handlers.AdminUploadImage, "admin.upload_image", "image", false, "", false, false},
 		// players
-		{http.MethodPut, "/players/:id/gus/:instance_id", "players.update", handlers.AdminUpdatePlayerGu, "admin.update_player_gu", "player"},
-		{http.MethodPost, "/players/:id/pets", "players.update", handlers.AdminCreatePlayerPet, "admin.create_player_pet", "player"},
-		{http.MethodPut, "/players/:id/pets/:pet_id", "players.update", handlers.AdminUpdatePlayerPet, "admin.update_player_pet", "player"},
+		{http.MethodPut, "/players/:id/gus/:instance_id", "players.update", handlers.AdminUpdatePlayerGu, "admin.update_player_gu", "player", false, "", false, false},
+		{http.MethodPost, "/players/:id/pets", "players.update", handlers.AdminCreatePlayerPet, "admin.create_player_pet", "player", false, "", false, false},
+		{http.MethodPut, "/players/:id/pets/:pet_id", "players.update", handlers.AdminUpdatePlayerPet, "admin.update_player_pet", "player", false, "", false, false},
 		// constitution_dictionary
-		{http.MethodGet, "/constitution-dictionary", "constitution_dictionary.read", handlers.AdminListConstitutions, "", ""},
-		{http.MethodPost, "/constitution-dictionary", "constitution_dictionary.update", handlers.AdminCreateConstitution, "admin.create_constitution", "constitution"},
-		{http.MethodPut, "/constitution-dictionary/:key", "constitution_dictionary.update", handlers.AdminUpdateConstitution, "admin.update_constitution", "constitution"},
-		{http.MethodDelete, "/constitution-dictionary/:key", "constitution_dictionary.update", handlers.AdminDeleteConstitution, "admin.delete_constitution", "constitution"},
+		{http.MethodGet, "/constitution-dictionary", "constitution_dictionary.read", handlers.AdminListConstitutions, "", "", false, "", false, false},
+		{http.MethodPost, "/constitution-dictionary", "constitution_dictionary.update", handlers.AdminCreateConstitution, "admin.create_constitution", "constitution", false, "", false, false},
+		{http.MethodPut, "/constitution-dictionary/:key", "constitution_dictionary.update", handlers.AdminUpdateConstitution, "admin.update_constitution", "constitution", false, "", false, false},
+		{http.MethodDelete, "/constitution-dictionary/:key", "constitution_dictionary.delete", handlers.AdminDeleteConstitution, "admin.delete_constitution", "constitution", true, "path", false, false},
 		// race_dictionary
-		{http.MethodGet, "/race-dictionary", "race_dictionary.read", handlers.AdminListRaces, "", ""},
-		{http.MethodPost, "/race-dictionary", "race_dictionary.update", handlers.AdminCreateRace, "admin.create_race", "race"},
-		{http.MethodPut, "/race-dictionary/:key", "race_dictionary.update", handlers.AdminUpdateRace, "admin.update_race", "race"},
-		{http.MethodDelete, "/race-dictionary/:key", "race_dictionary.update", handlers.AdminDeleteRace, "admin.delete_race", "race"},
+		{http.MethodGet, "/race-dictionary", "race_dictionary.read", handlers.AdminListRaces, "", "", false, "", false, false},
+		{http.MethodPost, "/race-dictionary", "race_dictionary.update", handlers.AdminCreateRace, "admin.create_race", "race", false, "", false, false},
+		{http.MethodPut, "/race-dictionary/:key", "race_dictionary.update", handlers.AdminUpdateRace, "admin.update_race", "race", false, "", false, false},
+		{http.MethodDelete, "/race-dictionary/:key", "race_dictionary.delete", handlers.AdminDeleteRace, "admin.delete_race", "race", true, "path", false, false},
 		// monitoring
-		{http.MethodGet, "/batch-metrics", "monitoring.read", handlers.GetBatchMetrics, "", ""},
+		{http.MethodGet, "/batch-metrics", "monitoring.read", handlers.GetBatchMetrics, "", "", false, "", false, false},
 		// status_dictionary
-		{http.MethodGet, "/status-dictionary", "status_dictionary.read", handlers.AdminListStatuses, "", ""},
-		{http.MethodPost, "/status-dictionary", "status_dictionary.update", handlers.AdminCreateStatus, "admin.create_status", "status"},
-		{http.MethodPut, "/status-dictionary/:key", "status_dictionary.update", handlers.AdminUpdateStatus, "admin.update_status", "status"},
-		{http.MethodDelete, "/status-dictionary/:key", "status_dictionary.update", handlers.AdminDeleteStatus, "admin.delete_status", "status"},
+		{http.MethodGet, "/status-dictionary", "status_dictionary.read", handlers.AdminListStatuses, "", "", false, "", false, false},
+		{http.MethodPost, "/status-dictionary", "status_dictionary.update", handlers.AdminCreateStatus, "admin.create_status", "status", false, "", false, false},
+		{http.MethodPut, "/status-dictionary/:key", "status_dictionary.update", handlers.AdminUpdateStatus, "admin.update_status", "status", false, "", false, false},
+		{http.MethodDelete, "/status-dictionary/:key", "status_dictionary.delete", handlers.AdminDeleteStatus, "admin.delete_status", "status", true, "path", false, false},
 		// monster_spawns
-		{http.MethodGet, "/monster-spawns", "monster_spawns.read", handlers.AdminListMonsterSpawns, "", ""},
-		{http.MethodPost, "/monster-spawns", "monster_spawns.update", handlers.AdminCreateMonsterSpawn, "admin.create_monster_spawn", "monster_spawn"},
-		{http.MethodPut, "/monster-spawns/:id", "monster_spawns.update", handlers.AdminUpdateMonsterSpawn, "admin.update_monster_spawn", "monster_spawn"},
-		{http.MethodDelete, "/monster-spawns/:id", "monster_spawns.update", handlers.AdminDeleteMonsterSpawn, "admin.delete_monster_spawn", "monster_spawn"},
+		{http.MethodGet, "/monster-spawns", "monster_spawns.read", handlers.AdminListMonsterSpawns, "", "", false, "", false, false},
+		{http.MethodPost, "/monster-spawns", "monster_spawns.update", handlers.AdminCreateMonsterSpawn, "admin.create_monster_spawn", "monster_spawn", false, "", false, false},
+		{http.MethodPut, "/monster-spawns/:id", "monster_spawns.update", handlers.AdminUpdateMonsterSpawn, "admin.update_monster_spawn", "monster_spawn", false, "", false, false},
+		{http.MethodDelete, "/monster-spawns/:id", "monster_spawns.delete", handlers.AdminDeleteMonsterSpawn, "admin.delete_monster_spawn", "monster_spawn", true, "path", false, false},
 		// quests
-		{http.MethodGet, "/quests", "quests.read", handlers.AdminListQuests, "", ""},
-		{http.MethodPost, "/quests", "quests.update", handlers.AdminCreateQuest, "admin.create_quest", "quest"},
-		{http.MethodPut, "/quests/:id", "quests.update", handlers.AdminUpdateQuest, "admin.update_quest", "quest"},
-		{http.MethodDelete, "/quests/:id", "quests.update", handlers.AdminDeleteQuest, "admin.delete_quest", "quest"},
+		{http.MethodGet, "/quests", "quests.read", handlers.AdminListQuests, "", "", false, "", false, false},
+		{http.MethodPost, "/quests", "quests.update", handlers.AdminCreateQuest, "admin.create_quest", "quest", false, "", false, false},
+		{http.MethodPut, "/quests/:id", "quests.update", handlers.AdminUpdateQuest, "admin.update_quest", "quest", false, "", false, false},
+		{http.MethodDelete, "/quests/:id", "quests.delete", handlers.AdminDeleteQuest, "admin.delete_quest", "quest", true, "path", false, false},
 		// dungeons
-		{http.MethodGet, "/dungeons", "dungeons.read", handlers.AdminListDungeons, "", ""},
-		{http.MethodPost, "/dungeons", "dungeons.update", handlers.AdminCreateDungeon, "admin.create_dungeon", "dungeon"},
-		{http.MethodPut, "/dungeons/:id", "dungeons.update", handlers.AdminUpdateDungeon, "admin.update_dungeon", "dungeon"},
-		{http.MethodDelete, "/dungeons/:id", "dungeons.update", handlers.AdminDeleteDungeon, "admin.delete_dungeon", "dungeon"},
+		{http.MethodGet, "/dungeons", "dungeons.read", handlers.AdminListDungeons, "", "", false, "", false, false},
+		{http.MethodPost, "/dungeons", "dungeons.update", handlers.AdminCreateDungeon, "admin.create_dungeon", "dungeon", false, "", false, false},
+		{http.MethodPut, "/dungeons/:id", "dungeons.update", handlers.AdminUpdateDungeon, "admin.update_dungeon", "dungeon", false, "", false, false},
+		{http.MethodDelete, "/dungeons/:id", "dungeons.delete", handlers.AdminDeleteDungeon, "admin.delete_dungeon", "dungeon", true, "path", false, false},
 		// sect_mines
-		{http.MethodGet, "/sect-mines", "sect_mines.read", handlers.AdminListSectMines, "", ""},
-		{http.MethodPut, "/sect-mines/:id", "sect_mines.update", handlers.AdminUpdateSectMine, "admin.update_sect_mine", "sect_mine"},
+		{http.MethodGet, "/sect-mines", "sect_mines.read", handlers.AdminListSectMines, "", "", false, "", false, false},
+		{http.MethodPut, "/sect-mines/:id", "sect_mines.update", handlers.AdminUpdateSectMine, "admin.update_sect_mine", "sect_mine", false, "", false, false},
 		// apertures
-		{http.MethodGet, "/apertures/:id/nodes", "apertures.read", handlers.AdminListApertureNodes, "", ""},
-		{http.MethodPost, "/apertures/:id/nodes", "apertures.update", handlers.AdminCreateApertureNode, "admin.create_aperture_node", "aperture"},
-		{http.MethodDelete, "/apertures/:id/nodes/:node_id", "apertures.update", handlers.AdminDeleteApertureNode, "admin.delete_aperture_node", "aperture"},
-		{http.MethodGet, "/apertures/:id/variant-humans", "apertures.read", handlers.AdminListApertureVariantHumans, "", ""},
-		{http.MethodPost, "/apertures/:id/variant-humans", "apertures.update", handlers.AdminCreateApertureVariantHuman, "admin.create_aperture_variant_human", "aperture"},
-		{http.MethodDelete, "/apertures/:id/variant-humans/:vh_id", "apertures.update", handlers.AdminDeleteApertureVariantHuman, "admin.delete_aperture_variant_human", "aperture"},
+		{http.MethodGet, "/apertures/:id/nodes", "apertures.read", handlers.AdminListApertureNodes, "", "", false, "", false, false},
+		{http.MethodPost, "/apertures/:id/nodes", "apertures.update", handlers.AdminCreateApertureNode, "admin.create_aperture_node", "aperture", false, "", false, false},
+		{http.MethodDelete, "/apertures/:id/nodes/:node_id", "apertures.delete", handlers.AdminDeleteApertureNode, "admin.delete_aperture_node", "aperture", true, "path", false, false},
+		{http.MethodGet, "/apertures/:id/variant-humans", "apertures.read", handlers.AdminListApertureVariantHumans, "", "", false, "", false, false},
+		{http.MethodPost, "/apertures/:id/variant-humans", "apertures.update", handlers.AdminCreateApertureVariantHuman, "admin.create_aperture_variant_human", "aperture", false, "", false, false},
+		{http.MethodDelete, "/apertures/:id/variant-humans/:vh_id", "apertures.delete", handlers.AdminDeleteApertureVariantHuman, "admin.delete_aperture_variant_human", "aperture", true, "path", false, false},
 	}
 }
 
@@ -350,7 +357,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		} else if allowedOriginsStr == "*" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Admin-Reason, X-Admin-Confirmation-Target, Idempotency-Key, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
@@ -438,8 +445,27 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 				handlers = append(handlers, middleware.AdminMutationAudit(route.auditAction, route.auditTargetType, route.permission))
 			}
 			handlers = append(handlers, middleware.PermissionRequired(route.permission))
-			if (route.method == http.MethodPost && strings.HasSuffix(route.path, "/commit")) || route.permission == "cache.flush" {
+			if route.reasonRequired {
 				handlers = append(handlers, middleware.AdminReasonRequired())
+			}
+			if route.confirmationTarget != "" {
+				target := route.confirmationTarget
+				handlers = append(handlers, middleware.AdminConfirmationRequired(func(c *gin.Context) string {
+					switch target {
+					case "path":
+						return c.Request.URL.Path
+					case "id", "table":
+						return c.Param(target)
+					default:
+						return target
+					}
+				}))
+			}
+			if route.reauthenticationRequired {
+				handlers = append(handlers, middleware.AdminPasswordReauthentication())
+			}
+			if route.idempotencyKeyRequired {
+				handlers = append(handlers, middleware.AdminIdempotencyKeyRequired())
 			}
 			handlers = append(handlers, route.handler)
 			admin.Handle(route.method, route.path, handlers...)

@@ -527,3 +527,18 @@ operational reason. `X-Admin-Reason` may be used for requests without a JSON bod
 Audit payloads never persist credential fields whose names identify passwords, tokens,
 cookies, OTPs, authorization/CSRF values, card verification values, or payment/client/API
 secrets. Multipart bodies are not captured.
+
+### Hợp đồng an toàn cho mutation quản trị nhạy cảm
+
+Các thao tác flush Redis, commit bulk import, xóa dữ liệu, điều chỉnh stones/tài nguyên và gán role dùng permission riêng. Mutation nhạy cảm phải gửi `reason` (hoặc `X-Admin-Reason`) và `confirmation_target` (hoặc `X-Admin-Confirmation-Target`) khớp chính xác target của route. Những thao tác có thể retry (flush Redis, commit import, đặt số dư tuyệt đối và thay role) phải gửi `Idempotency-Key` không rỗng, tối đa 128 ký tự; key được ghi vào audit; cùng actor/route/key và payload sẽ nhận lại response đã lưu trong vòng đời process, còn payload khác nhận `409`. Redis flush và gán role còn yêu cầu `reauth_password` của actor; giá trị bí mật này luôn bị redact khỏi audit.
+
+| Thao tác | Permission | Confirmation target | Re-auth | Idempotency-Key |
+|---|---|---|---|---|
+| Flush Redis | `cache.flush` | `Redis` | Có | Bắt buộc |
+| Commit toàn bộ / một dataset | `game_data.import_all` / `game_data.import` | `all` / key dataset | Không | Bắt buộc |
+| Xóa dữ liệu | `<domain>.delete` | đường dẫn API đầy đủ của target | Không | Không (client phải đọc kết quả trước khi retry) |
+| Đặt stones/tài nguyên player | `players.resources.adjust` | player ID | Không | Bắt buộc |
+| Thay role player | `admin_roles.assign` | player ID | Có | Bắt buộc |
+| Payment mutation tương lai | phải dùng `billing.mutate`, không dùng `billing.read` | order/transaction ID | Có | Bắt buộc |
+
+Mọi route mutation vẫn đi qua audit middleware trước permission middleware, vì vậy cả kết quả thành công lẫn thất bại/permission denied đều tạo audit record. Các thay đổi nhiều bảng (bulk import và role assignment) ghi success audit trong cùng transaction; nếu audit hoặc cập nhật thất bại, transaction rollback.

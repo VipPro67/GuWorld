@@ -53,7 +53,8 @@ export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }:
     setLoading(true);
     try {
       const path = scope === "all" ? "/api/admin/data/import/commit" : `/api/admin/data/import/${dataset}/commit`;
-      const response = await authFetch(`${BACKEND_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preflight_id: preview.preflight_id, reason: reason.trim() }) });
+	  const target = scope === "all" ? "all" : dataset;
+	  const response = await authFetch(`${BACKEND_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": preview.preflight_id }, body: JSON.stringify({ preflight_id: preview.preflight_id, reason: reason.trim(), confirmation_target: target }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Commit import thất bại");
       addToast(data.reload_ok ? "Import đã commit và registry/cache đã tải lại." : "Import đã commit; cần restart do reload chưa hoàn tất.", data.reload_ok ? "success" : "info");
@@ -93,7 +94,7 @@ export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }:
       <button disabled={!preview.plan.can_commit} onClick={() => setConfirming(true)} className="mt-4 flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"><CheckCircle2 className="h-4 w-4" />Xác nhận commit transaction</button>
     </div>}
 
-    <AdminConfirmDialog open={confirming} title="Commit dữ liệu đã dry-run?" description="Thao tác sẽ ghi database trong một transaction và được audit." riskLevel={scope === "all" ? "critical" : "high"} loading={loading} confirmDisabled={!reason.trim()} confirmLabel="Commit import" onCancel={() => setConfirming(false)} onConfirm={commit}>
+	<AdminConfirmDialog open={confirming} title={`Commit dữ liệu “${scope === "all" ? "all" : dataset}” đã dry-run?`} description="Thao tác sẽ ghi database trong một transaction và được audit." riskLevel={scope === "all" ? "critical" : "high"} loading={loading} confirmDisabled={!reason.trim()} confirmLabel="Commit import" onCancel={() => setConfirming(false)} onConfirm={commit}>
       <div className="space-y-3"><p>Diff phía sau đã được kiểm tra. Registry/cache sẽ được reload sau khi transaction commit; nếu reload lỗi, hệ thống sẽ cảnh báo restart.</p><label className="block text-xs text-zinc-400">Lý do bắt buộc<input value={reason} onChange={event => setReason(event.target.value)} className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100" /></label></div>
     </AdminConfirmDialog>
   </div>;
