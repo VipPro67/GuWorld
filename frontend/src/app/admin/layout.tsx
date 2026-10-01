@@ -55,14 +55,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const logout = useGameStore((gameState) => gameState.logout);
+  const addToast = useGameStore((gameState) => gameState.addToast);
   const [state, setState] = useState<AccessState>({ status: "loading" });
   const activeRequest = useRef<AbortController | null>(null);
 
-  const resolveAccess = useCallback(async () => {
+  const resolveAccess = useCallback(async (preserveContent = false) => {
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
-    setState({ status: "loading" });
+    if (!preserveContent) setState({ status: "loading" });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/admin/me`, { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -105,10 +106,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [resolveAccess]);
 
   useEffect(() => {
-    const handleForbidden = () => setState({ status: "forbidden" });
-    window.addEventListener("admin:forbidden", handleForbidden);
-    return () => window.removeEventListener("admin:forbidden", handleForbidden);
-  }, []);
+    let refreshPending = false;
+    const handlePermissionDenied = () => {
+      if (refreshPending) return;
+      refreshPending = true;
+      addToast("Quyền quản trị của bạn đã thay đổi. Danh sách thao tác đã được cập nhật.", "info");
+      void resolveAccess(true).finally(() => { refreshPending = false; });
+    };
+    window.addEventListener("admin:permission-denied", handlePermissionDenied);
+    return () => window.removeEventListener("admin:permission-denied", handlePermissionDenied);
+  }, [addToast, resolveAccess]);
 
   const handleLogout = () => {
     logout();
@@ -139,7 +146,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     .filter((item) => canAccessAdmin(access, item.permission))
     .sort((left, right) => left.order - right.order);
   return (
-    <AdminAccessProvider value={access}>
+    <AdminAccessProvider value={{ ...access, refreshAccess: () => resolveAccess(true) }}>
       <div className="min-h-screen bg-[var(--bg-primary)] text-zinc-100">
         <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
           <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-3 sm:px-6">

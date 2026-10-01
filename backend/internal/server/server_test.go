@@ -216,6 +216,8 @@ func TestAdminRoutePermissionsUseExpectedSensitivePolicies(t *testing.T) {
 		http.MethodPost + " /monitor/requests/reset": "monitoring.reset",
 		http.MethodGet + " /players/:id":             "players.read",
 		http.MethodPut + " /players/:id":             "players.update",
+		http.MethodPost + " /players/:id/items":      "players.inventory.grant",
+		http.MethodPost + " /players/:id/gus":        "players.inventory.grant",
 		http.MethodPost + " /data/import/:table":     "game_data.import",
 		http.MethodPost + " /data/export/:table":     "game_data.export",
 		http.MethodPost + " /clear-cache":            "cache.reload",

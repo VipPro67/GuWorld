@@ -365,9 +365,9 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là d
 | GET | `/admin/players/:id/roles` | Role hiện tại của người chơi: `{player_id, roles: [...]}`. `is_admin` ở các API player cũ chỉ là projection read-only để tương thích. |
 | PUT | `/admin/players/:id/roles` | Thay toàn bộ role bằng body `{roles: ["admin", "super_admin"]}`. Thao tác và audit `{before,after}` nằm trong cùng transaction. Không được tự nâng quyền, cấp role cao hơn role cao nhất của actor (trừ super admin), sửa role cao hơn thẩm quyền, hoặc xóa super admin cuối cùng (`409`). |
 | GET | `/admin/gus/search` | Tìm cổ trùng trên toàn server. Params: `gu_id` và/hoặc `instance_id` (match registry ID + tên, ILIKE), `page`, `limit`. Quét 3 nguồn: `players.gu_inventory`, `auction` (`item_type='Gu'`), `caravan_shop_items` + `arena_shop_items`. `location`: `inventory`/`auction`/`shop`. |
-| POST | `/admin/players/:id/items` | Thêm item hoặc cổ phương (Công thức) cho người chơi. Body: `{item_id, quantity}`. `item_id` là id item trong `Item.csv` hoặc id recipe trong `Recipe.csv`. Nếu là recipe → mở khóa (unlock) Cổ phương cho người chơi (`player_recipe_progress`, `completion_rate=100`). Trả `kind` = `item`/`recipe`. |
+| POST | `/admin/players/:id/items` | Cần `players.inventory.grant`. Thêm item hoặc cổ phương (Công thức) cho người chơi. Body: `{item_id, quantity}`. `item_id` là id item trong `Item.csv` hoặc id recipe trong `Recipe.csv`. Nếu là recipe → mở khóa (unlock) Cổ phương cho người chơi (`player_recipe_progress`, `completion_rate=100`). Trả `kind` = `item`/`recipe`. |
 | DELETE | `/admin/players/:id/items` | Xóa item hoặc cổ phương khỏi người chơi. Body: `{item_id, quantity}`. Nếu là recipe → thu hồi (delete) khỏi `player_recipe_progress`. Trả `kind` = `item`/`recipe`. |
-| POST | `/admin/players/:id/gus` | Thêm gu cho người chơi. Body: `{gu_id, quantity, rank?}`. `rank` tùy chọn — khi gửi sẽ cấp đúng bậc đó (validate theo `gu_dictionary`); khi bỏ trống dùng bậc cao nhất của `gu_id`. |
+| POST | `/admin/players/:id/gus` | Cần `players.inventory.grant`. Thêm gu cho người chơi. Body: `{gu_id, quantity, rank?}`. `rank` tùy chọn — khi gửi sẽ cấp đúng bậc đó (validate theo `gu_dictionary`); khi bỏ trống dùng bậc cao nhất của `gu_id`. |
 | DELETE | `/admin/players/:id/gus/:instance_id` | Xóa gu theo instance_id. |
 | GET | `/admin/players/:id/pets` | Lazy-load sủng vật của người chơi. Params: `page`, `limit`, `q` (search monster name/ID). |
 | DELETE | `/admin/players/:id/pets/:pet_id` | Xóa vĩnh viễn sủng vật. |
@@ -379,6 +379,8 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là d
 Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission RBAC theo domain. `GET /api/admin/me` yêu cầu `admin.dashboard.access`; wildcard `admin.*` cấp toàn bộ quyền cho `super_admin`. Handler vẫn có thể kiểm tra principal quản trị như lớp phòng vệ bổ sung.
 
 Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
+
+Các thao tác phá hủy `POST /admin/data/import` và `POST /admin/clear-redis-cache` bắt buộc body JSON có `reason` khác rỗng. Frontend khai báo permission, risk, confirmation, reason và re-authentication trong action policy; khi backend trả 403 kèm `permission`, client rollback optimistic state (nếu có), tải lại `/admin/me` rồi thông báo quyền đã thay đổi.
 
 | Nhóm | Routes hiện có |
 | --- | --- |

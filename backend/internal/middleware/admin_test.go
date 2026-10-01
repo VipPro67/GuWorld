@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,33 @@ type stubPrincipalResolver struct {
 	principal authz.AdminPrincipal
 	err       error
 	called    bool
+}
+
+func TestAdminReasonRequired(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tt := range []struct {
+		name, body string
+		want       int
+		downstream bool
+	}{
+		{"missing", `{}`, http.StatusBadRequest, false},
+		{"blank", `{"reason":"  "}`, http.StatusBadRequest, false},
+		{"present", `{"reason":"scheduled maintenance"}`, http.StatusNoContent, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			router := gin.New()
+			router.POST("/action", AdminReasonRequired(), func(c *gin.Context) {
+				called = true
+				c.Status(http.StatusNoContent)
+			})
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(tt.body)))
+			if response.Code != tt.want || called != tt.downstream {
+				t.Fatalf("status=%d called=%v, want status=%d called=%v", response.Code, called, tt.want, tt.downstream)
+			}
+		})
+	}
 }
 
 func TestAuthRequiredReturnsServiceUnavailableWithoutDatabase(t *testing.T) {
