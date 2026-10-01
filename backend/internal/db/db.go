@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -21,6 +22,28 @@ import (
 )
 
 var DB *sql.DB
+
+type csvImportExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// CSV imports can be pointed at a transaction while retaining the existing
+// parsers. The mutex also prevents one admin import from changing the source
+// file/executor used by another concurrent import.
+var csvImportState struct {
+	sync.Mutex
+	executor csvImportExecutor
+	override map[string]string
+}
+
+func activeCSVImportDB() csvImportExecutor {
+	if csvImportState.executor != nil {
+		return csvImportState.executor
+	}
+	return DB
+}
 
 // baseRankCache memoizes the minimum dictionary rank of each Gu id, used when
 // upgrading legacy recipe required_gus values to the ranked format.
@@ -108,6 +131,8 @@ func InitSchema() error {
 		{"world", schemaWorld},
 		{"parties", schemaParties},
 		{"players", schemaPlayers},
+		{"admin_roles", schemaAdminRoles},
+		{"authorization", schemaAuthorization},
 		{"player_extras", schemaPlayerExtras},
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
@@ -159,6 +184,12 @@ func InitSchema() error {
 	}
 	if err := ensureAdmin(); err != nil {
 		return fmt.Errorf("ensure admin: %w", err)
+	}
+	if err := ensureBootstrapAdminRole(); err != nil {
+		return fmt.Errorf("ensure bootstrap admin role: %w", err)
+	}
+	if err := backfillAdminRoles(); err != nil {
+		return fmt.Errorf("backfill admin roles: %w", err)
 	}
 	if err := seedQuestsFromCSV(); err != nil {
 		logger.S.Warnf("seedQuestsFromCSV: %v", err)
@@ -286,7 +317,8 @@ func backfillLeaderboardSettings() error {
 	return nil
 }
 
-// ensureAdmin promotes the reserved admin accounts when no admin exists yet.
+// ensureAdmin creates the reserved bootstrap account once. Its privilege state
+// is not restored on later startups, so operators can safely retire it.
 func ensureAdmin() error {
 	var adminCount int
 	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
@@ -310,10 +342,6 @@ func ensureAdmin() error {
 				100, 100, 'hub_nam_cuong', 50, 50, 'REF-ADMIN', true,
 				0, 0
 			)`, string(hash)); err != nil {
-			return err
-		}
-	} else {
-		if _, err := DB.Exec(`UPDATE players SET is_admin = true WHERE username = 'admin'`); err != nil {
 			return err
 		}
 	}
@@ -402,6 +430,9 @@ func csvPath(filename string) string {
 
 // openCSV opens a CSV file and returns the file, reader, and header row.
 func openCSV(filename string) (*os.File, *csv.Reader, []string, error) {
+	if override := csvImportState.override[filename]; override != "" {
+		filename = override
+	}
 	path := csvPath(filename)
 	f, err := os.Open(path)
 	if err != nil {
@@ -652,7 +683,7 @@ func seedItemsFromCSV(filename string) error {
 			path = strings.TrimSpace(row[pathIdx])
 		}
 
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price, image_url, rarity, path)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)
 			ON CONFLICT (id) DO UPDATE
@@ -850,7 +881,7 @@ func seedGusFromCSV(filename string) error {
 			targetType = "SINGLE"
 		}
 
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url)
 			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19, $20)
 			ON CONFLICT (id, rank) DO UPDATE
@@ -929,7 +960,7 @@ func seedConstitutionsFromCSV(filename string) error {
 				tierVal = v
 			}
 		}
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 		INSERT INTO constitution_dictionary (key, name, effects, tier)
 		VALUES ($1, $2, $3::jsonb, $4)
 		ON CONFLICT (key) DO UPDATE
@@ -992,7 +1023,7 @@ func seedRacesFromCSV(filename string) error {
 		row := seen[key]
 		name := get(row, nameIdx)
 		effects := safeJSON(get(row, effectsIdx), "[]", fmt.Sprintf("%s effects", key))
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO race_dictionary (key, name, effects)
 			VALUES ($1, $2, $3::jsonb)
 			ON CONFLICT (key) DO UPDATE
@@ -1064,7 +1095,7 @@ func seedStatusesFromCSV(filename string) error {
 			fmt.Sscanf(d, "%d", &duration)
 		}
 		description := get(row, descIdx)
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO status_dictionary (key, name, effects, default_duration_minutes, blocked_actions, description)
 			VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6)
 			ON CONFLICT (key) DO UPDATE
@@ -1169,13 +1200,13 @@ func seedRecipesFromCSV(filename string) error {
 
 		// Skip if target Gu doesn't exist (FK constraint)
 		var exists bool
-		if err = DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, targetGuID, targetRank).Scan(&exists); err != nil || !exists {
+		if err = activeCSVImportDB().QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, targetGuID, targetRank).Scan(&exists); err != nil || !exists {
 			logger.S.Warnf("Recipe %s skipped: target %s rank %d not in gu_dictionary", id, targetGuID, targetRank)
 			skipped++
 			continue
 		}
 
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO refining_recipes (target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost)
 			VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8)
 			ON CONFLICT (target_gu_id, target_rank, variant) DO UPDATE
@@ -1244,7 +1275,7 @@ func baseGuRank(guID string) int {
 		return r
 	}
 	var r int
-	if err := DB.QueryRow(`SELECT MIN(rank) FROM gu_dictionary WHERE id = $1`, guID).Scan(&r); err != nil || r <= 0 {
+	if err := activeCSVImportDB().QueryRow(`SELECT MIN(rank) FROM gu_dictionary WHERE id = $1`, guID).Scan(&r); err != nil || r <= 0 {
 		r = 1
 	}
 	baseRankCache[guID] = r
@@ -1304,7 +1335,7 @@ func seedShopItemsFromCSV(filename string) error {
 				isDefault = false
 			}
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO caravan_shop_items (id, rank, price, stock, is_default, sort_order, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NOW())
 			ON CONFLICT (id, rank) DO UPDATE
@@ -1373,7 +1404,7 @@ func seedArenaShopItemsFromCSV(filename string) error {
 				isDefault = false
 			}
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO arena_shop_items (id, price, qty, stock, is_default, sort_order, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NOW())
 			ON CONFLICT (id) DO UPDATE
@@ -1467,7 +1498,7 @@ func seedQuestsFromCSV() error {
 			}
 		}
 
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO quests (id, title, description, req_desc, message, rewards)
 			VALUES ($1, $2, $3, $4, $5, $6::jsonb)
 			ON CONFLICT (id) DO UPDATE
@@ -1571,7 +1602,7 @@ func seedRegionsFromCSV(filename string) error {
 	// Pass 1: Upsert all rows with parent_id = NULL to ensure all region IDs exist in table
 	seeded := 0
 	for _, item := range rowsToInsert {
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
@@ -1590,7 +1621,7 @@ func seedRegionsFromCSV(filename string) error {
 	// Pass 2: Update parent_id for rows that specify a parent
 	for _, item := range rowsToInsert {
 		if item.parentID != nil {
-			_, err = DB.Exec(`UPDATE regions SET parent_id = $1 WHERE id = $2`, item.parentID, item.id)
+			_, err = activeCSVImportDB().Exec(`UPDATE regions SET parent_id = $1 WHERE id = $2`, item.parentID, item.id)
 			if err != nil {
 				return fmt.Errorf("update region parent_id %s -> %v: %w", item.id, item.parentID, err)
 			}
@@ -1633,7 +1664,7 @@ func seedLootTablesFromCSV(filename string) error {
 		}
 		entries := safeJSONArray(get(row, entriesIdx), "[]", fmt.Sprintf("loot table %s entries", id))
 		entries = FilterImmortalLootEntries(entries)
-		_, err = DB.Exec(`INSERT INTO loot_tables (id, name, entries, updated_at) VALUES ($1,$2,$3::jsonb,NOW()) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, entries=EXCLUDED.entries, updated_at=NOW()`, id, get(row, nameIdx), entries)
+		_, err = activeCSVImportDB().Exec(`INSERT INTO loot_tables (id, name, entries, updated_at) VALUES ($1,$2,$3::jsonb,NOW()) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, entries=EXCLUDED.entries, updated_at=NOW()`, id, get(row, nameIdx), entries)
 		if err != nil {
 			return fmt.Errorf("upsert loot table %s: %w", id, err)
 		}
@@ -1777,7 +1808,7 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 		if v := strings.TrimSpace(get(row, lootIdx)); v != "" {
 			lootTableID = v
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, is_capturable, capture_chance, pet_hunger_per_hour, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, type=EXCLUDED.type,
@@ -1864,7 +1895,7 @@ func seedMonsterSpawnsFromCSV(filename string) error {
 		if av == "false" || av == "0" || av == "no" {
 			active = false
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO monster_spawns (region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, min_rank, max_rank, is_boss_spawn, is_active)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 			ON CONFLICT DO NOTHING
@@ -1930,7 +1961,7 @@ func seedMapCellsFromCSV(filename string) error {
 		if av == "false" || av == "0" || av == "no" {
 			active = false
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO map_cells (region_id, x, y, cell_type, content_id, metadata, respawn_seconds, is_active)
 			VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
 			ON CONFLICT (x, y) DO UPDATE SET region_id=EXCLUDED.region_id, cell_type=EXCLUDED.cell_type,
@@ -2185,7 +2216,7 @@ func seedDreamRealmsFromCSV(filename string) error {
 		if rtype == "" {
 			rtype = "DREAM_REALM"
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours)
 			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
 			ON CONFLICT (id) DO UPDATE SET
@@ -2326,7 +2357,7 @@ func SeedInstanceTemplates() error {
 	}
 
 	for _, t := range templates {
-		_, err := DB.Exec(`
+		_, err := activeCSVImportDB().Exec(`
 			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours)
 			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
 			ON CONFLICT (id) DO UPDATE SET
@@ -2360,7 +2391,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 		if err := json.Unmarshal([]byte(vaultMat), &mats); err == nil {
 			for itemID, qty := range mats {
 				if qty > 0 {
-					_, _ = DB.Exec(`
+					_, _ = activeCSVImportDB().Exec(`
 						INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
 						VALUES ($1, $2, $3)
 						ON CONFLICT (sect_id, item_id) DO UPDATE SET
@@ -2412,7 +2443,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 				if instID != "" {
 					rowID = fmt.Sprintf("%s:%s", sectID, instID)
 				}
-				_, _ = DB.Exec(`
+				_, _ = activeCSVImportDB().Exec(`
 					INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id)
 					VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 					ON CONFLICT (id) DO UPDATE SET
@@ -2439,7 +2470,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 				if rate <= 0 {
 					rate = 100.0
 				}
-				_, _ = DB.Exec(`
+				_, _ = activeCSVImportDB().Exec(`
 					INSERT INTO sect_vault_recipes (sect_id, recipe_id, completion_rate)
 					VALUES ($1, $2, $3)
 					ON CONFLICT (sect_id, recipe_id) DO UPDATE SET
@@ -2452,7 +2483,7 @@ func syncSectVaultFromJSON(sectID, vaultGu, vaultMat, vaultRec string) error {
 }
 
 func backfillSectVaultTables() error {
-	rows, err := DB.Query(`SELECT id, COALESCE(vault_gu::text, '[]'), COALESCE(vault_materials::text, '{}'), COALESCE(vault_recipes::text, '[]') FROM sects`)
+	rows, err := activeCSVImportDB().Query(`SELECT id, COALESCE(vault_gu::text, '[]'), COALESCE(vault_materials::text, '{}'), COALESCE(vault_recipes::text, '[]') FROM sects`)
 	if err != nil {
 		return err
 	}
@@ -2476,9 +2507,9 @@ func backfillSectVaultTables() error {
 		// Chỉ backfill nếu tông môn này chưa có bất kỳ dữ liệu kho nào trong các bảng mới.
 		// Tránh ghi đè dữ liệu gameplay mới bằng dữ liệu JSONB cũ khi server restart lại nhiều lần.
 		var matCount, guCount, recCount int
-		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_materials WHERE sect_id = $1`, s.id).Scan(&matCount)
-		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_gu WHERE sect_id = $1`, s.id).Scan(&guCount)
-		_ = DB.QueryRow(`SELECT COUNT(*) FROM sect_vault_recipes WHERE sect_id = $1`, s.id).Scan(&recCount)
+		_ = activeCSVImportDB().QueryRow(`SELECT COUNT(*) FROM sect_vault_materials WHERE sect_id = $1`, s.id).Scan(&matCount)
+		_ = activeCSVImportDB().QueryRow(`SELECT COUNT(*) FROM sect_vault_gu WHERE sect_id = $1`, s.id).Scan(&guCount)
+		_ = activeCSVImportDB().QueryRow(`SELECT COUNT(*) FROM sect_vault_recipes WHERE sect_id = $1`, s.id).Scan(&recCount)
 
 		if matCount == 0 && guCount == 0 && recCount == 0 {
 			_ = syncSectVaultFromJSON(s.id, s.vaultGu, s.vaultMat, s.vaultRec)
@@ -2529,7 +2560,7 @@ func seedSectMissionsFromCSV(filename string) error {
 		if sectId == "" {
 			continue
 		}
-		_, err = DB.Exec(`
+		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT DO NOTHING
@@ -2671,7 +2702,7 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 
 func seedNPCs() error {
 	var count int
-	err := DB.QueryRow("SELECT COUNT(*) FROM npcs").Scan(&count)
+	err := activeCSVImportDB().QueryRow("SELECT COUNT(*) FROM npcs").Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -2690,7 +2721,7 @@ func seedNPCs() error {
 			{"npc_clansman_2", "Cổ Nguyệt Đạo (Tộc nhân)", "gu_yue_clan", "CLANSMAN", 50},
 		}
 		for _, npc := range npcs {
-			_, err = DB.Exec(`
+			_, err = activeCSVImportDB().Exec(`
 				INSERT INTO npcs (id, name, sect_id, role, aptitude_percent)
 				VALUES ($1, $2, $3, $4, $5)
 				ON CONFLICT (id) DO NOTHING
@@ -2768,277 +2799,145 @@ func ensureDataDir() {
 	}
 }
 
-// ExportToCSV exports all dictionary tables to CSV files in the data/ directory.
+// ExportToCSV exports every dataset from the same registry used by individual exports.
 func ExportToCSV() error {
-	type exportDef struct {
-		filename string
-		columns  []string
-		query    string
-	}
-	ensureDataDir()
-	exports := []exportDef{
-		{
-			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'[]'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
-		},
-		{
-			filename: "Gu.csv",
-			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
-		},
-		{
-			filename: "Constitution.csv",
-			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM constitution_dictionary ORDER BY key`,
-		},
-		{
-			filename: "Race.csv",
-			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM race_dictionary ORDER BY key`,
-		},
-		{
-			filename: "Status.csv",
-			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
-			query:    `SELECT key, name, COALESCE(effects::text,'[]'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
-		},
-		{
-			filename: "Recipe.csv",
-			columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
-			query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
-		},
-		{
-			filename: "ShopItem.csv",
-			columns:  []string{"id", "rank", "price", "stock", "is_default", "sort_order"},
-			query:    `SELECT id, rank, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id, rank`,
-		},
-		{
-			filename: "ArenaShopItem.csv",
-			columns:  []string{"id", "price", "qty", "stock", "is_default", "sort_order"},
-			query:    `SELECT id, price, COALESCE(qty,1), COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM arena_shop_items ORDER BY id`,
-		},
-		{
-			filename: "Region.csv",
-			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
-		},
-		{
-			filename: "LootTable.csv",
-			columns:  []string{"id", "name", "entries"},
-			query:    `SELECT id, name, COALESCE(entries::text,'[]') FROM loot_tables ORDER BY id`,
-		},
-		{
-			filename: "Monster.csv",
-			columns:  []string{"id", "name", "type", "max_hp", "base_attack", "base_defense", "gu_inventory", "item_inventory", "dao_marks", "path_masteries", "ai_profile", "loot_table_id", "description", "is_active"},
-			query:    `SELECT id, name, type, max_hp, base_attack, base_defense, COALESCE(gu_inventory::text,'[]'), COALESCE(item_inventory::text,'{}'), COALESCE(dao_marks::text,'{}'), COALESCE(path_masteries::text,'{}'), COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''), COALESCE(description,''), COALESCE(is_active,true) FROM monster_templates ORDER BY id`,
-		},
-		{
-			filename: "MonsterSpawn.csv",
-			columns:  []string{"region_id", "monster_id", "x", "y", "spawn_mode", "chance", "respawn_seconds", "min_rank", "max_rank", "is_boss_spawn", "is_active"},
-			query:    `SELECT region_id, monster_id, x, y, COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true) FROM monster_spawns ORDER BY region_id, monster_id`,
-		},
-		{
-			filename: "MapCell.csv",
-			columns:  []string{"region_id", "x", "y", "cell_type", "content_id", "metadata", "respawn_seconds", "is_active"},
-			query:    `SELECT region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text,'{}'), COALESCE(respawn_seconds,300), COALESCE(is_active,true) FROM map_cells ORDER BY x, y`,
-		},
-		{
-			filename: "SectMission.csv",
-			columns:  []string{"sect_id", "title", "description", "mission_type", "target_id", "target_amount", "reward_contribution", "required_member_rank"},
-			query:    `SELECT sect_id, title, COALESCE(description,''), COALESCE(mission_type,'GATHER'), COALESCE(target_id,''), COALESCE(target_amount,1), COALESCE(reward_contribution,0), COALESCE(required_member_rank,'NGOAI_MON') FROM sect_missions ORDER BY sect_id, title`,
-		},
-		{
-			filename: "Quest.csv",
-			columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
-			query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
-		},
-		{
-			filename: "DreamRealm.csv",
-			columns:  []string{"id", "name", "path", "type", "required_rank", "entry_item", "description", "rewards", "map_data", "cooldown_hours"},
-			query:    `SELECT id, name, CASE WHEN id LIKE 'dream_realm_%' THEN substring(id from 13) ELSE '' END, type, required_rank, entry_item, COALESCE(description,''), COALESCE(rewards::text,'{}'), COALESCE(map_data::text,'[]'), cooldown_hours FROM instance_templates WHERE type='DREAM_REALM' ORDER BY id`,
-		},
-	}
-
-	for _, e := range exports {
-		p := filepath.Join("data", e.filename)
-		if err := writeCSV(p, e.columns, e.query); err != nil {
-			return fmt.Errorf("export %s: %w", p, err)
+	for _, dataset := range Datasets() {
+		if dataset.Export == nil {
+			continue
 		}
-		logger.S.Infof("Exported %s", p)
+		if err := dataset.Export(); err != nil {
+			return fmt.Errorf("export dataset %s: %w", dataset.Key, err)
+		}
 	}
 	logger.S.Info("All CSV data exported successfully")
 	return nil
 }
 
-// AvailableTables returns the list of table keys that can be individually imported/exported.
+// AvailableTables returns UI-supported dataset keys from the canonical registry.
 func AvailableTables() []string {
-	return []string{
-		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
-		"region", "loot_table", "monster", "monster_spawn", "map_cell",
-		"sect_mission", "quest", "race", "dream_realm", "status", "node_output",
+	var tables []string
+	for _, dataset := range Datasets() {
+		if dataset.UISupported {
+			tables = append(tables, dataset.Key)
+		}
 	}
+	return tables
 }
 
 // TableImport imports a single table from its CSV file.
 func TableImport(table string) error {
-	switch table {
-	case "item":
-		if err := preflightEffectCSVs([]effectCSVSource{{"item", "Item.csv", "id"}}); err != nil {
-			return err
-		}
-		return seedItemsFromCSV("Item.csv")
-	case "gu":
-		if err := preflightEffectCSVs([]effectCSVSource{{"gu", "Gu.csv", "id"}}); err != nil {
-			return err
-		}
-		return seedGusFromCSV("Gu.csv")
-	case "constitution":
-		if err := preflightEffectCSVs([]effectCSVSource{{"constitution", "Constitution.csv", "key"}}); err != nil {
-			return err
-		}
-		return seedConstitutionsFromCSV("Constitution.csv")
-	case "race":
-		if err := preflightEffectCSVs([]effectCSVSource{{"race", "Race.csv", "key"}}); err != nil {
-			return err
-		}
-		return seedRacesFromCSV("Race.csv")
-	case "status":
-		if err := preflightEffectCSVs([]effectCSVSource{{"status", "Status.csv", "key"}}); err != nil {
-			return err
-		}
-		return seedStatusesFromCSV("Status.csv")
-	case "recipe":
-		return seedRecipesFromCSV("Recipe.csv")
-
-	case "shop_item":
-		return seedShopItemsFromCSV("ShopItem.csv")
-	case "arena_shop_item":
-		return seedArenaShopItemsFromCSV("ArenaShopItem.csv")
-	case "region":
-		return seedRegionsFromCSV("Region.csv")
-	case "loot_table":
-		return seedLootTablesFromCSV("LootTable.csv")
-	case "monster":
-		return seedMonsterTemplatesFromCSV("Monster.csv")
-	case "monster_spawn":
-		return seedMonsterSpawnsFromCSV("MonsterSpawn.csv")
-	case "map_cell":
-		return seedMapCellsFromCSV("MapCell.csv")
-	case "sect_mission":
-		return seedSectMissionsFromCSV("SectMission.csv")
-	case "quest":
-		return seedQuestsFromCSV()
-	case "dream_realm":
-		return seedDreamRealmsFromCSV("DreamRealm.csv")
-	default:
-		return fmt.Errorf("unknown table: %s", table)
+	dataset, ok := DatasetByKey(table)
+	if !ok || dataset.Import == nil {
+		return fmt.Errorf("unknown table %q: dataset does not support import", table)
 	}
+	if dataset.Preflight == nil {
+		return fmt.Errorf("dataset %q does not declare preflight behavior", table)
+	}
+	if err := dataset.Preflight(); err != nil {
+		return err
+	}
+	return dataset.Import()
 }
 
 // TableExport exports a single table to its CSV file.
-func TableExport(table string) error {
-	ensureDataDir()
-	type exportDef struct {
-		filename string
-		columns  []string
-		query    string
-	}
-	defs := map[string]exportDef{
-		"item": {
-			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'[]'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
-		},
-		"gu": {
-			filename: "Gu.csv",
-			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
-		},
-		"constitution": {
-			filename: "Constitution.csv",
-			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM constitution_dictionary ORDER BY key`,
-		},
-		"race": {
-			filename: "Race.csv",
-			columns:  []string{"key", "name", "effects"},
-			query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM race_dictionary ORDER BY key`,
-		},
-		"status": {
-			filename: "Status.csv",
-			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
-			query:    `SELECT key, name, COALESCE(effects::text,'[]'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
-		},
-		"recipe": {
-			filename: "Recipe.csv",
-			columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
-			query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
-		},
-		"shop_item": {
-			filename: "ShopItem.csv",
-			columns:  []string{"id", "price", "stock", "is_default", "sort_order"},
-			query:    `SELECT id, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id`,
-		},
-		"arena_shop_item": {
-			filename: "ArenaShopItem.csv",
-			columns:  []string{"id", "price", "qty", "stock", "is_default", "sort_order"},
-			query:    `SELECT id, price, COALESCE(qty,1), COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM arena_shop_items ORDER BY id`,
-		},
-		"region": {
-			filename: "Region.csv",
-			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
-		},
-		"loot_table": {
-			filename: "LootTable.csv",
-			columns:  []string{"id", "name", "entries"},
-			query:    `SELECT id, name, COALESCE(entries::text,'[]') FROM loot_tables ORDER BY id`,
-		},
-		"monster": {
-			filename: "Monster.csv",
-			columns:  []string{"id", "name", "type", "max_hp", "base_attack", "base_defense", "gu_inventory", "item_inventory", "dao_marks", "path_masteries", "ai_profile", "loot_table_id", "description", "is_active"},
-			query:    `SELECT id, name, type, max_hp, base_attack, base_defense, COALESCE(gu_inventory::text,'[]'), COALESCE(item_inventory::text,'{}'), COALESCE(dao_marks::text,'{}'), COALESCE(path_masteries::text,'{}'), COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''), COALESCE(description,''), COALESCE(is_active,true) FROM monster_templates ORDER BY id`,
-		},
-		"monster_spawn": {
-			filename: "MonsterSpawn.csv",
-			columns:  []string{"region_id", "monster_id", "x", "y", "spawn_mode", "chance", "respawn_seconds", "min_rank", "max_rank", "is_boss_spawn", "is_active"},
-			query:    `SELECT region_id, monster_id, x, y, COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true) FROM monster_spawns ORDER BY region_id, monster_id`,
-		},
-		"map_cell": {
-			filename: "MapCell.csv",
-			columns:  []string{"region_id", "x", "y", "cell_type", "content_id", "metadata", "respawn_seconds", "is_active"},
-			query:    `SELECT region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text,'{}'), COALESCE(respawn_seconds,300), COALESCE(is_active,true) FROM map_cells ORDER BY x, y`,
-		},
-		"sect": {
-			filename: "Sect.csv",
-			columns:  []string{"id", "name", "description", "region", "vault_gu", "vault_materials", "vault_recipes"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(region,''), COALESCE(vault_gu::text,'[]'), COALESCE(vault_materials::text,'{}'), COALESCE(vault_recipes::text,'[]') FROM sects ORDER BY id`,
-		},
-		"sect_mission": {
-			filename: "SectMission.csv",
-			columns:  []string{"sect_id", "title", "description", "mission_type", "target_id", "target_amount", "reward_contribution", "required_member_rank"},
-			query:    `SELECT sect_id, title, COALESCE(description,''), COALESCE(mission_type,'GATHER'), COALESCE(target_id,''), COALESCE(target_amount,1), COALESCE(reward_contribution,0), COALESCE(required_member_rank,'NGOAI_MON') FROM sect_missions ORDER BY sect_id, title`,
-		},
-		"quest": {
-			filename: "Quest.csv",
-			columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
-			query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
-		},
-		"dream_realm": {
-			filename: "DreamRealm.csv",
-			columns:  []string{"id", "name", "path", "type", "required_rank", "entry_item", "description", "rewards", "map_data", "cooldown_hours"},
-			query:    `SELECT id, name, CASE WHEN id LIKE 'dream_realm_%' THEN substring(id from 13) ELSE '' END, type, required_rank, entry_item, COALESCE(description,''), COALESCE(rewards::text,'{}'), COALESCE(map_data::text,'[]'), cooldown_hours FROM instance_templates WHERE type='DREAM_REALM' ORDER BY id`,
-		},
-	}
+type exportDef struct {
+	filename string
+	columns  []string
+	query    string
+}
 
-	d, ok := defs[table]
-	if !ok {
-		return fmt.Errorf("unknown table: %s", table)
+var individualExportDefs = map[string]exportDef{
+	"item": {
+		filename: "Item.csv",
+		columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
+		query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'[]'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
+	},
+	"gu": {
+		filename: "Gu.csv",
+		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+	},
+	"constitution": {
+		filename: "Constitution.csv",
+		columns:  []string{"key", "name", "effects"},
+		query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM constitution_dictionary ORDER BY key`,
+	},
+	"race": {
+		filename: "Race.csv",
+		columns:  []string{"key", "name", "effects"},
+		query:    `SELECT key, name, COALESCE(effects::text,'[]') FROM race_dictionary ORDER BY key`,
+	},
+	"status": {
+		filename: "Status.csv",
+		columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
+		query:    `SELECT key, name, COALESCE(effects::text,'[]'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
+	},
+	"recipe": {
+		filename: "Recipe.csv",
+		columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
+		query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
+	},
+	"shop_item": {
+		filename: "ShopItem.csv",
+		columns:  []string{"id", "rank", "price", "stock", "is_default", "sort_order"},
+		query:    `SELECT id, rank, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id, rank`,
+	},
+	"arena_shop_item": {
+		filename: "ArenaShopItem.csv",
+		columns:  []string{"id", "price", "qty", "stock", "is_default", "sort_order"},
+		query:    `SELECT id, price, COALESCE(qty,1), COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM arena_shop_items ORDER BY id`,
+	},
+	"region": {
+		filename: "Region.csv",
+		columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
+		query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
+	},
+	"loot_table": {
+		filename: "LootTable.csv",
+		columns:  []string{"id", "name", "entries"},
+		query:    `SELECT id, name, COALESCE(entries::text,'[]') FROM loot_tables ORDER BY id`,
+	},
+	"monster": {
+		filename: "Monster.csv",
+		columns:  []string{"id", "name", "type", "max_hp", "base_attack", "base_defense", "gu_inventory", "item_inventory", "dao_marks", "path_masteries", "ai_profile", "loot_table_id", "description", "is_active"},
+		query:    `SELECT id, name, type, max_hp, base_attack, base_defense, COALESCE(gu_inventory::text,'[]'), COALESCE(item_inventory::text,'{}'), COALESCE(dao_marks::text,'{}'), COALESCE(path_masteries::text,'{}'), COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''), COALESCE(description,''), COALESCE(is_active,true) FROM monster_templates ORDER BY id`,
+	},
+	"monster_spawn": {
+		filename: "MonsterSpawn.csv",
+		columns:  []string{"region_id", "monster_id", "x", "y", "spawn_mode", "chance", "respawn_seconds", "min_rank", "max_rank", "is_boss_spawn", "is_active"},
+		query:    `SELECT region_id, monster_id, x, y, COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true) FROM monster_spawns ORDER BY region_id, monster_id`,
+	},
+	"map_cell": {
+		filename: "MapCell.csv",
+		columns:  []string{"region_id", "x", "y", "cell_type", "content_id", "metadata", "respawn_seconds", "is_active"},
+		query:    `SELECT region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text,'{}'), COALESCE(respawn_seconds,300), COALESCE(is_active,true) FROM map_cells ORDER BY x, y`,
+	},
+	"sect": {
+		filename: "Sect.csv",
+		columns:  []string{"id", "name", "description", "region", "vault_gu", "vault_materials", "vault_recipes"},
+		query:    `SELECT id, name, COALESCE(description,''), COALESCE(region,''), COALESCE(vault_gu::text,'[]'), COALESCE(vault_materials::text,'{}'), COALESCE(vault_recipes::text,'[]') FROM sects ORDER BY id`,
+	},
+	"sect_mission": {
+		filename: "SectMission.csv",
+		columns:  []string{"sect_id", "title", "description", "mission_type", "target_id", "target_amount", "reward_contribution", "required_member_rank"},
+		query:    `SELECT sect_id, title, COALESCE(description,''), COALESCE(mission_type,'GATHER'), COALESCE(target_id,''), COALESCE(target_amount,1), COALESCE(reward_contribution,0), COALESCE(required_member_rank,'NGOAI_MON') FROM sect_missions ORDER BY sect_id, title`,
+	},
+	"quest": {
+		filename: "Quest.csv",
+		columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
+		query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
+	},
+	"dream_realm": {
+		filename: "DreamRealm.csv",
+		columns:  []string{"id", "name", "path", "type", "required_rank", "entry_item", "description", "rewards", "map_data", "cooldown_hours"},
+		query:    `SELECT id, name, CASE WHEN id LIKE 'dream_realm_%' THEN substring(id from 13) ELSE '' END, type, required_rank, entry_item, COALESCE(description,''), COALESCE(rewards::text,'{}'), COALESCE(map_data::text,'[]'), cooldown_hours FROM instance_templates WHERE type='DREAM_REALM' ORDER BY id`,
+	},
+}
+
+func TableExport(table string) error {
+	dataset, ok := DatasetByKey(table)
+	if !ok || dataset.Export == nil {
+		return fmt.Errorf("unknown table %q: dataset does not support export", table)
 	}
-	p := filepath.Join("data", d.filename)
-	if err := writeCSV(p, d.columns, d.query); err != nil {
-		return fmt.Errorf("export %s: %w", p, err)
-	}
-	logger.S.Infof("Exported %s", p)
-	return nil
+	return dataset.Export()
 }

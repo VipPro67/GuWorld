@@ -1,37 +1,12 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { authFetch } from "@/lib/auth";
 import { Search, RefreshCw, History, Shield, Sparkles, User, ArrowRight, Copy, Check, Filter } from "lucide-react";
+import { useAdminUrlState } from "./useAdminUrlState";
+import { AdminServerSort } from "./AdminServerSort";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[2]) : null;
-}
-
-function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const csrfToken = getCookie("gu_csrf_token");
-  const headers: Record<string, string> = {};
-  if (init.headers) {
-    if (Array.isArray(init.headers)) {
-      for (const [k, v] of init.headers) headers[k] = v;
-    } else if (init.headers instanceof Headers) {
-      init.headers.forEach((v, k) => { headers[k] = v; });
-    } else {
-      Object.assign(headers, init.headers);
-    }
-  }
-  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
-    headers["X-CSRF-Token"] = csrfToken;
-  }
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("gu_auth_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-  return fetch(input, { ...init, headers, credentials: "include" });
-}
+const GU_HISTORY_DEFAULTS = { page: "1", page_size: "20", search: "", event_type: "", sort: "created_at", direction: "desc" };
+const GU_HISTORY_KEYS = Object.keys(GU_HISTORY_DEFAULTS);
 
 interface GuHistoryItem {
   id: string;
@@ -66,28 +41,30 @@ export const GuHistoryAdminTab: React.FC<{
 }> = ({ addToast }) => {
   const [logs, setLogs] = useState<GuHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
+  const [query, updateQuery] = useAdminUrlState(GU_HISTORY_DEFAULTS, GU_HISTORY_KEYS);
+  const page = Math.max(1, Number(query.page) || 1);
   const [total, setTotal] = useState(0);
-  const [limit] = useState(20);
-  const [search, setSearch] = useState("");
-  const [searchDebounce, setSearchDebounce] = useState("");
-  const [eventTypeFilter, setEventTypeFilter] = useState("");
+  const limit = Math.max(1, Number(query.page_size) || 20);
+  const search = query.search;
+  const [searchDebounce, setSearchDebounce] = useState(query.search);
+  const eventTypeFilter = query.event_type;
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setSearch(searchDebounce);
-      setPage(1);
+      updateQuery({ search: searchDebounce, page: "1" }, true);
     }, 400);
     return () => clearTimeout(timer);
-  }, [searchDebounce]);
+  }, [searchDebounce, updateQuery]);
+
+  useEffect(() => setSearchDebounce(query.search), [query.search]);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: limit.toString(),
+        page_size: limit.toString(), sort: query.sort, direction: query.direction,
       });
       if (search) params.append("search", search);
       if (eventTypeFilter) params.append("event_type", eventTypeFilter);
@@ -105,7 +82,7 @@ export const GuHistoryAdminTab: React.FC<{
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, eventTypeFilter, addToast]);
+  }, [page, limit, search, eventTypeFilter, addToast, query.direction, query.sort]);
 
   useEffect(() => {
     fetchLogs();
@@ -168,8 +145,7 @@ export const GuHistoryAdminTab: React.FC<{
             <select
               value={eventTypeFilter}
               onChange={(e) => {
-                setEventTypeFilter(e.target.value);
-                setPage(1);
+                updateQuery({ event_type: e.target.value, page: "1" });
               }}
               className="px-2.5 py-1.5 bg-zinc-950/80 border border-zinc-800 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-amber-500/50"
             >
@@ -183,6 +159,7 @@ export const GuHistoryAdminTab: React.FC<{
               <option value="STARVED_DEATH">Tiêu Hủy Do Chết Đói</option>
             </select>
           </div>
+          <AdminServerSort sort={query.sort} direction={query.direction} options={[{ value: "created_at", label: "Thời gian" }, { value: "rank", label: "Cấp bậc" }, { value: "event_type", label: "Sự kiện" }, { value: "gu_id", label: "Cổ trùng" }]} onChange={(sort, direction) => updateQuery({ sort, direction, page: "1" })} />
         </div>
 
         {/* Log Table */}
@@ -290,14 +267,14 @@ export const GuHistoryAdminTab: React.FC<{
           <div className="flex items-center gap-2">
             <span>Trang {page} / {totalPages}</span>
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => updateQuery({ page: String(Math.max(1, page - 1)) })}
               disabled={page <= 1}
               className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 disabled:opacity-40 hover:bg-zinc-700 cursor-pointer"
             >
               Trước
             </button>
             <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => updateQuery({ page: String(Math.min(totalPages, page + 1)) })}
               disabled={page >= totalPages}
               className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 disabled:opacity-40 hover:bg-zinc-700 cursor-pointer"
             >

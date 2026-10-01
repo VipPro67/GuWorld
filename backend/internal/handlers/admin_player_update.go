@@ -32,7 +32,6 @@ type AdminUpdatePlayerRequest struct {
 	CurrentRegion       *string            `json:"current_region"`
 	X                   *int               `json:"x"`
 	Y                   *int               `json:"y"`
-	IsAdmin             *bool              `json:"is_admin"`
 	SoulHP              *float64           `json:"soul_hp"`
 	MaxSoul             *float64           `json:"max_soul"`
 	SoulTier            *string            `json:"soul_tier"`
@@ -192,11 +191,6 @@ func AdminUpdatePlayer(c *gin.Context) {
 	if req.Y != nil {
 		sets = append(sets, "y=$"+strconv.Itoa(argIdx))
 		args = append(args, *req.Y)
-		argIdx++
-	}
-	if req.IsAdmin != nil {
-		sets = append(sets, "is_admin=$"+strconv.Itoa(argIdx))
-		args = append(args, *req.IsAdmin)
 		argIdx++
 	}
 	if req.SoulHP != nil {
@@ -361,7 +355,6 @@ func AdminUpdatePlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin người chơi"})
 		return
 	}
-
 	if req.Rank != nil && *req.Rank >= 6 {
 		var apID string
 		var internalYears float64

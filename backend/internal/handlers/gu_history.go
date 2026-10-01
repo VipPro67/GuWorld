@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -36,15 +35,12 @@ func GetGuHistory(c *gin.Context) {
 
 // AdminListGuHistory lists gu_history_logs with pagination and search for the Admin panel.
 func AdminListGuHistory(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
+	if _, ok := requireAdmin(c); !ok {
+		return
 	}
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	if limit < 1 || limit > 100 {
-		limit = 20
-	}
-	offset := (page - 1) * limit
+	paging := parseAdminPageQuery(c, 20, map[string]string{
+		"created_at": "g.created_at", "event_type": "g.event_type", "gu_id": "g.gu_id", "rank": "g.rank",
+	}, "created_at")
 	search := c.Query("search")
 	eventType := c.Query("event_type")
 
@@ -88,11 +84,11 @@ func AdminListGuHistory(c *gin.Context) {
 		LEFT JOIN players pa ON g.actor_id = pa.id
 		LEFT JOIN players pt ON g.target_id = pt.id
 		%s
-		ORDER BY g.created_at DESC
+		ORDER BY %s %s, g.id %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, argIdx, argIdx+1)
+	`, whereClause, paging.Sort, paging.Direction, paging.Direction, argIdx, argIdx+1)
 
-	queryArgs := append(args, limit, offset)
+	queryArgs := append(args, paging.PageSize, paging.Offset)
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, queryArgs...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query gu history logs"})
@@ -133,9 +129,9 @@ func AdminListGuHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"page":  page,
-		"limit": limit,
-		"total": total,
-		"logs":  logs,
+		"page":      paging.Page,
+		"page_size": paging.PageSize,
+		"total":     total,
+		"logs":      logs,
 	})
 }

@@ -1405,12 +1405,13 @@ func Simulate(state *CombatState) []CombatLog {
 					satKhiGuaranteed := hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState != nil && actor.CustomState["sat_khi_level"] > 10
 					if missCh := target.EvasionChance - actor.Accuracy; missCh > 0 && rng.Float64() < missCh && !satKhiGuaranteed {
 						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "EVADE_MISS",
-							TargetId:  target.ID,
-							Detail:    fmt.Sprintf("%s né tránh đòn [%s] của %s!", target.Name, a.Name, actor.Name),
+							Turn:       turn,
+							ActorId:    actor.ID,
+							ActorName:  actor.Name,
+							Action:     "EVADE_MISS",
+							TargetId:   target.ID,
+							SourceGuID: a.SourceID,
+							Detail:     fmt.Sprintf("%s né tránh đòn [%s] của %s!", target.Name, a.Name, actor.Name),
 							Breakdown: &DamageBreakdown{
 								BaseDamage:     a.Damage,
 								AttackerAttack: actor.StatProvenance["attack"],
@@ -1424,12 +1425,13 @@ func Simulate(state *CombatState) []CombatLog {
 					if actor.IsBlinded && actor.AccuracyPenalty > 0 {
 						if rng.Float64() < actor.AccuracyPenalty {
 							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "BLIND_MISS",
-								TargetId:  target.ID,
-								Detail:    fmt.Sprintf("%s bị mù, đòn tấn công [%s] đánh trượt %s!", actor.Name, a.Name, target.Name),
+								Turn:       turn,
+								ActorId:    actor.ID,
+								ActorName:  actor.Name,
+								Action:     "BLIND_MISS",
+								TargetId:   target.ID,
+								SourceGuID: a.SourceID,
+								Detail:     fmt.Sprintf("%s bị mù, đòn tấn công [%s] đánh trượt %s!", actor.Name, a.Name, target.Name),
 								Breakdown: &DamageBreakdown{
 									BaseDamage:     a.Damage,
 									AttackerAttack: actor.StatProvenance["attack"],
@@ -1542,53 +1544,59 @@ func Simulate(state *CombatState) []CombatLog {
 							damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, a.Name, target.Name, totalHitDmg, target.HP)
 						}
 
+						landed := !evadedThisStrike[target] && (hpLost > 0 || shieldAbsorbed > 0)
 						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    a.ActionType,
-							TargetId:  target.ID,
-							Damage:    totalHitDmg,
-							IsCrit:    isCritHit,
-							Detail:    damageDetail,
-							Breakdown: breakdown,
+							Turn:       turn,
+							ActorId:    actor.ID,
+							ActorName:  actor.Name,
+							Action:     a.ActionType,
+							TargetId:   target.ID,
+							Damage:     totalHitDmg,
+							IsCrit:     isCritHit,
+							SourceGuID: a.SourceID,
+							HitLanded:  landed,
+							Detail:     damageDetail,
+							Breakdown:  breakdown,
 						})
 					} else {
 						if target.VirtualShield > 0 {
 							breakdown.Reason = "Toàn bộ sát thương bị Khiên Ảo hấp thụ"
 							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    a.ActionType,
-								TargetId:  target.ID,
-								Damage:    0,
-								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, a.Name, target.Name, target.VirtualShield, target.HP),
-								Breakdown: breakdown,
+								Turn:       turn,
+								ActorId:    actor.ID,
+								ActorName:  actor.Name,
+								Action:     a.ActionType,
+								TargetId:   target.ID,
+								Damage:     0,
+								SourceGuID: a.SourceID,
+								Detail:     fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị Khiên Ảo hấp thụ (còn %.0f khiên, %.0f HP)", actor.Name, a.Name, target.Name, target.VirtualShield, target.HP),
+								Breakdown:  breakdown,
 							})
 						} else if target.HP <= 0 {
 							breakdown.Reason = "Mục tiêu đã gục ngã từ trước"
 							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    a.ActionType,
-								TargetId:  target.ID,
-								Damage:    0,
-								Detail:    fmt.Sprintf("%s dùng [%s] lên %s (mục tiêu đã gục ngã từ trước)!", actor.Name, a.Name, target.Name),
-								Breakdown: breakdown,
+								Turn:       turn,
+								ActorId:    actor.ID,
+								ActorName:  actor.Name,
+								Action:     a.ActionType,
+								TargetId:   target.ID,
+								Damage:     0,
+								SourceGuID: a.SourceID,
+								Detail:     fmt.Sprintf("%s dùng [%s] lên %s (mục tiêu đã gục ngã từ trước)!", actor.Name, a.Name, target.Name),
+								Breakdown:  breakdown,
 							})
 						} else {
 							breakdown.Reason = "Đối phương phòng thủ kiên cố hoặc miễn nhiễm toàn bộ sát thương"
 							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    a.ActionType,
-								TargetId:  target.ID,
-								Damage:    0,
-								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây 0 sát thương do đối phương phòng thủ/miễn nhiễm (còn %.0f HP)!", actor.Name, a.Name, target.Name, target.HP),
-								Breakdown: breakdown,
+								Turn:       turn,
+								ActorId:    actor.ID,
+								ActorName:  actor.Name,
+								Action:     a.ActionType,
+								TargetId:   target.ID,
+								Damage:     0,
+								SourceGuID: a.SourceID,
+								Detail:     fmt.Sprintf("%s dùng [%s] lên %s, gây 0 sát thương do đối phương phòng thủ/miễn nhiễm (còn %.0f HP)!", actor.Name, a.Name, target.Name, target.HP),
+								Breakdown:  breakdown,
 							})
 						}
 					}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { authFetch } from "@/lib/auth";
 import { useGameStore, guSpecFor } from "@/store/useGameStore";
 import type { GuSpec, ItemSpec } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
@@ -64,12 +65,32 @@ import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
 import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
 import { SectMinesAdminTab } from "./admin/SectMinesAdminTab";
 import { GuHistoryAdminTab } from "./admin/GuHistoryAdminTab";
-import { MonitoringAdminTab } from "./admin/MonitoringAdminTab";
+import { AuditLogsAdminTab } from "./admin/modules/AuditLogsAdminTab";
+import { MonitoringAdminTab } from "./admin/modules/MonitoringAdminTab";
 import { CoreDataAdminTab } from "./admin/CoreDataAdminTab";
 import { AdminDataGrid } from "./admin/AdminDataGrid";
+import { useAdminUrlState } from "./admin/useAdminUrlState";
 import { GuEffectsEditor, validateAllEffectEditors } from "./admin/GuEffectsEditor";
+import type { AdminModuleKey } from "./admin/navigation";
+import { useAdminAccess } from "./admin/AdminAccessContext";
+import { canPerformAdminAction, prepareAdminAction } from "./admin/actions";
+import { DataImportWorkflow } from "./admin/DataImportWorkflow";
+import { PlayerRolesEditor } from "./admin/PlayerRolesEditor";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
+const PLAYER_QUERY_KEYS = Object.keys(PLAYER_QUERY_DEFAULTS);
+
+type DatasetDescriptor = {
+  key: string;
+  label: string;
+  csv_file: string;
+  capabilities: { import: boolean; export: boolean; preflight: boolean };
+  cache_invalidation: string[];
+  registry_reload: string[];
+  permissions: { read: string; import?: string; export?: string };
+  ui_supported: boolean;
+};
 
 const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "string" | "number" | "boolean" }[]> = {
   active: [
@@ -150,36 +171,6 @@ const getEffectFieldType = (cat: string, key: string): "string" | "number" | "bo
   }
   return "number";
 };
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[2]) : null;
-}
-
-function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const csrfToken = getCookie("gu_csrf_token");
-  const headers: Record<string, string> = {};
-  if (init.headers) {
-    if (Array.isArray(init.headers)) {
-      for (const [k, v] of init.headers) headers[k] = v;
-    } else if (init.headers instanceof Headers) {
-      init.headers.forEach((v, k) => { headers[k] = v; });
-    } else {
-      Object.assign(headers, init.headers);
-    }
-  }
-  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
-    headers["X-CSRF-Token"] = csrfToken;
-  }
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("gu_auth_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-  return fetch(input, { ...init, headers, credentials: "include" });
-}
 
 interface PlayerRow {
   id: string; username: string; email: string; rank: number; sub_rank: number;
@@ -371,117 +362,6 @@ function rankColor(rank: number): string {
   return "text-zinc-400";
 }
 
-function formatAdminLogTime(timeStr: string): string {
-  if (!timeStr) return "—";
-  const d = new Date(timeStr);
-  if (isNaN(d.getTime())) return timeStr;
-  const pad = (n: number) => (n < 10 ? "0" + n : n);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-const AUDIT_ACTIONS = [
-  { action: "gu.feed", label: "Cho ăn Cổ trùng", icon: "🌱" },
-  { action: "gu.feed_group", label: "Cho ăn hàng loạt", icon: "🌱" },
-  { action: "gu.equip", label: "Trang bị Cổ trùng", icon: "⚔️" },
-  { action: "gu.unequip", label: "Tháo Cổ trùng", icon: "🛡️" },
-  { action: "gu.set_vital", label: "Khóa Bản Mệnh Cổ", icon: "✨" },
-  { action: "gu.drop", label: "Vứt Cổ trùng", icon: "🗑️" },
-  { action: "gu.drop_batch", label: "Vứt Cổ trùng hàng loạt", icon: "🗑️" },
-  { action: "gu.use_consumable", label: "Sử dụng Cổ trùng", icon: "🧪" },
-  { action: "gu.starve_death", label: "Cổ trùng chết đói", icon: "💀" },
-  { action: "gu.starve_vital_death", label: "Bản mệnh Cổ chết đói", icon: "💀" },
-  { action: "refine.gu", label: "Hợp luyện Cổ", icon: "🔥" },
-  { action: "refine.deduce_recipe", label: "Suy luận công thức", icon: "📜" },
-  { action: "combat.started", label: "Bắt đầu chiến đấu", icon: "⚔️" },
-  { action: "combat.ended", label: "Kết thúc chiến đấu", icon: "⚔️" },
-  { action: "combat.finish", label: "Hoàn thành chiến đấu", icon: "🏆" },
-  { action: "combat.flee", label: "Bỏ chạy chiến đấu", icon: "🏃" },
-  { action: "combat.retreat", label: "Rút lui chiến đấu", icon: "🏃" },
-  { action: "cultivate.breakthrough", label: "Đột phá tu vi", icon: "🌟" },
-  { action: "cultivate.break_wall", label: "Phá vách", icon: "🧱" },
-  { action: "cultivate.wall_cracked", label: "Vách nứt", icon: "🧱" },
-  { action: "soul.fortify", label: "Luyện hồn", icon: "👻" },
-  { action: "soul.refine", label: "Tinh luyện hồn", icon: "👻" },
-  { action: "gacha.open", label: "Mở đá", icon: "💎" },
-  { action: "gacha.open_bulk", label: "Mở đá hàng loạt", icon: "💎" },
-  { action: "shop.buy", label: "Mua vật phẩm", icon: "🛒" },
-  { action: "shop.buy_package", label: "Mua gói vật phẩm", icon: "🛒" },
-  { action: "shop.sell", label: "Bán vật phẩm", icon: "💰" },
-  { action: "marketplace.create_listing", label: "Đăng bán chợ", icon: "🏪" },
-  { action: "marketplace.buy", label: "Mua từ chợ", icon: "🏪" },
-  { action: "marketplace.sold", label: "Chợ bán thành công", icon: "🏪" },
-  { action: "marketplace.cancel_listing", label: "Hủy đăng bán", icon: "🏪" },
-  { action: "marketplace.bid", label: "Đặt giá đấu giá", icon: "🏷️" },
-  { action: "marketplace.settle_auction_win", label: "Kết toán đấu giá thắng", icon: "🏷️" },
-  { action: "marketplace.settle_auction_expired", label: "Kết toán đấu giá hết hạn", icon: "🏷️" },
-  { action: "trade.initiate", label: "Mở giao dịch", icon: "🤝" },
-  { action: "trade.confirm", label: "Xác nhận giao dịch", icon: "🤝" },
-  { action: "trade.accept", label: "Chấp nhận giao dịch", icon: "🤝" },
-  { action: "trade.complete", label: "Hoàn thành giao dịch", icon: "🤝" },
-  { action: "trade.cancel", label: "Hủy giao dịch", icon: "🤝" },
-  { action: "trade.decline", label: "Từ chối giao dịch", icon: "🤝" },
-  { action: "trade.lock", label: "Khóa giao dịch", icon: "🔒" },
-  { action: "trade.updated", label: "Cập nhật giao dịch", icon: "🤝" },
-  { action: "mine.occupy", label: "Chiếm mỏ", icon: "⛏️" },
-  { action: "mine.claim", label: "Thu hoạch mỏ", icon: "⛏️" },
-  { action: "mine.abandon", label: "Bỏ mỏ", icon: "⛏️" },
-  { action: "mine.attack", label: "Tấn công mỏ", icon: "⚔️" },
-  { action: "quest.complete", label: "Hoàn thành nhiệm vụ", icon: "📋" },
-  { action: "achievement.claim", label: "Nhận thành tựu", icon: "🏅" },
-  { action: "sect.join", label: "Vào tông môn", icon: "🏯" },
-  { action: "sect.leave", label: "Rời tông môn", icon: "🏯" },
-  { action: "sect.donate_stones", label: "Quyên góp đá tông môn", icon: "🏯" },
-  { action: "sect.donate_materials", label: "Quyên góp nguyên liệu tông môn", icon: "🏯" },
-  { action: "sect.donate_gu", label: "Quyên góp Cổ trùng tông môn", icon: "🏯" },
-  { action: "sect.buy_vault", label: "Mua kho tông môn", icon: "🏯" },
-  { action: "player.register", label: "Đăng ký tài khoản", icon: "👤" },
-  { action: "player.login", label: "Đăng nhập", icon: "🔑" },
-  { action: "player.logout", label: "Đăng xuất", icon: "🔑" },
-  { action: "player.updated", label: "Cập nhật nhân vật", icon: "👤" },
-  { action: "player.heartbeat", label: "Heartbeat", icon: "💓" },
-  { action: "gift_code.redeem", label: "Đổi mã quà", icon: "🎁" },
-  { action: "topup.create_order", label: "Tạo đơn nạp tiền", icon: "💳" },
-  { action: "topup.webhook_applied", label: "Nạp tiền thành công", icon: "💳" },
-  { action: "topup.webhook_failed", label: "Nạp tiền thất bại", icon: "💳" },
-  { action: "deposit.simulate", label: "Mô phỏng nạp tiền", icon: "💳" },
-  { action: "admin.create_gu", label: "Admin tạo Cổ trùng", icon: "🔧" },
-  { action: "admin.update_gu", label: "Admin sửa Cổ trùng", icon: "🔧" },
-  { action: "admin.delete_gu", label: "Admin xóa Cổ trùng", icon: "🔧" },
-  { action: "admin.add_gus", label: "Admin thêm Cổ trùng", icon: "🔧" },
-  { action: "admin.remove_gu", label: "Admin xóa Cổ trùng NL", icon: "🔧" },
-  { action: "admin.create_item", label: "Admin tạo vật phẩm", icon: "🔧" },
-  { action: "admin.update_item", label: "Admin sửa vật phẩm", icon: "🔧" },
-  { action: "admin.delete_item", label: "Admin xóa vật phẩm", icon: "🔧" },
-  { action: "admin.add_items", label: "Admin thêm vật phẩm", icon: "🔧" },
-  { action: "admin.remove_items", label: "Admin xóa vật phẩm NL", icon: "🔧" },
-  { action: "admin.create_recipe", label: "Admin tạo công thức", icon: "🔧" },
-  { action: "admin.update_recipe", label: "Admin sửa công thức", icon: "🔧" },
-  { action: "admin.delete_recipe", label: "Admin xóa công thức", icon: "🔧" },
-  { action: "admin.change_stones", label: "Admin đổi đá", icon: "🔧" },
-  { action: "admin.update_player", label: "Admin sửa nhân vật", icon: "🔧" },
-  { action: "admin.create_shop_item", label: "Admin tạo cửa hàng", icon: "🔧" },
-  { action: "admin.update_shop_item", label: "Admin sửa cửa hàng", icon: "🔧" },
-  { action: "admin.delete_shop_item", label: "Admin xóa cửa hàng", icon: "🔧" },
-  { action: "admin.create_arena_shop_item", label: "Admin tạo cửa hàng ĐT", icon: "🔧" },
-  { action: "admin.update_arena_shop_item", label: "Admin sửa cửa hàng ĐT", icon: "🔧" },
-  { action: "admin.delete_arena_shop_item", label: "Admin xóa cửa hàng ĐT", icon: "🔧" },
-  { action: "admin.create_gift_code", label: "Admin tạo mã quà", icon: "🔧" },
-  { action: "admin.create_sect_mission", label: "Admin tạo nhiệm vụ TM", icon: "🔧" },
-  { action: "admin.delete_sect_mission", label: "Admin xóa nhiệm vụ TM", icon: "🔧" },
-  { action: "admin.update_sect", label: "Admin sửa tông môn", icon: "🔧" },
-  { action: "admin.delete_sect", label: "Admin xóa tông môn", icon: "🔧" },
-  { action: "admin.set_sect_leader", label: "Admin đặt trưởng lão TM", icon: "🔧" },
-  { action: "admin.kick_sect_member", label: "Admin kick thành viên TM", icon: "🔧" },
-  { action: "admin.stock_sect_vault", label: "Admin nạp kho tông môn", icon: "🔧" },
-  { action: "admin.remove_sect_vault", label: "Admin rút kho tông môn", icon: "🔧" },
-  { action: "admin.add_to_sect", label: "Admin thêm vào tông môn", icon: "🔧" },
-  { action: "admin.update_mine_slot", label: "Admin sửa ô mỏ", icon: "🔧" },
-  { action: "admin.reset_mine_slot", label: "Admin reset ô mỏ", icon: "🔧" },
-  { action: "admin.import_data", label: "Admin nhập dữ liệu", icon: "📥" },
-  { action: "admin.export_data", label: "Admin xuất dữ liệu", icon: "📤" },
-  { action: "mana.snapshot", label: "Chụp snapshot mana", icon: "📸" },
-];
-
 function memberRankStyle(rank: string): string {
   switch (rank) {
     case "CHUONG_MON": return "text-amber-400 border-amber-500/30 bg-amber-950/60";
@@ -526,7 +406,9 @@ function guLocationLabel(loc: string): string {
   }
 }
 
-export const AdminView: React.FC = () => {
+export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; initialSection?: AdminModuleKey }> = ({ authorized = false, embedded = false, initialSection = "players" }) => {
+  const adminAccess = useAdminAccess();
+  const canAdminAction = (action: Parameters<typeof canPerformAdminAction>[1]) => canPerformAdminAction(adminAccess.effective_permissions, action);
   const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
   const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "combat">("items");
   const [isCombatEquippedExpanded, setIsCombatEquippedExpanded] = useState(true);
@@ -536,11 +418,14 @@ export const AdminView: React.FC = () => {
   const [isCombatPathExpanded, setIsCombatPathExpanded] = useState(true);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [limit] = useState(50);
-  const [search, setSearch] = useState("");
-  const [searchText, setSearchText] = useState("");
-  const [searchBy, setSearchBy] = useState<"all" | "id" | "username" | "email" | "item" | "gu">("all");
+  const [playerQuery, updatePlayerQuery] = useAdminUrlState(PLAYER_QUERY_DEFAULTS, PLAYER_QUERY_KEYS);
+  const page = Math.max(1, Number(playerQuery.page) || 1);
+  const limit = Math.max(1, Number(playerQuery.page_size) || 50);
+  const search = playerQuery.search;
+  const [searchText, setSearchText] = useState(playerQuery.search);
+  const searchBy = playerQuery.search_by as "all" | "id" | "username" | "email" | "item" | "gu";
+  const setPage = (next: number) => updatePlayerQuery({ page: String(next) });
+  useEffect(() => setSearchText(playerQuery.search), [playerQuery.search]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -571,6 +456,7 @@ export const AdminView: React.FC = () => {
 
   // Edit player modal
   const [showEditPlayer, setShowEditPlayer] = useState(false);
+  const [showRolesEditor, setShowRolesEditor] = useState(false);
   const [editPlayerForm, setEditPlayerForm] = useState<Record<string, string>>({});
 
   const [showAddItem, setShowAddItem] = useState(false);
@@ -591,7 +477,8 @@ export const AdminView: React.FC = () => {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
-  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "monitoring" | "shop" | "mines" | "gift_codes" | "apertures" | "topup_wallet" | "gu_history">("players");
+  const [datasets, setDatasets] = useState<DatasetDescriptor[]>([]);
+  const section: AdminModuleKey = initialSection;
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
   const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
 
@@ -607,20 +494,6 @@ export const AdminView: React.FC = () => {
   const [apertureDetailLoading, setApertureDetailLoading] = useState(false);
   const [apertureForm, setApertureForm] = useState<ApiResponseData>({});
   const [apertureSaving, setApertureSaving] = useState(false);
-
-  // ----- Audit log state -----
-  const [auditLogs, setAuditLogs] = useState<ApiResponseData[]>([]);
-  const [auditLogTotal, setAuditLogTotal] = useState(0);
-  const [auditLogLoading, setAuditLogLoading] = useState(false);
-  const [auditLogPage, setAuditLogPage] = useState(0);
-  const [auditLogLimit] = useState(50);
-  const [auditLogFilterAction, setAuditLogFilterAction] = useState("");
-  const [auditLogFilterPlayer, setAuditLogFilterPlayer] = useState("");
-  const [auditLogFilterSuccess, setAuditLogFilterSuccess] = useState("");
-  const [auditLogFilterSearch, setAuditLogFilterSearch] = useState("");
-  const [auditLogExpandId, setAuditLogExpandId] = useState<string | null>(null);
-  const [auditLogActionOpen, setAuditLogActionOpen] = useState(false);
-  const [auditLogActionSearch, setAuditLogActionSearch] = useState("");
 
   // ----- Shop state -----
   const [shopItems, setShopItems] = useState<ApiResponseData[]>([]);
@@ -1053,26 +926,6 @@ export const AdminView: React.FC = () => {
     setShopSearchLoaded(true);
   }, [shopSearchLoaded]);
 
-  const fetchAuditLogs = useCallback(async () => {
-    setAuditLogLoading(true);
-    try {
-      const params = new URLSearchParams({
-        limit: String(auditLogLimit),
-        offset: String(auditLogPage * auditLogLimit),
-      });
-      if (auditLogFilterAction) params.set("action", auditLogFilterAction);
-      if (auditLogFilterPlayer) params.set("player_id", auditLogFilterPlayer);
-      if (auditLogFilterSuccess) params.set("success", auditLogFilterSuccess);
-      if (auditLogFilterSearch) params.set("search", auditLogFilterSearch);
-      const res = await authFetch(`${BACKEND_URL}/api/admin/audit-logs?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAuditLogs(data.data || []);
-        setAuditLogTotal(data.total || 0);
-      }
-    } catch {} finally { setAuditLogLoading(false); }
-  }, [auditLogPage, auditLogLimit, auditLogFilterAction, auditLogFilterPlayer, auditLogFilterSuccess, auditLogFilterSearch]);
-
   useEffect(() => {
     if (section === "sects") fetchSects();
   }, [section, fetchSects]);
@@ -1097,32 +950,6 @@ export const AdminView: React.FC = () => {
   }, [selectedApertureId, fetchApertureDetail]);
 
   useEffect(() => {
-    if (section === "logs") fetchAuditLogs();
-  }, [section, fetchAuditLogs]);
-
-  const [auditLogSearchDebounce, setAuditLogSearchDebounce] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setAuditLogFilterSearch(auditLogSearchDebounce), 400);
-    return () => clearTimeout(t);
-  }, [auditLogSearchDebounce]);
-  useEffect(() => {
-    if (section === "logs") { setAuditLogPage(0); }
-  }, [auditLogFilterSearch]);
-
-  useEffect(() => {
-    if (!auditLogActionOpen) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-audit-action-combobox]")) {
-        setAuditLogActionOpen(false);
-        setAuditLogActionSearch("");
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [auditLogActionOpen]);
-
-  useEffect(() => {
     if (section === "shop") {
       fetchShopItems();
       fetchArenaShopItems();
@@ -1139,6 +966,15 @@ export const AdminView: React.FC = () => {
 
   useEffect(() => {
     if (section === "data") {
+      if (dataTab === "tables") {
+        void authFetch(`${BACKEND_URL}/api/admin/data/tables`)
+          .then(async response => {
+            if (!response.ok) throw new Error("Không thể tải danh sách dataset");
+            const body = await response.json() as { datasets?: DatasetDescriptor[] };
+            setDatasets((body.datasets ?? []).filter(dataset => dataset.ui_supported));
+          })
+          .catch(error => addToast(error instanceof Error ? error.message : "Không thể tải danh sách dataset", "error"));
+      }
       if (dataTab === "gus") fetchGus();
       else if (dataTab === "items") fetchItems();
       else if (dataTab === "recipes") fetchRecipes();
@@ -1147,7 +983,7 @@ export const AdminView: React.FC = () => {
       else if (dataTab === "regions") fetchRegions(1, regionSearch);
       else if (dataTab === "map_cells") fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter);
     }
-  }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables, fetchRegions, fetchMapCells, regionSearch, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter]);
+  }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables, fetchRegions, fetchMapCells, regionSearch, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter, addToast]);
 
   useEffect(() => {
     if (section === "players" && playersTab === "online") fetchOnlinePlayers();
@@ -1165,7 +1001,7 @@ export const AdminView: React.FC = () => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      const params = new URLSearchParams({ page: String(page), page_size: String(limit), sort: playerQuery.sort, direction: playerQuery.direction });
       const q = search.trim();
       if (q) {
         params.set("search", q);
@@ -1182,9 +1018,11 @@ export const AdminView: React.FC = () => {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       setError(err.message);
     } finally { setLoading(false); }
-  }, [page, limit, search, searchBy]);
+  }, [page, limit, search, searchBy, playerQuery.direction, playerQuery.sort]);
 
-  useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
+  useEffect(() => {
+    if (section === "players") fetchPlayers();
+  }, [section, fetchPlayers]);
 
   const fetchDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -1258,9 +1096,10 @@ export const AdminView: React.FC = () => {
   const exec = async (url: string, method: string, body?: ApiResponseData) => {
     setActionLoading(true);
     try {
+	  const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey : undefined;
       const res = await authFetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+		headers: { "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
         body: body ? JSON.stringify(body) : undefined,
       });
       const data = await res.json().catch(() => ({ error: "Lỗi không xác định" }));
@@ -1354,7 +1193,7 @@ export const AdminView: React.FC = () => {
     </div>
   );
 
-  if (!player?.is_admin) {
+  if (!authorized && !player?.is_admin) {
     return (
       <div className="max-w-4xl mx-auto text-center py-20 text-zinc-500 font-mono">
         <Shield className="w-12 h-12 mx-auto mb-4 text-zinc-700" />
@@ -1383,11 +1222,11 @@ export const AdminView: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowStones(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
+            {canAdminAction("updatePlayer") && <button onClick={() => setShowStones(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <Coins className="w-3.5 h-3.5" />
               Điều chỉnh tài nguyên
-            </button>
-            <button onClick={() => {
+            </button>}
+              {canAdminAction("updatePlayer") && <button onClick={() => {
               if (detail) {
                 setEditPlayerForm({
                   rank: String(detail.rank), sub_rank: String(detail.sub_rank),
@@ -1397,7 +1236,7 @@ export const AdminView: React.FC = () => {
                   wall_progress: String(detail.wall_progress ?? ""), human_qi: String(detail.human_qi ?? ""),
                   lifespan: String(detail.lifespan ?? ""), current_region: detail.current_region || "",
                   x: String(detail.x ?? 0), y: String(detail.y ?? 0),
-                  is_admin: String(detail.is_admin), soul_hp: String(detail.soul_hp ?? ""),
+                  soul_hp: String(detail.soul_hp ?? ""),
                   max_soul: String(detail.max_soul ?? ""), soul_tier: detail.soul_tier || "",
                   explore_count: String(detail.explore_count ?? ""), aperture_stress: String(detail.aperture_stress ?? ""),
                   bio: detail.bio || "", avatar_url: detail.avatar_url || "",
@@ -1416,10 +1255,10 @@ export const AdminView: React.FC = () => {
             }} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
               <Edit3 className="w-3.5 h-3.5" />
               Sửa thông tin
-            </button>
+            </button>}
             <button onClick={() => {
               if (detail) {
-                setSection("apertures");
+                window.location.assign("/admin/apertures");
                 setApertureSearchDebounce(detail.username);
                 setSelectedId(null);
                 setDetail(null);
@@ -1428,6 +1267,10 @@ export const AdminView: React.FC = () => {
               <Globe className="w-3.5 h-3.5 text-amber-500" />
               Xem Tiên Khiếu
             </button>
+            {(adminAccess.effective_permissions.includes("admin.*") || adminAccess.effective_permissions.includes("admin_roles.read") || canAdminAction("assignPlayerRoles")) && <button onClick={() => setShowRolesEditor(true)} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              Vai trò
+            </button>}
             <button onClick={() => { setSelectedId(null); setDetail(null); }} disabled={actionLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <X className="w-3.5 h-3.5" />
               Đóng
@@ -1491,9 +1334,9 @@ export const AdminView: React.FC = () => {
                   <button onClick={() => { setPlayerItemsPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
                     <Search className="w-3.5 h-3.5" /> Tìm
                   </button>
-                  <button onClick={() => { setAddItemId(""); setAddItemQty(1); setShowAddItem(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
+                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddItemId(""); setAddItemQty(1); setShowAddItem(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
-                  </button>
+                  </button>}
                 </div>
 
                 {playerItemsLoading ? (
@@ -1570,9 +1413,9 @@ export const AdminView: React.FC = () => {
                   <button onClick={() => { setPlayerGusPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
                     <Search className="w-3.5 h-3.5" /> Tìm
                   </button>
-                  <button onClick={() => { setAddGuId(""); setAddGuRank(""); setAddGuQty(1); setShowAddGu(true); ensureShopSearchLoaded(); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
+                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddGuId(""); setAddGuRank(""); setAddGuQty(1); setShowAddGu(true); ensureShopSearchLoaded(); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
-                  </button>
+                  </button>}
                 </div>
 
                 {playerGusLoading ? (
@@ -2234,6 +2077,9 @@ export const AdminView: React.FC = () => {
                   if (stonesPrimeval) body.primeval_stones = parseFloat(stonesPrimeval);
                   if (stonesImmortal) body.immortal_stones = parseFloat(stonesImmortal);
                   if (Object.keys(body).length === 0) return;
+				  const prepared = prepareAdminAction("adjustPlayerResources", `điều chỉnh tài nguyên của ${detail.username}`, selectedId || "player");
+				  if (!prepared) return;
+				  Object.assign(body, prepared);
                   const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/stones`, "PUT", body);
                   if (ok) setShowStones(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
@@ -2266,7 +2112,9 @@ export const AdminView: React.FC = () => {
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddItem(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !addItemId} onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "POST", { item_id: addItemId, quantity: addItemQty });
+				  const prepared = prepareAdminAction("grantPlayerInventory", "cấp vật phẩm cho người chơi", detail?.username || selectedId || "player");
+                  if (!prepared) return;
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "POST", { item_id: addItemId, quantity: addItemQty, ...prepared });
                   if (ok) setShowAddItem(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Thêm"}
@@ -2347,7 +2195,9 @@ export const AdminView: React.FC = () => {
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddGu(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !addGuId || rankRequired} onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty, ...(submitRank ? { rank: submitRank } : {}) });
+				  const prepared = prepareAdminAction("grantPlayerInventory", "cấp Cổ trùng cho người chơi", detail?.username || selectedId || "player");
+                  if (!prepared) return;
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty, ...(submitRank ? { rank: submitRank } : {}), ...prepared });
                   if (ok) setShowAddGu(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Thêm"}
@@ -2517,9 +2367,9 @@ export const AdminView: React.FC = () => {
                   <input type="text" value={editPlayerForm.fake_vital_gu || ""} onChange={e => setEditPlayerForm(f => ({ ...f, fake_vital_gu: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div className="flex items-center gap-4 pt-2">
-                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
-                    <input type="checkbox" checked={editPlayerForm.is_admin === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_admin: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
-                    Quyền Admin
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono">
+                    <input type="checkbox" checked={detail.is_admin} disabled className="accent-amber-500 w-4 h-4 disabled:opacity-60" />
+                    Quyền Admin (chỉ đọc)
                   </label>
                   <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
                     <input type="checkbox" checked={editPlayerForm.is_disguised === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_disguised: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
@@ -2559,7 +2409,6 @@ export const AdminView: React.FC = () => {
                   set("current_region", detail.current_region || "", editPlayerForm.current_region);
                   set("x", detail.x, num(editPlayerForm.x));
                   set("y", detail.y, num(editPlayerForm.y));
-                  set("is_admin", detail.is_admin, editPlayerForm.is_admin === "true");
                   set("soul_hp", detail.soul_hp, num(editPlayerForm.soul_hp));
                   set("max_soul", detail.max_soul, num(editPlayerForm.max_soul));
                   set("soul_tier", detail.soul_tier || "", editPlayerForm.soul_tier);
@@ -2600,6 +2449,9 @@ export const AdminView: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+        {showRolesEditor && detail && selectedId && (
+          <PlayerRolesEditor playerId={selectedId} username={detail.username} canAssign={canAdminAction("assignPlayerRoles")} addToast={addToast} onClose={() => setShowRolesEditor(false)} onSaved={() => { fetchDetail(selectedId); fetchPlayers(); }} />
         )}
         {renderItemPicker()}
       </div>
@@ -3099,7 +2951,7 @@ export const AdminView: React.FC = () => {
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6">
       {/* Header with section tabs */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
+      {!embedded && <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
         <div className="flex items-center gap-3">
           <button onClick={() => setView("dashboard")} className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer">
             <ArrowLeft className="w-4 h-4 text-zinc-400" />
@@ -3112,44 +2964,7 @@ export const AdminView: React.FC = () => {
             <p className="text-xs text-zinc-500 font-mono mt-0.5">Quản lý tài nguyên và người chơi</p>
           </div>
         </div>
-      </div>
-
-      {/* Section tabs */}
-      <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
-        <button onClick={() => setSection("players")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "players" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Users className="w-3.5 h-3.5 inline mr-1.5" />Người chơi
-        </button>
-        <button onClick={() => setSection("sects")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "sects" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Building2 className="w-3.5 h-3.5 inline mr-1.5" />Tông môn
-        </button>
-        <button onClick={() => setSection("data")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "data" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Database className="w-3.5 h-3.5 inline mr-1.5" />Dữ liệu
-        </button>
-        <button onClick={() => setSection("logs")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "logs" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <BookOpen className="w-3.5 h-3.5 inline mr-1.5" />Nhật ký
-        </button>
-        <button onClick={() => setSection("monitoring")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "monitoring" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Activity className="w-3.5 h-3.5 inline mr-1.5" />Giám sát
-        </button>
-        <button onClick={() => setSection("shop")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "shop" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Package className="w-3.5 h-3.5 inline mr-1.5" />Cửa hàng
-        </button>
-        <button onClick={() => setSection("mines")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "mines" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Layers className="w-3.5 h-3.5 inline mr-1.5" />Mỏ
-        </button>
-        <button onClick={() => setSection("gift_codes")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "gift_codes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Gift className="w-3.5 h-3.5 inline mr-1.5" />Mã Quà
-        </button>
-        <button onClick={() => setSection("apertures")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "apertures" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Globe className="w-3.5 h-3.5 inline mr-1.5" />Tiên Khiếu
-        </button>
-        <button onClick={() => setSection("topup_wallet")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "topup_wallet" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Coins className="w-3.5 h-3.5 inline mr-1.5" />Nạp Tiền & Ví
-        </button>
-        <button onClick={() => setSection("gu_history")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "gu_history" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <HistoryIcon className="w-3.5 h-3.5 inline mr-1.5" />Lịch Sử Tiên Cổ
-        </button>
-      </div>
+      </div>}
 
       {/* Players section */}
       {section === "players" && (
@@ -3171,7 +2986,7 @@ export const AdminView: React.FC = () => {
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Filter className="w-3 h-3" /> Loại tìm kiếm
                 </label>
-                <select value={searchBy} onChange={e => { setSearchBy(e.target.value as ApiResponseData); setPage(1); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
+                <select value={searchBy} onChange={e => { updatePlayerQuery({ search_by: e.target.value, page: "1" }); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
                   <option value="all">Tất cả (tự nhận diện ID)</option>
                   <option value="id">ID</option>
                   <option value="username">Tên đăng nhập</option>
@@ -3184,9 +2999,9 @@ export const AdminView: React.FC = () => {
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Search className="w-3 h-3" /> Tìm kiếm
                 </label>
-                <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { setPage(1); setSearch(searchText); } }} placeholder={searchBy === "item" ? "ID hoặc tên vật phẩm..." : searchBy === "gu" ? "ID hoặc tên cổ trùng..." : "ID, tên đăng nhập hoặc email..."} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
+                <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { updatePlayerQuery({ page: "1", search: searchText }); } }} placeholder={searchBy === "item" ? "ID hoặc tên vật phẩm..." : searchBy === "gu" ? "ID hoặc tên cổ trùng..." : "ID, tên đăng nhập hoặc email..."} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
               </div>
-              <button onClick={() => { setPage(1); setSearch(searchText); }} className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">Tìm</button>
+              <button onClick={() => { updatePlayerQuery({ page: "1", search: searchText }); }} className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">Tìm</button>
               <button onClick={fetchPlayers} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
               </button>
@@ -3385,6 +3200,8 @@ export const AdminView: React.FC = () => {
           </div>
 
           {dataTab === "import" && (
+            <>
+            <DataImportWorkflow canImportDataset={canAdminAction("importGameDataset")} canImportAll={canAdminAction("importAllGameData")} addToast={addToast} />
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-6">
               <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-2">
                 <Database className="w-4 h-4 text-emerald-400" />
@@ -3394,10 +3211,6 @@ export const AdminView: React.FC = () => {
                 Import dữ liệu từ file CSV vào database, hoặc export dữ liệu từ database ra file CSV.
               </p>
               <div className="flex flex-wrap gap-4">
-                <button disabled={actionLoading} onClick={async () => { if (!confirm("Import sẽ ghi đè dữ liệu hiện tại theo cơ chế UPSERT. Tiếp tục?")) return; const ok = await exec(`${BACKEND_URL}/api/admin/data/import`, "POST", {}); if (ok) addToast("Import thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
-                  <Database className="w-4 h-4" />
-                  {actionLoading ? "Đang xử lý..." : "Import CSV → Database"}
-                </button>
                 <button disabled={actionLoading} onClick={async () => { const ok = await exec(`${BACKEND_URL}/api/admin/data/export`, "POST", {}); if (ok) addToast("Export thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
                   <RefreshCw className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Export Database → CSV"}
@@ -3406,12 +3219,13 @@ export const AdminView: React.FC = () => {
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Dictionary"}
                 </button>
-                <button disabled={actionLoading} onClick={async () => { if (!confirm("Thao tác này sẽ xóa toàn bộ cache Redis (bao gồm session, cooldown...). Tiếp tục?")) return; const ok = await exec(`${BACKEND_URL}/api/admin/clear-redis-cache`, "POST", {}); if (ok) addToast("Toàn bộ cache Redis đã được xóa!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                {canAdminAction("flushRedis") && <button disabled={actionLoading} onClick={async () => { const prepared = prepareAdminAction("flushRedis", "xóa toàn bộ Redis cache", "Redis"); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/clear-redis-cache`, "POST", prepared); if (ok) addToast("Toàn bộ cache Redis đã được xóa!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Redis"}
-                </button>
+                </button>}
               </div>
             </div>
+            </>
           )}
 
           {dataTab === "tables" && (
@@ -3424,46 +3238,23 @@ export const AdminView: React.FC = () => {
                 Import hoặc export dữ liệu cho từng bảng riêng lẻ. Mỗi thao tác chỉ xử lý một bảng.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {[
-                  { key: "item", label: "Vật phẩm", icon: Package, csv: "Item.csv" },
-                  { key: "gu", label: "Cổ trùng", icon: Bug, csv: "Gu.csv" },
-                  { key: "constitution", label: "Thể chất", icon: Activity, csv: "Constitution.csv" },
-                  { key: "race", label: "Chủng tộc", icon: Users, csv: "Race.csv" },
-                  { key: "recipe", label: "Cổ phương", icon: FlaskConical, csv: "Recipe.csv" },
-                  { key: "shop_item", label: "Cửa hàng", icon: ShoppingBag, csv: "ShopItem.csv" },
-                  { key: "arena_shop_item", label: "Cửa hàng Đấu trường", icon: Swords, csv: "ArenaShopItem.csv" },
-                  { key: "region", label: "Khu vực", icon: Globe, csv: "Region.csv" },
-                  { key: "loot_table", label: "Bảng loot", icon: Gift, csv: "LootTable.csv" },
-                  { key: "monster", label: "Quái vật", icon: PawPrint, csv: "Monster.csv" },
-                  { key: "monster_spawn", label: "Spawn quái", icon: MapPin, csv: "MonsterSpawn.csv" },
-                  { key: "map_cell", label: "Bản đồ (boss/tài nguyên cao)", icon: Globe, csv: "MapCell.csv" },
-                  { key: "sect", label: "Tông môn", icon: Building2, csv: "Sect.csv" },
-                  { key: "sect_mission", label: "Nhiệm vụ tông môn", icon: ListTodo, csv: "SectMission.csv" },
-                  { key: "quest", label: "Nhiệm vụ", icon: BookOpen, csv: "Quest.csv" },
-                  { key: "dream_realm", label: "Mộng cảnh", icon: Star, csv: "DreamRealm.csv" },
-                ].map(t => (
+                {datasets.map(t => (
                   <div key={t.key} className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 flex flex-col gap-3">
                     <div className="flex items-center gap-2">
-                      <t.icon className="w-4 h-4 text-amber-400" />
+                      <Database className="w-4 h-4 text-amber-400" />
                       <span className="text-xs font-semibold text-zinc-200">{t.label}</span>
-                      <span className="text-[10px] text-zinc-500 font-mono ml-auto">{t.csv}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono ml-auto">{t.csv_file}</span>
                     </div>
                     <div className="flex gap-2">
-                      <button
+                      {t.capabilities.import && (adminAccess.effective_permissions.includes("admin.*") || (!!t.permissions.import && adminAccess.effective_permissions.includes(t.permissions.import))) && <button
                         disabled={tableLoading === t.key}
-                        onClick={async () => {
-                          if (!confirm(`Import "${t.label}" từ CSV? Dữ liệu sẽ được UPSERT.`)) return;
-                          setTableLoading(t.key);
-                          const ok = await exec(`${BACKEND_URL}/api/admin/data/import/${t.key}`, "POST", {});
-                          setTableLoading(null);
-                          if (ok) addToast(`Import ${t.label} thành công!`, "success");
-                        }}
+                        onClick={() => setDataTab("import")}
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold transition-all cursor-pointer"
                       >
                         <Upload className="w-3 h-3" />
                         {tableLoading === t.key ? "..." : "Import"}
-                      </button>
-                      <button
+                      </button>}
+                      {t.capabilities.export && (adminAccess.effective_permissions.includes("admin.*") || (!!t.permissions.export && adminAccess.effective_permissions.includes(t.permissions.export))) && <button
                         disabled={tableLoading === t.key}
                         onClick={async () => {
                           setTableLoading(t.key);
@@ -3475,7 +3266,7 @@ export const AdminView: React.FC = () => {
                       >
                         <RefreshCw className="w-3 h-3" />
                         {tableLoading === t.key ? "..." : "Export"}
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 ))}
@@ -3672,121 +3463,8 @@ export const AdminView: React.FC = () => {
       {section === "monitoring" && <MonitoringAdminTab addToast={addToast} />}
 
       {/* Audit Logs section */}
-      {section === "logs" && (
-        <div className="space-y-4">
-          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-            <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-3">
-              <BookOpen className="w-4 h-4 text-amber-400" />
-              Nhật Ký Hệ Thống
-            </h3>
-            {/* Filters */}
-            <div className="flex flex-wrap gap-3 mb-4">
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tìm kiếm</label>
-                <input value={auditLogSearchDebounce} onChange={e => setAuditLogSearchDebounce(e.target.value)} placeholder="Tìm trong action, mô tả, entity..." className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50" />
-              </div>
-              <div className="flex-1 min-w-[180px] relative" data-audit-action-combobox>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Hành động</label>
-                <div className="relative">
-                  <button onClick={() => setAuditLogActionOpen(!auditLogActionOpen)} className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 text-left flex items-center justify-between focus:outline-none focus:border-amber-500/50 cursor-pointer">
-                    <span className={auditLogFilterAction ? "" : "text-zinc-600"}>{auditLogFilterAction ? AUDIT_ACTIONS.find(a => a.action === auditLogFilterAction)?.label || auditLogFilterAction : "-- Tất cả --"}</span>
-                    <svg className={`w-3 h-3 text-zinc-500 transition-transform ${auditLogActionOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                  </button>
-                  {auditLogActionOpen && (
-                    <div data-audit-action-combobox className="absolute z-50 mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl max-h-[280px] overflow-hidden flex flex-col">
-                      <div className="p-1.5 border-b border-zinc-800">
-                        <input autoFocus value={auditLogActionSearch} onChange={e => setAuditLogActionSearch(e.target.value)} placeholder="Tìm action..." className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none" />
-                      </div>
-                      <div className="overflow-y-auto max-h-[230px]">
-                        <button onClick={() => { setAuditLogFilterAction(""); setAuditLogActionOpen(false); setAuditLogActionSearch(""); setAuditLogPage(0); }} className="w-full text-left px-3 py-1.5 text-xs hover:bg-amber-600/20 text-zinc-400 hover:text-amber-400 cursor-pointer">-- Tất cả --</button>
-                        {AUDIT_ACTIONS.filter(a => !auditLogActionSearch || a.action.includes(auditLogActionSearch.toLowerCase()) || a.label.toLowerCase().includes(auditLogActionSearch.toLowerCase())).map(a => (
-                          <button key={a.action} onClick={() => { setAuditLogFilterAction(a.action); setAuditLogActionOpen(false); setAuditLogActionSearch(""); setAuditLogPage(0); }} className={`w-full text-left px-3 py-1.5 text-xs hover:bg-amber-600/20 cursor-pointer flex items-center gap-2 ${auditLogFilterAction === a.action ? "text-amber-400 bg-amber-600/10" : "text-zinc-300"}`}>
-                            <span>{a.icon}</span>
-                            <span className="truncate">{a.label}</span>
-                            <span className="ml-auto text-[10px] text-zinc-600 font-mono shrink-0">{a.action}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex-1 min-w-[120px]">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Player ID</label>
-                <input value={auditLogFilterPlayer} onChange={e => setAuditLogFilterPlayer(e.target.value)} placeholder="UUID..." className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50" />
-              </div>
-              <div className="w-[100px]">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Kết quả</label>
-                <select value={auditLogFilterSuccess} onChange={e => { setAuditLogFilterSuccess(e.target.value); setAuditLogPage(0); }} className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50">
-                  <option value="">Tất cả</option>
-                  <option value="true">Thành công</option>
-                  <option value="false">Thất bại</option>
-                </select>
-              </div>
-              <div className="flex items-end">
-                <button onClick={fetchAuditLogs} disabled={auditLogLoading} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold cursor-pointer">
-                  {auditLogLoading ? "..." : "Tìm"}
-                </button>
-              </div>
-            </div>
-            {/* Log list */}
-            {auditLogLoading ? (
-              <div className="flex justify-center py-10">
-                <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
-              </div>
-            ) : auditLogs.length === 0 ? (
-              <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
-                <BookOpen className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Không có nhật ký nào.</p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1 max-h-[500px] overflow-y-auto">
-                  {auditLogs.map((log: ApiResponseData) => (
-                    <div key={log.id}>
-                      <div onClick={() => setAuditLogExpandId(auditLogExpandId === log.id ? null : log.id)} className="flex items-center gap-3 px-3 py-2 bg-zinc-800/40 hover:bg-zinc-800/60 rounded-lg cursor-pointer transition-colors">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${log.success ? "bg-emerald-500" : "bg-red-500"}`} />
-                        <span className="text-xs font-mono text-zinc-400 w-[145px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap" title={formatAdminLogTime(log.created_at)}>
-                          {formatAdminLogTime(log.created_at)}
-                        </span>
-                        <span className="text-xs font-semibold text-amber-400 min-w-[150px] max-w-[200px] shrink-0 truncate" title={log.action}>
-                          {log.action}
-                        </span>
-                        <span className="text-xs text-zinc-400 truncate flex-1" title={log.request_summary}>
-                          {log.request_summary}
-                        </span>
-                        <span className="text-[10px] text-zinc-600 w-[45px] text-right font-mono shrink-0" title={log.player_id}>
-                          {log.player_id ? log.player_id.substring(0, 8) : "—"}
-                        </span>
-                      </div>
-                      {auditLogExpandId === log.id && (
-                        <div className="mx-3 mb-1 px-4 py-2 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] text-zinc-400 font-mono space-y-1">
-                          {log.player_id && <div>player_id: {log.player_id}</div>}
-                          {log.entity_type && <div>entity_type: {log.entity_type}</div>}
-                          {log.entity_id && <div>entity_id: {log.entity_id}</div>}
-                          {log.error_message && <div className="text-red-400">error: {log.error_message}</div>}
-                          {log.ip_address && <div>ip: {log.ip_address}</div>}
-                          {log.metadata && Object.keys(log.metadata).length > 0 && (
-                            <div>metadata: {JSON.stringify(log.metadata, null, 1)}</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {/* Pagination */}
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-zinc-800/60">
-                  <span className="text-[11px] text-zinc-500 font-mono">{auditLogTotal} bản ghi</span>
-                  <div className="flex gap-2">
-                    <button disabled={auditLogPage <= 0} onClick={() => setAuditLogPage(p => Math.max(0, p - 1))} className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded-lg text-[11px] font-semibold cursor-pointer">Trước</button>
-                    <button disabled={(auditLogPage + 1) * auditLogLimit >= auditLogTotal} onClick={() => setAuditLogPage(p => p + 1)} className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded-lg text-[11px] font-semibold cursor-pointer">Sau</button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      {section === "logs" && <AuditLogsAdminTab />}
+
       {/* Shop section */}
       {section === "shop" && (
         <div className="space-y-4">

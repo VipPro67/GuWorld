@@ -78,18 +78,12 @@ func AdminListPlayers(c *gin.Context) {
 		return
 	}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	paging := parseAdminPageQuery(c, 50, map[string]string{
+		"created_at": "created_at", "username": "username", "email": "email", "rank": "rank",
+		"primeval_stones": "primeval_stones", "immortal_stones": "immortal_stones", "current_region": "current_region",
+	}, "created_at")
 	search := c.Query("search")
 	searchBy := c.DefaultQuery("search_by", "all")
-
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 200 {
-		limit = 50
-	}
-	offset := (page - 1) * limit
 
 	where, args := adminPlayerSearchClause(searchBy, search)
 
@@ -107,9 +101,9 @@ func AdminListPlayers(c *gin.Context) {
 	if where != "" {
 		query += ` WHERE ` + where
 	}
-	query += ` ORDER BY created_at DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	query += ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, id ` + paging.Direction + ` LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 
-	dataArgs := append(append([]interface{}{}, args...), limit, offset)
+	dataArgs := append(append([]interface{}{}, args...), paging.PageSize, paging.Offset)
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
@@ -156,10 +150,10 @@ func AdminListPlayers(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":  players,
-		"total": total,
-		"page":  page,
-		"limit": limit,
+		"data":      players,
+		"total":     total,
+		"page":      paging.Page,
+		"page_size": paging.PageSize,
 	})
 }
 

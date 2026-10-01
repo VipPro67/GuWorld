@@ -210,6 +210,11 @@ func LoginPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
 		return
 	}
+	player.CanAccessAdmin, err = middleware.PlayerHasAdminAccess(c.Request.Context(), player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve admin access"})
+		return
+	}
 	setAuthCookie(c, token)
 
 	c.JSON(http.StatusOK, CreatePlayerResponse{
@@ -251,5 +256,10 @@ func GetCurrentPlayer(c *gin.Context) {
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	player.CompletedQuests = loadCompletedQuests(playerID.String())
 	player.UnlockedRecipes = loadUnlockedRecipes(playerID.String())
+	player.CanAccessAdmin, err = middleware.PlayerHasAdminAccess(c.Request.Context(), playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve admin access"})
+		return
+	}
 	c.JSON(http.StatusOK, player)
 }

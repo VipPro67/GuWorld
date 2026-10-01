@@ -6,7 +6,6 @@ GU_BLOOD_SEA,5,1,"{""GU_BLOOD_MOUNTAIN"": {""qty"": 1, ""rank"": 4}}","{""thread
 GU_BLOOD_STORAGE,5,1,"{""GU_BLOOD_MOUNTAIN"": {""qty"": 1, ""rank"": 4}}","{""beast_blood_rank5"": 22, ""heaven_well_water"": 5}",0.5,300.000,0.000
 GU_RANDOM_TRAVEL_F2,6,1,"{""GU_RANDOM_TRAVEL_F"": {""qty"": 1, ""rank"": 5}}","{""immortal_essence"": 1, ""boundless_space_domain_stone"": 10}",0.05,600.000,100.000
 GU_DIAMOND_THOUGHT,6,1,"{""GU_CAPTURE_HEART"": {""qty"": 1, ""rank"": 5}}","{""star_thoughts"": 10, ""immortal_essence"": 1}",0.05,600.000,100.000
-GU_BRONZE_RELIC,1,1,{},"{""stinky_fart_gu"": 5}",0.81,20.000,0.000
 GU_HEAVEN_SECRET,6,1,"{""GU_DIVINE_SENSE"": {""qty"": 1, ""rank"": 5}}","{""water_rank6"": 6, ""heaven_qi_rank6"": 30, ""sound_stone_rank6"": 6, ""heaven_essence_cloud"": 6}",0.05,600.000,100.000
 GU_HEAVEN_SECRET,7,1,"{""GU_HEAVEN_SECRET"": {""qty"": 1, ""rank"": 6}}","{""iron_rank7"": 14, ""water_rank7"": 15, ""heaven_qi_rank7"": 33, ""sound_stone_rank7"": 9}",0.01,0.000,200.000
 GU_MIRAGE_BODY_2,2,1,"{""GU_MIRAGE_BODY_1"": {""qty"": 1, ""rank"": 1}}","{""mirage_fog_sand"": 4}",0.8,40.000,0.000
@@ -95,8 +94,6 @@ GU_INVESTIGATION_THOUSAND_LI_EYE_4,4,1,"{""GU_INVESTIGATION_SHADOW_EYE_3"": {""q
 GU_INVESTIGATION_WIND_EAR_5,5,1,"{""GU_INVESTIGATION_THOUSAND_LI_EYE_4"": {""qty"": 1, ""rank"": 4}}","{""book_worm"": 10}",0.5,300.000,0.000
 GU_INVESTIGATION_ALL_KNOWING_7,7,1,"{""GU_INVESTIGATION_HEAVEN_SENSE_6"": {""qty"": 1, ""rank"": 6}}","{""heaven_qi_rank7"": 15, ""sound_stone_rank7"": 2}",0.01,0.000,200.000
 GU_INVESTIGATION_COSMIC_MIRROR_8,8,1,"{""GU_INVESTIGATION_ALL_KNOWING_7"": {""qty"": 1, ""rank"": 7}}","{""heaven_qi_rank7"": 20, ""heaven_qi_rank8"": 10}",0.01,0.000,300.000
-GU_LIFESPAN_1,1,1,{},"{""stinky_fart_gu"": 4}",0.81,20.000,0.000
-GU_STRENGTH,1,1,{},"{""wild_boar_tusk"": 5}",0.81,20.000,0.000
 GU_QINGXUAN_I,6,1,"{""GU_QINGXUAN"": {""qty"": 1, ""rank"": 5}}","{""desolate_beast_sound_bone"": 20, ""desolate_kill_blood_essence"": 10}",0.05,600.000,100.000
 GU_SPACE_BRIDGE_5,5,1,"{""GU_SPACE_BRIDGE_4"": {""qty"": 1, ""rank"": 4}}","{""bat_wing"": 8, ""heaven_well_water"": 13}",0.5,300.000,0.000
 GU_SPACE_BRIDGE_I,6,1,"{""GU_SPACE_BRIDGE_5"": {""qty"": 1, ""rank"": 5}}","{""guts_gu_raw"": 11, ""desolate_earth_spirit_stone"": 17}",0.05,600.000,100.000

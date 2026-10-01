@@ -109,6 +109,9 @@ npm run build
 
 ## Quản lý dữ liệu gameplay
 
+Quy trình bootstrap/khôi phục admin, điều tra audit, rollback import và xử lý
+outage nằm tại [`ADMIN_OPERATIONS_RUNBOOK.md`](ADMIN_OPERATIONS_RUNBOOK.md).
+
 - Nguồn CSV chuẩn nằm tại `backend/data/`.
 - Admin → **Dữ liệu** hỗ trợ xem danh sách dataset, import/export từng bảng hoặc toàn bộ.
 - Import ghi dữ liệu vào PostgreSQL; việc chỉ sửa file CSV không làm thay đổi game đang chạy.

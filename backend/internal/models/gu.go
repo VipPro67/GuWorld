@@ -489,6 +489,48 @@ func GuImmuneDream(spec GuDictionaryItem) bool {
 	return false
 }
 
+// GuPersistentHitStatus reads the data-driven post-combat persistent status
+// declared on a Gu spec via the UNIQUE PERSIST_STATUS_ON_HIT native hook
+// (ON_HIT or ON_ACTION trigger, params: status_key + optional pvp_only).
+// Returns the gamefx status key (e.g. "sinh_khi_tan") and whether the grant is
+// restricted to real PvP hits. The second return is false when the Gu carries
+// no such hook, so future Gus only need CSV data, no code change.
+func GuPersistentHitStatus(spec GuDictionaryItem) (statusKey string, pvpOnly bool, ok bool) {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return "", false, false
+	}
+	for _, op := range compiled.NativeMechanics() {
+		if op.Code != "PERSIST_STATUS_ON_HIT" {
+			continue
+		}
+		if op.Trigger != gameplayeffects.TriggerOnHit && op.Trigger != gameplayeffects.TriggerOnAction {
+			continue
+		}
+		key := ""
+		pvp := false
+		for k, v := range op.Values {
+			switch strings.ToLower(strings.TrimSpace(k)) {
+			case "status_key":
+				if s, isStr := v.(string); isStr {
+					key = strings.ToLower(strings.TrimSpace(s))
+				}
+			case "pvp_only":
+				if b, isBool := v.(bool); isBool {
+					pvp = b
+				} else if f, isNum := v.(float64); isNum {
+					pvp = f != 0
+				}
+			}
+		}
+		if key == "" {
+			continue
+		}
+		return key, pvp, true
+	}
+	return "", false, false
+}
+
 // GuNativeMechanic returns the first compiled native operation with code.
 func GuNativeMechanic(spec GuDictionaryItem, code string) (gameplayeffects.CompiledOperation, bool) {
 	compiled := CompiledGuEffects(spec)

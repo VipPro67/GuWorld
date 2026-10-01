@@ -293,17 +293,25 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
-	// Sát Sinh Khí Cổ: đánh trúng ở PvP thật thì defender nhận +1 tầng Sinh Khí Tàn
-	// (persistent, refresh 5h). Vẫn cộng ở tầng V, không phụ thuộc thắng thua —
-	// chỉ cần 1 hit gây damage của phe ta. Arena virtual (dummy) bỏ qua.
-	if sinhKhiTanPvPGrant, grantTier := maybeGrantSinhKhiTan(tx, &player, &req.Loadout, simState, logs); sinhKhiTanPvPGrant {
-		logs = append(logs, simulator.CombatLog{
-			Turn:   simState.Turn,
-			Action: "SINH_KHI_TAN_APPLIED",
-			Detail: fmt.Sprintf("Sát khí tàn lụi xâm nhập! Kẻ địch nhận [%s] (công/thủ/tốc giảm %.0f%% trong %d giờ).",
-				gamefx.SinhKhiTanTierName(grantTier),
-				-gamefx.SinhKhiTanValueForTier(grantTier)*100, gamefx.SinhKhiTanDurationMinutes/60),
-		})
+	// Cổ mang PERSIST_STATUS_ON_HIT: đòn đánh trúng ở PvP thật thì defender
+	// nhận persistent status (data-driven, xem handlers/status.go).
+	for _, g := range maybeGrantPersistentHitStatuses(tx, &player, simState, logs) {
+		if strings.EqualFold(g.StatusKey, gamefx.StatusSinhKhiTan) {
+			logs = append(logs, simulator.CombatLog{
+				Turn:   simState.Turn,
+				Action: "SINH_KHI_TAN_APPLIED",
+				Detail: fmt.Sprintf("Sát khí tàn lụi xâm nhập! Kẻ địch nhận [%s] (công/thủ/tốc giảm %.0f%% trong %d giờ).",
+					gamefx.SinhKhiTanTierName(g.Tier),
+					-gamefx.SinhKhiTanValueForTier(g.Tier)*100, gamefx.SinhKhiTanDurationMinutes/60),
+			})
+		} else {
+			logs = append(logs, simulator.CombatLog{
+				Turn:   simState.Turn,
+				Action: "PERSIST_STATUS_APPLIED",
+				Detail: fmt.Sprintf("Kẻ địch trúng dư âm Cổ trùng, nhận [%s].",
+					gamefx.StatusDisplayName(g.StatusKey)),
+			})
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

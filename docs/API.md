@@ -41,8 +41,8 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/auth/google/callback` | Google OAuth callback, rate limited. |
 | GET | `/topup/packages` | Public topup packages. |
 | POST | `/webhooks/payos` | PayOS webhook. |
-| GET | `/admin/topup-orders` | Protected admin listing. |
-| GET | `/admin/wallet-transactions` | Protected admin listing. |
+| GET | `/admin/topup-orders` | Protected server-side listing. Query: `page`, `page_size`, `search`, allowlisted `sort`, `direction`, `status`, `provider`, `user_id`. Response: `{data,total,page,page_size}`. |
+| GET | `/admin/wallet-transactions` | Protected server-side listing. Query: `page`, `page_size`, `search`, allowlisted `sort`, `direction`, `user_id`, `type`, `currency`. Response: `{data,total,page,page_size}`. |
 | GET | `/wallet` | Protected wallet. |
 | POST | `/topup/orders` | Protected create order, rate limited. |
 | GET | `/topup/orders/:orderCode` | Protected order detail. |
@@ -340,39 +340,75 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/feedback/:id/comments` | Protected góp ý (rank ≥ 2; status phải `active`/`in_progress`/`completed`). |
 | DELETE | `/feedback/:id/comments/:commentId` | Protected xóa góp ý (tác giả hoặc admin). |
 
+## Admin — identity & resource catalog
+
+Hai endpoint sau thuộc nhóm protected `/api/admin`; chúng yêu cầu JWT/cookie hợp lệ và quyền admin:
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/admin/me` | Trả snapshot quyền thực tế của actor từ RBAC: `{actor_id, username, roles, effective_permissions, legacy_fallback, permission_version}`. `permission_version` là marker opaque để client invalidation cache quyền. Tài khoản `is_admin` cũ chưa được gán role nhận `super_admin`, wildcard `admin.*` và `legacy_fallback=true`. Frontend dùng permission key (không dùng tên role) để bảo vệ module. |
+| GET | `/admin/resources` | Trả `{resources, permission_version}` từ allowlist compile-time và chỉ gồm resource mà actor có ít nhất một quyền. Mỗi phần tử có metadata `{key, domain, label, capabilities, read_permissions, write_permissions, risk_level, cache_invalidation, registry_reload, restart_required, audit_action_prefix, frontend_route}`. Catalog không dùng `information_schema`, không trả database schema/tên bảng/cột/SQL, và không dùng resource key từ client để sinh SQL. |
+
+Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là deterministic. `read_permissions` và `write_permissions` là các permission thực tế được route backend dùng; metadata cache/registry mô tả tác động vận hành của thao tác ghi. Hiện mọi thao tác hỗ trợ đều reload trong process nên `restart_required=false`. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
+
 ## Admin — players & gus
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/admin/players` | List người chơi, phân trang (`page`, `limit`). Search: `search_by=all|id|username|email|item|gu`. Khi `search_by=all` auto-detect UUID. `item`/`gu` match theo registry ID + tên (trả `gu_ids`/`item_ids` mới hơn bản ghi cũ). |
+| GET | `/admin/players` | List người chơi server-side với `page`, `page_size` (`limit` vẫn được chấp nhận), `search`, `search_by=all|id|username|email|item|gu`, `sort`, `direction`; sort chỉ nhận allowlist. Khi `search_by=all` auto-detect UUID. Response gồm `data`, `total`, `page`, `page_size`. |
 | GET | `/admin/players/online` | List người chơi online. |
 | GET | `/admin/players/:id` | Chi tiết người chơi. Response bỏ `gu_inventory`/`materials_inventory`, trả `gu_count` + `item_count`. Kèm `race`, `gender`, `constitution`, `statuses` (array). |
 | GET | `/admin/players/:id/items` | Lazy-load item của người chơi từ `player_inventory_items`. Trả thêm các cổ phương đã mở khóa (`category=recipe`) từ `player_recipe_progress`. Params: `page`, `limit`, `q` (match item_id/item_name theo registry). |
 | GET | `/admin/players/:id/gus` | Lazy-load từ bảng `player_gu`. Params: `page`, `limit`, `q` (match gu_id/instance_id theo registry). |
-| PUT | `/admin/players/:id` | Sửa thông tin người chơi. Body là object chứa 1+ field (chỉ gửi field thay đổi): `username`, `email`, `password`, `bio`, `avatar_url`, `rank`, `sub_rank`, `cultivation`, `realm`, `hp`, `max_hp`, `mana`, `max_mana`, `mortal_stones`, `immortal_stones`, `primeval_stones`, `soul`, `hp_regen_rate`, `mana_regen_rate`, `is_admin`, `is_banned`, `is_online`. Thêm: `race`, `gender`, `constitution` (string), `statuses` (array string hoặc array object `{id, expires_at?, source?, value?}`, ví dụ `["severely_wounded"]` — key phải tồn tại trong `status_dictionary`). Trả list field đã cập nhật. |
+| PUT | `/admin/players/:id` | Sửa thông tin gameplay của người chơi. Body chỉ gửi field thay đổi. Trường tương thích `is_admin` là **read-only** và không còn được endpoint này xử lý; dùng endpoint roles riêng để thay đổi quyền. Hỗ trợ `race`, `gender`, `constitution` (string), `statuses` (array string hoặc array object `{id, expires_at?, source?, value?}`, ví dụ `["severely_wounded"]` — key phải tồn tại trong `status_dictionary`). |
+| GET | `/admin/roles` | Danh mục role quản trị, sắp theo `level`: `{roles: [{key,name,description,level}]}`. |
+| GET | `/admin/players/:id/roles` | Role hiện tại của người chơi: `{player_id, roles: [...]}`. `is_admin` ở các API player cũ chỉ là projection read-only để tương thích. |
+| PUT | `/admin/players/:id/roles` | Thay toàn bộ role bằng body `{roles: ["admin", "super_admin"]}`. Thao tác và audit `{before,after}` nằm trong cùng transaction. Không được tự nâng quyền, cấp role cao hơn role cao nhất của actor (trừ super admin), sửa role cao hơn thẩm quyền, hoặc xóa super admin cuối cùng (`409`). |
 | GET | `/admin/gus/search` | Tìm cổ trùng trên toàn server. Params: `gu_id` và/hoặc `instance_id` (match registry ID + tên, ILIKE), `page`, `limit`. Quét 3 nguồn: `players.gu_inventory`, `auction` (`item_type='Gu'`), `caravan_shop_items` + `arena_shop_items`. `location`: `inventory`/`auction`/`shop`. |
-| POST | `/admin/players/:id/items` | Thêm item hoặc cổ phương (Công thức) cho người chơi. Body: `{item_id, quantity}`. `item_id` là id item trong `Item.csv` hoặc id recipe trong `Recipe.csv`. Nếu là recipe → mở khóa (unlock) Cổ phương cho người chơi (`player_recipe_progress`, `completion_rate=100`). Trả `kind` = `item`/`recipe`. |
+| POST | `/admin/players/:id/items` | Cần `players.inventory.grant`. Thêm item hoặc cổ phương (Công thức) cho người chơi. Body: `{item_id, quantity}`. `item_id` là id item trong `Item.csv` hoặc id recipe trong `Recipe.csv`. Nếu là recipe → mở khóa (unlock) Cổ phương cho người chơi (`player_recipe_progress`, `completion_rate=100`). Trả `kind` = `item`/`recipe`. |
 | DELETE | `/admin/players/:id/items` | Xóa item hoặc cổ phương khỏi người chơi. Body: `{item_id, quantity}`. Nếu là recipe → thu hồi (delete) khỏi `player_recipe_progress`. Trả `kind` = `item`/`recipe`. |
-| POST | `/admin/players/:id/gus` | Thêm gu cho người chơi. Body: `{gu_id, quantity, rank?}`. `rank` tùy chọn — khi gửi sẽ cấp đúng bậc đó (validate theo `gu_dictionary`); khi bỏ trống dùng bậc cao nhất của `gu_id`. |
+| POST | `/admin/players/:id/gus` | Cần `players.inventory.grant`. Thêm gu cho người chơi. Body: `{gu_id, quantity, rank?}`. `rank` tùy chọn — khi gửi sẽ cấp đúng bậc đó (validate theo `gu_dictionary`); khi bỏ trống dùng bậc cao nhất của `gu_id`. |
 | DELETE | `/admin/players/:id/gus/:instance_id` | Xóa gu theo instance_id. |
 | GET | `/admin/players/:id/pets` | Lazy-load sủng vật của người chơi. Params: `page`, `limit`, `q` (search monster name/ID). |
 | DELETE | `/admin/players/:id/pets/:pet_id` | Xóa vĩnh viễn sủng vật. |
 | PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
-| GET | `/admin/audit-logs` | Audit log (bao gồm `admin.update_player`). |
+| GET | `/admin/audit-logs` | Audit log server-side (bao gồm `admin.update_player`), hỗ trợ `page`, `page_size`, `search`, allowlisted `sort`, `direction`, `action`, `entity_type`, `player_id`, `success`; trả total count. |
 
 ### Admin — nhóm quản trị còn lại
 
-Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth/admin và rate limit nhóm:
+Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission RBAC theo domain. `GET /api/admin/me` yêu cầu `admin.dashboard.access`; wildcard `admin.*` cấp toàn bộ quyền cho `super_admin`. Handler vẫn có thể kiểm tra principal quản trị như lớp phòng vệ bổ sung.
+
+Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.import_all`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. `game_data.import` chỉ cho phép một dataset; import toàn bộ có mức rủi ro cao hơn và bắt buộc `game_data.import_all`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
+
+Các endpoint commit import và `POST /admin/clear-redis-cache` bắt buộc body JSON có `reason` khác rỗng. Frontend khai báo permission, risk, confirmation, reason và re-authentication trong action policy; khi backend trả 403 kèm `permission`, client rollback optimistic state (nếu có), tải lại `/admin/me` rồi thông báo quyền đã thay đổi.
+
+#### Workflow import CSV
+
+| Method | Path | Permission | Mô tả |
+| --- | --- | --- | --- |
+| POST | `/admin/data/import` | `game_data.import_all` | Preflight read-only toàn bộ CSV trên server. |
+| POST | `/admin/data/import/:table` | `game_data.import` | Preflight một dataset; nhận multipart field `file` tùy chọn, nếu thiếu dùng CSV trên server. Upload tối đa 10 MiB. |
+| POST | `/admin/data/import/commit` | `game_data.import_all` | Commit preflight toàn bộ với JSON `{preflight_id, reason}`. |
+| POST | `/admin/data/import/:table/commit` | `game_data.import` | Commit preflight một dataset với JSON `{preflight_id, reason}`. |
+
+Preflight parse/validate CSV, chạy UPSERT trong transaction rồi rollback và trả `plan` gồm `totals`/từng dataset với `rows`, `inserts`, `updates`, `unchanged`, diff mẫu, `validation_errors`, cờ reload/restart và `can_commit`. Lỗi nghiêm trọng đặt `can_commit=false` và không ghi database. `preflight_id` hết hạn sau 15 phút, chỉ dùng một lần, gắn với admin/phạm vi/hash nguồn. Commit chạy lại cùng nguồn trong một transaction, ghi audit cùng transaction, sau đó reload registry và invalidate cache; response nêu rõ `reload_ok`, `reload_warnings` và `restart_required`.
 
 | Nhóm | Routes hiện có |
 | --- | --- |
 | Tiên khiếu | `GET /apertures`, `GET/PUT /apertures/:id`; CRUD node và xem/tạo/xóa quần thể dị nhân theo aperture. |
 | Cổ/pet/history | cập nhật cá thể Cổ; tạo/cập nhật pet; `GET /gu-history`; `GET /batch-metrics`. |
 | Môn phái | list/detail/update/delete sect; thêm/xóa/đặt chưởng môn; CRUD mission; nhập/xóa hàng kho; quản lý sect mine. |
-| Dữ liệu & cache | `GET /data/tables`, import/export toàn bộ hoặc `/:table`, clear application cache và Redis cache. |
+| Dữ liệu & cache | `GET /data/tables`, workflow preflight/commit import toàn bộ hoặc `/:table`, export và clear application/Redis cache. |
 | World/activity | CRUD region, map cell, monster spawn, dungeon; list/update/reset mine slot. |
 | Dictionary/shop | CRUD shop, arena shop, Gu, item, recipe, monster, loot table, constitution, race, status và quest. |
 | Hệ thống | gift code list/create, upload image, top-up order, wallet transaction và monitoring/traces. |
+
+`GET /api/admin/data/tables` trả cả `tables` (danh sách key tương thích ngược) và
+`datasets`. Mỗi phần tử `datasets` là nguồn sự thật cho Admin UI, gồm `key`,
+`label`, `csv_file`, capability `import`/`export`/`preflight`, permission tương
+ứng, `ui_supported`, cùng khai báo `cache_invalidation` và `registry_reload`.
+UI chỉ hiển thị dataset/các nút thao tác khi capability, UI support và permission
+được công bố; dataset chưa có implementation không được trả về danh sách này.
 
 Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` trong `backend/internal/server/server.go`; bảng này gom theo domain để tránh hiểu nhầm rằng Admin chỉ quản lý player/Cổ.
 
@@ -391,9 +427,11 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 | --- | --- | --- |
 | GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, WebSocket clients/channels, Process Uptime. |
 | GET | `/admin/monitor/requests/summary` | Thống kê request toàn diện: Tổng số request, in-flight requests, RPS (cửa sổ trượt 60s), phân bố mã trạng thái (2xx/3xx/4xx/5xx), độ trễ (min/max/avg/p50/p90/p99), top endpoint được gọi nhiều nhất và top endpoint chậm nhất. |
-| GET | `/admin/monitor/requests/traces` | Tra cứu chi tiết danh sách các request gần nhất (Ring Buffer 500 requests). Hỗ trợ query params: `limit` (default 50, max 200), `offset`, `method` (GET/POST/...), `status` (`200`, `500`, hoặc `errors` để lọc lỗi ≥ 400), `path` (chuỗi con URL), `min_duration_ms` (lọc slow request), `search` (tìm theo player_id, username, client_ip). |
+| GET | `/admin/monitor/admin-operations` | Counter trong memory cho vận hành admin: 403 theo permission, mutation lỗi theo action, destructive action, import failure, audit write failure, legacy `is_admin` fallback và permission resolution error. Yêu cầu `monitoring.read`; counter reset khi process restart hoặc gọi endpoint reset. |
+| GET | `/admin/monitor/requests/traces` | Tra cứu server-side các request gần nhất (Ring Buffer 500 requests). Hỗ trợ `page`, `page_size`, allowlisted `sort`, `direction`, `method`, `status` (`200`, `500`, hoặc `errors`), `path`, `min_duration_ms`, `search`; trả `{data,traces,total,page,page_size}` (`traces` là alias tương thích). |
+| GET | `/admin/gu-history` | Lịch sử Cổ trùng server-side: `page`, `page_size`, `search`, `event_type`, allowlisted `sort`, `direction`; trả `logs`, `total`, `page`, `page_size`. |
 | GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một request cụ thể qua `trace_id` (method, path/query đã lọc, status, latency, client IP, player ID/username, user-agent, error, `content_length`, JSON `request_body` đã redact và `body_truncated`). Các trace chỉ lưu trong memory và hiển thị tại tab **Giám sát** của Admin. |
-| POST | `/admin/monitor/requests/reset` | Đặt lại (reset) toàn bộ chỉ số đếm và xóa danh sách request trace gần nhất. |
+| POST | `/admin/monitor/requests/reset` | Đặt lại toàn bộ request/admin-operation metrics và xóa danh sách request trace gần nhất. |
 
 ## Realtime Communication — WebSocket `GET /api/ws` (Auth)
 
@@ -476,3 +514,32 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 - `GET /api/admin/effect-catalog/audit` audits Gu, Item, Race, Constitution, and Status definitions in the database.
 - Validation responses contain `source`, `row` (for CSV), `key`, `block_id`, `operation_index`, `path`, `error_code`, and `message`. CSV import returns HTTP 400 with the same `issues` payload and completes validation for the whole effect-bearing batch before the first database write.
 - The older `/api/admin/gu-effects/validate` and `/api/admin/gu-effects/audit` route names remain as aliases during the endpoint migration; validation payloads follow the strict Block v2 contract above.
+
+### Admin mutation audit contract
+
+Every `POST`, `PUT`, `PATCH`, and `DELETE` route below `/api/admin` declares a canonical
+`admin.*` audit action. The server writes an audit event for successful and failed
+handler/authorization outcomes. Events contain the actor ID and username snapshot,
+effective roles and required permission, target type and ID, recursively redacted
+request/response before-and-after data, reason, trace/request ID, client IP, result, sanitized HTTP error, and UTC
+timestamp. If callers omit `reason`, the server records the declared action as the
+operational reason. `X-Admin-Reason` may be used for requests without a JSON body.
+
+Audit payloads never persist credential fields whose names identify passwords, tokens,
+cookies, OTPs, authorization/CSRF values, card verification values, or payment/client/API
+secrets. Multipart bodies are not captured.
+
+### Hợp đồng an toàn cho mutation quản trị nhạy cảm
+
+Các thao tác flush Redis, commit bulk import, xóa dữ liệu, điều chỉnh stones/tài nguyên và gán role dùng permission riêng. Mutation nhạy cảm phải gửi `reason` (hoặc `X-Admin-Reason`) và `confirmation_target` (hoặc `X-Admin-Confirmation-Target`) khớp chính xác target của route. Những thao tác có thể retry (flush Redis, commit import, đặt số dư tuyệt đối và thay role) phải gửi `Idempotency-Key` không rỗng, tối đa 128 ký tự; key được ghi vào audit; cùng actor/route/key và payload sẽ nhận lại response đã lưu trong vòng đời process, còn payload khác nhận `409`. Redis flush và gán role còn yêu cầu `reauth_password` của actor; giá trị bí mật này luôn bị redact khỏi audit.
+
+| Thao tác | Permission | Confirmation target | Re-auth | Idempotency-Key |
+|---|---|---|---|---|
+| Flush Redis | `cache.flush` | `Redis` | Có | Bắt buộc |
+| Commit toàn bộ / một dataset | `game_data.import_all` / `game_data.import` | `all` / key dataset | Không | Bắt buộc |
+| Xóa dữ liệu | `<domain>.delete` | đường dẫn API đầy đủ của target | Không | Không (client phải đọc kết quả trước khi retry) |
+| Đặt stones/tài nguyên player | `players.resources.adjust` | player ID | Không | Bắt buộc |
+| Thay role player | `admin_roles.assign` | player ID | Có | Bắt buộc |
+| Payment mutation tương lai | phải dùng `billing.mutate`, không dùng `billing.read` | order/transaction ID | Có | Bắt buộc |
+
+Mọi route mutation vẫn đi qua audit middleware trước permission middleware, vì vậy cả kết quả thành công lẫn thất bại/permission denied đều tạo audit record. Các thay đổi nhiều bảng (bulk import và role assignment) ghi success audit trong cùng transaction; nếu audit hoặc cập nhật thất bại, transaction rollback.

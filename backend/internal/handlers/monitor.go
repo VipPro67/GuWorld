@@ -172,14 +172,22 @@ func AdminGetRequestSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, summary)
 }
 
+// AdminGetOperationMetrics returns counters for privileged authorization,
+// mutation, import, and audit events since process start or the last reset.
+func AdminGetOperationMetrics(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	c.JSON(http.StatusOK, monitor.GlobalAdminOperations.Snapshot())
+}
+
 // AdminGetRequestTraces handles GET /api/admin/monitor/requests/traces.
 func AdminGetRequestTraces(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	paging := parseAdminPageQuery(c, 50, map[string]string{"timestamp": "timestamp", "duration_ms": "duration_ms", "status": "status", "method": "method", "path": "path"}, "timestamp")
 	statusStr := strings.TrimSpace(c.Query("status"))
 	method := c.Query("method")
 	path := c.Query("path")
@@ -194,17 +202,19 @@ func AdminGetRequestTraces(c *gin.Context) {
 	}
 
 	opts := monitor.FilterOptions{
-		Limit:         limit,
-		Offset:        offset,
+		Limit:         paging.PageSize,
+		Offset:        paging.Offset,
 		Method:        method,
 		Status:        status,
 		Path:          path,
 		MinDurationMs: minDur,
 		Search:        search,
+		Sort:          paging.Sort,
+		Direction:     paging.Direction,
 	}
 
 	result := monitor.GlobalTracker.FilterTraces(opts)
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"data": result.Traces, "traces": result.Traces, "total": result.Total, "page": paging.Page, "page_size": paging.PageSize})
 }
 
 // AdminGetRequestTraceDetail handles GET /api/admin/monitor/requests/traces/:id.
@@ -227,5 +237,6 @@ func AdminResetRequestMetrics(c *gin.Context) {
 		return
 	}
 	monitor.GlobalTracker.Reset()
+	monitor.GlobalAdminOperations.Reset()
 	c.JSON(http.StatusOK, gin.H{"message": "Request metrics and traces reset successfully"})
 }

@@ -68,6 +68,7 @@ func schemaPlayers() error {
 		fake_vital_gu VARCHAR(50) DEFAULT '',
 		is_disguised BOOLEAN DEFAULT true,
 		is_admin BOOLEAN DEFAULT false,
+		admin_permissions TEXT[] NOT NULL DEFAULT ARRAY['*']::TEXT[],
 		needs_onboarding BOOLEAN NOT NULL DEFAULT false,
 		avatar_url TEXT DEFAULT '',
 		last_activity TIMESTAMP WITH TIME ZONE DEFAULT NULL,
@@ -89,6 +90,10 @@ func schemaPlayers() error {
 
 	if err := execSchema("players_state_revision_column", `
 	ALTER TABLE players ADD COLUMN IF NOT EXISTS state_revision BIGINT NOT NULL DEFAULT 0;`); err != nil {
+		return err
+	}
+	if err := execSchema("players_admin_permissions_column", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_permissions TEXT[] NOT NULL DEFAULT ARRAY['*']::TEXT[];`); err != nil {
 		return err
 	}
 

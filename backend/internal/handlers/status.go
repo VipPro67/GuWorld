@@ -59,7 +59,9 @@ func GrantPlayerStatus(q execQuerier, rq rowQuerier, playerID uuid.UUID, statusI
 	return true, nil
 }
 
-// SinhKhiTanGuID là Cổ trùng gây ra Sinh Khí Tàn khi đánh trúng ở PvP.
+// SinhKhiTanGuID giữ để tương thích: Cổ đầu tiên mang persistent
+// Sinh Khí Tàn. Detection mới đọc spec Cổ (PERSIST_STATUS_ON_HIT),
+// không còn so GuID ở đây.
 const SinhKhiTanGuID = "GU_KILL_ENERGY"
 
 // ApplySinhKhiTanHitToList tăng StatusList thêm 1 tầng Sinh Khí Tàn (cap V),
@@ -163,88 +165,101 @@ func CleanseSinhKhiTanOneTier(q execQuerier, rq rowQuerier, playerID uuid.UUID) 
 	return tier, true, nil
 }
 
-// maybeGrantSinhKhiTan cộng 1 tầng Sinh Khí Tàn cho defender PvP khi attacker
-// mang Sát Sinh Khí Cổ trong loadout và có ít nhất 1 hit gây damage của phe ta.
-// Chỉ áp dụng PvP thật (bỏ arena virtual/dummy). Trả granted + tầng mới.
-// Lỗi grant (defender không tồn tại...) được bỏ qua để không chặn kết toán combat.
-func maybeGrantSinhKhiTan(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, simState *simulator.CombatState, logs []simulator.CombatLog) (granted bool, tier int) {
-	if player == nil || player.ActiveCombat == nil || loadout == nil || simState == nil {
-		return false, 0
-	}
-	if player.ActiveCombat.EnemyType != "PVP" {
-		return false, 0
-	}
-	defenderID := player.ActiveCombat.TargetPlayerID
-	if defenderID == "" || defenderID == "dummy" {
-		return false, 0
-	}
-	// Loadout settings-based (AutoResolveCombat) không có GuIds: quét action
-	// phe ta tìm SourceID của Sát Sinh Khí Cổ, đồng thời lấy tên đòn để match
-	// chính xác hit gây damage (tránh cộng khi damage từ Cổ khác).
-	bringsKillEnergy, hitLanded := sinhKhiTanHitLanded(loadout, simState, logs)
-	if !bringsKillEnergy || !hitLanded {
-		return false, 0
-	}
-	defenderUUID, err := uuid.Parse(defenderID)
-	if err != nil || defenderUUID == player.ID {
-		return false, 0
-	}
-	tier, ok, err := GrantSinhKhiTanHit(tx, tx, defenderUUID)
-	if err != nil || !ok {
-		return false, 0
-	}
-	return true, tier
+// persistentHitGrant là một persistent status được grant sau combat.
+type persistentHitGrant struct {
+	StatusKey string
+	GuID      string
+	Tier      int // tier sau grant cho sinh_khi_tan, các status khác = 0
 }
 
-// sinhKhiTanHitLanded pure: attacker có mang Sát Sinh Khí Cổ (theo loadout
-// hoặc SourceID action phe ta) và có hit damage của phe ta từ đúng đòn đó.
-// Trả (bringsGu, hitLanded).
-func sinhKhiTanHitLanded(loadout *simulator.CombatLoadout, simState *simulator.CombatState, logs []simulator.CombatLog) (bool, bool) {
+// persistentHitStatusKeys maps GuID phe ta (SimAction.SourceID) sang
+// persistent status key khai trên Cổ (UNIQUE PERSIST_STATUS_ON_HIT).
+func persistentHitStatusKeys(simState *simulator.CombatState) map[string]string {
+	out := map[string]string{}
 	if simState == nil {
-		return false, false
+		return out
 	}
-	bringsKillEnergy := false
-	if loadout != nil {
-		for _, guID := range loadout.GuIds {
-			if guID == SinhKhiTanGuID {
-				bringsKillEnergy = true
-				break
-			}
-		}
-	}
-	var killEnergyNames []string
-	allyIDs := make(map[string]bool, len(simState.Allies))
 	for _, a := range simState.Allies {
 		if a == nil {
 			continue
 		}
-		allyIDs[a.ID] = true
 		for _, act := range a.Actions {
-			if act.SourceID == SinhKhiTanGuID {
-				bringsKillEnergy = true
-				if act.Name != "" {
-					killEnergyNames = append(killEnergyNames, "["+act.Name+"]")
-				}
+			if act.PersistentStatusKey == "" || act.SourceID == "" {
+				continue
+			}
+			if _, dup := out[act.SourceID]; !dup {
+				out[act.SourceID] = act.PersistentStatusKey
 			}
 		}
 	}
-	if !bringsKillEnergy {
-		return false, false
+	return out
+}
+
+// maybeGrantPersistentHitStatuses grant các persistent status data-driven
+// cho defender PvP khi đòn của Cổ mang PERSIST_STATUS_ON_HIT đánh trúng
+// (log HitLanded, gồm cả hit bị khiên hấp thụ; miss/evade/miễn nhiễm
+// không grant). Mỗi status grant tối đa 1 lần mỗi trận. Chỉ PvP thật
+// (bỏ arena virtual/dummy). Lỗi grant được bỏ qua để không chặn kết toán.
+func maybeGrantPersistentHitStatuses(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, logs []simulator.CombatLog) []persistentHitGrant {
+	if player == nil || player.ActiveCombat == nil || simState == nil {
+		return nil
 	}
+	if player.ActiveCombat.EnemyType != "PVP" {
+		return nil
+	}
+	defenderID := player.ActiveCombat.TargetPlayerID
+	if defenderID == "" || defenderID == "dummy" {
+		return nil
+	}
+	statusByGu := persistentHitStatusKeys(simState)
+	if len(statusByGu) == 0 {
+		return nil
+	}
+	allyIDs := make(map[string]bool, len(simState.Allies))
+	for _, a := range simState.Allies {
+		if a != nil {
+			allyIDs[a.ID] = true
+		}
+	}
+	hitKeys := make(map[string]string, len(statusByGu))
 	for _, l := range logs {
-		if l.Damage <= 0 || !allyIDs[l.ActorId] {
+		if !l.HitLanded || !allyIDs[l.ActorId] {
 			continue
 		}
-		if len(killEnergyNames) == 0 {
-			return true, true // loadout có Cổ nhưng không resolve được tên đòn: nới lỏng
+		key, hasGu := statusByGu[l.SourceGuID]
+		if !hasGu || key == "" {
+			continue
 		}
-		for _, n := range killEnergyNames {
-			if strings.Contains(l.Detail, n) {
-				return true, true
-			}
+		if _, dup := hitKeys[key]; !dup {
+			hitKeys[key] = l.SourceGuID
 		}
 	}
-	return true, false
+	if len(hitKeys) == 0 {
+		return nil
+	}
+	defenderUUID, err := uuid.Parse(defenderID)
+	if err != nil || defenderUUID == player.ID {
+		return nil
+	}
+	var grants []persistentHitGrant
+	for key, guID := range hitKeys {
+		if strings.EqualFold(key, gamefx.StatusSinhKhiTan) {
+			tier, ok, err := GrantSinhKhiTanHit(tx, tx, defenderUUID)
+			if err != nil || !ok {
+				continue
+			}
+			grants = append(grants, persistentHitGrant{StatusKey: key, GuID: guID, Tier: tier})
+			continue
+		}
+		if !gamefx.ValidStatuses()[key] {
+			continue
+		}
+		if ok, err := GrantPlayerStatus(tx, tx, defenderUUID, key, guID, -1, 0); err != nil || !ok {
+			continue
+		}
+		grants = append(grants, persistentHitGrant{StatusKey: key, GuID: guID})
+	}
+	return grants
 }
 
 // RevokePlayerStatus removes every instance of a status id. Returns whether

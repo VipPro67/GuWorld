@@ -64,6 +64,17 @@ gate closed; it is never inferred from a default counter.
 
 Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 
+### Authorization data
+
+Authorization của Admin được chuẩn hóa trong bốn bảng: `admin_roles`,
+`admin_permissions`, `admin_role_permissions` và `player_admin_roles`. Schema seed role
+`super_admin`, permission `admin.access`, mapping giữa hai giá trị, rồi backfill mọi
+player legacy có `is_admin=true` sang `super_admin`. Trong giai đoạn tương thích, nếu
+một player vẫn có `is_admin=true` nhưng chưa có assignment trong `player_admin_roles`,
+resolver tạm coi player đó là `super_admin` và ghi warning để vận hành phát hiện và
+sửa backfill. Assignment trong database là nguồn quyền lâu dài; JWT chỉ giữ identity
+và session, không chứa role hoặc permission.
+
 ## CSV gameplay files
 
 | File | Nội dung |
@@ -81,7 +92,7 @@ Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/
 | `backend/data/ApertureNodeTemplate.csv` | Template node Tiên Khiếu: cost, production, HP, defense, attack range, cost Cổ và zone. Đọc trực tiếp lúc khởi động; sửa CSV cần restart. |
 | `backend/data/disposable_email_domains.txt` | Danh sách domain email tạm bị chặn khi đăng ký; đọc lúc khởi động. |
 
-Không ghi số dòng cố định trong tài liệu vì dataset thay đổi thường xuyên. Các helper tìm file ở `data/` trước rồi mới thử đường dẫn legacy. Chỉ sửa CSV chưa làm đổi dictionary trong DB: phải import dataset tương ứng và restart backend nếu registry được cache. Với hai file package đọc trực tiếp, cần chờ cache 24 giờ hoặc xóa cache/restart để thấy thay đổi ngay.
+Không ghi số dòng cố định trong tài liệu vì dataset thay đổi thường xuyên. Các helper tìm file ở `data/` trước rồi mới thử đường dẫn legacy. Chỉ sửa CSV chưa làm đổi dictionary trong DB: phải import dataset tương ứng. Workflow Admin luôn parse/validate và dry-run trước, hiển thị row count/diff (`inserts`, `updates`, `unchanged`) rồi mới cho xác nhận commit transaction. Preflight có lỗi nghiêm trọng không ghi database. Sau commit server tự reload registry/invalidate cache; UI sẽ cảnh báo rõ nếu dataset hoặc lỗi reload vẫn yêu cầu restart. Với hai file package đọc trực tiếp, cần chờ cache 24 giờ hoặc xóa cache/restart để thấy thay đổi ngay.
 
 ## Registry runtime
 
@@ -97,6 +108,28 @@ Không ghi số dòng cố định trong tài liệu vì dataset thay đổi th�
 - API `/api/recipes` trả recipe refining cho frontend.
 
 ## Cấu trúc cơ sở dữ liệu
+
+### Phân quyền quản trị — Admin RBAC
+
+RBAC quản trị được lưu trong bốn bảng:
+
+- `admin_roles`: định nghĩa vai trò; `key` là định danh ổn định và duy nhất.
+- `admin_permissions`: danh mục quyền, khóa chính là `key`.
+- `admin_role_permissions`: ánh xạ nhiều-nhiều giữa vai trò và quyền.
+- `player_admin_roles`: gán nhiều-nhiều vai trò cho `players`.
+
+Khi khởi tạo schema, hệ thống seed idempotent các role `admin`, `observer`,
+`support_admin`, `content_admin`, `game_admin`, `finance_viewer`, `super_admin`,
+permission vào dashboard `admin.dashboard.access`, wildcard `admin.*` và các
+quan hệ tương ứng. `observer` chỉ đọc dữ liệu vận hành; `support_admin` xử lý
+người chơi; `content_admin` quản lý nội dung; `game_admin` vận hành game/world;
+`finance_viewer` chỉ đọc billing; `super_admin` nhận wildcard. Role tương thích
+`admin` chỉ nhận quyền vào dashboard và có thể được cấp thêm quyền domain. Sau khi tài khoản admin mặc định
+được bảo đảm tồn tại, các tài khoản admin cũ được backfill idempotent vào RBAC.
+
+Authorization của dashboard và API quản trị được resolve từ các role/quyền
+RBAC. Cột `players.is_admin` được giữ như projection tương thích cho client cũ,
+nhưng không phải nguồn quyết định hiển thị entry Admin ở Lobby.
 
 ### Bảng `immortal_apertures` (Tiên Khiếu)
 
@@ -167,6 +200,10 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
+Quyền quản trị hiệu lực được resolve qua `player_admin_roles` và
+`admin_role_permissions`. Permission `admin.dashboard.access` điều khiển quyền
+vào dashboard; `admin.*` là wildcard dành cho `super_admin`.
+
 `players.state_revision` cùng tổng counter trong `player_collection_revisions`
 tạo bộ đếm tăng đơn điệu cho trạng thái người chơi. Trigger trên `players` ghi
 trực tiếp vào dòng người chơi; trigger trên bảng con tăng một trong 64 counter
@@ -215,7 +252,7 @@ Danh sách hiện tại (7 trạng thái):
 | `refine_insight_1..9` | Luyện Cổ Tâm Đắc R1..R9 | +1%/tầng cho đúng rank đó, không cap (Value = số tầng) | Vĩnh viễn (reset về 0 khi luyện thành công rank đó) | — |
 | `sinh_khi_tan` | Sinh Khí Tàn | Tầng I -10%, II -25%, III -35%, IV -50%, V -99% attack/defense/speed (Value âm ghi đè stat_mods) | 300 phút, refresh mỗi hit | — |
 
-Sinh Khí Tàn do **Sát Sinh Khí Cổ** (`GU_KILL_ENERGY`, rank 9 Sát Đạo) gây ra: đánh trúng ở PvP thật thì defender persistent +1 tầng (tối đa V, tầng V vẫn ăn hit refresh, không miễn nhiễm). Công thức luyện: `GU_KILL_HEAVEN_DAO` rank 8 + `heaven_qi_rank8/9`, `kill_path_material`, `primordial_kill_origin_stone` (vật liệu Hỗn Độn trong spec gốc chưa tồn tại dưới dạng item nên tạm thay bằng tiên tài Sát Đạo hiện có). Helper: `gamefx.SinhKhiTanTierFromValue/ValueForTier/TierName`, `handlers.GrantSinhKhiTanHit` (PvP auto-combat hook trong `combat_auto.go`), `handlers.CleanseSinhKhiTanOneTier` (thanh tẩy tụt 1 tầng, hết tầng I thì xóa).
+Sinh Khí Tàn do **Sát Sinh Khí Cổ** (`GU_KILL_ENERGY`, rank 9 Sát Đạo) gây ra: đánh trúng ở PvP thật thì defender persistent +1 tầng (tối đa V, tầng V vẫn ăn hit refresh, không miễn nhiễm). Công thức luyện: `GU_KILL_HEAVEN_DAO` rank 8 + `heaven_qi_rank8/9`, `kill_path_material`, `primordial_kill_origin_stone` (vật liệu Hỗn Độn trong spec gốc chưa tồn tại dưới dạng item nên tạm thay bằng tiên tài Sát Đạo hiện có). Cơ chế **data-driven trên Cổ**: `Gu.csv` block `ON_HIT` + `UNIQUE PERSIST_STATUS_ON_HIT` (`params.status_key=sinh_khi_tan, pvp_only=true`); engine gắn `CombatLog.SourceGuID/HitLanded` (khiên hấp thụ hết vẫn tính hit, né/mù/miễn nhiễm không tính); hook post-combat `handlers.maybeGrantPersistentHitStatuses` (dùng chung `AutoCombatStart` + `AutoResolveCombat`) grant theo spec, Cổ mới chỉ cần thêm block tương tự. Helper: `gamefx.SinhKhiTanTierFromValue/ValueForTier/TierName`, `handlers.GrantSinhKhiTanHit`, `models.GuPersistentHitStatus`, `handlers.CleanseSinhKhiTanOneTier` (thanh tẩy tụt 1 tầng, hết tầng I thì xóa).
 
 Helper dùng chung: `gamefx.Get(player)` (resolve effects + BlockedActions), `gamefx.HasBlockedAction(player, action)`, `gamefx.BlockingStatuses(player, action)`, `handlers.GrantPlayerStatus/RevokePlayerStatus/CleanExpiredPlayerStatuses` (cấp/gỡ/dọn trạng thái trong transaction), worker `worker.StartStatusExpiryWorker` (dọn hết hạn mỗi phút).
 
@@ -1096,3 +1133,12 @@ transaction. Runtime execution contexts carry deterministic RNG, actor/target
 snapshots, rank, mastery, Dao marks, paths, and catalog revision, and enforce event,
 trigger-depth, repeat, and summon budgets. During migration, compiled combat
 operations are attached to `simulator.SimAction` alongside its legacy fields.
+
+## Admin audit log fields
+
+`audit_logs` stores immutable admin mutation context in dedicated columns:
+`actor_username`, `effective_roles`, `effective_permission`, `entity_type`, `entity_id`,
+`change_data`, `reason`, and `request_id`, in addition to actor `player_id`, IP, outcome,
+sanitized error, and `created_at`. Existing databases receive these columns through
+idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements during schema startup.
+Sensitive request fields and multipart bodies are excluded from `change_data`.

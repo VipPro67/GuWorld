@@ -1,7 +1,11 @@
 "use client";
 
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Copy, Edit3, Search, Trash2 } from "lucide-react";
+import { Copy, Edit3, Trash2 } from "lucide-react";
+import { AdminEmptyState } from "./AdminEmptyState";
+import { AdminFilterBar } from "./AdminFilterBar";
+import { AdminLoadingState } from "./AdminLoadingState";
+import { AdminServerPagination } from "./AdminServerPagination";
 
 export type AdminGridColumn<T> = {
   key: string;
@@ -97,13 +101,7 @@ export function AdminDataGrid<T>({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        {showSearch && <div className="relative flex-1 sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-          <input aria-label="Tìm kiếm dữ liệu" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-9 pr-3 text-xs text-zinc-200 placeholder:text-zinc-500" />
-        </div>}
-        <div className="text-[11px] text-zinc-500">Đã chọn <span className="font-bold text-amber-400">{selected.size}</span> · {filteredRows.length}/{rows.length} dòng</div>
-      </div>
+      <AdminFilterBar search={query} onSearchChange={showSearch ? setQuery : undefined} searchPlaceholder={searchPlaceholder} actions={<div className="text-[11px] text-zinc-500">Đã chọn <span className="font-bold text-amber-400">{selected.size}</span> · {filteredRows.length}/{rows.length} dòng</div>} />
       <div className="max-h-[560px] overflow-auto rounded-xl border border-zinc-800/80">
         <table className="w-full min-w-max border-collapse text-left text-xs">
           <thead className="sticky top-0 z-10 bg-zinc-900 text-[10px] uppercase tracking-wider text-zinc-400">
@@ -132,14 +130,11 @@ export function AdminDataGrid<T>({
                 </div></td>}
               </tr>;
             })}
-            {!visibleRows.length && <tr><td colSpan={columns.length + 1 + Number(Boolean(onEdit || onCopy || onDelete))} className="py-8 text-center italic text-zinc-500">{loading ? "Đang tải dữ liệu..." : emptyLabel}</td></tr>}
+            {!visibleRows.length && <tr><td colSpan={columns.length + 1 + Number(Boolean(onEdit || onCopy || onDelete))}>{loading ? <AdminLoadingState compact /> : <AdminEmptyState compact title={emptyLabel} />}</td></tr>}
           </tbody>
         </table>
       </div>
-      {showPagination && <div className="flex flex-col gap-2 text-[11px] text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
-        <label>Hiển thị <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="mx-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-zinc-200">{pageSizeOptions.map((size) => <option key={size}>{size}</option>)}</select> dòng/trang</label>
-        <div className="flex items-center gap-2"><span>Trang {Math.min(page, totalPages)}/{totalPages}</span><button aria-label="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="rounded border border-zinc-700 bg-zinc-800 p-1 text-zinc-300 disabled:opacity-40"><ChevronLeft className="h-3.5 w-3.5" /></button><button aria-label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)} className="rounded border border-zinc-700 bg-zinc-800 p-1 text-zinc-300 disabled:opacity-40"><ChevronRight className="h-3.5 w-3.5" /></button></div>
-      </div>}
+      {showPagination && <AdminServerPagination page={page} pageSize={pageSize} total={filteredRows.length} pageSizeOptions={pageSizeOptions} onPageChange={setPage} onPageSizeChange={setPageSize} loading={loading} />}
     </div>
   );
 }

@@ -13,9 +13,15 @@ import (
 type AuditLogResponse struct {
 	ID             string                 `json:"id"`
 	PlayerID       string                 `json:"player_id"`
+	ActorUsername  string                 `json:"actor_username"`
 	Action         string                 `json:"action"`
+	EffectiveRoles []string               `json:"effective_roles"`
+	Permission     string                 `json:"effective_permission"`
 	EntityType     *string                `json:"entity_type"`
 	EntityID       *string                `json:"entity_id"`
+	ChangeData     interface{}            `json:"change_data"`
+	Reason         string                 `json:"reason"`
+	RequestID      string                 `json:"request_id"`
 	RequestSummary string                 `json:"request_summary"`
 	Metadata       map[string]interface{} `json:"metadata"`
 	IPAddress      *string                `json:"ip_address"`
@@ -49,7 +55,7 @@ func GetMyAuditLogs(c *gin.Context) {
 	}
 
 	query := `
-		SELECT id, player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at
+		SELECT id, COALESCE(player_id::text, ''), actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, COALESCE(request_summary, ''), metadata, ip_address, success, error_message, created_at
 		FROM audit_logs
 		WHERE player_id = $1
 	`
@@ -96,10 +102,10 @@ func GetMyAuditLogs(c *gin.Context) {
 	logs := []AuditLogResponse{}
 	for rows.Next() {
 		var logRow AuditLogResponse
-		var metaJSON []byte
+		var metaJSON, rolesJSON, changeJSON []byte
 		err := rows.Scan(
-			&logRow.ID, &logRow.PlayerID, &logRow.Action, &logRow.EntityType,
-			&logRow.EntityID, &logRow.RequestSummary, &metaJSON, &logRow.IPAddress,
+			&logRow.ID, &logRow.PlayerID, &logRow.ActorUsername, &logRow.Action, &rolesJSON, &logRow.Permission, &logRow.EntityType,
+			&logRow.EntityID, &changeJSON, &logRow.Reason, &logRow.RequestID, &logRow.RequestSummary, &metaJSON, &logRow.IPAddress,
 			&logRow.Success, &logRow.ErrorMessage, &logRow.CreatedAt,
 		)
 		if err != nil {
@@ -109,6 +115,8 @@ func GetMyAuditLogs(c *gin.Context) {
 		if len(metaJSON) > 0 {
 			_ = json.Unmarshal(metaJSON, &logRow.Metadata)
 		}
+		_ = json.Unmarshal(rolesJSON, &logRow.EffectiveRoles)
+		_ = json.Unmarshal(changeJSON, &logRow.ChangeData)
 		logs = append(logs, logRow)
 	}
 

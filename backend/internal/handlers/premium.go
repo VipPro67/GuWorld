@@ -22,12 +22,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 const (
@@ -926,28 +929,49 @@ func remainingPurchases(q queryer, playerID uuid.UUID, pkg PremiumShopPackage) (
 }
 
 func requireAdmin(c *gin.Context) (uuid.UUID, bool) {
-	playerID, ok := middleware.GetPlayerID(c)
+	principal, ok := middleware.GetAdminPrincipal(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return uuid.Nil, false
 	}
-	if db.DB == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
+	if !principal.HasPermission(authz.AdminAccessPermission) {
+		monitor.GlobalAdminOperations.RecordForbidden(authz.AdminAccessPermission)
+		logger.L.Warn("admin_permission_denied", zap.String("permission", authz.AdminAccessPermission), zap.String("player_id", principal.PlayerID.String()))
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
 		return uuid.Nil, false
 	}
-	var isAdmin bool
-	if err := db.DB.QueryRow(`SELECT COALESCE(is_admin, false) FROM players WHERE id=$1`, playerID).Scan(&isAdmin); err != nil || !isAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
-		return uuid.Nil, false
-	}
-	return playerID, true
+	return principal.PlayerID, true
 }
 
 func AdminListTopupOrders(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders ORDER BY created_at DESC LIMIT 100`)
+	paging := parseAdminPageQuery(c, 50, map[string]string{"created_at": "created_at", "paid_at": "paid_at", "amount_vnd": "amount_vnd", "jade_amount": "jade_amount", "status": "status", "order_code": "order_code"}, "created_at")
+	where, args := ` WHERE 1=1`, []interface{}{}
+	add := func(clause string, value interface{}) {
+		args = append(args, value)
+		where += strings.ReplaceAll(clause, "?", "$"+strconv.Itoa(len(args)))
+	}
+	if search := strings.TrimSpace(c.Query("search")); search != "" {
+		add(` AND (order_code::text ILIKE ? OR user_id::text ILIKE ? OR provider ILIKE ?)`, "%"+search+"%")
+	}
+	if status := c.Query("status"); status != "" {
+		add(` AND status = ?`, status)
+	}
+	if provider := c.Query("provider"); provider != "" {
+		add(` AND provider = ?`, provider)
+	}
+	if userID := c.Query("user_id"); userID != "" {
+		add(` AND user_id::text = ?`, userID)
+	}
+	var total int
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM topup_orders`+where, args...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm danh sách đơn nạp"})
+		return
+	}
+	query := `SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders` + where + ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, order_code DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, append(args, paging.PageSize, paging.Offset)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách đơn nạp"})
 		return
@@ -967,22 +991,43 @@ func AdminListTopupOrders(c *gin.Context) {
 		}
 		orders = append(orders, gin.H{"orderCode": orderCode, "userId": userID, "amountVnd": amountVND, "jadeAmount": jadeAmount, "status": status, "provider": provider, "checkoutUrl": checkout.String, "createdAt": createdAt, "paidAt": nullableTime(paidAt)})
 	}
-	c.JSON(http.StatusOK, orders)
+	c.JSON(http.StatusOK, gin.H{"data": orders, "total": total, "page": paging.Page, "page_size": paging.PageSize})
 }
 
 func AdminListWalletTransactions(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	userID := c.Query("userId")
-	query := `SELECT id, user_id, type, currency, amount, balance_before, balance_after, ref_order_code, ref_package_id, note, created_at FROM wallet_transactions`
+	paging := parseAdminPageQuery(c, 50, map[string]string{"created_at": "created_at", "amount": "amount", "balance_after": "balance_after", "type": "type", "currency": "currency"}, "created_at")
+	query := `SELECT id, user_id, type, currency, amount, balance_before, balance_after, ref_order_code, ref_package_id, note, created_at FROM wallet_transactions WHERE 1=1`
 	args := []interface{}{}
-	if userID != "" {
-		query += ` WHERE user_id=$1`
-		args = append(args, userID)
+	add := func(clause string, value interface{}) {
+		args = append(args, value)
+		query += strings.ReplaceAll(clause, "?", "$"+strconv.Itoa(len(args)))
 	}
-	query += ` ORDER BY created_at DESC LIMIT 200`
-	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
+	userID := c.Query("user_id")
+	if userID == "" {
+		userID = c.Query("userId")
+	}
+	if userID != "" {
+		add(` AND user_id::text = ?`, userID)
+	}
+	if txType := c.Query("type"); txType != "" {
+		add(` AND type = ?`, txType)
+	}
+	if currency := c.Query("currency"); currency != "" {
+		add(` AND currency = ?`, currency)
+	}
+	if search := strings.TrimSpace(c.Query("search")); search != "" {
+		add(` AND (id::text ILIKE ? OR user_id::text ILIKE ? OR COALESCE(note, '') ILIKE ? OR COALESCE(ref_package_id, '') ILIKE ? OR ref_order_code::text ILIKE ?)`, "%"+search+"%")
+	}
+	var total int
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM (`+query+`) wallet_results`, args...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm giao dịch ví"})
+		return
+	}
+	query += ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, id DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, append(args, paging.PageSize, paging.Offset)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải giao dịch ví"})
 		return
@@ -1002,7 +1047,7 @@ func AdminListWalletTransactions(c *gin.Context) {
 		}
 		transactions = append(transactions, gin.H{"id": id, "userId": uid, "type": txType, "currency": currency, "amount": amount, "balanceBefore": before, "balanceAfter": after, "refOrderCode": refOrder.Int64, "refPackageId": refPackage.String, "note": note.String, "createdAt": createdAt})
 	}
-	c.JSON(http.StatusOK, transactions)
+	c.JSON(http.StatusOK, gin.H{"data": transactions, "total": total, "page": paging.Page, "page_size": paging.PageSize})
 }
 
 func numberFromAny(v interface{}) (int64, error) {

@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
+import Link from "next/link";
 
 interface HubItem {
   id: string;
@@ -604,31 +605,6 @@ export const LobbyView: React.FC = () => {
           })}
         </div>
       </div>
-
-      {/* Admin Section */}
-      {player?.is_admin && (
-        <div className="flex flex-col gap-3 sm:gap-5">
-          <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
-            <h2 className="text-xs uppercase tracking-widest text-amber-500 font-mono font-semibold">
-              Quản trị
-            </h2>
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-4 justify-center">
-            <div
-              onClick={() => setView("admin")}
-              className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-zinc-900/20 cursor-pointer group select-none"
-            >
-              <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 border border-amber-400/20 transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]">
-                <Shield className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-amber-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
-              </div>
-              <span className="font-serif text-[10px] sm:text-[11px] font-semibold text-zinc-400 mt-2 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
-                Dashboard
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 3. Category: HOẠT ĐỘNG */}
       <div className="flex flex-col gap-3 sm:gap-5">
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">

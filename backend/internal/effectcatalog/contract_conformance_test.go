@@ -141,6 +141,9 @@ func exampleParam(spec effectcatalog.ParamSpec) any {
 	if spec.Type == "bool" {
 		return true
 	}
+	if spec.Type == "string" {
+		return "example"
+	}
 	if spec.Type == "integer" {
 		if spec.Min != nil {
 			return int(*spec.Min)

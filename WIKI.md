@@ -63,7 +63,7 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 | Hình Phạt Tử Vong (`death_penalty`) | **-50%** tấn công, phòng thủ, tốc độ | 30 phút |
 | Tâm Thần Mệt Mỏi (`refine_fatigue`) | **-25%** tỉ lệ Luyện Cổ thành công (khi Luyện Tiên Cổ hoặc Cổ $\ge$ Rank bản thân) | 10 phút |
 | Luyện Cổ Phản Phệ (`refine_backfire`) | **-50%** tỉ lệ Luyện Cổ thành công (khi cố luyện lúc mệt mỏi hoặc bị nổ lò) | 20 phút |
-| Sinh Khí Tàn (`sinh_khi_tan`) | Trúng Sát Sinh Khí Cổ: tầng I **-10%**, II **-25%**, III **-35%**, IV **-50%**, V **-99%** tấn công/phòng thủ/tốc độ. Đánh trúng +1 tầng (tối đa V, refresh 5h); thanh tẩy -1 tầng | 5 giờ (refresh mỗi hit; spec gốc 50h đang tạm giảm cân bằng) |
+| Sinh Khí Tàn (`sinh_khi_tan`) | Trúng Sát Sinh Khí Cổ: tầng I **-10%**, II **-25%**, III **-35%**, IV **-50%**, V **-99%** tấn công/phòng thủ/tốc độ. Đánh trúng +1 tầng (tối đa V, refresh 5h; đòn bị khiên hấp thụ vẫn tính trúng, né/mù/miễn nhiễm không tính); thanh tẩy -1 tầng | 5 giờ (refresh mỗi hit; spec gốc 50h đang tạm giảm cân bằng) |
 
 Quy tắc áp dụng trạng thái:
 
