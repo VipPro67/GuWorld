@@ -386,6 +386,7 @@ type Player struct {
 	HPRegenRate         float64 `json:"hp_regen_rate"`
 	SoulRegenRate       float64 `json:"soul_regen_rate"`
 	IsSparseGuInventory bool    `json:"is_sparse_gu_inventory,omitempty"`
+	CanAccessAdmin      bool    `json:"can_access_admin,omitempty"`
 }
 
 type GrowthBoosts struct {

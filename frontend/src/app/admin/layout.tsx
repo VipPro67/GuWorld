@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, LayoutDashboard, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/components/admin/AdminAccessContext";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
+import { useGameStore } from "@/store/useGameStore";
 
 type AccessState =
   | { status: "loading" }
@@ -48,6 +50,8 @@ function AccessMessage({
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const logout = useGameStore((gameState) => gameState.logout);
   const [state, setState] = useState<AccessState>({ status: "loading" });
   const activeRequest = useRef<AbortController | null>(null);
 
@@ -97,6 +101,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => activeRequest.current?.abort();
   }, [resolveAccess]);
 
+  const handleLogout = () => {
+    logout();
+    router.replace("/");
+  };
+
   if (state.status === "loading") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]" aria-busy="true">
@@ -129,9 +138,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <p className="truncate text-xs text-zinc-500">Không gian vận hành độc lập</p>
               </div>
             </div>
-            <Link href="/" className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-white">
-              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Quay lại game</span>
-            </Link>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link href="/" className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-white">
+                <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Quay lại game</span>
+              </Link>
+              <button type="button" onClick={() => void handleLogout()} className="rounded-lg border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10">
+                Đăng xuất
+              </button>
+            </div>
           </div>
         </header>
 

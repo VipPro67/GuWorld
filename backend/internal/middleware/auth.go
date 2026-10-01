@@ -1,9 +1,9 @@
 package middleware
 
 import (
+	"context"
 	"database/sql"
 	"errors"
-	"context"
 	"net/http"
 	"strings"
 
@@ -17,18 +17,15 @@ import (
 // PlayerHasAdminAccess checks RBAC first and preserves players.is_admin as a
 // rollout fallback for legacy administrators.
 func PlayerHasAdminAccess(ctx context.Context, playerID uuid.UUID) (bool, error) {
-	var hasRBACRole, isLegacyAdmin bool
-	err := db.DB.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1
-			FROM player_admin_roles par
-			JOIN admin_roles ar ON ar.id = par.role_id
-			JOIN admin_role_permissions arp ON arp.role_id = ar.id
-			WHERE par.player_id = $1 AND arp.permission_key = 'admin.*'
-		), COALESCE(is_admin, false)
-		FROM players
-		WHERE id = $1`, playerID).Scan(&hasRBACRole, &isLegacyAdmin)
-	return hasRBACRole || isLegacyAdmin, err
+	principal, err := resolveAdminPrincipal(ctx, playerID)
+	if err != nil {
+		return false, err
+	}
+	return principal.HasPermission(authz.AdminAccessPermission), nil
+}
+
+func resolveAdminPrincipal(ctx context.Context, playerID uuid.UUID) (authz.AdminPrincipal, error) {
+	return authz.NewResolver(db.DB).Resolve(ctx, playerID)
 }
 
 const (
@@ -214,17 +211,14 @@ func PermissionRequired(permission string) gin.HandlerFunc {
 			return
 		}
 
-		var allowed bool
-		err := db.DB.QueryRow(`
-			SELECT COALESCE(is_admin, false)
-				AND ($2 = ANY(COALESCE(admin_permissions, ARRAY[]::TEXT[]))
-					OR '*' = ANY(COALESCE(admin_permissions, ARRAY[]::TEXT[])))
-			FROM players WHERE id=$1`, playerID, permission).Scan(&allowed)
-		if err != nil || !allowed {
+		principal, err := resolveAdminPrincipal(c.Request.Context(), playerID)
+		if err != nil || !principal.HasPermission(permission) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Permission required", "permission": permission})
 			c.Abort()
 			return
 		}
+		c.Set(adminPrincipalKey, principal)
+		c.Request = c.Request.WithContext(authz.WithPrincipal(c.Request.Context(), principal))
 		c.Next()
 	}
 }

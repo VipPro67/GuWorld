@@ -295,6 +295,7 @@ export interface Player {
   is_disguised?: boolean;
   is_dead?: boolean;
   is_admin?: boolean;
+  can_access_admin?: boolean;
   is_sparse_gu_inventory?: boolean;
   avatar_url?: string;
   active_concealment?: boolean;

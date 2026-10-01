@@ -11,7 +11,7 @@ import (
 
 const (
 	SuperAdminRole        = "super_admin"
-	AdminAccessPermission = "admin.access"
+	AdminAccessPermission = "admin.dashboard.access"
 )
 
 // AdminPrincipal is the database-resolved authorization identity for an
@@ -25,6 +25,9 @@ type AdminPrincipal struct {
 }
 
 func (p AdminPrincipal) HasPermission(permissionKey string) bool {
+	if _, ok := p.Permissions["admin.*"]; ok {
+		return true
+	}
 	_, ok := p.Permissions[permissionKey]
 	return ok
 }
