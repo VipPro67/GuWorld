@@ -194,3 +194,70 @@ func TestRequirePermissionResponsesAndPrincipalContext(t *testing.T) {
 		})
 	}
 }
+
+func TestPermissionRevocationTakesEffectOnNextRequestWithoutRelogin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	playerID := uuid.New()
+	resolver := &stubPrincipalResolver{principal: authz.AdminPrincipal{PlayerID: playerID, Permissions: map[string]struct{}{"players.update": {}}}}
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("player_id", playerID); c.Next() })
+	router.PUT("/direct", requirePermission(resolver, "players.update"), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, httptest.NewRequest(http.MethodPut, "/direct", nil))
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("before revocation status = %d", first.Code)
+	}
+
+	resolver.principal.Permissions = map[string]struct{}{}
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, httptest.NewRequest(http.MethodPut, "/direct", nil))
+	if second.Code != http.StatusForbidden {
+		t.Fatalf("after revocation status = %d, want 403", second.Code)
+	}
+}
+
+func TestRoleRouteStatusMatrixAndDirectEndpointEnforcement(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	playerID := uuid.New()
+	tests := []struct {
+		name             string
+		authenticated    bool
+		role, permission string
+		want             int
+	}{
+		{"anonymous", false, "", "players.update", http.StatusUnauthorized},
+		{"regular player", true, "player", "players.update", http.StatusForbidden},
+		{"observer read", true, "observer", "players.read", http.StatusNoContent},
+		{"observer direct mutation", true, "observer", "players.update", http.StatusForbidden},
+		{"support mutation", true, "support_admin", "players.update", http.StatusNoContent},
+		{"content import", true, "content_admin", "game_data.import", http.StatusNoContent},
+		{"game operation", true, "game_admin", "mine_slots.update", http.StatusNoContent},
+		{"finance read", true, "finance_viewer", "billing.read", http.StatusNoContent},
+		{"finance direct player mutation", true, "finance_viewer", "players.update", http.StatusForbidden},
+		{"super wildcard", true, "super_admin", "cache.flush", http.StatusNoContent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			permissionSet := map[string]struct{}{}
+			for _, permission := range authz.PermissionsForRole(tt.role) {
+				permissionSet[permission] = struct{}{}
+			}
+			resolver := &stubPrincipalResolver{principal: authz.AdminPrincipal{PlayerID: playerID, Roles: []string{tt.role}, Permissions: permissionSet}}
+			downstreamCalled := false
+			router := gin.New()
+			if tt.authenticated {
+				router.Use(func(c *gin.Context) { c.Set("player_id", playerID); c.Next() })
+			}
+			router.Handle(http.MethodPut, "/api/admin/direct", requirePermission(resolver, tt.permission), func(c *gin.Context) { downstreamCalled = true; c.Status(http.StatusNoContent) })
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/admin/direct", nil))
+			if response.Code != tt.want {
+				t.Fatalf("status = %d, want %d", response.Code, tt.want)
+			}
+			if downstreamCalled != (tt.want == http.StatusNoContent) {
+				t.Fatalf("downstream called = %v", downstreamCalled)
+			}
+		})
+	}
+}

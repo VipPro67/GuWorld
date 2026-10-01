@@ -1,7 +1,9 @@
 package db
 
+import "github.com/vippro67/GuWorld/backend/internal/authz"
+
 func schemaAuthorization() error {
-	return execSchema("authorization", `
+	if err := execSchema("authorization", `
 	CREATE TABLE IF NOT EXISTS admin_roles (
 		key VARCHAR(100) PRIMARY KEY,
 		description TEXT NOT NULL DEFAULT ''
@@ -43,7 +45,23 @@ func schemaAuthorization() error {
 		('super_admin', 'admin.dashboard.access'),
 		('super_admin', 'admin.*')
 	ON CONFLICT (role_key, permission_key) DO NOTHING;
-	`)
+	`); err != nil {
+		return err
+	}
+	for _, role := range authz.BuiltinRoles() {
+		if _, err := DB.Exec(`DELETE FROM admin_role_permissions WHERE role_key=$1`, role.Key); err != nil {
+			return err
+		}
+		for _, permission := range role.Permissions {
+			if _, err := DB.Exec(`INSERT INTO admin_permissions (key, name, description) VALUES ($1,$1,'Built-in permission') ON CONFLICT (key) DO NOTHING`, permission); err != nil {
+				return err
+			}
+			if _, err := DB.Exec(`INSERT INTO admin_role_permissions (role_key, permission_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, role.Key, permission); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // backfillAdminRoles runs after ensureAdmin so both existing legacy admins and
@@ -51,7 +69,8 @@ func schemaAuthorization() error {
 func backfillAdminRoles() error {
 	return execSchema("authorization_role_backfill", `
 	INSERT INTO player_admin_roles (player_id, role_key)
-	SELECT id, 'super_admin' FROM players WHERE COALESCE(is_admin, false)
+	SELECT id, 'admin' FROM players p WHERE COALESCE(is_admin, false)
+	  AND NOT EXISTS (SELECT 1 FROM player_admin_roles par WHERE par.player_id=p.id)
 	ON CONFLICT (player_id, role_key) DO NOTHING;
 	`)
 }

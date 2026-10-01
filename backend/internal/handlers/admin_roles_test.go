@@ -44,3 +44,13 @@ func TestValidateAdminRoleChangeInvariants(t *testing.T) {
 		})
 	}
 }
+
+func TestCannotRemoveLastSuperAdmin(t *testing.T) {
+	super := []adminRole{{Key: "super_admin", Level: 100}}
+	if !wouldRemoveLastSuperAdmin(super, nil, 1) {
+		t.Fatal("last super admin removal must be rejected")
+	}
+	if wouldRemoveLastSuperAdmin(super, nil, 2) {
+		t.Fatal("demotion must be allowed while another super admin remains")
+	}
+}

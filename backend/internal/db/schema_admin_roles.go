@@ -1,5 +1,7 @@
 package db
 
+import "github.com/vippro67/GuWorld/backend/internal/authz"
+
 // Administrative roles are the authority for granting and revoking admin
 // access. players.is_admin remains a compatibility projection for legacy
 // clients and middleware.
@@ -48,6 +50,12 @@ func schemaAdminRoles() error {
 		description = EXCLUDED.description,
 		level = EXCLUDED.level;`); err != nil {
 		return err
+	}
+	for _, role := range authz.BuiltinRoles() {
+		if _, err := DB.Exec(`INSERT INTO admin_roles (key, name, description, level) VALUES ($1,$2,$3,$4)
+			ON CONFLICT (key) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, level=EXCLUDED.level`, role.Key, role.Name, role.Description, role.Level); err != nil {
+			return err
+		}
 	}
 
 	// Preserve access for legacy admins without accidentally making every
