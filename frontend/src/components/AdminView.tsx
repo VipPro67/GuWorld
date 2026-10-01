@@ -69,12 +69,15 @@ import { AuditLogsAdminTab } from "./admin/modules/AuditLogsAdminTab";
 import { MonitoringAdminTab } from "./admin/modules/MonitoringAdminTab";
 import { CoreDataAdminTab } from "./admin/CoreDataAdminTab";
 import { AdminDataGrid } from "./admin/AdminDataGrid";
+import { useAdminUrlState } from "./admin/useAdminUrlState";
 import { GuEffectsEditor, validateAllEffectEditors } from "./admin/GuEffectsEditor";
 import type { AdminModuleKey } from "./admin/navigation";
 import { useAdminAccess } from "./admin/AdminAccessContext";
 import { canPerformAdminAction, prepareAdminAction } from "./admin/actions";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
+const PLAYER_QUERY_KEYS = Object.keys(PLAYER_QUERY_DEFAULTS);
 
 const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "string" | "number" | "boolean" }[]> = {
   active: [
@@ -402,11 +405,14 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [isCombatPathExpanded, setIsCombatPathExpanded] = useState(true);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [limit] = useState(50);
-  const [search, setSearch] = useState("");
-  const [searchText, setSearchText] = useState("");
-  const [searchBy, setSearchBy] = useState<"all" | "id" | "username" | "email" | "item" | "gu">("all");
+  const [playerQuery, updatePlayerQuery] = useAdminUrlState(PLAYER_QUERY_DEFAULTS, PLAYER_QUERY_KEYS);
+  const page = Math.max(1, Number(playerQuery.page) || 1);
+  const limit = Math.max(1, Number(playerQuery.page_size) || 50);
+  const search = playerQuery.search;
+  const [searchText, setSearchText] = useState(playerQuery.search);
+  const searchBy = playerQuery.search_by as "all" | "id" | "username" | "email" | "item" | "gu";
+  const setPage = (next: number) => updatePlayerQuery({ page: String(next) });
+  useEffect(() => setSearchText(playerQuery.search), [playerQuery.search]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -971,7 +977,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      const params = new URLSearchParams({ page: String(page), page_size: String(limit), sort: playerQuery.sort, direction: playerQuery.direction });
       const q = search.trim();
       if (q) {
         params.set("search", q);
@@ -988,7 +994,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       const err = caught instanceof Error ? caught : new Error(String(caught));
       setError(err.message);
     } finally { setLoading(false); }
-  }, [page, limit, search, searchBy]);
+  }, [page, limit, search, searchBy, playerQuery.direction, playerQuery.sort]);
 
   useEffect(() => {
     if (section === "players") fetchPlayers();
@@ -2945,7 +2951,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Filter className="w-3 h-3" /> Loại tìm kiếm
                 </label>
-                <select value={searchBy} onChange={e => { setSearchBy(e.target.value as ApiResponseData); setPage(1); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
+                <select value={searchBy} onChange={e => { updatePlayerQuery({ search_by: e.target.value, page: "1" }); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
                   <option value="all">Tất cả (tự nhận diện ID)</option>
                   <option value="id">ID</option>
                   <option value="username">Tên đăng nhập</option>
@@ -2958,9 +2964,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Search className="w-3 h-3" /> Tìm kiếm
                 </label>
-                <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { setPage(1); setSearch(searchText); } }} placeholder={searchBy === "item" ? "ID hoặc tên vật phẩm..." : searchBy === "gu" ? "ID hoặc tên cổ trùng..." : "ID, tên đăng nhập hoặc email..."} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
+                <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { updatePlayerQuery({ page: "1", search: searchText }); } }} placeholder={searchBy === "item" ? "ID hoặc tên vật phẩm..." : searchBy === "gu" ? "ID hoặc tên cổ trùng..." : "ID, tên đăng nhập hoặc email..."} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
               </div>
-              <button onClick={() => { setPage(1); setSearch(searchText); }} className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">Tìm</button>
+              <button onClick={() => { updatePlayerQuery({ page: "1", search: searchText }); }} className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">Tìm</button>
               <button onClick={fetchPlayers} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
               </button>

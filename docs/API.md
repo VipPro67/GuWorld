@@ -41,8 +41,8 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/auth/google/callback` | Google OAuth callback, rate limited. |
 | GET | `/topup/packages` | Public topup packages. |
 | POST | `/webhooks/payos` | PayOS webhook. |
-| GET | `/admin/topup-orders` | Protected admin listing. |
-| GET | `/admin/wallet-transactions` | Protected admin listing. |
+| GET | `/admin/topup-orders` | Protected server-side listing. Query: `page`, `page_size`, `search`, allowlisted `sort`, `direction`, `status`, `provider`, `user_id`. Response: `{data,total,page,page_size}`. |
+| GET | `/admin/wallet-transactions` | Protected server-side listing. Query: `page`, `page_size`, `search`, allowlisted `sort`, `direction`, `user_id`, `type`, `currency`. Response: `{data,total,page,page_size}`. |
 | GET | `/wallet` | Protected wallet. |
 | POST | `/topup/orders` | Protected create order, rate limited. |
 | GET | `/topup/orders/:orderCode` | Protected order detail. |
@@ -355,7 +355,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là d
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/admin/players` | List người chơi, phân trang (`page`, `limit`). Search: `search_by=all|id|username|email|item|gu`. Khi `search_by=all` auto-detect UUID. `item`/`gu` match theo registry ID + tên (trả `gu_ids`/`item_ids` mới hơn bản ghi cũ). |
+| GET | `/admin/players` | List người chơi server-side với `page`, `page_size` (`limit` vẫn được chấp nhận), `search`, `search_by=all|id|username|email|item|gu`, `sort`, `direction`; sort chỉ nhận allowlist. Khi `search_by=all` auto-detect UUID. Response gồm `data`, `total`, `page`, `page_size`. |
 | GET | `/admin/players/online` | List người chơi online. |
 | GET | `/admin/players/:id` | Chi tiết người chơi. Response bỏ `gu_inventory`/`materials_inventory`, trả `gu_count` + `item_count`. Kèm `race`, `gender`, `constitution`, `statuses` (array). |
 | GET | `/admin/players/:id/items` | Lazy-load item của người chơi từ `player_inventory_items`. Trả thêm các cổ phương đã mở khóa (`category=recipe`) từ `player_recipe_progress`. Params: `page`, `limit`, `q` (match item_id/item_name theo registry). |
@@ -372,7 +372,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là d
 | GET | `/admin/players/:id/pets` | Lazy-load sủng vật của người chơi. Params: `page`, `limit`, `q` (search monster name/ID). |
 | DELETE | `/admin/players/:id/pets/:pet_id` | Xóa vĩnh viễn sủng vật. |
 | PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
-| GET | `/admin/audit-logs` | Audit log (bao gồm `admin.update_player`). |
+| GET | `/admin/audit-logs` | Audit log server-side (bao gồm `admin.update_player`), hỗ trợ `page`, `page_size`, `search`, allowlisted `sort`, `direction`, `action`, `entity_type`, `player_id`, `success`; trả total count. |
 
 ### Admin — nhóm quản trị còn lại
 
@@ -409,7 +409,8 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 | --- | --- | --- |
 | GET | `/admin/monitor/system` | Báo cáo chi tiết hệ thống: CPU % (process & system), NumCPU, Goroutines, CgoCalls, Go MemStats (Alloc, Heap, Stack, GC pause), DB Connection Pool, Redis health & latency, WebSocket clients/channels, Process Uptime. |
 | GET | `/admin/monitor/requests/summary` | Thống kê request toàn diện: Tổng số request, in-flight requests, RPS (cửa sổ trượt 60s), phân bố mã trạng thái (2xx/3xx/4xx/5xx), độ trễ (min/max/avg/p50/p90/p99), top endpoint được gọi nhiều nhất và top endpoint chậm nhất. |
-| GET | `/admin/monitor/requests/traces` | Tra cứu chi tiết danh sách các request gần nhất (Ring Buffer 500 requests). Hỗ trợ query params: `limit` (default 50, max 200), `offset`, `method` (GET/POST/...), `status` (`200`, `500`, hoặc `errors` để lọc lỗi ≥ 400), `path` (chuỗi con URL), `min_duration_ms` (lọc slow request), `search` (tìm theo player_id, username, client_ip). |
+| GET | `/admin/monitor/requests/traces` | Tra cứu server-side các request gần nhất (Ring Buffer 500 requests). Hỗ trợ `page`, `page_size`, allowlisted `sort`, `direction`, `method`, `status` (`200`, `500`, hoặc `errors`), `path`, `min_duration_ms`, `search`; trả `{data,traces,total,page,page_size}` (`traces` là alias tương thích). |
+| GET | `/admin/gu-history` | Lịch sử Cổ trùng server-side: `page`, `page_size`, `search`, `event_type`, allowlisted `sort`, `direction`; trả `logs`, `total`, `page`, `page_size`. |
 | GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một request cụ thể qua `trace_id` (method, path/query đã lọc, status, latency, client IP, player ID/username, user-agent, error, `content_length`, JSON `request_body` đã redact và `body_truncated`). Các trace chỉ lưu trong memory và hiển thị tại tab **Giám sát** của Admin. |
 | POST | `/admin/monitor/requests/reset` | Đặt lại (reset) toàn bộ chỉ số đếm và xóa danh sách request trace gần nhất. |
 

@@ -943,7 +943,31 @@ func AdminListTopupOrders(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders ORDER BY created_at DESC LIMIT 100`)
+	paging := parseAdminPageQuery(c, 50, map[string]string{"created_at": "created_at", "paid_at": "paid_at", "amount_vnd": "amount_vnd", "jade_amount": "jade_amount", "status": "status", "order_code": "order_code"}, "created_at")
+	where, args := ` WHERE 1=1`, []interface{}{}
+	add := func(clause string, value interface{}) {
+		args = append(args, value)
+		where += strings.ReplaceAll(clause, "?", "$"+strconv.Itoa(len(args)))
+	}
+	if search := strings.TrimSpace(c.Query("search")); search != "" {
+		add(` AND (order_code::text ILIKE ? OR user_id::text ILIKE ? OR provider ILIKE ?)`, "%"+search+"%")
+	}
+	if status := c.Query("status"); status != "" {
+		add(` AND status = ?`, status)
+	}
+	if provider := c.Query("provider"); provider != "" {
+		add(` AND provider = ?`, provider)
+	}
+	if userID := c.Query("user_id"); userID != "" {
+		add(` AND user_id::text = ?`, userID)
+	}
+	var total int
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM topup_orders`+where, args...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm danh sách đơn nạp"})
+		return
+	}
+	query := `SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders` + where + ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, order_code DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, append(args, paging.PageSize, paging.Offset)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách đơn nạp"})
 		return
@@ -963,22 +987,43 @@ func AdminListTopupOrders(c *gin.Context) {
 		}
 		orders = append(orders, gin.H{"orderCode": orderCode, "userId": userID, "amountVnd": amountVND, "jadeAmount": jadeAmount, "status": status, "provider": provider, "checkoutUrl": checkout.String, "createdAt": createdAt, "paidAt": nullableTime(paidAt)})
 	}
-	c.JSON(http.StatusOK, orders)
+	c.JSON(http.StatusOK, gin.H{"data": orders, "total": total, "page": paging.Page, "page_size": paging.PageSize})
 }
 
 func AdminListWalletTransactions(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	userID := c.Query("userId")
-	query := `SELECT id, user_id, type, currency, amount, balance_before, balance_after, ref_order_code, ref_package_id, note, created_at FROM wallet_transactions`
+	paging := parseAdminPageQuery(c, 50, map[string]string{"created_at": "created_at", "amount": "amount", "balance_after": "balance_after", "type": "type", "currency": "currency"}, "created_at")
+	query := `SELECT id, user_id, type, currency, amount, balance_before, balance_after, ref_order_code, ref_package_id, note, created_at FROM wallet_transactions WHERE 1=1`
 	args := []interface{}{}
-	if userID != "" {
-		query += ` WHERE user_id=$1`
-		args = append(args, userID)
+	add := func(clause string, value interface{}) {
+		args = append(args, value)
+		query += strings.ReplaceAll(clause, "?", "$"+strconv.Itoa(len(args)))
 	}
-	query += ` ORDER BY created_at DESC LIMIT 200`
-	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
+	userID := c.Query("user_id")
+	if userID == "" {
+		userID = c.Query("userId")
+	}
+	if userID != "" {
+		add(` AND user_id::text = ?`, userID)
+	}
+	if txType := c.Query("type"); txType != "" {
+		add(` AND type = ?`, txType)
+	}
+	if currency := c.Query("currency"); currency != "" {
+		add(` AND currency = ?`, currency)
+	}
+	if search := strings.TrimSpace(c.Query("search")); search != "" {
+		add(` AND (id::text ILIKE ? OR user_id::text ILIKE ? OR COALESCE(note, '') ILIKE ? OR COALESCE(ref_package_id, '') ILIKE ? OR ref_order_code::text ILIKE ?)`, "%"+search+"%")
+	}
+	var total int
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM (`+query+`) wallet_results`, args...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm giao dịch ví"})
+		return
+	}
+	query += ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, id DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, append(args, paging.PageSize, paging.Offset)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải giao dịch ví"})
 		return
@@ -998,7 +1043,7 @@ func AdminListWalletTransactions(c *gin.Context) {
 		}
 		transactions = append(transactions, gin.H{"id": id, "userId": uid, "type": txType, "currency": currency, "amount": amount, "balanceBefore": before, "balanceAfter": after, "refOrderCode": refOrder.Int64, "refPackageId": refPackage.String, "note": note.String, "createdAt": createdAt})
 	}
-	c.JSON(http.StatusOK, transactions)
+	c.JSON(http.StatusOK, gin.H{"data": transactions, "total": total, "page": paging.Page, "page_size": paging.PageSize})
 }
 
 func numberFromAny(v interface{}) (int64, error) {

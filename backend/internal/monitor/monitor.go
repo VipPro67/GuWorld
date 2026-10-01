@@ -222,6 +222,8 @@ type FilterOptions struct {
 	Path          string
 	MinDurationMs float64
 	Search        string // Matches player_id, username, or client_ip
+	Sort          string
+	Direction     string
 }
 
 // FilterResult holds the paginated traces query response.
@@ -538,6 +540,34 @@ func (t *RequestTracker) FilterTraces(opts FilterOptions) FilterResult {
 	}
 
 	total := len(filtered)
+	desc := strings.ToLower(opts.Direction) != "asc"
+	sort.SliceStable(filtered, func(i, j int) bool {
+		left, right := filtered[i], filtered[j]
+		comparison := 0
+		switch opts.Sort {
+		case "duration_ms":
+			if left.DurationMs < right.DurationMs {
+				comparison = -1
+			} else if left.DurationMs > right.DurationMs {
+				comparison = 1
+			}
+		case "status":
+			comparison = left.Status - right.Status
+		case "method":
+			comparison = strings.Compare(left.Method, right.Method)
+		case "path":
+			comparison = strings.Compare(left.Path, right.Path)
+		default:
+			comparison = left.Timestamp.Compare(right.Timestamp)
+		}
+		if desc {
+			return comparison > 0
+		}
+		return comparison < 0
+	})
+	if opts.Offset < 0 {
+		opts.Offset = 0
+	}
 	if opts.Offset > total {
 		return FilterResult{Total: total, Traces: []RequestTrace{}}
 	}
