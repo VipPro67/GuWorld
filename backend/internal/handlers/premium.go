@@ -935,8 +935,8 @@ func requireAdmin(c *gin.Context) (uuid.UUID, bool) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
 		return uuid.Nil, false
 	}
-	var isAdmin bool
-	if err := db.DB.QueryRow(`SELECT COALESCE(is_admin, false) FROM players WHERE id=$1`, playerID).Scan(&isAdmin); err != nil || !isAdmin {
+	isAdmin, err := middleware.PlayerHasAdminAccess(c.Request.Context(), playerID)
+	if err != nil || !isAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
 		return uuid.Nil, false
 	}
