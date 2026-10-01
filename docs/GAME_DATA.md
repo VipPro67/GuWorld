@@ -167,6 +167,18 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
+#### Quyền quản trị
+
+Quyền quản trị được lưu trong `admin_roles` (danh mục có `key`, `name`,
+`description`, `level`) và bảng nối `player_admin_roles` (`player_id`,
+`role_key`, `assigned_by`, `assigned_at`). Hai role hệ thống là `admin` (level
+50) và `super_admin` (level 100). `players.is_admin` chỉ còn là projection
+tương thích cho frontend/middleware cũ và được đồng bộ khi role thay đổi; không
+được sửa qua API cập nhật player thông thường. Khi khởi tạo schema, admin cũ
+được backfill role `admin`, còn tài khoản bootstrap có username `admin` được
+được cấp `super_admin` nếu hệ thống chưa có super admin nào. Sau migration,
+thay đổi role qua API là bền vững qua các lần khởi động lại.
+
 `players.state_revision` cùng tổng counter trong `player_collection_revisions`
 tạo bộ đếm tăng đơn điệu cho trạng thái người chơi. Trigger trên `players` ghi
 trực tiếp vào dòng người chơi; trigger trên bảng con tăng một trong 64 counter

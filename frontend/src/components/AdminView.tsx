@@ -1397,7 +1397,7 @@ export const AdminView: React.FC = () => {
                   wall_progress: String(detail.wall_progress ?? ""), human_qi: String(detail.human_qi ?? ""),
                   lifespan: String(detail.lifespan ?? ""), current_region: detail.current_region || "",
                   x: String(detail.x ?? 0), y: String(detail.y ?? 0),
-                  is_admin: String(detail.is_admin), soul_hp: String(detail.soul_hp ?? ""),
+                  soul_hp: String(detail.soul_hp ?? ""),
                   max_soul: String(detail.max_soul ?? ""), soul_tier: detail.soul_tier || "",
                   explore_count: String(detail.explore_count ?? ""), aperture_stress: String(detail.aperture_stress ?? ""),
                   bio: detail.bio || "", avatar_url: detail.avatar_url || "",
@@ -2517,9 +2517,9 @@ export const AdminView: React.FC = () => {
                   <input type="text" value={editPlayerForm.fake_vital_gu || ""} onChange={e => setEditPlayerForm(f => ({ ...f, fake_vital_gu: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div className="flex items-center gap-4 pt-2">
-                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
-                    <input type="checkbox" checked={editPlayerForm.is_admin === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_admin: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
-                    Quyền Admin
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono">
+                    <input type="checkbox" checked={detail.is_admin} disabled className="accent-amber-500 w-4 h-4 disabled:opacity-60" />
+                    Quyền Admin (chỉ đọc)
                   </label>
                   <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
                     <input type="checkbox" checked={editPlayerForm.is_disguised === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_disguised: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
@@ -2559,7 +2559,6 @@ export const AdminView: React.FC = () => {
                   set("current_region", detail.current_region || "", editPlayerForm.current_region);
                   set("x", detail.x, num(editPlayerForm.x));
                   set("y", detail.y, num(editPlayerForm.y));
-                  set("is_admin", detail.is_admin, editPlayerForm.is_admin === "true");
                   set("soul_hp", detail.soul_hp, num(editPlayerForm.soul_hp));
                   set("max_soul", detail.max_soul, num(editPlayerForm.max_soul));
                   set("soul_tier", detail.soul_tier || "", editPlayerForm.soul_tier);

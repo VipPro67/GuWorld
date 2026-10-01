@@ -108,6 +108,7 @@ func InitSchema() error {
 		{"world", schemaWorld},
 		{"parties", schemaParties},
 		{"players", schemaPlayers},
+		{"admin_roles", schemaAdminRoles},
 		{"player_extras", schemaPlayerExtras},
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
@@ -159,6 +160,9 @@ func InitSchema() error {
 	}
 	if err := ensureAdmin(); err != nil {
 		return fmt.Errorf("ensure admin: %w", err)
+	}
+	if err := ensureBootstrapAdminRole(); err != nil {
+		return fmt.Errorf("ensure bootstrap admin role: %w", err)
 	}
 	if err := seedQuestsFromCSV(); err != nil {
 		logger.S.Warnf("seedQuestsFromCSV: %v", err)
