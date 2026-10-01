@@ -24,6 +24,8 @@ func TestPreviouslyUnguardedAdminHandlersRejectUnauthenticatedRequests(t *testin
 		{name: "create player pet", method: http.MethodPost, route: "/api/admin/players/:id/pets", request: "/api/admin/players/player-1/pets", handler: AdminCreatePlayerPet},
 		{name: "update player pet", method: http.MethodPut, route: "/api/admin/players/:id/pets/:pet_id", request: "/api/admin/players/player-1/pets/pet-1", handler: AdminUpdatePlayerPet},
 		{name: "batch metrics", method: http.MethodGet, route: "/api/admin/batch-metrics", request: "/api/admin/batch-metrics", handler: GetBatchMetrics},
+		{name: "admin identity", method: http.MethodGet, route: "/api/admin/me", request: "/api/admin/me", handler: AdminGetMe},
+		{name: "admin resources", method: http.MethodGet, route: "/api/admin/resources", request: "/api/admin/resources", handler: AdminGetResources},
 	}
 
 	for _, tt := range tests {

@@ -340,6 +340,17 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/feedback/:id/comments` | Protected góp ý (rank ≥ 2; status phải `active`/`in_progress`/`completed`). |
 | DELETE | `/feedback/:id/comments/:commentId` | Protected xóa góp ý (tác giả hoặc admin). |
 
+## Admin — identity & resource catalog
+
+Hai endpoint sau thuộc nhóm protected `/api/admin`; chúng yêu cầu JWT/cookie hợp lệ và quyền admin:
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/admin/me` | Trả snapshot quyền của actor: `{actor_id, username, roles, effective_permissions, legacy_fallback, permission_version}`. `permission_version` là marker opaque để client invalidation cache quyền. Trong giai đoạn tương thích `is_admin`, actor nhận role `legacy_admin` và `legacy_fallback=true`. |
+| GET | `/admin/resources` | Trả `{resources, permission_version}`; `resources` chỉ gồm module actor được nhìn thấy. Mỗi phần tử có đúng metadata ứng dụng `{key, label, category, frontend_route, capabilities, required_permissions, risk_level}`. Catalog không trả database schema, tên bảng/cột hoặc SQL metadata. `frontend_route` hiện trỏ tới entrypoint `/` của Admin single-view. |
+
+Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là deterministic. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
+
 ## Admin — players & gus
 
 | Method | Path | Ghi chú |

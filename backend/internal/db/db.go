@@ -108,6 +108,8 @@ func InitSchema() error {
 		{"world", schemaWorld},
 		{"parties", schemaParties},
 		{"players", schemaPlayers},
+		{"authorization", schemaAuthorization},
+		{"admin_rbac", schemaAdminRBAC},
 		{"player_extras", schemaPlayerExtras},
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
@@ -159,6 +161,11 @@ func InitSchema() error {
 	}
 	if err := ensureAdmin(); err != nil {
 		return fmt.Errorf("ensure admin: %w", err)
+	}
+	if err := backfillAdminRoles(); err != nil {
+		return fmt.Errorf("backfill admin roles: %w", err)
+	if err := seedAdminRBAC(); err != nil {
+		return fmt.Errorf("seed admin RBAC: %w", err)
 	}
 	if err := seedQuestsFromCSV(); err != nil {
 		logger.S.Warnf("seedQuestsFromCSV: %v", err)
