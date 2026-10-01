@@ -39,7 +39,7 @@ func TestApplyLegacyAdminFallback(t *testing.T) {
 			if applied != tt.wantApplied {
 				t.Fatalf("fallback applied = %v, want %v", applied, tt.wantApplied)
 			}
-			if applied && (!tt.principal.HasPermission(AdminAccessPermission) || !tt.principal.LegacyAdminFallback || len(tt.principal.Roles) != 1 || tt.principal.Roles[0] != SuperAdminRole) {
+			if applied && (!tt.principal.HasPermission(AdminAccessPermission) || !tt.principal.HasPermission("players.read") || !tt.principal.LegacyAdminFallback || len(tt.principal.Roles) != 1 || tt.principal.Roles[0] != SuperAdminRole) {
 				t.Fatalf("fallback principal was not populated correctly: %+v", tt.principal)
 			}
 		})

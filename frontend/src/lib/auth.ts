@@ -28,7 +28,7 @@ export const authHeaders = (method?: string): Record<string, string> => {
  * Fetch wrapper that injects Bearer token, CSRF header, abort-signal timeout,
  * and `credentials: "include"`. Drop-in replacement for `fetch()`.
  */
-export const authFetch = (
+export const authFetch = async (
   input: RequestInfo | URL,
   init: RequestInit & { timeoutMs?: number } = {},
 ): Promise<Response> => {
@@ -60,10 +60,14 @@ export const authFetch = (
     ? AbortSignal.any([callerSignal, timeoutSignal])
     : timeoutSignal;
 
-  return fetch(input, {
+  const response = await fetch(input, {
     ...fetchInit,
     headers,
     credentials: "include",
     signal,
   });
+  if (response.status === 403 && typeof window !== "undefined" && String(input).includes("/api/admin/")) {
+    window.dispatchEvent(new CustomEvent("admin:forbidden"));
+  }
+  return response;
 };

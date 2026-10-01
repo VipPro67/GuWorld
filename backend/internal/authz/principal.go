@@ -109,6 +109,7 @@ func applyLegacyAdminFallback(principal *AdminPrincipal, foundPlayer, isAdmin bo
 	}
 	principal.Roles = []string{SuperAdminRole}
 	principal.Permissions[AdminAccessPermission] = struct{}{}
+	principal.Permissions["admin.*"] = struct{}{}
 	principal.LegacyAdminFallback = true
 	return true
 }

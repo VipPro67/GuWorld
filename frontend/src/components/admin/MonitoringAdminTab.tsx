@@ -1,16 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { authFetch } from "@/lib/auth";
 import { Activity, ChevronLeft, ChevronRight, Copy, RefreshCw, RotateCcw, Server } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-
-function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const csrf = typeof document === "undefined" ? null : document.cookie.match(/(?:^|; )gu_csrf_token=([^;]+)/)?.[1];
-  const headers = new Headers(init.headers);
-  if (csrf && init.method && !["GET", "HEAD"].includes(init.method)) headers.set("X-CSRF-Token", decodeURIComponent(csrf));
-  const token = typeof window === "undefined" ? null : localStorage.getItem("gu_auth_token");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(input, { ...init, headers, credentials: "include" });
-}
 
 interface Endpoint { method: string; path: string; count: number; error_count: number; avg_duration_ms: number; max_duration_ms: number }
 interface Summary {
