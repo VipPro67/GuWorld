@@ -80,10 +80,12 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/sects/:id/vault/stock", "sects.update", handlers.AdminStockSectVault},
 		{http.MethodDelete, "/sects/:id/vault/stock", "sects.update", handlers.AdminRemoveSectVaultItem},
 		// game_data
-		{http.MethodPost, "/data/import", "game_data.import", handlers.AdminImportData},
+		{http.MethodPost, "/data/import", "game_data.import_all", handlers.AdminImportData},
+		{http.MethodPost, "/data/import/commit", "game_data.import_all", handlers.AdminCommitImportData},
 		{http.MethodPost, "/data/export", "game_data.export", handlers.AdminExportData},
 		{http.MethodGet, "/data/tables", "game_data.read", handlers.AdminListTables},
 		{http.MethodPost, "/data/import/:table", "game_data.import", handlers.AdminImportTable},
+		{http.MethodPost, "/data/import/:table/commit", "game_data.import", handlers.AdminCommitImportTable},
 		{http.MethodPost, "/data/export/:table", "game_data.export", handlers.AdminExportTable},
 		// cache
 		{http.MethodPost, "/clear-cache", "cache.reload", handlers.AdminClearCache},
@@ -429,7 +431,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		admin.Use(middleware.RateLimitByGroup("admin", 80, time.Minute))
 		for _, route := range adminRouteSpecs() {
 			handlers := []gin.HandlerFunc{middleware.PermissionRequired(route.permission)}
-			if (route.method == http.MethodPost && route.path == "/data/import") || route.permission == "cache.flush" {
+			if (route.method == http.MethodPost && strings.HasSuffix(route.path, "/commit")) || route.permission == "cache.flush" {
 				handlers = append(handlers, middleware.AdminReasonRequired())
 			}
 			handlers = append(handlers, route.handler)

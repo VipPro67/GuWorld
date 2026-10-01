@@ -74,6 +74,7 @@ import { GuEffectsEditor, validateAllEffectEditors } from "./admin/GuEffectsEdit
 import type { AdminModuleKey } from "./admin/navigation";
 import { useAdminAccess } from "./admin/AdminAccessContext";
 import { canPerformAdminAction, prepareAdminAction } from "./admin/actions";
+import { DataImportWorkflow } from "./admin/DataImportWorkflow";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
@@ -3165,6 +3166,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
           </div>
 
           {dataTab === "import" && (
+            <>
+            <DataImportWorkflow canImportDataset={canAdminAction("importGameDataset")} canImportAll={canAdminAction("importAllGameData")} addToast={addToast} />
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-6">
               <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-2">
                 <Database className="w-4 h-4 text-emerald-400" />
@@ -3174,10 +3177,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 Import dữ liệu từ file CSV vào database, hoặc export dữ liệu từ database ra file CSV.
               </p>
               <div className="flex flex-wrap gap-4">
-                {canAdminAction("importAllGameData") && <button disabled={actionLoading} onClick={async () => { const prepared = prepareAdminAction("importAllGameData", "import toàn bộ dữ liệu"); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/data/import`, "POST", prepared); if (ok) addToast("Import thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
-                  <Database className="w-4 h-4" />
-                  {actionLoading ? "Đang xử lý..." : "Import CSV → Database"}
-                </button>}
                 <button disabled={actionLoading} onClick={async () => { const ok = await exec(`${BACKEND_URL}/api/admin/data/export`, "POST", {}); if (ok) addToast("Export thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
                   <RefreshCw className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Export Database → CSV"}
@@ -3192,6 +3191,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 </button>}
               </div>
             </div>
+            </>
           )}
 
           {dataTab === "tables" && (
@@ -3218,6 +3218,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   { key: "monster_spawn", label: "Spawn quái", icon: MapPin, csv: "MonsterSpawn.csv" },
                   { key: "map_cell", label: "Bản đồ (boss/tài nguyên cao)", icon: Globe, csv: "MapCell.csv" },
                   { key: "sect", label: "Tông môn", icon: Building2, csv: "Sect.csv" },
+                  { key: "status", label: "Trạng thái", icon: Activity, csv: "Status.csv" },
                   { key: "sect_mission", label: "Nhiệm vụ tông môn", icon: ListTodo, csv: "SectMission.csv" },
                   { key: "quest", label: "Nhiệm vụ", icon: BookOpen, csv: "Quest.csv" },
                   { key: "dream_realm", label: "Mộng cảnh", icon: Star, csv: "DreamRealm.csv" },
@@ -3231,17 +3232,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     <div className="flex gap-2">
                       <button
                         disabled={tableLoading === t.key}
-                        onClick={async () => {
-                          if (!confirm(`Import "${t.label}" từ CSV? Dữ liệu sẽ được UPSERT.`)) return;
-                          setTableLoading(t.key);
-                          const ok = await exec(`${BACKEND_URL}/api/admin/data/import/${t.key}`, "POST", {});
-                          setTableLoading(null);
-                          if (ok) addToast(`Import ${t.label} thành công!`, "success");
-                        }}
+                        onClick={() => setDataTab("import")}
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold transition-all cursor-pointer"
                       >
                         <Upload className="w-3 h-3" />
-                        {tableLoading === t.key ? "..." : "Import"}
+                        Mở workflow
                       </button>
                       <button
                         disabled={tableLoading === t.key}

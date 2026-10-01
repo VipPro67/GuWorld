@@ -15,6 +15,8 @@ test("every admin action explicitly declares the complete safety policy", () => 
 test("known sensitive actions have the expected policies", () => {
   assert.deepEqual(ADMIN_ACTIONS.grantPlayerInventory, { permission: "players.inventory.grant", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false });
   assert.equal(ADMIN_ACTIONS.importAllGameData.riskLevel, "destructive");
+  assert.equal(ADMIN_ACTIONS.importAllGameData.permission, "game_data.import_all");
+  assert.equal(ADMIN_ACTIONS.importGameDataset.permission, "game_data.import");
   assert.equal(ADMIN_ACTIONS.flushRedis.permission, "cache.flush");
 });
 
