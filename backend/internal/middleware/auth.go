@@ -1,18 +1,40 @@
 package middleware
 
 import (
+	"database/sql"
+	"errors"
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 )
 
+// PlayerHasAdminAccess checks RBAC first and preserves players.is_admin as a
+// rollout fallback for legacy administrators.
+func PlayerHasAdminAccess(ctx context.Context, playerID uuid.UUID) (bool, error) {
+	var hasRBACRole, isLegacyAdmin bool
+	err := db.DB.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM player_admin_roles par
+			JOIN admin_roles ar ON ar.id = par.role_id
+			JOIN admin_role_permissions arp ON arp.role_id = ar.id
+			WHERE par.player_id = $1 AND arp.permission_key = 'admin.*'
+		), COALESCE(is_admin, false)
+		FROM players
+		WHERE id = $1`, playerID).Scan(&hasRBACRole, &isLegacyAdmin)
+	return hasRBACRole || isLegacyAdmin, err
+}
+
 const (
 	// SessionKickedError is returned when the session has been invalidated by a newer login
-	SessionKickedError = "Phiên đăng nhập đã hết hạn"
+	SessionKickedError   = "Phiên đăng nhập đã hết hạn"
+	permissionContextKey = "required_permission"
 )
 
 func csrfProtection(c *gin.Context) {
@@ -108,12 +130,22 @@ func AuthRequired() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		if db.DB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
+			c.Abort()
+			return
+		}
 
 		// Verify player actually exists in the database
 		var exists bool
 		var dbSessionID string
 		err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id=$1), COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&exists, &dbSessionID)
-		if err != nil || !exists {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
+			c.Abort()
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) || !exists {
 			// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
 			// Let's just return 401. The frontend interceptor will call logout().
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
@@ -153,10 +185,23 @@ func GetPlayerID(c *gin.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
-// AdminRequired rejects authenticated requests from players without admin access.
-// Keep handler-level authorization checks during the RBAC transition as defense in depth.
+// AdminRequired is a compatibility alias. New routes should name the required
+// permission explicitly with RequirePermission.
 func AdminRequired() gin.HandlerFunc {
+	return RequirePermission(authz.AdminAccessPermission)
+}
+
+// PermissionRequired declares and enforces the permission required by an admin
+// route. Admins receive only exact grants from admin_permissions, while the
+// transitional wildcard keeps existing full-access administrators working.
+// The context value also gives auditing code the policy decision to record.
+func PermissionRequired(permission string) gin.HandlerFunc {
+	if strings.TrimSpace(permission) == "" || permission == "admin" {
+		panic("admin routes require a specific named permission")
+	}
+
 	return func(c *gin.Context) {
+		c.Set(permissionContextKey, permission)
 		playerID, ok := GetPlayerID(c)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -169,13 +214,27 @@ func AdminRequired() gin.HandlerFunc {
 			return
 		}
 
-		var isAdmin bool
-		if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM player_admin_roles WHERE player_id=$1)`, playerID).Scan(&isAdmin); err != nil || !isAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
+		var allowed bool
+		err := db.DB.QueryRow(`
+			SELECT COALESCE(is_admin, false)
+				AND ($2 = ANY(COALESCE(admin_permissions, ARRAY[]::TEXT[]))
+					OR '*' = ANY(COALESCE(admin_permissions, ARRAY[]::TEXT[])))
+			FROM players WHERE id=$1`, playerID, permission).Scan(&allowed)
+		if err != nil || !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Permission required", "permission": permission})
 			c.Abort()
 			return
 		}
-
 		c.Next()
 	}
+}
+
+// GetRequiredPermission returns the permission declared by the matched route.
+func GetRequiredPermission(c *gin.Context) (string, bool) {
+	permission, ok := c.Get(permissionContextKey)
+	if !ok {
+		return "", false
+	}
+	value, ok := permission.(string)
+	return value, ok
 }

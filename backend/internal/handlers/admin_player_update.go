@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -354,6 +355,17 @@ func AdminUpdatePlayer(c *gin.Context) {
 	if _, err := tx.Exec(`UPDATE players SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(argIdx), args...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin người chơi"})
 		return
+	}
+	if req.IsAdmin != nil {
+		if *req.IsAdmin {
+			if _, err := tx.Exec(`INSERT INTO player_admin_roles (player_id, role_key) VALUES ($1, $2) ON CONFLICT DO NOTHING`, playerID, authz.SuperAdminRole); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cấp quyền quản trị"})
+				return
+			}
+		} else if _, err := tx.Exec(`DELETE FROM player_admin_roles WHERE player_id = $1`, playerID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thu hồi quyền quản trị"})
+			return
+		}
 	}
 
 	if req.Rank != nil && *req.Rank >= 6 {

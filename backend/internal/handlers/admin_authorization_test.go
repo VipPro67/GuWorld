@@ -27,6 +27,8 @@ func TestPreviouslyUnguardedAdminHandlersRejectUnauthenticatedRequests(t *testin
 		{name: "get player roles", method: http.MethodGet, route: "/api/admin/players/:id/roles", request: "/api/admin/players/player-1/roles", handler: AdminGetPlayerRoles},
 		{name: "update player roles", method: http.MethodPut, route: "/api/admin/players/:id/roles", request: "/api/admin/players/player-1/roles", handler: AdminUpdatePlayerRoles},
 		{name: "batch metrics", method: http.MethodGet, route: "/api/admin/batch-metrics", request: "/api/admin/batch-metrics", handler: GetBatchMetrics},
+		{name: "admin identity", method: http.MethodGet, route: "/api/admin/me", request: "/api/admin/me", handler: AdminGetMe},
+		{name: "admin resources", method: http.MethodGet, route: "/api/admin/resources", request: "/api/admin/resources", handler: AdminGetResources},
 	}
 
 	for _, tt := range tests {

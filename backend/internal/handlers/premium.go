@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -926,11 +927,13 @@ func remainingPurchases(q queryer, playerID uuid.UUID, pkg PremiumShopPackage) (
 }
 
 func requireAdmin(c *gin.Context) (uuid.UUID, bool) {
-	playerID, ok := middleware.GetPlayerID(c)
+	principal, ok := middleware.GetAdminPrincipal(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return uuid.Nil, false
 	}
+	if !principal.HasPermission(authz.AdminAccessPermission) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
 	if db.DB == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
 		return uuid.Nil, false
@@ -940,7 +943,7 @@ func requireAdmin(c *gin.Context) (uuid.UUID, bool) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
 		return uuid.Nil, false
 	}
-	return playerID, true
+	return principal.PlayerID, true
 }
 
 func AdminListTopupOrders(c *gin.Context) {

@@ -340,6 +340,17 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/feedback/:id/comments` | Protected góp ý (rank ≥ 2; status phải `active`/`in_progress`/`completed`). |
 | DELETE | `/feedback/:id/comments/:commentId` | Protected xóa góp ý (tác giả hoặc admin). |
 
+## Admin — identity & resource catalog
+
+Hai endpoint sau thuộc nhóm protected `/api/admin`; chúng yêu cầu JWT/cookie hợp lệ và quyền admin:
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/admin/me` | Trả snapshot quyền của actor: `{actor_id, username, roles, effective_permissions, legacy_fallback, permission_version}`. `permission_version` là marker opaque để client invalidation cache quyền. Trong giai đoạn tương thích `is_admin`, actor nhận role `legacy_admin` và `legacy_fallback=true`. |
+| GET | `/admin/resources` | Trả `{resources, permission_version}`; `resources` chỉ gồm module actor được nhìn thấy. Mỗi phần tử có đúng metadata ứng dụng `{key, label, category, frontend_route, capabilities, required_permissions, risk_level}`. Catalog không trả database schema, tên bảng/cột hoặc SQL metadata. `frontend_route` hiện trỏ tới entrypoint `/` của Admin single-view. |
+
+Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là deterministic. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
+
 ## Admin — players & gus
 
 | Method | Path | Ghi chú |
@@ -365,7 +376,9 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 ### Admin — nhóm quản trị còn lại
 
-Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth/admin và rate limit nhóm:
+Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission theo domain. Middleware kiểm tra `players.is_admin` cùng `players.admin_permissions`; giá trị `*` giữ quyền đầy đủ cho admin hiện hữu trong giai đoạn chuyển đổi. Handler vẫn có thể kiểm tra admin như lớp phòng vệ bổ sung.
+
+Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
 
 | Nhóm | Routes hiện có |
 | --- | --- |

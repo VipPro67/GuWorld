@@ -64,6 +64,17 @@ gate closed; it is never inferred from a default counter.
 
 Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 
+### Authorization data
+
+Authorization của Admin được chuẩn hóa trong bốn bảng: `admin_roles`,
+`admin_permissions`, `admin_role_permissions` và `player_admin_roles`. Schema seed role
+`super_admin`, permission `admin.access`, mapping giữa hai giá trị, rồi backfill mọi
+player legacy có `is_admin=true` sang `super_admin`. Trong giai đoạn tương thích, nếu
+một player vẫn có `is_admin=true` nhưng chưa có assignment trong `player_admin_roles`,
+resolver tạm coi player đó là `super_admin` và ghi warning để vận hành phát hiện và
+sửa backfill. Assignment trong database là nguồn quyền lâu dài; JWT chỉ giữ identity
+và session, không chứa role hoặc permission.
+
 ## CSV gameplay files
 
 | File | Nội dung |
@@ -97,6 +108,24 @@ Không ghi số dòng cố định trong tài liệu vì dataset thay đổi th�
 - API `/api/recipes` trả recipe refining cho frontend.
 
 ## Cấu trúc cơ sở dữ liệu
+
+### Phân quyền quản trị — Admin RBAC
+
+RBAC quản trị được lưu trong bốn bảng:
+
+- `admin_roles`: định nghĩa vai trò; `key` là định danh ổn định và duy nhất.
+- `admin_permissions`: danh mục quyền, khóa chính là `key`.
+- `admin_role_permissions`: ánh xạ nhiều-nhiều giữa vai trò và quyền.
+- `player_admin_roles`: gán nhiều-nhiều vai trò cho `players`.
+
+Khi khởi tạo schema, hệ thống seed idempotent role hệ thống `super_admin`,
+permission wildcard `admin.*` và quan hệ giữa chúng. Sau khi tài khoản admin mặc
+định được bảo đảm tồn tại, mọi player có `COALESCE(players.is_admin, false) =
+true` được backfill idempotent vào role `super_admin`.
+
+Trong rollout đầu tiên, authorization ưu tiên quyền RBAC nhưng vẫn fallback sang
+`players.is_admin` để admin cũ không bị khóa ngoài nếu backfill chưa hoàn tất.
+Cột `players.is_admin` được giữ nguyên trong giai đoạn chuyển đổi này.
 
 ### Bảng `immortal_apertures` (Tiên Khiếu)
 
@@ -167,17 +196,7 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
-#### Quyền quản trị
-
-Quyền quản trị được lưu trong `admin_roles` (danh mục có `key`, `name`,
-`description`, `level`) và bảng nối `player_admin_roles` (`player_id`,
-`role_key`, `assigned_by`, `assigned_at`). Hai role hệ thống là `admin` (level
-50) và `super_admin` (level 100). `players.is_admin` chỉ còn là projection
-tương thích cho frontend/middleware cũ và được đồng bộ khi role thay đổi; không
-được sửa qua API cập nhật player thông thường. Khi khởi tạo schema, admin cũ
-được backfill role `admin`, còn tài khoản bootstrap có username `admin` được
-được cấp `super_admin` nếu hệ thống chưa có super admin nào. Sau migration,
-thay đổi role qua API là bền vững qua các lần khởi động lại.
+Quyền quản trị lưu trong `players.admin_permissions` (`TEXT[]`). Middleware `/api/admin/*` yêu cầu đồng thời `is_admin = true` và permission của route có trong mảng; `*` là grant tương thích cho admin toàn quyền hiện hữu.
 
 `players.state_revision` cùng tổng counter trong `player_collection_revisions`
 tạo bộ đếm tăng đơn điệu cho trạng thái người chơi. Trigger trên `players` ghi
