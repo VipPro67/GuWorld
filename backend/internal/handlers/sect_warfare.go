@@ -16,9 +16,20 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
+
+const (
+	sectArrayRallyWindow = 10 * time.Minute
+	sectArrayCooldown    = 12 * time.Hour
+)
+
+func sectArrayCanIntercept(now time.Time, readyAt sql.NullTime) bool {
+	return !readyAt.Valid || !now.Before(readyAt.Time)
+}
 
 type SectDefender struct {
 	ID             string    `json:"id"`
@@ -509,13 +520,13 @@ func AttackSect(c *gin.Context) {
 	}
 
 	// Load target sect
-	var targetShield sql.NullTime
+	var targetShield, arrayReadyAt sql.NullTime
 	var targetBuildings []byte
 	var targetFunds int64
 	var targetName, targetRegion string
 	var targetMapX, targetMapY, targetLevel int
-	err = tx.QueryRow(`SELECT name, region, map_x, map_y, level, shield_until, buildings, funds FROM sects WHERE id = $1 FOR UPDATE`, req.TargetSectID).Scan(
-		&targetName, &targetRegion, &targetMapX, &targetMapY, &targetLevel, &targetShield, &targetBuildings, &targetFunds)
+	err = tx.QueryRow(`SELECT name, region, map_x, map_y, level, shield_until, buildings, funds, defensive_array_ready_at FROM sects WHERE id = $1 FOR UPDATE`, req.TargetSectID).Scan(
+		&targetName, &targetRegion, &targetMapX, &targetMapY, &targetLevel, &targetShield, &targetBuildings, &targetFunds, &arrayReadyAt)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Tông môn mục tiêu không tồn tại!"})
 		return
@@ -547,8 +558,40 @@ func AttackSect(c *gin.Context) {
 		return
 	}
 
-	// Build Guardian Beast as main enemy
 	arrLvl := getBuildingLvl(targetBuildings, "defensive_array")
+	now := time.Now()
+	if arrLvl > 0 && sectArrayCanIntercept(now, arrayReadyAt) {
+		shieldUntil := now.Add(sectArrayRallyWindow)
+		readyAt := now.Add(sectArrayCooldown)
+		if _, err = tx.Exec(`UPDATE sects SET shield_until = $1, defensive_array_ready_at = $2 WHERE id = $3`, shieldUntil, readyAt, req.TargetSectID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kích hoạt Hộ Sơn Đại Trận"})
+			return
+		}
+		var memberIDs []uuid.UUID
+		rows, queryErr := tx.Query(`SELECT player_id FROM sect_members WHERE sect_id = $1`, req.TargetSectID)
+		if queryErr == nil {
+			for rows.Next() {
+				var id uuid.UUID
+				if rows.Scan(&id) == nil {
+					memberIDs = append(memberIDs, id)
+				}
+			}
+			rows.Close()
+		}
+		if err = tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			return
+		}
+		alert := fmt.Sprintf("[Hộ Sơn Đại Trận] Đã chặn đợt tập kích của %s! Toàn tông có 10 phút tập hợp trấn thủ trước khi sơn môn có thể bị công kích lại.", attacker.Username)
+		_ = SendSystemMessage("sect", sql.NullString{String: req.TargetSectID, Valid: true}, alert)
+		for _, id := range memberIDs {
+			_ = notify.Send(db.DB, id, "sect_attack", "Hộ Sơn Đại Trận cảnh báo", alert)
+		}
+		c.JSON(http.StatusConflict, gin.H{"error": alert, "formation_cancelled": true, "shield_until": shieldUntil, "cooldown_until": readyAt})
+		return
+	}
+
+	// Build Guardian Beast as main enemy
 	guardian := sectGuardianCombatant(targetName, targetLevel, arrLvl)
 
 	// Build combat state with guardian as main enemy
@@ -724,10 +767,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 	treasuryLvl := getBuildingLvl(targetBuildings, "treasury")
 
 	// Calculate plunder percentage (higher treasury = less plunder)
-	plunderPercent := 0.20 - (float64(treasuryLvl) * 0.02)
-	if plunderPercent < 0.05 {
-		plunderPercent = 0.05
-	}
+	plunderPercent := sectmechanics.PlunderChance(treasuryLvl)
 
 	voidPct := sectPlunderVoidPct / 100.0
 
@@ -760,7 +800,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 			if err := matRows.Scan(&itemID, &qty); err != nil {
 				continue
 			}
-			stolen := int64(float64(qty) * plunderPercent)
+			stolen := sectmechanics.RollPlunderQuantity(qty, plunderPercent, rand.Float64())
 			if stolen <= 0 {
 				continue
 			}
@@ -850,7 +890,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 			if err := guRows.Scan(&tg.rowID, &tg.guID, &tg.rank, &tg.cost, &tg.vaultQty, &tg.hunger, &tg.instanceID); err != nil {
 				continue
 			}
-			stolen := int64(math.Ceil(float64(tg.vaultQty) * plunderPercent))
+			stolen := sectmechanics.RollPlunderQuantity(tg.vaultQty, plunderPercent, rand.Float64())
 			if stolen > tg.vaultQty {
 				stolen = tg.vaultQty
 			}
@@ -949,9 +989,6 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		if rand.Float64() < plunderPercent {
 			stolenRecipes = append(stolenRecipes, vr)
 		}
-	}
-	if len(targetVaultRecipes) > 0 && len(stolenRecipes) == 0 {
-		stolenRecipes = append(stolenRecipes, targetVaultRecipes[0])
 	}
 
 	// Split stolen recipes between Void Destruction and the team (same as death penalty)
