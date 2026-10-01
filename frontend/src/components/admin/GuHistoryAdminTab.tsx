@@ -1,37 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { authFetch } from "@/lib/auth";
 import { Search, RefreshCw, History, Shield, Sparkles, User, ArrowRight, Copy, Check, Filter } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[2]) : null;
-}
-
-function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const csrfToken = getCookie("gu_csrf_token");
-  const headers: Record<string, string> = {};
-  if (init.headers) {
-    if (Array.isArray(init.headers)) {
-      for (const [k, v] of init.headers) headers[k] = v;
-    } else if (init.headers instanceof Headers) {
-      init.headers.forEach((v, k) => { headers[k] = v; });
-    } else {
-      Object.assign(headers, init.headers);
-    }
-  }
-  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
-    headers["X-CSRF-Token"] = csrfToken;
-  }
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("gu_auth_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-  return fetch(input, { ...init, headers, credentials: "include" });
-}
 
 interface GuHistoryItem {
   id: string;

@@ -346,7 +346,7 @@ Hai endpoint sau thuộc nhóm protected `/api/admin`; chúng yêu cầu JWT/coo
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/admin/me` | Trả snapshot quyền của actor: `{actor_id, username, roles, effective_permissions, legacy_fallback, permission_version}`. `permission_version` là marker opaque để client invalidation cache quyền. Trong giai đoạn tương thích `is_admin`, actor nhận role `legacy_admin` và `legacy_fallback=true`. |
+| GET | `/admin/me` | Trả snapshot quyền thực tế của actor từ RBAC: `{actor_id, username, roles, effective_permissions, legacy_fallback, permission_version}`. `permission_version` là marker opaque để client invalidation cache quyền. Tài khoản `is_admin` cũ chưa được gán role nhận `super_admin`, wildcard `admin.*` và `legacy_fallback=true`. Frontend dùng permission key (không dùng tên role) để bảo vệ module. |
 | GET | `/admin/resources` | Trả `{resources, permission_version}`; `resources` chỉ gồm module actor được nhìn thấy. Mỗi phần tử có đúng metadata ứng dụng `{key, label, category, frontend_route, capabilities, required_permissions, risk_level}`. Catalog không trả database schema, tên bảng/cột hoặc SQL metadata. `frontend_route` hiện trỏ tới entrypoint `/` của Admin single-view. |
 
 Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là deterministic. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.

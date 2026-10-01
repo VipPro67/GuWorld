@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { authFetch } from "@/lib/auth";
 import { useGameStore, guSpecFor } from "@/store/useGameStore";
 import type { GuSpec, ItemSpec } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
@@ -68,6 +69,7 @@ import { MonitoringAdminTab } from "./admin/MonitoringAdminTab";
 import { CoreDataAdminTab } from "./admin/CoreDataAdminTab";
 import { AdminDataGrid } from "./admin/AdminDataGrid";
 import { GuEffectsEditor, validateAllEffectEditors } from "./admin/GuEffectsEditor";
+import type { AdminModuleKey } from "./admin/navigation";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -150,36 +152,6 @@ const getEffectFieldType = (cat: string, key: string): "string" | "number" | "bo
   }
   return "number";
 };
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[2]) : null;
-}
-
-function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const csrfToken = getCookie("gu_csrf_token");
-  const headers: Record<string, string> = {};
-  if (init.headers) {
-    if (Array.isArray(init.headers)) {
-      for (const [k, v] of init.headers) headers[k] = v;
-    } else if (init.headers instanceof Headers) {
-      init.headers.forEach((v, k) => { headers[k] = v; });
-    } else {
-      Object.assign(headers, init.headers);
-    }
-  }
-  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
-    headers["X-CSRF-Token"] = csrfToken;
-  }
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("gu_auth_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-  return fetch(input, { ...init, headers, credentials: "include" });
-}
 
 interface PlayerRow {
   id: string; username: string; email: string; rank: number; sub_rank: number;
@@ -526,7 +498,7 @@ function guLocationLabel(loc: string): string {
   }
 }
 
-export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean }> = ({ authorized = false, embedded = false }) => {
+export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; initialSection?: AdminModuleKey }> = ({ authorized = false, embedded = false, initialSection = "players" }) => {
   const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
   const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "combat">("items");
   const [isCombatEquippedExpanded, setIsCombatEquippedExpanded] = useState(true);
@@ -591,7 +563,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean }> =
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
-  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "monitoring" | "shop" | "mines" | "gift_codes" | "apertures" | "topup_wallet" | "gu_history">("players");
+  const section: AdminModuleKey = initialSection;
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
   const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
 
@@ -1184,7 +1156,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean }> =
     } finally { setLoading(false); }
   }, [page, limit, search, searchBy]);
 
-  useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
+  useEffect(() => {
+    if (section === "players") fetchPlayers();
+  }, [section, fetchPlayers]);
 
   const fetchDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -1419,7 +1393,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean }> =
             </button>
             <button onClick={() => {
               if (detail) {
-                setSection("apertures");
+                window.location.assign("/admin/apertures");
                 setApertureSearchDebounce(detail.username);
                 setSelectedId(null);
                 setDetail(null);
@@ -3112,43 +3086,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean }> =
           </div>
         </div>
       </div>}
-
-      {/* Section tabs */}
-      <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
-        <button onClick={() => setSection("players")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "players" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Users className="w-3.5 h-3.5 inline mr-1.5" />Người chơi
-        </button>
-        <button onClick={() => setSection("sects")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "sects" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Building2 className="w-3.5 h-3.5 inline mr-1.5" />Tông môn
-        </button>
-        <button onClick={() => setSection("data")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "data" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Database className="w-3.5 h-3.5 inline mr-1.5" />Dữ liệu
-        </button>
-        <button onClick={() => setSection("logs")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "logs" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <BookOpen className="w-3.5 h-3.5 inline mr-1.5" />Nhật ký
-        </button>
-        <button onClick={() => setSection("monitoring")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "monitoring" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Activity className="w-3.5 h-3.5 inline mr-1.5" />Giám sát
-        </button>
-        <button onClick={() => setSection("shop")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "shop" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Package className="w-3.5 h-3.5 inline mr-1.5" />Cửa hàng
-        </button>
-        <button onClick={() => setSection("mines")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "mines" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Layers className="w-3.5 h-3.5 inline mr-1.5" />Mỏ
-        </button>
-        <button onClick={() => setSection("gift_codes")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "gift_codes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Gift className="w-3.5 h-3.5 inline mr-1.5" />Mã Quà
-        </button>
-        <button onClick={() => setSection("apertures")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "apertures" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Globe className="w-3.5 h-3.5 inline mr-1.5" />Tiên Khiếu
-        </button>
-        <button onClick={() => setSection("topup_wallet")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "topup_wallet" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <Coins className="w-3.5 h-3.5 inline mr-1.5" />Nạp Tiền & Ví
-        </button>
-        <button onClick={() => setSection("gu_history")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "gu_history" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-          <HistoryIcon className="w-3.5 h-3.5 inline mr-1.5" />Lịch Sử Tiên Cổ
-        </button>
-      </div>
 
       {/* Players section */}
       {section === "players" && (

@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
 
 // Bump this marker whenever the legacy permission grant or resource catalog
@@ -84,12 +86,23 @@ func AdminGetMe(c *gin.Context) {
 		return
 	}
 
+	principal, ok := middleware.GetAdminPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	permissions := make([]string, 0, len(principal.Permissions))
+	for permission := range principal.Permissions {
+		permissions = append(permissions, permission)
+	}
+	sort.Strings(permissions)
+
 	c.JSON(http.StatusOK, gin.H{
 		"actor_id":              actorID,
 		"username":              username,
-		"roles":                 []string{"legacy_admin"},
-		"effective_permissions": legacyAdminPermissions(),
-		"legacy_fallback":       true,
+		"roles":                 principal.Roles,
+		"effective_permissions": permissions,
+		"legacy_fallback":       principal.LegacyAdminFallback,
 		"permission_version":    legacyAdminPermissionVersion,
 	})
 }

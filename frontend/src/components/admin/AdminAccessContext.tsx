@@ -27,3 +27,12 @@ export function useAdminPermission(permission: string): boolean {
   const { effective_permissions: permissions } = useAdminAccess();
   return permissions.includes("admin.*") || permissions.includes(permission);
 }
+
+export function canAccessAdmin(access: AdminAccess, permission: string): boolean {
+  return access.effective_permissions.includes("admin.*") || access.effective_permissions.includes(permission);
+}
+
+export function useCanAdmin(): (permission: string) => boolean {
+  const access = useAdminAccess();
+  return (permission) => canAccessAdmin(access, permission);
+}

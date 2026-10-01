@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, LayoutDashboard, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeft, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import {
   AdminAccessProvider,
+  canAccessAdmin,
   type AdminAccess,
 } from "@/components/admin/AdminAccessContext";
+import { ADMIN_GROUP_LABELS, ADMIN_NAVIGATION } from "@/components/admin/navigation";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { useGameStore } from "@/store/useGameStore";
@@ -51,6 +53,7 @@ function AccessMessage({
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const logout = useGameStore((gameState) => gameState.logout);
   const [state, setState] = useState<AccessState>({ status: "loading" });
   const activeRequest = useRef<AbortController | null>(null);
@@ -101,6 +104,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => activeRequest.current?.abort();
   }, [resolveAccess]);
 
+  useEffect(() => {
+    const handleForbidden = () => setState({ status: "forbidden" });
+    window.addEventListener("admin:forbidden", handleForbidden);
+    return () => window.removeEventListener("admin:forbidden", handleForbidden);
+  }, []);
+
   const handleLogout = () => {
     logout();
     router.replace("/");
@@ -126,6 +135,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const { access } = state;
+  const visibleNavigation = ADMIN_NAVIGATION
+    .filter((item) => canAccessAdmin(access, item.permission))
+    .sort((left, right) => left.order - right.order);
   return (
     <AdminAccessProvider value={access}>
       <div className="min-h-screen bg-[var(--bg-primary)] text-zinc-100">
@@ -160,9 +172,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <p className="mt-3 text-xs text-zinc-500">{access.effective_permissions.length} quyền hiệu lực</p>
             </div>
             <nav aria-label="Điều hướng quản trị" className="mt-4">
-              <Link href="/admin" aria-current="page" className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5 text-sm font-semibold text-amber-400">
-                <LayoutDashboard className="h-4 w-4" /> Bảng điều khiển
-              </Link>
+              {Object.entries(ADMIN_GROUP_LABELS).map(([group, label]) => {
+                const items = visibleNavigation.filter((item) => item.group === group);
+                if (items.length === 0) return null;
+                return (
+                  <div key={group} className="mb-5">
+                    <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-widest text-zinc-600">{label}</p>
+                    <div className="space-y-1">
+                      {items.map((item) => {
+                        const Icon = item.icon;
+                        const active = pathname === item.route;
+                        return (
+                          <Link key={item.key} href={item.route} aria-current={active ? "page" : undefined} className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-amber-500/10 text-amber-400" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"}`}>
+                            <Icon className="h-4 w-4" /> {item.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </nav>
           </aside>
           <main className="min-w-0">{children}</main>
