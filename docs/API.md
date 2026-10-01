@@ -373,11 +373,9 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là d
 
 ### Admin — nhóm quản trị còn lại
 
-Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu xác thực, effective permission
-`admin.access` và rate limit nhóm. Authorization được resolve từ role/permission trong
-database ở mỗi request; permission không được lưu trong JWT. Response authorization
-được chuẩn hóa: `401` khi chưa xác thực, `403` khi đã xác thực nhưng thiếu permission,
-và `503` khi database không khả dụng nên không thể kiểm tra permission.
+Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth, rate limit nhóm và permission theo domain. Middleware kiểm tra `players.is_admin` cùng `players.admin_permissions`; giá trị `*` giữ quyền đầy đủ cho admin hiện hữu trong giai đoạn chuyển đổi. Handler vẫn có thể kiểm tra admin như lớp phòng vệ bổ sung.
+
+Permission nhạy cảm gồm: `players.read`/`players.update`, `game_data.read`/`game_data.import`/`game_data.export`, `monitoring.read`/`monitoring.reset`, `cache.reload`/`cache.flush`, và `audit.read`. Các domain quản trị còn lại dùng permission `<domain>.read` cho GET và `<domain>.update` cho thao tác ghi; inventory chuẩn được khai báo cùng route trong `backend/internal/server/server.go`.
 
 | Nhóm | Routes hiện có |
 | --- | --- |
