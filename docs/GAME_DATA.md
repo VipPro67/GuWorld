@@ -109,6 +109,24 @@ Không ghi số dòng cố định trong tài liệu vì dataset thay đổi th�
 
 ## Cấu trúc cơ sở dữ liệu
 
+### Phân quyền quản trị — Admin RBAC
+
+RBAC quản trị được lưu trong bốn bảng:
+
+- `admin_roles`: định nghĩa vai trò; `key` là định danh ổn định và duy nhất.
+- `admin_permissions`: danh mục quyền, khóa chính là `key`.
+- `admin_role_permissions`: ánh xạ nhiều-nhiều giữa vai trò và quyền.
+- `player_admin_roles`: gán nhiều-nhiều vai trò cho `players`.
+
+Khi khởi tạo schema, hệ thống seed idempotent role hệ thống `super_admin`,
+permission wildcard `admin.*` và quan hệ giữa chúng. Sau khi tài khoản admin mặc
+định được bảo đảm tồn tại, mọi player có `COALESCE(players.is_admin, false) =
+true` được backfill idempotent vào role `super_admin`.
+
+Trong rollout đầu tiên, authorization ưu tiên quyền RBAC nhưng vẫn fallback sang
+`players.is_admin` để admin cũ không bị khóa ngoài nếu backfill chưa hoàn tất.
+Cột `players.is_admin` được giữ nguyên trong giai đoạn chuyển đổi này.
+
 ### Bảng `immortal_apertures` (Tiên Khiếu)
 
 Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade` được roll theo Nhân Khí lúc thăng tiên (LOW / MID / HIGH / EXTREME). Các cột chính:

@@ -3,6 +3,7 @@ package middleware
 import (
 	"database/sql"
 	"errors"
+	"context"
 	"net/http"
 	"strings"
 
@@ -12,6 +13,23 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 )
+
+// PlayerHasAdminAccess checks RBAC first and preserves players.is_admin as a
+// rollout fallback for legacy administrators.
+func PlayerHasAdminAccess(ctx context.Context, playerID uuid.UUID) (bool, error) {
+	var hasRBACRole, isLegacyAdmin bool
+	err := db.DB.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM player_admin_roles par
+			JOIN admin_roles ar ON ar.id = par.role_id
+			JOIN admin_role_permissions arp ON arp.role_id = ar.id
+			WHERE par.player_id = $1 AND arp.permission_key = 'admin.*'
+		), COALESCE(is_admin, false)
+		FROM players
+		WHERE id = $1`, playerID).Scan(&hasRBACRole, &isLegacyAdmin)
+	return hasRBACRole || isLegacyAdmin, err
+}
 
 const (
 	// SessionKickedError is returned when the session has been invalidated by a newer login

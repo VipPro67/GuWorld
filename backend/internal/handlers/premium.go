@@ -934,6 +934,13 @@ func requireAdmin(c *gin.Context) (uuid.UUID, bool) {
 	}
 	if !principal.HasPermission(authz.AdminAccessPermission) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+	if db.DB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
+		return uuid.Nil, false
+	}
+	isAdmin, err := middleware.PlayerHasAdminAccess(c.Request.Context(), playerID)
+	if err != nil || !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
 		return uuid.Nil, false
 	}
 	return principal.PlayerID, true
