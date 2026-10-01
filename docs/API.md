@@ -347,9 +347,9 @@ Hai endpoint sau thuộc nhóm protected `/api/admin`; chúng yêu cầu JWT/coo
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | GET | `/admin/me` | Trả snapshot quyền thực tế của actor từ RBAC: `{actor_id, username, roles, effective_permissions, legacy_fallback, permission_version}`. `permission_version` là marker opaque để client invalidation cache quyền. Tài khoản `is_admin` cũ chưa được gán role nhận `super_admin`, wildcard `admin.*` và `legacy_fallback=true`. Frontend dùng permission key (không dùng tên role) để bảo vệ module. |
-| GET | `/admin/resources` | Trả `{resources, permission_version}`; `resources` chỉ gồm module actor được nhìn thấy. Mỗi phần tử có đúng metadata ứng dụng `{key, label, category, frontend_route, capabilities, required_permissions, risk_level}`. Catalog không trả database schema, tên bảng/cột hoặc SQL metadata. `frontend_route` hiện trỏ tới entrypoint `/` của Admin single-view. |
+| GET | `/admin/resources` | Trả `{resources, permission_version}` từ allowlist compile-time và chỉ gồm resource mà actor có ít nhất một quyền. Mỗi phần tử có metadata `{key, domain, label, capabilities, read_permissions, write_permissions, risk_level, cache_invalidation, registry_reload, restart_required, audit_action_prefix, frontend_route}`. Catalog không dùng `information_schema`, không trả database schema/tên bảng/cột/SQL, và không dùng resource key từ client để sinh SQL. |
 
-Danh sách `roles`, `effective_permissions`, catalog và thứ tự module là deterministic. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
+Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là deterministic. `read_permissions` và `write_permissions` là các permission thực tế được route backend dùng; metadata cache/registry mô tả tác động vận hành của thao tác ghi. Hiện mọi thao tác hỗ trợ đều reload trong process nên `restart_required=false`. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
 
 ## Admin — players & gus
 
