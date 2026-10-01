@@ -362,7 +362,11 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 ### Admin — nhóm quản trị còn lại
 
-Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu auth/admin và rate limit nhóm:
+Mọi route dưới đây đều thuộc `/api/admin`, yêu cầu xác thực, effective permission
+`admin.access` và rate limit nhóm. Authorization được resolve từ role/permission trong
+database ở mỗi request; permission không được lưu trong JWT. Response authorization
+được chuẩn hóa: `401` khi chưa xác thực, `403` khi đã xác thực nhưng thiếu permission,
+và `503` khi database không khả dụng nên không thể kiểm tra permission.
 
 | Nhóm | Routes hiện có |
 | --- | --- |

@@ -64,6 +64,17 @@ gate closed; it is never inferred from a default counter.
 
 Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 
+### Authorization data
+
+Authorization của Admin được chuẩn hóa trong bốn bảng: `admin_roles`,
+`admin_permissions`, `admin_role_permissions` và `player_admin_roles`. Schema seed role
+`super_admin`, permission `admin.access`, mapping giữa hai giá trị, rồi backfill mọi
+player legacy có `is_admin=true` sang `super_admin`. Trong giai đoạn tương thích, nếu
+một player vẫn có `is_admin=true` nhưng chưa có assignment trong `player_admin_roles`,
+resolver tạm coi player đó là `super_admin` và ghi warning để vận hành phát hiện và
+sửa backfill. Assignment trong database là nguồn quyền lâu dài; JWT chỉ giữ identity
+và session, không chứa role hoặc permission.
+
 ## CSV gameplay files
 
 | File | Nội dung |

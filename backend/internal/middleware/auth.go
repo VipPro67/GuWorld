@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"database/sql"
+	"errors"
 	"context"
 	"net/http"
 	"strings"
@@ -8,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/authz"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 )
 
@@ -126,12 +129,22 @@ func AuthRequired() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		if db.DB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
+			c.Abort()
+			return
+		}
 
 		// Verify player actually exists in the database
 		var exists bool
 		var dbSessionID string
 		err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id=$1), COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&exists, &dbSessionID)
-		if err != nil || !exists {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
+			c.Abort()
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) || !exists {
 			// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
 			// Let's just return 401. The frontend interceptor will call logout().
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
@@ -171,31 +184,8 @@ func GetPlayerID(c *gin.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
-// AdminRequired rejects authenticated requests from players without admin access.
-// Keep handler-level authorization checks during the RBAC transition as defense in depth.
+// AdminRequired is a compatibility alias. New routes should name the required
+// permission explicitly with RequirePermission.
 func AdminRequired() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		playerID, ok := GetPlayerID(c)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			c.Abort()
-			return
-		}
-		if db.DB == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
-			c.Abort()
-			return
-		}
-
-		// Prefer RBAC membership. The legacy flag remains a fallback during the
-		// first rollout so an incomplete backfill cannot lock existing admins out.
-		isAdmin, err := PlayerHasAdminAccess(c.Request.Context(), playerID)
-		if err != nil || !isAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
+	return RequirePermission(authz.AdminAccessPermission)
 }
