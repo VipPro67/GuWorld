@@ -94,6 +94,25 @@ func findStealGus(inventory models.GuInventory) (permStealGu *models.GuInstance,
 	return
 }
 
+// hasReverseGu reports whether an inventory holds an equipped, ACTIVE
+// Nghịch Chuyển Cổ able to reverse hostile effects (steal included).
+func hasReverseGu(inventory models.GuInventory) (bool, string) {
+	for i := range inventory {
+		gu := &inventory[i]
+		if !gu.Equipped || gu.Status != "ACTIVE" || gu.Hunger <= 0 {
+			continue
+		}
+		spec, found := models.GetGu(gu.GuID, gu.Rank)
+		if !found {
+			continue
+		}
+		if _, found := models.GuNativeMechanic(spec, "REVERSE_CALAMITY"); found {
+			return true, spec.Name
+		}
+	}
+	return false, ""
+}
+
 // appendStealMiss records an explicit pre-combat steal failure/skip so the
 // replay can distinguish roll-miss from missing preconditions.
 func appendStealMiss(combat *models.CombatState, action, detail string) {
@@ -156,15 +175,26 @@ func handlePreCombatSteal(tx *sql.Tx, combat *models.CombatState, attacker *mode
 		return
 	}
 
-	// Attempt Permanent Steal from attacker first
-	if permGu != nil {
+	// Attempt Permanent Steal from attacker first.
+	// Nghịch Chuyển Cổ: absolute reversal — its holder cannot be stolen from.
+	victimProtected, victimGu := hasReverseGu(combat.EnemyGuInventory)
+	thiefProtected, thiefGu := hasReverseGu(attacker.GuInventory)
+	if victimProtected {
+		appendStealMiss(combat, "STEAL_REVERSED",
+			fmt.Sprintf("[Cướp Cổ] %s miễn nhiễm cướp đoạt nhờ [%s] — mọi thủ đoạn đều về hư vô!", combat.EnemyName, victimGu))
+	}
+	if thiefProtected {
+		appendStealMiss(combat, "STEAL_REVERSED",
+			fmt.Sprintf("[Cướp Cổ] %s miễn nhiễm cướp đoạt nhờ [%s] — mọi thủ đoạn đều về hư vô!", attacker.Username, thiefGu))
+	}
+	if permGu != nil && !victimProtected {
 		if executePermanentSteal(tx, combat, attacker, permGu, permSpec, victimUUID, combat.EnemyName, true) {
 			return
 		}
 	}
 
 	// Attempt Temporary Steal from attacker if perm steal didn't trigger
-	if tempGu != nil {
+	if tempGu != nil && !victimProtected {
 		if executeTempSteal(tx, combat, attacker, tempGu, tempSpec, victimUUID, combat.EnemyName, true) {
 			return
 		}
@@ -183,13 +213,13 @@ func handlePreCombatSteal(tx *sql.Tx, combat *models.CombatState, attacker *mode
 	// 2. If attacker has no steal Gu or neither succeeded, check defender Gus
 	defPermGu, defPermSpec, defTempGu, defTempSpec := findStealGus(combat.EnemyGuInventory)
 
-	if defPermGu != nil {
+	if defPermGu != nil && !thiefProtected {
 		if executePermanentSteal(tx, combat, attacker, defPermGu, defPermSpec, victimUUID, combat.EnemyName, false) {
 			return
 		}
 	}
 
-	if defTempGu != nil {
+	if defTempGu != nil && !thiefProtected {
 		if executeTempSteal(tx, combat, attacker, defTempGu, defTempSpec, victimUUID, combat.EnemyName, false) {
 			return
 		}

@@ -195,6 +195,19 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			})
 			return
 		}
+		// Nghịch Chuyển Cổ: absolute reversal of hostile effects. Every
+		// enemy-sourced status aimed at the holder is undone — only raw
+		// damage passes through. Checked before the resist gate.
+		if hasReverseCalamity(target) {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "STATUS_REVERSED",
+				Detail:    fmt.Sprintf("Nghịch Chuyển Cổ đảo nghịch [%s] của %s về hư vô!", spec.Label, actor.Name),
+			})
+			return
+		}
 		// Resist gate (control effects subject to MentalResistance + generic CCResist + Rank scaling).
 		// Combined multiplicatively, capped at 0.75.
 		if spec.ResistGate && !statusfx.CanApplyStatusWithGuRank(rng, actor.Rank, target.Rank, guRank, actor.DaoMarks, target.DaoMarks, spec, gamefx.CombinedResist(target.MentalResistance, target.CCResist), op.Chance) {

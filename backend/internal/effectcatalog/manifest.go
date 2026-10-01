@@ -112,7 +112,8 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 			result[key] = MechanicDefinition{Trigger: trigger, ActionCode: action, Disposition: disposition, Owner: owner}
 		}
 	}
-	add("ON_CONSUME", DispositionSupported, "gu-consume", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED")
+	add("ON_CONSUME", DispositionSupported, "gu-consume", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "DEDUCTION_INSTANT_FINISH")
+	add("ALWAYS_ON", DispositionSupported, "deduction", "DEDUCTION_INSTANT_FINISH")
 	add("ON_TICK", DispositionSupported, "resource-regen", "MANA_REGEN_TICK", "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK")
 	add("ON_TICK", DispositionSupported, "hunger-worker", "GENERATE_STONES_TICK", "GENERATE_IMMORTAL_STONES_TICK")
 	add("ON_CONSUME", DispositionMigrate, "effect-runtime-v2", "MAN_BEAST_BURIAL", "POISON_VOW", "SPRING_EGG_HATCH", "STONE_APERTURE", "THIRD_WATCH")
@@ -120,7 +121,7 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 	add("ON_DEATH", DispositionSupported, "combat", "REBORN")
 	add("BEFORE_ENEMY_ATTACK", DispositionSupported, "combat", "FORGET_INTENT_INTERRUPT", "FORGET_WILL_CONFUSE")
 	add("ON_TURN_START", DispositionSupported, "combat", "POEM_INTENT")
-	add("ON_BATTLE_START", DispositionSupported, "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU")
+	add("ON_BATTLE_START", DispositionSupported, "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY")
 	add("ON_CAST", DispositionSupported, "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE")
 	add("ON_HIT", DispositionSupported, "combat", "BYPASS_SHIELD")
 	add("BEFORE_HIT", DispositionSupported, "combat", "FIRST_TURN_EVADE")
@@ -129,8 +130,8 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 	// should use it; PASSIVE is retained so existing Gu rows keep validating.
 	// Both mean the same ON_EVENT timing (see timing.go), never the passive
 	// section (ALWAYS_ON character stats).
-	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT")
-	add("CAPABILITY", DispositionSupported, "world", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "SACRIFICE_NPC")
+	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY")
+	add("CAPABILITY", DispositionSupported, "world", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "SACRIFICE_NPC", "DEDUCTION_INSTANT_FINISH")
 	return result
 }
 

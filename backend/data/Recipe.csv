@@ -4457,3 +4457,5 @@ GU_FIXED_IMMORTAL_TRAVEL,7,1,"{""GU_FIXED_IMMORTAL_TRAVEL"": {""qty"": 1, ""rank
 GU_FIXED_IMMORTAL_TRAVEL,8,1,"{""GU_FIXED_IMMORTAL_TRAVEL"": {""qty"": 1, ""rank"": 7}}","{""water_rank8"": 1, ""heaven_qi_rank8"": 7, ""sound_stone_rank8"": 4, ""sword_leaf_grass_rank8"": 5, ""boundless_space_domain_stone"": 24}",0.001,900.000,1500.000
 GU_FIXED_IMMORTAL_TRAVEL,9,1,"{""GU_FIXED_IMMORTAL_TRAVEL"": {""qty"": 1, ""rank"": 8}}","{""water_rank9"": 1, ""heaven_qi_rank9"": 7, ""sound_stone_rank9"": 4, ""sword_leaf_grass_rank9"": 5, ""boundless_space_domain_stone"": 24}",0.00001,900.000,9500.000
 "GU_KILL_ENERGY","9","1","{""GU_KILL_HEAVEN_DAO"": {""qty"": 1, ""rank"": 8}}","{""heaven_qi_rank8"": 10, ""heaven_qi_rank9"": 10, ""kill_path_material"": 30, ""primordial_kill_origin_stone"": 10}","0.00001","0.000","1600.000"
+GU_REVERSE,9,1,"{""GU_LET_YOU_GO_FIRST"": {""qty"": 1, ""rank"": 9}}","{""sound_stone_rank9"": 25, ""iron_rank9"": 25, ""heaven_qi_rank9"": 25}",0.00001,0.000,1600.000
+GU_BAN,9,1,"{""GU_SQUARE_COMPASS_I"": {""qty"": 1, ""rank"": 8}}","{""sound_stone_rank9"": 25, ""iron_rank9"": 25, ""heaven_qi_rank9"": 25}",0.00001,0.000,1600.000
