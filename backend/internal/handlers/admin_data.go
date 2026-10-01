@@ -26,6 +26,58 @@ func writeImportError(c *gin.Context, prefix string, err error) {
 	c.JSON(http.StatusInternalServerError, gin.H{"error": prefix + ": " + err.Error()})
 }
 
+var dictionaryCacheKeys = []string{
+	"game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items",
+	"game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races",
+	"game_dictionary_statuses", "game_dictionary_loot_tables", "game_dictionary_regions",
+	"game_dictionary_monster_spawns",
+}
+
+func applyDatasetRuntimeBehavior(datasets []db.Dataset) {
+	caches, reloads := map[string]bool{}, map[string]bool{}
+	for _, dataset := range datasets {
+		for _, behavior := range dataset.CacheInvalidation {
+			caches[behavior] = true
+		}
+		for _, registry := range dataset.RegistryReload {
+			reloads[registry] = true
+		}
+	}
+	reload := func(name string, fn func() error) {
+		if reloads[name] {
+			if err := fn(); err != nil {
+				logger.S.Warnf("failed to reload %s after import: %v", name, err)
+			}
+		}
+	}
+	reload("gu", func() error { return models.LoadGuRegistry(db.DB) })
+	reload("item", func() error { return models.LoadItemRegistry(db.DB) })
+	reload("constitution", func() error { return gamefx.LoadConstitutionRegistry(db.DB) })
+	reload("race", func() error { return gamefx.LoadRaceRegistry(db.DB) })
+	reload("status", func() error { return gamefx.LoadStatusRegistry(db.DB) })
+	reload("monster", func() error { return models.LoadMonsterRegistry(db.DB) })
+	reload("quest", LoadQuestRegistry)
+	reload("zone", func() error { return LoadZoneRegistry(db.DB) })
+	reload("instance", InitInstanceCache)
+
+	if caches["dictionary"] {
+		cache.Delete(dictionaryCacheKeys...)
+		InvalidateDictionaryMemoryCache()
+	}
+	if caches["recipe_catalog"] {
+		invalidateRecipeCatalog()
+	}
+	if caches["shop_catalog"] {
+		invalidateShopCatalogCache()
+	}
+	if caches["arena_shop"] {
+		cache.Delete("arena_shop_items")
+	}
+	if caches["quests"] {
+		cache.Delete("game_quests_list")
+	}
+}
+
 // AdminImportData seeds all dictionary tables from CSV files.
 // POST /api/admin/data/import
 func AdminImportData(c *gin.Context) {
@@ -39,33 +91,7 @@ func AdminImportData(c *gin.Context) {
 		return
 	}
 
-	// Reload registries
-	if err := models.LoadGuRegistry(db.DB); err != nil {
-		logger.S.Warnf("failed to reload Gu registry after import: %v", err)
-	}
-	if err := models.LoadItemRegistry(db.DB); err != nil {
-		logger.S.Warnf("failed to reload Item registry after import: %v", err)
-	}
-	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
-		logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
-	}
-	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
-		logger.S.Warnf("failed to reload Race registry after import: %v", err)
-	}
-	if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
-		logger.S.Warnf("failed to reload Status registry after import: %v", err)
-	}
-	if err := models.LoadMonsterRegistry(db.DB); err != nil {
-		logger.S.Warnf("failed to reload Monster registry after import: %v", err)
-	}
-	if err := LoadQuestRegistry(); err != nil {
-		logger.S.Warnf("failed to reload Quest registry after import: %v", err)
-	}
-	if err := InitInstanceCache(); err != nil {
-		logger.S.Warnf("failed to reload Instance registry after import: %v", err)
-	}
-	InvalidateDictionaryMemoryCache()
-	invalidateRecipeCatalog()
+	applyDatasetRuntimeBehavior(db.Datasets())
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.import_data",
@@ -104,7 +130,7 @@ func AdminListTables(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"tables": db.AvailableTables()})
+	c.JSON(http.StatusOK, gin.H{"tables": db.AvailableTables(), "datasets": db.DatasetInfos()})
 }
 
 // AdminImportTable imports a single table from its CSV file.
@@ -121,54 +147,8 @@ func AdminImportTable(c *gin.Context) {
 		return
 	}
 
-	// Reload relevant registries
-	switch table {
-	case "item":
-		if err := models.LoadItemRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Item registry after import: %v", err)
-		}
-		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
-	case "gu":
-		if err := models.LoadGuRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Gu registry after import: %v", err)
-		}
-		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
-	case "constitution":
-		if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
-		}
-		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
-	case "race":
-		if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Race registry after import: %v", err)
-		}
-		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
-	case "status":
-		if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Status registry after import: %v", err)
-		}
-		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
-	case "monster", "loot_table":
-		if err := models.LoadMonsterRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
-		}
-		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
-	case "region", "map_cell", "monster_spawn":
-		if err := LoadZoneRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Zone registry after import: %v", err)
-		}
-		if err := models.LoadMonsterRegistry(db.DB); err != nil {
-			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
-		}
-		cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
-	case "quest":
-		if err := LoadQuestRegistry(); err != nil {
-			logger.S.Warnf("failed to reload Quest registry after import: %v", err)
-		}
-	case "recipe":
-		invalidateRecipeCatalog()
-	}
-	InvalidateDictionaryMemoryCache()
+	dataset, _ := db.DatasetByKey(table)
+	applyDatasetRuntimeBehavior([]db.Dataset{dataset})
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.import_table",

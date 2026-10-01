@@ -392,6 +392,13 @@ Các thao tác phá hủy `POST /admin/data/import` và `POST /admin/clear-redis
 | Dictionary/shop | CRUD shop, arena shop, Gu, item, recipe, monster, loot table, constitution, race, status và quest. |
 | Hệ thống | gift code list/create, upload image, top-up order, wallet transaction và monitoring/traces. |
 
+`GET /api/admin/data/tables` trả cả `tables` (danh sách key tương thích ngược) và
+`datasets`. Mỗi phần tử `datasets` là nguồn sự thật cho Admin UI, gồm `key`,
+`label`, `csv_file`, capability `import`/`export`/`preflight`, permission tương
+ứng, `ui_supported`, cùng khai báo `cache_invalidation` và `registry_reload`.
+UI chỉ hiển thị dataset/các nút thao tác khi capability, UI support và permission
+được công bố; dataset chưa có implementation không được trả về danh sách này.
+
 Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` trong `backend/internal/server/server.go`; bảng này gom theo domain để tránh hiểu nhầm rằng Admin chỉ quản lý player/Cổ.
 
 ### Admin — validation effect Cổ

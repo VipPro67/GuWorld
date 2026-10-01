@@ -79,6 +79,17 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:808
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
 const PLAYER_QUERY_KEYS = Object.keys(PLAYER_QUERY_DEFAULTS);
 
+type DatasetDescriptor = {
+  key: string;
+  label: string;
+  csv_file: string;
+  capabilities: { import: boolean; export: boolean; preflight: boolean };
+  cache_invalidation: string[];
+  registry_reload: string[];
+  permissions: { read: string; import?: string; export?: string };
+  ui_supported: boolean;
+};
+
 const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "string" | "number" | "boolean" }[]> = {
   active: [
     { key: "damage_flat", label: "Damage Flat (Sát thương cố định)", type: "number" },
@@ -463,6 +474,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
+  const [datasets, setDatasets] = useState<DatasetDescriptor[]>([]);
   const section: AdminModuleKey = initialSection;
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
   const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
@@ -951,6 +963,15 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
   useEffect(() => {
     if (section === "data") {
+      if (dataTab === "tables") {
+        void authFetch(`${BACKEND_URL}/api/admin/data/tables`)
+          .then(async response => {
+            if (!response.ok) throw new Error("Không thể tải danh sách dataset");
+            const body = await response.json() as { datasets?: DatasetDescriptor[] };
+            setDatasets((body.datasets ?? []).filter(dataset => dataset.ui_supported));
+          })
+          .catch(error => addToast(error instanceof Error ? error.message : "Không thể tải danh sách dataset", "error"));
+      }
       if (dataTab === "gus") fetchGus();
       else if (dataTab === "items") fetchItems();
       else if (dataTab === "recipes") fetchRecipes();
@@ -959,7 +980,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       else if (dataTab === "regions") fetchRegions(1, regionSearch);
       else if (dataTab === "map_cells") fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter);
     }
-  }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables, fetchRegions, fetchMapCells, regionSearch, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter]);
+  }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables, fetchRegions, fetchMapCells, regionSearch, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter, addToast]);
 
   useEffect(() => {
     if (section === "players" && playersTab === "online") fetchOnlinePlayers();
@@ -3204,32 +3225,15 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 Import hoặc export dữ liệu cho từng bảng riêng lẻ. Mỗi thao tác chỉ xử lý một bảng.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {[
-                  { key: "item", label: "Vật phẩm", icon: Package, csv: "Item.csv" },
-                  { key: "gu", label: "Cổ trùng", icon: Bug, csv: "Gu.csv" },
-                  { key: "constitution", label: "Thể chất", icon: Activity, csv: "Constitution.csv" },
-                  { key: "race", label: "Chủng tộc", icon: Users, csv: "Race.csv" },
-                  { key: "recipe", label: "Cổ phương", icon: FlaskConical, csv: "Recipe.csv" },
-                  { key: "shop_item", label: "Cửa hàng", icon: ShoppingBag, csv: "ShopItem.csv" },
-                  { key: "arena_shop_item", label: "Cửa hàng Đấu trường", icon: Swords, csv: "ArenaShopItem.csv" },
-                  { key: "region", label: "Khu vực", icon: Globe, csv: "Region.csv" },
-                  { key: "loot_table", label: "Bảng loot", icon: Gift, csv: "LootTable.csv" },
-                  { key: "monster", label: "Quái vật", icon: PawPrint, csv: "Monster.csv" },
-                  { key: "monster_spawn", label: "Spawn quái", icon: MapPin, csv: "MonsterSpawn.csv" },
-                  { key: "map_cell", label: "Bản đồ (boss/tài nguyên cao)", icon: Globe, csv: "MapCell.csv" },
-                  { key: "sect", label: "Tông môn", icon: Building2, csv: "Sect.csv" },
-                  { key: "sect_mission", label: "Nhiệm vụ tông môn", icon: ListTodo, csv: "SectMission.csv" },
-                  { key: "quest", label: "Nhiệm vụ", icon: BookOpen, csv: "Quest.csv" },
-                  { key: "dream_realm", label: "Mộng cảnh", icon: Star, csv: "DreamRealm.csv" },
-                ].map(t => (
+                {datasets.map(t => (
                   <div key={t.key} className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 flex flex-col gap-3">
                     <div className="flex items-center gap-2">
-                      <t.icon className="w-4 h-4 text-amber-400" />
+                      <Database className="w-4 h-4 text-amber-400" />
                       <span className="text-xs font-semibold text-zinc-200">{t.label}</span>
-                      <span className="text-[10px] text-zinc-500 font-mono ml-auto">{t.csv}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono ml-auto">{t.csv_file}</span>
                     </div>
                     <div className="flex gap-2">
-                      <button
+                      {t.capabilities.import && (adminAccess.effective_permissions.includes("admin.*") || (!!t.permissions.import && adminAccess.effective_permissions.includes(t.permissions.import))) && <button
                         disabled={tableLoading === t.key}
                         onClick={async () => {
                           if (!confirm(`Import "${t.label}" từ CSV? Dữ liệu sẽ được UPSERT.`)) return;
@@ -3242,8 +3246,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                       >
                         <Upload className="w-3 h-3" />
                         {tableLoading === t.key ? "..." : "Import"}
-                      </button>
-                      <button
+                      </button>}
+                      {t.capabilities.export && (adminAccess.effective_permissions.includes("admin.*") || (!!t.permissions.export && adminAccess.effective_permissions.includes(t.permissions.export))) && <button
                         disabled={tableLoading === t.key}
                         onClick={async () => {
                           setTableLoading(t.key);
@@ -3255,7 +3259,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                       >
                         <RefreshCw className="w-3 h-3" />
                         {tableLoading === t.key ? "..." : "Export"}
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 ))}
