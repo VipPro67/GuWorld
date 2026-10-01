@@ -1071,6 +1071,14 @@ Bảng `teleport_arrays` lưu các thực thể trận pháp do người chơi v
 - **Phí dịch chuyển & Két sắt:** Chủ sở hữu cấu hình bật/tắt thu phí và mức giá vé. Khi có người sử dụng, 95% phí được tích lũy vào Két Sắt Trận Pháp (`vault_balance`) để chủ sở hữu đến rút, 5% hao tán theo quy luật trời đất.
 - **Bảo trì & Thu hồi:** Tiêu hao Nguyên Thạch để sửa chữa hồi phục độ bền. Khi thu hồi (Dismantle), hoàn trả 50% chi phí xây dựng ban đầu (nhân theo tỉ lệ % độ bền còn lại) và tự động chuyển toàn bộ số dư Két Sắt về túi nhân vật.
 
+### Trạng thái công trình Tông Môn
+
+`sects.defensive_array_ready_at` lưu thời điểm Hộ Sơn Đại Trận có thể chặn đợt
+công kích đầu tiên tiếp theo. Khi kích hoạt, `shield_until` chỉ mở cửa sổ tập hợp
+10 phút; thời gian hồi chặn 12 giờ được theo dõi độc lập và không tăng theo cấp.
+`sects.buildings.treasury` tiếp tục là nguồn dữ liệu cấp Bảo Khố dùng để tính tỉ lệ
+rơi tài sản và chiết khấu phí lưu kho khi duy trì/di dời.
+
 ### Compiled effect runtime
 
 `effects.blocks` is authored as JSON but is compiled once when a Gu definition is

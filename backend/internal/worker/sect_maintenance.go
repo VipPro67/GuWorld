@@ -8,6 +8,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/sectmechanics"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -17,24 +18,26 @@ type QueryContextRunner interface {
 }
 
 type SectMaintenanceBreakdown struct {
-	LevelFee        int64 `json:"level_fee"`
-	SectLevel       int   `json:"sect_level"`
-	MemberFee       int64 `json:"member_fee"`
-	MemberCount     int   `json:"member_count"`
-	MaterialsFee    int64 `json:"materials_fee"`
-	MaterialsCount  int64 `json:"materials_count"`
-	MortalGuFee     int64 `json:"mortal_gu_fee"`
-	MortalGuCount   int64 `json:"mortal_gu_count"`
-	ImmortalGuFee   int64 `json:"immortal_gu_fee"`
-	ImmortalGuCount int64 `json:"immortal_gu_count"`
-	RecipesFee      int64 `json:"recipes_fee"`
-	RecipesCount    int   `json:"recipes_count"`
-	TotalFee        int64 `json:"total_fee"`
+	LevelFee         int64 `json:"level_fee"`
+	SectLevel        int   `json:"sect_level"`
+	MemberFee        int64 `json:"member_fee"`
+	MemberCount      int   `json:"member_count"`
+	MaterialsFee     int64 `json:"materials_fee"`
+	MaterialsCount   int64 `json:"materials_count"`
+	MortalGuFee      int64 `json:"mortal_gu_fee"`
+	MortalGuCount    int64 `json:"mortal_gu_count"`
+	ImmortalGuFee    int64 `json:"immortal_gu_fee"`
+	ImmortalGuCount  int64 `json:"immortal_gu_count"`
+	RecipesFee       int64 `json:"recipes_fee"`
+	RecipesCount     int   `json:"recipes_count"`
+	TreasuryLevel    int   `json:"treasury_level"`
+	TreasuryDiscount int64 `json:"treasury_discount"`
+	TotalFee         int64 `json:"total_fee"`
 }
 
 // CalculateSectMaintenanceFee calculates the daily maintenance fee:
 // Phí Bảo Trì = (Cấp TM * 2.000) + (Số TV * 200) + Phí Kho Tàng
-// Trong đó Phí Kho Tàng:
+// Trong đó Phí Kho Tàng (trước chiết khấu 50%-90% theo cấp Bảo Khố):
 // - Linh tài: sum(Rank * 5 * Số lượng)
 // - Cổ phàm (Rank 1-5): sum(Rank * 10 * Số lượng)
 // - Tiên Cổ (Rank 6-9): sum(Rank * 200 * Số lượng)
@@ -47,6 +50,11 @@ func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sect
 	var breakdown SectMaintenanceBreakdown
 	breakdown.SectLevel = sectLevel
 	breakdown.LevelFee = int64(sectLevel) * 2000
+	var treasuryLevel int
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE((buildings->>'treasury')::int, 1) FROM sects WHERE id = $1`, sectID).Scan(&treasuryLevel); err != nil {
+		return 0, breakdown, fmt.Errorf("failed to load treasury level: %w", err)
+	}
+	breakdown.TreasuryLevel = treasuryLevel
 
 	// 1. Members
 	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM sect_members WHERE sect_id = $1`, sectID).Scan(&breakdown.MemberCount)
@@ -114,6 +122,15 @@ func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sect
 		recRows.Close()
 	}
 
+	var saved int64
+	breakdown.MaterialsFee, saved = sectmechanics.DiscountVaultFee(breakdown.MaterialsFee, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
+	breakdown.MortalGuFee, saved = sectmechanics.DiscountVaultFee(breakdown.MortalGuFee, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
+	breakdown.ImmortalGuFee, saved = sectmechanics.DiscountVaultFee(breakdown.ImmortalGuFee, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
+	breakdown.RecipesFee, saved = sectmechanics.DiscountVaultFee(breakdown.RecipesFee, treasuryLevel)
+	breakdown.TreasuryDiscount += saved
 	breakdown.TotalFee = breakdown.LevelFee + breakdown.MemberFee + breakdown.MaterialsFee + breakdown.MortalGuFee + breakdown.ImmortalGuFee + breakdown.RecipesFee
 	return breakdown.TotalFee, breakdown, nil
 }

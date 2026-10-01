@@ -1162,6 +1162,11 @@ export const SectView: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="flex justify-between items-center bg-emerald-950/20 border border-emerald-900/50 p-3 rounded-xl mt-1 text-emerald-400">
+                  <span className="text-xs">Bảo Khố cấp {mySectStatus.maintenance_breakdown.treasury_level} đã tiết kiệm:</span>
+                  <span className="text-sm font-mono font-bold">-{mySectStatus.maintenance_breakdown.treasury_discount.toLocaleString()} Quỹ</span>
+                </div>
+
                 <div className="flex justify-between items-center bg-amber-950/20 border border-amber-500/30 p-3 rounded-xl mt-1">
                   <span className="text-xs font-serif font-bold text-amber-200">Dự kiến phí bảo trì ngày:</span>
                   <span className="text-sm font-mono font-bold text-amber-400">
@@ -1386,14 +1391,14 @@ export const SectView: React.FC = () => {
                   {
                     key: "defensive_array",
                     name: "Hộ Sơn Đại Trận",
-                    desc: "Tăng 500 Giáp phòng thủ cơ bản & tăng thời gian bảo vệ Tông môn sau khi bị đánh phá.",
+                    desc: "Tăng sức mạnh thủ hộ. Khi hết hồi 12 giờ, Đại Trận chặn đợt tấn công đầu tiên và mở 10 phút để môn nhân tập hợp.",
                     baseFunds: 2000,
                     icon: "🛡️",
                   },
                   {
                     key: "treasury",
                     name: "Bảo Khố",
-                    desc: "Giảm tỷ lệ Quỹ bị cướp đoạt khi bị Tông môn khác tấn công.",
+                    desc: "Giảm tỷ lệ từng tài nguyên/Cổ/Bí phương rơi khi thất thủ, đồng thời giảm mạnh phí duy trì và di dời tài sản trong kho.",
                     baseFunds: 1500,
                     icon: "🏛️",
                   },
@@ -4145,6 +4150,10 @@ const rank = spec.rank || 1;
                       <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
                         <span className="text-zinc-400">Bí phương ({relocationEstimate.cost_breakdown.recipes_count} quyển):</span>
                         <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.recipes_cost.toLocaleString()} Quỹ</span>
+                      </div>
+                      <div className="flex justify-between p-2 rounded-xl bg-emerald-950/20 border border-emerald-900/50 text-emerald-400">
+                        <span>Bảo Khố cấp {relocationEstimate.cost_breakdown.treasury_level} tiết kiệm:</span>
+                        <span className="font-bold">-{relocationEstimate.cost_breakdown.treasury_discount.toLocaleString()} Quỹ</span>
                       </div>
                     </div>
 
