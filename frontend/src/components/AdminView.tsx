@@ -526,7 +526,7 @@ function guLocationLabel(loc: string): string {
   }
 }
 
-export const AdminView: React.FC = () => {
+export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean }> = ({ authorized = false, embedded = false }) => {
   const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
   const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "combat">("items");
   const [isCombatEquippedExpanded, setIsCombatEquippedExpanded] = useState(true);
@@ -1354,7 +1354,7 @@ export const AdminView: React.FC = () => {
     </div>
   );
 
-  if (!player?.is_admin) {
+  if (!authorized && !player?.is_admin) {
     return (
       <div className="max-w-4xl mx-auto text-center py-20 text-zinc-500 font-mono">
         <Shield className="w-12 h-12 mx-auto mb-4 text-zinc-700" />
@@ -3098,7 +3098,7 @@ export const AdminView: React.FC = () => {
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6">
       {/* Header with section tabs */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
+      {!embedded && <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
         <div className="flex items-center gap-3">
           <button onClick={() => setView("dashboard")} className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer">
             <ArrowLeft className="w-4 h-4 text-zinc-400" />
@@ -3111,7 +3111,7 @@ export const AdminView: React.FC = () => {
             <p className="text-xs text-zinc-500 font-mono mt-0.5">Quản lý tài nguyên và người chơi</p>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Section tabs */}
       <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
