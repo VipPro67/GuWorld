@@ -235,6 +235,20 @@ func schemaPlayers() error {
 		return err
 	}
 
+	// Login hot path: WHERE LOWER(email) = $1 cannot use the raw UNIQUE(email)
+	// btree, so every login seq-scans players without this expression index.
+	if err := execSchema("players_email_lower_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_email_lower ON players (LOWER(email));`); err != nil {
+		return err
+	}
+
+	// Login fingerprint limit check filters on (last_login_fingerprint,
+	// last_login_time) twice per login. No index existed -> seq-scan per login.
+	if err := execSchema("players_login_fp_time_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_login_fp_time ON players (last_login_fingerprint, last_login_time);`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

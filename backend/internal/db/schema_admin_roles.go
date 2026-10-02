@@ -77,9 +77,14 @@ func ensureBootstrapAdminRole() error {
 	ON CONFLICT (player_id, role_key) DO NOTHING;`); err != nil {
 		return err
 	}
+	// Sync only divergent rows. The unguarded full-table rewrite dirtied every
+	// player row on each boot (WAL storm + row locks), tripping the 15s
+	// statement_timeout once players grows and blocking concurrent logins.
 	_, err := DB.Exec(`
 	UPDATE players p SET is_admin = EXISTS (
 		SELECT 1 FROM player_admin_roles par WHERE par.player_id = p.id
-	)`)
+	) WHERE p.is_admin IS DISTINCT FROM (EXISTS (
+		SELECT 1 FROM player_admin_roles par WHERE par.player_id = p.id
+	))`)
 	return err
 }
