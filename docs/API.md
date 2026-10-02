@@ -81,6 +81,15 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/beast-betting/history` | Lấy lịch sử 10 trận đấu thú gần nhất và log chiến đấu. |
 | POST | `/player/beast-betting/bet` | Đặt cược Nguyên Thạch vào phe Đỏ hoặc Xanh. Body: `{"team": "team_a"|"team_b", "amount": float64}`. |
 
+## Actors (Release 1, read-only)
+
+Các route protected dưới đây trả canonical Actor Instance thuộc người chơi. Release 1 chưa nhận command và chưa thay đổi contract của `/pets/*` hoặc `/immortal-aperture/npcs`.
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/actors` | Trả `{ "actors": [...] }`; danh sách rỗng luôn là `[]`. |
+| GET | `/actors/:id` | Trả `{ "actor": {...} }` cho actor thuộc người gọi. UUID sai trả `400`; actor không tồn tại hoặc không thuộc người gọi trả `404`. |
+
 ## Cultivation and quests
 
 | Method | Path |

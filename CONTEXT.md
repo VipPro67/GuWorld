@@ -1,5 +1,35 @@
 # Domain Glossary (CONTEXT.md)
 
+## Non-player Actors
+
+### Actor Template
+Dữ liệu tĩnh mô tả loài hoặc kiểu của một actor; không đại diện cho một cá thể tồn tại lâu dài.
+_Avoid_: Actor Instance, cá thể NPC
+
+### Actor Instance
+Cá thể không phải người chơi có định danh và trạng thái dài hạn riêng, dù hiện có xuất hiện trên bản đồ hay không.
+_Avoid_: Pet record, NPC record, monster record
+
+### World Presence
+Sự hiện diện duy nhất của một Actor Instance trên bản đồ thế giới tại một thời điểm; có thể được tạo khi triển khai và xóa khi thu hồi mà không xóa Actor Instance.
+_Avoid_: Actor Instance, spawn definition
+
+### Capability
+Năng lực dữ liệu hóa xác định một Actor Instance được phép thực hiện loại hành động nào; `actor_kind` chỉ mô tả danh tính/lore và policy mặc định.
+_Avoid_: Actor type check
+
+### Behavior Profile
+Policy dữ liệu hóa mô tả thứ tự ưu tiên ra quyết định của actor, nhưng không trực tiếp thay đổi domain state.
+_Avoid_: Capability, AI writer
+
+### Assignment
+Công việc dài hạn duy nhất mà một Actor Instance đang thực hiện.
+_Avoid_: Command, Behavior Profile
+
+### Combat Snapshot
+Bản sao bất biến của trạng thái chiến đấu actor tại thời điểm trận đấu bắt đầu; simulator chỉ đọc snapshot này và không truy vấn Actor Instance.
+_Avoid_: Actor Instance, live combat state
+
 ## Scouting, Divination & Concealment (Trinh Sát, Suy Diễn & Ẩn Thân)
 
 ### Trinh Sát Cục Bộ (Local Inspection)

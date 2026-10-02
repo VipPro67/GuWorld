@@ -826,6 +826,27 @@ Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy
 
 Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.
 
+### Canonical non-player actors (Release 1 foundation)
+
+`non_player_actors` là bảng canonical cho **Actor Instance** persistent. Nó tham chiếu template qua cặp đa hình `template_source/template_id` thay vì sao chép toàn bộ `monster_templates`; các nguồn hiện có gồm `MONSTER_TEMPLATE`, `VARIANT_RACE`, `NPC_TEMPLATE`, `CUSTOM`. `actor_kind` (`MONSTER`, `COMPANION_BEAST`, `VARIANT_NPC`, `WORLD_NPC`, `SECT_NPC`, `CONSTRUCT`, `BOSS`) chỉ biểu diễn identity/lore và default policy, không phải quyền thực thi hành vi.
+
+Các nhóm dữ liệu chính gồm ownership (`owner_player_id`, `faction_id`, `aperture_id`), identity/template, progression, combat stats, pack/hunger/upkeep, lifecycle/execution, behavior/AI và ba document JSONB `capabilities`, `traits`, `progression`. `legacy_source/legacy_id` là định danh migration duy nhất, cho phép backfill idempotent từ `player_pets` và các cá thể có tên trong `aperture_variant_npcs`; dân số aggregate `aperture_variant_humans` không trở thành từng actor.
+
+**Execution invariant:** tại một thời điểm, một actor chỉ có đúng một `execution_state` có quyền thay đổi gameplay. Graph tối thiểu là:
+
+```text
+STORED -> DEPLOYING | TRAINING | WORKING | RECOVERING | DEAD | DISMISSED
+DEPLOYING -> WORLD_IDLE
+WORLD_IDLE -> MOVING | FOLLOWING | GUARDING | PATROLLING | GATHERING | COMBAT | RETURNING | INJURED
+COMBAT -> WORLD_IDLE | RETURNING | INJURED | DEAD
+```
+
+Mọi transition ngoài graph bị từ chối. `lifecycle_state` là coarse persistence lifecycle (`ACTIVE`, `DEAD`, `DISMISSED`) và bị constraint đồng bộ với terminal execution state; nó không phải execution owner thứ hai. Constraint khác bảo đảm `count >= 1`, `hp >= 0`, `max_hp > 0`, `version >= 1`, actor thuộc nhóm owned có owner, và `hunger` nằm trong `[0,max_hunger]` khi `FEEDABLE=true`. Index bao phủ owner/kind, aperture/kind, execution state, template identity, actor active và legacy identity.
+
+`capabilities` là map boolean authoritative, hỗ trợ: `MOVE`, `FOLLOW`, `PATROL`, `GUARD`, `COMBAT`, `PRODUCE`, `REFINE`, `GATHER`, `TRAIN`, `FEEDABLE`, `CAPTURABLE`, `STACKABLE`, `EQUIP_GU`, `USE_SKILL`, `TRADE`, `QUEST_INTERACTION`, `MORTAL`, `REVIVABLE`. Command/handler phải kiểm tra capability thay vì phân nhánh hành vi theo `actor_kind`.
+
+Release 1 chỉ cung cấp schema, projection/backfill và API đọc. `player_pets` cùng `aperture_variant_npcs` vẫn là nguồn gameplay/write; API actor refresh projection trong transaction trước khi đọc và dọn projection của legacy row đã bị xóa, nên không tạo ghost actor trong giai đoạn này. `monster_spawns` vẫn là spawn definition; combat persistence chưa cut over. `world_actor_presence`, command mutation, scheduler và assignments thuộc các release tiếp theo để không tạo hai execution owner trong quá trình migration.
+
 ### Region / Bản đồ thế giới (World Map)
 
 Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (NGU_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (KHU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực. Ngoài `Southern_Border` (HUB mặc định), mỗi Đại Vực còn có **HUB khởi đầu riêng** (`hub_thuong_gia_thanh`, `hub_trung_chau`, `hub_bac_nguyen`, `hub_tay_mac`, `hub_dong_hai`). Khi hoàn tất onboarding (`complete-onboarding`), người chơi được đặt vào HUB tương ứng với vị trí đăng ký (xem `startingRegionHubs` trong `player.go`), không sinh quái trong HUB.
@@ -1000,7 +1021,7 @@ Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để 
 
 ### Bảng `player_pets` (Sủng vật)
 
-Bảng lưu sủng vật bắt được từ quái vật trong combat.
+Bảng legacy lưu sủng vật bắt được từ quái vật trong combat. Trong Release 1 của actor migration, bảng này vẫn là nguồn gameplay/write và được project idempotent sang `non_player_actors`; projection phải giữ nguyên pack count, stats, hunger, formation và semantics phí Soul HP. API `/api/pets/*` chưa đổi response.
 
 | Cột | Kiểu | Ghi chú |
 | --- | --- | --- |
