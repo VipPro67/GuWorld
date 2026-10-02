@@ -17,11 +17,13 @@ func refreshActionPlayerState(player *models.Player) {
 	_ = db.DB.QueryRow(`
 		SELECT p.state_revision + COALESCE((
 			SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id
-		), 0), p.primeval_stones, p.immortal_stones, p.human_qi
+		), 0), p.primeval_stones, p.immortal_stones, p.human_qi,
+		p.hp, p.current_thought, p.soul_hp, p.lifespan
 		FROM players p WHERE p.id = $1
 	`, player.ID).Scan(
 		&player.StateRevision, &player.PrimevalStones,
-		&player.ImmortalStones, &player.HumanQi,
+		&player.ImmortalStones, &player.HumanQi, &player.HP,
+		&player.CurrentThought, &player.SoulHP, &player.Lifespan,
 	)
 }
 
@@ -89,6 +91,10 @@ func respondActionGuOnly(c *gin.Context, status int, player models.Player, extra
 		"primeval_stones": player.PrimevalStones,
 		"immortal_stones": player.ImmortalStones,
 		"human_qi":        player.HumanQi,
+		"hp":              player.HP,
+		"current_thought": player.CurrentThought,
+		"soul_hp":         player.SoulHP,
+		"lifespan":        player.Lifespan,
 		"state_revision":  player.StateRevision,
 	}
 	for _, e := range extra {

@@ -34,6 +34,23 @@ const getPathColor = (path: string): string => {
   return `${c.bg} ${c.text} ${c.border}`;
 };
 
+const feedResourceInfo = (foodId: string, player: Player, rank: number) => {
+  switch (foodId) {
+    case "primeval_stone": return { label: "Nguyên Thạch", balance: player.primeval_stones || 0, cost: 2 ** rank, preserveOne: false };
+    case "immortal_stone": return { label: "Tiên Nguyên Thạch", balance: player.immortal_stones || 0, cost: rank, preserveOne: false };
+    case "blood": return { label: "Máu", balance: player.hp || 0, cost: 10, preserveOne: true };
+    case "thought": return { label: "Niệm Lực", balance: player.current_thought || 0, cost: 10, preserveOne: false };
+    case "soul": return { label: "Linh Hồn", balance: player.soul_hp || 0, cost: 10, preserveOne: true };
+    case "lifespan": return { label: "Tuổi Thọ", balance: player.lifespan || 0, cost: 1, preserveOne: true };
+    default: return null;
+  }
+};
+
+const canPayFeedResource = (foodId: string, player: Player, rank: number): boolean => {
+  const resource = feedResourceInfo(foodId, player, rank);
+  return resource !== null && (resource.preserveOne ? resource.balance > resource.cost : resource.balance >= resource.cost);
+};
+
 const FormatKey = (key: string): string => {
   switch (key) {
     case "damage":
@@ -923,7 +940,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
                     // Food info
                     const preferredFoodId = spec.food_types[0] || "unknown";
-                    const preferredFoodName = itemDictionary[preferredFoodId]?.name || preferredFoodId;
+                    const preferredResource = feedResourceInfo(preferredFoodId, player, spec.rank);
+                    const preferredFoodName = preferredResource?.label || itemDictionary[preferredFoodId]?.name || preferredFoodId;
 
                     const availableFoodId = spec.food_types.find(
                       foodId => (materials[foodId] || 0) > 0
@@ -934,13 +952,16 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     const availableFood = availableFoodId
                       ? materials[availableFoodId]
                       : 0;
+                    const availableResourceId = spec.food_types.find(foodId => canPayFeedResource(foodId, player, spec.rank));
+                    const availableResource = availableResourceId ? feedResourceInfo(availableResourceId, player, spec.rank) : null;
+                    const canFeedWithResource = availableResource !== null;
 
                     // Group feed status: are there hungry alive bugs that aren't sealed?
                     const hungryBugsCount = instances.filter(
                       inst => inst.status !== "DEAD" && inst.status !== "SEALED" && inst.hunger < spec.max_hunger
                     ).length;
                     const canFeedGroup = onFeedGroup && hungryBugsCount > 0 &&
-                      (availableFood > 0 || spec.food_types.includes("primeval_stone") || spec.food_types.includes("immortal_stone"));
+                      (availableFood > 0 || canFeedWithResource);
                     const isCurrentlyFeedingGroup = feedingGroupGuId === groupKey;
 
                     // Build dynamic styling based on group attributes
@@ -1085,7 +1106,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     useGameStore.getState().addToast("Không có Cổ trùng nào trong nhóm này đang đói.", "info");
                                     return;
                                   }
-                                  if (availableFood === 0 && !spec.food_types.includes("primeval_stone") && !spec.food_types.includes("immortal_stone")) {
+                                  if (availableFood === 0 && !canFeedWithResource) {
                                     useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
                                     return;
                                   }
@@ -1093,11 +1114,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 }}
                                 title={hungryBugsCount === 0
                                   ? "Không có con nào đói"
-                                  : spec.food_types.includes("primeval_stone")
-                                    ? `Cho ăn tất cả con đang đói. Cần: Nguyên Thạch (Sở hữu: ${Math.floor(player.primeval_stones || 0)})`
-                                    : spec.food_types.includes("immortal_stone")
-                                      ? `Cho ăn tất cả con đang đói. Cần: Tiên Nguyên Thạch (Sở hữu: ${Math.floor(player.immortal_stones || 0)})`
-                                      : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
+                                  : availableResource
+                                    ? `Cho ăn tất cả con đang đói. Mỗi lần cần: ${availableResource.cost} ${availableResource.label} (Sở hữu: ${Math.floor(availableResource.balance)})`
+                                    : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
                                 className={`text-[9px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1 transition-all cursor-pointer font-mono ${
                                   canFeedGroup
                                     ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] shadow-[0_0_8px_rgba(16,185,129,0.2)]"
@@ -1182,7 +1201,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               const isDead = status === "DEAD";
                               const hungerPercent = Math.min(100, Math.max(0, (gu.hunger / spec.max_hunger) * 100));
                               const isHungry = gu.hunger < spec.max_hunger;
-                              const canFeedIndividual = (availableFood > 0 && isHungry && !isDead && status !== "SEALED") || spec.food_types.includes("primeval_stone") || spec.food_types.includes("immortal_stone");
+                              const canFeedIndividual = isHungry && !isDead && status !== "SEALED" && (availableFood > 0 || canFeedWithResource);
 
                               return (
                                 <div
@@ -1288,7 +1307,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                             useGameStore.getState().addToast("Cổ trùng này đã no, không cần ăn thêm.", "info");
                                             return;
                                           }
-                                          if (availableFood === 0 && !spec.food_types.includes("primeval_stone") && !spec.food_types.includes("immortal_stone")) {
+                                          if (availableFood === 0 && !canFeedWithResource) {
                                             useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
                                             return;
                                           }

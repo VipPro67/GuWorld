@@ -1101,6 +1101,10 @@ interface ActionInventoryResponse {
   message?: string;
   gu_inventory?: GuInstance[];
   materials_inventory?: Record<string, number>;
+  hp?: number;
+  current_thought?: number;
+  soul_hp?: number;
+  lifespan?: number;
 }
 
 export interface ExploreResponse extends ActionInventoryResponse {
@@ -1482,6 +1486,18 @@ export const useGameStore = create<GameState>((set, get) => {
     }
     if (data.human_qi !== undefined) {
       updates.human_qi = Number(data.human_qi);
+    }
+    if (data.hp !== undefined) {
+      updates.hp = Number(data.hp);
+    }
+    if (data.current_thought !== undefined) {
+      updates.current_thought = Number(data.current_thought);
+    }
+    if (data.soul_hp !== undefined) {
+      updates.soul_hp = Number(data.soul_hp);
+    }
+    if (data.lifespan !== undefined) {
+      updates.lifespan = Number(data.lifespan);
     }
     if (data.recipes !== undefined) {
       updates.unlocked_recipes = data.recipes;

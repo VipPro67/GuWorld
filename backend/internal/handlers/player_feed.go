@@ -56,6 +56,88 @@ type FeedRequest struct {
 
 var guManaTable = gamefx.RankScaleTable
 
+const (
+	feedBloodID    = "blood"
+	feedThoughtID  = "thought"
+	feedSoulID     = "soul"
+	feedLifespanID = "lifespan"
+
+	feedBloodCost    = 10.0
+	feedThoughtCost  = 10.0
+	feedSoulCost     = 10
+	feedLifespanCost = 1.0
+)
+
+func isFeedResource(foodID string) bool {
+	switch foodID {
+	case "primeval_stone", "immortal_stone", feedBloodID, feedThoughtID, feedSoulID, feedLifespanID:
+		return true
+	default:
+		return false
+	}
+}
+
+// canConsumeFeedResource reports whether one serving can be paid. Blood, soul,
+// and lifespan always leave the cultivator with at least one point.
+func canConsumeFeedResource(player models.Player, foodID string, guRank int) bool {
+	switch foodID {
+	case "primeval_stone":
+		return player.PrimevalStones >= math.Pow(2, float64(guRank))
+	case "immortal_stone":
+		return player.ImmortalStones >= float64(guRank)
+	case feedBloodID:
+		return player.HP > feedBloodCost
+	case feedThoughtID:
+		return player.CurrentThought >= feedThoughtCost
+	case feedSoulID:
+		return player.SoulHP > feedSoulCost
+	case feedLifespanID:
+		return player.Lifespan > feedLifespanCost
+	default:
+		return false
+	}
+}
+
+func consumeFeedResource(player *models.Player, foodID string, guRank int) bool {
+	if !canConsumeFeedResource(*player, foodID, guRank) {
+		return false
+	}
+	switch foodID {
+	case "primeval_stone":
+		player.PrimevalStones -= math.Pow(2, float64(guRank))
+	case "immortal_stone":
+		player.ImmortalStones -= float64(guRank)
+	case feedBloodID:
+		player.HP -= feedBloodCost
+	case feedThoughtID:
+		player.CurrentThought -= feedThoughtCost
+	case feedSoulID:
+		player.SoulHP -= feedSoulCost
+	case feedLifespanID:
+		player.Lifespan -= feedLifespanCost
+	}
+	return true
+}
+
+func feedResourceName(foodID string) string {
+	switch foodID {
+	case "primeval_stone":
+		return "Nguyên Thạch"
+	case "immortal_stone":
+		return "Tiên Nguyên Thạch"
+	case feedBloodID:
+		return "Máu"
+	case feedThoughtID:
+		return "Niệm Lực"
+	case feedSoulID:
+		return "Linh Hồn"
+	case feedLifespanID:
+		return "Tuổi Thọ"
+	default:
+		return foodID
+	}
+}
+
 func getManaVal(rank int) float64 {
 	return gamefx.RankScale(rank)
 }
@@ -89,16 +171,8 @@ func computeFoodNutrition(foodID string, guRank int) int {
 
 func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodOptions []string, targetInstanceID string, materialQty map[string]int64) (foodID string, consumedGuIndex int) {
 	for _, food := range foodOptions {
-		if food == "primeval_stone" {
-			cost := int64(math.Pow(2, float64(targetGu.Rank)))
-			if player.PrimevalStones >= float64(cost) {
-				return food, -1
-			}
-			continue
-		}
-		if food == "immortal_stone" {
-			cost := int64(targetGu.Rank)
-			if player.ImmortalStones >= float64(cost) {
+		if isFeedResource(food) {
+			if canConsumeFeedResource(player, food, targetGu.Rank) {
 				return food, -1
 			}
 			continue
@@ -186,7 +260,7 @@ func FeedGu(c *gin.Context) {
 
 	materialQty := make(map[string]int64)
 	for _, food := range foodOptions {
-		if food == "primeval_stone" || food == "immortal_stone" || strings.HasPrefix(food, "GU_") {
+		if isFeedResource(food) || strings.HasPrefix(food, "GU_") {
 			continue
 		}
 		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
@@ -201,7 +275,7 @@ func FeedGu(c *gin.Context) {
 
 		foodID := ""
 		if chosenFoodItem != "" {
-			if chosenFoodItem != "primeval_stone" && chosenFoodItem != "immortal_stone" {
+			if !isFeedResource(chosenFoodItem) {
 				if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1); err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ thức ăn phù hợp để cho Cổ trùng ăn."})
 					return
@@ -240,22 +314,9 @@ func FeedGu(c *gin.Context) {
 			targetGu = &player.GuInventory[guIndex]
 		}
 
-		//some Gu consume immortal_stone and primeval_stone as food, so we need to check if the foodID is a stone and deduct it from the player's inventory
-		switch foodID {
-		case "immortal_stone":
-			cost := int64(targetGu.Rank)
-			if player.ImmortalStones < float64(cost) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
-				return
-			}
-			player.ImmortalStones -= float64(cost)
-		case "primeval_stone":
-			cost := int64(math.Pow(2, float64(targetGu.Rank)))
-			if player.PrimevalStones < float64(cost) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
-				return
-			}
-			player.PrimevalStones -= float64(cost)
+		if isFeedResource(foodID) && !consumeFeedResource(&player, foodID, targetGu.Rank) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ %s để cho Cổ trùng ăn.", feedResourceName(foodID))})
+			return
 		}
 
 		foodConsumed[foodID]++
@@ -293,8 +354,8 @@ func FeedGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7 WHERE id = $8`,
-		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7, current_thought = $8, soul_hp = $9 WHERE id = $10`,
+		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.CurrentThought, player.SoulHP, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -307,7 +368,7 @@ func FeedGu(c *gin.Context) {
 
 	var foodDetails []string
 	for fID, qty := range foodConsumed {
-		fName := fID
+		fName := feedResourceName(fID)
 		if itemSpec, ok := models.ItemRegistry[fID]; ok {
 			fName = itemSpec.Name
 		} else if guSpec, ok := models.GetGuAny(fID); ok {
@@ -402,14 +463,8 @@ func FeedGroup(c *gin.Context) {
 
 	getAvailableFood := func(targetRank int) string {
 		for _, food := range foodOptions {
-			if food == "primeval_stone" {
-				cost := int64(math.Pow(2, float64(targetRank)))
-				if player.PrimevalStones >= float64(cost) {
-					return food
-				}
-			} else if food == "immortal_stone" {
-				cost := int64(targetRank)
-				if player.ImmortalStones >= float64(cost) {
+			if isFeedResource(food) {
+				if canConsumeFeedResource(player, food, targetRank) {
 					return food
 				}
 			} else if !strings.HasPrefix(food, "GU_") {
@@ -459,12 +514,11 @@ func FeedGroup(c *gin.Context) {
 				foodID := ""
 				// Consume food
 				if chosenFood != "" {
-					switch chosenFood {
-					case "primeval_stone":
-						player.PrimevalStones -= float64(math.Pow(2, float64(gu.Rank)))
-					case "immortal_stone":
-						player.ImmortalStones -= float64(gu.Rank)
-					default:
+					if isFeedResource(chosenFood) {
+						if !consumeFeedResource(&player, chosenFood, gu.Rank) {
+							break
+						}
+					} else {
 						InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1)
 					}
 					foodID = chosenFood
@@ -523,8 +577,8 @@ func FeedGroup(c *gin.Context) {
 			return
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
-		player.PrimevalStones, player.ImmortalStones, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, current_thought = $4, soul_hp = $5, lifespan = $6 WHERE id = $7`,
+		player.PrimevalStones, player.ImmortalStones, player.HP, player.CurrentThought, player.SoulHP, player.Lifespan, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -537,7 +591,7 @@ func FeedGroup(c *gin.Context) {
 	// Build success message
 	var foodDetails []string
 	for foodID, qty := range foodConsumed {
-		foodName := foodID
+		foodName := feedResourceName(foodID)
 		if itemSpec, ok := models.ItemRegistry[foodID]; ok {
 			foodName = itemSpec.Name
 		} else if guSpec, ok := models.GetGuAny(foodID); ok {
@@ -614,14 +668,8 @@ func FeedAll(c *gin.Context) {
 
 	getAvailableFood := func(specs models.GuDictionaryItem, targetRank int) string {
 		for _, food := range specs.FoodTypes {
-			if food == "primeval_stone" {
-				cost := int64(math.Pow(2, float64(targetRank)))
-				if player.PrimevalStones >= float64(cost) {
-					return food
-				}
-			} else if food == "immortal_stone" {
-				cost := int64(targetRank)
-				if player.ImmortalStones >= float64(cost) {
+			if isFeedResource(food) {
+				if canConsumeFeedResource(player, food, targetRank) {
 					return food
 				}
 			} else if !strings.HasPrefix(food, "GU_") {
@@ -695,12 +743,11 @@ func FeedAll(c *gin.Context) {
 
 			foodID := ""
 			if chosenFood != "" {
-				switch chosenFood {
-				case "primeval_stone":
-					player.PrimevalStones -= float64(math.Pow(2, float64(gu.Rank)))
-				case "immortal_stone":
-					player.ImmortalStones -= float64(gu.Rank)
-				default:
+				if isFeedResource(chosenFood) {
+					if !consumeFeedResource(&player, chosenFood, gu.Rank) {
+						break
+					}
+				} else {
 					if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1); err == nil {
 						materialQty[chosenFood]--
 					} else {
@@ -768,8 +815,8 @@ func FeedAll(c *gin.Context) {
 			return
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
-		player.PrimevalStones, player.ImmortalStones, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, current_thought = $4, soul_hp = $5, lifespan = $6 WHERE id = $7`,
+		player.PrimevalStones, player.ImmortalStones, player.HP, player.CurrentThought, player.SoulHP, player.Lifespan, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -783,7 +830,7 @@ func FeedAll(c *gin.Context) {
 	// Build success message
 	var foodDetails []string
 	for foodID, qty := range foodConsumed {
-		foodName := foodID
+		foodName := feedResourceName(foodID)
 		if itemSpec, ok := models.ItemRegistry[foodID]; ok {
 			foodName = itemSpec.Name
 		} else if guSpec, ok := models.GetGuAny(foodID); ok {
