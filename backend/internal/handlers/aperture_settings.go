@@ -123,7 +123,10 @@ func SetApertureLabor(c *gin.Context) {
 		return
 	}
 
-	_ = tx.Commit()
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu cường độ lao động"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Cập nhật cường độ lao động của %s thành %s thành công!", req.Race, intensity)})
 }
@@ -155,7 +158,8 @@ func RepairApertureNode(c *gin.Context) {
 		SELECT n.id, n.aperture_id, n.name, n.hp, n.max_hp, n.is_destroyed
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
-		WHERE n.id = $1 AND a.player_id = $2
+		WHERE n.id = $1 AND a.player_id = $2 AND n.is_destroyed = false
+		FOR UPDATE OF n
 	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.Name, &n.HP, &n.MaxHP, &n.IsDestroyed)
 
 	if err == sql.ErrNoRows {
@@ -167,10 +171,6 @@ func RepairApertureNode(c *gin.Context) {
 	}
 
 	cost := int(math.Ceil(float64(n.MaxHP-n.HP) / 50.0))
-	if n.IsDestroyed {
-		cost = int(math.Ceil(float64(n.MaxHP*2) / 50.0))
-	}
-
 	if cost <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ tài nguyên đang ở trạng thái nguyên vẹn tốt nhất."})
 		return
@@ -198,17 +198,24 @@ func RepairApertureNode(c *gin.Context) {
 	}
 
 	// Repair node
-	_, err = tx.Exec(`
+	res, err := tx.Exec(`
 		UPDATE aperture_resource_nodes
-		SET hp = max_hp, is_destroyed = false, updated_at = NOW()
-		WHERE id = $1
+		SET hp = max_hp, updated_at = NOW()
+		WHERE id = $1 AND is_destroyed = false
 	`, nodeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái sửa chữa"})
 		return
 	}
+	if repaired, rowsErr := res.RowsAffected(); rowsErr != nil || repaired != 1 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Mỏ đã bị phá hủy trong lúc sửa chữa; giao dịch đã được hoàn lại"})
+		return
+	}
 
-	_ = tx.Commit()
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái sửa chữa"})
+		return
+	}
 
 	repairMsg := fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, cost)
 	notify.Send(db.DB, playerID, "aperture_repair", "Sửa Chữa Tiên Khiếu", repairMsg)

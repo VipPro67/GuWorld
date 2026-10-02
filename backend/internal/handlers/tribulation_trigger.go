@@ -447,16 +447,23 @@ func CheckAndTriggerTribulations() error {
 							if newHappiness < 30.0 || newOppression > 70.0 {
 								if rand.Float64() < (rebellionRisk / 100.0) {
 									newPop = int(float64(v.population) * 0.8)
-									// Rebellion random damage — keep as direct Exec (ORDER BY random)
+									// Rebellion damage is terminal at zero HP: delete the ruin.
 									_, _ = db.DB.Exec(`
-										UPDATE aperture_resource_nodes
-										SET hp = hp / 2
-										WHERE id IN (
-											SELECT id FROM aperture_resource_nodes
-											WHERE aperture_id = $1 AND is_destroyed = false
-											ORDER BY random() LIMIT 2
-										)
-									`, ap.ID)
+						WITH victims AS MATERIALIZED (
+							SELECT id FROM aperture_resource_nodes
+							WHERE aperture_id = $1 AND is_destroyed = false
+							ORDER BY random() LIMIT 2
+						), deleted AS (
+							DELETE FROM aperture_resource_nodes n
+							USING victims v
+							WHERE n.id = v.id AND n.hp <= 1
+							RETURNING n.id
+						)
+						UPDATE aperture_resource_nodes n
+						SET hp = n.hp / 2, updated_at = NOW()
+						FROM victims v
+						WHERE n.id = v.id AND n.hp > 1
+					`, ap.ID)
 									ap.ApertureHP = math.Max(0.0, ap.ApertureHP-ap.MaxApertureHP*0.05)
 									_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
 									msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Bộ tộc " + v.race + " trong Tiên Khiếu đã nổi loạn do bị áp bức dữ dội! Một số điểm tài nguyên và Tiên Khiếu đã bị hư hại."})
@@ -615,16 +622,26 @@ func CheckAndTriggerTribulations() error {
 
 				// Batch UPDATE node HP
 				if len(nodeUps) > 0 {
-					ids := make([]string, len(nodeUps))
-					hps := make([]int, len(nodeUps))
-					dest := make([]bool, len(nodeUps))
-					for i, u := range nodeUps {
-						ids[i] = u.id
-						hps[i] = u.hp
-						dest[i] = u.destroyed
+					ids := make([]string, 0, len(nodeUps))
+					hps := make([]int, 0, len(nodeUps))
+					destroyedIDs := make([]string, 0, len(nodeUps))
+					for _, u := range nodeUps {
+						if u.destroyed {
+							destroyedIDs = append(destroyedIDs, u.id)
+							continue
+						}
+						ids = append(ids, u.id)
+						hps = append(hps, u.hp)
 					}
-					if _, err := tx.Exec(`UPDATE aperture_resource_nodes AS n SET hp = v.hp, is_destroyed = v.destroyed, updated_at = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS hp, unnest($3::bool[]) AS destroyed) AS v WHERE n.id = v.id`, pq.Array(ids), pq.Array(hps), pq.Array(dest)); err != nil {
-						logger.S.Errorf("CheckAndTriggerTribulations: batch update nodes failed: %v", err)
+					if len(ids) > 0 {
+						if _, err := tx.Exec(`UPDATE aperture_resource_nodes AS n SET hp = v.hp, updated_at = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS hp) AS v WHERE n.id = v.id`, pq.Array(ids), pq.Array(hps)); err != nil {
+							logger.S.Errorf("CheckAndTriggerTribulations: batch update nodes failed: %v", err)
+						}
+					}
+					if len(destroyedIDs) > 0 {
+						if _, err := tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = ANY($1::uuid[])`, pq.Array(destroyedIDs)); err != nil {
+							logger.S.Errorf("CheckAndTriggerTribulations: delete destroyed nodes failed: %v", err)
+						}
 					}
 				}
 
@@ -970,8 +987,7 @@ func autoResolveEvent(eventID string, playerID string) {
 	`, newHP, ev.ID)
 
 	_, _ = tx.Exec(`
-		UPDATE aperture_resource_nodes 
-		SET is_destroyed = true 
+		DELETE FROM aperture_resource_nodes
 		WHERE id IN (
 			SELECT id FROM aperture_resource_nodes 
 			WHERE aperture_id = $1 AND is_destroyed = false 

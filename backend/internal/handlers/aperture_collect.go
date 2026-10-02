@@ -218,13 +218,12 @@ func applyBulkReward(baseReward int64, combinedMultiplier float64, bulkMultiplie
 }
 
 // computeBulkRepairCost returns the repair cost for a node after applying a bulk fee multiplier
-// (rounded up). Destroyed nodes cost max_hp*2; damaged nodes cost max_hp - hp.
+// (rounded up). Destroyed nodes cannot be repaired because they are deleted.
 func computeBulkRepairCost(hp, maxHP int, isDestroyed bool, feeMultiplier float64) (baseCost, totalCost int) {
 	if isDestroyed {
-		baseCost = int(math.Ceil(float64(maxHP*2) / 50.0))
-	} else {
-		baseCost = int(math.Ceil(float64(maxHP-hp) / 50.0))
+		return 0, 0
 	}
+	baseCost = int(math.Ceil(float64(maxHP-hp) / 50.0))
 	if baseCost <= 0 {
 		return 0, 0
 	}
@@ -697,7 +696,7 @@ func CollectAllApertureResources(c *gin.Context) {
 	})
 }
 
-// RepairAllApertureNodes repairs every damaged or destroyed node in the player's aperture at
+// RepairAllApertureNodes repairs every damaged node in the player's aperture at
 // once. As a convenience cost, each node's repair fee is increased by 30% (rounded up).
 func RepairAllApertureNodes(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
@@ -724,11 +723,12 @@ func RepairAllApertureNodes(c *gin.Context) {
 		return
 	}
 
-	// 2. Load damaged/destroyed nodes
+	// 2. Load damaged nodes. Fully destroyed nodes are deleted and cannot be rebuilt.
 	rows, err := tx.Query(`
-		SELECT id, name, hp, max_hp, is_destroyed
+		SELECT id, name, hp, max_hp
 		FROM aperture_resource_nodes
-		WHERE aperture_id = $1 AND (is_destroyed = true OR hp < max_hp)
+		WHERE aperture_id = $1 AND is_destroyed = false AND hp < max_hp
+		FOR UPDATE
 	`, apertureID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách công trình"})
@@ -746,13 +746,12 @@ func RepairAllApertureNodes(c *gin.Context) {
 	for rows.Next() {
 		var id, name string
 		var hp, maxHP int
-		var destroyed bool
-		if err := rows.Scan(&id, &name, &hp, &maxHP, &destroyed); err != nil {
+		if err := rows.Scan(&id, &name, &hp, &maxHP); err != nil {
 			rows.Close()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu công trình"})
 			return
 		}
-		_, cost := computeBulkRepairCost(hp, maxHP, destroyed, 1.3)
+		_, cost := computeBulkRepairCost(hp, maxHP, false, 1.3)
 		if cost <= 0 {
 			continue
 		}
@@ -791,12 +790,17 @@ func RepairAllApertureNodes(c *gin.Context) {
 		nodeIDs[idx] = r.NodeID
 	}
 	if len(nodeIDs) > 0 {
-		if _, err := tx.Exec(`
+		res, err := tx.Exec(`
 			UPDATE aperture_resource_nodes
-			SET hp = max_hp, is_destroyed = false, updated_at = NOW()
-			WHERE id = ANY($1::uuid[])
-		`, pq.Array(nodeIDs)); err != nil {
+			SET hp = max_hp, updated_at = NOW()
+			WHERE id = ANY($1::uuid[]) AND is_destroyed = false
+		`, pq.Array(nodeIDs))
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái sửa chữa"})
+			return
+		}
+		if repaired, rowsErr := res.RowsAffected(); rowsErr != nil || repaired != int64(len(nodeIDs)) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Một công trình đã bị phá hủy trong lúc sửa chữa; giao dịch đã được hoàn lại"})
 			return
 		}
 	}

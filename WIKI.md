@@ -37,7 +37,7 @@ Khi đăng ký, đạo hữu mặc định Nhân Tộc  và chọn **Giới tín
 | Thú Nhân (`variant_beastman`) | +8% tấn công, +5% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | Long Nhân (`dragonman`) | +10% tấn công, +10% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | Cự Dương Huyết Mạch (`giant_sun_descendant`) | +5 Vận, +5% hiệu quả tu luyện |
-| Cương Thi (`cuong_thi`) | **Bất tử tuổi thọ** (thọ nguyên không bao giờ cạn); **Cấm tự hồi phục** HP, Chân Nguyên/Tiên Nguyên, Nguyên Lực, Thần Hồn. Khi ở trạng thái Tiên Cương: gia tốc thời gian khóa ở `1.0`, Tiên Khiếu thành Tiên Khiếu Chết và bị suy thoái `time_rate` & `area_size` theo thời gian |
+| Cương Thi (`cuong_thi`) | **Bất tử tuổi thọ** (thọ nguyên không bao giờ cạn); **Cấm tự hồi phục** HP, Chân Nguyên/Tiên Nguyên, Nguyên Lực, Thần Hồn. Khi ở trạng thái Tiên Cương: gia tốc thời gian khóa ở `1.0`, Tiên Khiếu thành Tiên Khiếu Chết, không còn tiên kiếp, và bị suy thoái `time_rate` & `area_size` theo thời gian |
 
 Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` (seed từ `data/Race.csv`): admin thêm chủng tộc mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Chủng tộc" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
 
@@ -206,7 +206,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
 - Cổ sư đặt thêm node tài nguyên theo toạ độ, thu hoạch, gỡ/xóa, sửa chữa node.
 - **Thu hoạch tất cả** các mỏ đã đủ thời gian tích tụ cùng lúc; sản lượng giảm **20%** và Nhân Khí nhận được giảm còn **+1/mỏ** (so với thu hoạch từng mỏ).
-- **Sửa chữa tất cả** các công trình hư tổn/phế tích cùng lúc; phí sửa mỗi công trình tăng **30%**.
+- **Sửa chữa tất cả** các công trình còn tồn tại nhưng bị hư tổn cùng lúc; phí sửa mỗi công trình tăng **30%**. Công trình bị phá hủy hoàn toàn sẽ mất vĩnh viễn và phải xây lại.
 - Hệ sinh thái node có kiểm tra xung đột đường tu/path và cân bằng plant/herbivore/carnivore.
 - Dị nhân trong tiên khiếu có population, happiness, oppression, rebellion rate và labor intensity.
 

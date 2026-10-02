@@ -55,6 +55,13 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 	if _, err := tx.Exec(`SET LOCAL lock_timeout = '10000'`); err != nil {
 		return err
 	}
+	suppressed, err := suppressTribulationsForDeadAperture(tx, ev.PlayerID)
+	if err != nil {
+		return err
+	}
+	if suppressed {
+		return tx.Commit()
+	}
 
 	// Batch accumulators – reset per event.
 	type posUpdate struct {
@@ -456,20 +463,24 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 	if len(pendingNodeDmg) > 0 {
 		ndIDs := make([]string, 0, len(pendingNodeDmg))
 		ndHPs := make([]int, 0, len(pendingNodeDmg))
-		ndDestroyed := make([]bool, 0, len(pendingNodeDmg))
+		destroyedIDs := make([]string, 0, len(pendingNodeDmg))
 		for id, acc := range pendingNodeDmg {
+			if acc.IsDestroyed {
+				destroyedIDs = append(destroyedIDs, id)
+				continue
+			}
 			ndIDs = append(ndIDs, id)
 			ndHPs = append(ndHPs, acc.HP)
-			ndDestroyed = append(ndDestroyed, acc.IsDestroyed)
 		}
-		_, err = tx.Exec(`
-			UPDATE aperture_resource_nodes AS n
-			SET hp = v.hp, is_destroyed = v.is_destroyed, updated_at = NOW()
-			FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS hp, unnest($3::bool[]) AS is_destroyed) AS v
-			WHERE n.id = v.id
-		`, pq.Array(ndIDs), pq.Array(ndHPs), pq.Array(ndDestroyed))
-		if err != nil {
-			return fmt.Errorf("batch update node HP: %w", err)
+		if len(ndIDs) > 0 {
+			if _, err = tx.Exec(`UPDATE aperture_resource_nodes AS n SET hp = v.hp, updated_at = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS hp) AS v WHERE n.id = v.id`, pq.Array(ndIDs), pq.Array(ndHPs)); err != nil {
+				return fmt.Errorf("batch update node HP: %w", err)
+			}
+		}
+		if len(destroyedIDs) > 0 {
+			if _, err = tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = ANY($1::uuid[])`, pq.Array(destroyedIDs)); err != nil {
+				return fmt.Errorf("delete destroyed nodes: %w", err)
+			}
 		}
 	}
 

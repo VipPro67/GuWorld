@@ -625,10 +625,10 @@ export const ImmortalApertureView: React.FC = () => {
   // Bulk action helpers
   const bulkCollectableNodes = apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && canCollect(n, effectiveTimeRate));
   const bulkReadyCount = bulkCollectableNodes.length;
-  const bulkDamagedNodes = apertureNodes.filter(n => n.is_destroyed || n.hp < n.max_hp);
+  const bulkDamagedNodes = apertureNodes.filter(n => !n.is_destroyed && n.hp < n.max_hp);
   const bulkRepairCount = bulkDamagedNodes.length;
   const bulkRepairCost = bulkDamagedNodes.reduce((sum, n) => {
-    const baseCost = n.is_destroyed ? Math.ceil((n.max_hp * 2) / 50) : Math.ceil((n.max_hp - n.hp) / 50);
+    const baseCost = Math.ceil((n.max_hp - n.hp) / 50);
     return sum + Math.ceil(baseCost * 1.3);
   }, 0);
   const canAffordBulkRepair = player.immortal_stones >= bulkRepairCost;
@@ -1722,8 +1722,8 @@ return (
                           )}
 
                           {/* Repair Node Section */}
-                          {(selectedNode.hp < selectedNode.max_hp || selectedNode.is_destroyed) && (() => {
-                            const repairCost = selectedNode.is_destroyed ? Math.ceil((selectedNode.max_hp * 2) / 50) : Math.ceil((selectedNode.max_hp - selectedNode.hp) / 50);
+                          {!selectedNode.is_destroyed && selectedNode.hp < selectedNode.max_hp && (() => {
+                            const repairCost = Math.ceil((selectedNode.max_hp - selectedNode.hp) / 50);
                             const canRepair = player.immortal_stones >= repairCost;
                             return (
                               <div className="pt-2 border-t border-slate-800">
@@ -1732,7 +1732,7 @@ return (
                                   disabled={actionLoading || !canRepair}
                                   className="w-full py-2 bg-gradient-to-r from-cyan-600 to-blue-600 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-lg transition"
                                 >
-                                  {actionLoading ? "Đang sửa..." : selectedNode.is_destroyed ? `Tái thiết phế tích (${repairCost} Tiên Nguyên Thạch)` : `Sửa chữa độ bền (${repairCost} Tiên Nguyên Thạch)`}
+                                  {actionLoading ? "Đang sửa..." : `Sửa chữa độ bền (${repairCost} Tiên Nguyên Thạch)`}
                                 </button>
                               </div>
                             );
