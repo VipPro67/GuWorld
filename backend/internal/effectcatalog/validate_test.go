@@ -169,6 +169,10 @@ func TestValidateAcceptsExtendedRebornParams(t *testing.T) {
 	if _, _, err := NormalizeAndValidate([]byte(`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":0.7}}]}`)); err != nil {
 		t.Fatalf("legacy REBORN params rejected: %v", err)
 	}
+	// max_uses 0 = unlimited rebirth.
+	if _, _, err := NormalizeAndValidate([]byte(`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":1,"max_uses":0}}]}`)); err != nil {
+		t.Fatalf("unlimited REBORN params rejected: %v", err)
+	}
 	for _, bad := range []string{
 		`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":0.5,"mode":"rewind_too_far"}}]}`,
 		`{"other":[{"event_trigger":"ON_DEATH","action_code":"REBORN","params":{"chance":0.5,"max_uses":99}}]}`,

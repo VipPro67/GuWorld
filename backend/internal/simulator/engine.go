@@ -138,27 +138,82 @@ func seizeInitiative(state *CombatState, allActors []*CombatantAuto) (*Combatant
 // carries Cấm Cổ (ON_BATTLE_START/SUPPRESS_PRIORITY).
 func sideHasPrioritySuppressor(state *CombatState, allActors []*CombatantAuto, isAlly bool) bool {
 	for _, actor := range allActors {
-		inSide := false
-		if isAlly {
-			for _, a := range state.Allies {
-				if a.ID == actor.ID {
-					inSide = true
-					break
-				}
-			}
-		} else {
-			for _, e := range state.Enemies {
-				if e.ID == actor.ID {
-					inSide = true
-					break
-				}
-			}
-		}
-		if inSide && suppressesPriority(actor) {
+		if onSide(state, actor, isAlly) && suppressesPriority(actor) {
 			return true
 		}
 	}
 	return false
+}
+
+// onSide reports whether actor fights on the given side.
+func onSide(state *CombatState, actor *CombatantAuto, isAlly bool) bool {
+	if actor == nil {
+		return false
+	}
+	if isAlly {
+		for _, a := range state.Allies {
+			if a.ID == actor.ID {
+				return true
+			}
+		}
+		return false
+	}
+	for _, e := range state.Enemies {
+		if e.ID == actor.ID {
+			return true
+		}
+	}
+	return false
+}
+
+// sidePriorityWouldFire reports whether a side carries a battle-start priority
+// effect that would actually trigger on turn 1: a SEIZE_INITIATIVE whose
+// lifespan condition passes, or a FIRST_TURN_EVADE carrier (deterministic —
+// it negates the first strike it takes). Decides whether an opposing Cấm Cổ
+// suppression "activates successfully".
+func sidePriorityWouldFire(state *CombatState, isAlly bool) bool {
+	var side []*CombatantAuto
+	if isAlly {
+		side = state.Allies
+	} else {
+		side = state.Enemies
+	}
+	for _, c := range side {
+		if c == nil || c.HP <= 0 {
+			continue
+		}
+		if hasMechanic(c.Mechanics, "ON_BATTLE_START", "SEIZE_INITIATIVE") {
+			selfLife := combatantLifespan(c)
+			opp := opponentPrimary(state, isAlly)
+			if opp != nil && selfLife > 0 &&
+				combatantLifespan(opp) <= mechanicFloat(c.Mechanics, "ON_BATTLE_START", "SEIZE_INITIATIVE", "lifespan_ratio", 3)*selfLife {
+				return true
+			}
+		}
+		if hasMechanic(c.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") {
+			return true
+		}
+	}
+	return false
+}
+
+// successfulSuppressor returns the fastest living Cấm Cổ holder on the given
+// side when its suppression activates successfully — the opposing side
+// carries a priority effect that would actually trigger. Nil otherwise.
+// allActors must already be sorted by EffectiveSpeed descending.
+func successfulSuppressor(state *CombatState, allActors []*CombatantAuto, isAlly bool) *CombatantAuto {
+	if !sidePriorityWouldFire(state, !isAlly) {
+		return nil
+	}
+	for _, a := range allActors {
+		if a == nil || a.HP <= 0 || !suppressesPriority(a) {
+			continue
+		}
+		if onSide(state, a, isAlly) {
+			return a
+		}
+	}
+	return nil
 }
 
 // hasReverseCalamity reports whether a combatant carries Nghịch Chuyển Cổ's
@@ -170,7 +225,9 @@ func hasReverseCalamity(c *CombatantAuto) bool {
 
 // suppressesPriority reports whether a combatant carries Cấm Cổ
 // (ON_BATTLE_START/SUPPRESS_PRIORITY): enemy action-priority effects
-// (seize initiative, first-turn evade) are ignored against its side.
+// (seize initiative, first-turn evade) are ignored against its side, and a
+// suppression that negates a would-trigger enemy priority lets its fastest
+// living holder act first on turn 1.
 func suppressesPriority(c *CombatantAuto) bool {
 	return c != nil && hasMechanic(c.Mechanics, "ON_BATTLE_START", "SUPPRESS_PRIORITY")
 }
@@ -768,7 +825,7 @@ func Simulate(state *CombatState) []CombatLog {
 				turnLogs = append(turnLogs, CombatLog{
 					Turn:   turn,
 					Action: "PRIORITY_SUPPRESSED",
-					Detail: fmt.Sprintf("Cấm Cổ trấn áp tiên thủ của %s — thứ tự hành động so tốc như bình thường!", name),
+					Detail: fmt.Sprintf("Cấm Cổ trấn áp tiên thủ của %s!", name),
 				})
 			}
 			if seizer != nil {
@@ -787,6 +844,40 @@ func Simulate(state *CombatState) []CombatLog {
 					Action:    "SEIZE_INITIATIVE",
 					Detail:    fmt.Sprintf("[Thỉnh Đạo Hữu Tiên Hành] Thọ nguyên đối thủ chưa gấp ba lần đạo hữu — %s nắm quyền tiên thủ!", seizer.Name),
 				})
+			} else {
+				// ── Cấm Cổ: trấn áp thành công thì người mang đi trước ──
+				// A suppression that actually negates an enemy priority
+				// effect seizes the opening for its holder: the fastest
+				// living suppressor moves ahead of everyone. Mirror (both
+				// sides succeed): the faster suppressor goes first.
+				suppA := successfulSuppressor(state, allActors, true)
+				suppB := successfulSuppressor(state, allActors, false)
+				winner := suppA
+				mirror := suppA != nil && suppB != nil
+				if suppB != nil && (suppA == nil || suppB.EffectiveSpeed > suppA.EffectiveSpeed) {
+					winner = suppB
+				}
+				if winner != nil {
+					reordered := make([]*CombatantAuto, 0, len(allActors))
+					reordered = append(reordered, winner)
+					for _, a := range allActors {
+						if a != winner {
+							reordered = append(reordered, a)
+						}
+					}
+					allActors = reordered
+					detail := fmt.Sprintf("Cấm Cổ trấn áp ưu tiên của địch — %s giành quyền đi trước!", winner.Name)
+					if mirror {
+						detail = fmt.Sprintf("Song Cấm đối kháng — %s nhanh hơn, giành quyền đi trước!", winner.Name)
+					}
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   winner.ID,
+						ActorName: winner.Name,
+						Action:    "SUPPRESS_PRIORITY",
+						Detail:    detail,
+					})
+				}
 			}
 		}
 
@@ -2447,10 +2538,12 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 			mechs := c.Mechanics
 			maxUses := mechanicInt(mechs, "ON_DEATH", "REBORN", "max_uses", 1)
-			if maxUses < 1 {
+			// max_uses 0 = hồi sinh vô hạn (Xuân Thu Thiền).
+			unlimited := maxUses == 0
+			if maxUses < 0 {
 				maxUses = 1
 			}
-			if rebornUses[c.ID] >= maxUses {
+			if !unlimited && rebornUses[c.ID] >= maxUses {
 				return false
 			}
 			guaranteed := turn == 1 && mechanicBool(mechs, "ON_DEATH", "REBORN", "turn1_guaranteed", false)
@@ -2486,13 +2579,17 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 			applyRebornEmpower(c, mechs, turn, rebornUses[c.ID], &logs)
 			ComputeEffectMultipliers(c)
+			usesDetail := fmt.Sprintf("lần %d/%d", rebornUses[c.ID], maxUses)
+			if unlimited {
+				usesDetail = fmt.Sprintf("lần %d (vô hạn)", rebornUses[c.ID])
+			}
 			logs = append(logs, CombatLog{
 				Turn:      turn,
 				ActorId:   c.ID,
 				ActorName: c.Name,
 				Action:    "TRIGGERED",
 				Trigger:   "REBORN",
-				Detail:    fmt.Sprintf("%s lãng quên cái chết, vùng dậy với %.0f HP (lần %d/%d)!", c.Name, c.HP, rebornUses[c.ID], maxUses),
+				Detail:    fmt.Sprintf("%s lãng quên cái chết, vùng dậy với %.0f HP (%s)!", c.Name, c.HP, usesDetail),
 			})
 			return false
 		}

@@ -196,6 +196,31 @@ func TestRebornInPlaceSingleUse(t *testing.T) {
 	}
 }
 
+// REBORN unlimited: max_uses 0 revives on every death until the turn cap.
+func TestRebornUnlimitedUses(t *testing.T) {
+	ally := newTestCombatant("ally", "Player", 100, 0)
+	ally.Speed = 1
+	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Thủ", Damage: 0}}
+	ally.Mechanics = []CombatMechanic{mech("ON_DEATH", "REBORN",
+		`{"chance":1,"mode":"in_place","max_uses":0,"revive_hp_percent":0.5}`)}
+	enemy := newTestCombatant("enemy", "Enemy", 5000, 0)
+	enemy.Speed = 100
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Sát", Damage: 100}}
+
+	state := &CombatState{Seed: 13, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	if got := logCount(logs, "TRIGGERED"); got < 10 {
+		t.Fatalf("expected many REBORN triggers with unlimited uses, got %d", got)
+	}
+	if !hasDetail(logs, "(vô hạn)") {
+		t.Fatal("missing unlimited marker in reborn log")
+	}
+	if ally.HP <= 0 {
+		t.Fatalf("ally HP = %v, want alive with unlimited rebirth", ally.HP)
+	}
+}
+
 // REBORN miss: chance 0 always fails the roll and logs REBORN_MISS.
 func TestRebornMissLogged(t *testing.T) {
 	ally := newTestCombatant("ally", "Player", 100, 0)

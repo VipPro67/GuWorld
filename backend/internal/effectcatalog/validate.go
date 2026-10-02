@@ -456,7 +456,7 @@ func validateMechanicParams(action string, raw json.RawMessage, path string, rep
 				report.add(SeverityError, "invalid_mechanic_param", path+".mode", "mode phải là rewind hoặc in_place")
 			}
 		}
-		requireOptionalRange("max_uses", 1, 10)
+		requireOptionalRange("max_uses", 0, 10)
 		requireOptionalRange("revive_hp_percent", 0, 1)
 		requireOptionalRange("empower_attack_percent", 0, 5)
 		requireOptionalRange("empower_speed_percent", 0, 5)

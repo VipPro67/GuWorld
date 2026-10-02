@@ -2,6 +2,8 @@ package models
 
 import (
 	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 )
 
 func TestGetFlatGuEffectsPassiveOnlyDoesNotPanic(t *testing.T) {
@@ -258,5 +260,39 @@ func TestGetFlatGuEffectsReadsBlockPassives(t *testing.T) {
 	flat := GetFlatGuEffects(Gu{Effects: effects})
 	if flat["flat_damage"] != 12 || flat["flat_defense"] != 34 || flat["accuracy"] != 5 || flat["movement"] != 2 || flat["speed"] != 6 || flat["evasion"] != 15 {
 		t.Fatalf("unexpected flat passive projection: %+v", flat)
+	}
+}
+
+func TestImmortalTravelFirstTurnEvadeRank9Only(t *testing.T) {
+	hasEvade := func(raw string) bool {
+		var effects GuEffects
+		if err := effects.Scan(raw); err != nil {
+			t.Fatalf("scan travel effects: %v", err)
+		}
+		compiled := CompiledGuEffects(GuDictionaryItem{Effects: effects})
+		if compiled == nil {
+			t.Fatal("travel effects failed to compile")
+		}
+		for _, op := range compiled.NativeMechanics() {
+			if string(op.Trigger) == "BEFORE_HIT" && op.Code == "FIRST_TURN_EVADE" {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Rank 6-8: movement capabilities only, no evade.
+	rankLow := `[{"id":"SPACE_CAPABILITIES","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE"},{"op":"UNIQUE","code":"IGNORE_MOVEMENT_RANGE"}]}]`
+	if hasEvade(rankLow) {
+		t.Fatal("rank 6-8 travel Gu must not carry FIRST_TURN_EVADE")
+	}
+
+	// Rank 9 (Gu.csv): capabilities plus first-strike evade.
+	rank9 := `[{"id":"SPACE_CAPABILITIES","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE"},{"op":"UNIQUE","code":"IGNORE_MOVEMENT_RANGE"}]},{"id":"FIRST_TURN_EVADE","trigger":"BEFORE_HIT","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"FIRST_TURN_EVADE"}]}]`
+	if issues := effectcatalog.ValidateBlockV2([]byte(rank9), effectcatalog.Location{Source: "gu", Key: "GU_FIXED_IMMORTAL_TRAVEL/9"}); len(issues) > 0 {
+		t.Fatalf("rank 9 travel effects rejected by Admin import validator: %+v", issues)
+	}
+	if !hasEvade(rank9) {
+		t.Fatal("rank 9 travel Gu must compile BEFORE_HIT/FIRST_TURN_EVADE")
 	}
 }
