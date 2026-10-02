@@ -253,6 +253,11 @@ export const ImmortalApertureView: React.FC = () => {
     buildSettlement,
     upgradeSettlement,
     fetchNPCs,
+    assignNPCRole,
+    setNPCFormation,
+    cultivateNPC,
+    equipNPCGu,
+    unequipNPCGu,
     fetchRefinementQueue,
     createRefinementJob,
     deleteRefinementJob,
@@ -3048,16 +3053,34 @@ return (
                       const raceIcons: Record<string, string> = { HAIRY_MAN: "🧔", ROCKMAN: "🗿", FEATHERMAN: "🦅" };
                       const rankLabels: Record<number, string> = { 1: "Sơ Giai", 2: "Trung Giai", 3: "Hậu Giai", 4: "Đỉnh Phong", 5: "Siêu Việt" };
                       return (
-                        <div key={npc.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
+                        <div key={npc.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 space-y-3">
+                          <div className="flex items-center gap-3">
                           <span className="text-2xl">{raceIcons[npc.race] || "👤"}</span>
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-xs text-slate-100 truncate">{npc.name}</div>
-                            <div className="text-[9px] text-slate-500">Rank {npc.rank} · {rankLabels[npc.rank] || "?"} · {npc.path}</div>
+                            <div className="text-[9px] text-slate-500">Rank {npc.rank} · {rankLabels[npc.sub_rank] || "?"} · {npc.path}</div>
                             <div className="text-[9px] text-slate-500">Loyal: {npc.loyalty.toFixed(0)} · Talent: {npc.talent.toFixed(0)}</div>
+                            <div className="text-[9px] text-slate-500">HP {npc.hp.toFixed(0)}/{npc.max_hp.toFixed(0)} · Tu vi {npc.experience} · Slot {npc.formation_slot || "—"}</div>
                           </div>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${npc.status === "IDLE" ? "bg-slate-800 text-slate-400" : "bg-amber-500/20 text-amber-400"}`}>
                             {npc.role}
                           </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <select value={npc.role} onChange={(e) => assignNPCRole(npc.id, e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200">
+                              {['NONE','REFINER','MINER','FARMER'].map(role => <option key={role}>{role}</option>)}
+                            </select>
+                            <select value={npc.formation_slot} onChange={(e) => setNPCFormation(npc.id, Number(e.target.value))} disabled={npc.role !== 'NONE'} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 disabled:opacity-40">
+                              <option value={0}>Không chiến đấu</option>{[1,2,3,4,5,6,7,8].map(slot => <option key={slot} value={slot}>Đội hình {slot}</option>)}
+                            </select>
+                            <button onClick={() => cultivateNPC(npc.id)} disabled={npc.role !== 'NONE'} className="rounded bg-purple-600/30 border border-purple-500/40 px-2 py-1 text-[10px] text-purple-200 disabled:opacity-40">Tu luyện</button>
+                            <button onClick={() => {
+                              const available = player?.gu_inventory?.find((gu) => !gu.equipped && !gu.is_vital && gu.status === 'ACTIVE' && gu.rank <= npc.rank);
+                              if (available) equipNPCGu(npc.id, available.instance_id, 0);
+                              else addToast("Không có Cổ phù hợp trong túi", "error");
+                            }} className="rounded bg-amber-600/30 border border-amber-500/40 px-2 py-1 text-[10px] text-amber-200">Giao Cổ khả dụng</button>
+                          </div>
+                          {(npc.equipped_gu || []).map(gu => <button key={gu.instance_id} onClick={() => unequipNPCGu(npc.id, gu.instance_id)} className="mr-1 rounded bg-slate-800 px-2 py-1 text-[9px] text-slate-300">{gu.gu_id} R{gu.rank} ×</button>)}
                         </div>
                       );
                     })}

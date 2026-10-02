@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
@@ -84,6 +85,12 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	chargeAttacker := base.CombatMode != "virtual" && !base.PetSoulCharged
 	attackerPets, attackerSoul, attackerSoulLoaded := loadFormationPetCombatants(tx, player.ID.String(), base.CombatMode == "virtual", chargeAttacker)
 	base.Allies = append(base.Allies, attackerPets...)
+	attackerNPCs, errNPC := loadFormationNPCCombatants(tx, player.ID.String(), base.CombatMode == "virtual")
+	if errNPC != nil {
+		logger.S.Errorf("load attacker variant NPCs: %v", errNPC)
+	} else {
+		base.Allies = append(base.Allies, attackerNPCs...)
+	}
 	if chargeAttacker && attackerSoulLoaded {
 		player.SoulHP = attackerSoul
 		_, _ = tx.Exec("UPDATE players SET soul_hp = $1 WHERE id = $2", attackerSoul, player.ID)
@@ -99,6 +106,12 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	if base.TargetPlayerID != "" && base.TargetPlayerID != "dummy" {
 		defenderPets, defenderSoul, defenderSoulLoaded := loadFormationPetCombatants(tx, base.TargetPlayerID, base.CombatMode == "virtual", base.CombatMode != "virtual")
 		base.Enemies = append(base.Enemies, defenderPets...)
+		defenderNPCs, errNPC := loadFormationNPCCombatants(tx, base.TargetPlayerID, base.CombatMode == "virtual")
+		if errNPC != nil {
+			logger.S.Errorf("load defender variant NPCs: %v", errNPC)
+		} else {
+			base.Enemies = append(base.Enemies, defenderNPCs...)
+		}
 		if defenderSoulLoaded {
 			_, _ = tx.Exec("UPDATE players SET soul_hp = $1 WHERE id = $2", defenderSoul, base.TargetPlayerID)
 		}
@@ -192,6 +205,40 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	return base
 }
 
+func loadFormationNPCCombatants(tx *sql.Tx, playerID string, virtual bool) ([]models.Combatant, error) {
+	rows, err := tx.Query(`SELECT id,name,rank,sub_rank,hp,max_hp,base_attack,base_defense,speed,formation_slot,path
+		FROM non_player_actors WHERE owner_player_id=$1 AND actor_kind='VARIANT_NPC'
+		AND lifecycle_state='ACTIVE' AND execution_state='STORED' AND role='NONE' AND formation_slot>0
+		ORDER BY formation_slot FOR UPDATE`, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []models.Combatant{}
+	for rows.Next() {
+		var c models.Combatant
+		var slot int
+		var path string
+		if err := rows.Scan(&c.ID, &c.Name, &c.Rank, &c.SubRank, &c.HP, &c.MaxHP, &c.BaseAttack, &c.BaseDefense, &c.Speed, &slot, &path); err != nil {
+			return nil, err
+		}
+		c.Kind = "VariantNPC"
+		c.MaxMana = float64(c.Rank * 100)
+		c.CurrentMana = c.MaxMana
+		if virtual {
+			c.HP = c.MaxHP
+		}
+		c.PathMasteries = map[string]int{path: c.Rank * 100}
+		c.DaoMarks = models.DaoMarksMap{}
+		c.GuInventory, err = loadActorGu(tx, c.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, c)
+	}
+	return result, rows.Err()
+}
+
 // loadFormationPetCombatants loads a player's formation pets as Combatants.
 // virtual restores pets to full HP, mirroring arena's virtual-mode convention.
 // When charge is true, each loaded pet costs soul_hp equal to its count
@@ -210,9 +257,9 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool, charg
 	}
 
 	petRows, errPet := tx.Query(`
-		SELECT id, nickname, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
-		FROM player_pets
-		WHERE player_id = $1 AND formation_slot > 0 AND state = 'ACTIVE' AND hunger > 0
+		SELECT id, name, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
+		FROM non_player_actors
+		WHERE owner_player_id = $1 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE' AND formation_slot > 0 AND execution_state = 'STORED' AND hunger > 0
 		ORDER BY formation_slot ASC
 	`, playerID)
 	if errPet != nil {
@@ -222,10 +269,10 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool, charg
 
 	var pets []models.Combatant
 	for petRows.Next() {
-		var petID, nickname string
+		var petID, name string
 		var petRank, petSubRank, petCount int
 		var petHP, petMaxHP, petAtk, petDef, petSpeed float64
-		if errScan := petRows.Scan(&petID, &nickname, &petRank, &petSubRank, &petHP, &petMaxHP, &petAtk, &petDef, &petSpeed, &petCount); errScan != nil {
+		if errScan := petRows.Scan(&petID, &name, &petRank, &petSubRank, &petHP, &petMaxHP, &petAtk, &petDef, &petSpeed, &petCount); errScan != nil {
 			continue
 		}
 		if charge {
@@ -238,9 +285,9 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool, charg
 		if virtual {
 			petHP = petMaxHP
 		}
-		displayName := nickname
+		displayName := name
 		if petCount > 1 {
-			displayName = fmt.Sprintf("Bầy %s (%d)", nickname, petCount)
+			displayName = fmt.Sprintf("Bầy %s (%d)", name, petCount)
 		}
 		pets = append(pets, models.Combatant{
 			ID:            petID,

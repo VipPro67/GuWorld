@@ -904,7 +904,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			if a.ActionType == "GU_SKILL" && actor.Kind == "Player" {
+			if a.ActionType == "GU_SKILL" && (actor.Kind == "Player" || actor.Kind == "VariantNPC") {
 				guKey := a.InstanceID
 				if guKey == "" {
 					guKey = a.SourceID
@@ -976,7 +976,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 			actionStartIndex := len(turnLogs)
 
-			if actor.Kind == "Player" {
+			if actor.Kind == "Player" || actor.Kind == "VariantNPC" {
 				if a.ManaCost > 0 && actor.Mana < a.ManaCost {
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,

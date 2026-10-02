@@ -71,6 +71,10 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 			simState.Allies = append(simState.Allies, simPet)
 			continue
 		}
+		if ally.Kind == "VariantNPC" {
+			simState.Allies = append(simState.Allies, buildSimVariantNPC(&ally))
+			continue
+		}
 		// Party member allies
 		allyUUID, errParse := uuid.Parse(ally.ID)
 		if errParse == nil {
@@ -94,6 +98,10 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 	// Build enemies
 	for idx := range player.ActiveCombat.Enemies {
 		enemy := &player.ActiveCombat.Enemies[idx]
+		if enemy.Kind == "VariantNPC" {
+			simState.Enemies = append(simState.Enemies, buildSimVariantNPC(enemy))
+			continue
+		}
 		if simDef, ok := buildSimPlayerDefender(tx, enemy, player.ActiveCombat, isVirtual); ok {
 			simState.Enemies = append(simState.Enemies, simDef)
 			continue
@@ -204,6 +212,30 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 	}
 
 	return simState, nil
+}
+
+func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {
+	actions := []simulator.SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseAttack, DamageMult: 1}}
+	mechanics := []simulator.CombatMechanic{}
+	hunger := map[string]int{}
+	for _, gu := range actor.GuInventory {
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if !ok || gu.Status != "ACTIVE" || gu.Hunger <= 0 {
+			continue
+		}
+		mechanics = append(mechanics, combatMechanicsForSpec(spec, false)...)
+		hunger[gu.InstanceID] = gu.Hunger
+		if hasCombatActiveEffects(&spec) {
+			if act, err := buildSimActionFromGu(actor, &spec, "GU_SKILL"); err == nil {
+				act.InstanceID = gu.InstanceID
+				act.SourceID = gu.GuID
+				actions = append(actions, act)
+			}
+		}
+	}
+	return &simulator.CombatantAuto{ID: actor.ID, Name: actor.Name, Kind: "VariantNPC", Rank: actor.Rank, SubRank: actor.SubRank,
+		GridX: actor.GridX, GridY: actor.GridY, HP: actor.HP, MaxHP: actor.MaxHP, Mana: actor.CurrentMana, MaxMana: actor.MaxMana,
+		BaseDmg: actor.BaseAttack, BaseDef: actor.BaseDefense, Speed: actor.Speed, Actions: actions, Mechanics: mechanics, GuHunger: hunger}
 }
 
 // buildSimPlayerDefender rebuilds a real-player PVP defender with the same

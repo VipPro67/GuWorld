@@ -635,8 +635,8 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			pets.POST("/merge", handlers.MergePets)
 		}
 
-		// Canonical actor roster — Release 1 is read-only. Gameplay writes still
-		// use the legacy pet/NPC endpoints until their staged cutovers.
+		// Canonical actor roster. Domain-specific mutations remain under the pet
+		// and aperture routes so each command can enforce its own invariants.
 		actors := api.Group("/actors")
 		actors.Use(middleware.AuthRequired())
 		actors.Use(middleware.RateLimitByPlayer(20, time.Minute))
@@ -707,6 +707,10 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			// Phase 3: Variant NPCs
 			aperture.GET("/npcs", handlers.GetApertureNPCs)
 			aperture.POST("/npcs/:npc_id/role", handlers.AssignNPCRole)
+			aperture.POST("/npcs/:npc_id/formation", handlers.SetNPCFormation)
+			aperture.POST("/npcs/:npc_id/cultivate", handlers.CultivateNPC)
+			aperture.POST("/npcs/:npc_id/gu/equip", handlers.EquipNPCGu)
+			aperture.DELETE("/npcs/:npc_id/gu/:gu_id", handlers.UnequipNPCGu)
 			aperture.DELETE("/npcs/:npc_id", handlers.DismissNPC)
 		}
 

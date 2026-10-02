@@ -81,14 +81,25 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/beast-betting/history` | Lấy lịch sử 10 trận đấu thú gần nhất và log chiến đấu. |
 | POST | `/player/beast-betting/bet` | Đặt cược Nguyên Thạch vào phe Đỏ hoặc Xanh. Body: `{"team": "team_a"|"team_b", "amount": float64}`. |
 
-## Actors (Release 1, read-only)
+## Actors
 
-Các route protected dưới đây trả canonical Actor Instance thuộc người chơi. Release 1 chưa nhận command và chưa thay đổi contract của `/pets/*` hoặc `/immortal-aperture/npcs`.
+Các route protected dưới đây trả canonical Actor Instance thuộc người chơi. Sủng vật và NPC dị nhân đã dùng cùng nguồn dữ liệu này; contract của `/pets/*` và `/immortal-aperture/npcs` vẫn được giữ tương thích.
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | GET | `/actors` | Trả `{ "actors": [...] }`; danh sách rỗng luôn là `[]`. |
 | GET | `/actors/:id` | Trả `{ "actor": {...} }` cho actor thuộc người gọi. UUID sai trả `400`; actor không tồn tại hoặc không thuộc người gọi trả `404`. |
+
+### Named variant NPC gameplay
+
+Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC thuộc người gọi và còn sống. Công việc, tu luyện và chiến đấu loại trừ lẫn nhau qua `execution_state`.
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| POST | `/formation` | Body `{ "slot": 0..8 }`; slot `0` rút khỏi đội hình, chỉ NPC `NONE/STORED` được vào đội. |
+| POST | `/cultivate` | Tiêu Nguyên Thạch, tăng tiến độ deterministic theo thiên phú; tối đa Ngũ Chuyển. |
+| POST | `/gu/equip` | Body `{ "gu_instance_id", "slot" }`; chuyển Cổ khả dụng từ túi chủ sang NPC. |
+| DELETE | `/gu/:gu_id` | Thu hồi Cổ từ NPC về túi chủ. |
 
 ## Cultivation and quests
 

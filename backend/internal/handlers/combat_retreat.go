@@ -333,9 +333,9 @@ func Flee(c *gin.Context) {
 			if ally.ID != player.ID.String() {
 				if ally.Kind == "Pet" {
 					if ally.HP <= 0 {
-						_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, ally.ID, player.ID)
+						_, _ = tx.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST'`, ally.ID, player.ID)
 					} else {
-						_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+						_, _ = tx.Exec(`UPDATE non_player_actors SET hp = $1, updated_at = NOW(), version = version + 1 WHERE id = $2 AND owner_player_id = $3 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'`,
 							ally.HP, ally.ID, player.ID)
 					}
 					continue

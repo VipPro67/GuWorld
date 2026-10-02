@@ -589,7 +589,7 @@ Trong chiến đấu, đạo hữu có thể bắt quái vật làm sủng vật
   - `hpFactor`: `(1 - enemy.hp%)^0.5` — quái càng yếu càng dễ bắt (full HP ≈ 0%)
   - `captureBonus`: tổng từ thuộc tính `capture_bonus` của các Cổ đang trang bị
   - `luckMultiplier`: random 0.9-1.1
-- **Kết quả:** Nếu roll < baseChance → bắt thành công, quái biến thành sủng vật trong `player_pets`, xóa khỏi combat. Nếu roll ≥ baseChance → bỏ lỡ, tiếp tục chiến đấu.
+- **Kết quả:** Nếu roll < baseChance → bắt thành công, quái trở thành Actor sủng vật persistent và bị xóa khỏi combat. Nếu roll ≥ baseChance → bỏ lỡ, tiếp tục chiến đấu.
 
 ### Sủng vật (Pets)
 
@@ -605,9 +605,9 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 
 ### Mô hình Actor thống nhất (nền tảng)
 
-Sủng vật và NPC dị nhân có tên đang được chuyển dần sang một mô hình cá thể chung. Mỗi cá thể giữ định danh và tiến trình lâu dài độc lập với việc có đang xuất hiện trên bản đồ hay không; loài/kiểu cung cấp dữ liệu nền, còn capability quyết định hành động được phép.
+Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. Mỗi cá thể giữ định danh và tiến trình lâu dài độc lập với việc có đang xuất hiện trên bản đồ hay không; loài/kiểu cung cấp dữ liệu nền, còn capability quyết định hành động được phép. Quái/sủng thú tiếp tục lấy template từ `monster_templates`; NPC không bị ép thành “monster” mà dùng nguồn template phù hợp với loại của mình.
 
-Trong Release 1 đây là lớp nền và API đọc: cơ chế sủng vật, đội hình, độ no, gộp bầy và chiến đấu vẫn giữ nguyên hành vi hiện tại. Các release sau mới lần lượt chuyển command, hiện diện thế giới, AI, combat và công việc; client chỉ gửi ý định và không tự quyết định vị trí, HP hoặc trạng thái.
+**Cổ Sư dị nhân có tên:** có thể làm giám sát khai khoáng/nông nghiệp, hỗ trợ luyện Cổ, tu luyện tới Ngũ Chuyển, nhận Cổ từ chủ nhân và tham gia đội hình. NPC đang làm việc không thể đồng thời tu luyện hoặc chiến đấu; NPC tử trận được ghi nhận là đã chết. Các cơ chế hiện diện ngoài bản đồ và AI tự ra quyết định chưa được bật.
 
 ### Đấu Trường Sinh Tử (Death Arena)
 
