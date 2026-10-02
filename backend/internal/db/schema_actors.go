@@ -1,10 +1,5 @@
 package db
 
-import (
-	"context"
-	"fmt"
-)
-
 // Actor schema: persistent non-player individuals and the sole instance store
 // for companion beasts and named variant NPCs. Static monster data remains in
 // monster_templates; world presence and assignments are introduced separately.
@@ -156,82 +151,8 @@ func schemaActors() error {
 		return err
 	}
 
-	return migrateLegacyActors()
+	// Canonical store is solely non_player_actors. Legacy tables
+	// player_pets / aperture_variant_npcs were dropped by the one-way
+	// migration and are no longer referenced anywhere.
+	return nil
 }
-
-// migrateLegacyActors is a one-way, transactional cutover. It preserves legacy
-// UUIDs so in-flight combat snapshots stay valid and drops each source only
-// after every row has a canonical actor.
-func migrateLegacyActors() error {
-	tx, err := DB.BeginTx(context.Background(), nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, migration := range []struct{ table, statement, kind string }{
-		{"player_pets", legacyPetsToActorsSQL, "COMPANION_BEAST"},
-		{"aperture_variant_npcs", legacyVariantNPCsToActorsSQL, "VARIANT_NPC"},
-	} {
-		var exists bool
-		if err := tx.QueryRow(`SELECT to_regclass('public.' || $1) IS NOT NULL`, migration.table).Scan(&exists); err != nil {
-			return err
-		}
-		if !exists {
-			continue
-		}
-		if _, err := tx.Exec(migration.statement); err != nil {
-			return err
-		}
-		var missing int
-		query := fmt.Sprintf(`SELECT count(*) FROM %s l WHERE NOT EXISTS (SELECT 1 FROM non_player_actors a WHERE a.id = l.id AND a.actor_kind = $1)`, migration.table)
-		if err := tx.QueryRow(query, migration.kind).Scan(&missing); err != nil {
-			return err
-		}
-		if missing != 0 {
-			return fmt.Errorf("actor migration from %s left %d rows behind", migration.table, missing)
-		}
-		if _, err := tx.Exec(`DROP TABLE ` + migration.table); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
-const legacyPetsToActorsSQL = `
-	DELETE FROM non_player_actors a USING player_pets p
-	WHERE a.legacy_source = 'PLAYER_PET' AND a.legacy_id = p.id;
-	INSERT INTO non_player_actors (
-		id, actor_kind, owner_player_id, template_source, template_id, species, name,
-		rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count,
-		hunger, max_hunger, upkeep_rate, hunger_updated_at, lifecycle_state,
-		execution_state, behavior_profile, ai_profile, capabilities, formation_slot,
-		legacy_source, legacy_id, created_at, updated_at)
-	SELECT p.id, 'COMPANION_BEAST', p.player_id, 'MONSTER_TEMPLATE', p.monster_template_id,
-	       p.monster_template_id, p.nickname, p.rank, p.sub_rank, p.hp, p.max_hp,
-	       p.base_attack, p.base_defense, p.speed, p.count, p.hunger, p.max_hunger,
-	       p.pet_hunger_per_hour, p.updated_at, 'ACTIVE',
-	       CASE WHEN p.state = 'SLEEPING' THEN 'RECOVERING' ELSE 'STORED' END,
-	       'DEFENSIVE_FOLLOWER', COALESCE(m.ai_profile, 'beast_basic'),
-	       '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"FEEDABLE":true,"CAPTURABLE":true,"STACKABLE":true,"MORTAL":true}'::jsonb,
-	       p.formation_slot, 'PLAYER_PET', p.id, p.captured_at, p.updated_at
-	FROM player_pets p LEFT JOIN monster_templates m ON m.id = p.monster_template_id;`
-
-const legacyVariantNPCsToActorsSQL = `
-	DELETE FROM non_player_actors a USING aperture_variant_npcs n
-	WHERE a.legacy_source = 'APERTURE_VARIANT_NPC' AND a.legacy_id = n.id;
-	INSERT INTO non_player_actors (
-		id, actor_kind, owner_player_id, aperture_id, template_source, template_id,
-		species, race, name, rank, sub_rank, talent, loyalty, hp, max_hp,
-		base_attack, base_defense, speed, count,
-		lifecycle_state, execution_state, behavior_profile, capabilities, path, role,
-		legacy_source, legacy_id, created_at, updated_at)
-	SELECT n.id, 'VARIANT_NPC', a.player_id, n.aperture_id, 'VARIANT_RACE', n.race,
-	       n.race, n.race, n.name, n.rank, GREATEST(1, LEAST(n.sub_rank, 4)), n.talent, n.loyalty,
-	       80 + n.rank * 40 + n.talent, 80 + n.rank * 40 + n.talent,
-	       8 + n.rank * 6 + n.talent * 0.12, 5 + n.rank * 4 + n.talent * 0.08,
-	       8 + n.rank + n.talent * 0.02, 1,
-	       CASE WHEN n.status = 'DEAD' THEN 'DEAD' ELSE 'ACTIVE' END,
-	       CASE n.status WHEN 'DEAD' THEN 'DEAD' WHEN 'TRAINING' THEN 'TRAINING' WHEN 'IDLE' THEN 'STORED' ELSE 'WORKING' END,
-	       'WORKER', '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"PRODUCE":true,"REFINE":true,"TRAIN":true,"EQUIP_GU":true}'::jsonb,
-	       n.path, n.role, 'APERTURE_VARIANT_NPC', n.id, n.created_at, n.updated_at
-	FROM aperture_variant_npcs n JOIN immortal_apertures a ON a.id = n.aperture_id;`

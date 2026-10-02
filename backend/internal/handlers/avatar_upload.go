@@ -1,17 +1,14 @@
 package handlers
 
 import (
-	"bytes"
 	"io"
 	"net/http"
-	"os"
+	"time"
 
-	"github.com/cloudinary/cloudinary-go/v2"
-	"github.com/cloudinary/cloudinary-go/v2/api"
-	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/storage"
 )
 
 const maxAvatarSize = 2 << 20 // 2 MB
@@ -22,7 +19,7 @@ var allowedImageTypes = map[string]bool{
 	"image/webp": true,
 }
 
-// UploadAvatar handles avatar image upload to Cloudinary
+// UploadAvatar handles avatar image upload to Cloudflare R2
 func UploadAvatar(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -54,43 +51,20 @@ func UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	cloudName := os.Getenv("CLOUDINARY_CLOUD_NAME")
-	apiKey := os.Getenv("CLOUDINARY_API_KEY")
-	apiSecret := os.Getenv("CLOUDINARY_API_SECRET")
-
-	if cloudName == "" || apiKey == "" || apiSecret == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cloudinary chưa được cấu hình!"})
-		return
-	}
-
-	cld, err := cloudinary.NewFromParams(cloudName, apiKey, apiSecret)
+	avatarURL, err := storage.PutAvatar(c.Request.Context(), playerID.String(), contentType, fileBytes, time.Now().Unix())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo Cloudinary instance"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	resp, err := cld.Upload.Upload(c, bytes.NewReader(fileBytes), uploader.UploadParams{
-		PublicID:  "avatar_" + playerID.String(),
-		Overwrite: api.Bool(true),
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cloudinary error: " + err.Error()})
-		return
-	}
-
-	if resp.SecureURL == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Upload thành công nhưng không nhận được URL ảnh"})
-		return
-	}
-
-	_, err = db.DB.Exec(`UPDATE players SET avatar_url = $1 WHERE id = $2`, resp.SecureURL, playerID)
+	_, err = db.DB.Exec(`UPDATE players SET avatar_url = $1 WHERE id = $2`, avatarURL, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu avatar vào database"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"avatar_url": resp.SecureURL,
+		"avatar_url": avatarURL,
 		"message":    "Cập nhật ảnh đại diện thành công!",
 	})
 }

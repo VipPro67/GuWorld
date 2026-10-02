@@ -387,7 +387,7 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `aperture_variant_events`: sự kiện xã hội (loại, mức độ, effects JSONB, thời điểm giải quyết).
 - `non_player_actors` với `actor_kind = VARIANT_NPC`: cá thể Cổ Sư/Cổ Tiên với rank, lưu phái, vai trò, trung thành, thiên phú và trạng thái.
 
-Các cột xã hội trên quần thể lưu kho lương, lương thực đầu người, tăng trưởng và tử vong. Xây khu định cư đưa 500 cư dân ban đầu và lượng lương thực bằng sức chứa kho; mô phỏng xã hội tăng/giảm dân số nhưng không vượt sức chứa khu định cư. Worker production, society simulation và Gu Master spawning lần lượt chạy theo chu kỳ 10, 5 và 30 phút. Mỗi tick production cũng thử một lần cho các lệnh tự luyện ưu tiên cao. Một lần thử cần `rank × 100` Mao Dân chưa được phân công (Nhất Chuyển 100, Ngũ Chuyển 500, Cửu Chuyển 900); worker giữ chỗ tổng lao động trong tick và bỏ qua lệnh chưa đủ người để lệnh cấp thấp hơn vẫn có thể chạy: cần Mao Dân, bí phương hoàn thiện, nguyên liệu thường và nguyên thạch; thất bại tiêu hao nguyên liệu, thành công tạo một Cổ và tăng tiến độ. Lệnh thiếu tài nguyên tạm chờ và tự thử lại ở tick sau. Bí phương dùng Cổ khác làm nguyên liệu chưa được nhận vào hàng đợi tự động. API cho phép phân công lao động (tổng phân công không vượt dân số), quản lý hàng đợi, nâng khu định cư và đổi vai trò/giải tán NPC; xem route map trong `docs/API.md`.
+Các cột xã hội trên quần thể lưu kho lương, lương thực đầu người, tăng trưởng và tử vong. Xây khu định cư đưa 500 cư dân ban đầu và lượng lương thực bằng sức chứa kho; mô phỏng xã hội tăng/giảm dân số nhưng không vượt sức chứa khu định cư. Worker production, society simulation và Gu Master spawning lần lượt chạy theo chu kỳ 10, 5 và 30 phút. Gu Master spawn khi `population >= 500`, chance `5% * (pop/1000)` mỗi tick (prosperity buff ±25%), cap 100/aperture/race. Mỗi tick production cũng thử một lần cho các lệnh tự luyện ưu tiên cao. Một lần thử cần `rank × 100` Mao Dân chưa được phân công (Nhất Chuyển 100, Ngũ Chuyển 500, Cửu Chuyển 900); worker giữ chỗ tổng lao động trong tick và bỏ qua lệnh chưa đủ người để lệnh cấp thấp hơn vẫn có thể chạy: cần Mao Dân, bí phương hoàn thiện, nguyên liệu thường và nguyên thạch; thất bại tiêu hao nguyên liệu, thành công tạo một Cổ và tăng tiến độ. Lệnh thiếu tài nguyên tạm chờ và tự thử lại ở tick sau. Bí phương dùng Cổ khác làm nguyên liệu chưa được nhận vào hàng đợi tự động. API cho phép phân công lao động (tổng phân công không vượt dân số), quản lý hàng đợi, nâng khu định cư và đổi vai trò/giải tán NPC; xem route map trong `docs/API.md`.
 
 ### Bảng `tribulation_events`
 
@@ -830,7 +830,7 @@ Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, pat
 
 `non_player_actors` là bảng canonical cho **Actor Instance** persistent. Nó tham chiếu template qua cặp đa hình `template_source/template_id` thay vì sao chép toàn bộ `monster_templates`; các nguồn hiện có gồm `MONSTER_TEMPLATE`, `VARIANT_RACE`, `NPC_TEMPLATE`, `CUSTOM`. `actor_kind` (`MONSTER`, `COMPANION_BEAST`, `VARIANT_NPC`, `WORLD_NPC`, `SECT_NPC`, `CONSTRUCT`, `BOSS`) chỉ biểu diễn identity/lore và default policy, không phải quyền thực thi hành vi.
 
-Các nhóm dữ liệu chính gồm ownership (`owner_player_id`, `faction_id`, `aperture_id`), identity/template, progression, combat stats, pack/hunger/upkeep, lifecycle/execution, behavior/AI và ba document JSONB `capabilities`, `traits`, `progression`. Các cột `formation_slot`, `path`, `role` phục vụ trực tiếp các truy vấn gameplay thường xuyên. Khi nâng cấp database cũ, UUID và dữ liệu từ `player_pets`/`aperture_variant_npcs` được chuyển một lần rồi hai bảng cũ bị xóa; dân số aggregate `aperture_variant_humans` không trở thành từng actor.
+Các nhóm dữ liệu chính gồm ownership (`owner_player_id`, `faction_id`, `aperture_id`), identity/template, progression, combat stats, pack/hunger/upkeep, lifecycle/execution, behavior/AI và ba document JSONB `capabilities`, `traits`, `progression`. Các cột `formation_slot`, `path`, `role` phục vụ trực tiếp các truy vấn gameplay thường xuyên. Bảng legacy `player_pets`/`aperture_variant_npcs` đã xóa hoàn toàn; chỉ còn `non_player_actors`. Dân số aggregate `aperture_variant_humans` không trở thành từng actor.
 
 **Execution invariant:** tại một thời điểm, một actor chỉ có đúng một `execution_state` có quyền thay đổi gameplay. Graph tối thiểu là:
 
@@ -1025,7 +1025,7 @@ Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để 
 
 ### Lưu trữ sủng vật
 
-Sủng vật được lưu dưới dạng `non_player_actors.actor_kind = 'COMPANION_BEAST'`, tham chiếu `MONSTER_TEMPLATE`. `formation_slot` là cột first-class; `upkeep_rate` là tốc độ đói và `hunger_updated_at` là đồng hồ riêng để các cập nhật actor không làm sai hunger decay. `RECOVERING` tương ứng trạng thái ngủ trong DTO cũ, còn `STORED` là active/có thể vào đội hình.
+Sủng vật được lưu dưới dạng `non_player_actors.actor_kind = 'COMPANION_BEAST'`, tham chiếu `MONSTER_TEMPLATE`. `formation_slot` là cột first-class; `upkeep_rate` là tốc độ đói và `hunger_updated_at` là đồng hồ riêng để các cập nhật actor không làm sai hunger decay. `RECOVERING` tương ứng trạng thái ngủ trong DTO cũ, còn `STORED` là active/có thể vào đội hình. Pet chỉ load vào combat khi `ACTIVE + STORED + slot>0 + hunger>0 + đủ soul`; NPC dị nhân chỉ load khi `ACTIVE + STORED + role=NONE + slot>0`. Slot formation dùng chung pet+NPC (unique `(owner,slot)`).
 
 ### Cột bắt sủng vật trong `monster_templates`
 
@@ -1044,6 +1044,13 @@ Sủng vật được lưu dưới dạng `non_player_actors.actor_kind = 'COMPA
   - Áp dụng cho cả pet của **đối phương phòng thủ** khi bị tấn công PvP/mine/map (trừ `soul_hp` của họ, thiếu thì bỏ pet của họ).
   - **Võ Đài (arena, virtual) không tốn soul.**
   - Cờ `active_combat.pet_soul_charged` đảm bảo mỗi trận chỉ tính phí một lần (tránh re-init giữa trận tính lại).
+
+### Đội hình tổ đội (trưởng nhóm xếp)
+
+- Trưởng nhóm xếp thứ tự xuất trận qua `/api/party/formation`: `player` (thành viên), `pet`/`npc` (thú/dị nhân của chính trưởng nhóm), tối đa 8 vị trí sau trưởng nhóm (9 ô grid). Trưởng nhóm luôn `Allies[0]`.
+- Mỗi entry có `pos` 1-8 là ô grid combat (`allySlots`: cột trái = tiền tuyến hứng đòn trước); `pos` trùng nhau bị từ chối, thiếu = tự xếp ô trống thấp nhất. UI Tổ đội là lưới 3x3 Tiền/Trung/Hậu nhìn đúng như combat.
+- Đội hình rỗng = chế độ tự động cũ (cả đội cùng region + thú/NPC theo `formation_slot`). Đã xếp = chỉ ai trong danh sách mới vào, theo đúng thứ tự (vị trí grid gán theo index như cũ).
+- Điều kiện từng vị trí vẫn giữ: member cùng region + còn HP (virtual hồi đầy); pet `STORED + hunger>0 + đủ soul` (lineup thay luôn yêu cầu slot); NPC `STORED + role NONE`. Kẻ không đủ điều kiện tự bỏ qua + log.
 
 ### Cho sủng vật ăn (thức ăn loại Food)
 - Sủng vật được cho ăn qua `/api/pets/feed` (handler `FeedPet`).

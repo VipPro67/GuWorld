@@ -92,14 +92,16 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 
 	_, err := tx.Exec(updateQuery, args...)
 	if err != nil {
-		logger.S.Errorf("Failed to save combat outcome for player %s: %v", player.ID, err)
-		return logs, err
+		logger.S.Errorf("finalize player outcome update failed for player %s: %v", player.ID, err)
+		return logs, fmt.Errorf("player outcome update: %w", err)
 	}
 
 	// Update simulated allies' database status (HP, Mana, Stones, Items)
+	// NOTE: Pet and VariantNPC allies are persisted by their dedicated blocks
+	// below; only real player allies are handled here.
 	if !isVirtual {
 		for _, simAlly := range simState.Allies {
-			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" {
+			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" || simAlly.Kind == "VariantNPC" {
 				continue
 			}
 			allyUUID := uuid.MustParse(simAlly.ID)
@@ -150,13 +152,13 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 				WHERE id = $6
 			`, allyHP, simAlly.Mana, simAlly.PrimevalStones, simAlly.ImmortalStones, models.PathMasteriesMap(simAlly.PathMasteries), allyUUID)
 			if errUpd != nil {
-				logger.S.Errorf("Failed to update ally %s outcome: %v", simAlly.Name, errUpd)
-				return logs, errUpd
+				logger.S.Errorf("finalize ally update failed for ally %s (%s): %v", simAlly.Name, simAlly.ID, errUpd)
+				return logs, fmt.Errorf("ally %s update: %w", simAlly.ID, errUpd)
 			}
 		}
 	} else {
 		for _, simAlly := range simState.Allies {
-			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" {
+			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" || simAlly.Kind == "VariantNPC" {
 				continue
 			}
 			allyID := simAlly.ID
@@ -284,7 +286,8 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		}
 		for _, ally := range simState.Allies {
 			if err := persistNPC(ally, player.ID); err != nil {
-				return logs, err
+				logger.S.Errorf("finalize attacker NPC persist failed for %s: %v", ally.ID, err)
+				return logs, fmt.Errorf("attacker NPC %s persist: %w", ally.ID, err)
 			}
 		}
 		defenderID := ""
@@ -294,7 +297,8 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		if defenderID != "" && defenderID != "dummy" {
 			for _, enemy := range simState.Enemies {
 				if err := persistNPC(enemy, defenderID); err != nil {
-					return logs, err
+					logger.S.Errorf("finalize defender NPC persist failed for %s: %v", enemy.ID, err)
+					return logs, fmt.Errorf("defender NPC %s persist: %w", enemy.ID, err)
 				}
 			}
 		}
@@ -302,8 +306,8 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 
 	if alliesAlive && !isVirtual {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-			logger.S.Errorf("Failed to sync player gus for player %s: %v", player.ID, err)
-			return logs, err
+			logger.S.Errorf("finalize player Gu sync failed for player %s: %v", player.ID, err)
+			return logs, fmt.Errorf("player Gu sync: %w", err)
 		}
 	}
 	return logs, nil

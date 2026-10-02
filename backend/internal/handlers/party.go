@@ -75,6 +75,7 @@ func CreateParty(c *gin.Context) {
 			"id":        partyID.String(),
 			"leader_id": player.ID.String(),
 			"members":   members,
+			"formation": []PartyFormationEntry{},
 		},
 	})
 }
@@ -93,23 +94,14 @@ func GetPartyStatus(c *gin.Context) {
 		return
 	}
 
-	var leaderID string
-	var membersRaw []byte
-	err = db.DB.QueryRowContext(c.Request.Context(), "SELECT leader_id, members FROM parties WHERE id = $1", partyIDStr.String).Scan(&leaderID, &membersRaw)
+	payload, err := partyStatusPayload(db.DB, partyIDStr.String)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"party": nil})
 		return
 	}
 
-	var members []PartyMember
-	json.Unmarshal(membersRaw, &members)
-
 	c.JSON(http.StatusOK, gin.H{
-		"party": gin.H{
-			"id":        partyIDStr.String,
-			"leader_id": leaderID,
-			"members":   members,
-		},
+		"party": payload,
 	})
 }
 
@@ -221,6 +213,7 @@ func InvitePlayer(c *gin.Context) {
 			"id":        player.PartyID.String(),
 			"leader_id": leaderID,
 			"members":   members,
+			"formation": mustPartyFormation(tx, player.PartyID.String()),
 		},
 	})
 }
@@ -458,6 +451,7 @@ func RespondToInvitation(c *gin.Context) {
 			"id":        partyID.String(),
 			"leader_id": leaderID,
 			"members":   members,
+			"formation": mustPartyFormation(tx, partyID.String()),
 		},
 	})
 }

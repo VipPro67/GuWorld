@@ -32,9 +32,9 @@ func StartGuMasterSpawningWorker(ctx context.Context, db *sql.DB, interval time.
 
 // Spawning thresholds per race.
 const (
-	spawnThresholdPop   = 10000 // minimum population to start spawning
-	spawnChanceBase     = 0.001 // 0.1% base chance per tick per 10k population
-	maxGuMastersPerRace = 100   // cap per aperture per race
+	spawnThresholdPop   = 500  // minimum population to start spawning (seed settlements start at 500)
+	spawnChanceBase     = 0.05 // 5% base chance per tick per 1000 population
+	maxGuMastersPerRace = 100  // cap per aperture per race
 )
 
 // processGuMasterSpawning checks all apertures and spawns Gu Masters as needed.
@@ -88,7 +88,7 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 	var candidates []spawnCandidate
 	for _, r := range races {
 		// Calculate spawn chance based on population and prosperity.
-		popFactor := float64(r.pop) / 10000.0
+		popFactor := float64(r.pop) / 1000.0
 		prosperityMod := 1.0 + (r.prosperity-50.0)/200.0 // prosperity 100 → 1.25x
 		chance := spawnChanceBase * popFactor * prosperityMod
 

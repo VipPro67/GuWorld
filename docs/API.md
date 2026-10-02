@@ -199,6 +199,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/party/invitations` |
 | POST | `/party/invitations/:id/respond` |
 | POST | `/party/leave` |
+| POST | `/party/formation` | Trưởng nhóm xếp đội hình xuất trận. Body: `{"order": [{"kind": "player"\|"pet"\|"npc", "id": "...", "pos": 1-8}]}` (tối đa 8 sau trưởng nhóm; `pos` trùng/0 = tự xếp ô trống; rỗng = về tự động). |
 | GET | `/arena/leaderboard` |
 | POST | `/arena/challenge` |
 | GET | `/arena/shop` |

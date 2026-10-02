@@ -579,6 +579,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			party.POST("/leave", handlers.LeaveParty)
 			party.GET("/invitations", handlers.GetPendingInvitations)
 			party.POST("/invitations/:id/respond", handlers.RespondToInvitation)
+			party.POST("/formation", handlers.SavePartyFormation)
 		}
 
 		// Inventory — group: 30/min, per player: 20/min
