@@ -421,9 +421,14 @@ func UpdateGuStatus(c *gin.Context) {
 		return
 	}
 
-	// If transitioning away from ACTIVE (e.g. to SLEEPING or SEALED), force unequip if equipped
+	// If transitioning away from ACTIVE (e.g. to SLEEPING or SEALED), force unequip if equipped.
+	// Flush pending growth time into permanent boosts first, mirroring EquipGu.
 	if req.Status != "ACTIVE" && targetGu.Equipped {
 		targetGu.Equipped = false
+		if spec, ok := models.GetGu(targetGu.GuID, targetGu.Rank); ok {
+			flushGrowthOnUnequip(&player, targetGu, &spec)
+		}
+		targetGu.EquippedAt = nil
 	}
 
 	neededStones := int64(0)
@@ -456,7 +461,7 @@ func UpdateGuStatus(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu inventory status"})
 		return
 	}
-	_, err = tx.Exec("UPDATE players SET equipped_gus = $1 WHERE id = $2", player.EquippedGus, player.ID)
+	_, err = tx.Exec("UPDATE players SET equipped_gus = $1, base_hp = $2, growth_data = $3 WHERE id = $4", player.EquippedGus, player.BaseHP, player.GrowthData, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu inventory status"})
 		return

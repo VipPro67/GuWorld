@@ -694,7 +694,7 @@ Cấu trúc flat v2 của mỗi block:
 | `healing_multiplier` / `heal_received_multiplier` / `cold_resistance` / `water_resistance` / `dao_mark_multiplier` / `exclude_gu_storage` / `formation_power` / `refinement_power` / `storage_capacity_gu` / `target_selector`(=ROW) | 1 | mixed | Minor (xem struct) |
 | `description` | 5 | string | Ghi chú text |
 
-*Khối `growth` (5 key, 18 Cổ):* `max_attack`, `max_defense`, `max_hp`, `hours_to_max`, `max_speed`(4) — chỉ số tăng trưởng khi nuôi.
+*Khối `growth` (5 key, 58 Cổ):* `max_attack`, `max_defense`, `max_hp`, `hours_to_max`, `max_speed` — chỉ số tăng trưởng khi nuôi, cộng dồn vĩnh viễn vào `players.growth_data.boosts` (+`base_hp`) qua growth worker (tick 1h) và flush khi unequip/sleep/seal. Block v2: `STAT_MOD ... GROWTH_CAP` + `UNIQUE GROWTH_DURATION_HOURS` (`{"id":"GROWTH","trigger":"ALWAYS_ON"}`). Cổ growth bị rớt khi migrate Block v2 đã được backfill từ CSV cũ.
 
 *Khối `support` đã xóa:* heal ngoài combat dùng chung `active.heal_flat` (endpoint Support áp `active.heal_flat`, cap `EffectiveMaxHP`; combat dùng như đòn heal thường). Envelope `support:{}` rỗng vẫn parse được; key nào trong `support` đều reject `unclassified_effect_key`.
 

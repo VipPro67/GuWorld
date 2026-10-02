@@ -217,7 +217,3 @@ func GetDaoNganHandler(c *gin.Context) {
 	result := CalculateDaoNganDetailed(daoMap, pathMasteries, charFX.NonConflictingDaoMarks, charFX.DaoNganBonus)
 	c.JSON(http.StatusOK, result)
 }
-
-// flushGrowthOnUnequip converts the pending equipped-time of a Gu with a growth
-// effect into permanent boosts when the Gu is unequipped (manually or by the
-// equipped-list cleanup in EquipGu). No-op when the Gu has no growth effect.

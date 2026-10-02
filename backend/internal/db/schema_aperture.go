@@ -114,8 +114,16 @@ func schemaAperture() error {
 		return err
 	}
 
+	if err := execSchema("aperture_nodes_interval_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_nodes_interval ON aperture_resource_nodes (node_category, node_type, production_interval_hours);`); err != nil {
+		return err
+	}
+
+	// Idempotent guard: without IS DISTINCT FROM the UPDATE rewrites every
+	// matching row on each boot (row locks + WAL), tripping the 15s
+	// statement_timeout once the table grows.
 	if err := execSchema("aperture_resource_nodes_interval_10h_upgrade", `
-	UPDATE aperture_resource_nodes SET production_interval_hours = 10 WHERE node_category = 'RESOURCE' OR node_type IN ('FARMING_ZONE', 'BREEDING_ZONE', 'MINING_ZONE');
+	UPDATE aperture_resource_nodes SET production_interval_hours = 10 WHERE (node_category = 'RESOURCE' OR node_type IN ('FARMING_ZONE', 'BREEDING_ZONE', 'MINING_ZONE')) AND production_interval_hours IS DISTINCT FROM 10;
 	`); err != nil {
 		return err
 	}
@@ -353,6 +361,13 @@ func schemaAperture() error {
 	}
 	if err := execSchema("tribulation_enemies_event_dead_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_enemies_event_dead ON tribulation_enemies (event_id, is_dead);`); err != nil {
+		return err
+	}
+
+	// Partial index so the boot cleanup below seeks ruins instead of
+	// seq-scanning the whole node table.
+	if err := execSchema("aperture_nodes_destroyed_idx", `
+	CREATE INDEX IF NOT EXISTS idx_aperture_nodes_destroyed ON aperture_resource_nodes (id) WHERE is_destroyed = true;`); err != nil {
 		return err
 	}
 

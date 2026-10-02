@@ -187,21 +187,17 @@ func LoginPlayer(c *gin.Context) {
 		return
 	}
 
-	// Update last login info
+	// Update last login info + rotate session in a single write to avoid two
+	// consecutive row versions (and trigger bumps) on the hot player row.
+	sessionID := uuid.New().String()
 	_, err = db.DB.Exec(`
 		UPDATE players
-		SET last_login_fingerprint = $1, last_login_ip = $2, last_login_time = NOW()
-		WHERE id = $3`,
-		fingerprint, c.ClientIP(), player.ID)
+		SET last_login_fingerprint = $1, last_login_ip = $2, last_login_time = NOW(),
+		    active_session_id = $3
+		WHERE id = $4`,
+		fingerprint, c.ClientIP(), sessionID, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên đăng nhập"})
-		return
-	}
-
-	sessionID := uuid.New().String()
-	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
 		return
 	}
 
