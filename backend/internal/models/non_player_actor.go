@@ -158,6 +158,9 @@ type NonPlayerActor struct {
 	Capabilities    ActorCapabilities      `json:"capabilities"`
 	Traits          map[string]interface{} `json:"traits"`
 	Progression     map[string]interface{} `json:"progression"`
+	FormationSlot   int                    `json:"formation_slot"`
+	Path            string                 `json:"path"`
+	Role            string                 `json:"role"`
 	LegacySource    *string                `json:"legacy_source,omitempty"`
 	LegacyID        *string                `json:"legacy_id,omitempty"`
 	Version         int64                  `json:"version"`
@@ -172,7 +175,7 @@ const actorSelectColumns = `
 	hp, max_hp, base_attack, base_defense, speed,
 	count, hunger, max_hunger, upkeep_rate, hunger_updated_at,
 	lifecycle_state, execution_state, behavior_profile, ai_profile,
-	capabilities, traits, progression, legacy_source, legacy_id,
+	capabilities, traits, progression, formation_slot, path, role, legacy_source, legacy_id,
 	version, created_at, updated_at`
 
 type actorScanner interface {
@@ -190,7 +193,7 @@ func scanNonPlayerActor(scanner actorScanner) (NonPlayerActor, error) {
 		&actor.HP, &actor.MaxHP, &actor.BaseAttack, &actor.BaseDefense, &actor.Speed,
 		&actor.Count, &actor.Hunger, &actor.MaxHunger, &actor.UpkeepRate, &actor.HungerUpdatedAt,
 		&actor.LifecycleState, &actor.ExecutionState, &actor.BehaviorProfile, &actor.AIProfile,
-		&actor.Capabilities, &traits, &progression, &legacySource, &legacyID,
+		&actor.Capabilities, &traits, &progression, &actor.FormationSlot, &actor.Path, &actor.Role, &legacySource, &legacyID,
 		&actor.Version, &actor.CreatedAt, &actor.UpdatedAt,
 	)
 	if err != nil {

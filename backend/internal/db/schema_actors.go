@@ -1,10 +1,13 @@
 package db
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
-// Actor schema: persistent non-player individuals. Static monster data remains
-// in monster_templates; world presence and assignments are introduced by later
-// releases so the foundation does not change live gameplay ownership yet.
+// Actor schema: persistent non-player individuals and the sole instance store
+// for companion beasts and named variant NPCs. Static monster data remains in
+// monster_templates; world presence and assignments are introduced separately.
 func schemaActors() error {
 	if err := execSchema("non_player_actors", `
 	CREATE TABLE IF NOT EXISTS non_player_actors (
@@ -46,6 +49,9 @@ func schemaActors() error {
 		capabilities JSONB NOT NULL DEFAULT '{}',
 		traits JSONB NOT NULL DEFAULT '{}',
 		progression JSONB NOT NULL DEFAULT '{}',
+		formation_slot INT NOT NULL DEFAULT 0,
+		path VARCHAR(50) NOT NULL DEFAULT '',
+		role VARCHAR(50) NOT NULL DEFAULT 'NONE',
 
 		legacy_source VARCHAR(32),
 		legacy_id UUID,
@@ -83,12 +89,21 @@ func schemaActors() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("non_player_actors_domain_columns", `
+	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS formation_slot INT NOT NULL DEFAULT 0;
+	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT '';
+	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'NONE';`); err != nil {
+		return err
+	}
 
 	indexes := []struct{ name, ddl string }{
 		{"non_player_actors_owner_kind_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_owner_kind ON non_player_actors (owner_player_id, actor_kind);`},
 		{"non_player_actors_aperture_kind_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_aperture_kind ON non_player_actors (aperture_id, actor_kind);`},
 		{"non_player_actors_execution_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_execution_state ON non_player_actors (execution_state);`},
 		{"non_player_actors_template_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_template ON non_player_actors (template_source, template_id);`},
+		{"non_player_actors_formation_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_formation ON non_player_actors (owner_player_id, formation_slot) WHERE actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE';`},
+		{"non_player_actors_variant_formation_idx", `CREATE UNIQUE INDEX IF NOT EXISTS idx_non_player_actors_variant_formation ON non_player_actors (owner_player_id, formation_slot) WHERE actor_kind = 'VARIANT_NPC' AND lifecycle_state = 'ACTIVE' AND formation_slot > 0;`},
+		{"non_player_actors_owned_formation_uidx", `CREATE UNIQUE INDEX IF NOT EXISTS idx_non_player_actors_owned_formation ON non_player_actors (owner_player_id, formation_slot) WHERE actor_kind IN ('COMPANION_BEAST','VARIANT_NPC') AND lifecycle_state = 'ACTIVE' AND formation_slot > 0;`},
 		{"non_player_actors_active_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_active ON non_player_actors (actor_kind, execution_state) WHERE lifecycle_state = 'ACTIVE';`},
 		{"non_player_actors_legacy_uidx", `CREATE UNIQUE INDEX IF NOT EXISTS idx_non_player_actors_legacy ON non_player_actors (legacy_source, legacy_id) WHERE legacy_source IS NOT NULL AND legacy_id IS NOT NULL;`},
 	}
@@ -98,140 +113,125 @@ func schemaActors() error {
 		}
 	}
 
-	return backfillLegacyActors()
+	if err := execSchema("actor_gu_equipment", `
+	CREATE TABLE IF NOT EXISTS actor_gu_equipment (
+		actor_id UUID NOT NULL REFERENCES non_player_actors(id) ON DELETE CASCADE,
+		player_gu_id VARCHAR(80) NOT NULL REFERENCES player_gu(id) ON DELETE CASCADE,
+		slot INTEGER NOT NULL,
+		equipped_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (actor_id, player_gu_id),
+		UNIQUE (player_gu_id),
+		UNIQUE (actor_id, slot),
+		CONSTRAINT actor_gu_equipment_slot_check CHECK (slot BETWEEN 1 AND 9)
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("actor_gu_equipment_actor_idx", `CREATE INDEX IF NOT EXISTS idx_actor_gu_equipment_actor ON actor_gu_equipment(actor_id, slot);`); err != nil {
+		return err
+	}
+	if err := execSchema("actor_gu_equipment_guard", `
+	CREATE OR REPLACE FUNCTION guard_actor_equipped_gu() RETURNS trigger AS $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM actor_gu_equipment WHERE player_gu_id=OLD.id) THEN
+			RAISE EXCEPTION 'Gu % is equipped by a non-player actor', OLD.id USING ERRCODE='check_violation';
+		END IF;
+		RETURN NEW;
+	END; $$ LANGUAGE plpgsql;
+	DROP TRIGGER IF EXISTS trg_guard_actor_equipped_gu ON player_gu;
+	CREATE TRIGGER trg_guard_actor_equipped_gu BEFORE UPDATE OF player_id,location,equipped,is_vital ON player_gu
+	FOR EACH ROW EXECUTE FUNCTION guard_actor_equipped_gu();`); err != nil {
+		return err
+	}
+	if err := execSchema("variant_npc_progression_normalization", `
+	UPDATE non_player_actors
+	SET sub_rank = GREATEST(1, LEAST(sub_rank, 4)),
+	    max_hp = GREATEST(max_hp, 80 + rank * 40 + talent),
+	    hp = CASE WHEN hp >= max_hp THEN GREATEST(max_hp, 80 + rank * 40 + talent)
+	              ELSE LEAST(hp, GREATEST(max_hp, 80 + rank * 40 + talent)) END,
+	    base_attack = GREATEST(base_attack, 8 + rank * 6 + talent * 0.12),
+	    base_defense = GREATEST(base_defense, 5 + rank * 4 + talent * 0.08),
+	    speed = GREATEST(speed, 8 + rank + talent * 0.02)
+	WHERE actor_kind = 'VARIANT_NPC'
+	  AND (sub_rank NOT BETWEEN 1 AND 4 OR base_attack <= 0 OR base_defense <= 0 OR speed <= 0);`); err != nil {
+		return err
+	}
+
+	return migrateLegacyActors()
 }
 
-// backfillLegacyActors is deliberately idempotent. Release 1 leaves both
-// legacy tables authoritative and only creates stable canonical projections.
-func backfillLegacyActors() error {
-	if _, err := DB.Exec(nonPlayerActorsPetProjectionSQL, nil); err != nil {
-		return err
-	}
-	if _, err := DB.Exec(nonPlayerActorsVariantNPCProjectionSQL, nil); err != nil {
-		return err
-	}
-	if _, err := DB.Exec(nonPlayerActorsLegacyCleanupSQL, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-// SyncLegacyActorProjections refreshes the compatibility projection before a
-// Release 1 roster read. Legacy tables remain authoritative until later
-// cutovers, so the refresh also removes projections for released/dismissed rows.
-func SyncLegacyActorProjections(ctx context.Context, playerID string) error {
-	tx, err := DB.BeginTx(ctx, nil)
+// migrateLegacyActors is a one-way, transactional cutover. It preserves legacy
+// UUIDs so in-flight combat snapshots stay valid and drops each source only
+// after every row has a canonical actor.
+func migrateLegacyActors() error {
+	tx, err := DB.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	for _, statement := range []string{
-		nonPlayerActorsPetProjectionSQL,
-		nonPlayerActorsVariantNPCProjectionSQL,
-		nonPlayerActorsLegacyCleanupSQL,
+	for _, migration := range []struct{ table, statement, kind string }{
+		{"player_pets", legacyPetsToActorsSQL, "COMPANION_BEAST"},
+		{"aperture_variant_npcs", legacyVariantNPCsToActorsSQL, "VARIANT_NPC"},
 	} {
-		if _, err := tx.ExecContext(ctx, statement, playerID); err != nil {
+		var exists bool
+		if err := tx.QueryRow(`SELECT to_regclass('public.' || $1) IS NOT NULL`, migration.table).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		if _, err := tx.Exec(migration.statement); err != nil {
+			return err
+		}
+		var missing int
+		query := fmt.Sprintf(`SELECT count(*) FROM %s l WHERE NOT EXISTS (SELECT 1 FROM non_player_actors a WHERE a.id = l.id AND a.actor_kind = $1)`, migration.table)
+		if err := tx.QueryRow(query, migration.kind).Scan(&missing); err != nil {
+			return err
+		}
+		if missing != 0 {
+			return fmt.Errorf("actor migration from %s left %d rows behind", migration.table, missing)
+		}
+		if _, err := tx.Exec(`DROP TABLE ` + migration.table); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-const nonPlayerActorsPetProjectionSQL = `
+const legacyPetsToActorsSQL = `
+	DELETE FROM non_player_actors a USING player_pets p
+	WHERE a.legacy_source = 'PLAYER_PET' AND a.legacy_id = p.id;
 	INSERT INTO non_player_actors (
-		actor_kind, owner_player_id, template_source, template_id, species, name,
+		id, actor_kind, owner_player_id, template_source, template_id, species, name,
 		rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count,
 		hunger, max_hunger, upkeep_rate, hunger_updated_at, lifecycle_state,
-		execution_state, behavior_profile, ai_profile, capabilities, traits,
-		progression, legacy_source, legacy_id, created_at, updated_at)
-	SELECT 'COMPANION_BEAST', p.player_id, 'MONSTER_TEMPLATE', p.monster_template_id,
+		execution_state, behavior_profile, ai_profile, capabilities, formation_slot,
+		legacy_source, legacy_id, created_at, updated_at)
+	SELECT p.id, 'COMPANION_BEAST', p.player_id, 'MONSTER_TEMPLATE', p.monster_template_id,
 	       p.monster_template_id, p.nickname, p.rank, p.sub_rank, p.hp, p.max_hp,
 	       p.base_attack, p.base_defense, p.speed, p.count, p.hunger, p.max_hunger,
-	       p.pet_hunger_per_hour, NOW(), 'ACTIVE',
+	       p.pet_hunger_per_hour, p.updated_at, 'ACTIVE',
 	       CASE WHEN p.state = 'SLEEPING' THEN 'RECOVERING' ELSE 'STORED' END,
 	       'DEFENSIVE_FOLLOWER', COALESCE(m.ai_profile, 'beast_basic'),
 	       '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"FEEDABLE":true,"CAPTURABLE":true,"STACKABLE":true,"MORTAL":true}'::jsonb,
-	       jsonb_build_object('legacy_state', p.state),
-	       jsonb_build_object('formation_slot', p.formation_slot),
-	       'PLAYER_PET', p.id, p.captured_at, p.updated_at
-	FROM player_pets p
-	LEFT JOIN monster_templates m ON m.id = p.monster_template_id
-	WHERE ($1::uuid IS NULL OR p.player_id = $1)
-	ON CONFLICT (legacy_source, legacy_id)
-		WHERE legacy_source IS NOT NULL AND legacy_id IS NOT NULL
-	DO UPDATE SET
-		owner_player_id = EXCLUDED.owner_player_id, template_id = EXCLUDED.template_id,
-		species = EXCLUDED.species, name = EXCLUDED.name, rank = EXCLUDED.rank,
-		sub_rank = EXCLUDED.sub_rank, hp = EXCLUDED.hp, max_hp = EXCLUDED.max_hp,
-		base_attack = EXCLUDED.base_attack, base_defense = EXCLUDED.base_defense,
-		speed = EXCLUDED.speed, count = EXCLUDED.count, hunger = EXCLUDED.hunger,
-		max_hunger = EXCLUDED.max_hunger, upkeep_rate = EXCLUDED.upkeep_rate,
-		hunger_updated_at = EXCLUDED.hunger_updated_at,
-		execution_state = EXCLUDED.execution_state, ai_profile = EXCLUDED.ai_profile,
-		capabilities = EXCLUDED.capabilities, traits = EXCLUDED.traits,
-		progression = EXCLUDED.progression, updated_at = EXCLUDED.updated_at,
-		version = non_player_actors.version + 1
-	WHERE (non_player_actors.owner_player_id, non_player_actors.template_id,
-	       non_player_actors.name, non_player_actors.rank, non_player_actors.sub_rank,
-	       non_player_actors.hp, non_player_actors.max_hp, non_player_actors.base_attack,
-	       non_player_actors.base_defense, non_player_actors.speed, non_player_actors.count,
-	       non_player_actors.hunger, non_player_actors.max_hunger,
-	       non_player_actors.upkeep_rate, non_player_actors.execution_state,
-	       non_player_actors.ai_profile, non_player_actors.traits, non_player_actors.progression)
-	      IS DISTINCT FROM
-	      (EXCLUDED.owner_player_id, EXCLUDED.template_id, EXCLUDED.name, EXCLUDED.rank,
-	       EXCLUDED.sub_rank, EXCLUDED.hp, EXCLUDED.max_hp, EXCLUDED.base_attack,
-	       EXCLUDED.base_defense, EXCLUDED.speed, EXCLUDED.count, EXCLUDED.hunger,
-	       EXCLUDED.max_hunger, EXCLUDED.upkeep_rate, EXCLUDED.execution_state,
-	       EXCLUDED.ai_profile, EXCLUDED.traits, EXCLUDED.progression);`
+	       p.formation_slot, 'PLAYER_PET', p.id, p.captured_at, p.updated_at
+	FROM player_pets p LEFT JOIN monster_templates m ON m.id = p.monster_template_id;`
 
-const nonPlayerActorsVariantNPCProjectionSQL = `
+const legacyVariantNPCsToActorsSQL = `
+	DELETE FROM non_player_actors a USING aperture_variant_npcs n
+	WHERE a.legacy_source = 'APERTURE_VARIANT_NPC' AND a.legacy_id = n.id;
 	INSERT INTO non_player_actors (
-		actor_kind, owner_player_id, aperture_id, template_source, template_id,
-		species, race, name, rank, sub_rank, talent, loyalty, hp, max_hp, count,
-		lifecycle_state, execution_state, behavior_profile, capabilities, traits,
-		progression, legacy_source, legacy_id, created_at, updated_at)
-	SELECT 'VARIANT_NPC', a.player_id, n.aperture_id, 'VARIANT_RACE', n.race,
-	       n.race, n.race, n.name, n.rank, n.sub_rank, n.talent, n.loyalty,
-	       100, 100, 1,
+		id, actor_kind, owner_player_id, aperture_id, template_source, template_id,
+		species, race, name, rank, sub_rank, talent, loyalty, hp, max_hp,
+		base_attack, base_defense, speed, count,
+		lifecycle_state, execution_state, behavior_profile, capabilities, path, role,
+		legacy_source, legacy_id, created_at, updated_at)
+	SELECT n.id, 'VARIANT_NPC', a.player_id, n.aperture_id, 'VARIANT_RACE', n.race,
+	       n.race, n.race, n.name, n.rank, GREATEST(1, LEAST(n.sub_rank, 4)), n.talent, n.loyalty,
+	       80 + n.rank * 40 + n.talent, 80 + n.rank * 40 + n.talent,
+	       8 + n.rank * 6 + n.talent * 0.12, 5 + n.rank * 4 + n.talent * 0.08,
+	       8 + n.rank + n.talent * 0.02, 1,
 	       CASE WHEN n.status = 'DEAD' THEN 'DEAD' ELSE 'ACTIVE' END,
-	       CASE n.status WHEN 'DEAD' THEN 'DEAD' WHEN 'TRAINING' THEN 'TRAINING'
-	            WHEN 'IDLE' THEN 'STORED' ELSE 'WORKING' END,
-	       'WORKER',
-	       '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"PRODUCE":true,"REFINE":true,"TRAIN":true,"EQUIP_GU":true}'::jsonb,
-	       jsonb_build_object('path', n.path, 'role', n.role),
-	       jsonb_build_object('legacy_status', n.status),
-	       'APERTURE_VARIANT_NPC', n.id, n.created_at, n.updated_at
-	FROM aperture_variant_npcs n
-	JOIN immortal_apertures a ON a.id = n.aperture_id
-	WHERE ($1::uuid IS NULL OR a.player_id = $1)
-	ON CONFLICT (legacy_source, legacy_id)
-		WHERE legacy_source IS NOT NULL AND legacy_id IS NOT NULL
-	DO UPDATE SET
-		owner_player_id = EXCLUDED.owner_player_id, aperture_id = EXCLUDED.aperture_id,
-		template_id = EXCLUDED.template_id, species = EXCLUDED.species, race = EXCLUDED.race,
-		name = EXCLUDED.name, rank = EXCLUDED.rank, sub_rank = EXCLUDED.sub_rank,
-		talent = EXCLUDED.talent, loyalty = EXCLUDED.loyalty,
-		lifecycle_state = EXCLUDED.lifecycle_state, execution_state = EXCLUDED.execution_state,
-		capabilities = EXCLUDED.capabilities, traits = EXCLUDED.traits,
-		progression = EXCLUDED.progression, updated_at = EXCLUDED.updated_at,
-		version = non_player_actors.version + 1
-	WHERE (non_player_actors.owner_player_id, non_player_actors.aperture_id,
-	       non_player_actors.template_id, non_player_actors.race, non_player_actors.name,
-	       non_player_actors.rank, non_player_actors.sub_rank, non_player_actors.talent,
-	       non_player_actors.loyalty, non_player_actors.lifecycle_state,
-	       non_player_actors.execution_state, non_player_actors.traits,
-	       non_player_actors.progression)
-	      IS DISTINCT FROM
-	      (EXCLUDED.owner_player_id, EXCLUDED.aperture_id, EXCLUDED.template_id,
-	       EXCLUDED.race, EXCLUDED.name, EXCLUDED.rank, EXCLUDED.sub_rank,
-	       EXCLUDED.talent, EXCLUDED.loyalty, EXCLUDED.lifecycle_state,
-	       EXCLUDED.execution_state, EXCLUDED.traits, EXCLUDED.progression);`
-
-const nonPlayerActorsLegacyCleanupSQL = `
-	DELETE FROM non_player_actors a
-	WHERE ($1::uuid IS NULL OR a.owner_player_id = $1)
-	  AND ((a.legacy_source = 'PLAYER_PET'
-	       AND NOT EXISTS (SELECT 1 FROM player_pets p WHERE p.id = a.legacy_id))
-	   OR (a.legacy_source = 'APERTURE_VARIANT_NPC'
-	       AND NOT EXISTS (SELECT 1 FROM aperture_variant_npcs n WHERE n.id = a.legacy_id)));`
+	       CASE n.status WHEN 'DEAD' THEN 'DEAD' WHEN 'TRAINING' THEN 'TRAINING' WHEN 'IDLE' THEN 'STORED' ELSE 'WORKING' END,
+	       'WORKER', '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"PRODUCE":true,"REFINE":true,"TRAIN":true,"EQUIP_GU":true}'::jsonb,
+	       n.path, n.role, 'APERTURE_VARIANT_NPC', n.id, n.created_at, n.updated_at
+	FROM aperture_variant_npcs n JOIN immortal_apertures a ON a.id = n.aperture_id;`

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 
 	"github.com/google/uuid"
@@ -217,7 +218,26 @@ func processRefinementJob(ctx context.Context, database *sql.DB, jobID string, r
 		return errors.New("player currency changed during locked refinement")
 	}
 
-	succeeded := roll < recipe.successRate
+	refiners := []namedNPCWorker{}
+	rows, err := tx.QueryContext(ctx, `SELECT role,rank,talent,loyalty FROM non_player_actors
+		WHERE aperture_id=$1 AND actor_kind='VARIANT_NPC' AND lifecycle_state='ACTIVE'
+		  AND execution_state='WORKING' AND role='REFINER'`, apertureID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var n namedNPCWorker
+		if err := rows.Scan(&n.role, &n.rank, &n.talent, &n.loyalty); err != nil {
+			rows.Close()
+			return err
+		}
+		refiners = append(refiners, n)
+	}
+	if err = rows.Close(); err != nil {
+		return err
+	}
+	successRate := math.Min(1, recipe.successRate+namedNPCBonus(refiners, "REFINER", .25))
+	succeeded := roll < successRate
 	if succeeded {
 		gu := models.GuInstance{InstanceID: uuid.NewString(), GuID: recipe.targetGuID, Rank: recipe.targetRank, Hunger: 100, Status: "ACTIVE"}
 		if err := db.AddPlayerGu(tx, playerID, gu); err != nil {

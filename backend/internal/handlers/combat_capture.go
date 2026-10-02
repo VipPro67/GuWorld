@@ -153,15 +153,15 @@ func CaptureMonster(c *gin.Context) {
 		speed := 8.0 + float64(player.ActiveCombat.EnemyRank)*2.0 + float64(player.ActiveCombat.EnemySubRank)*0.5
 
 		_, errPet := tx.Exec(`
-			INSERT INTO player_pets (player_id, monster_template_id, nickname, rank, sub_rank,
-				hp, max_hp, base_attack, base_defense, speed, count, hunger, max_hunger,
-				pet_hunger_per_hour, state, formation_slot, captured_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,$11,$12,$13,'ACTIVE',0,NOW(),NOW())
+			INSERT INTO non_player_actors (actor_kind, owner_player_id, template_source, template_id, species, name, rank, sub_rank,
+				hp, max_hp, base_attack, base_defense, speed, count, hunger, max_hunger, upkeep_rate,
+				lifecycle_state, execution_state, behavior_profile, ai_profile, capabilities, formation_slot)
+			VALUES ('COMPANION_BEAST',$1,'MONSTER_TEMPLATE',$2,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,$11,$12,$13,'ACTIVE','STORED','DEFENSIVE_FOLLOWER',$14,'{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"FEEDABLE":true,"CAPTURABLE":true,"STACKABLE":true,"MORTAL":true}'::jsonb,0)
 		`,
 			player.ID, monTemplate.ID, monTemplate.Name,
 			player.ActiveCombat.EnemyRank, player.ActiveCombat.EnemySubRank,
 			hp, hp, atk, def, speed,
-			float64(defaultMaxHunger(monTemplate.Type)), float64(defaultMaxHunger(monTemplate.Type)), monTemplate.PetHungerPerHour,
+			float64(defaultMaxHunger(monTemplate.Type)), float64(defaultMaxHunger(monTemplate.Type)), monTemplate.PetHungerPerHour, monTemplate.AIProfile,
 		)
 		if errPet != nil {
 			logger.S.Errorf("CaptureMonster: failed to insert pet: %v", errPet)

@@ -31,13 +31,14 @@ type PlayerPet struct {
 
 func LoadPlayerPets(db *sql.DB, playerID string) ([]PlayerPet, error) {
 	rows, err := db.Query(`
-		SELECT id, player_id, monster_template_id, nickname, rank, sub_rank,
+		SELECT id, owner_player_id, template_id, name, rank, sub_rank,
 		       hp, max_hp, base_attack, base_defense, speed, count,
-		       hunger, max_hunger, pet_hunger_per_hour, state, formation_slot,
-		       captured_at, updated_at
-		FROM player_pets
-		WHERE player_id = $1
-		ORDER BY formation_slot ASC, captured_at ASC
+		       hunger, max_hunger, upkeep_rate,
+		       CASE WHEN execution_state = 'RECOVERING' THEN 'SLEEPING' ELSE 'ACTIVE' END,
+		       formation_slot, created_at, updated_at
+		FROM non_player_actors
+		WHERE owner_player_id = $1 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
+		ORDER BY formation_slot ASC, created_at ASC
 	`, playerID)
 	if err != nil {
 		return nil, err
@@ -63,12 +64,14 @@ func LoadPlayerPets(db *sql.DB, playerID string) ([]PlayerPet, error) {
 
 func LoadFormationPets(db *sql.DB, playerID string) ([]PlayerPet, error) {
 	rows, err := db.Query(`
-		SELECT id, player_id, monster_template_id, nickname, rank, sub_rank,
+		SELECT id, owner_player_id, template_id, name, rank, sub_rank,
 		       hp, max_hp, base_attack, base_defense, speed, count,
-		       hunger, max_hunger, pet_hunger_per_hour, state, formation_slot,
-		       captured_at, updated_at
-		FROM player_pets
-		WHERE player_id = $1 AND formation_slot > 0 AND state = 'ACTIVE' AND hunger > 0
+		       hunger, max_hunger, upkeep_rate,
+		       CASE WHEN execution_state = 'RECOVERING' THEN 'SLEEPING' ELSE 'ACTIVE' END,
+		       formation_slot, created_at, updated_at
+		FROM non_player_actors
+		WHERE owner_player_id = $1 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
+		  AND formation_slot > 0 AND execution_state = 'STORED' AND hunger > 0
 		ORDER BY formation_slot ASC
 	`, playerID)
 	if err != nil {

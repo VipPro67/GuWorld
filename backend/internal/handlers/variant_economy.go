@@ -774,11 +774,13 @@ func GetApertureNPCs(c *gin.Context) {
 
 	rows, err := db.DB.Query(`
 		SELECT n.id, n.aperture_id, n.race, n.name, n.rank, n.sub_rank,
-		       n.path, n.role, n.loyalty, n.talent, n.status,
+		       n.path, n.role, n.loyalty, n.talent, n.experience, n.hp, n.max_hp,
+		       n.formation_slot, n.version,
+		       CASE n.execution_state WHEN 'TRAINING' THEN 'TRAINING' WHEN 'STORED' THEN 'IDLE' ELSE 'ASSIGNED' END,
 		       n.created_at, n.updated_at
-		FROM aperture_variant_npcs n
+		FROM non_player_actors n
 		JOIN immortal_apertures a ON a.id = n.aperture_id
-		WHERE a.player_id = $1
+		WHERE a.player_id = $1 AND n.actor_kind = 'VARIANT_NPC' AND n.lifecycle_state = 'ACTIVE'
 		ORDER BY n.race, n.rank DESC, n.name
 	`, playerID)
 	if err != nil {
@@ -791,10 +793,12 @@ func GetApertureNPCs(c *gin.Context) {
 	for rows.Next() {
 		var n models.ApertureVariantNPC
 		if err := rows.Scan(&n.ID, &n.ApertureID, &n.Race, &n.Name, &n.Rank, &n.SubRank,
-			&n.Path, &n.Role, &n.Loyalty, &n.Talent, &n.Status,
+			&n.Path, &n.Role, &n.Loyalty, &n.Talent, &n.Experience, &n.HP, &n.MaxHP,
+			&n.FormationSlot, &n.Version, &n.Status,
 			&n.CreatedAt, &n.UpdatedAt); err != nil {
 			continue
 		}
+		n.EquippedGu, _ = loadActorGu(db.DB, n.ID)
 		list = append(list, n)
 	}
 	if list == nil {
@@ -804,7 +808,7 @@ func GetApertureNPCs(c *gin.Context) {
 }
 
 type AssignNPCRoleRequest struct {
-	Role string `json:"role" binding:"required,oneof=NONE REFINER MINER FARMER SCHOLAR GENERAL GOVERNOR"`
+	Role string `json:"role" binding:"required,oneof=NONE REFINER MINER FARMER"`
 }
 
 // AssignNPCRole assigns a role to a variant NPC.
@@ -824,10 +828,14 @@ func AssignNPCRole(c *gin.Context) {
 
 	// Verify NPC belongs to player's aperture.
 	result, err := db.DB.Exec(`
-		UPDATE aperture_variant_npcs n
-		SET role = $3, status = CASE WHEN $3 = 'NONE' THEN 'IDLE' ELSE 'ASSIGNED' END, updated_at = NOW()
+		UPDATE non_player_actors n
+		SET role = $3, formation_slot = 0,
+		    execution_state = CASE WHEN $3 = 'NONE' THEN 'STORED' ELSE 'WORKING' END,
+		    updated_at = NOW(), version = version + 1
 		FROM immortal_apertures a
 		WHERE n.aperture_id = a.id AND n.id = $1 AND a.player_id = $2
+		  AND n.actor_kind = 'VARIANT_NPC' AND n.lifecycle_state = 'ACTIVE'
+		  AND n.execution_state IN ('STORED','WORKING')
 	`, npcID, playerID, req.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -857,12 +865,13 @@ func DismissNPC(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Get NPC info before delete.
+	// Lock the active actor so concurrent dismissals decrement the aggregate once.
 	var apertureID, race string
 	err = tx.QueryRow(`
-		SELECT n.aperture_id, n.race FROM aperture_variant_npcs n
+		SELECT n.aperture_id, n.race FROM non_player_actors n
 		JOIN immortal_apertures a ON a.id = n.aperture_id
-		WHERE n.id = $1 AND a.player_id = $2
+		WHERE n.id = $1 AND a.player_id = $2 AND n.actor_kind = 'VARIANT_NPC'
+		  AND n.lifecycle_state = 'ACTIVE' FOR UPDATE
 	`, npcID, playerID).Scan(&apertureID, &race)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy NPC"})
@@ -873,7 +882,14 @@ func DismissNPC(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(`DELETE FROM aperture_variant_npcs WHERE id = $1`, npcID)
+	_, err = tx.Exec(`UPDATE non_player_actors
+		SET lifecycle_state = 'DISMISSED', execution_state = 'DISMISSED', updated_at = NOW(), version = version + 1
+		WHERE id = $1`, npcID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	err = releaseActorGu(tx, npcID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return

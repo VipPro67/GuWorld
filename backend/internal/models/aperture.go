@@ -218,19 +218,25 @@ const (
 
 // ApertureVariantNPC represents a named Gu Master / Gu Immortal NPC within an aperture.
 type ApertureVariantNPC struct {
-	ID         string    `json:"id"`
-	ApertureID string    `json:"aperture_id"`
-	Race       string    `json:"race"`
-	Name       string    `json:"name"`
-	Rank       int       `json:"rank"`
-	SubRank    int       `json:"sub_rank"`
-	Path       string    `json:"path"`
-	Role       string    `json:"role"`
-	Loyalty    float64   `json:"loyalty"`
-	Talent     float64   `json:"talent"`
-	Status     string    `json:"status"` // IDLE, REFINING, MINING, TRAINING, DEAD
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID            string       `json:"id"`
+	ApertureID    string       `json:"aperture_id"`
+	Race          string       `json:"race"`
+	Name          string       `json:"name"`
+	Rank          int          `json:"rank"`
+	SubRank       int          `json:"sub_rank"`
+	Path          string       `json:"path"`
+	Role          string       `json:"role"`
+	Loyalty       float64      `json:"loyalty"`
+	Talent        float64      `json:"talent"`
+	Experience    int64        `json:"experience"`
+	HP            float64      `json:"hp"`
+	MaxHP         float64      `json:"max_hp"`
+	FormationSlot int          `json:"formation_slot"`
+	Version       int64        `json:"version"`
+	EquippedGu    []GuInstance `json:"equipped_gu"`
+	Status        string       `json:"status"` // IDLE, REFINING, MINING, TRAINING, DEAD
+	CreatedAt     time.Time    `json:"created_at"`
+	UpdatedAt     time.Time    `json:"updated_at"`
 }
 
 type TribTypeConfig struct {

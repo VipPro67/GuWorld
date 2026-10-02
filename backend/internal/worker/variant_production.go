@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -38,6 +40,13 @@ type apertureTickData struct {
 	yearsPassed float64
 	variants    []variantRow
 	nodes       []nodeWorkerRow
+	namedNPCs   []namedNPCWorker
+}
+
+type namedNPCWorker struct {
+	role            string
+	rank            int
+	talent, loyalty float64
 }
 
 type variantRow struct {
@@ -107,13 +116,56 @@ func processVariantProductionTick(ctx context.Context, db *sql.DB) {
 		logger.S.Error("VariantProduction: load workers: ", err)
 		return
 	}
+	namedNPCMap, err := loadNamedNPCWorkersBatch(ctx, db, apertureIDs)
+	if err != nil {
+		logger.S.Error("VariantProduction: load named NPCs: ", err)
+		return
+	}
 
 	for i := range apertures {
 		apertures[i].variants = variantMap[apertures[i].apertureID]
 		apertures[i].nodes = workerMap[apertures[i].apertureID]
+		apertures[i].namedNPCs = namedNPCMap[apertures[i].apertureID]
 		processApertureProduction(ctx, db, &apertures[i])
 		processApertureRefinement(ctx, db, apertures[i].apertureID)
 	}
+}
+
+func loadNamedNPCWorkersBatch(ctx context.Context, db *sql.DB, apertureIDs []string) (map[string][]namedNPCWorker, error) {
+	rows, err := db.QueryContext(ctx, `SELECT aperture_id,role,rank,talent,loyalty FROM non_player_actors
+		WHERE aperture_id=ANY($1::uuid[]) AND actor_kind='VARIANT_NPC' AND lifecycle_state='ACTIVE' AND execution_state='WORKING'`, pq.Array(apertureIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string][]namedNPCWorker)
+	for rows.Next() {
+		var id string
+		var n namedNPCWorker
+		if err := rows.Scan(&id, &n.role, &n.rank, &n.talent, &n.loyalty); err != nil {
+			return nil, err
+		}
+		result[id] = append(result[id], n)
+	}
+	return result, rows.Err()
+}
+
+func clampNPCPercent(v float64) float64 { return math.Max(0, math.Min(100, v)) / 100 }
+func namedNPCBonus(npcs []namedNPCWorker, role string, cap float64) float64 {
+	bonus := 0.0
+	for _, n := range npcs {
+		if n.role == role {
+			bonus += .005 * float64(n.rank) * clampNPCPercent(n.talent) * clampNPCPercent(n.loyalty)
+		}
+	}
+	return math.Min(cap, bonus)
+}
+func namedNPCNodeRole(nodeType, productionKey string) string {
+	v := nodeType + " " + productionKey
+	if strings.Contains(strings.ToUpper(v), "FARM") || strings.Contains(strings.ToUpper(v), "BREED") || strings.Contains(strings.ToUpper(v), "FOOD") {
+		return "FARMER"
+	}
+	return "MINER"
 }
 
 // --- batch loaders ---
@@ -203,7 +255,8 @@ func processApertureProduction(ctx context.Context, db *sql.DB, ap *apertureTick
 			popBonus = 5.0
 		}
 		levelBonus := 1.0 + float64(nw.nodeLevel-1)*0.1
-		output := int64(baseOutput * popBonus * levelBonus * laborMod)
+		npcBonus := namedNPCBonus(ap.namedNPCs, namedNPCNodeRole(nw.nodeType, nw.productionKey), .50)
+		output := int64(baseOutput * popBonus * levelBonus * laborMod * (1 + npcBonus))
 		if output <= 0 {
 			continue
 		}

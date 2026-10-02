@@ -122,12 +122,25 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 		npcTalent := 20.0 + rand.Float64()*60.0  // 20-80
 		npcLoyalty := 50.0 + rand.Float64()*50.0 // 50-100
 
-		_, err := tx.ExecContext(ctx, `
-			INSERT INTO aperture_variant_npcs (aperture_id, race, name, rank, sub_rank, path, role, loyalty, talent, status)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'IDLE')
-		`, c.apertureID, c.race, npcName, npcRank, 0, "REFINEMENT", "NONE", npcLoyalty, npcTalent)
+		result, err := tx.ExecContext(ctx, `
+			INSERT INTO non_player_actors (
+				actor_kind, owner_player_id, aperture_id, template_source, template_id, species, race, name,
+				rank, sub_rank, path, role, loyalty, talent, hp, max_hp, base_attack, base_defense, speed, lifecycle_state, execution_state,
+				behavior_profile, capabilities)
+			SELECT 'VARIANT_NPC', a.player_id, a.id, 'VARIANT_RACE', $2, $2, $2, $3,
+			       $4, $5, $6, $7, $8, $9,
+			       80 + $4 * 40 + $9, 80 + $4 * 40 + $9,
+			       8 + $4 * 6 + $9 * 0.12, 5 + $4 * 4 + $9 * 0.08, 8 + $4 + $9 * 0.02,
+			       'ACTIVE', 'STORED', 'WORKER',
+			       '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"PRODUCE":true,"REFINE":true,"TRAIN":true,"EQUIP_GU":true}'::jsonb
+			FROM immortal_apertures a WHERE a.id = $1 AND a.state != 'DESTROYED'
+		`, c.apertureID, c.race, npcName, npcRank, 1, "REFINEMENT", "NONE", npcLoyalty, npcTalent)
 		if err != nil {
 			logger.S.Errorf("GuMasterSpawn: insert NPC for %s: %v", c.apertureID, err)
+			continue
+		}
+		inserted, err := result.RowsAffected()
+		if err != nil || inserted != 1 {
 			continue
 		}
 

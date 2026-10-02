@@ -37,7 +37,7 @@ ghi bằng domain command nhưng vẫn là `Internal/not exposed` nếu không c
 | aperture | `aperture_refinement_queue` | Internal/not exposed | Queue/runtime state. |
 | aperture | `aperture_variant_settlements` | Internal/not exposed | Gameplay-owned child state. |
 | aperture | `aperture_variant_events` | Internal/not exposed | Event history/runtime. |
-| aperture | `aperture_variant_npcs` | Internal/not exposed | Gameplay-owned child state. |
+| actors | `non_player_actors` | Domain command only | Canonical pet/NPC instances; pet admin commands are exposed, not a generic row editor. |
 | aperture | `tribulation_events` | Internal/not exposed | Runtime event state. |
 | aperture | `tribulation_enemies` | Internal/not exposed | Runtime combat state. |
 | beast betting | `beast_betting_rounds` | Internal/not exposed | Betting lifecycle; future admin action must be a domain command. |
@@ -76,7 +76,6 @@ ghi bằng domain command nhưng vẫn là `Internal/not exposed` nếu không c
 | player items | `player_quest_progress` | Internal/not exposed | Gameplay progress. |
 | player items | `player_dao_path` | Internal/not exposed | Gameplay progression state. |
 | player items | `player_map_progress` | Internal/not exposed | Gameplay progress. |
-| player items | `player_pets` | Domain command only | Player pet create/update/delete command; không generic row editor. |
 | player items | `player_instance_sessions` | Internal/not exposed | Active session/runtime state. |
 | players | `players` | Domain command only | Redacted read/update và explicit commands; password/auth fields không được lộ. |
 | players | `player_collection_revisions` | Internal/not exposed | Cache/coherency revision. |

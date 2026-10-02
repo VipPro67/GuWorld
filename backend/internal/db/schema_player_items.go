@@ -245,43 +245,6 @@ func schemaPlayerItems() error {
 		return err
 	}
 
-	if err := execSchema("player_pets", `
-	CREATE TABLE IF NOT EXISTS player_pets (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		monster_template_id VARCHAR(50) NOT NULL REFERENCES monster_templates(id),
-		nickname VARCHAR(60) NOT NULL DEFAULT '',
-		rank INT NOT NULL DEFAULT 1,
-		sub_rank INT NOT NULL DEFAULT 1,
-		hp DOUBLE PRECISION NOT NULL,
-		max_hp DOUBLE PRECISION NOT NULL,
-		base_attack DOUBLE PRECISION NOT NULL,
-		base_defense DOUBLE PRECISION NOT NULL,
-		speed DOUBLE PRECISION NOT NULL DEFAULT 10,
-		count INT NOT NULL DEFAULT 1,
-		hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
-		max_hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
-		pet_hunger_per_hour DOUBLE PRECISION NOT NULL DEFAULT 2.0,
-		state VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-		formation_slot INT NOT NULL DEFAULT 0,
-		captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	);`); err != nil {
-		return err
-	}
-	if err := execSchema("player_pets_player_idx", `
-	CREATE INDEX IF NOT EXISTS idx_player_pets_player ON player_pets (player_id);`); err != nil {
-		return err
-	}
-	if err := execSchema("player_pets_formation_idx", `
-	CREATE INDEX IF NOT EXISTS idx_player_pets_formation ON player_pets (player_id, formation_slot);`); err != nil {
-		return err
-	}
-	if err := execSchema("player_pets_monster_idx", `
-	CREATE INDEX IF NOT EXISTS idx_player_pets_monster ON player_pets (player_id, monster_template_id);`); err != nil {
-		return err
-	}
-
 	if err := execSchema("player_instance_sessions", `
 	CREATE TABLE IF NOT EXISTS player_instance_sessions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
