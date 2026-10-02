@@ -920,7 +920,7 @@ Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `pas
 6. `ON_CAST / UNRAVEL_RIDDLE` — hóa giải tối đa 2 buff của mục tiêu (kèm log ngắt tụ lực). VD: Giải Mê Cổ (đồng thời gây `SILENCE` từ `active.apply_status`).
 7. `ON_CAST / CHAOS_GAMBLE` — gieo 1 lợi trong 3 (crit ×5 / bất tử 1 lượt / trừ 90% HP hiện tại của địch, giữ lại tối thiểu 1 HP) kèm 1 giá trong 3 (tư chất −10% / tuổi thọ −5 năm / nguyên thạch −50%). VD: Cổ Tình Yêu.
 8. `ON_HIT / BYPASS_SHIELD` — đòn đánh xuyên Khiên Ảo, trừ thẳng HP (không trừ thủ). VD: Cổ Phá Không.
-9. `BEFORE_HIT / FIRST_TURN_EVADE` — né đòn đánh đầu tiên ở Lượt 1, đòn multi-hit/AoE tiếp theo vẫn trúng (chỉ Cổ nào mang mechanic này mới có; Định Tiên Du hiện tại mang `portal_create` + `movement`, không có evade).
+9. `BEFORE_HIT / FIRST_TURN_EVADE` — né đòn đánh đầu tiên ở Lượt 1, đòn multi-hit/AoE tiếp theo vẫn trúng. Định Tiên Du rank 9 mang mechanic này (rank 6–8 chỉ có `portal_create` + `movement`).
 9b. `apply_status / INVINCIBLE` có `chance` — miễn nhiễm theo tỉ lệ mỗi lần dùng, tỉ lệ và số lượt tăng theo rank (`chance + 0.05×(rank−1)`, `turns + (rank−1)/3`). VD: Hoang Mộ Cổ rank 4 (`chance: 0.35, turns: 1`) → 50%/2 lượt + khiên 600. Trượt hiện log `STATUS_MISS`.
 10. `COMBAT_PASSIVE / DOUBLE_DAMAGE_DEALT` (`PASSIVE` cũ vẫn dùng được) — nhân đôi mọi sát thương gây ra. VD: Tiên Thai Chí Tôn (kèm `path_conflict_reduction: 100`).
 11. `active.cleansing_power` / `passive.tenacity` + `passive.cc_resist` — kháng và tự giải hiệu ứng bất lợi (xem mục Kháng hiệu ứng và Tenacity ở mục 9). VD: Ngã Ý Cổ (`tenacity: 0.35`, `cc_resist: 0.15`).
@@ -938,7 +938,7 @@ Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `pas
 4. `ON_TICK / THOUGHT_REGEN_TICK (params.value)` — hồi Niệm lực mỗi giờ cho Cổ sư trang bị. VD: Trí Tuệ Cổ.
 5. `ALWAYS_ON / DEDUCTION_INSTANT_FINISH` — Cổ trang bị có tỉ lệ đốn ngộ, lập tức hoàn thành thôi diễn bí phương (100%). Tỉ lệ = `base_chance + (rank Cổ - rank đích) * per_rank_step`, chặn trong `[min_chance, max_chance]`; mỗi lần thôi diễn chỉ roll 1 lần. VD: Đốn Ngộ Cổ.
 6. `COMBAT_PASSIVE / REVERSE_CALAMITY` — miễn nhiễm tuyệt đối mọi trạng thái bất lợi từ địch (choáng/ngủ/phong ấn/cướp Cổ...), damage vẫn nhận. VD: Nghịch Chuyển Cổ.
-7. `ON_BATTLE_START / SUPPRESS_PRIORITY` — trấn áp hiệu ứng ưu tiên hành động của địch (`SEIZE_INITIATIVE`, né đòn đầu Định Tiên Du), sau đó so tốc bình thường. VD: Cấm Cổ.
+7. `ON_BATTLE_START / SUPPRESS_PRIORITY` — trấn áp hiệu ứng ưu tiên hành động của địch (`SEIZE_INITIATIVE`, né đòn đầu Định Tiên Du); trấn áp thành công thì người mang Cấm Cổ đi trước Lượt 1, song Cấm thì ai nhanh hơn đi trước. VD: Cấm Cổ.
 
 ## 18. Bối cảnh & Cốt truyện nguyên tác (Cổ Chân Nhân)
 

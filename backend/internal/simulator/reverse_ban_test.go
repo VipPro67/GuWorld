@@ -94,20 +94,27 @@ func TestReverseCalamityBlocksGuSeal(t *testing.T) {
 	}
 }
 
-// TestSuppressPriorityBlocksSeize verifies Cấm Cổ: an eligible enemy seize is
-// ignored and turn order falls back to normal speed (holder not auto-first).
-func TestSuppressPriorityBlocksSeize(t *testing.T) {
-	build := func(allySuppress, enemySuppress bool) (string, []CombatLog) {
+// TestSuppressPrioritySeizesFirstOnSuccess verifies Cấm Cổ: when the
+// suppression negates an enemy priority effect that would actually trigger,
+// the fastest living holder acts first on turn 1 (even when slower).
+func TestSuppressPrioritySeizesFirstOnSuccess(t *testing.T) {
+	build := func(allySpeed, enemySpeed float64, allySuppress, enemySuppress bool, allyLife, enemyLife float64, allySeize bool) (string, []CombatLog) {
 		ally := newTestCombatant("ally", "Player", 100000, 1)
-		ally.Speed = 50
-		ally.Lifespan = 100
+		ally.Speed = allySpeed
+		ally.Lifespan = allyLife
 		if allySuppress {
 			ally.Mechanics = []CombatMechanic{suppressPriorityMech()}
 		}
+		if allySeize {
+			ally.Mechanics = append(ally.Mechanics, CombatMechanic{
+				Trigger: "ON_BATTLE_START", ActionCode: "SEIZE_INITIATIVE",
+				Params: []byte(`{"lifespan_ratio":3}`),
+			})
+		}
 		ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 1}}
 		enemy := newTestCombatant("enemy", "Enemy", 100000, 1)
-		enemy.Speed = 1
-		enemy.Lifespan = 100
+		enemy.Speed = enemySpeed
+		enemy.Lifespan = enemyLife
 		enemy.Mechanics = []CombatMechanic{{
 			Trigger: "ON_BATTLE_START", ActionCode: "SEIZE_INITIATIVE",
 			Params: []byte(`{"lifespan_ratio":3}`),
@@ -129,22 +136,65 @@ func TestSuppressPriorityBlocksSeize(t *testing.T) {
 	}
 
 	// Sanity: without suppression the slower enemy seizes.
-	if first, _ := build(false, false); first != "enemy" {
+	if first, _ := build(50, 1, false, false, 100, 100, false); first != "enemy" {
 		t.Fatalf("sanity: expected enemy to seize without suppression, first=%q", first)
 	}
-	// Holder suppresses: no seize, faster ally first by speed.
-	if first, logs := build(true, false); first != "ally" {
-		t.Fatalf("expected speed order after suppression, first=%q", first)
+	// Slower holder suppresses an eligible seize: holder goes first anyway.
+	if first, logs := build(1, 50, true, false, 100, 100, false); first != "ally" {
+		t.Fatalf("expected suppressor first despite lower speed, first=%q", first)
 	} else if logActionCount(logs, "SEIZE_INITIATIVE") != 0 {
 		t.Fatal("expected no SEIZE_INITIATIVE log when suppressed")
 	} else if logActionCount(logs, "PRIORITY_SUPPRESSED") == 0 {
 		t.Fatal("expected PRIORITY_SUPPRESSED log")
+	} else if logActionCount(logs, "SUPPRESS_PRIORITY") == 0 {
+		t.Fatal("expected SUPPRESS_PRIORITY first-strike log")
 	}
-	// Mirror: both sides suppress — still speed order, no seize.
-	if first, logs := build(true, true); first != "ally" {
-		t.Fatalf("expected speed order in mirror suppression, first=%q", first)
+	// Mirror: both sides suppress and both have an eligible seize — the
+	// faster suppressor goes first.
+	if first, logs := build(50, 1, true, true, 100, 100, true); first != "ally" {
+		t.Fatalf("expected faster suppressor first in mirror, first=%q", first)
 	} else if logActionCount(logs, "SEIZE_INITIATIVE") != 0 {
 		t.Fatal("expected no SEIZE_INITIATIVE log in mirror suppression")
+	} else if logActionCount(logs, "SUPPRESS_PRIORITY") == 0 {
+		t.Fatal("expected SUPPRESS_PRIORITY log in mirror suppression")
+	}
+	if first, _ := build(1, 50, true, true, 100, 100, true); first != "enemy" {
+		t.Fatalf("expected faster enemy suppressor first in mirror, first=%q", first)
+	}
+}
+
+// TestSuppressPriorityNoJumpWithoutTrigger verifies a suppression with
+// nothing to negate grants no first strike: enemy seize ineligible on
+// lifespan, so turn 1 stays in speed order with no SUPPRESS_PRIORITY log.
+func TestSuppressPriorityNoJumpWithoutTrigger(t *testing.T) {
+	ally := newTestCombatant("ally", "Player", 100000, 1)
+	ally.Speed = 1
+	ally.Lifespan = 10000
+	ally.Mechanics = []CombatMechanic{suppressPriorityMech()}
+	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 1}}
+	enemy := newTestCombatant("enemy", "Enemy", 100000, 1)
+	enemy.Speed = 50
+	enemy.Lifespan = 100
+	enemy.Mechanics = []CombatMechanic{{
+		Trigger: "ON_BATTLE_START", ActionCode: "SEIZE_INITIATIVE",
+		Params: []byte(`{"lifespan_ratio":3}`),
+	}}
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 1}}
+	state := &CombatState{Seed: 3, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
+	logs := Simulate(state)
+
+	first := ""
+	for _, l := range logs {
+		if l.Turn == 1 && l.Action != "TURN_START" && l.ActorId != "" {
+			first = l.ActorId
+			break
+		}
+	}
+	if first != "enemy" {
+		t.Fatalf("expected speed order when nothing to suppress, first=%q", first)
+	}
+	if logActionCount(logs, "SUPPRESS_PRIORITY") != 0 {
+		t.Fatal("expected no SUPPRESS_PRIORITY log without a successful suppression")
 	}
 }
 
@@ -164,6 +214,9 @@ func TestSuppressPriorityBlocksFirstTurnEvade(t *testing.T) {
 
 	if logDetailCount(logs, "trấn áp") == 0 {
 		t.Fatal("expected suppression trace against first-turn evade")
+	}
+	if logActionCount(logs, "SUPPRESS_PRIORITY") == 0 {
+		t.Fatal("expected SUPPRESS_PRIORITY first-strike log against evade carrier")
 	}
 	if logActionCount(logs, "EVADE") != 0 {
 		t.Fatal("expected no EVADE log when suppressed")

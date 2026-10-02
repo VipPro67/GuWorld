@@ -306,7 +306,7 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
         return { text: `Đảo nghịch mọi trạng thái bất lợi về hư vô (chỉ nhận sát thương)`, color: "text-slate-200 font-semibold", icon: "☯️" };
       }
       if (code === "SUPPRESS_PRIORITY") {
-        return { text: `Trấn áp hiệu ứng ưu tiên hành động của địch (so tốc bình thường)`, color: "text-red-300 font-semibold", icon: "⛔" };
+        return { text: `Trấn áp ưu tiên hành động của địch — trấn áp thành công thì đi trước Lượt 1`, color: "text-red-300 font-semibold", icon: "⛔" };
       }
 
       const codeName = UNIQUE_NAMES[code] || code;
