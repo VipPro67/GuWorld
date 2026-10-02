@@ -49,14 +49,14 @@ func schemaAuthorization() error {
 		return err
 	}
 	for _, role := range authz.BuiltinRoles() {
-		if _, err := DB.Exec(`DELETE FROM admin_role_permissions WHERE role_key=$1`, role.Key); err != nil {
+		if _, err := schemaDB().Exec(`DELETE FROM admin_role_permissions WHERE role_key=$1`, role.Key); err != nil {
 			return err
 		}
 		for _, permission := range role.Permissions {
-			if _, err := DB.Exec(`INSERT INTO admin_permissions (key, name, description) VALUES ($1,$1,'Built-in permission') ON CONFLICT (key) DO NOTHING`, permission); err != nil {
+			if _, err := schemaDB().Exec(`INSERT INTO admin_permissions (key, name, description) VALUES ($1,$1,'Built-in permission') ON CONFLICT (key) DO NOTHING`, permission); err != nil {
 				return err
 			}
-			if _, err := DB.Exec(`INSERT INTO admin_role_permissions (role_key, permission_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, role.Key, permission); err != nil {
+			if _, err := schemaDB().Exec(`INSERT INTO admin_role_permissions (role_key, permission_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, role.Key, permission); err != nil {
 				return err
 			}
 		}

@@ -243,7 +243,7 @@ func seedDefaultRaceConstitutionRows() error {
 		{"giant_sun_descendant", "Cự Dương Huyết Mạch", `{"luck":5,"cultivation_efficiency":0.05}`},
 	}
 	for _, r := range races {
-		if _, err := DB.Exec(`INSERT INTO race_dictionary (key, name, effects) VALUES ($1,$2,$3::jsonb) ON CONFLICT (key) DO NOTHING`, r.key, r.name, r.effects); err != nil {
+		if _, err := schemaDB().Exec(`INSERT INTO race_dictionary (key, name, effects) VALUES ($1,$2,$3::jsonb) ON CONFLICT (key) DO NOTHING`, r.key, r.name, r.effects); err != nil {
 			return err
 		}
 	}
@@ -266,7 +266,7 @@ func seedDefaultRaceConstitutionRows() error {
 		{"pure_dream_reality_seeker_body", "Thuần Mộng Cầu Chân Thể", `{"dao_mark":{"dream":0.40},"path_damage":{"dream":0.10},"max_mana":0.40,"mana_regen":1}`, 3},
 	}
 	for _, c := range constitutions {
-		if _, err := DB.Exec(`INSERT INTO constitution_dictionary (key, name, effects, tier) VALUES ($1,$2,$3::jsonb,$4) ON CONFLICT (key) DO NOTHING`, c.key, c.name, c.effects, c.tier); err != nil {
+		if _, err := schemaDB().Exec(`INSERT INTO constitution_dictionary (key, name, effects, tier) VALUES ($1,$2,$3::jsonb,$4) ON CONFLICT (key) DO NOTHING`, c.key, c.name, c.effects, c.tier); err != nil {
 			return err
 		}
 	}
@@ -366,7 +366,7 @@ func seedDefaultStatusRows() error {
 	}
 
 	for _, s := range statuses {
-		if _, err := DB.Exec(`
+		if _, err := schemaDB().Exec(`
 			INSERT INTO status_dictionary (
 				key,
 				name,
