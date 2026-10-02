@@ -32,6 +32,66 @@ func TestChooseFeedCandidate(t *testing.T) {
 	}
 }
 
+func TestConsumeFixedFeedResources(t *testing.T) {
+	tests := []struct {
+		name   string
+		foodID string
+		player models.Player
+		check  func(t *testing.T, player models.Player)
+	}{
+		{"blood", feedBloodID, models.Player{BodyState: models.BodyState{HP: 25}}, func(t *testing.T, p models.Player) {
+			if p.HP != 15 {
+				t.Fatalf("HP = %v, want 15", p.HP)
+			}
+		}},
+		{"thought", feedThoughtID, models.Player{ThoughtPool: models.ThoughtPool{CurrentThought: 25}}, func(t *testing.T, p models.Player) {
+			if p.CurrentThought != 15 {
+				t.Fatalf("thought = %v, want 15", p.CurrentThought)
+			}
+		}},
+		{"soul", feedSoulID, models.Player{SoulState: models.SoulState{SoulHP: 25}}, func(t *testing.T, p models.Player) {
+			if p.SoulHP != 15 {
+				t.Fatalf("soul = %v, want 15", p.SoulHP)
+			}
+		}},
+		{"lifespan", feedLifespanID, models.Player{CultivationState: models.CultivationState{Lifespan: 25}}, func(t *testing.T, p models.Player) {
+			if p.Lifespan != 24 {
+				t.Fatalf("lifespan = %v, want 24", p.Lifespan)
+			}
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			beforeRankFive := tt.player
+			beforeRankNine := tt.player
+			if !consumeFeedResource(&beforeRankFive, tt.foodID, 5) || !consumeFeedResource(&beforeRankNine, tt.foodID, 9) {
+				t.Fatal("expected resource to be consumable at both ranks")
+			}
+			tt.check(t, beforeRankFive)
+			tt.check(t, beforeRankNine)
+		})
+	}
+}
+
+func TestFeedResourcesPreserveLife(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		foodID string
+		player models.Player
+	}{
+		{"blood", feedBloodID, models.Player{BodyState: models.BodyState{HP: feedBloodCost}}},
+		{"soul", feedSoulID, models.Player{SoulState: models.SoulState{SoulHP: feedSoulCost}}},
+		{"lifespan", feedLifespanID, models.Player{CultivationState: models.CultivationState{Lifespan: feedLifespanCost}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if consumeFeedResource(&tt.player, tt.foodID, 1) {
+				t.Fatal("resource at the safety boundary must not be consumed")
+			}
+		})
+	}
+}
+
 func TestComputeFoodNutrition(t *testing.T) {
 	// Seed dummy registry items for testing if needed
 	models.ItemRegistry["food_r1"] = models.ItemSpec{ID: "food_r1", Rank: 1}

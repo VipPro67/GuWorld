@@ -363,6 +363,7 @@ Khi Cổ chết đói, **Ký Sự Tu Hành** ghi bản rõ: độ no ngay trư�
 Cổ sư có thể:
 
 - Cho ăn từng Cổ hoặc theo nhóm.
+- Ngoài vật liệu, một số Cổ đặc thù ăn trực tiếp tài nguyên của chủ nhân: Huyết Thọ Cổ dùng 10 Máu, Nhiếp Tâm Cổ dùng 10 Niệm Lực, Khấp Thương Cổ dùng 10 Linh Hồn và Thâu Mệnh Tiên Cổ dùng 1 Tuổi Thọ cho mỗi khẩu phần 100 Độ No. Chi phí này cố định ở mọi Chuyển; hệ thống không cho Máu, Linh Hồn hoặc Tuổi Thọ bị ăn xuống 0.
 - Trang bị/tháo Cổ.
 - Đặt Cổ bản mệnh.
 - Chuyển trạng thái active/sleeping.
