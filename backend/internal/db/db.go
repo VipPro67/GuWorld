@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
@@ -48,6 +49,49 @@ func activeCSVImportDB() csvImportExecutor {
 // baseRankCache memoizes the minimum dictionary rank of each Gu id, used when
 // upgrading legacy recipe required_gus values to the ranked format.
 var baseRankCache = map[string]int{}
+
+// schemaExec routes InitSchema traffic through a dedicated connection with
+// migration-friendly timeouts (see InitSchema). It is nil outside InitSchema,
+// in which case schemaDB falls back to the shared pool.
+var schemaExec csvImportExecutor
+
+func schemaDB() csvImportExecutor {
+	if schemaExec != nil {
+		return schemaExec
+	}
+	return DB
+}
+
+// migrationConn adapts a dedicated *sql.Conn to the executor interface so all
+// migration statements share one session (and its SET timeouts).
+type migrationConn struct {
+	conn *sql.Conn
+}
+
+func (m migrationConn) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return m.conn.ExecContext(context.Background(), query, args...)
+}
+
+func (m migrationConn) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return m.conn.QueryContext(context.Background(), query, args...)
+}
+
+func (m migrationConn) QueryRow(query string, args ...interface{}) *sql.Row {
+	return m.conn.QueryRowContext(context.Background(), query, args...)
+}
+
+// migrationTimeoutMs reads an env override in milliseconds, falling back to
+// def when unset or unparseable (a bad value must not break boot).
+func migrationTimeoutMs(key, def string) string {
+	raw := strings.TrimSpace(getEnv(key, def))
+	if raw == "" {
+		return def
+	}
+	if _, err := strconv.Atoi(raw); err != nil {
+		return def
+	}
+	return raw
+}
 
 // Connect establishes a connection to the PostgreSQL database
 func Connect() error {
@@ -97,18 +141,37 @@ func InitSchema() error {
 		return fmt.Errorf("database connection is nil")
 	}
 
-	if _, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`); err != nil {
+	// Run the whole migration on ONE dedicated connection with generous
+	// timeouts. The pool-wide 15s statement_timeout (needed to protect the
+	// request path) aborts backfills/consolidations on prod-size tables
+	// (sect_vault_gu, aperture_resource_nodes, players), FATALing boot into a
+	// crash loop. Request traffic keeps the strict pool defaults.
+	migConn, err := DB.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer migConn.Close()
+	if _, err := migConn.ExecContext(context.Background(), fmt.Sprintf("SET statement_timeout = %s", migrationTimeoutMs("DB_MIGRATION_STATEMENT_TIMEOUT_MS", "300000"))); err != nil {
+		return fmt.Errorf("set migration statement_timeout: %w", err)
+	}
+	if _, err := migConn.ExecContext(context.Background(), fmt.Sprintf("SET lock_timeout = %s", migrationTimeoutMs("DB_MIGRATION_LOCK_TIMEOUT_MS", "60000"))); err != nil {
+		return fmt.Errorf("set migration lock_timeout: %w", err)
+	}
+	schemaExec = migrationConn{conn: migConn}
+	defer func() { schemaExec = nil }()
+
+	if _, err := schemaDB().Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`); err != nil {
 		logger.S.Warnf("failed to create uuid-ossp extension: %v", err)
 	}
-	if _, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "unaccent";`); err != nil {
+	if _, err := schemaDB().Exec(`CREATE EXTENSION IF NOT EXISTS "unaccent";`); err != nil {
 		logger.S.Warnf("failed to create unaccent extension: %v", err)
 	}
-	if _, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`); err != nil {
+	if _, err := schemaDB().Exec(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`); err != nil {
 		logger.S.Warnf("failed to create pg_trgm extension: %v", err)
 	}
 	// Immutable wrapper around unaccent so it can be used in index expressions.
 	// unaccent() itself is STABLE and cannot be indexed directly.
-	if _, err := DB.Exec(`
+	if _, err := schemaDB().Exec(`
 	CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
 	RETURNS text
 	LANGUAGE sql
@@ -199,7 +262,7 @@ func InitSchema() error {
 	// Clean up any stale active_combat records for non-leader party members.
 	// IS NOT NULL guard keeps the boot UPDATE idempotent (no rewrite when
 	// already clean), avoiding a full-table rewrite under statement_timeout.
-	_, _ = DB.Exec(`UPDATE players SET active_combat = NULL WHERE active_combat IS NOT NULL AND party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`)
+	_, _ = schemaDB().Exec(`UPDATE players SET active_combat = NULL WHERE active_combat IS NOT NULL AND party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`)
 
 	logger.S.Info("Database schema initialized successfully")
 	return nil
@@ -207,7 +270,7 @@ func InitSchema() error {
 
 // execSchema runs a single DDL statement, wrapping errors with the schema name.
 func execSchema(name, sql string) error {
-	if _, err := DB.Exec(sql); err != nil {
+	if _, err := schemaDB().Exec(sql); err != nil {
 		return fmt.Errorf("failed to create %s: %w", name, err)
 	}
 	return nil
@@ -217,7 +280,7 @@ func execSchema(name, sql string) error {
 // (default 'Southern_Border') is satisfied on a fresh database before the admin
 // imports Region.csv. The CSV import overwrites/extends this row.
 func seedHubRegion() error {
-	if _, err := DB.Exec(`
+	if _, err := schemaDB().Exec(`
 	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at)
 	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 201, 201, 1, 9, true, 'HUB', 4900, 4900, 5100, 5100, 5000, 5000, '{"cell_type_weights":{"Empty":100}}', NOW())
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
@@ -229,13 +292,13 @@ func seedHubRegion() error {
 // seedSystemPlayers seeds the two reserved system accounts used by the
 // global/world/sect chat channels and automated notifications.
 func seedSystemPlayers() error {
-	if _, err := DB.Exec(`
+	if _, err := schemaDB().Exec(`
 	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
 	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
-	if _, err := DB.Exec(`
+	if _, err := schemaDB().Exec(`
 	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
 	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
@@ -248,7 +311,7 @@ func seedSystemPlayers() error {
 // 9 Sử Thi, 18 Hiếm) when the table is empty.
 func seedMineSlots() error {
 	var count int
-	if err := DB.QueryRow(`SELECT COUNT(*) FROM mine_slots`).Scan(&count); err != nil {
+	if err := schemaDB().QueryRow(`SELECT COUNT(*) FROM mine_slots`).Scan(&count); err != nil {
 		return err
 	}
 	if count >= 62 {
@@ -268,13 +331,13 @@ func seedMineSlots() error {
 		}
 	}
 	for i := 1; i <= 31; i++ {
-		if _, err := DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'mortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[i]); err != nil {
+		if _, err := schemaDB().Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'mortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[i]); err != nil {
 			logger.S.Errorf("Failed to seed mortal mine %d: %v", i, err)
 		}
 	}
 	for i := 101; i <= 131; i++ {
 		idx := i - 100
-		if _, err := DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'immortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[idx]); err != nil {
+		if _, err := schemaDB().Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'immortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[idx]); err != nil {
 			logger.S.Errorf("Failed to seed immortal mine %d: %v", i, err)
 		}
 	}
@@ -284,7 +347,7 @@ func seedMineSlots() error {
 
 // seedSectMines seeds the 5 fixed sect mines.
 // func seedSectMines() error {
-// 	if _, err := DB.Exec(`
+// 	if _, err := schemaDB().Exec(`
 // 	INSERT INTO sect_mines (name, rarity) VALUES
 // 	('Thái Cổ Tinh Mạch', 'Truyền Thuyết'),
 // 	('Cửu U Huyết Mạch', 'Sử Thi'),
@@ -299,7 +362,7 @@ func seedMineSlots() error {
 
 // backfillWallets mirrors each player's stone balances into the wallet table.
 func backfillWallets() error {
-	if _, err := DB.Exec(`
+	if _, err := schemaDB().Exec(`
 	INSERT INTO wallets (user_id, immortal_jade)
 	SELECT id, 0
 	FROM players
@@ -311,7 +374,7 @@ func backfillWallets() error {
 
 // backfillLeaderboardSettings ensures every player has a leaderboard row.
 func backfillLeaderboardSettings() error {
-	if _, err := DB.Exec(`
+	if _, err := schemaDB().Exec(`
 	INSERT INTO leaderboard_settings (player_id, show_on_leaderboard)
 	SELECT id, TRUE FROM players
 	ON CONFLICT (player_id) DO NOTHING;`); err != nil {
@@ -324,7 +387,7 @@ func backfillLeaderboardSettings() error {
 // is not restored on later startups, so operators can safely retire it.
 func ensureAdmin() error {
 	var adminCount int
-	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
+	if err := schemaDB().QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
 		return nil
 	}
 	if adminCount == 0 {
@@ -333,7 +396,7 @@ func ensureAdmin() error {
 			return err
 		}
 
-		if _, err := DB.Exec(`
+		if _, err := schemaDB().Exec(`
 			INSERT INTO players (
 				id, username, password_hash, email, rank, sub_rank, 
 				aptitude_type, aptitude_percent, current_mana, max_mana, 

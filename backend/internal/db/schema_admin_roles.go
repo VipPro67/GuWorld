@@ -52,7 +52,7 @@ func schemaAdminRoles() error {
 		return err
 	}
 	for _, role := range authz.BuiltinRoles() {
-		if _, err := DB.Exec(`INSERT INTO admin_roles (key, name, description, level) VALUES ($1,$2,$3,$4)
+		if _, err := schemaDB().Exec(`INSERT INTO admin_roles (key, name, description, level) VALUES ($1,$2,$3,$4)
 			ON CONFLICT (key) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, level=EXCLUDED.level`, role.Key, role.Name, role.Description, role.Level); err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func schemaAdminRoles() error {
 }
 
 func ensureBootstrapAdminRole() error {
-	if _, err := DB.Exec(`
+	if _, err := schemaDB().Exec(`
 	INSERT INTO player_admin_roles (player_id, role_key)
 	SELECT id, 'super_admin' FROM players
 	WHERE username = 'admin'
@@ -80,7 +80,7 @@ func ensureBootstrapAdminRole() error {
 	// Sync only divergent rows. The unguarded full-table rewrite dirtied every
 	// player row on each boot (WAL storm + row locks), tripping the 15s
 	// statement_timeout once players grows and blocking concurrent logins.
-	_, err := DB.Exec(`
+	_, err := schemaDB().Exec(`
 	UPDATE players p SET is_admin = EXISTS (
 		SELECT 1 FROM player_admin_roles par WHERE par.player_id = p.id
 	) WHERE p.is_admin IS DISTINCT FROM (EXISTS (

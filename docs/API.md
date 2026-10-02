@@ -12,7 +12,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 
 > **Log request:** mọi request (trừ OPTIONS) phát event structured `http_request_started` và `http_request_completed`, liên kết bằng `trace_id`. Event hoàn tất có method, route/path, status, duration, IP, player ID/username, user-agent và JSON body đã lọc. Body chỉ được ghi với `Content-Type: application/json`, tối đa 8 KiB; password/token/OTP/secret và các key nhạy cảm được thay bằng `[REDACTED]`, body lỗi/quá dài chỉ lưu marker, còn multipart/binary và các nhóm auth/webhook/top-up/chat không được ghi. Query string cũng được redact. Request ≥ 5 giây được log mức warning.
 
-> **DB hardening:** connection string mặc định kèm `statement_timeout=15000ms`, `lock_timeout=10000ms` (override qua `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`). Query bị lock/treo sẽ tự abort thay vì treo vô hạn.
+> **DB hardening:** connection string mặc định kèm `statement_timeout=15000ms`, `lock_timeout=10000ms` (override qua `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`). Query bị lock/treo sẽ tự abort thay vì treo vô hạn. Riêng `InitSchema` lúc boot chạy trên connection riêng với timeout nới lỏng (`DB_MIGRATION_STATEMENT_TIMEOUT_MS`/`DB_MIGRATION_LOCK_TIMEOUT_MS`, mặc định 300000/60000 ms) để backfill/consolidate trên bảng lớn không FATAL.
 
 > **SEO routes:** `robots.txt`, `sitemap.xml`, `/wiki`, `/wiki/[guId]` do Next.js frontend xử lý (SSG/ISR). Xem `frontend/src/app/`.
 
