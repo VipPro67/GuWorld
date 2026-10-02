@@ -386,6 +386,13 @@ func schemaAperture() error {
 		return err
 	}
 
+	// Destroyed nodes are terminal losses. Remove legacy ruins now that all
+	// dependent foreign keys have their ON DELETE behavior installed.
+	if err := execSchema("aperture_destroyed_nodes_cleanup", `
+	DELETE FROM aperture_resource_nodes WHERE is_destroyed = true;`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

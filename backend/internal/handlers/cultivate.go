@@ -529,6 +529,15 @@ func Tribulation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Only Gu Immortals face tribulations"})
 		return
 	}
+	if raceHasDeadAperture(player.Race) {
+		_, _ = tx.Exec(`UPDATE players SET next_tribulation_time = NULL WHERE id = $1`, player.ID)
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cương có Tử Khiếu, không phải chịu tai kiếp"})
+		return
+	}
 
 	if player.NextTribulationTime == nil || time.Now().Before(*player.NextTribulationTime) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "It is not yet time for your tribulation"})

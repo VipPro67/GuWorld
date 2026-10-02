@@ -33,7 +33,7 @@ func TestComputeBulkRepairCost(t *testing.T) {
 		wantTotal int
 	}{
 		{hp: 500, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 10, wantTotal: 13},
-		{hp: 0, maxHP: 1000, destroyed: true, fee: 1.3, wantBase: 40, wantTotal: 52},
+		{hp: 0, maxHP: 1000, destroyed: true, fee: 1.3, wantBase: 0, wantTotal: 0},
 		{hp: 1000, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 0, wantTotal: 0},
 		{hp: 900, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 2, wantTotal: 3},
 		{hp: 999, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 1, wantTotal: 2},
@@ -43,5 +43,14 @@ func TestComputeBulkRepairCost(t *testing.T) {
 		if base != c.wantBase || total != c.wantTotal {
 			t.Fatalf("computeBulkRepairCost(%d, %d, %v, %v) = (%d, %d), want (%d, %d)", c.hp, c.maxHP, c.destroyed, c.fee, base, total, c.wantBase, c.wantTotal)
 		}
+	}
+}
+
+func TestRaceHasDeadApertureSuppressesTribulations(t *testing.T) {
+	if !raceHasDeadAperture("cuong_thi") {
+		t.Fatal("cuong_thi must have a dead aperture and be exempt from tribulations")
+	}
+	if raceHasDeadAperture("human") {
+		t.Fatal("human must continue to face tribulations")
 	}
 }

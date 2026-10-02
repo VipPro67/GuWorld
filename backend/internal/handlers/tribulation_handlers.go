@@ -35,6 +35,20 @@ func GetActiveTribulation(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	suppressed, err := suppressTribulationsForDeadAperture(tx, playerID.String())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trạng thái Tiên Cương"})
+		return
+	}
+	if suppressed {
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			return
+		}
+		c.JSON(http.StatusOK, nil)
+		return
+	}
+
 	// 1. Fetch active event
 	var ev models.TribulationEvent
 	var endedAt sql.NullTime
@@ -122,6 +136,20 @@ func EngageTribulation(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+
+	suppressed, err := suppressTribulationsForDeadAperture(tx, playerID.String())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trạng thái Tiên Cương"})
+		return
+	}
+	if suppressed {
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Cương có Tử Khiếu, không phải chịu tai kiếp"})
+		return
+	}
 
 	// 1. Validate Tribulation Event
 	var evStatus string
@@ -522,8 +550,7 @@ func ResolveTribulation(c *gin.Context) {
 			handleSuccess(ev.TribulationType)
 
 			_, _ = tx.Exec(`
-				UPDATE aperture_resource_nodes 
-				SET is_destroyed = true 
+				DELETE FROM aperture_resource_nodes
 				WHERE id IN (
 					SELECT id FROM aperture_resource_nodes 
 					WHERE aperture_id = $1 AND is_destroyed = false 
@@ -584,8 +611,7 @@ func ResolveTribulation(c *gin.Context) {
 
 			if nodesToDestroy > 0 {
 				_, _ = tx.Exec(`
-					UPDATE aperture_resource_nodes 
-					SET is_destroyed = true 
+					DELETE FROM aperture_resource_nodes
 					WHERE id IN (
 						SELECT id FROM aperture_resource_nodes 
 						WHERE aperture_id = $1 AND is_destroyed = false 
