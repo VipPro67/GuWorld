@@ -635,6 +635,16 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			pets.POST("/merge", handlers.MergePets)
 		}
 
+		// Canonical actor roster — Release 1 is read-only. Gameplay writes still
+		// use the legacy pet/NPC endpoints until their staged cutovers.
+		actors := api.Group("/actors")
+		actors.Use(middleware.AuthRequired())
+		actors.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		{
+			actors.GET("", handlers.ListActors)
+			actors.GET("/:id", handlers.GetActor)
+		}
+
 		// Killer Moves — group: 30/min, per player: 20/min
 		killerMoves := api.Group("/killer-moves")
 		killerMoves.Use(middleware.AuthRequired())

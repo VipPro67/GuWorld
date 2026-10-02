@@ -603,6 +603,12 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 - **Gộp:** Cùng `monster_template_id` có thể gộp thành 1 bầy. Chỉ số × `N^0.65` (theo base, không cộng dồn lũy tiến). Bầy tối đa `max_soul/10` cá thể — cần tăng Hồn Phách để gộp thêm.
 - **Chết:** Sinh lực = 0 trong combat hoặc hết độ no → xóa vĩnh viễn. Không thể hồi sinh.
 
+### Mô hình Actor thống nhất (nền tảng)
+
+Sủng vật và NPC dị nhân có tên đang được chuyển dần sang một mô hình cá thể chung. Mỗi cá thể giữ định danh và tiến trình lâu dài độc lập với việc có đang xuất hiện trên bản đồ hay không; loài/kiểu cung cấp dữ liệu nền, còn capability quyết định hành động được phép.
+
+Trong Release 1 đây là lớp nền và API đọc: cơ chế sủng vật, đội hình, độ no, gộp bầy và chiến đấu vẫn giữ nguyên hành vi hiện tại. Các release sau mới lần lượt chuyển command, hiện diện thế giới, AI, combat và công việc; client chỉ gửi ý định và không tự quyết định vị trí, HP hoặc trạng thái.
+
 ### Đấu Trường Sinh Tử (Death Arena)
 
 Đại chiến tổ đội 6v6 loại trực tiếp đỉnh cao hàng tuần:
