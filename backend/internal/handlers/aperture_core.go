@@ -28,9 +28,9 @@ func GetImmortalAperture(c *gin.Context) {
 	// 1. Fetch player (read-only query)
 	var player models.Player
 	err := db.DB.QueryRow(`
-		SELECT id, rank, aptitude_percent, human_qi, primeval_stones, immortal_stones, current_mana, time_speed_multiplier
+		SELECT id, rank, aptitude_percent, human_qi, primeval_stones, immortal_stones, current_mana, time_speed_multiplier, COALESCE(race, '')
 		FROM players WHERE id = $1
-	`, playerID).Scan(&player.ID, &player.Rank, &player.AptitudePercent, &player.HumanQi, &player.PrimevalStones, &player.ImmortalStones, &player.CurrentMana, &player.TimeSpeedMultiplier)
+	`, playerID).Scan(&player.ID, &player.Rank, &player.AptitudePercent, &player.HumanQi, &player.PrimevalStones, &player.ImmortalStones, &player.CurrentMana, &player.TimeSpeedMultiplier, &player.Race)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Cổ sư không tồn tại"})
 		return
@@ -76,6 +76,27 @@ func GetImmortalAperture(c *gin.Context) {
 	}
 
 	ap.TribulationCount = ap.TotalTribulationCount()
+	isImmortalPlayer := gamefx.Get(&player).Immortal
+	if isImmortalPlayer {
+		tx, txErr := db.DB.Begin()
+		if txErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trạng thái Tiên Cương"})
+			return
+		}
+		suppressed, suppressErr := suppressTribulationsForDeadAperture(tx, playerID.String())
+		if suppressErr != nil {
+			_ = tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đồng bộ trạng thái Tiên Cương"})
+			return
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái Tiên Cương"})
+			return
+		}
+		if suppressed {
+			ap.State = "STABLE"
+		}
+	}
 
 	originalState := ap.State
 	originalEssence := ap.ImmortalEssence
@@ -100,12 +121,15 @@ func GetImmortalAperture(c *gin.Context) {
 
 	effectiveTimeRate := 0.0
 	if ap.TimeRate > 0 {
-		tsm := player.TimeSpeedMultiplier
-		if tsm <= 0 {
-			tsm = 1.0
-		}
-		if bonus, err := db.EquippedTimeSpeedBonus(db.DB, playerID.String()); err == nil {
-			tsm += bonus
+		tsm := 1.0
+		if !isImmortalPlayer {
+			tsm = player.TimeSpeedMultiplier
+			if tsm <= 0 {
+				tsm = 1.0
+			}
+			if bonus, err := db.EquippedTimeSpeedBonus(db.DB, playerID.String()); err == nil {
+				tsm += bonus
+			}
 		}
 		effectiveTimeRate = ap.TimeRate * tsm
 	}
@@ -135,7 +159,6 @@ func GetImmortalAperture(c *gin.Context) {
 		}
 	}
 
-	isImmortalPlayer := gamefx.Get(&player).Immortal
 	if !isImmortalPlayer {
 		if (ap.State == "STABLE" || ap.State == "DAMAGED") && ap.NextTribulationYear > 0 && ap.InternalYearsPassed >= ap.NextTribulationYear {
 			_ = checkAndTriggerSingleAperture(ap.ID)

@@ -377,7 +377,7 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `level`, `hp`, `max_hp` — cấp và HP
 - `x`, `y` — toạ độ grid (0-19)
 - `production_type`, `production_amount`, `production_interval_hours` — sản lượng
-- `is_destroyed` — trạng thái hỏng
+- `is_destroyed` — cờ tương thích dữ liệu cũ; công trình bị phá hủy hoàn toàn được xóa khỏi bảng và không thể sửa chữa
 
 ### Kinh tế và xã hội Dị Nhân trong Tiên Khiếu
 
