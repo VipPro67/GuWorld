@@ -695,8 +695,10 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       // Handle skip battle result
       if (data.skip_result) {
         const skipResult = data.skip_result;
+        const allies = Array.isArray(skipResult.allies) ? skipResult.allies.slice(1) : [];
+        const allyText = allies.length > 0 ? ` Cùng ${allies.map((a: { name: string }) => a.name).join(", ")} xuất trận.` : " Một mình xuất trận.";
         if (skipResult.winner === "Phe Ta") {
-          get().addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!`, "success");
+          get().addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!${allyText}`, "success");
           if (skipResult.mine_occupied) {
             get().addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
           }

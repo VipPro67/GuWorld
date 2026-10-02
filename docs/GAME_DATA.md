@@ -385,9 +385,9 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `aperture_refinement_queue`: hàng đợi luyện chế theo recipe, mode, mục tiêu, tiến độ, ưu tiên và trạng thái bật/tắt; `last_error` và `last_processed_at` cho biết lý do dừng/lần xử lý cuối.
 - `aperture_variant_settlements`: khu định cư theo chủng tộc, sức chứa, nhà ở, kho lương và an ninh.
 - `aperture_variant_events`: sự kiện xã hội (loại, mức độ, effects JSONB, thời điểm giải quyết).
-- `aperture_variant_npcs`: cá thể Cổ Sư/Cổ Tiên với rank, lưu phái, vai trò, trung thành, thiên phú và trạng thái.
+- `non_player_actors` với `actor_kind = VARIANT_NPC`: cá thể Cổ Sư/Cổ Tiên với rank, lưu phái, vai trò, trung thành, thiên phú và trạng thái.
 
-Các cột xã hội trên quần thể lưu kho lương, lương thực đầu người, tăng trưởng và tử vong. Xây khu định cư đưa 500 cư dân ban đầu và lượng lương thực bằng sức chứa kho; mô phỏng xã hội tăng/giảm dân số nhưng không vượt sức chứa khu định cư. Worker production, society simulation và Gu Master spawning lần lượt chạy theo chu kỳ 10, 5 và 30 phút. Mỗi tick production cũng thử một lần cho các lệnh tự luyện ưu tiên cao. Một lần thử cần `rank × 100` Mao Dân chưa được phân công (Nhất Chuyển 100, Ngũ Chuyển 500, Cửu Chuyển 900); worker giữ chỗ tổng lao động trong tick và bỏ qua lệnh chưa đủ người để lệnh cấp thấp hơn vẫn có thể chạy: cần Mao Dân, bí phương hoàn thiện, nguyên liệu thường và nguyên thạch; thất bại tiêu hao nguyên liệu, thành công tạo một Cổ và tăng tiến độ. Lệnh thiếu tài nguyên tạm chờ và tự thử lại ở tick sau. Bí phương dùng Cổ khác làm nguyên liệu chưa được nhận vào hàng đợi tự động. API cho phép phân công lao động (tổng phân công không vượt dân số), quản lý hàng đợi, nâng khu định cư và đổi vai trò/giải tán NPC; xem route map trong `docs/API.md`.
+Các cột xã hội trên quần thể lưu kho lương, lương thực đầu người, tăng trưởng và tử vong. Xây khu định cư đưa 500 cư dân ban đầu và lượng lương thực bằng sức chứa kho; mô phỏng xã hội tăng/giảm dân số nhưng không vượt sức chứa khu định cư. Worker production, society simulation và Gu Master spawning lần lượt chạy theo chu kỳ 10, 5 và 30 phút. Gu Master spawn khi `population >= 500`, chance `5% * (pop/1000)` mỗi tick (prosperity buff ±25%), cap 100/aperture/race. Mỗi tick production cũng thử một lần cho các lệnh tự luyện ưu tiên cao. Một lần thử cần `rank × 100` Mao Dân chưa được phân công (Nhất Chuyển 100, Ngũ Chuyển 500, Cửu Chuyển 900); worker giữ chỗ tổng lao động trong tick và bỏ qua lệnh chưa đủ người để lệnh cấp thấp hơn vẫn có thể chạy: cần Mao Dân, bí phương hoàn thiện, nguyên liệu thường và nguyên thạch; thất bại tiêu hao nguyên liệu, thành công tạo một Cổ và tăng tiến độ. Lệnh thiếu tài nguyên tạm chờ và tự thử lại ở tick sau. Bí phương dùng Cổ khác làm nguyên liệu chưa được nhận vào hàng đợi tự động. API cho phép phân công lao động (tổng phân công không vượt dân số), quản lý hàng đợi, nâng khu định cư và đổi vai trò/giải tán NPC; xem route map trong `docs/API.md`.
 
 ### Bảng `tribulation_events`
 
@@ -826,6 +826,31 @@ Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy
 
 Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.
 
+### Canonical non-player actors
+
+`non_player_actors` là bảng canonical cho **Actor Instance** persistent. Nó tham chiếu template qua cặp đa hình `template_source/template_id` thay vì sao chép toàn bộ `monster_templates`; các nguồn hiện có gồm `MONSTER_TEMPLATE`, `VARIANT_RACE`, `NPC_TEMPLATE`, `CUSTOM`. `actor_kind` (`MONSTER`, `COMPANION_BEAST`, `VARIANT_NPC`, `WORLD_NPC`, `SECT_NPC`, `CONSTRUCT`, `BOSS`) chỉ biểu diễn identity/lore và default policy, không phải quyền thực thi hành vi.
+
+Các nhóm dữ liệu chính gồm ownership (`owner_player_id`, `faction_id`, `aperture_id`), identity/template, progression, combat stats, pack/hunger/upkeep, lifecycle/execution, behavior/AI và ba document JSONB `capabilities`, `traits`, `progression`. Các cột `formation_slot`, `path`, `role` phục vụ trực tiếp các truy vấn gameplay thường xuyên. Bảng legacy `player_pets`/`aperture_variant_npcs` đã xóa hoàn toàn; chỉ còn `non_player_actors`. Dân số aggregate `aperture_variant_humans` không trở thành từng actor.
+
+**Execution invariant:** tại một thời điểm, một actor chỉ có đúng một `execution_state` có quyền thay đổi gameplay. Graph tối thiểu là:
+
+```text
+STORED -> DEPLOYING | TRAINING | WORKING | RECOVERING | DEAD | DISMISSED
+DEPLOYING -> WORLD_IDLE
+WORLD_IDLE -> MOVING | FOLLOWING | GUARDING | PATROLLING | GATHERING | COMBAT | RETURNING | INJURED
+COMBAT -> WORLD_IDLE | RETURNING | INJURED | DEAD
+```
+
+Mọi transition ngoài graph bị từ chối. `lifecycle_state` là coarse persistence lifecycle (`ACTIVE`, `DEAD`, `DISMISSED`) và bị constraint đồng bộ với terminal execution state; nó không phải execution owner thứ hai. Constraint khác bảo đảm `count >= 1`, `hp >= 0`, `max_hp > 0`, `version >= 1`, actor thuộc nhóm owned có owner, và `hunger` nằm trong `[0,max_hunger]` khi `FEEDABLE=true`. Index bao phủ owner/kind, aperture/kind, execution state, template identity, actor active và legacy identity.
+
+`capabilities` là map boolean authoritative, hỗ trợ: `MOVE`, `FOLLOW`, `PATROL`, `GUARD`, `COMBAT`, `PRODUCE`, `REFINE`, `GATHER`, `TRAIN`, `FEEDABLE`, `CAPTURABLE`, `STACKABLE`, `EQUIP_GU`, `USE_SKILL`, `TRADE`, `QUEST_INTERACTION`, `MORTAL`, `REVIVABLE`. Command/handler phải kiểm tra capability thay vì phân nhánh hành vi theo `actor_kind`.
+
+`non_player_actors` là nguồn đọc/ghi duy nhất cho sủng vật và NPC dị nhân có tên. API `/pets/*` và `/immortal-aperture/npcs` vẫn giữ DTO cũ để không phá client. `monster_templates` tiếp tục là template chuyên biệt cho quái/sủng thú; NPC dị nhân dùng `VARIANT_RACE`. Không dùng `monster_templates` làm template chung cho mọi non-player: khi shop/quest/sect NPC cần archetype tái sử dụng sẽ bổ sung `NPC_TEMPLATE`; cá thể độc nhất dùng `CUSTOM`. `monster_spawns` vẫn là spawn definition, còn `world_actor_presence`, command mutation và assignments thuộc các release tiếp theo.
+
+`actor_gu_equipment` giữ trang bị Cổ của actor. Mỗi instance Cổ chỉ thuộc tối đa một actor, mỗi actor có tối đa một Cổ trên mỗi slot; `player_gu.location='ACTOR'` khiến Cổ không xuất hiện trong inventory sử dụng của người chơi. NPC chỉ dùng Cổ đang sống, còn độ no và không cao hơn rank của NPC.
+
+NPC `MINER` và `FARMER` tăng sản lượng node phù hợp; NPC `REFINER` tăng xác suất hàng đợi luyện Cổ. Mỗi NPC đóng góp `0.005 × rank × talent% × loyalty%`; production cap `+50%`, refinement cap `+25%`. Tu luyện NPC là command thủ công, tiêu `rank × sub_rank × 100` Nguyên Thạch, nhận `20 + talent/2` kinh nghiệm (tối thiểu 10), cần `rank × sub_rank × 100` để tiến một tiểu cảnh giới và tạm giới hạn ở Rank 5 Đỉnh Phong.
+
 ### Region / Bản đồ thế giới (World Map)
 
 Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (NGU_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (KHU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực. Ngoài `Southern_Border` (HUB mặc định), mỗi Đại Vực còn có **HUB khởi đầu riêng** (`hub_thuong_gia_thanh`, `hub_trung_chau`, `hub_bac_nguyen`, `hub_tay_mac`, `hub_dong_hai`). Khi hoàn tất onboarding (`complete-onboarding`), người chơi được đặt vào HUB tương ứng với vị trí đăng ký (xem `startingRegionHubs` trong `player.go`), không sinh quái trong HUB.
@@ -998,28 +1023,9 @@ Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để 
 - Thêm/sửa bảng: sửa file `schema_*.go` tương ứng → xóa DB (hoặc `DROP TABLE` thủ công) → restart server.
 - FK cho các cột `players.race` / `players.constitution` / `players.current_region`: các dòng sentinel (`''`) và vùng `Southern_Border` được pre-seed trong `InitSchema` nên đăng ký vẫn hoạt động trước khi import CSV. Các HUB khởi đầu theo Đại Vực (`hub_*`) nằm trong `Region.csv` và được import qua Admin tab "Dữ liệu"; nếu chưa import, `complete-onboarding` fallback về `Southern_Border`. Các bảng dictionary (`race_dictionary`, `constitution_dictionary`) tự seed default dataset khi DB rỗng; CSV import (Admin tab "Dữ liệu") vẫn là nguồn chính thức.
 
-### Bảng `player_pets` (Sủng vật)
+### Lưu trữ sủng vật
 
-Bảng lưu sủng vật bắt được từ quái vật trong combat.
-
-| Cột | Kiểu | Ghi chú |
-| --- | --- | --- |
-| `id` | UUID PK | |
-| `player_id` | UUID FK | → `players(id)` ON DELETE CASCADE |
-| `monster_template_id` | VARCHAR(80) FK | → `monster_templates(id)` |
-| `monster_name` | VARCHAR(100) | Tên quái tại thời điểm bắt |
-| `rank` | INTEGER | Rank của quái vật |
-| `current_hp` | DOUBLE PRECISION | HP hiện tại |
-| `max_hp` | DOUBLE PRECISION | HP tối đa |
-| `attack` | DOUBLE PRECISION | Tấn công |
-| `defense` | DOUBLE PRECISION | Phòng thủ |
-| `hunger` | DOUBLE PRECISION | Độ no (0-100) |
-| `status` | VARCHAR(20) | `active` hoặc `sleeping` |
-| `formation_slot` | INTEGER | 0 = storage, 1..N = formation slot |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | Dùng cho hunger decay theo elapsed time |
-
-Indexes: `idx_player_pets_player_id`, `idx_player_pets_player_id_template`.
+Sủng vật được lưu dưới dạng `non_player_actors.actor_kind = 'COMPANION_BEAST'`, tham chiếu `MONSTER_TEMPLATE`. `formation_slot` là cột first-class; `upkeep_rate` là tốc độ đói và `hunger_updated_at` là đồng hồ riêng để các cập nhật actor không làm sai hunger decay. `RECOVERING` tương ứng trạng thái ngủ trong DTO cũ, còn `STORED` là active/có thể vào đội hình. Pet chỉ load vào combat khi `ACTIVE + STORED + slot>0 + hunger>0 + đủ soul`; NPC dị nhân chỉ load khi `ACTIVE + STORED + role=NONE + slot>0`. Slot formation dùng chung pet+NPC (unique `(owner,slot)`).
 
 ### Cột bắt sủng vật trong `monster_templates`
 
@@ -1038,6 +1044,13 @@ Indexes: `idx_player_pets_player_id`, `idx_player_pets_player_id_template`.
   - Áp dụng cho cả pet của **đối phương phòng thủ** khi bị tấn công PvP/mine/map (trừ `soul_hp` của họ, thiếu thì bỏ pet của họ).
   - **Võ Đài (arena, virtual) không tốn soul.**
   - Cờ `active_combat.pet_soul_charged` đảm bảo mỗi trận chỉ tính phí một lần (tránh re-init giữa trận tính lại).
+
+### Đội hình tổ đội (trưởng nhóm xếp)
+
+- Trưởng nhóm xếp thứ tự xuất trận qua `/api/party/formation`: `player` (thành viên), `pet`/`npc` (thú/dị nhân của chính trưởng nhóm), tối đa 8 vị trí sau trưởng nhóm (9 ô grid). Trưởng nhóm luôn `Allies[0]`.
+- Mỗi entry có `pos` 1-8 là ô grid combat (`allySlots`: cột trái = tiền tuyến hứng đòn trước); `pos` trùng nhau bị từ chối, thiếu = tự xếp ô trống thấp nhất. UI Tổ đội là lưới 3x3 Tiền/Trung/Hậu nhìn đúng như combat.
+- Đội hình rỗng = chế độ tự động cũ (cả đội cùng region + thú/NPC theo `formation_slot`). Đã xếp = chỉ ai trong danh sách mới vào, theo đúng thứ tự (vị trí grid gán theo index như cũ).
+- Điều kiện từng vị trí vẫn giữ: member cùng region + còn HP (virtual hồi đầy); pet `STORED + hunger>0 + đủ soul` (lineup thay luôn yêu cầu slot); NPC `STORED + role NONE`. Kẻ không đủ điều kiện tự bỏ qua + log.
 
 ### Cho sủng vật ăn (thức ăn loại Food)
 - Sủng vật được cho ăn qua `/api/pets/feed` (handler `FeedPet`).

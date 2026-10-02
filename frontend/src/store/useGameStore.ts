@@ -699,6 +699,12 @@ export interface ApertureVariantNPC {
   role: string;
   loyalty: number;
   talent: number;
+  experience: number;
+  hp: number;
+  max_hp: number;
+  formation_slot: number;
+  version: number;
+  equipped_gu: GuInstance[];
   status: string;
   created_at: string;
   updated_at: string;

@@ -71,7 +71,7 @@ func scanGuRow(rows interface{ Scan(...any) error }) (models.GuInstance, error) 
 // When equippedOnly is true, only equipped or vital Gus are returned (used for
 // the lightweight player status snapshot). Otherwise the full inventory is returned.
 func LoadPlayerGus(q Queryer, playerID string, equippedOnly bool) (models.GuInventory, error) {
-	query := `SELECT ` + playerGuColumns + ` FROM player_gu WHERE player_id = $1`
+	query := `SELECT ` + playerGuColumns + ` FROM player_gu WHERE player_id = $1 AND location <> 'ACTOR'`
 	if equippedOnly {
 		query += ` AND (equipped OR is_vital)`
 	}

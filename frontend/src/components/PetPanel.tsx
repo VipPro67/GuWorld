@@ -127,7 +127,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2">
             <Swords className="w-4 h-4 text-amber-400" />
-            Đội Hình Ra Trận ({formationPets.length}/{maxSlots})
+            Đội Hình Thú ({formationPets.length}/{maxSlots})
           </h3>
           <button
             onClick={() => {
@@ -147,6 +147,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
 
         <div className="text-[10px] text-zinc-500 mb-3">
           Phí Hồn Phách khi ra trận: <span className="text-purple-400 font-bold">{formationSoulCost}</span> / {player.soul_hp ?? 0} soul (mỗi cá thể = 1 soul; Võ Đài miễn phí).
+          Slot dùng chung với Dị Nhân (pet + NPC share 1-{maxSlots}).
         </div>
 
         {editingFormation ? (

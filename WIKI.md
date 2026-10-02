@@ -589,7 +589,7 @@ Trong chiến đấu, đạo hữu có thể bắt quái vật làm sủng vật
   - `hpFactor`: `(1 - enemy.hp%)^0.5` — quái càng yếu càng dễ bắt (full HP ≈ 0%)
   - `captureBonus`: tổng từ thuộc tính `capture_bonus` của các Cổ đang trang bị
   - `luckMultiplier`: random 0.9-1.1
-- **Kết quả:** Nếu roll < baseChance → bắt thành công, quái biến thành sủng vật trong `player_pets`, xóa khỏi combat. Nếu roll ≥ baseChance → bỏ lỡ, tiếp tục chiến đấu.
+- **Kết quả:** Nếu roll < baseChance → bắt thành công, quái trở thành Actor sủng vật persistent và bị xóa khỏi combat. Nếu roll ≥ baseChance → bỏ lỡ, tiếp tục chiến đấu.
 
 ### Sủng vật (Pets)
 
@@ -602,6 +602,12 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 - **Cho ăn:** Dùng vật phẩm có effect `hunger` (Thịt Lợn Rừng +40, Rượu Thanh Trúc +30, Ngọc Thạch +25, Nguyệt Lan +20).
 - **Gộp:** Cùng `monster_template_id` có thể gộp thành 1 bầy. Chỉ số × `N^0.65` (theo base, không cộng dồn lũy tiến). Bầy tối đa `max_soul/10` cá thể — cần tăng Hồn Phách để gộp thêm.
 - **Chết:** Sinh lực = 0 trong combat hoặc hết độ no → xóa vĩnh viễn. Không thể hồi sinh.
+
+### Mô hình Actor thống nhất (nền tảng)
+
+Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. Mỗi cá thể giữ định danh và tiến trình lâu dài độc lập với việc có đang xuất hiện trên bản đồ hay không; loài/kiểu cung cấp dữ liệu nền, còn capability quyết định hành động được phép. Quái/sủng thú tiếp tục lấy template từ `monster_templates`; NPC không bị ép thành “monster” mà dùng nguồn template phù hợp với loại của mình.
+
+**Cổ Sư dị nhân có tên:** có thể làm giám sát khai khoáng/nông nghiệp, hỗ trợ luyện Cổ, tu luyện tới Ngũ Chuyển, nhận Cổ từ chủ nhân và tham gia đội hình. NPC đang làm việc không thể đồng thời tu luyện hoặc chiến đấu; NPC tử trận được ghi nhận là đã chết. Các cơ chế hiện diện ngoài bản đồ và AI tự ra quyết định chưa được bật.
 
 ### Đấu Trường Sinh Tử (Death Arena)
 

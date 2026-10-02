@@ -33,12 +33,13 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 	}
 	defer tx.Rollback()
 
-	// Decay hunger for ACTIVE pets based on elapsed hours since updated_at
+	// Decay active companion beasts using the dedicated hunger clock.
 	_, err = tx.Exec(`
-		UPDATE player_pets
-		SET hunger = GREATEST(hunger - pet_hunger_per_hour * EXTRACT(EPOCH FROM (NOW() - updated_at)) / 3600.0, 0),
-		    updated_at = NOW()
-		WHERE state = 'ACTIVE' AND hunger > 0
+		UPDATE non_player_actors
+		SET hunger = GREATEST(hunger - upkeep_rate * EXTRACT(EPOCH FROM (NOW() - hunger_updated_at)) / 3600.0, 0),
+		    hunger_updated_at = NOW(), updated_at = NOW(), version = version + 1
+		WHERE actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
+		  AND execution_state = 'STORED' AND hunger > 0
 	`)
 	if err != nil {
 		logger.S.Errorf("Pet Hunger Worker: failed to decay hunger: %v", err)
@@ -47,10 +48,11 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 
 	// SLEEPING pets decay at 50% rate
 	_, err = tx.Exec(`
-		UPDATE player_pets
-		SET hunger = GREATEST(hunger - pet_hunger_per_hour * 0.5 * EXTRACT(EPOCH FROM (NOW() - updated_at)) / 3600.0, 0),
-		    updated_at = NOW()
-		WHERE state = 'SLEEPING' AND hunger > 0
+		UPDATE non_player_actors
+		SET hunger = GREATEST(hunger - upkeep_rate * 0.5 * EXTRACT(EPOCH FROM (NOW() - hunger_updated_at)) / 3600.0, 0),
+		    hunger_updated_at = NOW(), updated_at = NOW(), version = version + 1
+		WHERE actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
+		  AND execution_state = 'RECOVERING' AND hunger > 0
 	`)
 	if err != nil {
 		logger.S.Errorf("Pet Hunger Worker: failed to decay sleeping hunger: %v", err)
@@ -59,9 +61,10 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 
 	// Starving pets: hunger <= 0 → death
 	rows, err := tx.Query(`
-		DELETE FROM player_pets
-		WHERE hunger <= 0 AND state IN ('ACTIVE', 'SLEEPING')
-		RETURNING id, player_id, nickname
+		DELETE FROM non_player_actors
+		WHERE hunger <= 0 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
+		  AND execution_state IN ('STORED', 'RECOVERING')
+		RETURNING id, owner_player_id, name
 	`)
 	if err != nil {
 		logger.S.Errorf("Pet Hunger Worker: failed to query starving pets: %v", err)
@@ -71,6 +74,7 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 
 	// Collect starved pets for audit log within the same transaction
 	type starvedPet struct {
+		id       string
 		playerID string
 		nickname string
 	}
@@ -82,16 +86,19 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 			continue
 		}
 		starvedCount++
-		starved = append(starved, starvedPet{playerID: playerID, nickname: nickname})
+		starved = append(starved, starvedPet{id: id, playerID: playerID, nickname: nickname})
 	}
 	rows.Close()
 
 	// Insert audit logs inside the transaction for consistency
 	for _, p := range starved {
-		_, _ = tx.Exec(`
+		if _, err := tx.Exec(`
 			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
 			VALUES ($1, 'pet.starve_death', 'player_pet', $2, $3, '{}', '', false, 'Pet chết đói', NOW())
-		`, p.playerID, p.nickname+" chết đói")
+		`, p.playerID, p.id, p.nickname+" chết đói"); err != nil {
+			logger.S.Errorf("Pet Hunger Worker: failed to audit starvation: %v", err)
+			return
+		}
 	}
 
 	if starvedCount > 0 {

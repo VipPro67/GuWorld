@@ -99,6 +99,22 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	// Run Simulator
 	logs := simulator.Simulate(simState)
 
+	// Log đội hình thực tế mang vào sim để skip mode nhìn thấy pet/NPC có load không.
+	allyParts := make([]string, 0, len(simState.Allies))
+	allySummary := make([]map[string]interface{}, 0, len(simState.Allies))
+	for _, a := range simState.Allies {
+		allyParts = append(allyParts, fmt.Sprintf("%s (%s)", a.Name, a.Kind))
+		allySummary = append(allySummary, map[string]interface{}{
+			"id": a.ID, "name": a.Name, "kind": a.Kind,
+			"hp": a.HP, "max_hp": a.MaxHP,
+		})
+	}
+	logs = append([]simulator.CombatLog{{
+		Turn:   0,
+		Action: "FORMATION",
+		Detail: fmt.Sprintf("Phe ta xuất trận (%d): %s", len(allyParts), strings.Join(allyParts, ", ")),
+	}}, logs...)
+
 	_, alliesAlive, finalPlayerHP := combatOutcome(simState, player.ID.String())
 
 	// Apply outcome to DB (simplified from AutoCombatStart)
@@ -337,6 +353,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	summary["winner"] = winner
 	summary["enemy_name"] = enemyName
 	summary["enemy_type"] = enemyType
+	summary["allies"] = allySummary
 
 	player.ActiveCombat = nil
 	return winner, logs, summary, nil
@@ -378,21 +395,25 @@ func loadKillerMovesBatch(tx *sql.Tx, playerID uuid.UUID, ids []string) (map[str
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
 
 	kmMap := make(map[string]models.KillerMove)
 	var kmIDs []string
 	for rows.Next() {
 		m, err := scanKillerMoveRow(rows)
 		if err != nil {
+			rows.Close()
 			return nil, nil, err
 		}
 		kmMap[m.ID] = m
 		kmIDs = append(kmIDs, m.ID)
 	}
 	if err = rows.Err(); err != nil {
+		rows.Close()
 		return nil, nil, err
 	}
+	// Close before the next query: a Tx pins one connection, overlapping
+	// queries corrupt the protocol and poison the transaction.
+	rows.Close()
 
 	slotsMap := make(map[string][]models.KillerMoveSlot)
 	if len(kmIDs) > 0 {

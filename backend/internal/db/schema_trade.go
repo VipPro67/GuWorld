@@ -15,6 +15,12 @@ func schemaParties() error {
 	);`); err != nil {
 		return err
 	}
+	// Party battle formation set by the leader: ordered [{kind,id}] where kind
+	// is player|pet|npc. Empty = legacy auto behavior.
+	if err := execSchema("parties_formation", `
+	ALTER TABLE parties ADD COLUMN IF NOT EXISTS formation JSONB NOT NULL DEFAULT '[]';`); err != nil {
+		return err
+	}
 	return nil
 }
 

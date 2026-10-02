@@ -74,12 +74,12 @@ func FeedPet(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Load pet
-	var petID, nickname, state string
+	var petID, name, state string
 	var hunger, maxHunger, count float64
 	err = tx.QueryRow(`
-		SELECT id, nickname, hunger, max_hunger, state, count
-		FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
-	`, req.PetID, authID).Scan(&petID, &nickname, &hunger, &maxHunger, &state, &count)
+		SELECT id, name, hunger, max_hunger, execution_state, count
+		FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE' FOR UPDATE
+	`, req.PetID, authID).Scan(&petID, &name, &hunger, &maxHunger, &state, &count)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Pet không tồn tại."})
 		return
@@ -126,7 +126,7 @@ func FeedPet(c *gin.Context) {
 	if newHunger > maxHunger {
 		newHunger = maxHunger
 	}
-	_, err = tx.Exec(`UPDATE player_pets SET hunger = $1, updated_at = NOW() WHERE id = $2`, newHunger, petID)
+	_, err = tx.Exec(`UPDATE non_player_actors SET hunger = $1, hunger_updated_at = NOW(), updated_at = NOW(), version = version + 1 WHERE id = $2`, newHunger, petID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pet hunger"})
 		return
@@ -148,10 +148,10 @@ func FeedPet(c *gin.Context) {
 		Action:         "pet.feed",
 		EntityType:     "player_pet",
 		EntityID:       petID,
-		RequestSummary: fmt.Sprintf("Cho linh thú %s ăn: 1x %s | Độ no: %.0f/%.0f", nickname, item.Name, newHunger, maxHunger),
+		RequestSummary: fmt.Sprintf("Cho linh thú %s ăn: 1x %s | Độ no: %.0f/%.0f", name, item.Name, newHunger, maxHunger),
 		Metadata: map[string]interface{}{
 			"pet_id":     petID,
-			"pet_name":   nickname,
+			"pet_name":   name,
 			"item_id":    req.ItemID,
 			"item_name":  item.Name,
 			"new_hunger": newHunger,
@@ -163,7 +163,7 @@ func FeedPet(c *gin.Context) {
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"pet_id":     petID,
-		"nickname":   nickname,
+		"nickname":   name,
 		"hunger":     newHunger,
 		"max_hunger": maxHunger,
 		"count":      count,
@@ -185,14 +185,14 @@ func SetPetSleep(c *gin.Context) {
 		return
 	}
 
-	newState := "ACTIVE"
+	newState := "STORED"
 	if req.Sleeping {
-		newState = "SLEEPING"
+		newState = "RECOVERING"
 	}
 
 	result, err := db.DB.Exec(`
-		UPDATE player_pets SET state = $1, updated_at = NOW()
-		WHERE id = $2 AND player_id = $3
+		UPDATE non_player_actors SET execution_state = $1, updated_at = NOW(), version = version + 1
+		WHERE id = $2 AND owner_player_id = $3 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
 	`, newState, req.PetID, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pet state"})
@@ -205,7 +205,7 @@ func SetPetSleep(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"pet_id": req.PetID, "state": newState})
+	c.JSON(http.StatusOK, gin.H{"pet_id": req.PetID, "state": map[bool]string{true: "SLEEPING", false: "ACTIVE"}[req.Sleeping]})
 }
 
 func SetPetFormation(c *gin.Context) {
@@ -246,9 +246,22 @@ func SetPetFormation(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	if len(req.Slots) > 0 {
+		var occupied bool
+		if err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM non_player_actors
+			WHERE owner_player_id=$1 AND actor_kind='VARIANT_NPC' AND lifecycle_state='ACTIVE'
+			  AND formation_slot BETWEEN 1 AND $2)`, authID, len(req.Slots)).Scan(&occupied); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate formation"})
+			return
+		}
+		if occupied {
+			c.JSON(http.StatusConflict, gin.H{"error": "Một ô đội hình đã được NPC dị nhân sử dụng."})
+			return
+		}
+	}
 
 	// Reset all formation slots
-	_, err = tx.Exec(`UPDATE player_pets SET formation_slot = 0 WHERE player_id = $1`, authID)
+	_, err = tx.Exec(`UPDATE non_player_actors SET formation_slot = 0, updated_at = NOW(), version = version + 1 WHERE owner_player_id = $1 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'`, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset formation"})
 		return
@@ -261,8 +274,8 @@ func SetPetFormation(c *gin.Context) {
 			continue
 		}
 		_, errUpd := tx.Exec(`
-			UPDATE player_pets SET formation_slot = $1, updated_at = NOW()
-			WHERE id = $2 AND player_id = $3
+			UPDATE non_player_actors SET formation_slot = $1, updated_at = NOW(), version = version + 1
+			WHERE id = $2 AND owner_player_id = $3 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
 		`, i+1, petUUID, authID)
 		if errUpd != nil {
 			continue
@@ -291,7 +304,7 @@ func ReleasePet(c *gin.Context) {
 	}
 
 	result, err := db.DB.Exec(`
-		DELETE FROM player_pets WHERE id = $1 AND player_id = $2
+		DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
 	`, req.PetID, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to release pet"})
@@ -337,8 +350,8 @@ func MergePets(c *gin.Context) {
 	var targetRank, targetSubRank, targetCount int
 	var targetHP, targetMaxHP, targetAtk, targetDef, targetSpeed float64
 	err = tx.QueryRow(`
-		SELECT id, monster_template_id, nickname, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
-		FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
+		SELECT id, template_id, name, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
+		FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE' FOR UPDATE
 	`, req.TargetID, authID).Scan(
 		&targetID, &targetTemplateID, &targetNickname, &targetRank, &targetSubRank,
 		&targetHP, &targetMaxHP, &targetAtk, &targetDef, &targetSpeed, &targetCount,
@@ -360,12 +373,19 @@ func MergePets(c *gin.Context) {
 	// Validate all sources: same template, same player, formation_slot=0.
 	// Sum each source's `count` so merging a pack source adds all its individuals.
 	addedCount := 0
+	validSources := make(map[string]struct{}, len(req.SourceIDs))
 	for _, srcID := range req.SourceIDs {
+		if srcID == req.TargetID {
+			continue
+		}
+		if _, duplicate := validSources[srcID]; duplicate {
+			continue
+		}
 		var srcTemplateID string
 		var srcFormationSlot, srcCount int
 		errSrc := tx.QueryRow(`
-			SELECT monster_template_id, formation_slot, count
-			FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
+			SELECT template_id, formation_slot, count
+			FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE' FOR UPDATE
 		`, srcID, authID).Scan(&srcTemplateID, &srcFormationSlot, &srcCount)
 		if errSrc != nil {
 			continue
@@ -377,6 +397,7 @@ func MergePets(c *gin.Context) {
 			continue // can't merge from formation
 		}
 		addedCount += srcCount
+		validSources[srcID] = struct{}{}
 	}
 
 	if addedCount == 0 {
@@ -399,8 +420,8 @@ func MergePets(c *gin.Context) {
 	newDef := packScaledStat(rebaseStat(targetDef, targetCount), newCount)
 
 	_, err = tx.Exec(`
-		UPDATE player_pets
-		SET count = $1, hp = $2, max_hp = $3, base_attack = $4, base_defense = $5, updated_at = NOW()
+		UPDATE non_player_actors
+		SET count = $1, hp = $2, max_hp = $3, base_attack = $4, base_defense = $5, updated_at = NOW(), version = version + 1
 		WHERE id = $6
 	`, newCount, newMaxHP, newMaxHP, newAtk, newDef, targetID)
 	if err != nil {
@@ -409,20 +430,8 @@ func MergePets(c *gin.Context) {
 	}
 
 	// Delete valid sources
-	for _, srcID := range req.SourceIDs {
-		var srcTemplateID string
-		var srcFormationSlot int
-		errSrc := tx.QueryRow(`
-			SELECT monster_template_id, formation_slot
-			FROM player_pets WHERE id = $1 AND player_id = $2
-		`, srcID, authID).Scan(&srcTemplateID, &srcFormationSlot)
-		if errSrc != nil {
-			continue
-		}
-		if srcTemplateID != targetTemplateID || srcFormationSlot > 0 {
-			continue
-		}
-		_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, srcID, authID)
+	for srcID := range validSources {
+		_, _ = tx.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2`, srcID, authID)
 	}
 
 	if err := tx.Commit(); err != nil {

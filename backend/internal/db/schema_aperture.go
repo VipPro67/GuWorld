@@ -262,36 +262,6 @@ func schemaAperture() error {
 		return err
 	}
 
-	// --- Phase 3: Variant Human NPCs (Gu Masters, Gu Immortals) ---
-	if err := execSchema("aperture_variant_npcs", `
-	CREATE TABLE IF NOT EXISTS aperture_variant_npcs (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
-		race VARCHAR(50) NOT NULL,
-		name VARCHAR(100) NOT NULL,
-		rank INTEGER NOT NULL DEFAULT 1,
-		sub_rank INTEGER NOT NULL DEFAULT 0,
-		path VARCHAR(50) NOT NULL DEFAULT 'REFINEMENT',
-		role VARCHAR(50) NOT NULL DEFAULT 'NONE',
-		loyalty DOUBLE PRECISION NOT NULL DEFAULT 100.0,
-		talent DOUBLE PRECISION NOT NULL DEFAULT 50.0,
-		status VARCHAR(20) NOT NULL DEFAULT 'IDLE',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-	);`); err != nil {
-		return err
-	}
-	if err := execSchema("aperture_variant_npcs_aperture_idx", `
-	CREATE INDEX IF NOT EXISTS idx_aperture_variant_npcs_aperture ON aperture_variant_npcs (aperture_id);
-	`); err != nil {
-		return err
-	}
-	if err := execSchema("aperture_variant_npcs_race_idx", `
-	CREATE INDEX IF NOT EXISTS idx_aperture_variant_npcs_race ON aperture_variant_npcs (aperture_id, race);
-	`); err != nil {
-		return err
-	}
-
 	if err := execSchema("tribulation_events", `
 	CREATE TABLE IF NOT EXISTS tribulation_events (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -520,10 +520,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
               // Handle skip battle result
               if (res.skip_result) {
-                const skipResult = res.skip_result as { winner?: string; enemy_name?: string; mine_occupied?: string };
+                const skipResult = res.skip_result as { winner?: string; enemy_name?: string; mine_occupied?: string; allies?: { name: string }[] };
+                const allies = Array.isArray(skipResult.allies) ? skipResult.allies.slice(1) : [];
+                const allyText = allies.length > 0 ? ` Cùng ${allies.map((a) => a.name).join(", ")} xuất trận.` : " Một mình xuất trận.";
                 const addToast = useGameStore.getState().addToast;
                 if (skipResult.winner === "Phe Ta") {
-                  addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!`, "success");
+                  addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!${allyText}`, "success");
                   if (skipResult.mine_occupied) {
                     addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
                   }

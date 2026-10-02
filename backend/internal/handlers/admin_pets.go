@@ -20,12 +20,14 @@ func AdminListPlayerPets(c *gin.Context) {
 	}
 
 	pets, err := db.DB.Query(`
-		SELECT id, player_id, monster_template_id, nickname, rank, sub_rank,
+		SELECT id, owner_player_id, template_id, name, rank, sub_rank,
 		       hp, max_hp, base_attack, base_defense, speed, count,
-		       hunger, max_hunger, pet_hunger_per_hour, state, formation_slot,
-		       captured_at, updated_at
-		FROM player_pets WHERE player_id = $1
-		ORDER BY formation_slot ASC, captured_at ASC
+		       hunger, max_hunger, upkeep_rate,
+		       CASE WHEN execution_state = 'RECOVERING' THEN 'SLEEPING' ELSE 'ACTIVE' END,
+		       formation_slot, created_at, updated_at
+		FROM non_player_actors WHERE owner_player_id = $1
+		  AND actor_kind = 'COMPANION_BEAST' AND lifecycle_state = 'ACTIVE'
+		ORDER BY formation_slot ASC, created_at ASC
 	`, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query pets"})
@@ -35,12 +37,12 @@ func AdminListPlayerPets(c *gin.Context) {
 
 	var results []map[string]interface{}
 	for pets.Next() {
-		var id, plID, templateID, nickname, state string
+		var id, plID, templateID, name, state string
 		var rank, subRank, count, formationSlot int
 		var hp, maxHP, atk, def, speed, hunger, maxHunger, hungerRate float64
 		var capturedAt, updatedAt interface{}
 		if errScan := pets.Scan(
-			&id, &plID, &templateID, &nickname, &rank, &subRank,
+			&id, &plID, &templateID, &name, &rank, &subRank,
 			&hp, &maxHP, &atk, &def, &speed, &count,
 			&hunger, &maxHunger, &hungerRate, &state, &formationSlot,
 			&capturedAt, &updatedAt,
@@ -49,7 +51,7 @@ func AdminListPlayerPets(c *gin.Context) {
 		}
 		results = append(results, map[string]interface{}{
 			"id": id, "player_id": plID, "monster_template_id": templateID,
-			"nickname": nickname, "rank": rank, "sub_rank": subRank,
+			"nickname": name, "rank": rank, "sub_rank": subRank,
 			"hp": hp, "max_hp": maxHP, "base_attack": atk, "base_defense": def,
 			"speed": speed, "count": count, "hunger": hunger, "max_hunger": maxHunger,
 			"pet_hunger_per_hour": hungerRate, "state": state, "formation_slot": formationSlot,
@@ -71,13 +73,13 @@ func AdminDeletePlayerPet(c *gin.Context) {
 		return
 	}
 
-	var nickname string
-	_ = db.DB.QueryRow(`SELECT nickname FROM player_pets WHERE id = $1`, petID).Scan(&nickname)
-	if nickname == "" {
-		nickname = petID
+	var name string
+	_ = db.DB.QueryRow(`SELECT name FROM non_player_actors WHERE id = $1`, petID).Scan(&name)
+	if name == "" {
+		name = petID
 	}
 
-	result, err := db.DB.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, petID, playerID)
+	result, err := db.DB.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST'`, petID, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete pet"})
 		return
@@ -91,7 +93,7 @@ func AdminDeletePlayerPet(c *gin.Context) {
 
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi Linh thú '%s' của đạo hữu %s", nickname, username))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi Linh thú '%s' của đạo hữu %s", name, username))
 
 	c.JSON(http.StatusOK, gin.H{"deleted": true, "pet_id": petID})
 }
@@ -150,8 +152,8 @@ func AdminCreatePlayerPet(c *gin.Context) {
 	}
 
 	_, err := db.DB.ExecContext(c.Request.Context(), `
-		INSERT INTO player_pets (player_id, monster_template_id, nickname, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count, hunger, max_hunger, pet_hunger_per_hour, state, formation_slot)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+		INSERT INTO non_player_actors (actor_kind, owner_player_id, template_source, template_id, species, name, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count, hunger, max_hunger, upkeep_rate, lifecycle_state, execution_state, behavior_profile, capabilities, formation_slot)
+		VALUES ('COMPANION_BEAST', $1, 'MONSTER_TEMPLATE', $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'ACTIVE', CASE WHEN UPPER($15) = 'SLEEPING' THEN 'RECOVERING' ELSE 'STORED' END, 'DEFENSIVE_FOLLOWER', '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"FEEDABLE":true,"CAPTURABLE":true,"STACKABLE":true,"MORTAL":true}'::jsonb, $16)`,
 		playerID, req.MonsterTemplateID, req.Nickname, req.Rank, req.SubRank, req.HP, req.MaxHP, req.BaseAttack, req.BaseDefense, req.Speed, req.Count, req.Hunger, req.MaxHunger, req.PetHungerPerHour, req.State, req.FormationSlot)
 
 	if err != nil {
@@ -180,8 +182,8 @@ func AdminUpdatePlayerPet(c *gin.Context) {
 	}
 
 	_, err := db.DB.ExecContext(c.Request.Context(), `
-		UPDATE player_pets SET nickname=$1, rank=$2, sub_rank=$3, hp=$4, max_hp=$5, base_attack=$6, base_defense=$7, speed=$8, count=$9, hunger=$10, max_hunger=$11, pet_hunger_per_hour=$12, state=$13, formation_slot=$14, updated_at=NOW()
-		WHERE id=$15 AND player_id=$16`,
+		UPDATE non_player_actors SET name=$1, rank=$2, sub_rank=$3, hp=$4, max_hp=$5, base_attack=$6, base_defense=$7, speed=$8, count=$9, hunger=$10, max_hunger=$11, upkeep_rate=$12, execution_state=CASE WHEN UPPER($13) = 'SLEEPING' THEN 'RECOVERING' ELSE 'STORED' END, formation_slot=$14, updated_at=NOW(), version=version+1
+		WHERE id=$15 AND owner_player_id=$16 AND actor_kind='COMPANION_BEAST' AND lifecycle_state='ACTIVE'`,
 		req.Nickname, req.Rank, req.SubRank, req.HP, req.MaxHP, req.BaseAttack, req.BaseDefense, req.Speed, req.Count, req.Hunger, req.MaxHunger, req.PetHungerPerHour, req.State, req.FormationSlot, petID, playerID)
 
 	if err != nil {

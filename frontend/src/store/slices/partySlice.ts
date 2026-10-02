@@ -2,8 +2,15 @@ import type { StateCreator } from "zustand";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
+export interface PartyFormationEntry {
+  kind: "player" | "pet" | "npc";
+  id: string;
+  /** 1..8 combat grid cell (allySlots index); omitted = auto-fill */
+  pos?: number;
+}
+
 export interface PartySlice {
-  party: { id: string; leader_id: string; members: { id: string; username: string; avatar_url?: string }[] } | null;
+  party: { id: string; leader_id: string; members: { id: string; username: string; avatar_url?: string }[]; formation: PartyFormationEntry[] } | null;
   partyInvitations: { id: string; party_id: string; inviter_name: string; inviter_avatar?: string }[];
   createParty: () => Promise<boolean>;
   fetchPartyStatus: () => Promise<void>;
@@ -11,6 +18,7 @@ export interface PartySlice {
   invitePlayer: (username: string) => Promise<boolean>;
   respondPartyInvitation: (id: string, action: "accept" | "reject") => Promise<boolean>;
   leaveParty: () => Promise<boolean>;
+  savePartyFormation: (order: PartyFormationEntry[]) => Promise<boolean>;
 }
 
 export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, PartySlice> = (set, get) => ({
@@ -131,6 +139,30 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         partyInvitations: state.partyInvitations.filter((inv: ApiResponseData) => inv.id !== id),
       }));
       get().addLog(data.message || `Đã ${action === "accept" ? "chấp nhận" : "từ chối"} lời mời.`);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      return false;
+    } finally { get().endAction("party"); }
+  },
+
+  savePartyFormation: async (order) => {
+    const { token, logout } = get();
+    if (!token || !get().beginAction("party")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/party/formation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Lưu đội hình thất bại");
+      get().addToast(data.message || "Đã lưu đội hình xuất trận", "success");
+      await get().fetchPartyStatus();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

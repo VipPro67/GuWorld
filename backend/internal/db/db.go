@@ -137,6 +137,7 @@ func InitSchema() error {
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},
 		{"aperture", schemaAperture},
+		{"actors", schemaActors},
 		{"effect_catalog_migration", schemaEffectCatalogMigration},
 		{"combat", schemaCombat},
 		{"trade", schemaTrade},

@@ -579,6 +579,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			party.POST("/leave", handlers.LeaveParty)
 			party.GET("/invitations", handlers.GetPendingInvitations)
 			party.POST("/invitations/:id/respond", handlers.RespondToInvitation)
+			party.POST("/formation", handlers.SavePartyFormation)
 		}
 
 		// Inventory — group: 30/min, per player: 20/min
@@ -633,6 +634,16 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			pets.POST("/sleep", handlers.SetPetSleep)
 			pets.POST("/release", handlers.ReleasePet)
 			pets.POST("/merge", handlers.MergePets)
+		}
+
+		// Canonical actor roster. Domain-specific mutations remain under the pet
+		// and aperture routes so each command can enforce its own invariants.
+		actors := api.Group("/actors")
+		actors.Use(middleware.AuthRequired())
+		actors.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		{
+			actors.GET("", handlers.ListActors)
+			actors.GET("/:id", handlers.GetActor)
 		}
 
 		// Killer Moves — group: 30/min, per player: 20/min
@@ -697,6 +708,10 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			// Phase 3: Variant NPCs
 			aperture.GET("/npcs", handlers.GetApertureNPCs)
 			aperture.POST("/npcs/:npc_id/role", handlers.AssignNPCRole)
+			aperture.POST("/npcs/:npc_id/formation", handlers.SetNPCFormation)
+			aperture.POST("/npcs/:npc_id/cultivate", handlers.CultivateNPC)
+			aperture.POST("/npcs/:npc_id/gu/equip", handlers.EquipNPCGu)
+			aperture.DELETE("/npcs/:npc_id/gu/:gu_id", handlers.UnequipNPCGu)
 			aperture.DELETE("/npcs/:npc_id", handlers.DismissNPC)
 		}
 
