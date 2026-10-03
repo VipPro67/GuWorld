@@ -682,6 +682,19 @@ func (g *GuEffects) Scan(value interface{}) error {
 	if err := json.Unmarshal(normalized, g); err != nil {
 		return err
 	}
+	// Block v2 documents carry their data in `blocks`. NormalizeAndValidate
+	// synthesizes empty `active`/`passive`/`growth` sections so unmarshalling
+	// leaves those pointers non-nil, which would make every `Effects.Active !=
+	// nil` / `Effects.Passive != nil` dispatch treat the Gu as a legacy-format
+	// spec with zero values and silently drop the block effects. Clear them.
+	var root map[string]json.RawMessage
+	if json.Unmarshal(trimmed, &root) == nil {
+		if _, isV2Doc := root["blocks"]; isV2Doc {
+			g.Active = nil
+			g.Passive = nil
+			g.Growth = nil
+		}
+	}
 	if g.Active != nil {
 		g.Active.normalize()
 	}
@@ -855,6 +868,64 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 			res["capture_bonus"] = gu.Effects.Active.CaptureBonus
 		}
 		res["channel_time"] = 0 // default
+	} else if len(gu.Effects.Blocks) > 0 {
+		for _, block := range gu.Effects.Blocks {
+			if block.Trigger != gameplayeffects.TriggerOnAction {
+				continue
+			}
+			for _, op := range block.Operations {
+				switch op.Op {
+				case gameplayeffects.OpDamage:
+					switch {
+					case strings.EqualFold(op.SubType, "FLAT") || op.SubType == "":
+						res["damage"] += op.Value
+					case strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0:
+						res["damage_multiplier"] = op.Value
+					}
+				case gameplayeffects.OpShield:
+					switch {
+					case strings.EqualFold(op.SubType, "FLAT") || op.SubType == "":
+						res["defense"] += op.Value
+					case strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0:
+						res["shield_multiplier"] = op.Value
+					}
+				case gameplayeffects.OpHeal:
+					if strings.EqualFold(op.SubType, "FLAT") || op.SubType == "" {
+						res["heal"] += op.Value
+					}
+				case gameplayeffects.OpStatus:
+					switch strings.ToUpper(op.StatusID) {
+					case "BLEED":
+						res["bleed"] = op.Value
+					case "POISON":
+						res["poison"] = op.Value
+					case "STUN":
+						res["stun"] = float64(op.Turns)
+					case "SLOW":
+						res["slow"] = op.Value
+					case "SLOW1":
+						res["slow1"] = op.Value
+					case "WEAK":
+						res["weak"] = op.Value
+					case "FREEZE":
+						res["freeze"] = float64(op.Turns)
+					case "SILENCE":
+						res["silence"] = float64(op.Turns)
+					case "THORNS":
+						res["thorns_buff"] = op.Value
+					case "REGEN":
+						res["regen"] = op.Value
+					case "ATK_UP":
+						res["atk_up"] = op.Value
+					case "DEF_UP":
+						res["def_up"] = op.Value
+					case "TAUNT":
+						res["taunt"] = float64(op.Turns)
+					}
+				}
+			}
+		}
+		res["channel_time"] = 0
 	}
 	// Block v2 is the only passive source. Legacy PassiveEffect flat fields are
 	// never read here; overlay the compiled passive projection so block-only

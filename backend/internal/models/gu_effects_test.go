@@ -19,6 +19,30 @@ func TestGetFlatGuEffectsPassiveOnlyDoesNotPanic(t *testing.T) {
 	}
 }
 
+func TestGuEffectsScanClearsLegacyFieldsForBlockV2Envelope(t *testing.T) {
+	var effects GuEffects
+	raw := `{"schema_version":2,"blocks":[{"id":"ACTIVE_SKILL","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":2000}]}]}`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan envelope effects: %v", err)
+	}
+	if len(effects.Blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(effects.Blocks))
+	}
+	if effects.Active != nil {
+		t.Fatal("Active must be nil for a Block v2 document, otherwise consumers route the Gu down the legacy path")
+	}
+	if effects.Passive != nil {
+		t.Fatal("Passive must be nil for a Block v2 document")
+	}
+	if effects.Growth != nil {
+		t.Fatal("Growth must be nil for a Block v2 document")
+	}
+	gu := Gu{Effects: effects}
+	if flat := GetFlatGuEffects(gu); flat["damage"] != 2000 {
+		t.Fatalf("flat damage = %v, want 2000", flat["damage"])
+	}
+}
+
 func TestGetFlatGuEffectsIncludesActiveCaptureBonus(t *testing.T) {
 	gu := Gu{Effects: GuEffects{Active: &ActiveEffect{CaptureBonus: 0.25}}}
 	effects := GetFlatGuEffects(gu)
