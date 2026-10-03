@@ -128,11 +128,6 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				// Check target Sát Khí level
 				_, targetSatKhiLevel := getSatKhiMultiplier(tx, targetUUID)
 
-				// Newbie protection: Rank <= 3 cannot be attacked unless they carry Sát Khí
-				if targetPlayer.Rank <= 3 && targetSatKhiLevel == 0 {
-					return fmt.Sprintf("Cổ Sư %s đang ở cảnh giới %d Chuyển (Tân Thủ <= 3 Chuyển), được Thiên Đạo bảo hộ không thể bị tấn công!", targetPlayer.Username, targetPlayer.Rank), false, nil
-				}
-
 				// Target PvP immunity check (after death/respawn)
 				if targetPlayer.Statuses.Has("pvp_immunity") {
 					return fmt.Sprintf("Cổ Sư %s đang trong thời gian Miễn Chiến sau khi hồi sinh, không thể tấn công!", targetPlayer.Username), false, nil

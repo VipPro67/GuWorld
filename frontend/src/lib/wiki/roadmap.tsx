@@ -127,7 +127,7 @@ export const roadmapPages: WikiPage[] = [
                   <strong>Cơ chế Sát Khí & Safe Zone:</strong> Sát Khí &gt; 10 bị tước quyền bảo hộ trong Safe Zone/Hub. Sát Khí &gt; 5 có thể rơi Cổ đang trang bị khi chết (Cổ Bản Mệnh luôn được bảo toàn).
                 </li>
                 <li>
-                  <strong>Bảo Hộ Tân Thủ & Miễn Chiến Hồi Sinh:</strong> Cổ sư &le; 3 Chuyển (0 Sát Khí) miễn nhiễm bị tấn công. Nạn nhân bị tấn công và thua trận nhận 10 phút Miễn Chiến hồi sinh.
+                  <strong>Miễn Chiến Hồi Sinh:</strong> Nạn nhân bị tấn công và thua trận nhận 10 phút Miễn Chiến hồi sinh.
                 </li>
               </ul>
             </div>

@@ -580,8 +580,8 @@ export default function Home() {
                 <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">🛡️</span>
                   <div>
-                    <span className="font-bold text-emerald-300">Bảo Hộ Tân Thủ & Miễn Chiến Hồi Sinh</span>
-                    <p className="text-[var(--text-secondary)] mt-0.5">Cổ sư cảnh giới &le; 3 Chuyển (và 0 Sát Khí) được miễn nhiễm mọi đòn tấn công từ người chơi khác, nhưng vẫn được phép chủ động khai chiến. Khi bị người khác tấn công và thua trận, nạn nhân nhận buff <strong>Miễn Chiến 10 phút</strong> (chủ động khai chiến sẽ mất buff).</p>
+                    <span className="font-bold text-emerald-300">Miễn Chiến Hồi Sinh</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Khi bị người khác tấn công và thua trận, nạn nhân nhận buff <strong>Miễn Chiến 10 phút</strong> (chủ động khai chiến sẽ mất buff). Sát Khí không còn giảm theo thời gian; mỗi lần đồ sát nhận thêm Sát Khí theo chênh lệch cảnh giới (rank càng cao hạ rank càng thấp càng nhiều).</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">

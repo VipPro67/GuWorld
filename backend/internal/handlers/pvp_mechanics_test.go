@@ -48,23 +48,18 @@ func TestPvpImmunityStatus(t *testing.T) {
 	}
 }
 
-func TestNewbieProtectionRules(t *testing.T) {
-	// Rule: Rank <= 3 without Sat Khi is protected.
-	isProtected := func(rank int, satKhiLevel int) bool {
-		return rank <= 3 && satKhiLevel == 0
+func TestSatKhiGainForRanks(t *testing.T) {
+	// Cao hạ thấp: +2 per rank difference
+	if got := satKhiGainForRanks(5, 2); got != 9 {
+		t.Errorf("expected 9, got %d", got)
 	}
-
-	if !isProtected(1, 0) {
-		t.Errorf("Rank 1 with 0 Sat Khi should be protected")
+	// Bằng rank: +1
+	if got := satKhiGainForRanks(3, 3); got != 1 {
+		t.Errorf("expected 1, got %d", got)
 	}
-	if !isProtected(3, 0) {
-		t.Errorf("Rank 3 with 0 Sat Khi should be protected")
-	}
-	if isProtected(3, 1) {
-		t.Errorf("Rank 3 with 1 Sat Khi should NOT be protected")
-	}
-	if isProtected(4, 0) {
-		t.Errorf("Rank 4 with 0 Sat Khi should NOT be protected")
+	// Thấp hạ cao: tối thiểu +1
+	if got := satKhiGainForRanks(1, 5); got != 1 {
+		t.Errorf("expected 1, got %d", got)
 	}
 }
 

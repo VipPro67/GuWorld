@@ -264,6 +264,15 @@ func InitSchema() error {
 	// already clean), avoiding a full-table rewrite under statement_timeout.
 	_, _ = schemaDB().Exec(`UPDATE players SET active_combat = NULL WHERE active_combat IS NOT NULL AND party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`)
 
+	// Sát Khí is permanent now: strip any leftover expires_at from existing
+	// sat_khi status entries so they no longer decay over time.
+	_, _ = schemaDB().Exec(`
+UPDATE players SET statuses = COALESCE((
+	SELECT jsonb_agg(CASE WHEN e->>'id' = 'sat_khi' THEN e - 'expires_at' ELSE e END)
+	FROM jsonb_array_elements(statuses) e
+), '[]'::jsonb)
+WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(statuses) e WHERE e->>'id' = 'sat_khi' AND e ? 'expires_at')`)
+
 	logger.S.Info("Database schema initialized successfully")
 	return nil
 }
