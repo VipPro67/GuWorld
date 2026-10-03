@@ -94,6 +94,12 @@ func ExploreNode(c *gin.Context) {
 	}
 
 	roll := rand.Intn(100)
+	// DISGUISE shrinks the random-monster window (70% threshold)
+	// while leaving the resource window (<40%) untouched.
+	monsterThreshold := 70 - int(PlayerDisguiseLevel(&player))
+	if monsterThreshold < 40 {
+		monsterThreshold = 40
+	}
 	var logMsg string
 	combatTriggered := false
 
@@ -101,7 +107,7 @@ func ExploreNode(c *gin.Context) {
 		stonesFound := 1 + rand.Intn(3)
 		player.PrimevalStones += float64(stonesFound)
 		logMsg = fmt.Sprintf("Khám phá hoàn tất tại %s. Đạo hữu may mắn phát hiện thấy %d viên Nguyên Thạch!", nodeName, stonesFound)
-	} else if roll < 70 {
+	} else if roll < monsterThreshold {
 		combatTriggered = true
 
 		monsterID, minRank, maxRank, err := db.PickRandomMonsterFromRegion(tx, req.NodeID)

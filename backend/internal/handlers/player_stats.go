@@ -3,6 +3,7 @@ package handlers
 import (
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -12,6 +13,34 @@ import (
 
 func CalculatePlayerStats(player *models.Player) map[string]float64 {
 	return GetPassiveStats(player).Stats
+}
+
+// PlayerDisguiseLevel is the total concealment score of a player: rank plus
+// DISGUISE stats from equipped active Gu plus wisdom/dark path mastery bonus.
+// Used both by scouting/profile and by world-map monster ambush rolls.
+func PlayerDisguiseLevel(player *models.Player) float64 {
+	disguiseLevel := float64(player.Rank)
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+			disguiseLevel += models.GuStatValue(spec, "DISGUISE")
+		}
+	}
+	for path, points := range player.PathMasteries {
+		cleanPath := strings.ToLower(path)
+		if strings.Contains(cleanPath, "wisdom") || strings.Contains(cleanPath, "dark") {
+			switch gamefx.PathMasteryLevel(points) {
+			case 1:
+				disguiseLevel += 1.0
+			case 2:
+				disguiseLevel += 2.0
+			case 3:
+				disguiseLevel += 3.0
+			case 4:
+				disguiseLevel += 5.0
+			}
+		}
+	}
+	return disguiseLevel
 }
 
 // ── Passive Stats Breakdown ──────────────────────────────────────────────────

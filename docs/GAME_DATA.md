@@ -1159,3 +1159,20 @@ operations are attached to `simulator.SimAction` alongside its legacy fields.
 sanitized error, and `created_at`. Existing databases receive these columns through
 idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements during schema startup.
 Sensitive request fields and multipart bodies are excluded from `change_data`.
+
+## Chỉ số thám hiểm (INVESTIGATION / DISGUISE) trên bản đồ
+
+- **INVESTIGATION** cộng trực tiếp vào bán kính tầm nhìn bản đồ (`/api/explore/grid` →
+  `vision_radius` và `stats.investigation`): `radius = clamp(int(stats.investigation), 1, 25)`.
+  Trần cứng tối đa là **25 ô** (`MaxMapVisionRadius` trong `exploration_grid.go`), áp dụng cho
+  cả grid viewport và client world map để Cổ stack INVESTIGATION không mở toàn bản đồ. UI lưới
+  cũ vẫn giới hạn hiển thị 5x5 riêng.
+- **DISGUISE** giảm cơ hội bị quái tấn công/phục kích khi di chuyển ngoài bản đồ:
+  - Phục kích lân cận (`exploration_move.go`): `ambushChance = clamp(50 + rank*2 - disguise, 5, 95)`.
+  - Khám phá ngẫu nhiên (`combat_explore.go`): cửa sổ quái `roll < 70` thu hẹp còn
+    `roll < max(70 - disguise, 40)` (cửa sổ tài nguyên `< 40` giữ nguyên).
+  - `disguise = PlayerDisguiseLevel(player)` = rank + Σ `STAT_MOD DISGUISE ADD_FLAT` của Cổ
+    đang trang bị + thưởng cảnh giới lưu phái Trí/Ám (như profile scouting).
+- Cổ mang tag/role trinh sát (INVESTIGATION, MAP_REVEAL, scout...) giờ có `STAT_MOD INVESTIGATION`
+  trong `effects`; Cổ che giấu (concealment/stealth...) có `STAT_MOD DISGUISE` + capability
+  `DISGUISE` trong `effects`. Giá trị = rank của Cổ.
