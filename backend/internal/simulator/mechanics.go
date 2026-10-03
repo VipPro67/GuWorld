@@ -470,12 +470,7 @@ func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto, turn int
 // CalculateDamage is kept for backward compatibility but no longer used by the engine.
 // Use proper defense mitigation via applyDamageToTarget in engine.go.
 func CalculateDamage(attacker *CombatantAuto, defender *CombatantAuto, baseDamage float64, attackPath string) (float64, []CombatLog) {
-	netDmg := baseDamage - defender.BaseDef
-	if netDmg < 1 {
-		netDmg = 1
-	}
-
-	finalDamage := math.Max(1.0, netDmg)
+	finalDamage := ResolveBaseDamage(baseDamage, defender.BaseDef)
 
 	var logs []CombatLog
 	if defender.VirtualShield > 0 {
@@ -504,6 +499,12 @@ func CalculateDamage(attacker *CombatantAuto, defender *CombatantAuto, baseDamag
 	}
 
 	return finalDamage, logs
+}
+
+// ResolveBaseDamage is the shared deterministic defense step used by both the
+// turn-based simulator and the server-authoritative world runtime.
+func ResolveBaseDamage(baseDamage, defense float64) float64 {
+	return math.Max(1, baseDamage-defense)
 }
 
 // ProcessTriggers is kept for backward compatibility but no longer used by the engine.

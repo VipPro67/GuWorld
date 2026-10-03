@@ -314,6 +314,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		handlers.WorldCellBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
 			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
 		}
+		handlers.WorldCombatBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
+			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
+		}
 	}
 	worker.PlayerEventPublisher = func(playerID uuid.UUID, eventType string, domains ...string) {
 		typedDomains := make([]handlers.PlayerEventDomain, 0, len(domains))
@@ -792,6 +795,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/explore/players", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyPlayers)
+		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
 		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
 		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)

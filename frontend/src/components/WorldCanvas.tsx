@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
-import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldObject } from "@/store/useWorldStore";
+import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldObject } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 const BG_COLOR = 0x1d1e2c;
@@ -621,6 +621,20 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       const s = useWorldStore.getState();
       if (s.targetingGu) {
+        const runtimeTarget = Object.values(s.monsters).find((m) => Math.floor(m.x) === tx && Math.floor(m.y) === ty && m.state !== "DEFEATED");
+        if (runtimeTarget) {
+          const spec = monsterDictionary[runtimeTarget.monster_template_id];
+          s.selectTarget({
+            instanceId: runtimeTarget.instance_id,
+            x: runtimeTarget.x,
+            y: runtimeTarget.y,
+            cellType: "Monster",
+            contentId: runtimeTarget.monster_template_id,
+            name: spec?.name || runtimeTarget.monster_template_id,
+            hp: runtimeTarget.hp,
+            maxHp: runtimeTarget.max_hp,
+          });
+        }
         s.useGuOnMap(s.targetingGu.guInstanceId, tx, ty);
         return;
       }
@@ -653,17 +667,19 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const rank = nearby?.rank || persistent?.rank || 1;
 
         if (cellType === "Monster" || cellType === "Boss" || cellType === "WildGu") {
+          const runtimeTarget = Object.values(s.monsters).find((m) => Math.floor(m.x) === tx && Math.floor(m.y) === ty && m.state !== "DEFEATED");
           const name = monsterDictionary[contentId]?.name || guSpecFor(contentId, rank)?.name || contentId;
           const baseHp = monsterDictionary[contentId]?.max_hp || rank * 500;
           s.selectTarget({
+            instanceId: runtimeTarget?.instance_id,
             x: tx,
             y: ty,
             cellType,
             contentId,
             name,
             rank,
-            hp: baseHp,
-            maxHp: baseHp,
+            hp: runtimeTarget?.hp ?? baseHp,
+            maxHp: runtimeTarget?.max_hp ?? baseHp,
           });
         }
 
@@ -1984,7 +2000,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     if (!appReady || !useGameStore.getState().player) return;
     const pollCells = () => {
       const player = useGameStore.getState().player;
-      if (player) fetchNearbyCells(player.x, player.y, useWorldStore.getState().investigationRange);
+      if (player) {
+        fetchNearbyCells(player.x, player.y, useWorldStore.getState().investigationRange);
+        void useWorldStore.getState().fetchMonsterSnapshot(useWorldStore.getState().investigationRange);
+      }
     };
     const pollPlayers = () => {
       const player = useGameStore.getState().player;
@@ -2053,6 +2072,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         pruneStalePlayers();
       }
     };
+    const onWorldCombat = (e: Event) => {
+      const event = (e as CustomEvent<WorldCombatEvent>).detail;
+      if (event) useWorldStore.getState().applyCombatEvent(event);
+    };
 
     const onWorldCell = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -2081,6 +2104,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     pollPlayers();
     prefetch();
     window.addEventListener("gu_world_pos", onWorldPos);
+    window.addEventListener("gu_world_combat", onWorldCombat);
     window.addEventListener("gu_world_cell", onWorldCell);
     window.addEventListener("gu_world_cells", onWorldCells);
     let lastCellsPoll = Date.now();
@@ -2105,6 +2129,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     const intervalId = setInterval(unifiedTick, 1000);
     return () => {
       window.removeEventListener("gu_world_pos", onWorldPos);
+      window.removeEventListener("gu_world_combat", onWorldCombat);
       window.removeEventListener("gu_world_cell", onWorldCell);
       window.removeEventListener("gu_world_cells", onWorldCells);
       clearInterval(intervalId);

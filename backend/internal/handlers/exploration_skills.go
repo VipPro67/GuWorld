@@ -15,14 +15,22 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+type WorldCastTarget struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+}
+
 type UseGuOnMapRequest struct {
-	GuInstanceID string `json:"gu_instance_id" binding:"required"`
-	TargetX      int    `json:"target_x"`
-	TargetY      int    `json:"target_y"`
+	CommandID    string           `json:"command_id"`
+	GuInstanceID string           `json:"gu_instance_id" binding:"required"`
+	Target       *WorldCastTarget `json:"target,omitempty"`
+	TargetX      int              `json:"target_x"`
+	TargetY      int              `json:"target_y"`
 }
 
 func UseGuOnMap(c *gin.Context) {
@@ -308,56 +316,68 @@ func UseGuOnMap(c *gin.Context) {
 		return
 	}
 
-	// Calculate map target damage if targeting a monster/boss cell
+	// Monster casts use a stable runtime identity. Coordinate targeting remains
+	// available only for utility/portal Gu for backwards compatibility.
 	var targetDefeated bool
 	var targetHP, targetMaxHP float64
 	var targetName string
 	var damageDealt float64
 
-	if inWorld(req.TargetX, req.TargetY) && (req.TargetX != 0 || req.TargetY != 0) {
-		cell := ResolveCell(req.TargetX, req.TargetY)
-		if (cell.Type == "Monster" || cell.Type == "Boss") && !isCellClearedRecently(player.CurrentRegion, req.TargetX, req.TargetY, 5*time.Minute) {
-			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
-			if err == nil {
-				maxHP, _, def := models.ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, cell.Rank, cell.SubRank, mon.Type)
-				targetName = mon.Name
-				targetMaxHP = maxHP
-
-				rawDmg := effectValue
-				if rawDmg <= 0 {
-					stats := CalculatePlayerStats(&player)
-					rawDmg = math.Max(20.0, stats["attack"]*0.8)
-				}
-				damageDealt = math.Max(10.0, rawDmg-def*0.3)
-				effectType = "damage"
-
-				if damageDealt >= maxHP {
-					targetDefeated = true
-					targetHP = 0
-					if player.ClearedCells == nil {
-						player.ClearedCells = make(models.ClearedCellsMap)
-					}
-					coordKey := fmt.Sprintf("%d,%d", req.TargetX, req.TargetY)
-					player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-					if err := cache.SetCellCleared(player.CurrentRegion, req.TargetX, req.TargetY, player.ID.String(), clearedCellCooldown); err != nil {
-						logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, req.TargetX, req.TargetY, err)
-					}
-					cache.BroadcastMonsterKilled(req.TargetX, req.TargetY, mon.Name, player.CurrentRegion)
-					_ = cache.BroadcastCellCleared(player.CurrentRegion, req.TargetX, req.TargetY, "Monster", mon.ID)
-
-					stonesGain := int64(float64(cell.Rank) * 30.0)
-					if stonesGain <= 0 {
-						stonesGain = 20
-					}
-					player.PrimevalStones += float64(stonesGain)
-
-					logs = append(logs, fmt.Sprintf("💥 Sát chiêu %s giáng xuống %s (Rank %d), gây %.0f sát thương diệt sát mục tiêu! Nhận +%d Nguyên Thạch.", specs.Name, mon.Name, cell.Rank, damageDealt, stonesGain))
-				} else {
-					targetDefeated = false
-					targetHP = maxHP - damageDealt
-					logs = append(logs, fmt.Sprintf("⚡ Sát chiêu %s giáng xuống %s (Rank %d), gây %.0f sát thương! (HP còn: %.0f/%.0f)", specs.Name, mon.Name, cell.Rank, damageDealt, targetHP, maxHP))
-				}
-			}
+	if req.Target != nil && req.Target.Kind == "monster" {
+		if req.CommandID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "command_id is required for monster casts"})
+			return
+		}
+		monster, exists, getErr := cache.GetWorldMonster(c.Request.Context(), player.CurrentRegion, req.Target.ID)
+		if getErr != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Monster runtime unavailable"})
+			return
+		}
+		if !exists || monster.State == MonsterStateDefeated {
+			c.JSON(http.StatusConflict, gin.H{"error": "Monster is no longer active"})
+			return
+		}
+		if monster.RegionID != player.CurrentRegion {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Target is in another region"})
+			return
+		}
+		if math.Hypot(float64(player.X)-monster.X, float64(player.Y)-monster.Y) > 12 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Target is out of cast range"})
+			return
+		}
+		rawDmg := effectValue
+		if rawDmg <= 0 {
+			rawDmg = math.Max(20, CalculatePlayerStats(&player)["attack"]*0.8)
+		}
+		damageDealt = simulator.ResolveBaseDamage(rawDmg, monster.BaseDefense)
+		outcome, updated, hitErr := cache.HitWorldMonster(c.Request.Context(), monster.RegionID, monster.InstanceID, player.ID.String()+":"+req.CommandID, monster.Revision, damageDealt, time.Now().UTC(), time.Duration(monster.RespawnSeconds)*time.Second, monsterTTL(monster.RespawnSeconds))
+		if hitErr != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Cannot update monster state"})
+			return
+		}
+		if outcome == cache.WorldMonsterRevisionConflict {
+			worldMonsterMetrics.conflicts.Add(1)
+			c.JSON(http.StatusConflict, gin.H{"error": "Monster state changed; retry with the latest snapshot"})
+			return
+		}
+		if outcome == cache.WorldMonsterAlreadyDefeated {
+			worldMonsterMetrics.preventedDoubleKills.Add(1)
+			c.JSON(http.StatusConflict, gin.H{"error": "Command already processed or monster defeated"})
+			return
+		}
+		targetHP, targetMaxHP = updated.HP, updated.MaxHP
+		targetName = models.MonsterRegistry[updated.MonsterTemplateID].Name
+		targetDefeated = outcome == cache.WorldMonsterFirstKill
+		effectType = "damage"
+		if targetDefeated {
+			worldMonsterMetrics.kills.Add(1)
+			stonesGain := int64(30)
+			player.PrimevalStones += float64(stonesGain)
+			logs = append(logs, fmt.Sprintf("💥 %s gây %.0f sát thương, tiêu diệt %s! Nhận +%d Nguyên Thạch.", specs.Name, damageDealt, targetName, stonesGain))
+			broadcastWorldCombat(updated, "monster_defeated", map[string]any{"killer_id": player.ID.String(), "damage": damageDealt})
+		} else {
+			logs = append(logs, fmt.Sprintf("⚡ %s gây %.0f sát thương lên %s (HP %.0f/%.0f).", specs.Name, damageDealt, targetName, targetHP, targetMaxHP))
+			broadcastWorldCombat(updated, "entity_damaged", map[string]any{"source_id": player.ID.String(), "damage": damageDealt, "hp": targetHP, "max_hp": targetMaxHP})
 		}
 	}
 

@@ -1113,3 +1113,7 @@ Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ /
 ### Ấn ký truy tung & chém đứt manh mối
 - Đại thành công suy diễn người cho phép **gieo ấn ký**: Trí Niệm Ấn (ngắn) hoặc Huyết Mạch Ấn (lâu). Giới hạn 3 mục tiêu (phàm) / 10 (tiên). Ấn ký cho tọa độ realtime trong radar.
 - **Đoạn Tuyệt Thiên Cơ:** tốn 20 Chân Nguyên (cố định), chém toàn bộ ấn ký người khác gieo lên mình + xóa tàn dư khí tức tại ô đang đứng. Bị theo dõi mà không biết chém — chết lúc nào không hay.
+
+## Quái thường trên World Map
+
+Quái thường nay là thực thể sống riêng biệt: mỗi lần sinh có ID, HP, vị trí và trạng thái riêng. Sát thương không chí mạng được giữ lại và đồng bộ cho người chơi gần đó. Quái có thể phát hiện, đuổi, vào tầm đánh và quay lại điểm sinh khi mất mục tiêu hoặc vượt dây cương; quái không chọn mục tiêu ở khu an toàn hay vùng khác. Sau khi bị hạ, quái sinh lại bằng instance ID mới sau thời gian hồi sinh của điểm spawn. Client chỉ dự đoán hiệu ứng hình ảnh; HP, tử vong và phần thưởng luôn do server quyết định.

@@ -1177,3 +1177,14 @@ Sensitive request fields and multipart bodies are excluded from `change_data`.
 - Cổ mang tag/role trinh sát (INVESTIGATION, MAP_REVEAL, scout...) giờ có `STAT_MOD INVESTIGATION`
   trong `effects`; Cổ che giấu (concealment/stealth...) có `STAT_MOD DISGUISE` + capability
   `DISGUISE` trong `effects`. Giá trị = rank của Cổ.
+
+## Ordinary world-monster lifecycle
+
+`monster_templates`, `monster_spawns`, and `map_cells` remain PostgreSQL static data. Ordinary non-boss monster HP, target, state, statuses, position, timestamps, and revision are ephemeral Redis data under `world:monster:*`; they are not written to PostgreSQL per hit or movement. `monster_spawns.id` is the stable spawn identity. Runtime defaults are a 12-cell aggro radius, 1.5-cell attack range, 24-cell leash, speed 3 cells/second, and 2-second attack interval. Runtime TTL is the spawn respawn duration plus a five-minute replay-safety window.
+
+Monster runtime AOI uses **32×32-cell buckets**, separate from the legacy
+300×300 player-position broadcast index. The activation/fan-out radius is 25
+cells, matching the current hard cap for player investigation range, so one
+player normally activates at most a 3×3 neighborhood of small monster buckets.
+This separation avoids loading a 300×300 monster area for a 10–25-cell view
+without changing party, PvP, or world-position broadcast behavior.

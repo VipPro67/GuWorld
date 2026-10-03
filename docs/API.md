@@ -564,3 +564,20 @@ Các thao tác flush Redis, commit bulk import, xóa dữ liệu, điều chỉn
 | Payment mutation tương lai | phải dùng `billing.mutate`, không dùng `billing.read` | order/transaction ID | Có | Bắt buộc |
 
 Mọi route mutation vẫn đi qua audit middleware trước permission middleware, vì vậy cả kết quả thành công lẫn thất bại/permission denied đều tạo audit record. Các thay đổi nhiều bảng (bulk import và role assignment) ghi success audit trong cùng transaction; nếu audit hoặc cập nhật thất bại, transaction rollback.
+
+## World monster runtime
+
+`GET /api/world/monsters?r=25` returns the authoritative ordinary-monster snapshot for the authenticated player's current region and AOI. `r` defaults to and is capped at 25, while clients normally send their actual 10–25-cell investigation radius. A snapshot materializes intersecting non-boss `monster_spawns` on demand; each result has a fresh `instance_id`, stable `spawn_id`, position, HP, state, revision, and server timestamps.
+
+The client should send its actual investigation radius (currently 10–25 cells).
+The server groups runtime monsters into 32×32-cell buckets and activates only
+the bucket neighborhood intersecting active players; the separate 300-cell
+world-position broadcast radius is not used as the monster activation radius.
+
+`POST /api/explore/use_gu` accepts stable monster targets:
+
+```json
+{"command_id":"uuid","gu_instance_id":"uuid","target":{"kind":"monster","id":"monster-instance-uuid"}}
+```
+
+The server validates region, authoritative distance, life state, mana, hunger, cooldown and command idempotency. Runtime revision conflicts return HTTP 409. The targeted WebSocket channel `world:combat` carries `event_id`, `server_time`, `region_id`, `entity_id`, `entity_revision`, `event_type`, `position`, and `payload`. Event types include `monster_spawned`, `monster_moved`, `monster_targeted`, `action_started`, `action_resolved`, `entity_damaged`, `status_changed`, `monster_returned`, `monster_defeated`, `monster_despawned`, and `monster_respawned`.
