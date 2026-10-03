@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 func testMonster(now time.Time) WorldMonster {
@@ -64,14 +67,166 @@ func TestWorldMonsterLeashReturnAndStatusExpiry(t *testing.T) {
 	}
 }
 
+func installMonsterWorkerTestState(t *testing.T, entries []WorldPosEntry, connected map[uuid.UUID]bool) *[]ActiveWorldBucket {
+	t.Helper()
+	previousIndex := worldPosIndex
+	previousLoader := worldMonstersInBucket
+	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
+	worldPosIndex.Reconcile(entries)
+	queried := make([]ActiveWorldBucket, 0)
+	var mu sync.Mutex
+	worldMonstersInBucket = func(_ context.Context, region string, bx, by int) ([]WorldMonster, error) {
+		mu.Lock()
+		queried = append(queried, ActiveWorldBucket{Region: region, BX: bx, BY: by})
+		mu.Unlock()
+		return nil, nil
+	}
+	SetWSConnectedProvider(func(id uuid.UUID) bool { return connected[id] })
+	t.Cleanup(func() {
+		SetWSConnectedProvider(nil)
+		worldPosIndex = previousIndex
+		worldMonstersInBucket = previousLoader
+	})
+	return &queried
+}
+
+func TestWorldMonsterTickSkipsRegionWithoutOnlinePlayers(t *testing.T) {
+	now := time.Now()
+	playerID := uuid.New()
+	queried := installMonsterWorkerTestState(t, []WorldPosEntry{{ID: playerID.String(), Region: "empty", X: 16, Y: 16, TS: now.UnixMilli()}}, map[uuid.UUID]bool{})
+
+	processWorldMonsterTick(context.Background(), now)
+	if len(*queried) != 0 {
+		t.Fatalf("queried %d buckets for an offline region: %#v", len(*queried), *queried)
+	}
+}
+
+func TestWorldMonsterTickIgnoresRecentlyActiveDisconnectedPlayer(t *testing.T) {
+	now := time.Now()
+	playerID := uuid.New()
+	queried := installMonsterWorkerTestState(t, []WorldPosEntry{{ID: playerID.String(), Region: "field", X: 16, Y: 16, TS: now.Add(-WorldPosActiveWindow / 2).UnixMilli()}}, map[uuid.UUID]bool{})
+
+	processWorldMonsterTick(context.Background(), now)
+	if len(*queried) != 0 {
+		t.Fatalf("disconnected player activated %d buckets", len(*queried))
+	}
+}
+
+func TestWorldMonsterTickDeduplicatesSharedAOIBuckets(t *testing.T) {
+	now := time.Now()
+	p1, p2 := uuid.New(), uuid.New()
+	queried := installMonsterWorkerTestState(t, []WorldPosEntry{
+		{ID: p1.String(), Region: "field", X: 16, Y: 16, TS: now.UnixMilli()},
+		{ID: p2.String(), Region: "field", X: 17, Y: 17, TS: now.UnixMilli()},
+	}, map[uuid.UUID]bool{p1: true, p2: true})
+
+	processWorldMonsterTick(context.Background(), now)
+	seen := make(map[ActiveWorldBucket]struct{}, len(*queried))
+	for _, bucket := range *queried {
+		if _, duplicate := seen[bucket]; duplicate {
+			t.Fatalf("bucket queried more than once: %#v", bucket)
+		}
+		seen[bucket] = struct{}{}
+	}
+	if len(*queried) == 0 {
+		t.Fatal("online shared AOI did not activate any bucket")
+	}
+}
+
+func TestWorldMonsterTickStopsOldRegionAfterTeleport(t *testing.T) {
+	now := time.Now()
+	playerID := uuid.New()
+	queried := installMonsterWorkerTestState(t, []WorldPosEntry{{ID: playerID.String(), Region: "old", X: 16, Y: 16, TS: now.UnixMilli()}}, map[uuid.UUID]bool{playerID: true})
+	processWorldMonsterTick(context.Background(), now)
+	if len(*queried) == 0 {
+		t.Fatal("old region was not initially active")
+	}
+
+	*queried = (*queried)[:0]
+	worldPosIndex.Set(WorldPosEntry{ID: playerID.String(), Region: "new", X: 16, Y: 16, TS: now.UnixMilli()})
+	processWorldMonsterTick(context.Background(), now.Add(time.Second))
+	if len(*queried) == 0 {
+		t.Fatal("new region did not become active after teleport")
+	}
+	for _, bucket := range *queried {
+		if bucket.Region != "new" {
+			t.Fatalf("teleported player kept old region active: %#v", *queried)
+		}
+	}
+}
+
+func TestSpawnMaterializationUsesAuthoritativePlayerRadius(t *testing.T) {
+	player := WorldPosEntry{Region: "field", X: 100, Y: 200}
+	if !spawnWithinPlayerRadius(monsterSpawnRow{RegionID: "field", X: 115, Y: 220}, player, WorldMonsterActivationRadius) {
+		t.Fatal("spawn exactly on authoritative radius was excluded")
+	}
+	if spawnWithinPlayerRadius(monsterSpawnRow{RegionID: "field", X: 125, Y: 225}, player, WorldMonsterActivationRadius) {
+		t.Fatal("spawn in query square but outside authoritative radius was included")
+	}
+}
+
 func TestWorldMonsterWorkerStopsWithContext(t *testing.T) {
+	now := time.Now()
+	playerID := uuid.New()
+	installMonsterWorkerTestState(t, []WorldPosEntry{{ID: playerID.String(), Region: "field", X: 16, Y: 16, TS: now.UnixMilli()}}, map[uuid.UUID]bool{playerID: true})
+	var calls atomic.Int64
+	worldMonstersInBucket = func(context.Context, string, int, int) ([]WorldMonster, error) {
+		calls.Add(1)
+		return nil, nil
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	StartWorldMonsterWorker(ctx)
+	done := startWorldMonsterWorker(ctx, 5*time.Millisecond)
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if calls.Load() == 0 {
+		t.Fatal("worker never ticked")
+	}
 	cancel()
 	select {
-	case <-ctx.Done():
+	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("context did not cancel")
+		t.Fatal("worker did not stop after context cancellation")
+	}
+	stoppedAt := calls.Load()
+	time.Sleep(15 * time.Millisecond)
+	if calls.Load() != stoppedAt {
+		t.Fatalf("worker ticked after stopping: calls %d -> %d", stoppedAt, calls.Load())
+	}
+}
+
+func TestMaterializeSpawnReusesRuntimeWhileTTLRemains(t *testing.T) {
+	previousMaterialize := materializeWorldMonster
+	previousTemplate, hadTemplate := models.MonsterRegistry["ttl-test"]
+	t.Cleanup(func() {
+		materializeWorldMonster = previousMaterialize
+		if hadTemplate {
+			models.MonsterRegistry["ttl-test"] = previousTemplate
+		} else {
+			delete(models.MonsterRegistry, "ttl-test")
+		}
+	})
+	models.MonsterRegistry["ttl-test"] = models.MonsterTemplate{ID: "ttl-test", MaxHP: 100, BaseAttack: 10, BaseDefense: 5}
+	var runtime *WorldMonster
+	var expiresAt time.Time
+	materializeWorldMonster = func(_ context.Context, candidate WorldMonster, _, _ int, ttl time.Duration) (WorldMonster, bool, error) {
+		now := time.Now()
+		if runtime != nil && now.Before(expiresAt) {
+			return *runtime, false, nil
+		}
+		runtime = &candidate
+		expiresAt = now.Add(ttl)
+		return candidate, true, nil
+	}
+	spawn := monsterSpawnRow{ID: "spawn-1", RegionID: "field", MonsterID: "ttl-test", X: 4, Y: 4, RespawnSeconds: 30, Rank: 1, SubRank: 1}
+	first, created, err := materializeSpawn(context.Background(), spawn, time.Now().UTC())
+	if err != nil || !created {
+		t.Fatalf("first materialization = (%+v, %v, %v), want created", first, created, err)
+	}
+	second, created, err := materializeSpawn(context.Background(), spawn, time.Now().UTC().Add(time.Minute))
+	if err != nil || created || second.InstanceID != first.InstanceID {
+		t.Fatalf("returning player materialization = (%+v, %v, %v), want existing %s", second, created, err, first.InstanceID)
 	}
 }
 

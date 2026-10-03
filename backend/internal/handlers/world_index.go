@@ -252,6 +252,31 @@ func (idx *positionIndex) ActiveEntries(limit int) []WorldPosEntry {
 	return out
 }
 
+// OnlineEntries returns active position entries that also satisfy the live
+// connection predicate. Filtering happens after ActiveEntries releases the
+// index lock so connection providers cannot introduce lock-order inversions.
+func (idx *positionIndex) OnlineEntries(limit int, connected func(WorldPosEntry) bool) []WorldPosEntry {
+	if connected == nil {
+		return nil
+	}
+	active := idx.ActiveEntries(-1)
+	capacity := len(active)
+	if limit > 0 && limit < capacity {
+		capacity = limit
+	}
+	online := make([]WorldPosEntry, 0, capacity)
+	for _, entry := range active {
+		if !connected(entry) {
+			continue
+		}
+		online = append(online, entry)
+		if limit > 0 && len(online) == limit {
+			break
+		}
+	}
+	return online
+}
+
 // setWorldPosFromPlayer upserts a player's current position into the index.
 // Called after any position-mutating commit (retreats, teleports, onboarding)
 // that does not go through the move handlers (which already broadcast).

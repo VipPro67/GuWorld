@@ -72,6 +72,11 @@ var worldMonsterMetrics struct {
 
 var worldMonsterBucketCursor atomic.Uint64
 
+var (
+	worldMonstersInBucket   = cache.WorldMonstersInBucket
+	materializeWorldMonster = cache.MaterializeWorldMonster
+)
+
 type monsterSpawnRow struct {
 	ID, RegionID, MonsterID       string
 	X, Y                          int
@@ -99,7 +104,7 @@ func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time)
 		LeashRadius: 24, Speed: 3, AttackIntervalMS: 2000, BaseAttack: attack, BaseDefense: defense,
 	}
 	bx, by := monsterBucket(spawn.X, spawn.Y)
-	return cache.MaterializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
+	return materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
 }
 
 func monsterBucket(x, y int) (int, int) {
@@ -110,6 +115,13 @@ func monsterBucket(x, y int) (int, int) {
 		return v / WorldMonsterAOIBucket
 	}
 	return div(x), div(y)
+}
+
+func spawnWithinPlayerRadius(spawn monsterSpawnRow, player WorldPosEntry, radius int) bool {
+	dx := int64(spawn.X) - int64(player.X)
+	dy := int64(spawn.Y) - int64(player.Y)
+	r := int64(radius)
+	return dx*dx+dy*dy <= r*r
 }
 
 func activeMonsterBuckets(players []WorldPosEntry, radius, limit int) []ActiveWorldBucket {
@@ -192,6 +204,9 @@ func GetWorldMonsters(c *gin.Context) {
 	for rows.Next() {
 		var spawn monsterSpawnRow
 		if err := rows.Scan(&spawn.ID, &spawn.RegionID, &spawn.MonsterID, &spawn.X, &spawn.Y, &spawn.RespawnSeconds, &spawn.Rank); err != nil {
+			continue
+		}
+		if !spawnWithinPlayerRadius(spawn, entry, radius) {
 			continue
 		}
 		if spawn.Rank < 1 {
@@ -342,8 +357,14 @@ func expireMonsterStatuses(statuses []StatusEffect, now time.Time) []StatusEffec
 
 // StartWorldMonsterWorker runs one bounded ticker for all ordinary monsters.
 func StartWorldMonsterWorker(ctx context.Context) {
+	startWorldMonsterWorker(ctx, worldMonsterTickInterval)
+}
+
+func startWorldMonsterWorker(ctx context.Context, interval time.Duration) <-chan struct{} {
+	done := make(chan struct{})
 	go func() {
-		ticker := time.NewTicker(worldMonsterTickInterval)
+		defer close(done)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -354,12 +375,28 @@ func StartWorldMonsterWorker(ctx context.Context) {
 			}
 		}
 	}()
+	return done
 }
 
 func processWorldMonsterTick(ctx context.Context, now time.Time) {
 	deadline := time.Now().Add(worldMonsterTickBudget)
-	active := worldPosIndex.ActiveEntries(-1)
-	allBuckets := activeMonsterBuckets(active, WorldMonsterActivationRadius, int(^uint(0)>>1))
+	online := worldPosIndex.OnlineEntries(-1, func(entry WorldPosEntry) bool {
+		playerID, err := uuid.Parse(entry.ID)
+		return err == nil && isWSConnected(playerID)
+	})
+	playersByRegion := make(map[string][]WorldPosEntry)
+	for _, player := range online {
+		playersByRegion[player.Region] = append(playersByRegion[player.Region], player)
+	}
+	regions := make([]string, 0, len(playersByRegion))
+	for region := range playersByRegion {
+		regions = append(regions, region)
+	}
+	sort.Strings(regions)
+	allBuckets := make([]ActiveWorldBucket, 0, len(online)*9)
+	for _, region := range regions {
+		allBuckets = append(allBuckets, activeMonsterBuckets(playersByRegion[region], WorldMonsterActivationRadius, int(^uint(0)>>1))...)
+	}
 	cursor := worldMonsterBucketCursor.Add(uint64(worldMonsterMaxBuckets)) - uint64(worldMonsterMaxBuckets)
 	buckets := rotatingMonsterBucketWindow(allBuckets, worldMonsterMaxBuckets, cursor)
 	if len(allBuckets) > len(buckets) {
@@ -371,7 +408,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 			worldMonsterMetrics.skipped.Add(1)
 			break
 		}
-		monsters, err := cache.WorldMonstersInBucket(ctx, b.Region, b.BX, b.BY)
+		monsters, err := worldMonstersInBucket(ctx, b.Region, b.BX, b.BY)
 		if err != nil {
 			continue
 		}
