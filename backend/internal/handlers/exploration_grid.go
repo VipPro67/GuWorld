@@ -13,6 +13,10 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// MaxMapVisionRadius caps how many tiles a player can see around themselves
+// on the world map, regardless of stacked INVESTIGATION stats.
+const MaxMapVisionRadius = 25
+
 // GetGrid retrieves the viewport viewport within vision range
 func GetGrid(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
@@ -42,9 +46,15 @@ func GetGrid(c *gin.Context) {
 	if visionRadius < 1 {
 		visionRadius = 1
 	}
+	// Hard upper cap on map vision so stacked INVESTIGATION stats cannot
+	// reveal the entire world. The raw stat is hidden behind this cap for
+	// every consumer of the grid viewport.
+	if visionRadius > MaxMapVisionRadius {
+		visionRadius = MaxMapVisionRadius
+	}
 	// The client only reads movement + investigation; skip shipping the rest
 	// of the stat block in every viewport fetch.
-	gridStats := gin.H{"movement": stats["movement"], "investigation": stats["investigation"]}
+	gridStats := gin.H{"movement": stats["movement"], "investigation": visionRadius}
 
 	// Cap the visual vision radius to 2 (corresponding to a 5x5 grid) to prevent UI breakage
 	visualVisionRadius := visionRadius

@@ -492,7 +492,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
 
   setExploredSubZones: (keys) => set({ exploredSubZones: new Set<string>(keys) }),
   setMovementRange: (r) => set({ movementRange: r > 0 ? r : 1 }),
-  setInvestigationRange: (r) => set({ investigationRange: r > 10 ? r : 10 }),
+  setInvestigationRange: (r) => set({ investigationRange: Math.min(Math.max(r, 10), 25) }),
   setMoving: (v) => set({ isMoving: v }),
   selectObject: (obj) => set({ selectedObject: obj }),
   setLivePosition: (x, y) => set({ liveX: x, liveY: y }),

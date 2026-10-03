@@ -1071,6 +1071,14 @@ Hệ thống rút gọn hiển thị số lượng lớn (sát thương, khiên,
 
 Không ai được xem trộm hồ sơ từ xa. Muốn biết địch ở đâu, mạnh cỡ nào, giữ Cổ gì — phải **trinh sát** (gần) hoặc **suy diễn thiên cơ** (xa). Và kẻ bị dò luôn có đường **phản trinh sát**.
 
+### Tác dụng ngoài bản đồ
+
+- **Trinh Sát (INVESTIGATION):** mỗi điểm cộng 1 ô tầm nhìn trên bản đồ (`/api/explore/grid`),
+  tối đa **25 ô** — Cổ trinh sát càng cao nhìn càng xa nhưng bị trần cứng.
+- **Ngụy Trang (DISGUISE):** tổng từ rank + Cổ đang trang bị + cảnh giới Trí/Ám.
+  Mỗi điểm giảm 1% cơ hội bị quái phục kích lân cận (`50 + rank*2 - disguise`, sàn 5%, trần 95%)
+  và thu hẹp cửa sổ gặp quái ngẫu nhiên khi khám phá (`70 - disguise`, sàn 40%).
+
 ### Ba trụ điểm (áp cho cả hai phe)
 1. **Cổ trùng:** phe công lấy chỉ số Trinh Sát (Investigation) của Cổ đang trang bị; phe thủ lấy Ngụy Trang (DisguiseLevel) + năng lực đặc biệt (`PERFECT_DISGUISE` như Thái Độ Cổ, `CONCEAL_GU`).
 2. **Cảnh giới lưu phái + Đạo ngân:**

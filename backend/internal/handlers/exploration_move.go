@@ -422,6 +422,14 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					rank = adj.Rank
 				}
 				ambushChance := 50 + (rank * 2) // Base 50% + 2% per rank (min 50%)
+				// DISGUISE lowers the chance of being ambushed by adjacent monsters.
+				ambushChance -= int(PlayerDisguiseLevel(player))
+				if ambushChance < 5 {
+					ambushChance = 5
+				}
+				if ambushChance > 95 {
+					ambushChance = 95
+				}
 
 				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < ambushChance {
 					combatTriggered = true
