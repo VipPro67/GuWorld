@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -61,10 +60,28 @@ var deathPenaltyConfig = struct {
 	VoidDestructionPct: 40,
 }
 
+// satKhiGainForRanks returns how many Sát Khí layers a killer gains from a PvP kill.
+// The gain is based on the rank difference between the killer and the victim.
+// If the killer has a higher rank than the victim, the gain is multiplied by the difference.
+
+func satKhiGainForRanks(killerRank, victimRank int) int {
+	diff := killerRank - victimRank
+
+	if diff <= 0 {
+		return 1
+	}
+
+	return diff * diff
+}
+
 // AddSatKhiStatus adds or increments Sát Khí status (sat_khi) for a PvP killer.
-func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID) {
+// The status is permanent — it no longer decays over time, only removed/reduced on death.
+func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID, gain int) {
 	if killerID == nil {
 		return
+	}
+	if gain < 1 {
+		gain = 1
 	}
 	var rawStatuses []byte
 	err := tx.QueryRow(`SELECT statuses FROM players WHERE id = $1 FOR UPDATE`, *killerID).Scan(&rawStatuses)
@@ -88,9 +105,9 @@ func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID) {
 		}
 	}
 
-	newLevel := currentLevel + 1 // Bỏ giới hạn cấp Sát Khí (tăng liên tục theo số mạng đồ sát)
+	newLevel := currentLevel + gain // Sát Khí tăng theo chênh lệch cảnh giới kẻ hạ vs nạn nhân
 
-	sl.Add("sat_khi", "pvp_kill", 24*time.Hour, float64(newLevel))
+	sl.Add("sat_khi", "pvp_kill", 0, float64(newLevel)) // vĩnh viễn, không tụt theo thời gian
 	newBytes, _ := json.Marshal(sl)
 	if _, spErr := tx.Exec("SAVEPOINT sp_sat_khi_add"); spErr == nil {
 		if _, err := tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, *killerID); err != nil {
@@ -102,7 +119,7 @@ func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID) {
 	}
 
 	notify.Send(tx, *killerID, "sat_khi_increase", "Sát Khí gia tăng!",
-		fmt.Sprintf("Tích tụ oán khí đồ sát! Sát Khí của bạn tăng lên Tầng %d. Nếu bị đánh bại, lượng tài sản đánh rơi sẽ gia tăng x%.1f!", newLevel, 1.0+float64(newLevel)*0.5))
+		fmt.Sprintf("Tích tụ oán khí đồ sát! Sát Khí của bạn tăng %d tầng (lên Tầng %d). Nếu bị đánh bại, lượng tài sản đánh rơi sẽ gia tăng x%.1f!", gain, newLevel, 1.0+float64(newLevel)*0.5))
 
 	// Broadcast wanted / hunt notice when killer has slaughtered multiple players (>= 3 kills / Sát Khí level >= 3)
 	if newLevel >= 3 {
@@ -187,7 +204,7 @@ func reduceSatKhiOnDeath(tx *sql.Tx, playerID uuid.UUID) {
 	}
 
 	if currentLevel > 1 {
-		sl.Add("sat_khi", "pvp_death", 24*time.Hour, float64(currentLevel-1))
+		sl.Add("sat_khi", "pvp_death", 0, float64(currentLevel-1)) // vĩnh viễn, không tụt theo thời gian
 	} else {
 		sl.Remove("sat_khi")
 	}
@@ -431,9 +448,13 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 		lost = append(lost, recipeLogs...)
 	}
 
-	// Nếu người thắng là kẻ chủ động tấn công (aggressor), tăng Sát Khí cho kẻ chiến thắng
+	// Nếu người thắng là kẻ chủ động tấn công (aggressor), tăng Sát Khí cho kẻ chiến thắng.
+	// Lượng sát khí tăng theo chênh lệch cảnh giới: rank càng cao hạ rank càng thấp → càng nhiều.
 	if winnerID != nil && isAggressor {
-		AddSatKhiStatus(tx, winnerID)
+		var winnerRank, loserRank int
+		_ = tx.QueryRow(`SELECT COALESCE(rank, 0) FROM players WHERE id = $1`, *winnerID).Scan(&winnerRank)
+		_ = tx.QueryRow(`SELECT COALESCE(rank, 0) FROM players WHERE id = $1`, loserID).Scan(&loserRank)
+		AddSatKhiStatus(tx, winnerID, satKhiGainForRanks(winnerRank, loserRank))
 	}
 
 	// Nếu người thua có Sát Khí, giảm 1 tầng Sát Khí sau khi trả nợ máu bằng tử đạo

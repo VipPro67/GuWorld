@@ -366,6 +366,7 @@ Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** b�
 ### Cơ chế rơi đồ khi tử đạo & Thiên Đạo Tiêu Hủy (Death Penalty & Void Destruction)
 - **Tỷ lệ phạt cơ bản khi chết:** 40% Nguyên Thạch & Tiên Nguyên Thạch, 40% chủng loại nguyên liệu (tối đa 30 loại), 30% Cổ trùng (ngoại trừ Cổ Bản Mệnh; Cổ trang bị chỉ rơi khi Sát Khí > 5), 30% Bí phương.
 - **Hệ số Oán Khí:** Sát Khí tăng tỷ lệ hao hụt tài nguyên (`mult = 1.0 + level * 0.5`).
+- **Tích Sát Khí:** Chỉ tăng khi hạ Cổ Sư PvP (kẻ chủ động). Lượng tầng nhận = 1 + chênh lệch rank khi rank kẻ hạ cao hơn nạn nhân (cao hạ thấp tích nhanh hơn). Sát Khí là trạng thái vĩnh viễn — không giảm theo thời gian, chỉ bị trừ 1 tầng khi tử đạo.
 - **Thiên Đạo Tiêu Hủy (40% Void Destruction):** Trong số tài nguyên bị mất, 40% bị chấn nát tiêu hủy vĩnh viễn khỏi server (chống hành vi tử đạo để tuồn/chuyển tài nguyên cho tài khoản khác). 60% còn lại rơi ra bãi đất `map_ground_drops` tồn tại trong 10 phút.
 
 
