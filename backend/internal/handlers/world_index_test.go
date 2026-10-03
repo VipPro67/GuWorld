@@ -31,3 +31,15 @@ func TestPositionIndexSetMovesPlayerBetweenCoordinates(t *testing.T) {
 		t.Fatalf("new coordinates = %#v, want moved player", got)
 	}
 }
+
+func TestPositionIndexActiveEntriesExcludesStalePlayers(t *testing.T) {
+	idx := newPositionIndex(WorldPosIndexBucket)
+	now := time.Now()
+	idx.Set(WorldPosEntry{ID: "active", Region: "north", X: 10, Y: 10, TS: now.UnixMilli()})
+	idx.Set(WorldPosEntry{ID: "stale", Region: "north", X: 20, Y: 20, TS: now.Add(-WorldPosActiveWindow - time.Second).UnixMilli()})
+
+	entries := idx.ActiveEntries(10)
+	if len(entries) != 1 || entries[0].ID != "active" {
+		t.Fatalf("ActiveEntries() = %#v, want only active player", entries)
+	}
+}

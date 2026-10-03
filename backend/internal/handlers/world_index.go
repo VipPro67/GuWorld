@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -37,6 +39,15 @@ type WorldPosEntry struct {
 
 type worldBucketKey struct {
 	bx, by int
+}
+
+// ActiveWorldBucket is a bounded snapshot used by shared world workers. X/Y
+// identify a representative active player; Region prevents workers from
+// ticking entities merely because another region overlaps in coordinates.
+type ActiveWorldBucket struct {
+	BX, BY int
+	X, Y   int
+	Region string
 }
 
 // positionIndex is the in-memory spatial index of active players. It is the
@@ -180,6 +191,65 @@ func (idx *positionIndex) Len() int {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 	return len(idx.byID)
+}
+
+// ActiveBuckets returns at most limit occupied buckets. It intentionally
+// copies only scalar data while holding the read lock, so a fixed-tick worker
+// never keeps the position index locked during Redis or database work.
+func (idx *positionIndex) ActiveBuckets(limit int) []ActiveWorldBucket {
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+	if limit <= 0 {
+		return nil
+	}
+	now := time.Now().UnixMilli()
+	out := make([]ActiveWorldBucket, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	for key, entries := range idx.grid {
+		for _, e := range entries {
+			if e == nil || now-e.TS > WorldPosActiveWindow.Milliseconds() {
+				continue
+			}
+			identity := e.Region + ":" + strconv.Itoa(key.bx) + ":" + strconv.Itoa(key.by)
+			if _, ok := seen[identity]; ok {
+				continue
+			}
+			seen[identity] = struct{}{}
+			out = append(out, ActiveWorldBucket{BX: key.bx, BY: key.by, X: e.X, Y: e.Y, Region: e.Region})
+			if len(out) == limit {
+				return out
+			}
+		}
+	}
+	return out
+}
+
+// ActiveEntries returns a bounded snapshot of currently active players. World
+// runtimes with a different spatial granularity (for example monster AOI) use
+// this instead of coupling their bucket size to the position broadcast index.
+func (idx *positionIndex) ActiveEntries(limit int) []WorldPosEntry {
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+	if limit == 0 {
+		return nil
+	}
+	now := time.Now().UnixMilli()
+	capacity := len(idx.byID)
+	if limit > 0 && limit < capacity {
+		capacity = limit
+	}
+	out := make([]WorldPosEntry, 0, capacity)
+	for _, e := range idx.byID {
+		if e == nil || now-e.TS > WorldPosActiveWindow.Milliseconds() {
+			continue
+		}
+		out = append(out, *e)
+		if limit > 0 && len(out) == limit {
+			break
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // setWorldPosFromPlayer upserts a player's current position into the index.

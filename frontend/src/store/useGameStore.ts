@@ -2055,6 +2055,18 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      // Server-authoritative ordinary-monster state. The world store performs
+      // event-id deduplication and revision ordering before mutating entities.
+      wsManager.subscribe("world:combat", (payload: ApiResponseData) => {
+        try {
+          if (payload?.event_id) {
+            window.dispatchEvent(new CustomEvent("gu_world_combat", { detail: payload }));
+          }
+        } catch (err) {
+          console.error("Failed to process world combat event", err);
+        }
+      });
+
       // Listen for chat:world
       wsManager.subscribe("chat:world", (payload: ApiResponseData) => {
         try {

@@ -156,6 +156,7 @@ export interface SkillFxEvent {
 }
 
 export interface SelectedTarget {
+  instanceId?: string;
   x: number;
   y: number;
   cellType: string;
@@ -166,10 +167,40 @@ export interface SelectedTarget {
   maxHp: number;
 }
 
+export interface WorldMonster {
+  instance_id: string;
+  spawn_id: string;
+  monster_template_id: string;
+  region_id: string;
+  x: number;
+  y: number;
+  spawn_x: number;
+  spawn_y: number;
+  hp: number;
+  max_hp: number;
+  state: "IDLE" | "CHASE" | "ATTACK" | "RETURN" | "DEFEATED";
+  target_id?: string;
+  revision: number;
+  last_update_at: string;
+}
+
+export interface WorldCombatEvent {
+  event_id: string;
+  server_time: string;
+  region_id: string;
+  entity_id: string;
+  entity_revision: number;
+  event_type: string;
+  position: { x: number; y: number };
+  payload?: Record<string, unknown>;
+}
+
 import { BACKEND_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
 
 interface WorldStoreState {
+  monsters: Record<string, WorldMonster>;
+  seenCombatEvents: string[];
   objects: WorldObject[];
   nearbyCells: NearbyCell[];
   cellChunks: Record<string, CellChunk>;
@@ -201,6 +232,8 @@ interface WorldStoreState {
   invalidateCell: (x: number, y: number) => void;
   mergeWSCells: (cells: NearbyCell[]) => void;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
+  fetchMonsterSnapshot: (r?: number) => Promise<void>;
+  applyCombatEvent: (event: WorldCombatEvent) => void;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
   movePath: (x: number, y: number) => Promise<{
@@ -228,6 +261,8 @@ interface WorldStoreState {
 }
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
+  monsters: {},
+  seenCombatEvents: [],
   objects: [],
   nearbyCells: [],
   cellChunks: {},
@@ -346,7 +381,13 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       const res = await authFetch(`${BACKEND_URL}/api/explore/use_gu`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gu_instance_id: guInstanceId, target_x: tx, target_y: ty }),
+        body: JSON.stringify({
+          command_id: crypto.randomUUID(),
+          gu_instance_id: guInstanceId,
+          target_x: tx,
+          target_y: ty,
+          ...(curTarget?.instanceId ? { target: { kind: "monster", id: curTarget.instanceId } } : {}),
+        }),
       });
       const body = await res.text();
       let data;
@@ -384,12 +425,6 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
           if (data.target_defeated) {
             useUIStore.getState().addToast(`Tiêu diệt thành công ${data.target_name || "quái vật"}!`, "success");
             set({ selectedTarget: null });
-          } else if (data.target_hp !== undefined) {
-            set((s) => ({
-              selectedTarget: s.selectedTarget
-                ? { ...s.selectedTarget, hp: data.target_hp, maxHp: data.target_max_hp || s.selectedTarget.maxHp }
-                : null,
-            }));
           }
         } else if (data.effect_type) {
           get().triggerSkillFx(
@@ -587,6 +622,74 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     } catch (err) {
       console.error("fetchNearbyPlayers error:", err instanceof Error ? err.message : err);
     }
+  },
+
+  fetchMonsterSnapshot: async (r = 25) => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/world/monsters?r=${Math.min(25, Math.max(1, Math.round(r)))}`);
+      if (!res.ok) throw new Error("Không thể tải trạng thái quái vật");
+      const data = await res.json();
+      const list: WorldMonster[] = Array.isArray(data?.monsters) ? data.monsters : [];
+      const region = currentCellRegion();
+      set((s) => {
+        const monsters: Record<string, WorldMonster> = {};
+        for (const incoming of list) {
+          if (incoming.region_id !== region) continue;
+          const current = s.monsters[incoming.instance_id];
+          monsters[incoming.instance_id] = current && current.revision > incoming.revision ? current : incoming;
+        }
+        return {
+          monsters,
+          selectedTarget: s.selectedTarget?.instanceId && !monsters[s.selectedTarget.instanceId] ? null : s.selectedTarget,
+        };
+      });
+    } catch (err) {
+      console.error("fetchMonsterSnapshot error:", err instanceof Error ? err.message : err);
+    }
+  },
+
+  applyCombatEvent: (event) => {
+    set((s) => {
+      if (!event?.event_id || s.seenCombatEvents.includes(event.event_id)) return {};
+      const seenCombatEvents = [...s.seenCombatEvents, event.event_id].slice(-1000);
+      const current = s.monsters[event.entity_id];
+      if (current && event.entity_revision <= current.revision) return { seenCombatEvents };
+      if (event.event_type === "monster_defeated" || event.event_type === "monster_despawned") {
+        const monsters = { ...s.monsters };
+        delete monsters[event.entity_id];
+        return {
+          monsters,
+          seenCombatEvents,
+          selectedTarget: s.selectedTarget?.instanceId === event.entity_id ? null : s.selectedTarget,
+          targetingGu: s.selectedTarget?.instanceId === event.entity_id ? null : s.targetingGu,
+        };
+      }
+      if (!current) {
+        // A spawn event is followed by an AOI snapshot; never invent template
+        // data from an incomplete event payload.
+        if (event.event_type === "monster_spawned" || event.event_type === "monster_respawned") {
+          void get().fetchMonsterSnapshot();
+        }
+        return { seenCombatEvents };
+      }
+      const hp = typeof event.payload?.hp === "number" ? event.payload.hp : current.hp;
+      const next: WorldMonster = {
+        ...current,
+        x: event.position.x,
+        y: event.position.y,
+        hp,
+        revision: event.entity_revision,
+        state: event.event_type === "monster_returned" ? "RETURN" : current.state,
+        last_update_at: event.server_time,
+      };
+      return {
+        monsters: { ...s.monsters, [event.entity_id]: next },
+        seenCombatEvents,
+        selectedTarget: s.selectedTarget?.instanceId === event.entity_id
+          ? { ...s.selectedTarget, x: next.x, y: next.y, hp: next.hp, maxHp: next.max_hp }
+          : s.selectedTarget,
+      };
+    });
   },
 
   upsertPlayerPosition: (p) => {
