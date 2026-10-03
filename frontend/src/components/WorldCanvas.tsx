@@ -854,7 +854,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     const addRegionLabel = (z: { name: string }, rx: number, ry: number, rw: number, rh: number, color: number, fontSize: number, type: string) => {
       const label = new Text({
         text: z.name,
-        style: { fontSize, fill: color, fontFamily: "serif", stroke: { color: 0x000000, width: 4 }, fontWeight: "bold" },
+        style: { fontSize, fill: color, fontFamily: ["Lora", "Times New Roman", "serif"], stroke: { color: 0x000000, width: 4 }, fontWeight: "bold" },
       });
       label.anchor.set(0.5, 0.5);
 
