@@ -3300,7 +3300,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
           {dataTab === "gus" && (
             <CoreDataAdminTab kind="gus" rows={gus} loading={gusLoading}
-              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: { schema_version: 2, blocks: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
+              onCreate={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Active", base_mana_cost: 0, effects: [], food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: 0, is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "", _isNew: true })}
               onEdit={(g) => setGuEdit({ ...structuredClone(g), _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
               onCopy={(g) => setGuEdit({ ...structuredClone(g), id: "", _isNew: true, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })}
               onDelete={async (g) => { if (!confirm(`Xóa toàn bộ các rank của ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} />
@@ -3308,7 +3308,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
           {dataTab === "items" && (
             <CoreDataAdminTab kind="items" rows={items} loading={itemsLoading}
-              onCreate={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: { schema_version: 2, blocks: [] }, description: "", base_price: 0, image_url: "", _isNew: true })}
+              onCreate={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: [], description: "", base_price: 0, image_url: "", _isNew: true })}
               onEdit={(item) => setItemEdit({ ...structuredClone(item), effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
               onCopy={(item) => setItemEdit({ ...structuredClone(item), id: "", _isNew: true, effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
               onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/item-dictionary/${item.id}`, "DELETE"); if (ok) fetchItems(); }} />
@@ -4424,7 +4424,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 </div>
               </div>
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={itemEdit.description || ""} onChange={e => setItemEdit({...itemEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <GuEffectsEditor effects={itemEdit.effects || { schema_version: 2, blocks: [] }} source="item" effectKey={itemEdit.id || "new"} onChange={(effects) => setItemEdit({ ...itemEdit, effects })} />
+              <GuEffectsEditor effects={itemEdit.effects || []} source="item" effectKey={itemEdit.id || "new"} onChange={(effects) => setItemEdit({ ...itemEdit, effects })} />
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setItemEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>

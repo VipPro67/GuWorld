@@ -6,8 +6,8 @@ import { GuEffectsEditor, validateAllEffectEditors } from "./GuEffectsEditor";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const parseEffectsForEditor = (value: ApiResponseData) => {
-  if (typeof value !== "string") return value || { schema_version: 2, blocks: [] };
-  try { return JSON.parse(value); } catch { return { schema_version: 2, blocks: [] }; }
+  if (typeof value !== "string") return value || [];
+  try { return JSON.parse(value); } catch { return []; }
 };
 
 export const DictionariesAdminTab: React.FC<{
@@ -147,10 +147,10 @@ export const DictionariesAdminTab: React.FC<{
               setIsNew(true);
               setEditItem(
                 type === "constitution"
-                  ? { key: "", name: "", tier: 1, description: "", effects: { schema_version: 2, blocks: [] } }
+                  ? { key: "", name: "", tier: 1, description: "", effects: [] }
                   : type === "race"
-                  ? { key: "", name: "", description: "", effects: { schema_version: 2, blocks: [] } }
-                  : { key: "", name: "", description: "", effects: { schema_version: 2, blocks: [] }, default_duration_minutes: 30, blocked_actions: [] }
+                  ? { key: "", name: "", description: "", effects: [] }
+                  : { key: "", name: "", description: "", effects: [], default_duration_minutes: 30, blocked_actions: [] }
               );
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors cursor-pointer"
