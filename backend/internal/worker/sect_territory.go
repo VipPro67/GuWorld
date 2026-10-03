@@ -107,7 +107,10 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 
 	// 1a. Defender counts per sect
 	defenderCountMap := map[string]int{}
-	if dRows, err := tx.QueryContext(ctx, `SELECT sect_id, COUNT(*) FROM sect_defenders WHERE sect_id = ANY($1::text[]) GROUP BY sect_id`, pq.Array(sectIDs)); err == nil {
+	if dRows, err := tx.QueryContext(ctx, `SELECT sect_id, COUNT(*) FROM sect_defenders WHERE sect_id = ANY($1::text[]) GROUP BY sect_id`, pq.Array(sectIDs)); err != nil {
+		logger.S.Errorf("Sect Territory Worker: defender count query failed: %v", err)
+		return
+	} else {
 		for dRows.Next() {
 			var sid string
 			var cnt int
@@ -120,7 +123,10 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 
 	// 1b. Defender player IDs per sect
 	defenderIDsBySect := map[string]map[string]bool{}
-	if dRows, err := tx.QueryContext(ctx, `SELECT sect_id, player_id::text FROM sect_defenders WHERE sect_id = ANY($1::text[]) AND defender_type = 'member'`, pq.Array(sectIDs)); err == nil {
+	if dRows, err := tx.QueryContext(ctx, `SELECT sect_id, player_id::text FROM sect_defenders WHERE sect_id = ANY($1::text[]) AND defender_type = 'member'`, pq.Array(sectIDs)); err != nil {
+		logger.S.Errorf("Sect Territory Worker: defender IDs query failed: %v", err)
+		return
+	} else {
 		for dRows.Next() {
 			var sid string
 			var pid string
@@ -137,7 +143,10 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 	// 1c. Member player IDs per sect
 	memberIDsBySect := map[string][]string{}
 	allMemberIDSet := map[string]bool{}
-	if mRows, err := tx.QueryContext(ctx, `SELECT sect_id, player_id::text FROM sect_members WHERE sect_id = ANY($1::text[])`, pq.Array(sectIDs)); err == nil {
+	if mRows, err := tx.QueryContext(ctx, `SELECT sect_id, player_id::text FROM sect_members WHERE sect_id = ANY($1::text[])`, pq.Array(sectIDs)); err != nil {
+		logger.S.Errorf("Sect Territory Worker: member IDs query failed: %v", err)
+		return
+	} else {
 		for mRows.Next() {
 			var sid, pid string
 			if mRows.Scan(&sid, &pid) == nil {
@@ -206,6 +215,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		// Just update the tick time
 		if _, err := tx.Exec(`UPDATE sects SET last_territory_tick_at = now() WHERE id = ANY($1::text[])`, pq.Array(sectIDs)); err != nil {
 			logger.S.Errorf("Sect Territory Worker: batch update tick time failed: %v", err)
+			return
 		}
 	}
 
@@ -216,7 +226,10 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 			SELECT DISTINCT ON (rank) rank, id FROM item_dictionary
 			WHERE item_type = 'Material' AND rank >= 1 AND rank <= $1
 			ORDER BY rank, RANDOM()
-		`, maxSectLevel); err == nil {
+		`, maxSectLevel); err != nil {
+			logger.S.Errorf("Sect Territory Worker: material dictionary query failed: %v", err)
+			return
+		} else {
 			for matRows.Next() {
 				var rank int
 				var id string
@@ -233,20 +246,23 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		}
 
 		vaultMap := map[string]map[string]int{}
-		if vRows, err := tx.Query(`SELECT sect_id, item_id, quantity FROM sect_vault_materials WHERE sect_id = ANY($1::text[])`, pq.Array(vaultIDs)); err == nil {
-			for vRows.Next() {
-				var sid string
-				var itemID string
-				var qty int
-				if vRows.Scan(&sid, &itemID, &qty) == nil {
-					if vaultMap[sid] == nil {
-						vaultMap[sid] = map[string]int{}
-					}
-					vaultMap[sid][itemID] += qty
-				}
-			}
-			vRows.Close()
+		vRows, err := tx.Query(`SELECT sect_id, item_id, quantity FROM sect_vault_materials WHERE sect_id = ANY($1::text[])`, pq.Array(vaultIDs))
+		if err != nil {
+			logger.S.Errorf("Sect Territory Worker: vault materials query failed: %v", err)
+			return
 		}
+		for vRows.Next() {
+			var sid string
+			var itemID string
+			var qty int
+			if vRows.Scan(&sid, &itemID, &qty) == nil {
+				if vaultMap[sid] == nil {
+					vaultMap[sid] = map[string]int{}
+				}
+				vaultMap[sid][itemID] += qty
+			}
+		}
+		vRows.Close()
 
 		for _, sr := range activeSects {
 			qty := sectMatCredits[sr.id]
@@ -278,6 +294,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 				`, sid, matID, qty)
 				if err != nil {
 					logger.S.Errorf("Sect Territory Worker: failed to update vault material %s for sect %s: %v", matID, sid, err)
+					return
 				}
 			}
 		}
@@ -294,7 +311,10 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		if cRows, err := tx.Query(`
 			SELECT player_id, territory_pending, territory_credited_today, COALESCE(territory_credited_at::text, '')
 			FROM sect_members WHERE player_id = ANY($1::uuid[])
-		`, pq.Array(allMemberIDs)); err == nil {
+		`, pq.Array(allMemberIDs)); err != nil {
+			logger.S.Errorf("Sect Territory Worker: member states query failed: %v", err)
+			return
+		} else {
 			for cRows.Next() {
 				var pid string
 				var ms memberState
