@@ -49,7 +49,7 @@ cd backend
 go run ./cmd/server
 ```
 
-Backend mặc định nghe `:8080`, tự khởi tạo schema và các bản ghi hệ thống tối thiểu khi kết nối được PostgreSQL. Hãy import CSV trong Admin trước khi chơi và khởi động lại backend để nạp lại các registry được cache.
+Backend mặc định nghe `:8080`, tự khởi tạo schema và các bản ghi hệ thống tối thiểu khi kết nối được PostgreSQL. Quá trình này được serialize giữa các instance bằng PostgreSQL advisory lock và tự thử lại các lỗi lock tạm thời; cấu hình timeout/retry được mô tả trong `docs/DEVELOPMENT.md`. Hãy import CSV trong Admin trước khi chơi và khởi động lại backend để nạp lại các registry được cache.
 
 ### Frontend
 

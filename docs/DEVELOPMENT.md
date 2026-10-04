@@ -27,7 +27,9 @@ Các biến thường dùng:
 | `PORT` | Port backend, mặc định `8080`. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Kết nối PostgreSQL; có default local trong `db.Connect()`. |
 | `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS` | Timeout câu lệnh/chờ lock PostgreSQL cho request path; mặc định lần lượt 15000/10000 ms. |
-| `DB_MIGRATION_STATEMENT_TIMEOUT_MS`, `DB_MIGRATION_LOCK_TIMEOUT_MS` | Timeout riêng cho `InitSchema` lúc boot (backfill/consolidate trên bảng lớn); mặc định 300000/60000 ms. Request path vẫn giữ timeout chặt. |
+| `DB_MIGRATION_STATEMENT_TIMEOUT_MS`, `DB_MIGRATION_LOCK_TIMEOUT_MS` | Timeout riêng cho từng câu lệnh/lock của `InitSchema` lúc boot (backfill/consolidate trên bảng lớn); mặc định 300000/10000 ms. Request path vẫn giữ timeout chặt. |
+| `DB_MIGRATION_RETRY_ATTEMPTS`, `DB_MIGRATION_RETRY_DELAY_MS` | Số lần thử lại câu lệnh khởi tạo khi PostgreSQL trả lỗi lock/deadlock/serialization tạm thời và độ trễ ban đầu; mặc định 6 lần/1000 ms, giới hạn 20 lần/60000 ms và backoff tối đa 10 giây. |
+| `DB_MIGRATION_ADVISORY_LOCK_TIMEOUT_MS` | Thời gian tối đa chờ một instance GuWorld khác hoàn tất `InitSchema`; mặc định 120000 ms, tối đa 3600000 ms. |
 | `CORS_ALLOWED_ORIGINS` | Danh sách origin frontend, mặc định `http://localhost:3000`. |
 | `JWT_SECRET` | Ký token/cookie auth. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Cấu hình SMTP (ví dụ: Brevo) để gửi mã OTP đăng ký. |
@@ -80,6 +82,13 @@ Server sẽ:
 4. Load registry từ database. Nếu chưa có dữ liệu, vào Admin → **Dữ liệu** để import CSV rồi khởi động lại backend.
 5. Start workers.
 6. Listen HTTP.
+
+`InitSchema` dùng PostgreSQL advisory lock để chỉ một instance thay đổi schema tại
+một thời điểm, đồng thời thử lại có giới hạn khi gặp SQLSTATE `55P03`, `40P01`
+hoặc `40001`. Nếu vẫn hết thời gian chờ, hãy kiểm tra transaction dài hoặc
+`idle in transaction` trên PostgreSQL và tạm dừng import/traffic ghi trong cửa
+sổ migrate; không nên chỉ tăng timeout vô hạn. Với rolling deployment, nên chạy
+migration như một bước riêng trước khi đưa replica mới nhận traffic.
 
 ## Run frontend
 
