@@ -891,6 +891,7 @@ Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLarg
 
 **Phân lớp sinh nội dung**:
 - Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB.
+- Ô quái procedural trong AOI được materialize thành `WorldMonster` Redis với identity ổn định `procedural:<region>:<x>:<y>`; movement và combat sau đó được phát qua `world:combat`. Marker cell chỉ là fallback cho tới khi runtime replacement tại đúng tọa độ xuất hiện.
 - Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung.
 
 Import/Export qua Admin tab "Dữ liệu": bảng `region` (Region.csv), `map_cell` (MapCell.csv), `monster_spawn` (MonsterSpawn.csv). Sau khi import **restart backend** để nạp ZoneRegistry.

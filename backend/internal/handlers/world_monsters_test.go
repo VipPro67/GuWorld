@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -241,6 +242,59 @@ func TestSpawnMaterializationUsesAuthoritativePlayerRadius(t *testing.T) {
 	}
 	if spawnWithinPlayerRadius(monsterSpawnRow{RegionID: "field", X: 125, Y: 225}, player, WorldMonsterActivationRadius) {
 		t.Fatal("spawn in query square but outside authoritative radius was included")
+	}
+}
+
+func TestProceduralMonsterCellBecomesRuntimeSpawn(t *testing.T) {
+	entry := WorldPosEntry{Region: "dang_hon_son", X: 24798, Y: 13261}
+	previousCell, previousRegion, previousCleared := resolveWorldMonsterCell, deriveWorldMonsterRegion, worldMonsterCellCleared
+	resolveWorldMonsterCell = func(x, y int) models.Cell {
+		if x == entry.X && y == entry.Y {
+			return models.Cell{X: x, Y: y, Type: "Monster", Content: "monster_soul_devourer", Rank: 5, SubRank: 2}
+		}
+		return models.Cell{X: x, Y: y, Type: "Empty"}
+	}
+	deriveWorldMonsterRegion = func(int, int) string { return entry.Region }
+	worldMonsterCellCleared = func(string, int, int) bool { return false }
+	t.Cleanup(func() {
+		resolveWorldMonsterCell, deriveWorldMonsterRegion, worldMonsterCellCleared = previousCell, previousRegion, previousCleared
+	})
+	cell := resolveWorldMonsterCell(entry.X, entry.Y)
+	spawns := proceduralMonsterSpawns(entry, 1)
+	found := false
+	for _, spawn := range spawns {
+		if spawn.X == entry.X && spawn.Y == entry.Y {
+			found = spawn.MonsterID == cell.Content && spawn.ID == "procedural:dang_hon_son:24798:13261"
+		}
+	}
+	if !found {
+		t.Fatalf("procedural monster cell was not converted to a stable runtime spawn: %#v", spawns)
+	}
+	worldMonsterCellCleared = func(string, int, int) bool { return true }
+	if cleared := proceduralMonsterSpawns(entry, 1); len(cleared) != 0 {
+		t.Fatalf("cleared procedural cell rematerialized: %#v", cleared)
+	}
+}
+
+func TestProceduralMonsterSpawnIdentityRoundTripsToCell(t *testing.T) {
+	region, x, y, ok := proceduralMonsterCell("procedural:dang_hon_son:24798:13261")
+	if !ok || region != "dang_hon_son" || x != 24798 || y != 13261 {
+		t.Fatalf("round trip=(%q,%d,%d,%v)", region, x, y, ok)
+	}
+	if _, _, _, ok := proceduralMonsterCell("fixed-spawn-id"); ok {
+		t.Fatal("fixed spawn was classified as procedural")
+	}
+}
+
+func TestMonsterBucketCandidateRadiusCoversCornerAggro(t *testing.T) {
+	centerX, centerY := WorldMonsterAOIBucket/2, WorldMonsterAOIBucket/2
+	monsterX, monsterY := float64(WorldMonsterAOIBucket-1), float64(WorldMonsterAOIBucket-1)
+	playerX, playerY := 39, 31
+	if math.Hypot(float64(playerX)-monsterX, float64(playerY)-monsterY) > 12 {
+		t.Fatal("fixture player must be in aggro range")
+	}
+	if math.Hypot(float64(playerX-centerX), float64(playerY-centerY)) > worldMonsterBucketQueryRadius {
+		t.Fatal("bucket candidate query radius omits a valid corner target")
 	}
 }
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { reduceWorldCombatEvent, type WorldCombatEvent, type WorldMonster, type WorldMonsterReducerState } from "./worldMonsterReducer.ts";
+import { legacyMonsterHasRuntimeReplacement, reduceWorldCombatEvent, type WorldCombatEvent, type WorldMonster, type WorldMonsterReducerState } from "./worldMonsterReducer.ts";
 
 const monster = (overrides: Partial<WorldMonster> = {}): WorldMonster => ({
   instance_id: "instance-1", spawn_id: "spawn-1", monster_template_id: "wolf", region_id: "field",
@@ -56,4 +56,24 @@ test("respawn replaces the old spawn instance and clears its selection", () => {
   assert.equal(respawned.monsters["instance-2"].state, "IDLE");
   assert.equal(respawned.selectedTarget, null);
   assert.equal(respawned.targetingGu, null);
+});
+
+test("an empty runtime snapshot does not hide procedural cell monsters", () => {
+  assert.equal(legacyMonsterHasRuntimeReplacement({ x: 10, y: 12 }, {}), false);
+  assert.equal(legacyMonsterHasRuntimeReplacement({ x: 10, y: 12 }, {
+    "instance-1": monster({ x: 10, y: 12, spawn_x: 10, spawn_y: 12 }),
+  }), true);
+  assert.equal(legacyMonsterHasRuntimeReplacement({ x: 10, y: 12 }, {
+    "instance-1": monster({ x: 11, y: 12, spawn_x: 11, spawn_y: 12 }),
+  }), false);
+  assert.equal(legacyMonsterHasRuntimeReplacement({ x: 10, y: 12 }, {
+    "instance-1": monster({ x: 11, y: 12, spawn_x: 10, spawn_y: 12 }),
+  }), true);
+});
+
+test("records distinct informational combat events at the same entity revision", () => {
+  const started = reduceWorldCombatEvent(initial(), event({ event_id: "started", event_type: "action_started" }));
+  const resolved = reduceWorldCombatEvent(started, event({ event_id: "resolved", event_type: "action_resolved" }));
+  const damaged = reduceWorldCombatEvent(resolved, event({ event_id: "damaged", event_type: "entity_damaged" }));
+  assert.deepEqual(damaged.seenCombatEvents, ["started", "resolved", "damaged"]);
 });

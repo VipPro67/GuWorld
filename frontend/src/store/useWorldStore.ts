@@ -52,6 +52,7 @@ export const CELL_CHUNK_SIZE = 64;
 const MAX_CELL_CHUNKS = 512;
 
 const currentCellRegion = () => useGameStore.getState().player?.current_region ?? "";
+let monsterSnapshotRequest = 0;
 const chunkKey = (region: string, x: number, y: number) =>
   `${region}:${Math.floor(x / CELL_CHUNK_SIZE)},${Math.floor(y / CELL_CHUNK_SIZE)}`;
 const cellKey = (x: number, y: number) => `${x},${y}`;
@@ -213,7 +214,7 @@ interface WorldStoreState {
   invalidateCell: (x: number, y: number) => void;
   mergeWSCells: (cells: NearbyCell[]) => void;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
-  fetchMonsterSnapshot: (r?: number) => Promise<void>;
+  fetchMonsterSnapshot: (r?: number) => Promise<boolean>;
   applyCombatEvent: (event: WorldCombatEvent) => void;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
@@ -608,6 +609,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   },
 
   fetchMonsterSnapshot: async (r = 25) => {
+    const requestID = ++monsterSnapshotRequest;
     const requestedRegion = currentCellRegion();
     set((s) => s.monsterSnapshotRegion === requestedRegion
       ? {}
@@ -619,7 +621,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       const list: WorldMonster[] = Array.isArray(data?.monsters) ? data.monsters : [];
       const snapshotTime = Date.parse(typeof data?.server_time === "string" ? data.server_time : "");
       set((s) => {
-        if (currentCellRegion() !== requestedRegion) return {};
+        if (requestID !== monsterSnapshotRequest || currentCellRegion() !== requestedRegion) return {};
         const monsters: Record<string, WorldMonster> = {};
         for (const incoming of list) {
           if (incoming.region_id !== requestedRegion) continue;
@@ -644,8 +646,10 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
           targetingGu: removedSelected ? null : s.targetingGu,
         };
       });
+      return requestID === monsterSnapshotRequest && currentCellRegion() === requestedRegion;
     } catch (err) {
       console.error("fetchMonsterSnapshot error:", err instanceof Error ? err.message : err);
+      return false;
     }
   },
 

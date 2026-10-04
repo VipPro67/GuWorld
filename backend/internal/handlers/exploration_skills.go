@@ -375,6 +375,10 @@ func UseGuOnMap(c *gin.Context) {
 			player.PrimevalStones += float64(stonesGain)
 			logs = append(logs, fmt.Sprintf("💥 %s gây %.0f sát thương, tiêu diệt %s! Nhận +%d Nguyên Thạch.", specs.Name, damageDealt, targetName, stonesGain))
 			broadcastWorldCombat(updated, "monster_defeated", map[string]any{"killer_id": player.ID.String(), "damage": damageDealt})
+			if region, x, y, procedural := proceduralMonsterCell(updated.SpawnID); procedural {
+				_ = cache.SetCellCleared(region, x, y, player.ID.String(), clearedCellCooldown)
+				_ = cache.BroadcastMonsterKilled(x, y, targetName, region)
+			}
 		} else {
 			logs = append(logs, fmt.Sprintf("⚡ %s gây %.0f sát thương lên %s (HP %.0f/%.0f).", specs.Name, damageDealt, targetName, targetHP, targetMaxHP))
 			broadcastWorldCombat(updated, "entity_damaged", map[string]any{"source_id": player.ID.String(), "damage": damageDealt, "hp": targetHP, "max_hp": targetMaxHP})

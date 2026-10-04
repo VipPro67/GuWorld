@@ -40,11 +40,12 @@ const (
 	// Monster AOI is deliberately independent from the 300-cell player
 	// position broadcast index. The client investigation radius is capped at
 	// 25 cells, so 32-cell buckets keep a view to at most 3x3 small buckets.
-	WorldMonsterAOIBucket        = 32
-	WorldMonsterActivationRadius = 25
-	worldMonsterMaxBuckets       = 128
-	worldMonsterMaxPerTick       = 512
-	worldMonsterTickBudget       = 150 * time.Millisecond
+	WorldMonsterAOIBucket         = 32
+	WorldMonsterActivationRadius  = 25
+	worldMonsterMaxBuckets        = 128
+	worldMonsterMaxPerTick        = 512
+	worldMonsterTickBudget        = 150 * time.Millisecond
+	worldMonsterBucketQueryRadius = 35
 )
 
 type WorldMonster = cache.WorldMonster
@@ -81,11 +82,14 @@ var worldMonsterMetrics struct {
 var worldMonsterBucketCursor atomic.Uint64
 
 var (
-	worldMonstersInBucket   = cache.WorldMonstersInBucket
-	materializeWorldMonster = cache.MaterializeWorldMonster
-	casWorldMonster         = cache.CASWorldMonster
-	loadWorldCombatPlayers  = loadWorldCombatPlayerSnapshots
-	applyWorldMonsterAction = applyWorldMonsterAttack
+	worldMonstersInBucket    = cache.WorldMonstersInBucket
+	materializeWorldMonster  = cache.MaterializeWorldMonster
+	casWorldMonster          = cache.CASWorldMonster
+	loadWorldCombatPlayers   = loadWorldCombatPlayerSnapshots
+	applyWorldMonsterAction  = applyWorldMonsterAttack
+	resolveWorldMonsterCell  = ResolveCell
+	deriveWorldMonsterRegion = DeriveRegionAt
+	worldMonsterCellCleared  = func(region string, x, y int) bool { return isCellClearedRecently(region, x, y, clearedCellCooldown) }
 )
 
 type worldCombatPlayer struct {
@@ -309,6 +313,46 @@ func spawnWithinPlayerRadius(spawn monsterSpawnRow, player WorldPosEntry, radius
 	return dx*dx+dy*dy <= r*r
 }
 
+func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow {
+	spawns := make([]monsterSpawnRow, 0, 64)
+	minX, maxX := max(0, player.X-radius), min(WorldWidth-1, player.X+radius)
+	minY, maxY := max(0, player.Y-radius), min(WorldHeight-1, player.Y+radius)
+	for y := minY; y <= maxY; y++ {
+		for x := minX; x <= maxX; x++ {
+			dx, dy := int64(x-player.X), int64(y-player.Y)
+			if dx*dx+dy*dy > int64(radius)*int64(radius) {
+				continue
+			}
+			cell := resolveWorldMonsterCell(x, y)
+			if cell.Type != "Monster" || cell.Content == "" || deriveWorldMonsterRegion(x, y) != player.Region || worldMonsterCellCleared(player.Region, x, y) {
+				continue
+			}
+			spawns = append(spawns, monsterSpawnRow{
+				ID: fmt.Sprintf("procedural:%s:%d:%d", player.Region, x, y), RegionID: player.Region,
+				MonsterID: cell.Content, X: x, Y: y, RespawnSeconds: int(clearedCellCooldown.Seconds()), Rank: cell.Rank, SubRank: cell.SubRank,
+			})
+		}
+	}
+	return spawns
+}
+
+func proceduralMonsterCell(spawnID string) (region string, x, y int, ok bool) {
+	const prefix = "procedural:"
+	if !strings.HasPrefix(spawnID, prefix) {
+		return "", 0, 0, false
+	}
+	parts := strings.Split(strings.TrimPrefix(spawnID, prefix), ":")
+	if len(parts) != 3 {
+		return "", 0, 0, false
+	}
+	x, errX := strconv.Atoi(parts[1])
+	y, errY := strconv.Atoi(parts[2])
+	if errX != nil || errY != nil {
+		return "", 0, 0, false
+	}
+	return parts[0], x, y, true
+}
+
 func activeMonsterBuckets(players []WorldPosEntry, radius, limit int) []ActiveWorldBucket {
 	if radius < 0 || limit <= 0 {
 		return nil
@@ -385,6 +429,7 @@ func GetWorldMonsters(c *gin.Context) {
 	}
 	defer rows.Close()
 	monsters := make([]WorldMonster, 0, 32)
+	occupied := make(map[[2]int]struct{}, 32)
 	now := time.Now().UTC()
 	for rows.Next() {
 		var spawn monsterSpawnRow
@@ -403,11 +448,27 @@ func GetWorldMonsters(c *gin.Context) {
 			logger.S.Warnf("materialize monster spawn %s: %v", spawn.ID, err)
 			continue
 		}
+		occupied[[2]int{spawn.X, spawn.Y}] = struct{}{}
 		if monster.State != MonsterStateDefeated {
 			monsters = append(monsters, monster)
 		}
 		if created {
 			broadcastWorldCombat(monster, "monster_spawned", nil)
+		}
+	}
+	for _, spawn := range proceduralMonsterSpawns(entry, radius) {
+		if _, exists := occupied[[2]int{spawn.X, spawn.Y}]; exists {
+			continue
+		}
+		monster, created, err := materializeSpawn(c.Request.Context(), spawn, now)
+		if err != nil {
+			continue
+		}
+		if monster.State != MonsterStateDefeated {
+			monsters = append(monsters, monster)
+		}
+		if created {
+			broadcastWorldCombat(monster, "monster_spawned", map[string]any{"procedural": true})
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": now})
@@ -610,7 +671,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 		}
 		bucketCenterX := b.BX*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
 		bucketCenterY := b.BY*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
-		candidates := worldPosIndex.Nearby(bucketCenterX, bucketCenterY, WorldMonsterAOIBucket/2+12, "")
+		candidates := worldPosIndex.Nearby(bucketCenterX, bucketCenterY, worldMonsterBucketQueryRadius, "")
 		needsCombatPlayers := false
 		for _, monster := range monsters {
 			if monster.State == MonsterStateAttack && (monster.NextAttackAt.IsZero() || !monster.NextAttackAt.After(now)) {
