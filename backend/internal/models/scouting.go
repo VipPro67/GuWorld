@@ -173,7 +173,7 @@ type DivineGuRequest struct {
 
 // DivineGuHolderInfo represents intelligence on an entity holding or listing the Gu
 type DivineGuHolderInfo struct {
-	HolderType     string       `json:"holder_type"` // "player" | "sect_vault" | "auction_listing"
+	HolderType     string       `json:"holder_type"` // "player" | "sect_vault" | "auction_listing" | "ground_drop"
 	HolderUsername string       `json:"holder_username,omitempty"`
 	HolderName     string       `json:"holder_name,omitempty"`
 	Region         string       `json:"region,omitempty"`
@@ -188,21 +188,22 @@ type DivineGuHolderInfo struct {
 
 // DivineGuReport contains deduced intelligence on a Gu worm
 type DivineGuReport struct {
-	GuID           string               `json:"gu_id"`
-	GuName         string               `json:"gu_name"`
-	Rank           int                  `json:"rank"`
-	Path           string               `json:"path"`
-	IsImmortal     bool                 `json:"is_immortal"`
-	IsRefined      bool                 `json:"is_refined"`
-	WorldCount     int                  `json:"world_count"`
-	PlayerCount    int                  `json:"player_count"`
-	SectVaultCount int                  `json:"sect_vault_count"`
-	MarketCount    int                  `json:"market_count"`
-	Holders        []DivineGuHolderInfo `json:"holders,omitempty"`
-	FoodHint       string               `json:"food_hint,omitempty"`
-	RecipeHint     string               `json:"recipe_hint,omitempty"`
-	NaturalHabitat string               `json:"natural_habitat,omitempty"`
-	LoreStatus     string               `json:"lore_status"`
+	GuID            string               `json:"gu_id"`
+	GuName          string               `json:"gu_name"`
+	Rank            int                  `json:"rank"`
+	Path            string               `json:"path"`
+	IsImmortal      bool                 `json:"is_immortal"`
+	IsRefined       bool                 `json:"is_refined"`
+	WorldCount      int                  `json:"world_count"`
+	PlayerCount     int                  `json:"player_count"`
+	SectVaultCount  int                  `json:"sect_vault_count"`
+	MarketCount     int                  `json:"market_count"`
+	GroundDropCount int                  `json:"ground_drop_count"`
+	Holders         []DivineGuHolderInfo `json:"holders,omitempty"`
+	FoodHint        string               `json:"food_hint,omitempty"`
+	RecipeHint      string               `json:"recipe_hint,omitempty"`
+	NaturalHabitat  string               `json:"natural_habitat,omitempty"`
+	LoreStatus      string               `json:"lore_status"`
 }
 
 // DivineGuResponse is the outcome of a Gu deduction
