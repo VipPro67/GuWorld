@@ -2,7 +2,7 @@
 
 
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -32,10 +32,38 @@ import {
   extractGuEffectBadges,
   removeAccents,
 } from "@/lib/gu-effect-search";
-
+import WikiPagination from "@/components/WikiPagination";
+import { getPaginationInfo, type PageSize } from "@/lib/pagination";
 
 // Types
 type TabType = "guides" | "gus" | "items" | "recipes" | "monsters" | "regions";
+
+const DEFAULT_PAGE_SIZES: Record<TabType, PageSize> = {
+  guides: "all",
+  gus: 36,
+  items: 36,
+  recipes: 30,
+  monsters: 24,
+  regions: 20,
+};
+
+const TAB_PAGE_SIZE_OPTIONS: Record<TabType, PageSize[]> = {
+  guides: ["all"],
+  gus: [24, 36, 60, 120, "all"],
+  items: [24, 36, 60, 120, "all"],
+  recipes: [20, 30, 50, 100, "all"],
+  monsters: [24, 48, 96, "all"],
+  regions: [10, 20, 40, "all"],
+};
+
+const TAB_ITEM_LABELS: Record<TabType, string> = {
+  guides: "hướng dẫn",
+  gus: "Cổ trùng",
+  items: "Vật phẩm",
+  recipes: "Cổ phương",
+  monsters: "Quái vật",
+  regions: "Khu vực",
+};
 
 interface Props {
   initialGus: GuDictionaryItem[];
@@ -118,6 +146,10 @@ export default function WikiClientView({
   // Tabs State
   const [activeTab, setActiveTab] = useState<TabType>("guides");
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZES["guides"]);
+
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -160,7 +192,43 @@ export default function WikiClientView({
     setMonsterRank("all");
     setRegionZoneType("all");
     setRegionRank("all");
+    setCurrentPage(1);
   };
+
+  // Reset current page when filters or search query change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    guRank,
+    guPath,
+    guRarity,
+    guType,
+    guEffect,
+    itemRank,
+    itemType,
+    recipeRank,
+    recipeSort,
+    monsterType,
+    monsterRank,
+    regionZoneType,
+    regionRank,
+  ]);
+
+  // Read URL parameters on mount (e.g. /wiki?tab=recipes&search=xyz)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab") as TabType | null;
+    const searchParam = params.get("search");
+    if (tabParam && ["guides", "gus", "items", "recipes", "monsters", "regions"].includes(tabParam)) {
+      setActiveTab(tabParam);
+      setPageSize(DEFAULT_PAGE_SIZES[tabParam] || 36);
+    }
+    if (searchParam) {
+      setSearchQuery(searchParam);
+    }
+  }, []);
 
   const hasActiveFilters = useMemo(() => {
     if (searchQuery.trim()) return true;
@@ -360,6 +428,8 @@ export default function WikiClientView({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSearchQuery("");
+    setCurrentPage(1);
+    setPageSize(DEFAULT_PAGE_SIZES[tab] || 36);
   };
 
   // Filtered lists
@@ -469,9 +539,57 @@ export default function WikiClientView({
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [initialRegions, cleanSearch, regionZoneType]);
 
+  // Pagination metadata and sliced items
+  const currentTotalItems = useMemo(() => {
+    switch (activeTab) {
+      case "gus": return filteredGus.length;
+      case "items": return filteredItems.length;
+      case "recipes": return filteredRecipes.length;
+      case "monsters": return filteredMonsters.length;
+      case "regions": return filteredRegions.length;
+      default: return 0;
+    }
+  }, [activeTab, filteredGus.length, filteredItems.length, filteredRecipes.length, filteredMonsters.length, filteredRegions.length]);
+
+  const paginationInfo = useMemo(() => {
+    return getPaginationInfo(currentTotalItems, currentPage, pageSize);
+  }, [currentTotalItems, currentPage, pageSize]);
+
+  const paginatedGus = useMemo(() => {
+    if (activeTab !== "gus") return [];
+    if (pageSize === "all") return filteredGus;
+    return filteredGus.slice(paginationInfo.startIndex, paginationInfo.endIndex);
+  }, [activeTab, pageSize, filteredGus, paginationInfo.startIndex, paginationInfo.endIndex]);
+
+  const paginatedItems = useMemo(() => {
+    if (activeTab !== "items") return [];
+    if (pageSize === "all") return filteredItems;
+    return filteredItems.slice(paginationInfo.startIndex, paginationInfo.endIndex);
+  }, [activeTab, pageSize, filteredItems, paginationInfo.startIndex, paginationInfo.endIndex]);
+
+  const paginatedRecipes = useMemo(() => {
+    if (activeTab !== "recipes") return [];
+    if (pageSize === "all") return filteredRecipes;
+    return filteredRecipes.slice(paginationInfo.startIndex, paginationInfo.endIndex);
+  }, [activeTab, pageSize, filteredRecipes, paginationInfo.startIndex, paginationInfo.endIndex]);
+
+  const paginatedMonsters = useMemo(() => {
+    if (activeTab !== "monsters") return [];
+    if (pageSize === "all") return filteredMonsters;
+    return filteredMonsters.slice(paginationInfo.startIndex, paginationInfo.endIndex);
+  }, [activeTab, pageSize, filteredMonsters, paginationInfo.startIndex, paginationInfo.endIndex]);
+
+  const paginatedRegions = useMemo(() => {
+    if (activeTab !== "regions") return [];
+    if (pageSize === "all") return filteredRegions;
+    return filteredRegions.slice(paginationInfo.startIndex, paginationInfo.endIndex);
+  }, [activeTab, pageSize, filteredRegions, paginationInfo.startIndex, paginationInfo.endIndex]);
+
   // Navigate to Gu tab and filter by name
   const locateGu = (guId: string) => {
     setActiveTab("gus");
+    setPageSize(DEFAULT_PAGE_SIZES["gus"]);
+    setCurrentPage(1);
     const target = guMap.get(guId);
     if (target) {
       setSearchQuery(target.name);
@@ -482,6 +600,8 @@ export default function WikiClientView({
 
   const locateMonster = (monsterId: string) => {
     setActiveTab("monsters");
+    setPageSize(DEFAULT_PAGE_SIZES["monsters"]);
+    setCurrentPage(1);
     const target = monsterMap.get(monsterId);
     if (target) {
       setSearchQuery(target.name);
@@ -492,6 +612,8 @@ export default function WikiClientView({
 
   const locateRegion = (regionId: string) => {
     setActiveTab("regions");
+    setPageSize(DEFAULT_PAGE_SIZES["regions"]);
+    setCurrentPage(1);
     const target = regionMap.get(regionId);
     if (target) {
       setSearchQuery(target.name);
@@ -903,44 +1025,62 @@ export default function WikiClientView({
               </div>
             )}
 
-            {/* Results count & Quick reset */}
-            <div className="flex items-center justify-between text-xs font-mono text-[var(--text-muted)] pt-1">
-              <div>
-                <span>Hiển thị </span>
-                <span className="font-bold text-[var(--text-primary)]">
-                  {activeTab === "gus"
-                    ? filteredGus.length
-                    : activeTab === "items"
-                    ? filteredItems.length
-                    : activeTab === "recipes"
-                    ? filteredRecipes.length
-                    : activeTab === "monsters"
-                    ? filteredMonsters.length
-                    : filteredRegions.length}
-                </span>
-                <span> / </span>
-                <span>
-                  {activeTab === "gus"
-                    ? initialGus.length
-                    : activeTab === "items"
-                    ? initialItems.length
-                    : activeTab === "recipes"
-                    ? initialRecipes.length
-                    : activeTab === "monsters"
-                    ? initialMonsters.length
-                    : initialRegions.length}
-                </span>
-                <span> {activeTab === "gus" ? "Cổ trùng" : activeTab === "items" ? "Vật phẩm" : activeTab === "recipes" ? "Cổ phương" : activeTab === "monsters" ? "Quái vật" : "Khu vực"}</span>
+            {/* Results count, Quick reset, and Compact Pagination */}
+            <div id="wiki-results-anchor" className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[var(--text-muted)] pt-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <div>
+                  <span>Hiển thị </span>
+                  <span className="font-bold text-[var(--text-primary)]">
+                    {activeTab === "gus"
+                      ? filteredGus.length.toLocaleString()
+                      : activeTab === "items"
+                      ? filteredItems.length.toLocaleString()
+                      : activeTab === "recipes"
+                      ? filteredRecipes.length.toLocaleString()
+                      : activeTab === "monsters"
+                      ? filteredMonsters.length.toLocaleString()
+                      : filteredRegions.length.toLocaleString()}
+                  </span>
+                  <span> / </span>
+                  <span>
+                    {activeTab === "gus"
+                      ? initialGus.length.toLocaleString()
+                      : activeTab === "items"
+                      ? initialItems.length.toLocaleString()
+                      : activeTab === "recipes"
+                      ? initialRecipes.length.toLocaleString()
+                      : activeTab === "monsters"
+                      ? initialMonsters.length.toLocaleString()
+                      : initialRegions.length.toLocaleString()}
+                  </span>
+                  <span> {TAB_ITEM_LABELS[activeTab]}</span>
+                </div>
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 font-mono transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Đặt lại bộ lọc</span>
+                  </button>
+                )}
               </div>
-              {hasActiveFilters && (
-                <button
-                  onClick={resetFilters}
-                  className="inline-flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 font-mono transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Đặt lại bộ lọc</span>
-                </button>
-              )}
+
+              {/* Compact pagination controls at top */}
+              <WikiPagination
+                compact
+                currentPage={paginationInfo.currentPage}
+                totalPages={paginationInfo.totalPages}
+                totalItems={paginationInfo.totalItems}
+                pageSize={pageSize}
+                startIndex={paginationInfo.startIndex}
+                endIndex={paginationInfo.endIndex}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={TAB_PAGE_SIZE_OPTIONS[activeTab]}
+                itemLabel={TAB_ITEM_LABELS[activeTab]}
+                scrollTargetId="wiki-results-anchor"
+              />
             </div>
           </div>
         )}
@@ -1016,8 +1156,9 @@ export default function WikiClientView({
                 <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy Cổ trùng nào trùng khớp với bộ lọc</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredGus.map((gu) => {
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {paginatedGus.map((gu) => {
                   const effectBadges = extractGuEffectBadges(gu, 3);
                   return (
                     <Link
@@ -1154,8 +1295,22 @@ export default function WikiClientView({
                   );
                 })}
               </div>
-            )}
-          </div>
+              <WikiPagination
+                currentPage={paginationInfo.currentPage}
+                totalPages={paginationInfo.totalPages}
+                totalItems={paginationInfo.totalItems}
+                pageSize={pageSize}
+                startIndex={paginationInfo.startIndex}
+                endIndex={paginationInfo.endIndex}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={TAB_PAGE_SIZE_OPTIONS["gus"]}
+                itemLabel="Cổ trùng"
+                scrollTargetId="wiki-results-anchor"
+              />
+            </>
+          )}
+        </div>
         )}
 
         {/* 3. ITEMS TAB */}
@@ -1167,8 +1322,9 @@ export default function WikiClientView({
                 <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy vật phẩm nào trùng khớp với bộ lọc</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredItems.map((item) => (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {paginatedItems.map((item) => (
                   <div
                     key={item.id}
                     className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-sky-500/20 transition-all bg-gradient-to-br from-[var(--bg-card)] to-zinc-900/10 shadow-sm"
@@ -1256,8 +1412,22 @@ export default function WikiClientView({
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+              <WikiPagination
+                currentPage={paginationInfo.currentPage}
+                totalPages={paginationInfo.totalPages}
+                totalItems={paginationInfo.totalItems}
+                pageSize={pageSize}
+                startIndex={paginationInfo.startIndex}
+                endIndex={paginationInfo.endIndex}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={TAB_PAGE_SIZE_OPTIONS["items"]}
+                itemLabel="Vật phẩm"
+                scrollTargetId="wiki-results-anchor"
+              />
+            </>
+          )}
+        </div>
         )}
 
         {/* 4. RECIPES TAB */}
@@ -1269,8 +1439,9 @@ export default function WikiClientView({
                 <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy công thức nào trùng khớp với bộ lọc</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {filteredRecipes.map((recipe) => {
+              <>
+                <div className="space-y-3">
+                {paginatedRecipes.map((recipe) => {
                   const targetGu = guMap.get(recipe.target_gu_id);
                   const targetName = targetGu ? targetGu.name : recipe.target_gu_id;
 
@@ -1410,8 +1581,22 @@ export default function WikiClientView({
                   );
                 })}
               </div>
-            )}
-          </div>
+              <WikiPagination
+                currentPage={paginationInfo.currentPage}
+                totalPages={paginationInfo.totalPages}
+                totalItems={paginationInfo.totalItems}
+                pageSize={pageSize}
+                startIndex={paginationInfo.startIndex}
+                endIndex={paginationInfo.endIndex}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={TAB_PAGE_SIZE_OPTIONS["recipes"]}
+                itemLabel="Cổ phương"
+                scrollTargetId="wiki-results-anchor"
+              />
+            </>
+          )}
+        </div>
         )}
 
         {/* 5. MONSTERS TAB */}
@@ -1419,12 +1604,13 @@ export default function WikiClientView({
           <div>
             {filteredMonsters.length === 0 ? (
               <div className="text-center py-20 bg-zinc-900/10 rounded-2xl border border-[var(--border)] border-dashed">
-      wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww          <ShieldAlert className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
+                <ShieldAlert className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
                 <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy quái vật nào trùng khớp với bộ lọc</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredMonsters.map((monster) => {
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {paginatedMonsters.map((monster) => {
                   const regions = monsterRegionMap.get(monster.id) || [];
                   const lootTable = lootTableMap.get(monster.loot_table_id);
 
@@ -1540,8 +1726,22 @@ export default function WikiClientView({
                   );
                 })}
               </div>
-            )}
-          </div>
+              <WikiPagination
+                currentPage={paginationInfo.currentPage}
+                totalPages={paginationInfo.totalPages}
+                totalItems={paginationInfo.totalItems}
+                pageSize={pageSize}
+                startIndex={paginationInfo.startIndex}
+                endIndex={paginationInfo.endIndex}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={TAB_PAGE_SIZE_OPTIONS["monsters"]}
+                itemLabel="Quái vật"
+                scrollTargetId="wiki-results-anchor"
+              />
+            </>
+          )}
+        </div>
         )}
 
         {/* 6. REGIONS TAB */}
@@ -1553,8 +1753,9 @@ export default function WikiClientView({
                 <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy khu vực nào trùng khớp với bộ lọc</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredRegions.map((region) => {
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {paginatedRegions.map((region) => {
                   const wildGus = region.pool_weights?.wild_gus || [];
                   const resources = region.pool_weights?.resources || [];
                   const monstersInRegion = regionMonsterMap.get(region.id) || [];
@@ -1677,8 +1878,22 @@ export default function WikiClientView({
                   );
                 })}
               </div>
-            )}
-          </div>
+              <WikiPagination
+                currentPage={paginationInfo.currentPage}
+                totalPages={paginationInfo.totalPages}
+                totalItems={paginationInfo.totalItems}
+                pageSize={pageSize}
+                startIndex={paginationInfo.startIndex}
+                endIndex={paginationInfo.endIndex}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={TAB_PAGE_SIZE_OPTIONS["regions"]}
+                itemLabel="Khu vực"
+                scrollTargetId="wiki-results-anchor"
+              />
+            </>
+          )}
+        </div>
         )}
       </div>
     </div>

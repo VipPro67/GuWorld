@@ -603,6 +603,7 @@ func TestWorldMonsterSimultaneousAttacksDeathExactlyOnce(t *testing.T) {
 }
 
 func TestMaterializeSpawnReusesRuntimeWhileTTLRemains(t *testing.T) {
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
 	previousMaterialize := materializeWorldMonster
 	previousTemplate, hadTemplate := models.MonsterRegistry["ttl-test"]
 	t.Cleanup(func() {
