@@ -45,7 +45,7 @@ func TestSpecKnownBehaviours(t *testing.T) {
 	for _, id := range []string{
 		StatusBurn, StatusFear, StatusConfuse, StatusStealth, StatusSleep,
 		StatusBlind, StatusCharm, StatusBind, StatusHaste, StatusArmorBreak,
-		StatusDamageReduction, StatusInvincible, StatusEvasion, StatusReviveLock,
+		StatusDamageReduction, StatusInvincible, StatusLastStand, StatusEvasion, StatusReviveLock,
 		StatusBleed, StatusPoison, StatusStun, StatusSlow, StatusSlow1,
 		StatusSlowDamage, StatusWeak, StatusFreeze, StatusSilence,
 		StatusThorns, StatusRegen, StatusAtkUp, StatusDefUp, StatusTaunt,

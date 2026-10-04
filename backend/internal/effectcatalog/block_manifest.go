@@ -159,6 +159,11 @@ func init() {
 	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY")
 	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE")
 	register("ON_HIT", "combat", "BYPASS_SHIELD")
+	NativeHooks["GUARANTEED_HIT"] = NativeHook{
+		Triggers: values("ON_ACTION", "ON_HIT", "COMBAT_PASSIVE"),
+		Params:   map[string]ParamSpec{},
+		Domain:   "combat",
+	}
 	NativeHooks["PERSIST_STATUS_ON_HIT"] = NativeHook{
 		Triggers: values("ON_HIT", "ON_ACTION"),
 		Params: map[string]ParamSpec{

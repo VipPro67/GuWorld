@@ -443,7 +443,7 @@ Các trường quan trọng trong dictionary:
   - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Ngoài các trigger thế giới (`ON_TICK`, `ON_CONSUME`, `ON_USE`), combat hỗ trợ `ON_CAST`, `ON_HIT`, `BEFORE_HIT`, `BEFORE_ENEMY_ATTACK`, `ON_TURN_START`, `ON_DEATH`, `ON_BATTLE_START` và `COMBAT_PASSIVE` (`PASSIVE` cũ vẫn hợp lệ, cùng nghĩa).
     - **Timing kích hoạt (xem `effectcatalog/timing.go`):** `ALWAYS_ON` (race/constitution/status còn hạn/Cổ equipped-ACTIVE, resolve qua `gamefx.Get` mỗi lần đọc) / `ON_ACTION` (`active.*` khi ra đòn, `ON_CONSUME`/`ON_USE` khi dùng Cổ) / `ON_EVENT` (hook combat + status trận) / `SCHEDULED` (`growth`, `ON_TICK`, hết hạn status) / `CAPABILITY` (cổng quyền, không tự chạy) / `META` (`description`).
     - Simulator nhận một snapshot mechanic bất biến được biên dịch khi bắt đầu trận. `gu_id`/`SourceID` chỉ còn dùng cho định danh, log, ưu tiên và trừ độ đói; thay ID nhưng giữ nguyên effect phải cho cùng hành vi.
-    - Các mechanic đặc thù hiện đã data-driven gồm: `POEM_INTENT`, `SUMMON_WOLF_FRONTLINE`, `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE`, `BYPASS_SHIELD`, `FIRST_TURN_EVADE`, `SEIZE_INITIATIVE`, `DOUBLE_DAMAGE_DEALT`, `REBORN`, `FORGET_INTENT_INTERRUPT`, `FORGET_WILL_CONFUSE`.
+    - Các mechanic đặc thù hiện đã data-driven gồm: `POEM_INTENT`, `SUMMON_WOLF_FRONTLINE`, `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE`, `BYPASS_SHIELD`, `GUARANTEED_HIT`, `FIRST_TURN_EVADE`, `SEIZE_INITIATIVE`, `DOUBLE_DAMAGE_DEALT`, `REBORN`, `FORGET_INTENT_INTERRUPT`, `FORGET_WILL_CONFUSE`.
     - `SEIZE_INITIATIVE` (`event_trigger: ON_BATTLE_START`, Thỉnh Đạo Hữu Tiên Hành Cổ): trên lượt 1, nếu thọ nguyên đối thủ chính (`Enemies[0]`; quái dùng bảng quy đổi theo rank, Cổ sư dùng `players.lifespan`) không hơn `lifespan_ratio` (default 3) lần thọ nguyên chủ Cổ thì chủ Cổ nhảy lên đầu thứ tự hành động, địch vẫn đánh sau theo tốc độ thường (không bỏ lượt).
     - `REBORN` thống nhất (`mode: rewind` reset cả trận / `in_place` đứng dậy tại chỗ): `chance` (0..1, required), `mode`, `max_uses` (0–10, default 1; 0 = hồi sinh vô hạn), `turn1_guaranteed`, `revive_hp_percent` (default 0.5), `clear_debuffs` (default true), `empower_attack/speed/shield_percent` + `empower_turns` (default 100; stack `ATK_UP`/`HASTE` + khiên mỗi lần sống dậy). Counter `rebornUses` sống qua rewind; `REVIVE_LOCK` chặn cả 2 mode; mode `rewind` ưu tiên khi cùng lượt có cả 2. **Phe địch chỉ hồi sinh `in_place`** (không rewind); mode bỏ trống ở phe ta = `rewind` như cũ.
     - `BYPASS_SHIELD` (`ON_HIT`) chỉ xuyên Khiên Ảo — không trừ thủ (muốn trừ thủ dùng `ignore_defense*`). `FIRST_TURN_EVADE` chỉ né đòn đánh đầu tiên Lượt 1 (multi-hit/AoE sau đó vẫn trúng, rider `damage_hp_percent`/strip của đòn bị né cũng bị bỏ). Đòn đánh thường fallback chạy qua `runOne` nên chịu `FORGET_INTENT/WILL`, backlash, mana, hunger và ngộ đạo như đòn thường.
@@ -560,7 +560,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | `ON_TURN_START` | `POEM_INTENT` | self/enemies; hook params | simulator; combat state | effect timing + catalog |
 | `ON_BATTLE_START` | `SEIZE_INITIATIVE` | self vs primary enemy; lifespan ratio | simulator; initiative snapshot | engine + catalog |
 | `ON_CAST` | `SUMMON_WOLF_FRONTLINE`, `FULL_SOUL_HEAL`, `SWORD_DRAGON_TRANSFORM`, `BORROW_PAST_POWER`, `UNRAVEL_RIDDLE`, `CHAOS_GAMBLE` | hook-declared combat targets; typed params required | simulator; combat state | engine/effect timing + catalog |
-| `ON_HIT` | `BYPASS_SHIELD` | event targets; bool | simulator; hit event | engine + catalog |
+| `ON_HIT` | `BYPASS_SHIELD`, `GUARANTEED_HIT` | event targets; bool | simulator; hit event (GUARANTEED_HIT bỏ qua Evasion/Blind/First Turn Evade/Forget Will Miss) | engine + catalog |
 | `BEFORE_HIT` | `FIRST_TURN_EVADE` | self; bool/turn gate; Định Tiên Du rank 9 mang (rank 6–8 chỉ `portal_create` + `movement`) | simulator; combat state | engine + catalog |
 | `PASSIVE` | `DOUBLE_DAMAGE_DEALT` | self; multiplier | simulator; combat snapshot (`COMBAT_PASSIVE` là tên v2) | engine + catalog |
 | `CAPABILITY` | `MARKETPLACE_ACCESS`, `REMOTE_TRADE`, `CHAT_CONNECT`, `CHAT_PERCEIVE`, `IGNORE_MOVEMENT_RANGE`, `LOOT_PREVIEW`, `DISGUISE`, `CHANGE_FORM_DISGUISE`, `PERFECT_DISGUISE`, `ARENA_IDENTITY_MASK`, `SACRIFICE_NPC` | self/capability subject; bool/range/level theo schema hook | marketplace/trade/chat/scouting/world handlers; owner domain tương ứng | catalog + handler/scouting characterization |
@@ -748,7 +748,7 @@ Cấu trúc flat v2 của mỗi block:
 | **STEALTH** | Special | CÓ (4) | **CÓ (registry)** |
 | **SLEEP** | Control | CÓ (2) | **CÓ (registry)** |
 | **BLIND / CHARM / BIND** | Stat/Control | CÓ (1) | **CÓ (registry)** |
-| HASTE, ARMOR_BREAK, DAMAGE_REDUCTION_UP, INVINCIBLE, EVASION, REVIVE_LOCK | Buff/Debuff | Không | **CÓ (registry)** |
+| HASTE, ARMOR_BREAK, DAMAGE_REDUCTION_UP, INVINCIBLE, LAST_STAND, EVASION, REVIVE_LOCK | Buff/Debuff | Không | **CÓ (registry)** |
 
 **Bảng D — Mapping key cũ → key chuẩn** (dùng key chuẩn khi thêm Cổ mới):
 
@@ -763,6 +763,8 @@ Cấu trúc flat v2 của mỗi block:
 | `slow`/`freeze`/`sleep`/… | `apply_status: [{id:"SLOW",...}]` | **Đã migrate xong** (Gu.csv + keys chết `invulnerable_ticks`→`INVINCIBLE`, `absorb_damage_flat`→`shield_flat`, `speed_boost_flat`→`HASTE`) |
 | `passive.evasion` / `STAT_MOD EVASION` / `self_evasion_boost_percent` | `apply_status: [{id:"EVASION",...}]` | **Đã migrate xong** — `EVASION` giờ là status tự buff có `chance`/`turns`/`value`, nguồn né duy nhất trong combat |
 | `passive.accuracy` / `STAT_MOD ACCURACY` | — | **Đã gỡ khỏi hệ thống** (chỉ số trừ thẳng vào xác suất né 0..1 nên vô hiệu hoá né tránh) |
+| `invulnerable_ticks` (miễn nhiễm cũ) | `apply_status: [{id:"INVINCIBLE",...}]` | **Đã migrate xong** — `INVINCIBLE` nay là Bất Hoại chặn **mọi** đường sát thương (kể cả DoT / %MaxHP), không chỉ đòn đánh thường |
+| (chưa có) | `apply_status: [{id:"LAST_STAND",...}]` | **Status mới**: Bất Tử — nhận sát thương nhưng HP sàn 1; `CategoryImmortal` nên bị tẩy trừ được |
 
 ### Status chiến đấu (combat)
 
@@ -791,7 +793,7 @@ Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không
 
 **Status có trong data, đã wire qua registry `statusfx`** (xem `docs/STATUS_EFFECTS.md` → "Registry status"): `BURN` (DoT hỏa), `FEAR` (force basic), `CONFUSE` (40% mis-target), `STEALTH` (untargetable), `SLEEP` (skip turn + break on damage), `BLIND` (35% miss), `CHARM` (điều khiển), `BIND` (mất lượt).
 
-**Status catalog đã wire qua registry**: `HASTE` (tăng tốc), `ARMOR_BREAK` (giảm thủ), `DAMAGE_REDUCTION_UP` (giảm sát thương nhận), `INVINCIBLE` (miễn nhiễm sát thương), `EVASION` (tự buff né tránh — `value` là % né, gộp max, cap 75%), `REVIVE_LOCK` (chặn hồi sinh).
+**Status catalog đã wire qua registry**: `HASTE` (tăng tốc), `ARMOR_BREAK` (giảm thủ), `DAMAGE_REDUCTION_UP` (giảm sát thương nhận), `INVINCIBLE` (Bất Hoại — miễn nhiễm mọi đường sát thương, không dispel), `LAST_STAND` (Bất Tử — nhận sát thương nhưng HP sàn 1, **bị dispel**), `EVASION` (tự buff né tránh — `value` là % né, gộp max, cap 75%), `REVIVE_LOCK` (chặn hồi sinh). Cả `INVINCIBLE` và `LAST_STAND` đều bị Sát Khí tầng $>10$ xuyên.
 
 **Quy tắc gộp hiệu ứng (Consolidation)**:
 - `disable_gu_next_turn` và `FORGET_EGO` được quy về trạng thái chuẩn `GU_SEAL` (`StatusGuSeal`).

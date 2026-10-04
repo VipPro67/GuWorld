@@ -4,13 +4,80 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
+// LastStandMinHP is the HP floor Bất Tử (LAST_STAND) holds: damage still
+// applies, but the unit cannot be pushed to 0 while the buff is up.
+const LastStandMinHP = 1.0
+
 // tenacityPriority ranks which debuff gets dispelled first: hard lock (mất
 // lượt) → action lock → disrupt/dao → DoT. Lower is dispelled first.
+
+// applyLastStandFloor keeps target at >= LastStandMinHP while Bất Tử is active
+// and Sát Khí is not piercing. It never heals: a unit already below the floor
+// when the buff lands is raised to exactly the floor, and a unit already dead
+// stays dead. Returns true when the floor was applied so callers can log it.
+func applyLastStandFloor(target *CombatantAuto, satKhiPierce bool) bool {
+	if target == nil || satKhiPierce || !target.IsLastStand {
+		return false
+	}
+	if target.HP < LastStandMinHP {
+		target.HP = LastStandMinHP
+		return true
+	}
+	return false
+}
+
+// isImmuneToDamage reports whether Bất Hoại blocks damage entirely. Covers the
+// registry buff, the raw "invulnerable" effect CHAOS_GAMBLE grants
+// (engine.go:1492), and the legacy DamageTakenReduction == 1 sentinel from
+// database rows that predate the IsInvincible field.
+func isImmuneToDamage(target *CombatantAuto, satKhiPierce bool) bool {
+	if target == nil || satKhiPierce {
+		return false
+	}
+	if target.IsInvincible || target.DamageTakenReduction >= 1.0 {
+		return true
+	}
+	for _, eff := range target.ActiveEffects {
+		if strings.EqualFold(eff.ID, "invulnerable") || strings.EqualFold(eff.ID, statusfx.StatusInvincible) {
+			return true
+		}
+	}
+	return false
+}
+
+// satKhiPiercesImmunity reports whether the actor's Sát Khí is high enough to
+// ignore both Bất Hoại and Bất Tử (Tất Sát Cổ, threshold > 10).
+func satKhiPiercesImmunity(actor *CombatantAuto) bool {
+	return actor != nil && actor.CustomState != nil &&
+		hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") &&
+		actor.CustomState["sat_khi_level"] > 10
+}
+
+// isGuaranteedHit reports whether an action or actor possesses the GUARANTEED_HIT
+// mechanic (bypasses evasion, blindness, and first-turn evade).
+func isGuaranteedHit(actor *CombatantAuto, a *SimAction) bool {
+	if a != nil {
+		if hasMechanic(a.Mechanics, "ON_HIT", "GUARANTEED_HIT") ||
+			hasMechanic(a.Mechanics, "ON_ACTION", "GUARANTEED_HIT") ||
+			hasMechanic(a.Mechanics, "ON_CAST", "GUARANTEED_HIT") {
+			return true
+		}
+	}
+	if actor != nil {
+		if hasMechanic(actor.Mechanics, "COMBAT_PASSIVE", "GUARANTEED_HIT") ||
+			hasMechanic(actor.Mechanics, "ON_BATTLE_START", "GUARANTEED_HIT") {
+			return true
+		}
+	}
+	return false
+}
+
 // EvasionChanceCap is the hard ceiling on a combatant's combined dodge chance
 // (EVASION status). Stacks merge by max, so this only binds for a single Gu
 // granting >= 76% evasion.
@@ -139,11 +206,27 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 				label = dot.Type
 			}
 
+			// Bất Hoại blocks DoT too — this path never reaches applyDamageToTarget.
+			if isImmuneToDamage(c, false) {
+				logs = append(logs, CombatLog{
+					Turn:      turn,
+					ActorId:   c.ID,
+					ActorName: c.Name,
+					Action:    "DOT_ABSORBED",
+					Detail:    fmt.Sprintf("%s miễn nhiễm %s nhờ Bất Hoại!", c.Name, label),
+				})
+				continue
+			}
 			dmg := dot.Value
 			if dot.DirectHP {
 				c.HP -= dmg
+				floored := applyLastStandFloor(c, false)
 				if c.HP < 0 {
 					c.HP = 0
+				}
+				dotDetail := fmt.Sprintf("%s chịu %.0f %s sát thương trực tiếp (còn %.0f HP).", c.Name, dmg, label, c.HP)
+				if floored {
+					dotDetail = fmt.Sprintf("%s chịu %.0f %s nhưng [Bất Tử] giữ lại 1 HP!", c.Name, dmg, label)
 				}
 				logs = append(logs, CombatLog{
 					Turn:      turn,
@@ -151,7 +234,7 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 					ActorName: c.Name,
 					Action:    "DOT_TICK",
 					Damage:    dmg,
-					Detail:    fmt.Sprintf("%s chịu %.0f %s sát thương trực tiếp (còn %.0f HP).", c.Name, dmg, label, c.HP),
+					Detail:    dotDetail,
 				})
 			} else {
 				hpDmg := dmg
@@ -167,15 +250,23 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 						c.VirtualShield = 0
 					}
 				}
+				lastStandSaved := false
 				if hpDmg > 0 {
 					c.HP -= hpDmg
+					// Bất Tử absorbed the overflow: nothing spilled to HP.
+					if applyLastStandFloor(c, false) {
+						hpDmg = 0
+						lastStandSaved = true
+					}
 					if c.HP < 0 {
 						c.HP = 0
 					}
 				}
 
 				detail := ""
-				if shieldDmg > 0 && hpDmg > 0 {
+				if lastStandSaved {
+					detail = fmt.Sprintf("%s chịu %.0f %s nhưng [Bất Tử] giữ lại 1 HP!", c.Name, dmg, label)
+				} else if shieldDmg > 0 && hpDmg > 0 {
 					detail = fmt.Sprintf("%s chịu %.0f %s sát thương (khiên trừ %.0f, còn %.0f khiên, %.0f HP).", c.Name, dmg, label, shieldDmg, c.VirtualShield, c.HP)
 				} else if shieldDmg > 0 {
 					detail = fmt.Sprintf("%s chịu %.0f %s sát thương bị khiên hấp thụ (còn %.0f khiên, %.0f HP).", c.Name, dmg, label, c.VirtualShield, c.HP)
@@ -251,6 +342,8 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	c.AccuracyPenalty = 0.0
 	c.EvasionChance = 0.0
 	c.DamageTakenReduction = 0.0
+	c.IsInvincible = false
+	c.IsLastStand = false
 
 	// Reset new flags
 	c.IsEssenceLeaking = false
@@ -287,7 +380,13 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 				c.DamageTakenReduction = r
 			}
 		case statusfx.BehaviourInvincible:
+			// Bất Hoại. DamageTakenReduction = 1.0 is kept as the sentinel the
+			// damage gate reads; IsInvincible is what the damage paths that never
+			// touch applyDamageToTarget check.
 			c.DamageTakenReduction = 1.0
+			c.IsInvincible = true
+		case statusfx.BehaviourLastStand:
+			c.IsLastStand = true
 		case statusfx.BehaviourEvasion:
 			// Merge by max (not sum) so stacking evade buffs never breaks the
 			// dodge roll; hard cap 0.75 keeps a guaranteed hit possible.
@@ -391,9 +490,13 @@ func DispelActorStatuses(actor *CombatantAuto, category statusfx.StatusCategory,
 			continue
 		}
 		// Trigger cleanse trap for BLEED from Blood path.
-		if st.ID == statusfx.StatusBleed && spec.Path == "blood" {
+		if st.ID == statusfx.StatusBleed && spec.Path == "blood" && !isImmuneToDamage(actor, false) {
 			burst := float64(st.Value) * float64(st.Duration) * 0.5
 			actor.HP -= burst
+			applyLastStandFloor(actor, false)
+			if actor.HP < 0 {
+				actor.HP = 0
+			}
 		}
 		cleansed = append(cleansed, st.ID)
 	}
@@ -409,7 +512,18 @@ func ApplyThornsDamage(defender, attacker *CombatantAuto, damageDealt float64, t
 	}
 	thornsNet := damageDealt * defender.ThornsDamage
 	thornsNet = math.Max(1, thornsNet-attacker.BaseDef)
+	if isImmuneToDamage(attacker, false) {
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   attacker.ID,
+			ActorName: attacker.Name,
+			Action:    "THORNS_ABSORBED",
+			Detail:    fmt.Sprintf("%s miễn nhiễm %s phản đòn nhờ Bất Hoại!", attacker.Name, defender.Name),
+		})
+		return 0
+	}
 	attacker.HP -= thornsNet
+	applyLastStandFloor(attacker, false)
 	if attacker.HP < 0 {
 		attacker.HP = 0
 	}
@@ -525,7 +639,8 @@ type BasicDamageResult struct {
 	Shield         float64
 }
 
-func ResolveBasicDamage(baseDamage, defense, reduction, hp, shield float64) BasicDamageResult {
+// minHP is the HP floor (Bất Tử / LAST_STAND); pass 0 when no floor applies.
+func ResolveBasicDamage(baseDamage, defense, reduction, hp, shield, minHP float64) BasicDamageResult {
 	damage := ResolveBaseDamage(baseDamage, defense)
 	if reduction < 0 {
 		reduction = 0
@@ -538,7 +653,10 @@ func ResolveBasicDamage(baseDamage, defense, reduction, hp, shield float64) Basi
 	result.ShieldAbsorbed = math.Min(result.Shield, damage)
 	result.Shield -= result.ShieldAbsorbed
 	result.HPDamage = damage - result.ShieldAbsorbed
-	result.HP = math.Max(0, hp-result.HPDamage)
+	result.HP = math.Max(minHP, hp-result.HPDamage)
+	if result.HP < 0 {
+		result.HP = 0
+	}
 	return result
 }
 

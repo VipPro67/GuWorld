@@ -557,6 +557,20 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			Detail:    fmt.Sprintf("%s nhận [%s] +%.0f%% trong %d lượt!", target.Name, spec.Label, pct, op.Turns),
 		})
 
+	// LAST_STAND (Bất Tử) needs no Value: the strength is the shared
+	// LastStandMinHP floor applied by applyLastStandFloor at every HP write.
+	case statusfx.BehaviourLastStand:
+		target.ActiveEffects = append(target.ActiveEffects, Effect{
+			ID: spec.ID, Type: "buff", Value: 1, Duration: op.Turns,
+		})
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   target.ID,
+			ActorName: target.Name,
+			Action:    "LAST_STAND_APPLIED",
+			Detail:    fmt.Sprintf("%s nhận [%s], không thể bị hạ gục trong %d lượt!", target.Name, spec.Label, op.Turns),
+		})
+
 	case statusfx.BehaviourInvincible:
 		target.ActiveEffects = append(target.ActiveEffects, Effect{
 			ID: spec.ID, Type: "buff", Value: 100, Duration: op.Turns,
@@ -614,6 +628,16 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		if damage <= 0 {
 			damage = 50
 		}
+		if isImmuneToDamage(target, false) {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "SOUL_WOUND_ABSORBED",
+				Detail:    fmt.Sprintf("%s miễn nhiễm %s nhờ Bất Hoại!", target.Name, spec.Label),
+			})
+			break
+		}
 		if target.VirtualShield > 0 {
 			if target.VirtualShield >= damage {
 				target.VirtualShield -= damage
@@ -623,8 +647,20 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			}
 		}
 		target.HP -= damage
+		floored := applyLastStandFloor(target, false)
 		if target.HP < 0 {
 			target.HP = 0
+		}
+		if floored {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "LAST_STAND_FLOORED",
+				Damage:    damage,
+				Detail:    fmt.Sprintf("%s chịu %s nhưng [Bất Tử] giữ lại 1 HP!", target.Name, spec.Label),
+			})
+			break
 		}
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
@@ -664,9 +700,24 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		if damage <= 0 {
 			damage = 30
 		}
+		if isImmuneToDamage(target, false) {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "BACKLASH_ABSORBED",
+				Detail:    fmt.Sprintf("%s miễn nhiễm %s nhờ Bất Hoại!", target.Name, spec.Label),
+			})
+			break
+		}
 		target.HP -= damage
+		floored := applyLastStandFloor(target, false)
 		if target.HP < 0 {
 			target.HP = 0
+		}
+		detail := fmt.Sprintf("%s bị [%s], chịu %.0f sát thương phản phệ!", target.Name, spec.Label, damage)
+		if floored {
+			detail = fmt.Sprintf("%s bị [%s] nhưng [Bất Tử] giữ lại 1 HP!", target.Name, spec.Label)
 		}
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
@@ -674,7 +725,7 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			ActorName: target.Name,
 			Action:    "BACKLASH_APPLIED",
 			Damage:    damage,
-			Detail:    fmt.Sprintf("%s bị [%s], chịu %.0f sát thương phản phệ!", target.Name, spec.Label, damage),
+			Detail:    detail,
 		})
 
 	case statusfx.BehaviourAperture:

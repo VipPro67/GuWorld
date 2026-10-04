@@ -39,7 +39,11 @@ const (
 	StatusHaste           = "HASTE"
 	StatusArmorBreak      = "ARMOR_BREAK"
 	StatusDamageReduction = "DAMAGE_REDUCTION_UP"
+	// StatusInvincible is Bất Hoại: takes no damage at all. StatusLastStand is
+	// Bất Tử: still takes damage, but HP never reaches 0. Sát Khí (level > 10)
+	// pierces both.
 	StatusInvincible      = "INVINCIBLE"
+	StatusLastStand       = "LAST_STAND"
 	StatusEvasion         = "EVASION"
 	StatusReviveLock      = "REVIVE_LOCK"
 
@@ -94,7 +98,8 @@ const (
 	BehaviourHaste           = "haste"            // speed up
 	BehaviourArmorBreak      = "armor_break"      // defense down
 	BehaviourDamageReduction = "damage_reduction" // reduce damage taken
-	BehaviourInvincible      = "invincible"       // immune to damage
+	BehaviourInvincible      = "invincible"       // Bất Hoại: immune to all damage
+	BehaviourLastStand       = "last_stand"       // Bất Tử: takes damage, HP floors at 1
 	BehaviourEvasion         = "evasion"          // dodge chance (0..1 = Effect.Value/100)
 	BehaviourReviveLock      = "revive_lock"      // prevent revival
 

@@ -676,6 +676,8 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 							act.Defense += 30.0
 						case "BYPASS_SHIELD":
 							act.Bypass = true
+						case "GUARANTEED_HIT":
+							act.Mechanics = append(act.Mechanics, simulator.CombatMechanic{Trigger: "ON_HIT", ActionCode: "GUARANTEED_HIT"})
 						}
 					}
 				}
