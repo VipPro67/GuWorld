@@ -110,6 +110,25 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 		simState.Enemies = append(simState.Enemies, simEnemy)
 	}
 
+	// Áp Chế Giới Vực giả (FAKE_REGIONAL_WALL): chỉ PvP player-vs-player; giảm
+	// công/thủ/tốc của địch theo rank của địch (cùng formula RegionalWallDebuff).
+	if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && playerHasBattleStartMechanic(player, "FAKE_REGIONAL_WALL") {
+		for i := range player.ActiveCombat.Enemies {
+			if i >= len(simState.Enemies) || simState.Enemies[i] == nil {
+				continue
+			}
+			pct, _ := gamefx.RegionalWallDebuff(player.ActiveCombat.Enemies[i].Rank, player.ActiveCombat.Enemies[i].SubRank)
+			factor := 1 + pct
+			simState.Enemies[i].BaseDmg *= factor
+			simState.Enemies[i].BaseDef *= factor
+			simState.Enemies[i].Speed *= factor
+			if simState.Enemies[i].CustomState == nil {
+				simState.Enemies[i].CustomState = map[string]int{}
+			}
+			simState.Enemies[i].CustomState["fake_regional_wall"] = 1
+		}
+	}
+
 	// Inject Steal Gu mechanics and pre-combat battle logs
 	if player.ActiveCombat != nil && player.ActiveCombat.StealLogMessage != "" {
 		actionType := "STEAL_GU"

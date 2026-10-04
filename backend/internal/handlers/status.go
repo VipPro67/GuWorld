@@ -8,8 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // rowQuerier matches the QueryRow surface shared by *sql.DB and *sql.Tx so
@@ -63,6 +65,45 @@ func GrantPlayerStatus(q execQuerier, rq rowQuerier, playerID uuid.UUID, statusI
 // Sinh Khí Tàn. Detection mới đọc spec Cổ (PERSIST_STATUS_ON_HIT),
 // không còn so GuID ở đây.
 const SinhKhiTanGuID = "GU_KILL_ENERGY"
+
+// playerHasBattleStartMechanic reports whether any equipped, ACTIVE, fed Gu
+// authored with the given ON_BATTLE_START UNIQUE native-hook code is in the
+// player's loadout. Dùng chung cho CLEANSE_REGIONAL_WALL và FAKE_REGIONAL_WALL.
+func playerHasBattleStartMechanic(player *models.Player, code string) bool {
+	if player == nil {
+		return false
+	}
+	for _, gu := range player.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" || gu.Hunger <= 0 {
+			continue
+		}
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if !ok {
+			if spec, ok = models.GetGuAny(gu.GuID); !ok {
+				continue
+			}
+		}
+		for _, m := range models.CompiledGuEffects(spec).NativeMechanics() {
+			if m.Trigger == gameplayeffects.TriggerOnBattleStart && m.Code == code {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// maybeCleanseRegionalWall gỡ trạng thái Áp Chế Giới Vực khỏi người chơi khi
+// bắt đầu trận (bất kỳ Cổ nào trong loadout mang CLEANSE_REGIONAL_WALL).
+// Gọi trước khi tính CalculatePlayerStats.
+func maybeCleanseRegionalWall(player *models.Player) {
+	if player == nil || !playerHasBattleStartMechanic(player, "CLEANSE_REGIONAL_WALL") {
+		return
+	}
+	if player.Statuses.Has("regional_wall_suppression") {
+		player.Statuses.Remove("regional_wall_suppression")
+		logger.S.Infof("Cleared regional_wall_suppression via CLEANSE_REGIONAL_WALL")
+	}
+}
 
 // ApplySinhKhiTanHitToList tăng StatusList thêm 1 tầng Sinh Khí Tàn (cap V),
 // refresh thời hạn SinhKhiTanDurationMinutes. Trả về tầng mới + cường độ.

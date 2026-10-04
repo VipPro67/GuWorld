@@ -65,6 +65,8 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 | Luyện Cổ Phản Phệ (`refine_backfire`) | **-50%** tỉ lệ Luyện Cổ thành công (khi cố luyện lúc mệt mỏi hoặc bị nổ lò) | 20 phút |
 | Sinh Khí Tàn (`sinh_khi_tan`) | Trúng Sát Sinh Khí Cổ: tầng I **-10%**, II **-25%**, III **-35%**, IV **-50%**, V **-99%** tấn công/phòng thủ/tốc độ. Đánh trúng +1 tầng (tối đa V, refresh 5h; đòn bị khiên hấp thụ vẫn tính trúng, né/mù/miễn nhiễm không tính); thanh tẩy -1 tầng | 5 giờ (refresh mỗi hit; spec gốc 50h đang tạm giảm cân bằng) |
 
+> Gu `FIVE_ELEMENTS_DIVINE_BARRIER_ARRAY` (Ngũ Hành Thiên Chướng Trận, rank 9) có 2 effect khi bắt đầu trận: **gỡ `regional_wall_suppression` khỏi bản thân** (người mang), và **phản chiếu Áp Chế Giới Vực lên địch PvP** (giảm công/thủ/tốc theo rank địch) — chỉ PvP thực.
+
 Quy tắc áp dụng trạng thái:
 
 - `stat_mods` là **phần trăm trên tổng chỉ số** (cộng dồn sau toàn bộ nguồn khác: cơ bản, Cổ, buff,	Hộ Sơn…). Nếu tổng chỉ số trước đó bằng 0 thì mod không có tác dụng; chỉ số vật lý (**tấn công / phòng thủ / tốc độ / HP**) luôn **sàn ở 0** — áp chế nặng không thể đẩy chỉ số xuống âm.
