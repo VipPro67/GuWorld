@@ -613,7 +613,13 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     const requestedRegion = currentCellRegion();
     set((s) => s.monsterSnapshotRegion === requestedRegion
       ? {}
-      : { monsters: {}, hasMonsterSnapshot: false, monsterSnapshotRegion: requestedRegion });
+      : {
+          monsters: {},
+          hasMonsterSnapshot: false,
+          monsterSnapshotRegion: requestedRegion,
+          selectedTarget: null,
+          targetingGu: null,
+        });
     try {
       const res = await authFetch(`${BACKEND_URL}/api/world/monsters?r=${Math.min(25, Math.max(1, Math.round(r)))}`);
       if (!res.ok) throw new Error("Không thể tải trạng thái quái vật");
@@ -637,13 +643,14 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
           }
           monsters[current.instance_id] = current;
         }
-        const removedSelected = Boolean(s.selectedTarget?.instanceId && !monsters[s.selectedTarget.instanceId]);
+        // A radius-limited snapshot may temporarily omit a moving target. Only
+        // authoritative defeated/despawned events should cancel an armed cast.
         return {
           monsters,
           hasMonsterSnapshot: true,
           monsterSnapshotRegion: requestedRegion,
-          selectedTarget: removedSelected ? null : s.selectedTarget,
-          targetingGu: removedSelected ? null : s.targetingGu,
+          selectedTarget: s.selectedTarget,
+          targetingGu: s.targetingGu,
         };
       });
       return requestID === monsterSnapshotRequest && currentCellRegion() === requestedRegion;

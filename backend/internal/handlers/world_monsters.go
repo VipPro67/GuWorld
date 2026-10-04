@@ -37,7 +37,7 @@ const (
 	worldMonsterTickInterval = 250 * time.Millisecond
 	worldMonsterSafetyTTL    = 5 * time.Minute
 	worldMonsterMoveEventGap = 400 * time.Millisecond
-	worldMonsterDefaultSpeed = 1.0
+	worldMonsterDefaultSpeed = 0.25
 	// Monster AOI is deliberately independent from the 300-cell player
 	// position broadcast index. The client investigation radius is capped at
 	// 25 cells, so 32-cell buckets keep a view to at most 3x3 small buckets.
@@ -83,16 +83,21 @@ var worldMonsterMetrics struct {
 var worldMonsterBucketCursor atomic.Uint64
 
 var (
-	worldMonstersInBucket    = cache.WorldMonstersInBucket
-	materializeWorldMonster  = cache.MaterializeWorldMonster
-	casWorldMonster          = cache.CASWorldMonster
-	loadWorldCombatPlayers   = loadWorldCombatPlayerSnapshots
-	applyWorldMonsterAction  = applyWorldMonsterAttack
-	applyWorldPlayerCounter  = applyWorldCounterattack
-	resolveWorldMonsterCell  = ResolveCell
-	deriveWorldMonsterRegion = DeriveRegionAt
-	isWorldMonsterSafeZone   = IsSafeZone
-	worldMonsterCellCleared  = func(region string, x, y int) bool { return isCellClearedRecently(region, x, y, clearedCellCooldown) }
+	worldMonstersInBucket     = cache.WorldMonstersInBucket
+	materializeWorldMonster   = cache.MaterializeWorldMonster
+	casWorldMonster           = cache.CASWorldMonster
+	loadWorldCombatPlayers    = loadWorldCombatPlayerSnapshots
+	applyWorldMonsterAction   = applyWorldMonsterAttack
+	applyWorldPlayerCounter   = applyWorldCounterattack
+	resolveWorldMonsterCell   = ResolveCell
+	deriveWorldMonsterRegion  = DeriveRegionAt
+	isWorldMonsterSafeZone    = IsSafeZone
+	worldMonsterCellCleared   = func(region string, x, y int) bool { return isCellClearedRecently(region, x, y, clearedCellCooldown) }
+	loadWorldMonsterSpawnRank = func(ctx context.Context, spawnID string) (int, error) {
+		var rank int
+		err := db.DB.QueryRowContext(ctx, `SELECT min_rank FROM monster_spawns WHERE id::text=$1`, spawnID).Scan(&rank)
+		return rank, err
+	}
 )
 
 type worldCombatPlayer struct {
@@ -350,15 +355,48 @@ func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time)
 		return WorldMonster{}, false, fmt.Errorf("unknown monster template %q", spawn.MonsterID)
 	}
 	maxHP, attack, defense := models.ScaleMonsterStats(template.MaxHP, template.BaseAttack, template.BaseDefense, spawn.Rank, spawn.SubRank, template.Type)
+	aggroRadius, leashRadius := worldMonsterAggroProfile(spawn.Rank)
 	monster := WorldMonster{
-		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, RegionID: spawn.RegionID,
+		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, Rank: spawn.Rank, SubRank: spawn.SubRank, RegionID: spawn.RegionID,
 		X: float64(spawn.X), Y: float64(spawn.Y), SpawnX: float64(spawn.X), SpawnY: float64(spawn.Y),
 		HP: maxHP, MaxHP: maxHP, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now,
-		Statuses: []StatusEffect{}, RespawnSeconds: spawn.RespawnSeconds, AggroRadius: 12, AttackRange: 1.5,
-		LeashRadius: 24, Speed: worldMonsterDefaultSpeed, AttackIntervalMS: 2000, BaseAttack: attack, BaseDefense: defense,
+		Statuses: []StatusEffect{}, RespawnSeconds: spawn.RespawnSeconds, AggroRadius: aggroRadius, AttackRange: 1.5,
+		LeashRadius: leashRadius, Speed: worldMonsterDefaultSpeed, AttackIntervalMS: 2000, BaseAttack: attack, BaseDefense: defense,
 	}
 	bx, by := monsterBucket(spawn.X, spawn.Y)
 	return materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
+}
+
+// worldMonsterAggroProfile keeps ordinary monsters passive until a player is
+// very close. Higher-rank monsters notice players slightly farther away, but
+// never regain the old 12-cell aggro / 24-cell chase range.
+func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
+	if rank < 1 {
+		rank = 1
+	}
+	if rank > 9 {
+		rank = 9
+	}
+	aggroRadius = 2 + float64(rank-1)*0.5
+	leashRadius = aggroRadius + 3
+	return aggroRadius, leashRadius
+}
+
+func applyWorldMonsterTuning(ctx context.Context, monster *WorldMonster) {
+	if monster.Rank < 1 {
+		cell := resolveWorldMonsterCell(int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY)))
+		if cell.Content == monster.MonsterTemplateID && cell.Rank > 0 {
+			monster.Rank, monster.SubRank = cell.Rank, cell.SubRank
+		} else if rank, err := loadWorldMonsterSpawnRank(ctx, monster.SpawnID); err == nil && rank > 0 {
+			monster.Rank = rank
+		}
+	}
+	effectiveRank := monster.Rank
+	if effectiveRank < 1 {
+		effectiveRank = 1
+	}
+	monster.AggroRadius, monster.LeashRadius = worldMonsterAggroProfile(effectiveRank)
+	monster.Speed = worldMonsterDefaultSpeed
 }
 
 func monsterBucket(x, y int) (int, int) {
@@ -777,8 +815,12 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				break
 			}
 			processed++
+			// Refresh cached monsters as well as newly materialized ones so a deploy
+			// takes effect immediately instead of waiting for their Redis TTL.
+			tuned := monster
+			applyWorldMonsterTuning(ctx, &tuned)
 			if monster.State == MonsterStateDefeated && !monster.RespawnAt.IsZero() && !now.Before(monster.RespawnAt) {
-				replacement := monster
+				replacement := tuned
 				replacement.InstanceID = uuid.NewString()
 				replacement.HP = replacement.MaxHP
 				replacement.State = MonsterStateIdle
@@ -797,7 +839,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				}
 				continue
 			}
-			next, eventType := tickWorldMonster(monster, candidates, now, func(id string) bool { parsed, e := uuid.Parse(id); return e == nil && isWSConnected(parsed) })
+			next, eventType := tickWorldMonster(tuned, candidates, now, func(id string) bool { parsed, e := uuid.Parse(id); return e == nil && isWSConnected(parsed) })
 			var action worldMonsterActionResult
 			var actionToken string
 			var counterTarget worldCombatPlayer

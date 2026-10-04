@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
@@ -282,30 +283,62 @@ func UseGuOnMap(c *gin.Context) {
 		}
 	}
 
-	// Fallback for general Active Gu effects if no map-specific condition matched
-	if !applied && specs.Effects.Active != nil {
+	// Fallback for general active Gu effects if no map-specific condition matched.
+	// Use the simulator projection here because Block v2 intentionally leaves the
+	// legacy Effects.Active field nil.
+	if !applied && hasCombatActiveEffects(&specs) {
 		stats := CalculatePlayerStats(&player)
 		attacker := models.CombatantFromPlayer(&player, stats)
-		ctx := &CombatContext{
-			Attacker: &attacker,
-		}
-		act, err := BuildCombatAction(ctx, specs)
+		act, err := buildSimActionFromGu(&attacker, &specs, "GU_SKILL")
 		if err == nil {
-			applied = true
 			cdDuration = 30 * time.Second
 			effectType = "utility"
-			if act.Dmg > 0 {
-				effectValue = act.Dmg
-				logs = append(logs, fmt.Sprintf("Kích hoạt %s thôi động sát chiêu (Uy lực %.0f)!", specs.Name, act.Dmg))
-			} else if act.Def > 0 {
-				effectValue = act.Def
-				player.Statuses.Add("virtual_shield", "world_map", 5*time.Minute, act.Def)
-				logs = append(logs, fmt.Sprintf("Kích hoạt %s tạo lớp ảo thuẫn hộ thể (%.0f) duy trì 5 phút.", specs.Name, act.Def))
+			if act.Damage > 0 {
+				applied = true
+				effectValue = act.Damage
+				logs = append(logs, fmt.Sprintf("Kích hoạt %s thôi động sát chiêu (Uy lực %.0f)!", specs.Name, act.Damage))
 			}
-			if len(act.Logs) > 0 {
-				logs = append(logs, act.Logs...)
+			if act.Defense > 0 {
+				applied = true
+				effectValue = act.Defense
+				player.Statuses.Add("virtual_shield", "world_map", 5*time.Minute, act.Defense)
+				logs = append(logs, fmt.Sprintf("Kích hoạt %s tạo lớp ảo thuẫn hộ thể (%.0f) duy trì 5 phút.", specs.Name, act.Defense))
 			}
-			if len(logs) == 0 {
+			if act.Healing > 0 {
+				applied = true
+				heal := math.Min(act.Healing, gamefx.EffectiveMaxHP(&player)-player.HP)
+				player.HP += heal
+				effectType = "heal"
+				effectValue = heal
+				logs = append(logs, fmt.Sprintf("%s phục hồi %.1f HP.", specs.Name, heal))
+			}
+			for _, block := range specs.Effects.Blocks {
+				if block.Trigger != gameplayeffects.TriggerOnAction {
+					continue
+				}
+				for _, op := range block.Operations {
+					if op.Op != gameplayeffects.OpStatus {
+						continue
+					}
+					duration := time.Duration(max(op.Turns, 1)) * time.Minute
+					statusID, statusType := strings.ToUpper(op.StatusID), ""
+					switch statusID {
+					case "ATK_UP":
+						statusType, effectType = "buff_atk", "buff_atk"
+					case "DEF_UP":
+						statusType, effectType = "buff_def", "buff_def"
+					case "SPEED_UP", "HASTE":
+						statusType, effectType = "buff_speed", "buff_speed"
+					}
+					if statusType != "" {
+						player.Statuses.Add(statusType, specs.Name, duration, op.Value)
+						effectValue = op.Value
+						applied = true
+						logs = append(logs, fmt.Sprintf("%s kích hoạt %s trong %.0f phút.", specs.Name, statusID, duration.Minutes()))
+					}
+				}
+			}
+			if applied && len(logs) == 0 {
 				logs = append(logs, fmt.Sprintf("Kích hoạt %s thành công!", specs.Name))
 			}
 		}
@@ -347,16 +380,16 @@ func UseGuOnMap(c *gin.Context) {
 		}
 		stats := CalculatePlayerStats(&player)
 		attacker := models.CombatantFromPlayer(&player, stats)
-		combatCtx := &CombatContext{Attacker: &attacker}
-		attackAction, buildErr := BuildCombatAction(combatCtx, specs)
-		if buildErr != nil || attackAction.Dmg <= 0 {
+		attackAction, buildErr := buildSimActionFromGu(&attacker, &specs, "GU_SKILL")
+		if buildErr != nil || attackAction.Damage <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không có kỹ năng sát thương để tấn công quái vật."})
 			return
 		}
-		rawDmg := attackAction.Dmg
+		rawDmg := attackAction.Damage
 		damageDealt = simulator.ResolveBaseDamage(rawDmg, monster.BaseDefense)
 		outcome, updated, hitErr := cache.HitWorldMonster(c.Request.Context(), monster.RegionID, monster.InstanceID, player.ID.String()+":"+req.CommandID, monster.Revision, damageDealt, time.Now().UTC(), time.Duration(monster.RespawnSeconds)*time.Second, monsterTTL(monster.RespawnSeconds))
 		if hitErr != nil {
+			logger.S.Errorf("[WorldGuCast] failed to update monster %s in region %s: %v", monster.InstanceID, monster.RegionID, hitErr)
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Cannot update monster state"})
 			return
 		}
