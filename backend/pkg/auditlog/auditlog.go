@@ -91,8 +91,31 @@ func LogChecked(q Querier, entry Entry) error {
 		return err
 	}
 
+	const insertSQL = `INSERT INTO audit_logs (player_id, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb,$9,$10,$11,$12::jsonb,$13,$14,$15,$16)`
+
+	if tx, ok := execDB.(*sql.Tx); ok {
+		if _, err := tx.Exec("SAVEPOINT auditlog_insert"); err != nil {
+			recordWriteFailure(entry, err)
+			return err
+		}
+		if _, err := tx.Exec(
+			insertSQL,
+			pid, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
+		); err != nil {
+			recordWriteFailure(entry, err)
+			_, _ = tx.Exec("ROLLBACK TO SAVEPOINT auditlog_insert")
+			_, _ = tx.Exec("RELEASE SAVEPOINT auditlog_insert")
+			return err
+		}
+		if _, err := tx.Exec("RELEASE SAVEPOINT auditlog_insert"); err != nil {
+			recordWriteFailure(entry, err)
+			return err
+		}
+		return nil
+	}
+
 	_, err = execDB.Exec(
-		`INSERT INTO audit_logs (player_id, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb,$9,$10,$11,$12::jsonb,$13,$14,$15,$16)`,
+		insertSQL,
 		pid, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
 	)
 	if err != nil {

@@ -111,6 +111,7 @@ export interface DivineGuReport {
   player_count?: number;
   sect_vault_count?: number;
   market_count?: number;
+  ground_drop_count?: number;
   holders?: DivineGuHolderInfo[];
   food_hint?: string;
   recipe_hint?: string;

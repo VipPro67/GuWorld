@@ -2658,6 +2658,7 @@ func seedSectMissionsFromCSV(filename string) error {
 //  1. player_gu — every player's inventory
 //  2. auction — ACTIVE Gu listings
 //  3. sects.vault_gu — sect vault (kho tông môn)
+//  4. map_ground_drops — unexpired death loot on the world map
 func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs []string) (bool, error) {
 	var runner interface {
 		QueryRow(query string, args ...any) *sql.Row
@@ -2708,17 +2709,19 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 					ELSE '[]'::jsonb 
 				END
 			) AS elem
-			WHERE item_type = 'Gu'
-			  AND status = 'ACTIVE'
+			WHERE LOWER(item_type) = 'gu'
+			  AND UPPER(status) = 'ACTIVE'
+			  AND end_time > NOW()
 			  AND elem->>'gu_id' = $1::text
-			  AND COALESCE((elem->>'rank')::int, 0) >= 6
+			  AND CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 0 END >= 6
 			UNION
 			SELECT 1 FROM buyback_orders
-			WHERE item_type = 'Gu'
-			  AND status = 'ACTIVE'
-			  AND order_type = 'SELL'
+			WHERE LOWER(item_type) = 'gu'
+			  AND UPPER(status) = 'ACTIVE'
+			  AND end_time > NOW()
+			  AND UPPER(order_type) = 'SELL'
 			  AND item_target->>'gu_id' = $1::text
-			  AND COALESCE((item_target->>'rank')::int, 0) >= 6
+			  AND CASE WHEN item_target->>'rank' ~ '^[0-9]+$' THEN (item_target->>'rank')::int ELSE 0 END >= 6
 		)
 	`, guID).Scan(&exists)
 	if err != nil {
@@ -2728,7 +2731,30 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		return true, nil
 	}
 
-	// 3. Kiểm tra trong kho tông môn (sect_vault_gu)
+	// 3. Unexpired death drops. These instances have already been removed from
+	// player_gu, but remain real Gu until the ground drop expires or is looted.
+	err = runner.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1
+			FROM map_ground_drops d
+			CROSS JOIN LATERAL jsonb_array_elements(
+				CASE WHEN jsonb_typeof(d.loot_data->'gus') = 'array'
+				     THEN d.loot_data->'gus' ELSE '[]'::jsonb END
+			) elem
+			WHERE d.expires_at > NOW()
+			  AND elem->>'gu_id' = $1
+			  AND CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 0 END >= 6
+			  AND ($2::text[] IS NULL OR cardinality($2::text[]) = 0 OR NOT (elem->>'instance_id' = ANY($2::text[])))
+		)
+	`, guID, pq.Array(excludeInstanceIDs)).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+
+	// 4. Kiểm tra trong kho tông môn (sect_vault_gu)
 	err = runner.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM sect_vault_gu
@@ -2744,7 +2770,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 
 // GetExistingImmortalGuIDs returns the set of gu_ids that currently have at least one
 // rank >= 6 (Immortal Gu) instance anywhere in the world: any player's player_gu,
-// ACTIVE auction listings, or the sect vault (sect_vault_gu / sects.vault_gu).
+// unexpired ACTIVE auction listings, unexpired ground drops, or the sect vault.
 func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 	rows, err := tx.Query(`
 		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
@@ -2756,7 +2782,23 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 					ELSE '[]'::jsonb 
 				END
 			) AS elem
-			WHERE item_type = 'Gu' AND status = 'ACTIVE' AND COALESCE((elem->>'rank')::int, 0) >= 6
+			WHERE LOWER(item_type) = 'gu' AND UPPER(status) = 'ACTIVE' AND end_time > NOW()
+			  AND CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 0 END >= 6
+		UNION
+		SELECT DISTINCT item_target->>'gu_id'
+		FROM buyback_orders
+		WHERE LOWER(item_type) = 'gu' AND UPPER(status) = 'ACTIVE'
+		  AND UPPER(order_type) = 'SELL' AND end_time > NOW()
+		  AND CASE WHEN item_target->>'rank' ~ '^[0-9]+$' THEN (item_target->>'rank')::int ELSE 0 END >= 6
+		UNION
+		SELECT DISTINCT elem->>'gu_id'
+		FROM map_ground_drops d
+		CROSS JOIN LATERAL jsonb_array_elements(
+			CASE WHEN jsonb_typeof(d.loot_data->'gus') = 'array'
+			     THEN d.loot_data->'gus' ELSE '[]'::jsonb END
+		) elem
+		WHERE d.expires_at > NOW()
+		  AND CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 0 END >= 6
 		UNION
 		SELECT DISTINCT gu_id FROM sect_vault_gu WHERE rank >= 6 AND quantity > 0
 	`)

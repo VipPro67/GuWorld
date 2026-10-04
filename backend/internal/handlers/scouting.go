@@ -1014,6 +1014,7 @@ func ExecuteDivineGu(c *gin.Context) {
 	playerCount := 0
 	sectVaultCount := 0
 	marketCount := 0
+	groundDropCount := 0
 
 	// 4a. Player Inventories & Apertures (player_gu)
 	queryPlayers := `
@@ -1025,12 +1026,15 @@ func ExecuteDivineGu(c *gin.Context) {
 		JOIN players p ON pg.player_id = p.id
 		WHERE (LOWER(pg.gu_id) = LOWER($1) OR pg.gu_id = ANY($3))
 		  AND ($2 = 0 OR pg.gu_rank = $2 OR pg.rank = $2)
+		  AND p.id <> '00000000-0000-0000-0000-000000000000'::uuid
 	`
 	pRows, err := db.DB.QueryContext(c.Request.Context(), queryPlayers, targetGu.ID, targetGu.Rank, matchIDs)
 	if err != nil {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu queryPlayers error: %v", err)
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ vị trí Cổ trùng"})
+		return
 	} else {
 		defer pRows.Close()
 		for pRows.Next() {
@@ -1049,7 +1053,8 @@ func ExecuteDivineGu(c *gin.Context) {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu player scan error: %v", err)
 				}
-				continue
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng trong túi người chơi không hợp lệ"})
+				return
 			}
 			targetPlayer := models.Player{
 				Account:          models.Account{ID: pID, Username: pUsername, IsDisguised: pDisguised},
@@ -1094,6 +1099,10 @@ func ExecuteDivineGu(c *gin.Context) {
 			})
 			playerCount++
 		}
+		if err := pRows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết vị trí Cổ trùng trong túi người chơi"})
+			return
+		}
 	}
 
 	// 4b. Sect Vaults (sect_vault_gu)
@@ -1111,6 +1120,8 @@ func ExecuteDivineGu(c *gin.Context) {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu querySects error: %v", err)
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ kho Tông Môn"})
+		return
 	} else {
 		defer sRows.Close()
 		for sRows.Next() {
@@ -1120,7 +1131,8 @@ func ExecuteDivineGu(c *gin.Context) {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu sect scan error: %v", err)
 				}
-				continue
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng trong kho Tông Môn không hợp lệ"})
+				return
 			}
 			sectDef := float64(sLevel*20 + 10)
 			if sectDef > maxHolderDefense {
@@ -1142,13 +1154,18 @@ func ExecuteDivineGu(c *gin.Context) {
 			})
 			sectVaultCount += qty
 		}
+		if err := sRows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết kho Tông Môn"})
+			return
+		}
 	}
 
 	// 4c. Marketplace & Auction Listings (auction)
 	queryAuctions := `
 		SELECT a.id, a.seller_id, p.username, p.current_region, p.x, p.y,
-		       a.currency, a.start_price, a.current_price, a.listing_type, a.quantity,
-		       COALESCE((elem->>'rank')::int, 1) AS gu_rank
+		       a.currency, a.start_price, a.current_price, a.listing_type,
+		       COUNT(*)::int AS quantity,
+		       MIN(CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 1 END) AS gu_rank
 		FROM auction a
 		JOIN players p ON a.seller_id = p.id,
 		LATERAL jsonb_array_elements(
@@ -1159,14 +1176,19 @@ func ExecuteDivineGu(c *gin.Context) {
 		) AS elem
 		WHERE LOWER(a.item_type) = 'gu'
 		  AND a.status IN ('active', 'ACTIVE')
+		  AND a.end_time > NOW()
 		  AND (LOWER(elem->>'gu_id') = LOWER($1) OR LOWER(elem->>'id') = LOWER($1) OR elem->>'gu_id' = ANY($3) OR elem->>'id' = ANY($3))
-		  AND ($2 = 0 OR COALESCE((elem->>'rank')::int, 1) = $2)
+		  AND ($2 = 0 OR CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 1 END = $2)
+		GROUP BY a.id, a.seller_id, p.username, p.current_region, p.x, p.y,
+		         a.currency, a.start_price, a.current_price, a.listing_type
 	`
 	aRows, err := db.DB.QueryContext(c.Request.Context(), queryAuctions, targetGu.ID, targetGu.Rank, matchIDs)
 	if err != nil {
 		if logger.S != nil {
 			logger.S.Errorf("scouting: ExecuteDivineGu queryAuctions error: %v", err)
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ Cổ trùng trên chợ"})
+		return
 	} else {
 		defer aRows.Close()
 		for aRows.Next() {
@@ -1182,10 +1204,11 @@ func ExecuteDivineGu(c *gin.Context) {
 				if logger.S != nil {
 					logger.S.Errorf("scouting: ExecuteDivineGu auction scan error: %v", err)
 				}
-				continue
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu niêm yết Cổ trùng không hợp lệ"})
+				return
 			}
 			currLabel := "Nguyên Thạch"
-			if strings.EqualFold(currency, "immortal_stone") || strings.EqualFold(currency, "immortal_stones") {
+			if strings.EqualFold(currency, "immortal") || strings.EqualFold(currency, "immortal_stone") || strings.EqualFold(currency, "immortal_stones") {
 				currLabel = "Tiên Nguyên Thạch"
 			}
 
@@ -1205,9 +1228,129 @@ func ExecuteDivineGu(c *gin.Context) {
 			})
 			marketCount += qty
 		}
+		if err := aRows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết niêm yết Cổ trùng"})
+			return
+		}
 	}
 
-	totalWorldCount := playerCount + sectVaultCount + marketCount
+	// Gu escrowed by asynchronous trade offers and SELL buyback orders are
+	// physically owned by the Bảo Hoàng Thiên system player. Classify only
+	// active, unexpired escrow as market inventory instead of attributing it to
+	// that synthetic player (or counting stale escrow forever).
+	escrowRows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT source, creator_name, region, x, y, gu_id, gu_rank
+		FROM (
+			SELECT 'trade_offer'::text AS source, p.username AS creator_name,
+			       p.current_region AS region, p.x, p.y, pg.gu_id,
+			       COALESCE(pg.gu_rank, pg.rank, 1) AS gu_rank
+			FROM trade_offers t
+			JOIN players p ON p.id = t.creator_id
+			CROSS JOIN LATERAL jsonb_array_elements_text(
+				CASE WHEN jsonb_typeof(t.offered_data->'gus') = 'array'
+				     THEN t.offered_data->'gus' ELSE '[]'::jsonb END
+			) gu_instance_id
+			JOIN player_gu pg ON pg.id = gu_instance_id
+			WHERE UPPER(t.status) = 'ACTIVE' AND t.end_time > NOW()
+			UNION ALL
+			SELECT 'buyback_listing'::text, p.username, p.current_region, p.x, p.y,
+			       pg.gu_id, COALESCE(pg.gu_rank, pg.rank, 1)
+			FROM buyback_orders b
+			JOIN players p ON p.id = b.buyer_id
+			CROSS JOIN LATERAL jsonb_array_elements_text(
+				CASE WHEN jsonb_typeof(b.item_data) = 'array'
+				     THEN b.item_data ELSE '[]'::jsonb END
+			) gu_instance_id
+			JOIN player_gu pg ON pg.id = gu_instance_id
+			WHERE UPPER(b.status) = 'ACTIVE' AND UPPER(b.order_type) = 'SELL'
+			  AND LOWER(b.item_type) = 'gu' AND b.end_time > NOW()
+		) escrow
+		WHERE (LOWER(gu_id) = LOWER($1) OR gu_id = ANY($3))
+		  AND ($2 = 0 OR gu_rank = $2)
+	`, targetGu.ID, targetGu.Rank, matchIDs)
+	if err != nil {
+		if logger.S != nil {
+			logger.S.Errorf("scouting: ExecuteDivineGu queryMarketEscrow error: %v", err)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ Cổ trùng ký gửi trên chợ"})
+		return
+	}
+	defer escrowRows.Close()
+	for escrowRows.Next() {
+		var source, creatorName, region, guID string
+		var x, y, guRank int
+		if err := escrowRows.Scan(&source, &creatorName, &region, &x, &y, &guID, &guRank); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng ký gửi trên chợ không hợp lệ"})
+			return
+		}
+		label := "Đơn trao đổi"
+		if source == "buyback_listing" {
+			label = "Đơn rao bán"
+		}
+		allHolders = append(allHolders, holderData{
+			holderType: source, holderName: fmt.Sprintf("%s (Người đăng: %s)", label, creatorName),
+			holderUsername: creatorName, region: region, x: x, y: y,
+			state: source, quantity: 1, priceInfo: "Ký gửi tại Bảo Hoàng Thiên", defense: 15,
+		})
+		marketCount++
+	}
+	if err := escrowRows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết Cổ trùng ký gửi trên chợ"})
+		return
+	}
+
+	// 4d. Unexpired Gu dropped on the world map. Death drops have already been
+	// removed from player_gu, so omitting this domain incorrectly declares them
+	// destroyed and can also violate Immortal Gu uniqueness.
+	dropRows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT d.region_id, d.x, d.y, d.loser_name,
+		       EXTRACT(EPOCH FROM (d.expires_at - NOW()))::int,
+		       elem->>'gu_id',
+		       CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 1 END
+		FROM map_ground_drops d
+		CROSS JOIN LATERAL jsonb_array_elements(
+			CASE WHEN jsonb_typeof(d.loot_data->'gus') = 'array'
+			     THEN d.loot_data->'gus' ELSE '[]'::jsonb END
+		) elem
+		WHERE d.expires_at > NOW()
+		  AND (LOWER(elem->>'gu_id') = LOWER($1) OR elem->>'gu_id' = ANY($3))
+		  AND ($2 = 0 OR CASE WHEN elem->>'rank' ~ '^[0-9]+$' THEN (elem->>'rank')::int ELSE 1 END = $2)
+	`, targetGu.ID, targetGu.Rank, matchIDs)
+	if err != nil {
+		if logger.S != nil {
+			logger.S.Errorf("scouting: ExecuteDivineGu queryGroundDrops error: %v", err)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm chứng đầy đủ Cổ trùng rơi trên bản đồ"})
+		return
+	} else {
+		defer dropRows.Close()
+		for dropRows.Next() {
+			var region, loserName, guID string
+			var x, y, expiresIn, guRank int
+			if err := dropRows.Scan(&region, &x, &y, &loserName, &expiresIn, &guID, &guRank); err != nil {
+				if logger.S != nil {
+					logger.S.Errorf("scouting: ExecuteDivineGu ground drop scan error: %v", err)
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu Cổ trùng rơi trên bản đồ không hợp lệ"})
+				return
+			}
+			allHolders = append(allHolders, holderData{
+				holderType: "ground_drop",
+				holderName: fmt.Sprintf("Chiến lợi phẩm rơi của %s", loserName),
+				region:     region, x: x, y: y, hasCoords: true,
+				state: "ground_drop", quantity: 1,
+				priceInfo: fmt.Sprintf("Tan biến sau %d giây", expiresIn),
+				defense:   10,
+			})
+			groundDropCount++
+		}
+		if err := dropRows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc hết Cổ trùng rơi trên bản đồ"})
+			return
+		}
+	}
+
+	totalWorldCount := playerCount + sectVaultCount + marketCount + groundDropCount
 
 	// 5. Query Recipe Clues
 	var reqGusJSON, reqMatsJSON sql.NullString
@@ -1304,7 +1447,7 @@ func ExecuteDivineGu(c *gin.Context) {
 		}
 	} else {
 		if isRefined {
-			loreStatus = fmt.Sprintf("Phàm Cổ — Hiện có tổng cộng %d con trong thiên hạ (Cổ Sư: %d, Kho Tông Môn: %d, Đang Treo Bán: %d).", totalWorldCount, playerCount, sectVaultCount, marketCount)
+			loreStatus = fmt.Sprintf("Phàm Cổ — Hiện có tổng cộng %d con trong thiên hạ (Cổ Sư: %d, Kho Tông Môn: %d, Đang Treo Bán: %d, Rơi trên bản đồ: %d).", totalWorldCount, playerCount, sectVaultCount, marketCount, groundDropCount)
 		} else {
 			loreStatus = "Phàm Cổ — Hiện không có bản thể nào được lưu giữ trong tay Cổ Sư, Tông Môn hay Chợ Đấu Giá."
 		}
@@ -1380,21 +1523,22 @@ func ExecuteDivineGu(c *gin.Context) {
 	}
 
 	report := &models.DivineGuReport{
-		GuID:           targetGu.ID,
-		GuName:         targetGu.Name,
-		Rank:           targetGu.Rank,
-		Path:           strings.Join(targetGu.Path, ", "),
-		IsImmortal:     isImmortal,
-		IsRefined:      isRefined,
-		WorldCount:     totalWorldCount,
-		PlayerCount:    playerCount,
-		SectVaultCount: sectVaultCount,
-		MarketCount:    marketCount,
-		Holders:        holderInfos,
-		FoodHint:       foodHint,
-		RecipeHint:     recipeHint,
-		NaturalHabitat: naturalHabitat,
-		LoreStatus:     loreStatus,
+		GuID:            targetGu.ID,
+		GuName:          targetGu.Name,
+		Rank:            targetGu.Rank,
+		Path:            strings.Join(targetGu.Path, ", "),
+		IsImmortal:      isImmortal,
+		IsRefined:       isRefined,
+		WorldCount:      totalWorldCount,
+		PlayerCount:     playerCount,
+		SectVaultCount:  sectVaultCount,
+		MarketCount:     marketCount,
+		GroundDropCount: groundDropCount,
+		Holders:         holderInfos,
+		FoodHint:        foodHint,
+		RecipeHint:      recipeHint,
+		NaturalHabitat:  naturalHabitat,
+		LoreStatus:      loreStatus,
 	}
 
 	var msg string

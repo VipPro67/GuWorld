@@ -393,8 +393,10 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	if otherAccountsCount >= 2 {
+		_ = tx.Rollback()
+
 		// Log to Audit Log for Admin
-		auditlog.Log(tx, auditlog.Entry{
+		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID:       &player.ID,
 			Action:         "security.multi_login_blocked",
 			RequestSummary: fmt.Sprintf("Blocked Google login for %s due to multi-login fingerprint limit. Fingerprint=%s IP=%s", player.Username, fingerprint, c.ClientIP()),
@@ -404,7 +406,7 @@ func GoogleCallback(c *gin.Context) {
 		})
 
 		// Send real-time SSE notifications to the other active accounts from this fingerprint
-		rows, err := tx.Query(`
+		rows, err := db.DB.Query(`
 			SELECT id FROM players
 			WHERE last_login_fingerprint = $1
 			  AND last_login_time > NOW() - INTERVAL '24 hours'
@@ -415,7 +417,7 @@ func GoogleCallback(c *gin.Context) {
 			for rows.Next() {
 				var otherPID uuid.UUID
 				if err := rows.Scan(&otherPID); err == nil {
-					notify.Send(tx, otherPID, "security_alert",
+					notify.Send(db.DB, otherPID, "security_alert",
 						"Cảnh báo bảo mật",
 						fmt.Sprintf("Hệ thống đã chặn yêu cầu đăng nhập tài khoản Google thứ 3 (%s) trong ngày từ thiết bị của đạo hữu.", player.Username))
 				}
