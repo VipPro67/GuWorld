@@ -125,7 +125,6 @@ const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "st
     { key: "shield_flat_reduce_percent", label: "Tước % khiên (0..1)", type: "number" },
     { key: "disable_gu_next_turn", label: "Phong ấn Cổ lượt sau", type: "boolean" },
     { key: "forget_reality_chance", label: "Tỉ lệ proc bonus (0..1)", type: "number" },
-    { key: "self_evasion_boost_percent", label: "Né tránh bản thân (0..1)", type: "number" },
     { key: "target_damage_reduce_percent", label: "Giảm ST địch (0..1)", type: "number" }
   ],
   passive: [
@@ -136,7 +135,6 @@ const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "st
     { key: "mana_regen_mult", label: "Mana Regen Mult (Hệ số hồi mana)", type: "number" },
     { key: "soul_refinement", label: "Soul Refinement", type: "number" },
     { key: "movement", label: "Movement (Phạm vi di chuyển, ô)", type: "number" },
-    { key: "evasion", label: "Evasion (Né tránh)", type: "number" },
     { key: "storage_capacity", label: "Storage (Dung lượng chứa)", type: "number" },
     { key: "investigation", label: "Investigation (Khảo sát/Điều tra)", type: "number" },
     { key: "hearing", label: "Hearing (Thính giác)", type: "number" },
@@ -1699,7 +1697,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                       soul: "Hồn Lực",
                       storage: "Vật Chứa",
                       movement: "Di Chuyển (ô)",
-                      evasion: "Né Tránh",
                       investigation: "Trinh Sát",
                       hearing: "Thính Giác",
                       mana_regen_mult: "Hồi Pháp",

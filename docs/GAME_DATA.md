@@ -436,8 +436,8 @@ Các trường quan trọng trong dictionary:
   - **Khối `active`:** effect chủ động dùng trong combat — `damage_flat`, `damage_mult`, `damage_path`, `heal_flat`, `shield_flat`, `apply_status`, `target_selector`, `summon_*`, `curve_attack`, `lifesteal`, … Danh sách đầy đủ + catalog chuẩn xem mục **"Hiệu ứng Cổ (effects)"** bên dưới.
     - **`apply_status` là khối lắp ráp được:** một action có thể gắn **nhiều status cùng lúc** dưới dạng mảng `[{"id":"BLEED","value":10,"turns":3},{"id":"BIND","turns":2}]`. Ba dạng authoring đều hợp lệ: chuỗi legacy (`"BIND"`), object đơn (`{"id":"BIND","turns":6}`), mảng (khuyến nghị). Entry thiếu `value`/`turns` sẽ kế thừa `status_tick_damage`/`status_duration_ticks` cấp action (chỉ dùng cho dữ liệu cũ; dữ liệu mới khai báo trọn trong từng entry). Entry có thêm **`chance` (0..1, optional)** — tỉ lệ kích hoạt mỗi lần dùng, **0 = luôn trúng** (mọi row cũ không có `chance` giữ nguyên hành vi). Resolve qua `statusfx` registry (`models.ActiveEffect.ResolveStatusApplications`, bản rank-scale `...ForRank` dùng ở simulator build).
     - **Rank-scale cho entry có `chance`:** `chance_thực = min(0.95, chance + 0.05×(rank−1))`, `turns_thực = turns + (rank−1)/3` (rank 1–3: +0, 4–6: +1, 7–9: +2). VD Hoang Mộ Cổ (`GU_DEATH_DESOLATE_TOMB_4`, `chance: 0.35, turns: 1`): rank 4 → 50%/2 lượt; cùng entry ở rank 9 → 75%/3 lượt. Miss log `STATUS_MISS`, roll trước miễn nhiễm/kháng.
-    - Key phần trăm trực tiếp (0..1, áp sau sát thương thường): `damage_hp_percent` (% MaxHP mục tiêu, xuyên khiên), `shield_flat_reduce_percent` (% khiên hiện tại bị tước), `disable_gu_next_turn` (bool: `GU_SEAL` mục tiêu — xem enforcement trong simulator), `forget_reality_chance` (cổng proc cho cả gói bonus), `self_evasion_boost_percent` (buff `EVASION` bản thân), `target_damage_reduce_percent` (cường độ `WEAK`/`FORGET_REALITY` lên mục tiêu). `damage_path` ghi đè hệ đòn đánh; `stat_base_attack` trong active cộng flat vào sát thương đòn.
-  - **Khối `passive` (Block v2 duy nhất, không còn đọc flat cũ):** chỉ số vĩnh viễn cộng dồn (`STAT_MOD ... SPEED`, `MOVEMENT` = phạm vi di chuyển ô — tốc chạy map, `SPEED` chỉ thứ tự đánh combat), `damage_reduction`, `evasion`, `luck`, `storage_capacity`, `tenacity` (0..1: rút ngắn duration CC + tỉ lệ tự giải 1 debuff đầu lượt), `cc_resist` (0..1: kháng proc mọi debuff, nhân với mental resist, cap tổng 0.75), …
+    - Key phần trăm trực tiếp (0..1, áp sau sát thương thường): `damage_hp_percent` (% MaxHP mục tiêu, xuyên khiên), `shield_flat_reduce_percent` (% khiên hiện tại bị tước), `disable_gu_next_turn` (bool: `GU_SEAL` mục tiêu — xem enforcement trong simulator), `forget_reality_chance` (cổng proc cho cả gói bonus), `target_damage_reduce_percent` (cường độ `WEAK`/`FORGET_REALITY` lên mục tiêu). `damage_path` ghi đè hệ đòn đánh; `stat_base_attack` trong active cộng flat vào sát thương đòn.
+  - **Khối `passive` (Block v2 duy nhất, không còn đọc flat cũ):** chỉ số vĩnh viễn cộng dồn (`STAT_MOD ... SPEED`, `MOVEMENT` = phạm vi di chuyển ô — tốc chạy map, `SPEED` chỉ thứ tự đánh combat), `damage_reduction`, `luck`, `storage_capacity`, `tenacity` (0..1: rút ngắn duration CC + tỉ lệ tự giải 1 debuff đầu lượt), `cc_resist` (0..1: kháng proc mọi debuff, nhân với mental resist, cap tổng 0.75), …
     - Khắc hệ theo Gu path (Block v2): `STAT_MOD PATH_RESISTANCE ADD_FLAT` kèm `path` (`heaven`/`earth`/`dream`, 0..1, merge vào `CombatantAuto.PathResistance`, nhận diện theo `Gu.path` của đòn đánh), `UNIQUE IMMUNE_DREAM_STATUS` (miễn nhiễm status có `spec.Path == "dream"`), `forget_heaven/earth_protection` (cờ metadata).
   - **Shorthand status (đã loại khỏi dữ liệu):** key viết tắt (`freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`, `bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt`) không còn xuất hiện trong `Gu.csv` — toàn bộ đã migrate sang `apply_status` dạng mảng. `ActiveEffect.normalize()` vẫn giữ làm fallback cho DB rows cũ chưa re-import; **không dùng cho dữ liệu mới**.
   - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Ngoài các trigger thế giới (`ON_TICK`, `ON_CONSUME`, `ON_USE`), combat hỗ trợ `ON_CAST`, `ON_HIT`, `BEFORE_HIT`, `BEFORE_ENEMY_ATTACK`, `ON_TURN_START`, `ON_DEATH`, `ON_BATTLE_START` và `COMBAT_PASSIVE` (`PASSIVE` cũ vẫn hợp lệ, cùng nghĩa).
@@ -516,16 +516,16 @@ inventory nhưng **không được coi là supported**.
 | `[parser-only] active.ignore_defense`; `ignore_defense_pct`; `armor_pen`; `crit_rate_boost`; `speed_boost_flat`; `all_stats_buff_percent`; `lifesteal_rate` | action/hit | flat or ratio (legacy names không đồng nhất) | typed model/runtime legacy; combat state | model/simulator characterization |
 | `active.curve_attack`; `summon_phantom` | action → enemies/summon | flat/count | combat legacy/partial; combat state | catalog + simulator characterization |
 | `[parser-only] active.summon_growth_phantoms`; `[parser-only] active.summon_count_per_tick`; `[parser-only] active.phantom_damage_scale` | growth tick → summon | bool/count/ratio | parser/model only; chưa có persistence executor | catalog only, không parity |
-| `active.disable_gu_next_turn`; `forget_reality_chance`; `self_evasion_boost_percent`; `target_damage_reduce_percent` | hit → self/target | bool/probability/ratio | simulator/statusfx; combat state | forget-gu + simulator |
+| `active.disable_gu_next_turn`; `forget_reality_chance`; `target_damage_reduce_percent` | hit → self/target | bool/probability/ratio | simulator/statusfx; combat state | forget-gu + simulator |
 | `active.capture_bonus`; `portal_create`; `random_portal` | world use → self/world | ratio/bool | explore/world handlers; player/world tables | handler characterization |
 | `active.cleansing_power`; `active.wood_transformation` | action → self | ratio/bool | combat legacy partial; combat state | catalog; parity chưa đầy đủ |
 | `[parser-only] active.refine_mana_tier`; `[parser-only] active.replicate`; `[parser-only] active.generate_gu`; `[parser-only] active.invulnerable_ticks`; `[parser-only] active.absorb_damage_flat` | before refine/action → self hoặc generated entity | tier/bool/id/ticks/flat | model/manifest only; chưa có v2 executor/persistence command | catalog only, không parity |
 | `active.reveal_all_stealth`; `active.reveal_weakness` | action/world inspect → targets/world | bool | migrate runtime v2; definition JSONB, chưa có persistence command | catalog only, không parity |
 | `active.summon_monster_id`; `active.sleep`; `active.decoy_count` | action → summon/targets | entity id/bool/count | migrate runtime v2; combat/world owner chưa chốt | catalog only, không parity |
-| `active.stat_base_attack`; `stat_base_defense`; `stat_base_hp`; `evasion` | always-on (đặt nhầm namespace) → self | flat/ratio | legacy player stats; `player_gu` | catalog |
+| `active.stat_base_attack`; `stat_base_defense`; `stat_base_hp` | always-on (đặt nhầm namespace) → self | flat | legacy player stats; `player_gu` | catalog |
 | `active.description` | không trigger | text metadata, **không effect** | content only | catalog |
 | `STAT_MOD ATTACK/DEFENSE/HP/SPEED` (`PASSIVE_STATS`, `ALWAYS_ON`) | always-on equipped ACTIVE → self | flat | player stats/combat snapshot; `player_gu` | player-stats + catalog |
-| `STAT_MOD MOVEMENT/INVESTIGATION/HEARING/EVASION/LUCK/ACCURACY/DISGUISE/STORAGE` | always-on/capability → self | flat | player/world/inventory readers | catalog + handler characterization |
+| `STAT_MOD MOVEMENT/INVESTIGATION/HEARING/LUCK/DISGUISE/STORAGE` | always-on/capability → self | flat | player/world/inventory readers | catalog + handler characterization |
 | `passive.damage_multiplier_on_hit`; `damage_mult`; `[parser-only] damage_reduction`; `tenacity`; `cc_resist` | always-on/combat event → self | ratio | combat; combat snapshot | simulator/status tests; `damage_mult` migrate |
 | `STAT_MOD PATH_RESISTANCE` kèm `path` (`heaven`/`earth`/`dream`); `UNIQUE IMMUNE_DREAM_STATUS`; `forget_heaven_protection`; `forget_earth_protection` | combat passive → self | ratio/bool | combat snapshot | simulator characterization |
 | `passive.success_rate_bonus`; `refine_mana_tier`; `soul_refinement`; `path_conflict_reduction` | before refinement → self | ratio/tier | refinement handlers; player/loadout; conflict key known bug | refine tests + catalog |
@@ -641,8 +641,8 @@ Cấu trúc flat v2 của mỗi block:
   2. `SHIELD`: khiên ảo Chân Nguyên Giáp (`FLAT`, `MULTIPLIER`).
   3. `HEAL`: hồi phục `FLAT`, `PERCENT`, `LIFESTEAL` hoặc `RESOURCE` (resource chọn bằng field `resource`).
   4. `DIRECT_HP`: sát thương trực tiếp `FLAT`, `MAX_HP_PERCENT` hoặc hủy khiên `SHIELD_STRIP`.
-  5. `STAT_MOD`: biến đổi chỉ số nhân vật (`ATTACK`, `DEFENSE`, `SPEED`, `EVASION`, `CRIT_RATE`, `ALL`...) dạng `ADD_FLAT` hoặc `MULTIPLY_PERCENT`.
-  6. `STATUS`: gắn hiệu ứng trạng thái quản lý bởi `statusfx` (`status_id`, `value`, `turns`, `chance`).
+  5. `STAT_MOD`: biến đổi chỉ số nhân vật (`ATTACK`, `DEFENSE`, `SPEED`, `CRIT_RATE`, `ALL`...) dạng `ADD_FLAT` hoặc `MULTIPLY_PERCENT`.
+  6. `STATUS`: gắn hiệu ứng trạng thái quản lý bởi `statusfx` (`status_id`, `value`, `turns`, `chance`). Né tránh dùng `status_id: "EVASION"` — `value` là % né, gộp max, cap 75%.
   7. `BARRIER`: bảo hộ có subtype `FLAT` hoặc `PERCENT` cùng thời lượng.
   8. `CLEANSE`: thanh tẩy `ALL`, `DEBUFF` hoặc một `STATUS` cụ thể.
   9. `UNIQUE`: cơ chế phi tuyến tính đặc thù (`code`, `params`).
@@ -691,7 +691,7 @@ Cấu trúc flat v2 của mỗi block:
 | `control_power` | 5 | number | Khống chế |
 | `soul_refinement` | 4 | number | Tinh luyện Hồn |
 | `time_speed_multiplier` | 1 | number | +`time_speed_multiplier` khi trang bị ACTIVE (cộng vào `players.time_speed_multiplier`, xử lý ở `models.EquippedTimeSpeedBonus`) |
-| `luck` + `cleansing_power` + `evasion` + `storage_capacity` + `attack_speed` + `damage_multiplier` + `damage_multiplier_on_hit` + `damage_reduction` + `damage_reflect` | 1–6 | mixed | Minor (xem struct) |
+| `luck` + `cleansing_power` + `storage_capacity` + `attack_speed` + `damage_multiplier` + `damage_multiplier_on_hit` + `damage_reduction` + `damage_reflect` | 1–6 | mixed | Minor (xem struct) |
 | `healing_multiplier` / `heal_received_multiplier` / `cold_resistance` / `water_resistance` / `dao_mark_multiplier` / `exclude_gu_storage` / `formation_power` / `refinement_power` / `storage_capacity_gu` / `target_selector`(=ROW) | 1 | mixed | Minor (xem struct) |
 | `description` | 5 | string | Ghi chú text |
 
@@ -720,8 +720,8 @@ Cấu trúc flat v2 của mỗi block:
 | C - Persistent | `stat_base_hp/attack/defense/speed` | number | Chỉ số vĩnh viễn | CÓ |
 | C - Persistent | `damage_reduction` | decimal | Giảm damage % | CÓ |
 | C - Persistent | `crit_chance` / `crit_damage` | decimal | Bạo kích | Cần thêm |
-| C - Persistent | `accuracy` | decimal | Tỉ lệ đánh trúng | Cần thêm |
-| C - Persistent | `evasion` | decimal | Tỉ lệ né | CÓ (`evasion`) |
+| C - Persistent | `accuracy` | decimal | Tỉ lệ đánh trúng | **Đã gỡ** (xem `apply_status EVASION`) |
+| C - Persistent | `evasion` | decimal | Tỉ lệ né | **Đã gỡ** → `apply_status` `status_id: "EVASION"` |
 | D - Turn | `cooldown_ticks` | integer | Hồi chiêu | Cần thêm |
 | D - Turn | `mana_cost` | number | Chi phí dùng Cổ | CÓ (cột `base_mana_cost`) |
 | D - Turn | `target_type` | enum | Quy tắc mục tiêu | Cần thêm (hiện dùng `target_selector` giới hạn) |
@@ -748,7 +748,7 @@ Cấu trúc flat v2 của mỗi block:
 | **STEALTH** | Special | CÓ (4) | **CÓ (registry)** |
 | **SLEEP** | Control | CÓ (2) | **CÓ (registry)** |
 | **BLIND / CHARM / BIND** | Stat/Control | CÓ (1) | **CÓ (registry)** |
-| HASTE, ARMOR_BREAK, DAMAGE_REDUCTION_UP, INVINCIBLE, REVIVE_LOCK | Buff/Debuff | Không | **CÓ (registry)** |
+| HASTE, ARMOR_BREAK, DAMAGE_REDUCTION_UP, INVINCIBLE, EVASION, REVIVE_LOCK | Buff/Debuff | Không | **CÓ (registry)** |
 
 **Bảng D — Mapping key cũ → key chuẩn** (dùng key chuẩn khi thêm Cổ mới):
 
@@ -761,6 +761,8 @@ Cấu trúc flat v2 của mỗi block:
 | `lifesteal` | `life_steal` | Hồi HP theo damage cuối |
 | `damage_reflect` | `reflect_damage` | Phản damage nhận vào |
 | `slow`/`freeze`/`sleep`/… | `apply_status: [{id:"SLOW",...}]` | **Đã migrate xong** (Gu.csv + keys chết `invulnerable_ticks`→`INVINCIBLE`, `absorb_damage_flat`→`shield_flat`, `speed_boost_flat`→`HASTE`) |
+| `passive.evasion` / `STAT_MOD EVASION` / `self_evasion_boost_percent` | `apply_status: [{id:"EVASION",...}]` | **Đã migrate xong** — `EVASION` giờ là status tự buff có `chance`/`turns`/`value`, nguồn né duy nhất trong combat |
+| `passive.accuracy` / `STAT_MOD ACCURACY` | — | **Đã gỡ khỏi hệ thống** (chỉ số trừ thẳng vào xác suất né 0..1 nên vô hiệu hoá né tránh) |
 
 ### Status chiến đấu (combat)
 
@@ -789,7 +791,7 @@ Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không
 
 **Status có trong data, đã wire qua registry `statusfx`** (xem `docs/STATUS_EFFECTS.md` → "Registry status"): `BURN` (DoT hỏa), `FEAR` (force basic), `CONFUSE` (40% mis-target), `STEALTH` (untargetable), `SLEEP` (skip turn + break on damage), `BLIND` (35% miss), `CHARM` (điều khiển), `BIND` (mất lượt).
 
-**Status catalog đã wire qua registry**: `HASTE` (tăng tốc), `ARMOR_BREAK` (giảm thủ), `DAMAGE_REDUCTION_UP` (giảm sát thương nhận), `INVINCIBLE` (miễn nhiễm sát thương), `REVIVE_LOCK` (chặn hồi sinh).
+**Status catalog đã wire qua registry**: `HASTE` (tăng tốc), `ARMOR_BREAK` (giảm thủ), `DAMAGE_REDUCTION_UP` (giảm sát thương nhận), `INVINCIBLE` (miễn nhiễm sát thương), `EVASION` (tự buff né tránh — `value` là % né, gộp max, cap 75%), `REVIVE_LOCK` (chặn hồi sinh).
 
 **Quy tắc gộp hiệu ứng (Consolidation)**:
 - `disable_gu_next_turn` và `FORGET_EGO` được quy về trạng thái chuẩn `GU_SEAL` (`StatusGuSeal`).

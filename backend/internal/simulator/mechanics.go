@@ -11,6 +11,11 @@ import (
 
 // tenacityPriority ranks which debuff gets dispelled first: hard lock (mất
 // lượt) → action lock → disrupt/dao → DoT. Lower is dispelled first.
+// EvasionChanceCap is the hard ceiling on a combatant's combined dodge chance
+// (EVASION status). Stacks merge by max, so this only binds for a single Gu
+// granting >= 76% evasion.
+const EvasionChanceCap = 0.75
+
 func tenacityPriority(id string) int {
 	switch id {
 	case statusfx.StatusStun, statusfx.StatusBind, statusfx.StatusFreeze, statusfx.StatusSleep,
@@ -283,6 +288,15 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			}
 		case statusfx.BehaviourInvincible:
 			c.DamageTakenReduction = 1.0
+		case statusfx.BehaviourEvasion:
+			// Merge by max (not sum) so stacking evade buffs never breaks the
+			// dodge roll; hard cap 0.75 keeps a guaranteed hit possible.
+			if r := float64(eff.Value) / 100.0; r > c.EvasionChance {
+				c.EvasionChance = r
+			}
+			if c.EvasionChance > EvasionChanceCap {
+				c.EvasionChance = EvasionChanceCap
+			}
 		case statusfx.BehaviourStun:
 			c.IsStunned = true
 		case statusfx.BehaviourFreeze:
@@ -340,13 +354,6 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			case EffectTaunt:
 				c.HasTaunt = true
 				c.TaunterID = c.ID
-			case "EVASION":
-				if r := float64(eff.Value) / 100.0; r > c.EvasionChance {
-					c.EvasionChance = r
-				}
-				if c.EvasionChance > 0.75 {
-					c.EvasionChance = 0.75
-				}
 			}
 		}
 	}

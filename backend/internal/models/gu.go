@@ -225,7 +225,6 @@ type ActiveEffect struct {
 	ShieldFlatReducePercent float64 `json:"shield_flat_reduce_percent,omitempty"` // % target current shield stripped
 	DisableGuNextTurn       bool    `json:"disable_gu_next_turn,omitempty"`       // seal target Gu for 1 turn (GU_SEAL)
 	ForgetRealityChance     float64 `json:"forget_reality_chance,omitempty"`      // proc gate (0..1) for the action's status + bonus effects
-	SelfEvasionBoostPercent float64 `json:"self_evasion_boost_percent,omitempty"` // self evasion buff (0..1)
 	TargetDamageReducePct   float64 `json:"target_damage_reduce_percent,omitempty"`
 	DamagePath              string  `json:"damage_path,omitempty"`      // overrides action dao path (e.g. "Dream Path")
 	StatBaseAttackFlat      float64 `json:"stat_base_attack,omitempty"` // flat bonus added to action damage
@@ -260,13 +259,11 @@ type PassiveEffect struct {
 	Movement              float64 `json:"movement,omitempty"`
 	Investigation         float64 `json:"investigation,omitempty"`
 	Hearing               float64 `json:"hearing,omitempty"`
-	Evasion               float64 `json:"evasion,omitempty"`
 	RefineManaTier        float64 `json:"refine_mana_tier,omitempty"`
 	CleansingPower        float64 `json:"cleansing_power,omitempty"`
 	Luck                  float64 `json:"luck,omitempty"`
 	SuccessRateBonus      float64 `json:"success_rate_bonus,omitempty"`
 	TimeSpeedMultiplier   float64 `json:"time_speed_multiplier,omitempty"`
-	Accuracy              float64 `json:"accuracy,omitempty"` // accuracy bonus (reduces enemy dodge)
 	DisguiseLevel         float64 `json:"disguise_level,omitempty"`
 	Tenacity              float64 `json:"tenacity,omitempty"`  // self-dispel chance + CC duration reduction (0..1)
 	CCResist              float64 `json:"cc_resist,omitempty"` // generic proc resist vs all debuffs (0..1)
@@ -933,8 +930,8 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 	for stat, key := range map[string]string{
 		"ATTACK": "flat_damage", "DEFENSE": "flat_defense",
 		"INVESTIGATION": "success_rate_bonus", "PATH_CONFLICT_REDUCTION": "path_conflict_reduction",
-		"ACCURACY": "accuracy", "TENACITY": "tenacity", "CC_RESIST": "cc_resist",
-		"MOVEMENT": "movement", "SPEED": "speed", "EVASION": "evasion",
+		"TENACITY": "tenacity", "CC_RESIST": "cc_resist",
+		"MOVEMENT": "movement", "SPEED": "speed",
 	} {
 		if value := GuStatValue(gu, stat); value != 0 {
 			res[key] = value

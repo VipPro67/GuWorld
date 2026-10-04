@@ -535,6 +535,28 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			Detail:    fmt.Sprintf("%s nhận [%s], giảm %.0f%% sát thương nhận vào trong %d lượt!", target.Name, spec.Label, pct, op.Turns),
 		})
 
+	// EVASION carries its own strength: Value is the dodge chance in percent
+	// (op.Value is already scaled by CasterAttenuationFactor on self buffs).
+	// ComputeEffectMultipliers merges multiple EVASION effects by max, cap 0.75.
+	case statusfx.BehaviourEvasion:
+		pct := op.Value
+		if pct <= 0 {
+			pct = 30
+		}
+		if pct > 100 {
+			pct = 100
+		}
+		target.ActiveEffects = append(target.ActiveEffects, Effect{
+			ID: spec.ID, Type: "buff", Value: int(pct), Duration: op.Turns,
+		})
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   target.ID,
+			ActorName: target.Name,
+			Action:    "EVASION_APPLIED",
+			Detail:    fmt.Sprintf("%s nhận [%s] +%.0f%% trong %d lượt!", target.Name, spec.Label, pct, op.Turns),
+		})
+
 	case statusfx.BehaviourInvincible:
 		target.ActiveEffects = append(target.ActiveEffects, Effect{
 			ID: spec.ID, Type: "buff", Value: 100, Duration: op.Turns,

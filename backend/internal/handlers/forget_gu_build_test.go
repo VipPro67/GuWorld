@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -33,19 +34,32 @@ func TestBuildSimActionForgetReality(t *testing.T) {
 	spec := &models.GuDictionaryItem{
 		ID: "GU_FORGET_REALITY", Name: "Thực Tại", Rank: 7, Path: []string{"Wisdom Path"},
 		Effects: models.GuEffects{Active: &models.ActiveEffect{
-			ForgetRealityChance: 0.4, SelfEvasionBoostPercent: 0.5, TargetDamageReducePct: 0.4,
-			ApplyStatus: models.StatusApplications{{ID: "FORGET_REALITY", Turns: 2}},
+			ForgetRealityChance: 0.4, TargetDamageReducePct: 0.4,
+			ApplyStatus: models.StatusApplications{
+				{ID: "EVASION", Value: 50, Chance: 0.15, Turns: 1},
+				{ID: "FORGET_REALITY", Turns: 2},
+			},
 		}},
 	}
 	act, err := buildSimActionFromGu(actor, spec, "GU_SKILL")
 	if err != nil {
 		t.Fatalf("buildSimActionFromGu: %v", err)
 	}
-	if act.ProcChance != 0.4 || act.SelfEvasionPct != 0.5 || act.TargetWeakPct != 0.4 || act.BonusTurns != 2 {
+	if act.ProcChance != 0.4 || act.TargetWeakPct != 0.4 || act.BonusTurns != 2 {
 		t.Fatalf("reality fields not mapped: %+v", act)
 	}
-	if len(act.StatusOps) != 1 || act.StatusOps[0].Value != 40 {
-		t.Fatalf("FORGET_REALITY op must carry intensity 40: %+v", act.StatusOps)
+	if len(act.StatusOps) != 2 {
+		t.Fatalf("expected EVASION + FORGET_REALITY ops, got %+v", act.StatusOps)
+	}
+	if act.StatusOps[0].ID != "EVASION" || act.StatusOps[0].Value != 50 {
+		t.Fatalf("EVASION op must carry strength 50: %+v", act.StatusOps[0])
+	}
+	// Rank 7 scaling: chance 0.15 + 0.05*(7-1) = 0.45, turns 1 + (7-1)/3 = 3.
+	if math.Abs(act.StatusOps[0].Chance-0.45) > 1e-9 || act.StatusOps[0].Turns != 3 {
+		t.Fatalf("EVASION rank scaling wrong: %+v", act.StatusOps[0])
+	}
+	if act.StatusOps[1].Value != 40 {
+		t.Fatalf("FORGET_REALITY op must carry intensity 40: %+v", act.StatusOps[1])
 	}
 }
 

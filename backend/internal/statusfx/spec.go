@@ -184,6 +184,16 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryBuff, Path: "void", BaseChance: 1.0,
 		SelfTarget: true, DefaultTurns: 1,
 	},
+	// EVASION is the only dodge source in combat. Self buff, never dispellable,
+	// never gated by CC resist; its proc chance comes from the apply_status
+	// entry (rank-scaled in combat_auto_resolve) and its strength from op.Value
+	// (percent). The simulator merges multiple EVASION effects by max, capped
+	// at 0.75 in ComputeEffectMultipliers.
+	StatusEvasion: {
+		ID: StatusEvasion, Behaviour: BehaviourEvasion, Label: "Né Tránh",
+		Category: CategoryBuff, Path: "void", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 1,
+	},
 	StatusReviveLock: {
 		ID: StatusReviveLock, Behaviour: BehaviourReviveLock, Label: "Khóa Hồi Sinh",
 		Category: CategoryImmortal, Path: "rules", BaseChance: 1.0,

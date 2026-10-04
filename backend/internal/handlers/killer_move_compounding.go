@@ -104,19 +104,18 @@ var compoundRules = []compoundRule{
 	},
 	{
 		Name: "huyễn ảnh bộ", Type: "phantom_step",
-		Requires: []string{"movement", "evasion", "stealth"},
+		Requires: []string{"movement", "stealth"},
 		Boosts:   []string{"movement_bonus"},
 		MinCount: 2,
 		Description: "Thân pháp kết hợp ảo ảnh tạo ra bước di chuyển khó lường. " +
-			"Tăng khả năng né tránh và tốc độ.",
+			"Tăng tốc độ di chuyển.",
 		Transform: func(coreVal float64, boost float64, num int) (float64, string) {
-			evasion := coreVal*(1.0+float64(num)*0.2) + float64(num)*3.0
 			speed := coreVal * 0.5 * (1.0 + float64(num)*0.1)
 			if boost > 0 {
-				evasion *= boost
+				speed *= boost
 			}
-			return evasion + speed,
-				fmt.Sprintf("Tăng %.0f né tránh và %.0f tốc độ di chuyển", evasion, speed)
+			return speed,
+				fmt.Sprintf("Tăng %.0f tốc độ di chuyển", speed)
 		},
 	},
 	{
@@ -445,8 +444,7 @@ func applyCompoundEffects(baseDamage, baseDefense float64, effects map[string]fl
 			finalDamage += c.Value
 			finalEffects["stun"] = c.Value * 0.1
 		case "phantom_step":
-			finalEffects["evasion"] = c.Value * 0.6
-			finalEffects["speed_boost"] = c.Value * 0.4
+			finalEffects["speed_boost"] = c.Value
 		case "bloodthirsty_strength":
 			finalDamage += c.Value
 			finalEffects["life_steal"] = c.Value * 0.1

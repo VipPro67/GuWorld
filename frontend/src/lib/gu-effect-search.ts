@@ -27,6 +27,7 @@ export const STATUS_NAMES_VI: Record<string, string> = {
   THORNS: "Gai Phản Đòn",
   TAUNT: "Khiêu Khích",
   INVINCIBLE: "Bất Tử",
+  EVASION: "Né Tránh",
   CONFUSE: "Hỗn Loạn",
   CONFUSION: "Hỗn Loạn",
   FEAR: "Hoảng Sợ",
@@ -53,8 +54,6 @@ export const STAT_NAMES_VI: Record<string, string> = {
   DEFENSE: "Thủ",
   HP: "Sinh Lực",
   SPEED: "Tốc Độ",
-  EVASION: "Né Tránh",
-  ACCURACY: "Chính Xác",
   CRIT_RATE: "Bạo Kích",
   TENACITY: "Kiên Cường",
   CC_RESIST: "Kháng Khống Chế",
@@ -248,7 +247,7 @@ export function matchesGuEffect(gu: GuDictionaryItem, effectId: string): boolean
           if (opType === "DIRECT_HP" || subType === "MAX_HP_PERCENT" || code === "BYPASS_SHIELD") return true;
           break;
         case "crit_evade":
-          if (stat === "CRIT_RATE" || stat === "EVASION" || code === "FIRST_TURN_EVADE") return true;
+          if (stat === "CRIT_RATE" || statusId === "EVASION" || code === "FIRST_TURN_EVADE") return true;
           break;
         case "stat_buff":
           if (opType === "STAT_MOD" || code === "STAT_MODS") return true;

@@ -160,9 +160,8 @@ type SimAction struct {
 	DamageHPPercent    float64 // % target MaxHP as direct HP damage (bypasses shield)
 	ShieldStripPercent float64 // % target current shield stripped
 	ProcChance         float64 // 0 = always; >0 = gate status ops + bonus effects
-	SelfEvasionPct     float64 // self evasion buff 0..1 (EVASION effect)
 	TargetWeakPct      float64 // WEAK intensity 0..1 applied to target
-	BonusTurns         int     // duration for SelfEvasionPct/TargetWeakPct effects
+	BonusTurns         int     // duration for TargetWeakPct effects
 	DisableGuTurns     int     // GU_SEAL turns applied to target (disable_gu_next_turn)
 
 	// Backlash from using Gu rank > actor rank
@@ -348,10 +347,9 @@ type CombatantAuto struct {
 	HasThoughtChaos      bool               // THOUGHT_CHAOS can cause KillerMove failure
 	HasDaoConflict       bool               // DAO_CONFLICT reduces heal/shield from allies
 	AccuracyPenalty      float64            // 0..1 miss chance (BLIND)
-	EvasionChance        float64            // 0..1 dodge chance (EVASION buff, e.g. FORGET_REALITY)
+	EvasionChance        float64            // 0..1 dodge chance from EVASION statuses (merged by max, cap EvasionChanceCap)
 	ImmuneDreamStatus    bool               // immune to dream-path statuses (FORGET_DREAM)
 	DamageTakenReduction float64            // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP / INVINCIBLE)
-	Accuracy             float64            // accuracy bonus (reduces miss chance from Blind, adds to dodge check)
 	CritRateBonus        float64            // extra crit chance (0..1) from Gu active effects
 	IgnoreDefenseFlat    float64            // flat defense ignored by attacker
 	IgnoreDefensePct     float64            // % defense ignored by attacker (0..1)

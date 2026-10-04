@@ -222,7 +222,7 @@ func TestItemEffectsScan_Blocks(t *testing.T) {
 
 func TestCompiledProjectionReadsAuthoredBlocksOnly(t *testing.T) {
 	var effects GuEffects
-	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ACCURACY","sub_type":"ADD_FLAT","value":4},{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":7},{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":10},{"op":"UNIQUE","code":"GROWTH_DURATION_HOURS","params":{"value":24}}]}]`
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"HEARING","sub_type":"ADD_FLAT","value":4},{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":7},{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":10},{"op":"UNIQUE","code":"GROWTH_DURATION_HOURS","params":{"value":24}}]}]`
 	if err := effects.Scan(raw); err != nil {
 		t.Fatalf("scan block effects: %v", err)
 	}
@@ -276,14 +276,22 @@ func TestEquippedTimeSpeedBonusReadsBlockEffects(t *testing.T) {
 
 func TestGetFlatGuEffectsReadsBlockPassives(t *testing.T) {
 	var effects GuEffects
-	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"ADD_FLAT","value":34},{"op":"STAT_MOD","stat":"ACCURACY","sub_type":"ADD_FLAT","value":5},{"op":"STAT_MOD","stat":"MOVEMENT","sub_type":"ADD_FLAT","value":2},{"op":"STAT_MOD","stat":"SPEED","sub_type":"ADD_FLAT","value":6},{"op":"STAT_MOD","stat":"EVASION","sub_type":"ADD_FLAT","value":15}]}]`
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"ADD_FLAT","value":34},{"op":"STAT_MOD","stat":"HEARING","sub_type":"ADD_FLAT","value":5},{"op":"STAT_MOD","stat":"MOVEMENT","sub_type":"ADD_FLAT","value":2},{"op":"STAT_MOD","stat":"SPEED","sub_type":"ADD_FLAT","value":6},{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":15}]}]`
 	if err := effects.Scan(raw); err != nil {
 		t.Fatalf("scan block effects: %v", err)
 	}
 
 	flat := GetFlatGuEffects(Gu{Effects: effects})
-	if flat["flat_damage"] != 12 || flat["flat_defense"] != 34 || flat["accuracy"] != 5 || flat["movement"] != 2 || flat["speed"] != 6 || flat["evasion"] != 15 {
+	if flat["flat_damage"] != 12 || flat["flat_defense"] != 34 || flat["success_rate_bonus"] != 15 || flat["movement"] != 2 || flat["speed"] != 6 {
 		t.Fatalf("unexpected flat passive projection: %+v", flat)
+	}
+	// EVASION and ACCURACY are no longer passive stats; a stray legacy key must
+	// not resurface through the flat projection.
+	if _, ok := flat["evasion"]; ok {
+		t.Fatalf("evasion must not be projected as a passive stat: %+v", flat)
+	}
+	if _, ok := flat["accuracy"]; ok {
+		t.Fatalf("accuracy must not be projected as a passive stat: %+v", flat)
 	}
 }
 

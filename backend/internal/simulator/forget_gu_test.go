@@ -67,14 +67,17 @@ func TestForgetEgoPercentsAndSeal(t *testing.T) {
 	}
 }
 
-// REALITY: full-proc action grants self evasion and weakens the target.
+// REALITY: full-proc action grants the EVASION status and weakens the target.
 func TestForgetRealityProcEvasionWeak(t *testing.T) {
 	ally := newTestCombatant("ally", "Player", 1000, 0)
 	ally.Speed = 100
 	ally.Actions = []SimAction{{
 		ActionType: "GU_SKILL", Name: "Thực Tại", Damage: 10,
-		ProcChance: 1.0, SelfEvasionPct: 0.5, BonusTurns: 2,
-		StatusOps: []statusfx.StatusOp{{ID: statusfx.StatusForgetReality, Value: 40, Turns: 2}},
+		ProcChance: 1.0,
+		StatusOps: []statusfx.StatusOp{
+			{ID: statusfx.StatusEvasion, Value: 50, Turns: 2, Chance: 1.0},
+			{ID: statusfx.StatusForgetReality, Value: 40, Turns: 2},
+		},
 	}}
 	enemy := newTestCombatant("enemy", "Enemy", 2000, 50)
 	enemy.Speed = 1
@@ -83,12 +86,14 @@ func TestForgetRealityProcEvasionWeak(t *testing.T) {
 	state := &CombatState{Seed: 5, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}}
 	logs := Simulate(state)
 
-	// Per-action logs are merged into the consolidated GU_SKILL entry.
-	if !hasDetail(logs, "né tránh") {
-		t.Fatal("missing evasion gain in merged action log")
+	if !hasDetail(logs, "Né Tránh") {
+		t.Fatal("missing EVASION application in merged action log")
 	}
 	if !hasDetail(logs, "Lãng Quên Thực Tại") {
 		t.Fatal("missing FORGET_REALITY application log")
+	}
+	if ally.EvasionChance < 0.5 {
+		t.Fatalf("EvasionChance = %v, want >= 0.5 from the EVASION status", ally.EvasionChance)
 	}
 }
 
