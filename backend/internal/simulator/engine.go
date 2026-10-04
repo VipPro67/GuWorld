@@ -1573,9 +1573,9 @@ func Simulate(state *CombatState) []CombatLog {
 					totalDmg := 0.0
 					hadEvaded := target.CustomState != nil && target.CustomState["first_turn_evade_used"] == turn
 
-					// Evasion: dodge chance from EVASION buffs, reduced by attacker Accuracy
+					// Evasion: dodge chance from the target's EVASION status.
 					satKhiGuaranteed := hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState != nil && actor.CustomState["sat_khi_level"] > 10
-					if missCh := target.EvasionChance - actor.Accuracy; missCh > 0 && rng.Float64() < missCh && !satKhiGuaranteed {
+					if missCh := target.EvasionChance; missCh > 0 && rng.Float64() < missCh && !satKhiGuaranteed {
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:       turn,
 							ActorId:    actor.ID,
@@ -2028,28 +2028,6 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				if len(allOps) > 0 {
 					applyStatusOps(actor, resolved, allOps, actionRank, turn, rng, &turnLogs)
-				}
-				if a.SelfEvasionPct > 0 {
-					evaPct := a.SelfEvasionPct
-					if actor.Rank > actionRank {
-						att := statusfx.CasterAttenuationFactor(actionRank, actor.Rank)
-						evaPct *= att
-					}
-					turns := a.BonusTurns + 1
-					if turns < 2 {
-						turns = 2
-					}
-					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
-						ID: "EVASION", Type: "buff", Value: int(evaPct * 100), Duration: turns,
-					})
-					ComputeEffectMultipliers(actor)
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "EVASION_GAIN",
-						Detail:    fmt.Sprintf("%s nhận +%.0f%% né tránh trong %d lượt!", actor.Name, evaPct*100, a.BonusTurns),
-					})
 				}
 				if a.TargetWeakPct > 0 {
 					hasFR := false

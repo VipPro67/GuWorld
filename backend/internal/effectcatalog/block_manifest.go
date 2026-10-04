@@ -45,7 +45,7 @@ var OperationCatalog = map[string]OperationDefinition{
 	"CLEANSE":   {values("ALL", "DEBUFF", "STATUS"), anyTriggers, combatTargets, values("op", "sub_type", "target", "status_id"), nil, true, false},
 	"UNIQUE":    {nil, anyTriggers, combatTargets, values("op", "target", "code", "params"), []string{"code"}, false, false},
 }
-var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "ACCURACY", "EVASION", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL", "MANA", "MOVEMENT", "INVESTIGATION", "HEARING", "DISGUISE", "TIME_SPEED", "REFINE_SUCCESS", "REFINE_MANA_TIER", "STORAGE", "SOUL_REFINEMENT", "CLEANSING_POWER", "DAO_MARK", "PATH_CONFLICT_REDUCTION", "PATH_RESISTANCE")
+var StatCatalog = values("ATTACK", "DEFENSE", "HP", "SPEED", "DAMAGE_DEALT", "TENACITY", "CC_RESIST", "LUCK", "CRIT_RATE", "ALL", "MANA", "MOVEMENT", "INVESTIGATION", "HEARING", "DISGUISE", "TIME_SPEED", "REFINE_SUCCESS", "REFINE_MANA_TIER", "STORAGE", "SOUL_REFINEMENT", "CLEANSING_POWER", "DAO_MARK", "PATH_CONFLICT_REDUCTION", "PATH_RESISTANCE")
 var ResourceCatalog = values("HP", "MANA", "SOUL", "THOUGHT", "APTITUDE", "LIFESPAN", "STRESS", "PRIMEVAL_STONE", "IMMORTAL_STONE")
 var StatusCatalog = func() map[string]bool {
 	m := map[string]bool{}

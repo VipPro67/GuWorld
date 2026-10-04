@@ -149,7 +149,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 				missingHpRate := 1.0 - player.HP/player.BaseHP
 				addSrc("damage_multiplier", srcID, spec.Name, missingHpRate*value, 1, 1)
 			}
-			for _, entry := range []struct{ stat, key string }{{"SOUL_REFINEMENT", "soul"}, {"STORAGE", "storage"}, {"MOVEMENT", "movement"}, {"INVESTIGATION", "investigation"}, {"HEARING", "hearing"}, {"EVASION", "evasion"}, {"ACCURACY", "accuracy"}, {"CLEANSING_POWER", "cleansing_power"}, {"LUCK", "luck"}} {
+			for _, entry := range []struct{ stat, key string }{{"SOUL_REFINEMENT", "soul"}, {"STORAGE", "storage"}, {"MOVEMENT", "movement"}, {"INVESTIGATION", "investigation"}, {"HEARING", "hearing"}, {"CLEANSING_POWER", "cleansing_power"}, {"LUCK", "luck"}} {
 				if value := models.GuStatValue(spec, entry.stat); value != 0 {
 					addSrc(entry.key, srcID, spec.Name, value, 1, 1)
 				}
@@ -190,7 +190,6 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		"movement":      0.0,
 		"investigation": 0.0,
 		"storage":       0.0,
-		"accuracy":      0.0,
 	}
 	var details []PassiveStatDetail
 	for key, srcs := range acc {
@@ -236,7 +235,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		}
 		if totalBuffPct > 0 {
 			for key := range stats {
-				if key == "storage" || key == "accuracy" {
+				if key == "storage" {
 					continue
 				}
 				cur := stats[key]

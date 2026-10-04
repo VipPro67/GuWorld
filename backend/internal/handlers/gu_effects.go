@@ -299,10 +299,6 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 		})
 		action.Logs = append(action.Logs, fmt.Sprintf("%s phong ấn Cổ của địch (không thể dùng Cổ lượt sau).", spec.Name))
 	}
-	if active.SelfEvasionBoostPercent > 0 {
-		action.IsUtility = true
-		action.Logs = append(action.Logs, fmt.Sprintf("%s tăng %.0f%% né tránh cho người dùng.", spec.Name, active.SelfEvasionBoostPercent*100))
-	}
 	if active.StatBaseAttackFlat > 0 {
 		action.Dmg += active.StatBaseAttackFlat
 		action.Logs = append(action.Logs, fmt.Sprintf("%s cộng thêm %.1f sát thương.", spec.Name, active.StatBaseAttackFlat))

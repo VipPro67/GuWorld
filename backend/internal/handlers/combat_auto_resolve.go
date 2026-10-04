@@ -498,16 +498,13 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.ForgetRealityChance > 0 {
 			act.ProcChance = active.ForgetRealityChance
 		}
-		if active.SelfEvasionBoostPercent > 0 {
-			act.SelfEvasionPct = active.SelfEvasionBoostPercent
-		}
 		if active.TargetDamageReducePct > 0 {
 			act.TargetWeakPct = active.TargetDamageReducePct
 		}
 		if active.DisableGuNextTurn {
 			act.DisableGuTurns = 1
 		}
-		if active.SelfEvasionBoostPercent > 0 || active.TargetDamageReducePct > 0 || active.DisableGuNextTurn {
+		if active.TargetDamageReducePct > 0 || active.DisableGuNextTurn {
 			act.BonusTurns = active.StatusDurationTicks
 			if act.BonusTurns <= 0 {
 				act.BonusTurns = 2
@@ -670,13 +667,6 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 							act.Damage += op.Value
 						case "DEFENSE":
 							act.Defense += op.Value
-						case "EVASION":
-							act.SelfEvasionPct = op.Value
-							if op.Turns > 0 {
-								act.BonusTurns = op.Turns
-							} else {
-								act.BonusTurns = 2
-							}
 						}
 					case gameplayeffects.OpUnique:
 						switch strings.ToUpper(op.Code) {
@@ -714,7 +704,7 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 			active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
 			active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0 ||
 			active.SummonGrowthPhantoms || active.DamageHPPercent > 0 || active.ShieldFlatReducePercent > 0 ||
-			active.DisableGuNextTurn || active.ForgetRealityChance > 0 || active.SelfEvasionBoostPercent > 0 ||
+			active.DisableGuNextTurn || active.ForgetRealityChance > 0 ||
 			active.TargetDamageReducePct > 0 || active.StatBaseAttackFlat > 0 || active.DamagePath != "" {
 			return true
 		}
@@ -725,7 +715,7 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 				if op.Op == gameplayeffects.OpDamage || op.Op == gameplayeffects.OpShield || op.Op == gameplayeffects.OpHeal ||
 					op.Op == gameplayeffects.OpDirectHP || op.Op == gameplayeffects.OpStatus ||
 					op.Op == gameplayeffects.OpBarrier || op.Op == gameplayeffects.OpCleanse ||
-					(op.Op == gameplayeffects.OpStatMod && (strings.ToUpper(op.Stat) == "ATTACK" || strings.ToUpper(op.Stat) == "DEFENSE" || strings.ToUpper(op.Stat) == "EVASION")) ||
+					(op.Op == gameplayeffects.OpStatMod && (strings.ToUpper(op.Stat) == "ATTACK" || strings.ToUpper(op.Stat) == "DEFENSE")) ||
 					op.Op == gameplayeffects.OpUnique {
 					return true
 				}
@@ -757,7 +747,7 @@ func hasCombatEffects(spec *models.GuDictionaryItem) bool {
 	if models.GuStatValue(*spec, "ATTACK") > 0 || models.GuStatValue(*spec, "DEFENSE") > 0 ||
 		models.GuStatValue(*spec, "HP") > 0 || models.GuStatValue(*spec, "SPEED") > 0 ||
 		models.GuStatValueBySubtype(*spec, "DAMAGE_DEALT", "MULTIPLY_PERCENT") > 0 ||
-		models.GuStatValue(*spec, "EVASION") > 0 || models.GuStatValue(*spec, "PATH_CONFLICT_REDUCTION") > 0 ||
+		models.GuStatValue(*spec, "PATH_CONFLICT_REDUCTION") > 0 ||
 		len(models.GuPathResistance(*spec)) > 0 || models.GuImmuneDream(*spec) {
 		return true
 	}
@@ -772,7 +762,7 @@ func hasCombatEffects(spec *models.GuDictionaryItem) bool {
 				if op.Op == gameplayeffects.OpStatMod {
 					stat := strings.ToUpper(op.Stat)
 					if stat == "ATTACK" || stat == "DEFENSE" || stat == "HP" || stat == "SPEED" ||
-						stat == "DAMAGE_DEALT" || stat == "EVASION" || stat == "PATH_CONFLICT_REDUCTION" ||
+						stat == "DAMAGE_DEALT" || stat == "PATH_CONFLICT_REDUCTION" ||
 						stat == "CRIT_RATE" || stat == "ALL" {
 						return true
 					}

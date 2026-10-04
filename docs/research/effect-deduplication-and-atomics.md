@@ -92,14 +92,14 @@ Hệ thống có tới **6 cách thức khác nhau** để làm cùng một vi�
 
 ### 2.7 Phân Mảnh Tăng / Giảm Chỉ Số (StatMod)
 - **Active Flat Bonus**: `ActiveEffect.StatBaseAttackFlat` (cộng thẳng công kích trước khi tính scale).
-- **Active Multipliers**: `damage_mult`, `shield_mult`, `refine_mana_tier` (+20% dmg/tier), `wood_transformation` (+30 def), `all_stats_buff_percent`, `speed_boost_flat`, `self_evasion_boost_percent`.
+- **Active Multipliers**: `damage_mult`, `shield_mult`, `refine_mana_tier` (+20% dmg/tier), `wood_transformation` (+30 def), `all_stats_buff_percent`, `speed_boost_flat`. ~~`self_evasion_boost_percent`~~ → **đã gỡ**, thay bằng status `EVASION`.
 - **Status Buffs**: `ATK_UP`, `DEF_UP`, `HASTE`, `DAMAGE_REDUCTION_UP`.
-- **Passive Stats**: `stat_base_attack`, `stat_base_defense`, `stat_base_hp`, `stat_base_speed`, `accuracy`, `evasion`, `tenacity`, `cc_resist`, `damage_multiplier_on_hit`.
+- **Passive Stats**: `stat_base_attack`, `stat_base_defense`, `stat_base_hp`, `stat_base_speed`, `tenacity`, `cc_resist`, `damage_multiplier_on_hit`. ~~`accuracy`~~ và ~~`evasion`~~ **đã gỡ** khỏi hệ thống.
 
 ### 2.8 Bất Cập Giữa SpecialMechanic (`other`) Và Built-in Active/Passive
 Nhiều hiệu ứng bản chất giống nhau nhưng một bên được viết thành code riêng trong `ActiveEffect`, một bên lại đẩy vào mảng `other`:
 - `DOUBLE_DAMAGE_DEALT` nằm trong `other` (`PASSIVE` / `COMBAT_PASSIVE`), trong khi `damage_mult` nằm trong `active`, và `damage_multiplier_on_hit` nằm trong `passive`.
-- `FIRST_TURN_EVADE` nằm trong `other`, trong khi `self_evasion_boost_percent` nằm trong `active`, và `evasion` nằm trong `passive`.
+- ~~`FIRST_TURN_EVADE` nằm trong `other`, trong khi `self_evasion_boost_percent` nằm trong `active`, và `evasion` nằm trong `passive`~~ → **đã giải quyết**: né tránh gộp về một nguồn duy nhất là status `EVASION` trong `statusfx` (`FIRST_TURN_EVADE` vẫn là mechanic turn-1 độc lập, bị Cấm Cổ chặn).
 - `BYPASS_SHIELD` nằm trong `other`, trong khi `damage_hp_percent` nằm trong `active`.
 - `SUMMON_WOLF_FRONTLINE` nằm trong `other`, trong khi `summon_phantom` và `summon_growth_phantoms` nằm trong `active`.
 
@@ -165,7 +165,7 @@ Mô hình **Composable Effect Block** tái cấu trúc mọi hiệu ứng thành
 ### 5. `StatMod` (Biến Đổi Chỉ Số Động & Tĩnh)
 - **Ý nghĩa**: Điều chỉnh các thuộc tính chiến đấu hoặc thuộc tính nhân vật (Công, Thủ, Tốc, Bạo kích, Né tránh, Chính xác, Kháng hiệu ứng).
 - **Thuộc tính**:
-  - `stat`: `"ATTACK"` | `"DEFENSE"` | `"SPEED"` | `"CRIT_RATE"` | `"EVASION"` | `"ACCURACY"` | `"TENACITY"` | `"CC_RESIST"` | `"DAMAGE_REDUCTION"`
+  - `stat`: `"ATTACK"` | `"DEFENSE"` | `"SPEED"` | `"CRIT_RATE"` | `"TENACITY"` | `"CC_RESIST"` | `"DAMAGE_REDUCTION"` (~~`EVASION`~~ / ~~`ACCURACY`~~ đã gỡ khỏi `StatCatalog`)
   - `mode`: `"ADD_FLAT"` | `"MULTIPLY_PERCENT"`
   - `value`: Giá trị tăng/giảm
   - `duration`: `0` (vĩnh viễn / ALWAYS_ON) hoặc `n` lượt (combat stance)
@@ -227,11 +227,12 @@ Mô hình **Composable Effect Block** tái cấu trúc mọi hiệu ứng thành
 | `speed_boost_flat` | `active` | **StatMod** | `stat: "SPEED", mode: "ADD_FLAT", value: X` | Tăng tốc độ flat |
 | `all_stats_buff_percent` | `active` | **StatMod** | `stat: "ALL", mode: "MULTIPLY_PERCENT", value: X` | Tăng toàn diện chỉ số |
 | `crit_rate_boost` | `active` | **StatMod** | `stat: "CRIT_RATE", mode: "ADD_FLAT", value: X` | Tăng tỉ lệ bạo kích |
-| `self_evasion_boost_percent` | `active` | **StatMod** | `stat: "EVASION", mode: "ADD_FLAT", value: X` | Thay thế bằng buff Né Tránh |
+| ~~`self_evasion_boost_percent`~~ | ~~`active`~~ | — | `apply_status: [{id:"EVASION",value:X,...}]` | **Đã thực thi**: gỡ field, migrate 64 dòng `Gu.csv` sang status `EVASION` |
 | `wood_transformation: true` | `active` | **StatMod** | `stat: "DEFENSE", mode: "ADD_FLAT", value: 30` | Xóa cờ dị biệt, đưa về StatMod +30 |
 | `refine_mana_tier` (trong active) | `active` | **StatMod** | `stat: "ATTACK", mode: "MULTIPLY_PERCENT", value: X*0.2` | Đưa về hệ số tăng công chuẩn |
 | `stat_base_*` (passive) | `passive` | **StatMod** | `stat: "*", mode: "ADD_FLAT", duration: 0` | Chỉ số tĩnh ALWAYS_ON |
-| `accuracy`, `evasion`, `luck`... | `passive` | **StatMod** | `stat: "*", mode: "ADD_FLAT", duration: 0` | Thuộc tính tĩnh ALWAYS_ON |
+| `luck`, `movement`, `hearing`... | `passive` | **StatMod** | `stat: "*", mode: "ADD_FLAT", duration: 0` | Thuộc tính tĩnh ALWAYS_ON |
+| ~~`accuracy`, `evasion`~~ | ~~`passive`~~ | — | — | **Đã gỡ khỏi hệ thống**: `accuracy` trừ thẳng (tới 1000) vào xác suất né 0..1 nên vô hiệu hoá né tránh; `evasion` → status `EVASION` |
 | `damage_multiplier_on_hit` | `passive` | **StatMod** | `stat: "DAMAGE_DEALT", mode: "MULTIPLY_PERCENT"` | Thay thế `DOUBLE_DAMAGE_DEALT` |
 | `DOUBLE_DAMAGE_DEALT` | `other` (`PASSIVE`) | **StatMod** | `stat: "DAMAGE_DEALT", mode: "MULTIPLY_PERCENT", value: 2.0` | Thống nhất với `damage_multiplier_on_hit` |
 | Shorthand: `freeze`, `stun`, `silence`, `taunt` | `active` | **StatusEffect** | `status_id: "ID", turns: X` | **Loại bỏ shorthand**, chỉ dùng StatusOp |

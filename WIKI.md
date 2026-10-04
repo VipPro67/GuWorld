@@ -438,7 +438,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
   - `defense + heal → khiên sinh mệnh`: khiên tự hồi phục
   - `damage + poison → độc nhận phá thể`: vết thương nhiễm độc
   - `damage + stun → chấn động`: sát thương kèm choáng
-  - `movement + evasion/stealth → huyễn ảnh bộ`: né tránh + tốc độ
+  - `movement + stealth → huyễn ảnh bộ`: tốc độ di chuyển
   - `damage + blood_drain → huyết lực`: hút máu theo sát thương
   - `summon + damage → hư ảnh đại lực`: hư ảnh chiến đấu
   - `damage + damage_multiplier → cuồng phong`: đánh liên hoàn
@@ -551,7 +551,7 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 ### Quy luật Áp Chế Cảnh Giới 2 Chiều & Tỉ Lệ Kích Hoạt Động (Dynamic Proc Chance)
 
 - **Suy Hao Cảnh Giới Tự Thân (Caster Attenuation)**: Khi Cổ sư sử dụng Cổ trùng có đẳng cấp thấp hơn cảnh giới hiện tại của mình (`GuRank < CasterRank`) để buff cho bản thân hoặc đồng đội, hiệu lực sẽ bị suy giảm mạnh theo tỷ trọng sức mạnh cảnh giới $K_{\text{caster}} = W(\text{GuRank}) / W(\text{CasterRank})$ (Bảng trọng số: Phàm giới $1, 2, 5, 20, 100$; Tiên giới $1.000, 10.000, 100.000, 1.000.000$).
-  - Các hiệu ứng đặc biệt như **Bất Tử (INVINCIBLE)** hay **Khóa Cổ (GU_SEAL)** sẽ bị nhân tỉ lệ kích hoạt với $K_{\text{caster}}$ (ví dụ: Tiên nhân Bát Chuyển/Cửu Chuyển dùng Cổ Bất Tử Tứ Chuyển thì tỉ lệ kích hoạt rơi về $\approx 0.002\%$).
+  - Các hiệu ứng đặc biệt như **Bất Tử (INVINCIBLE)**, **Né Tránh (EVASION)** hay **Khóa Cổ (GU_SEAL)** sẽ bị nhân tỉ lệ kích hoạt với $K_{\text{caster}}$ (ví dụ: Tiên nhân Bát Chuyển/Cửu Chuyển dùng Cổ Bất Tử Tứ Chuyển thì tỉ lệ kích hoạt rơi về $\approx 0.002\%$).
   - Trị số khiên ảo, hồi máu và các chỉ số cộng thêm cũng bị điều chỉnh tương ứng theo $K_{\text{caster}}$.
 - **Áp Chế Cảnh Giới Mục Tiêu (Target Realm Suppression)**: Khi xuất chiêu khống chế hoặc nguyền rủa lên đối thủ có cảnh giới cao hơn (`TargetRank > GuRank`):
   - Mỗi bậc chênh lệch cảnh giới $\Delta R$ làm giảm $20\%$ tỉ lệ dính hiệu ứng: $\text{SuppressionFactor} = \max(0, 1.0 - 0.20 \times \Delta R)$.
@@ -927,7 +927,8 @@ Nguyên tắc: engine chỉ đọc effect (`other.action_code`, `active.*`, `pas
 10. `COMBAT_PASSIVE / DOUBLE_DAMAGE_DEALT` (`PASSIVE` cũ vẫn dùng được) — nhân đôi mọi sát thương gây ra. VD: Tiên Thai Chí Tôn (kèm `path_conflict_reduction: 100`).
 11. `active.cleansing_power` / `passive.tenacity` + `passive.cc_resist` — kháng và tự giải hiệu ứng bất lợi (xem mục Kháng hiệu ứng và Tenacity ở mục 9). VD: Ngã Ý Cổ (`tenacity: 0.35`, `cc_resist: 0.15`).
 12. `active.damage_hp_percent` + `shield_flat_reduce_percent` + `disable_gu_next_turn` — trừ thẳng % MaxHP (xuyên khiên), tước % khiên hiện tại, phong ấn Cổ mục tiêu lượt sau (`GU_SEAL`, Tenacity có thể tự giải). VD: Lãng Quên Bản Ngã Cổ (40%/40%/1 lượt + status `FORGET_EGO`).
-13. `active.forget_reality_chance` + `self_evasion_boost_percent` + `target_damage_reduce_percent` + status `FORGET_REALITY` — 40% proc: bản thân +50% né tránh, địch dính suy yếu 40% sát thương (2 lượt). VD: Lãng Quên Thực Tại Cổ.
+13. `active.forget_reality_chance` + `target_damage_reduce_percent` + status `EVASION` + `FORGET_REALITY` — 40% proc: bản thân tự buff né tránh 50% (1 lượt), địch dính suy yếu 40% sát thương (2 lượt). VD: Lãng Quên Thực Tại Cổ.
+13b. **`EVASION` — nguồn né tránh duy nhất trong combat.** Gắn qua `apply_status` (`{"id":"EVASION","value":X,"turns":N,"chance":C}`) trên block `ON_ACTION`, y hệt `INVINCIBLE`: tự buff nên không qua cổng kháng CC, `CategoryBuff` nên không bị dispel, chỉ chịu tỉ lệ `chance` × Caster Attenuation $K_{\text{caster}}$ và rank-scale (`chance + 0.05×(rank−1)` cap 0.95, `turns + (rank−1)/3`). `value` là **% né**; nhiều stack **gộp max** (không cộng dồn) và cap **75%**. Roll né diễn ra **một lần cho cả đòn** (đa đòn không roll lại), trước cả roll Mù. Đối kháng: **Sát Khí** (`SAT_KHI_GUARANTEE`, `sat_khi_level > 10`) bỏ qua hoàn toàn ⇒ không né được đòn từ đó. Chỉ số `accuracy` cũ đã bị gỡ vì nó trừ thẳng (giá trị tới 1000) vào xác suất 0..1 khiến né tránh không bao giờ xảy ra.
 14. `STAT_MOD PATH_RESISTANCE` kèm `path` + `UNIQUE IMMUNE_DREAM_STATUS` — giảm sát thương khi đòn đánh mang Gu path tương ứng (nhận diện theo `Gu.path`); miễn nhiễm mọi status Mộng đạo (`SLEEP`, `CONFUSE`...). VD: Lãng Quên Thiên/Địa/Mộng Cổ (65%/65%/50%).
 15. `BEFORE_ENEMY_ATTACK / FORGET_INTENT_INTERRUPT` — khi địch tấn công, 40% phong ấn Cổ địch lượt sau (tối đa 8 lần thành công, sau đó phản phệ phong ấn chính mình). VD: Lãng Quên Ý Niệm Cổ.
 16. `BEFORE_ENEMY_ATTACK / FORGET_WILL_CONFUSE` — khi địch tấn công, 35% quên mục tiêu (15% trúng chủ Cổ, 35% tự đánh mình, 50% hụt) + 20% phản phệ phong ấn Cổ mình 2 lượt. VD: Lãng Quên Chí Cổ.

@@ -1154,7 +1154,6 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		PrimevalStones:    simStones,
 		ImmortalStones:    simImmortalStones,
 		RefineManaTier:    gamefx.RefineManaTier(player.Rank, player.GuInventory),
-		Accuracy:          playerStats["accuracy"],
 		CritRateBonus:     computeGlobalCritRate(selectedGuIDs, loadoutSpec),
 		IgnoreDefenseFlat: func() float64 { f, _ := computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec); return f }(),
 		IgnoreDefensePct:  func() float64 { _, p := computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec); return p }(),

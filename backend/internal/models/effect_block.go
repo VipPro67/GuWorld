@@ -120,12 +120,6 @@ func compileLegacyPrototype(active *ActiveEffect, passive *PassiveEffect, other 
 		if passive.DamageMultiplierOnHit != 0 {
 			passOps = append(passOps, AtomicOperation{Op: OpStatMod, Stat: "DAMAGE_DEALT", SubType: "MULTIPLY_PERCENT", Value: passive.DamageMultiplierOnHit})
 		}
-		if passive.Accuracy != 0 {
-			passOps = append(passOps, AtomicOperation{Op: OpStatMod, Stat: "ACCURACY", SubType: "ADD_FLAT", Value: passive.Accuracy})
-		}
-		if passive.Evasion != 0 {
-			passOps = append(passOps, AtomicOperation{Op: OpStatMod, Stat: "EVASION", SubType: "ADD_FLAT", Value: passive.Evasion})
-		}
 		if passive.Tenacity != 0 {
 			passOps = append(passOps, AtomicOperation{Op: OpStatMod, Stat: "TENACITY", SubType: "ADD_FLAT", Value: passive.Tenacity})
 		}
@@ -256,15 +250,6 @@ func compileLegacyPrototype(active *ActiveEffect, passive *PassiveEffect, other 
 				SubType: "ADD_FLAT",
 				Target:  &TargetScope{Selector: TargetSelf},
 				Value:   active.CritRateBoost,
-			})
-		}
-		if active.SelfEvasionBoostPercent > 0 {
-			actOps = append(actOps, AtomicOperation{
-				Op:      OpStatMod,
-				Stat:    "EVASION",
-				SubType: "ADD_FLAT",
-				Target:  &TargetScope{Selector: TargetSelf},
-				Value:   active.SelfEvasionBoostPercent,
 			})
 		}
 		if active.AllStatsBuffPct > 0 {

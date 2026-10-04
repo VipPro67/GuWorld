@@ -50,15 +50,21 @@ func buildFieldDefinitions() map[string]map[string]Definition {
 		"lifesteal_rate", "blood_drain", "curve_attack", "summon_phantom", "freeze", "slow", "slow1", "weak", "stun",
 		"silence", "bleed", "poison", "thorns", "regen", "atk_up", "def_up", "taunt",
 		"damage_hp_percent", "shield_flat_reduce_percent", "disable_gu_next_turn",
-		"forget_reality_chance", "self_evasion_boost_percent", "target_damage_reduce_percent",
+		"forget_reality_chance", "target_damage_reduce_percent",
 		"damage_path")
 	add("active", DispositionSupported, "world", "capture_bonus", "portal_create", "random_portal")
 	add("active", DispositionPartial, "combat-legacy", "range", "mana_regen", "cleansing_power", "wood_transformation", "refine_mana_tier", "summon_growth_phantoms", "summon_count_per_tick", "phantom_damage_scale")
 	add("active", DispositionMigrate, "effect-runtime-v2", "replicate", "generate_gu", "reveal_all_stealth", "reveal_weakness", "invulnerable_ticks", "summon_monster_id", "sleep", "decoy_count", "convert_damage_to_heal_percent", "absorb_damage_flat")
-	add("active", DispositionMigrate, "passive-stats", "stat_base_attack", "stat_base_defense", "stat_base_hp", "evasion")
+	// EVASION/ACCURACY are no longer passive stats: evasion is now the
+	// self-targeted EVASION status (see statusDefinitions), and the accuracy
+	// stat was removed outright. Legacy payloads carrying these keys are only
+	// warned about, never rejected.
+	add("active", DispositionMigrate, "removed-passive-evasion", "evasion", "self_evasion_boost_percent")
+	add("active", DispositionMigrate, "passive-stats", "stat_base_attack", "stat_base_defense", "stat_base_hp")
 	add("active", DispositionMetadata, "content", "description")
 
-	add("passive", DispositionSupported, "player-stats", "stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", "movement", "investigation", "hearing", "evasion", "luck", "accuracy", "damage_multiplier_on_hit", "cleansing_power", "disguise_level", "tenacity", "cc_resist")
+	add("passive", DispositionSupported, "player-stats", "stat_base_attack", "stat_base_defense", "stat_base_hp", "stat_base_speed", "movement", "investigation", "hearing", "luck", "damage_multiplier_on_hit", "cleansing_power", "disguise_level", "tenacity", "cc_resist")
+	add("passive", DispositionMigrate, "removed-passive-evasion", "evasion", "accuracy")
 	add("passive", DispositionSupported, "combat", "anti_heaven_damage_reduction_percent", "anti_earth_damage_reduction_percent", "anti_dream_damage_reduction_percent", "immune_dream_status", "forget_heaven_protection", "forget_earth_protection")
 	add("passive", DispositionSupported, "refinement", "success_rate_bonus", "refine_mana_tier", "soul_refinement")
 	add("passive", DispositionSupported, "inventory", "storage_capacity")
@@ -166,7 +172,7 @@ var statusDefinitions = func() map[string]Definition {
 	}
 	add(DispositionSupported, "statusfx", "BLEED", "POISON", "BURN", "FEAR", "CONFUSE", "STEALTH", "SLEEP", "BLIND", "CHARM", "BIND", "FORGET_EGO", "FORGET_REALITY",
 		"SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "REGEN", "ATK_UP", "DEF_UP", "THORNS", "TAUNT",
-		"HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "REVIVE_LOCK",
+		"HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "EVASION", "REVIVE_LOCK",
 		"ESSENCE_LEAK", "GU_SEAL", "SOUL_WOUND", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH")
 	add(DispositionPartial, "combat-legacy", "STUN", "FREEZE", "SILENCE")
 	add(DispositionMigrate, "effect-runtime-v2", "ROOT", "CONFUSION", "DECAY")

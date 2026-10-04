@@ -40,6 +40,7 @@ const (
 	StatusArmorBreak      = "ARMOR_BREAK"
 	StatusDamageReduction = "DAMAGE_REDUCTION_UP"
 	StatusInvincible      = "INVINCIBLE"
+	StatusEvasion         = "EVASION"
 	StatusReviveLock      = "REVIVE_LOCK"
 
 	// Lãng Quên statuses (Wisdom Path). FORGET_EGO seals the victim's Gu
@@ -94,6 +95,7 @@ const (
 	BehaviourArmorBreak      = "armor_break"      // defense down
 	BehaviourDamageReduction = "damage_reduction" // reduce damage taken
 	BehaviourInvincible      = "invincible"       // immune to damage
+	BehaviourEvasion         = "evasion"          // dodge chance (0..1 = Effect.Value/100)
 	BehaviourReviveLock      = "revive_lock"      // prevent revival
 
 	// Gu World specific behaviours

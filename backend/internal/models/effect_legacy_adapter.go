@@ -36,12 +36,6 @@ func CompileLegacyToBlocksWithGrowth(active *ActiveEffect, passive *PassiveEffec
 		if passive.DamageMultiplierOnHit != 0 {
 			passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: "DAMAGE_DEALT", SubType: "MULTIPLY_PERCENT", Value: passive.DamageMultiplierOnHit})
 		}
-		if passive.Accuracy != 0 {
-			passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: "ACCURACY", SubType: "ADD_FLAT", Value: passive.Accuracy})
-		}
-		if passive.Evasion != 0 {
-			passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: "EVASION", SubType: "ADD_FLAT", Value: passive.Evasion})
-		}
 		if passive.Tenacity != 0 {
 			passOps = append(passOps, effects.Operation{Op: effects.OpStatMod, Stat: "TENACITY", SubType: "ADD_FLAT", Value: passive.Tenacity})
 		}
@@ -238,15 +232,6 @@ func CompileLegacyToBlocksWithGrowth(active *ActiveEffect, passive *PassiveEffec
 				SubType: "ADD_FLAT",
 				Target:  &effects.Target{Selector: effects.TargetSelf},
 				Value:   active.CritRateBoost,
-			})
-		}
-		if active.SelfEvasionBoostPercent > 0 {
-			actOps = append(actOps, effects.Operation{
-				Op:      effects.OpStatMod,
-				Stat:    "EVASION",
-				SubType: "ADD_FLAT",
-				Target:  &effects.Target{Selector: effects.TargetSelf},
-				Value:   active.SelfEvasionBoostPercent,
 			})
 		}
 		if active.AllStatsBuffPct > 0 {
