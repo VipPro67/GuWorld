@@ -314,6 +314,11 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 
+	if fakeWallLog := maybeGrantFakeRegionalWallStatus(tx, &player); fakeWallLog != nil {
+		fakeWallLog.Turn = simState.Turn
+		logs = append(logs, *fakeWallLog)
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat transaction"})
 		return

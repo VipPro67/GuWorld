@@ -313,6 +313,11 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		}
 	}
 
+	if fakeWallLog := maybeGrantFakeRegionalWallStatus(tx, player); fakeWallLog != nil {
+		fakeWallLog.Turn = simState.Turn
+		logs = append(logs, *fakeWallLog)
+	}
+
 	winner := "Phe Địch"
 	if alliesAlive {
 		winner = "Phe Ta"

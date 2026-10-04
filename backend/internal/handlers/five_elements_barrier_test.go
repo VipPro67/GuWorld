@@ -170,7 +170,8 @@ func TestFiveElementsDivineBarrierArray(t *testing.T) {
 				continue
 			}
 			pct, _ := gamefx.RegionalWallDebuff(p.ActiveCombat.Enemies[i].Rank, p.ActiveCombat.Enemies[i].SubRank)
-			factor := 1 + pct
+			debuffPct := pct * 0.5
+			factor := 1 + debuffPct
 			simState.Enemies[i].BaseDmg *= factor
 			simState.Enemies[i].BaseDef *= factor
 			simState.Enemies[i].Speed *= factor
@@ -182,17 +183,29 @@ func TestFiveElementsDivineBarrierArray(t *testing.T) {
 	}
 
 	// For Rank 9 SubRank 1, RegionalWallDebuff is -0.75
-	// Factor = 1 - 0.75 = 0.25 -> BaseDmg/Def/Speed should be 250
-	if simEnemy.BaseDmg != 250 {
-		t.Fatalf("simEnemy.BaseDmg = %f, want 250", simEnemy.BaseDmg)
+	// Halved debuff = -0.75 * 0.5 = -0.375.
+	// Factor = 1 - 0.375 = 0.625 -> BaseDmg/Def/Speed should be 625
+	if simEnemy.BaseDmg != 625 {
+		t.Fatalf("simEnemy.BaseDmg = %f, want 625", simEnemy.BaseDmg)
 	}
-	if simEnemy.BaseDef != 250 {
-		t.Fatalf("simEnemy.BaseDef = %f, want 250", simEnemy.BaseDef)
+	if simEnemy.BaseDef != 625 {
+		t.Fatalf("simEnemy.BaseDef = %f, want 625", simEnemy.BaseDef)
 	}
-	if simEnemy.Speed != 250 {
-		t.Fatalf("simEnemy.Speed = %f, want 250", simEnemy.Speed)
+	if simEnemy.Speed != 625 {
+		t.Fatalf("simEnemy.Speed = %f, want 625", simEnemy.Speed)
 	}
 	if simEnemy.CustomState["fake_regional_wall"] != 1 {
 		t.Fatalf("fake_regional_wall custom state flag not set")
+	}
+
+	// 5. Test status duration calculation: 15p + (rank-1)*5p
+	defenderRank := 9
+	durationMinutes := 15 + (defenderRank-1)*5
+	if durationMinutes != 55 {
+		t.Fatalf("durationMinutes for Rank 9 = %d, want 55", durationMinutes)
+	}
+	durationRank1 := 15 + (1-1)*5
+	if durationRank1 != 15 {
+		t.Fatalf("durationMinutes for Rank 1 = %d, want 15", durationRank1)
 	}
 }

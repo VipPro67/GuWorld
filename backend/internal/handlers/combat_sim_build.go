@@ -111,14 +111,15 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 	}
 
 	// Áp Chế Giới Vực giả (FAKE_REGIONAL_WALL): chỉ PvP player-vs-player; giảm
-	// công/thủ/tốc của địch theo rank của địch (cùng formula RegionalWallDebuff).
+	// công/thủ/tốc của địch theo rank của địch (formula RegionalWallDebuff nhưng giảm 1 nửa).
 	if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && playerHasBattleStartMechanic(player, "FAKE_REGIONAL_WALL") {
 		for i := range player.ActiveCombat.Enemies {
 			if i >= len(simState.Enemies) || simState.Enemies[i] == nil {
 				continue
 			}
 			pct, _ := gamefx.RegionalWallDebuff(player.ActiveCombat.Enemies[i].Rank, player.ActiveCombat.Enemies[i].SubRank)
-			factor := 1 + pct
+			debuffPct := pct * 0.5
+			factor := 1 + debuffPct
 			simState.Enemies[i].BaseDmg *= factor
 			simState.Enemies[i].BaseDef *= factor
 			simState.Enemies[i].Speed *= factor
@@ -126,6 +127,17 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 				simState.Enemies[i].CustomState = map[string]int{}
 			}
 			simState.Enemies[i].CustomState["fake_regional_wall"] = 1
+			enemyName := simState.Enemies[i].Name
+			if enemyName == "" {
+				enemyName = "Kẻ địch"
+			}
+			simState.InitialLogs = append(simState.InitialLogs, simulator.CombatLog{
+				Turn:      0,
+				ActorId:   player.ID.String(),
+				ActorName: player.Username,
+				Action:    "FAKE_REGIONAL_WALL",
+				Detail:    fmt.Sprintf("Ngũ Hành Thiên Chướng Trận khai mở! Phản chiếu giới vực lên %s, làm suy giảm %.1f%% công/thủ/tốc!", enemyName, -debuffPct*100),
+			})
 		}
 	}
 

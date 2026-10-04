@@ -303,6 +303,54 @@ func maybeGrantPersistentHitStatuses(tx *sql.Tx, player *models.Player, simState
 	return grants
 }
 
+// maybeGrantFakeRegionalWallStatus grant trạng thái Áp Chế Giới Vực (regional_wall_suppression)
+// cho defender PvP khi attacker mang FAKE_REGIONAL_WALL (Ngũ Hành Thiên Chướng Trận).
+// Cường độ debuff giảm 1 nửa so với Giới Vực Bích tự nhiên, thời gian ngắn hơn (15 phút + 5 phút mỗi rank).
+func maybeGrantFakeRegionalWallStatus(tx *sql.Tx, player *models.Player) *simulator.CombatLog {
+	if player == nil || player.ActiveCombat == nil {
+		return nil
+	}
+	if player.ActiveCombat.EnemyType != "PVP" || !playerHasBattleStartMechanic(player, "FAKE_REGIONAL_WALL") {
+		return nil
+	}
+	defenderID := player.ActiveCombat.TargetPlayerID
+	if defenderID == "" || defenderID == "dummy" {
+		return nil
+	}
+	defenderUUID, err := uuid.Parse(defenderID)
+	if err != nil || defenderUUID == player.ID {
+		return nil
+	}
+	defenderRank := player.ActiveCombat.EnemyRank
+	defenderSubRank := player.ActiveCombat.EnemySubRank
+	if defenderRank < 1 && len(player.ActiveCombat.Enemies) > 0 {
+		defenderRank = player.ActiveCombat.Enemies[0].Rank
+		defenderSubRank = player.ActiveCombat.Enemies[0].SubRank
+	}
+	if defenderRank < 1 {
+		defenderRank = 1
+	}
+	if defenderSubRank < 1 {
+		defenderSubRank = 1
+	}
+	pct, _ := gamefx.RegionalWallDebuff(defenderRank, defenderSubRank)
+	debuffPct := pct * 0.5 // Debuff giảm 1 nửa
+	durationMinutes := 15 + (defenderRank-1)*5
+	if durationMinutes < 15 {
+		durationMinutes = 15
+	}
+	duration := time.Duration(durationMinutes) * time.Minute
+
+	ok, err := GrantPlayerStatus(tx, tx, defenderUUID, "regional_wall_suppression", "Ngũ Hành Thiên Chướng Trận", duration, debuffPct)
+	if err != nil || !ok {
+		return nil
+	}
+	return &simulator.CombatLog{
+		Action: "REGIONAL_WALL_SUPPRESSION_APPLIED",
+		Detail: fmt.Sprintf("Ngũ Hành Thiên Chướng Trận phản chiếu! Kẻ địch nhận [Áp Chế Giới Vực] (công/thủ/tốc giảm %.1f%% trong %d phút).", -debuffPct*100, durationMinutes),
+	}
+}
+
 // RevokePlayerStatus removes every instance of a status id. Returns whether
 // the status was present.
 func RevokePlayerStatus(q execQuerier, rq rowQuerier, playerID uuid.UUID, statusID string) (bool, error) {
