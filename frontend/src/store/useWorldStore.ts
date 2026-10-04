@@ -195,7 +195,7 @@ interface WorldStoreState {
   investigationRange: number;
   selectedObject: WorldObject | null;
   selectedTarget: SelectedTarget | null;
-  targetingGu: { guInstanceId: string; guId: string; name: string } | null;
+  targetingGu: { guInstanceId: string; guId: string; name: string; mode: "monster" | "position" } | null;
   skillFxEvents: SkillFxEvent[];
   isMoving: boolean;
   loading: boolean;
@@ -226,8 +226,8 @@ interface WorldStoreState {
     reached: boolean;
     skip_result?: unknown;
   } | null>;
-  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number; damage_dealt?: number; target_defeated?: boolean; target_hp?: number; target_max_hp?: number } | null>;
-  setTargetingGu: (gu: { guInstanceId: string; guId: string; name: string } | null) => void;
+  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number, targetMonsterId?: string) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number; damage_dealt?: number; target_defeated?: boolean; target_hp?: number; target_max_hp?: number } | null>;
+  setTargetingGu: (gu: { guInstanceId: string; guId: string; name: string; mode: "monster" | "position" } | null) => void;
   selectTarget: (target: SelectedTarget | null) => void;
   triggerSkillFx: (type: string, value: number, text: string, x: number, y: number) => void;
   clearSkillFx: (id: string) => void;
@@ -355,12 +355,12 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     }
   },
 
-  useGuOnMap: async (guInstanceId: string, targetX: number, targetY: number) => {
+  useGuOnMap: async (guInstanceId: string, targetX: number, targetY: number, targetMonsterId?: string) => {
     set({ loading: true, error: null });
     try {
       const curTarget = get().selectedTarget;
-      const tx = targetX || (curTarget ? curTarget.x : 0);
-      const ty = targetY || (curTarget ? curTarget.y : 0);
+      const tx = targetX ?? (curTarget ? curTarget.x : 0);
+      const ty = targetY ?? (curTarget ? curTarget.y : 0);
 
       const res = await authFetch(`${BACKEND_URL}/api/explore/use_gu`, {
         method: "POST",
@@ -370,7 +370,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
           gu_instance_id: guInstanceId,
           target_x: tx,
           target_y: ty,
-          ...(curTarget?.instanceId ? { target: { kind: "monster", id: curTarget.instanceId } } : {}),
+          ...(targetMonsterId ? { target: { kind: "monster", id: targetMonsterId } } : {}),
         }),
       });
       const body = await res.text();
