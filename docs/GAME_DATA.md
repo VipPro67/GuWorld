@@ -64,6 +64,15 @@ gate closed; it is never inferred from a default counter.
 
 Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 
+### Chỉ mục vận hành
+
+`players` có chỉ mục `(created_at DESC, id DESC)` phục vụ phân trang mặc định
+trong danh sách người chơi của Admin. `notifications` có chỉ mục riêng cho thông
+báo chưa đọc, còn `player_recipe_progress` dùng khóa chính
+`(player_id, recipe_id)`. Các truy vấn tương ứng timeout đồng thời thường là dấu
+hiệu nghẽn pool, tải database hoặc khóa schema, không nên xử lý bằng cách chỉ tăng
+`statement_timeout`.
+
 ### Authorization data
 
 Authorization của Admin được chuẩn hóa trong bốn bảng: `admin_roles`,
