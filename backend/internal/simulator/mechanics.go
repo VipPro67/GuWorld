@@ -507,6 +507,34 @@ func ResolveBaseDamage(baseDamage, defense float64) float64 {
 	return math.Max(1, baseDamage-defense)
 }
 
+// BasicDamageResult is the deterministic, side-effect-free result of routing
+// one ordinary attack through defense, damage reduction, and a virtual shield.
+// It is shared by the turn simulator and real-time world combat.
+type BasicDamageResult struct {
+	Damage         float64
+	HPDamage       float64
+	ShieldAbsorbed float64
+	HP             float64
+	Shield         float64
+}
+
+func ResolveBasicDamage(baseDamage, defense, reduction, hp, shield float64) BasicDamageResult {
+	damage := ResolveBaseDamage(baseDamage, defense)
+	if reduction < 0 {
+		reduction = 0
+	}
+	if reduction > 1 {
+		reduction = 1
+	}
+	damage *= 1 - reduction
+	result := BasicDamageResult{Damage: damage, HP: hp, Shield: math.Max(0, shield)}
+	result.ShieldAbsorbed = math.Min(result.Shield, damage)
+	result.Shield -= result.ShieldAbsorbed
+	result.HPDamage = damage - result.ShieldAbsorbed
+	result.HP = math.Max(0, hp-result.HPDamage)
+	return result
+}
+
 // ProcessTriggers is kept for backward compatibility but no longer used by the engine.
 func ProcessTriggers(state *CombatState, target *CombatantAuto, triggerType string, rng *rand.Rand) []CombatLog {
 	return nil
