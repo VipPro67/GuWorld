@@ -14,11 +14,36 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+// stubSafeZoneLookup removes the zone registry from the safe-zone check so these
+// tests never reach db.DB. Safe-zone behaviour has its own dedicated tests
+// (TestSelectMonsterTargetRejectsSafeZone) that stub the seam directly.
+func stubSafeZoneLookup(t *testing.T, safe func(string, int, int) bool) {
+	t.Helper()
+	previous := isWorldMonsterSafeZone
+	isWorldMonsterSafeZone = safe
+	t.Cleanup(func() { isWorldMonsterSafeZone = previous })
+}
+
+// stubCounterAttack removes the Redis-backed counterattack from a tick so the
+// harness never touches cache.Client. It reports REVISION_CONFLICT, which is a
+// no-land outcome that broadcasts no counterattack event — a real hit would
+// always add an extra "entity_damaged". Tests that assert counterattack
+// behaviour install their own stub.
+func stubCounterAttack(t *testing.T) {
+	t.Helper()
+	applyWorldPlayerCounter = func(_ context.Context, monster WorldMonster, _ worldCombatPlayer, _ string, _ time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
+		return cache.WorldMonsterRevisionConflict, monster, 0, nil
+	}
+	t.Cleanup(func() { applyWorldPlayerCounter = applyWorldCounterattack })
+}
+
 func installMonsterTransitionTest(t *testing.T, monster WorldMonster, now time.Time, casOK bool) *[]WorldCombatEvent {
 	t.Helper()
 	playerID := uuid.New()
 	previousIndex, previousLoader, previousCAS := worldPosIndex, worldMonstersInBucket, casWorldMonster
 	previousBroadcaster := WorldCombatBroadcaster
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
+	stubCounterAttack(t)
 	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
 	worldPosIndex.Reconcile([]WorldPosEntry{{ID: playerID.String(), Region: monster.RegionID, X: 4, Y: 0, TS: now.UnixMilli()}})
 	loaded := false
@@ -96,6 +121,7 @@ func testMonster(now time.Time) WorldMonster {
 }
 
 func TestSelectMonsterTargetDeterministicAndRegionSafe(t *testing.T) {
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
 	now := time.Now()
 	m := testMonster(now)
 	candidates := []WorldPosEntry{{ID: "b", Region: "field", X: 3, Y: 0, TS: now.UnixMilli()}, {ID: "a", Region: "field", X: -3, Y: 0, TS: now.UnixMilli()}, {ID: "other", Region: "elsewhere", X: 1, Y: 0, TS: now.UnixMilli()}}
@@ -128,6 +154,7 @@ func TestMoveMonsterTowardDoesNotTunnelThroughSafeZone(t *testing.T) {
 }
 
 func TestWorldMonsterChaseAttackChaseAndElapsedMovement(t *testing.T) {
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
 	now := time.Now()
 	m := testMonster(now)
 	id := uuid.NewString()
@@ -150,6 +177,7 @@ func TestWorldMonsterChaseAttackChaseAndElapsedMovement(t *testing.T) {
 }
 
 func TestWorldMonsterLeashReturnAndStatusExpiry(t *testing.T) {
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
 	now := time.Now()
 	m := testMonster(now)
 	m.State = MonsterStateChase
@@ -355,6 +383,8 @@ func installWorldAttackTest(t *testing.T, now time.Time, monsters []WorldMonster
 	t.Helper()
 	previousIndex, previousLoader, previousCAS := worldPosIndex, worldMonstersInBucket, casWorldMonster
 	previousPlayers, previousAction, previousCounter, previousBroadcaster := loadWorldCombatPlayers, applyWorldMonsterAction, applyWorldPlayerCounter, WorldCombatBroadcaster
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
+	stubCounterAttack(t)
 	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
 	worldPosIndex.Set(WorldPosEntry{ID: player.ID.String(), Region: player.Region, X: player.X, Y: player.Y, TS: now.UnixMilli()})
 	loaded := false
@@ -521,14 +551,15 @@ func TestWorldMonsterAttackRejectsDisconnectedTarget(t *testing.T) {
 func TestWorldMonsterAttackRejectsSafeZoneTarget(t *testing.T) {
 	now := time.Now().UTC()
 	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: HubRegionID, X: 15000, Y: 10000}
-	if !IsSafeZone(p.Region, p.X, p.Y) {
-		t.Skip("test zone registry has no hub fixture")
-	}
 	m := testMonster(now.Add(-time.Second))
 	m.RegionID, m.X, m.Y = p.Region, float64(p.X), float64(p.Y)
 	m.SpawnX, m.SpawnY = m.X, m.Y
 	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
+	// Register the hub as safe AFTER installWorldAttackTest, whose default stub
+	// reports no safe zones. Cleanups unwind LIFO, so the original seam is
+	// restored once both are done.
 	_, calls := installWorldAttackTest(t, now, []WorldMonster{m}, p)
+	stubSafeZoneLookup(t, func(region string, _, _ int) bool { return region == HubRegionID })
 	processWorldMonsterTick(context.Background(), now)
 	if calls.Load() != 0 {
 		t.Fatal("safe-zone target was damaged")
