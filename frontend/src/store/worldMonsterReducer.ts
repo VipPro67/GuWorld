@@ -36,6 +36,15 @@ export interface MonsterSelection {
   maxHp: number;
 }
 
+export function legacyMonsterHasRuntimeReplacement(
+  cell: { x: number; y: number },
+  monsters: Record<string, WorldMonster>,
+): boolean {
+  return Object.values(monsters).some((monster) =>
+    monster.state !== "DEFEATED" && Math.floor(monster.spawn_x) === cell.x && Math.floor(monster.spawn_y) === cell.y,
+  );
+}
+
 export interface WorldMonsterReducerState<TSelection extends MonsterSelection = MonsterSelection> {
   monsters: Record<string, WorldMonster>;
   seenCombatEvents: string[];

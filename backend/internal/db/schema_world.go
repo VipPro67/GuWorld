@@ -110,6 +110,29 @@ func schemaWorld() error {
 		return err
 	}
 
+	// Durable action claims bridge Redis monster CAS with PostgreSQL player
+	// updates. Replaying the same monster revision can never damage/drop twice.
+	if err := execSchema("world_monster_actions", `
+	CREATE TABLE IF NOT EXISTS world_monster_actions (
+		action_token TEXT PRIMARY KEY,
+		monster_id TEXT NOT NULL,
+		player_id UUID NOT NULL,
+		applied BOOLEAN NOT NULL DEFAULT FALSE,
+		died BOOLEAN NOT NULL DEFAULT FALSE,
+		damage DOUBLE PRECISION NOT NULL DEFAULT 0,
+		remaining_hp DOUBLE PRECISION NOT NULL DEFAULT 0,
+		remaining_shield DOUBLE PRECISION NOT NULL DEFAULT 0,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS applied BOOLEAN NOT NULL DEFAULT FALSE;
+	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS died BOOLEAN NOT NULL DEFAULT FALSE;
+	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS damage DOUBLE PRECISION NOT NULL DEFAULT 0;
+	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS remaining_hp DOUBLE PRECISION NOT NULL DEFAULT 0;
+	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS remaining_shield DOUBLE PRECISION NOT NULL DEFAULT 0;
+	CREATE INDEX IF NOT EXISTS idx_world_monster_actions_created_at ON world_monster_actions(created_at);`); err != nil {
+		return err
+	}
+
 	if err := execSchema("map_cells", `
 	CREATE TABLE IF NOT EXISTS map_cells (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -891,6 +891,7 @@ Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLarg
 
 **Phân lớp sinh nội dung**:
 - Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB.
+- Ô quái procedural trong AOI được materialize thành `WorldMonster` Redis với identity ổn định `procedural:<region>:<x>:<y>`; movement và combat sau đó được phát qua `world:combat`. Marker cell chỉ là fallback cho tới khi runtime replacement tại đúng tọa độ xuất hiện.
 - Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung.
 
 Import/Export qua Admin tab "Dữ liệu": bảng `region` (Region.csv), `map_cell` (MapCell.csv), `monster_spawn` (MonsterSpawn.csv). Sau khi import **restart backend** để nạp ZoneRegistry.
@@ -1181,6 +1182,8 @@ Sensitive request fields and multipart bodies are excluded from `change_data`.
 ## Ordinary world-monster lifecycle
 
 `monster_templates`, `monster_spawns`, and `map_cells` remain PostgreSQL static data. Ordinary non-boss monster HP, target, state, statuses, position, timestamps, and revision are ephemeral Redis data under `world:monster:*`; they are not written to PostgreSQL per hit or movement. `monster_spawns.id` is the stable spawn identity. Runtime defaults are a 12-cell aggro radius, 1.5-cell attack range, 24-cell leash, speed 3 cells/second, and 2-second attack interval. Runtime TTL is the spawn respawn duration plus a five-minute replay-safety window.
+
+Ordinary monster attacks batch-load player combat snapshots once per active AOI bucket. A due `ATTACK` resolves at most once per tick with the simulator's defense/reduction/shield pipeline. The short PostgreSQL mutation is claimed in `world_monster_actions` by the stable monster-instance/revision token, so retries and simultaneous lethal hits cannot apply HP loss or death drops twice.
 
 Monster runtime AOI uses **32×32-cell buckets**, separate from the legacy
 300×300 player-position broadcast index. The activation/fan-out radius is 25

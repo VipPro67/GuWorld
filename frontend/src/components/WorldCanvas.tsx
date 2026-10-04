@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
 import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldMonster, type WorldObject } from "@/store/useWorldStore";
+import { legacyMonsterHasRuntimeReplacement } from "@/store/worldMonsterReducer";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 const BG_COLOR = 0x1d1e2c;
@@ -92,6 +93,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const targetRingRef = useRef<Graphics>(new Graphics());
   const skillFxContainerRef = useRef<Container>(new Container());
   const processedFxRef = useRef<Set<string>>(new Set());
+  const monsterSnapshotCenterRef = useRef<{ region: string; x: number; y: number } | null>(null);
 
   const playerAvatarRef = useRef<Sprite | null>(null);
   const fogDirtyRef = useRef(true);
@@ -1399,7 +1401,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
     for (const c of cells) {
       if (c.cell_type === "Monster") {
-        if (useWorldStore.getState().hasMonsterSnapshot) continue;
+        if (legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) continue;
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
         batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
         monsterCount++;
@@ -1467,7 +1469,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     if (!settings.monster) return;
     const invR = useWorldStore.getState().investigationRange;
     const labelCells = cells
-      .filter((c) => (c.cell_type !== "Monster" || !useWorldStore.getState().hasMonsterSnapshot) && (c.cell_type === "Monster" || c.cell_type === "Resource" || c.cell_type === "WildGu") && Math.hypot(c.x + 0.5 - player.x, c.y + 0.5 - player.y) <= invR)
+      .filter((c) => (c.cell_type !== "Monster" || !legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) && (c.cell_type === "Monster" || c.cell_type === "Resource" || c.cell_type === "WildGu") && Math.hypot(c.x + 0.5 - player.x, c.y + 0.5 - player.y) <= invR)
       .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
       .slice(0, 100);
 
@@ -2101,6 +2103,18 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   }, [appReady, monsters, selectedTarget?.instanceId, syncRuntimeMonsters]);
 
   useEffect(() => {
+    if (!appReady || !gamePlayer) return;
+    const previous = monsterSnapshotCenterRef.current;
+    const refreshDistance = Math.max(3, Math.floor(investigationRange / 2));
+    const moved = !previous || previous.region !== gamePlayer.current_region || Math.hypot(previous.x - gamePlayer.x, previous.y - gamePlayer.y) >= refreshDistance;
+    if (!moved) return;
+    const center = { region: gamePlayer.current_region, x: gamePlayer.x, y: gamePlayer.y };
+    void useWorldStore.getState().fetchMonsterSnapshot(investigationRange).then((loaded) => {
+      if (loaded) monsterSnapshotCenterRef.current = center;
+    });
+  }, [appReady, gamePlayer, investigationRange]);
+
+  useEffect(() => {
     if (!appReady || !appRef.current) return;
     drawPlayers(nearbyPlayers);
   }, [appReady, nearbyPlayers, drawPlayers]);
@@ -2204,7 +2218,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       if (!event) return;
       const before = useWorldStore.getState();
       const current = before.monsters[event.entity_id];
-      const accepted = !before.seenCombatEvents.includes(event.event_id) && (!current || event.entity_revision > current.revision);
+      const informational = event.event_type === "action_resolved" || event.event_type === "entity_damaged";
+      const accepted = !before.seenCombatEvents.includes(event.event_id) && (!current || event.entity_revision > current.revision || (informational && event.entity_revision === current.revision));
       before.applyCombatEvent(event);
       if (!accepted) return;
       if (event.event_type === "action_started") {
@@ -2233,7 +2248,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           };
           app.ticker.add(animateProjectile);
         }
-      } else if (event.event_type === "action_resolved" || event.event_type === "entity_damaged") {
+      } else if (event.event_type === "entity_damaged") {
         const damage = typeof event.payload?.damage === "number" ? event.payload.damage : 0;
         useWorldStore.getState().triggerSkillFx("damage", damage, damage > 0 ? `-${Math.round(damage)}` : "✦", event.position.x, event.position.y);
       }

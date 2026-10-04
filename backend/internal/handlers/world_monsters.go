@@ -2,20 +2,28 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -32,11 +40,12 @@ const (
 	// Monster AOI is deliberately independent from the 300-cell player
 	// position broadcast index. The client investigation radius is capped at
 	// 25 cells, so 32-cell buckets keep a view to at most 3x3 small buckets.
-	WorldMonsterAOIBucket        = 32
-	WorldMonsterActivationRadius = 25
-	worldMonsterMaxBuckets       = 128
-	worldMonsterMaxPerTick       = 512
-	worldMonsterTickBudget       = 150 * time.Millisecond
+	WorldMonsterAOIBucket         = 32
+	WorldMonsterActivationRadius  = 25
+	worldMonsterMaxBuckets        = 128
+	worldMonsterMaxPerTick        = 512
+	worldMonsterTickBudget        = 150 * time.Millisecond
+	worldMonsterBucketQueryRadius = 35
 )
 
 type WorldMonster = cache.WorldMonster
@@ -73,10 +82,189 @@ var worldMonsterMetrics struct {
 var worldMonsterBucketCursor atomic.Uint64
 
 var (
-	worldMonstersInBucket   = cache.WorldMonstersInBucket
-	materializeWorldMonster = cache.MaterializeWorldMonster
-	casWorldMonster         = cache.CASWorldMonster
+	worldMonstersInBucket    = cache.WorldMonstersInBucket
+	materializeWorldMonster  = cache.MaterializeWorldMonster
+	casWorldMonster          = cache.CASWorldMonster
+	loadWorldCombatPlayers   = loadWorldCombatPlayerSnapshots
+	applyWorldMonsterAction  = applyWorldMonsterAttack
+	resolveWorldMonsterCell  = ResolveCell
+	deriveWorldMonsterRegion = DeriveRegionAt
+	worldMonsterCellCleared  = func(region string, x, y int) bool { return isCellClearedRecently(region, x, y, clearedCellCooldown) }
 )
+
+type worldCombatPlayer struct {
+	ID       uuid.UUID
+	HP       float64
+	Region   string
+	X, Y     int
+	Dead     bool
+	Defense  float64
+	Statuses models.StatusList
+}
+
+type worldMonsterActionResult struct {
+	Applied, Died, Rejected bool
+	Damage, HP, Shield      float64
+}
+
+func loadWorldCombatPlayerSnapshots(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]worldCombatPlayer, error) {
+	out := make(map[uuid.UUID]worldCombatPlayer, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := db.DB.QueryContext(ctx, `
+		SELECT p.id, p.hp, p.current_region, p.x, p.y, p.is_dead, p.rank, p.sub_rank,
+		       p.statuses, p.growth_data, p.path_masteries,
+		       COALESCE(dm.marks, '{}'::jsonb), `+db.GuInventoryAggregate("p.id")+`
+		FROM players p
+		LEFT JOIN LATERAL (SELECT jsonb_object_agg(path, dao_marks) marks FROM player_dao_path WHERE player_id=p.id) dm ON true
+		WHERE p.id = ANY($1::uuid[])`, pq.Array(func() []string {
+		out := make([]string, len(ids))
+		for i := range ids {
+			out[i] = ids[i].String()
+		}
+		return out
+	}()))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p models.Player
+		var snap worldCombatPlayer
+		if err := rows.Scan(&snap.ID, &snap.HP, &snap.Region, &snap.X, &snap.Y, &snap.Dead,
+			&p.Rank, &p.SubRank, &p.Statuses, &p.GrowthData, &p.PathMasteries, &p.DaoMarks, &p.GuInventory); err != nil {
+			return nil, err
+		}
+		p.ID, p.HP, p.CurrentRegion, p.X, p.Y = snap.ID, snap.HP, snap.Region, snap.X, snap.Y
+		snap.Statuses = p.Statuses
+		snap.Defense = calculateWorldPlayerDefense(&p)
+		out[snap.ID] = snap
+	}
+	return out, rows.Err()
+}
+
+// calculateWorldPlayerDefense is the query-free subset of the simulator stat
+// builder needed by a world attack. All inputs are supplied by the batch load.
+func calculateWorldPlayerDefense(p *models.Player) float64 {
+	defense := 5 + float64(p.Rank-1)*5 + float64(p.SubRank-1) + p.GrowthData.Boosts.Defense
+	best := map[string]models.GuInstance{}
+	for _, gu := range p.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			if old, ok := best[gu.GuID]; !ok || gu.Rank > old.Rank {
+				best[gu.GuID] = gu
+			}
+		}
+	}
+	allPct := 0.0
+	for _, gu := range best {
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if !ok {
+			continue
+		}
+		mastery, dao := gamefx.GuStatMultipliers(p.PathMasteries, p.DaoMarks, spec.Path)
+		defense += models.GuStatValue(spec, "DEFENSE") * mastery * dao
+		if compiled := models.CompiledGuEffects(spec); compiled != nil {
+			allPct += compiled.StatValue(gameplayeffects.TriggerOnAction, "ALL", "MULTIPLY_PERCENT")
+		}
+	}
+	for _, st := range p.Statuses.Active() {
+		if st.ID == "buff_def" {
+			defense += st.Value
+		}
+	}
+	return defense * (1 + allPct) * statusStatFactor(p, "defense")
+}
+
+func worldStatusDefense(statuses models.StatusList) (shield, reduction float64) {
+	for _, st := range statuses.Active() {
+		if st.ID == "virtual_shield" {
+			shield += math.Max(0, st.Value)
+		}
+		switch {
+		case strings.EqualFold(st.ID, statusfx.StatusInvincible), strings.EqualFold(st.ID, "invulnerable"):
+			reduction = 1
+		case strings.EqualFold(st.ID, statusfx.StatusDamageReduction):
+			value := st.Value
+			if value > 1 {
+				value /= 100
+			}
+			if value > reduction {
+				reduction = value
+			}
+		}
+	}
+	return
+}
+
+func setWorldVirtualShield(statuses *models.StatusList, value float64) {
+	out := (*statuses)[:0]
+	for _, st := range *statuses {
+		if st.ID != "virtual_shield" {
+			out = append(out, st)
+			continue
+		}
+		if value > 0 {
+			st.Value, value = value, 0
+			out = append(out, st)
+		}
+	}
+	*statuses = out
+}
+
+func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target worldCombatPlayer, actionToken string) (worldMonsterActionResult, error) {
+	tx, err := db.DB.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return worldMonsterActionResult{}, err
+	}
+	defer tx.Rollback()
+	var claimed string
+	if err := tx.QueryRowContext(ctx, `INSERT INTO world_monster_actions(action_token, monster_id, player_id)
+		VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING action_token`, actionToken, monster.InstanceID, target.ID).Scan(&claimed); err != nil {
+		if err == sql.ErrNoRows {
+			var replay worldMonsterActionResult
+			err = tx.QueryRowContext(ctx, `SELECT applied,died,damage,remaining_hp,remaining_shield FROM world_monster_actions WHERE action_token=$1`, actionToken).
+				Scan(&replay.Applied, &replay.Died, &replay.Damage, &replay.HP, &replay.Shield)
+			return replay, err
+		}
+		return worldMonsterActionResult{}, err
+	}
+	var hp float64
+	var region string
+	var x, y int
+	var dead bool
+	var statuses models.StatusList
+	if err := tx.QueryRowContext(ctx, `SELECT hp,current_region,x,y,is_dead,statuses FROM players WHERE id=$1 FOR UPDATE`, target.ID).
+		Scan(&hp, &region, &x, &y, &dead, &statuses); err != nil {
+		return worldMonsterActionResult{}, err
+	}
+	if dead || hp <= 0 || region != monster.RegionID || x != target.X || y != target.Y || IsSafeZone(region, x, y) || math.Hypot(float64(x)-monster.X, float64(y)-monster.Y) > monster.AttackRange {
+		return worldMonsterActionResult{Rejected: true}, nil
+	}
+	statuses.Expire(time.Now())
+	shield, reduction := worldStatusDefense(statuses)
+	resolved := simulator.ResolveBasicDamage(monster.BaseAttack, target.Defense, reduction, hp, shield)
+	setWorldVirtualShield(&statuses, resolved.Shield)
+	statusJSON, err := json.Marshal(statuses)
+	if err != nil {
+		return worldMonsterActionResult{}, err
+	}
+	died := hp > 0 && resolved.HP <= 0
+	if _, err = tx.ExecContext(ctx, `UPDATE players SET hp=$1,statuses=$2,is_dead=(is_dead OR $3),version=version+1 WHERE id=$4`, resolved.HP, statusJSON, died, target.ID); err != nil {
+		return worldMonsterActionResult{}, err
+	}
+	if died {
+		applyDeathDropRecord(tx, &target.ID, nil, false, DeathPos{Region: region, X: x, Y: y})
+	}
+	result := worldMonsterActionResult{Applied: true, Died: died, Damage: resolved.HPDamage + resolved.ShieldAbsorbed, HP: resolved.HP, Shield: resolved.Shield}
+	if _, err = tx.ExecContext(ctx, `UPDATE world_monster_actions SET applied=$2,died=$3,damage=$4,remaining_hp=$5,remaining_shield=$6 WHERE action_token=$1`, actionToken, result.Applied, result.Died, result.Damage, result.HP, result.Shield); err != nil {
+		return worldMonsterActionResult{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return worldMonsterActionResult{}, err
+	}
+	return result, nil
+}
 
 type monsterSpawnRow struct {
 	ID, RegionID, MonsterID       string
@@ -123,6 +311,46 @@ func spawnWithinPlayerRadius(spawn monsterSpawnRow, player WorldPosEntry, radius
 	dy := int64(spawn.Y) - int64(player.Y)
 	r := int64(radius)
 	return dx*dx+dy*dy <= r*r
+}
+
+func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow {
+	spawns := make([]monsterSpawnRow, 0, 64)
+	minX, maxX := max(0, player.X-radius), min(WorldWidth-1, player.X+radius)
+	minY, maxY := max(0, player.Y-radius), min(WorldHeight-1, player.Y+radius)
+	for y := minY; y <= maxY; y++ {
+		for x := minX; x <= maxX; x++ {
+			dx, dy := int64(x-player.X), int64(y-player.Y)
+			if dx*dx+dy*dy > int64(radius)*int64(radius) {
+				continue
+			}
+			cell := resolveWorldMonsterCell(x, y)
+			if cell.Type != "Monster" || cell.Content == "" || deriveWorldMonsterRegion(x, y) != player.Region || worldMonsterCellCleared(player.Region, x, y) {
+				continue
+			}
+			spawns = append(spawns, monsterSpawnRow{
+				ID: fmt.Sprintf("procedural:%s:%d:%d", player.Region, x, y), RegionID: player.Region,
+				MonsterID: cell.Content, X: x, Y: y, RespawnSeconds: int(clearedCellCooldown.Seconds()), Rank: cell.Rank, SubRank: cell.SubRank,
+			})
+		}
+	}
+	return spawns
+}
+
+func proceduralMonsterCell(spawnID string) (region string, x, y int, ok bool) {
+	const prefix = "procedural:"
+	if !strings.HasPrefix(spawnID, prefix) {
+		return "", 0, 0, false
+	}
+	parts := strings.Split(strings.TrimPrefix(spawnID, prefix), ":")
+	if len(parts) != 3 {
+		return "", 0, 0, false
+	}
+	x, errX := strconv.Atoi(parts[1])
+	y, errY := strconv.Atoi(parts[2])
+	if errX != nil || errY != nil {
+		return "", 0, 0, false
+	}
+	return parts[0], x, y, true
 }
 
 func activeMonsterBuckets(players []WorldPosEntry, radius, limit int) []ActiveWorldBucket {
@@ -201,6 +429,7 @@ func GetWorldMonsters(c *gin.Context) {
 	}
 	defer rows.Close()
 	monsters := make([]WorldMonster, 0, 32)
+	occupied := make(map[[2]int]struct{}, 32)
 	now := time.Now().UTC()
 	for rows.Next() {
 		var spawn monsterSpawnRow
@@ -219,11 +448,27 @@ func GetWorldMonsters(c *gin.Context) {
 			logger.S.Warnf("materialize monster spawn %s: %v", spawn.ID, err)
 			continue
 		}
+		occupied[[2]int{spawn.X, spawn.Y}] = struct{}{}
 		if monster.State != MonsterStateDefeated {
 			monsters = append(monsters, monster)
 		}
 		if created {
 			broadcastWorldCombat(monster, "monster_spawned", nil)
+		}
+	}
+	for _, spawn := range proceduralMonsterSpawns(entry, radius) {
+		if _, exists := occupied[[2]int{spawn.X, spawn.Y}]; exists {
+			continue
+		}
+		monster, created, err := materializeSpawn(c.Request.Context(), spawn, now)
+		if err != nil {
+			continue
+		}
+		if monster.State != MonsterStateDefeated {
+			monsters = append(monsters, monster)
+		}
+		if created {
+			broadcastWorldCombat(monster, "monster_spawned", map[string]any{"procedural": true})
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": now})
@@ -426,7 +671,27 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 		}
 		bucketCenterX := b.BX*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
 		bucketCenterY := b.BY*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
-		candidates := worldPosIndex.Nearby(bucketCenterX, bucketCenterY, WorldMonsterAOIBucket/2+12, "")
+		candidates := worldPosIndex.Nearby(bucketCenterX, bucketCenterY, worldMonsterBucketQueryRadius, "")
+		needsCombatPlayers := false
+		for _, monster := range monsters {
+			if monster.State == MonsterStateAttack && (monster.NextAttackAt.IsZero() || !monster.NextAttackAt.After(now)) {
+				needsCombatPlayers = true
+				break
+			}
+		}
+		playerSnapshots := map[uuid.UUID]worldCombatPlayer{}
+		if needsCombatPlayers {
+			playerIDs := make([]uuid.UUID, 0, len(candidates))
+			for _, candidate := range candidates {
+				if id, parseErr := uuid.Parse(candidate.ID); parseErr == nil {
+					playerIDs = append(playerIDs, id)
+				}
+			}
+			playerSnapshots, err = loadWorldCombatPlayers(ctx, playerIDs)
+			if err != nil {
+				continue
+			}
+		}
 		for monsterIndex, monster := range monsters {
 			if processed >= worldMonsterMaxPerTick || time.Now().After(deadline) {
 				worldMonsterMetrics.skipped.Add(uint64(len(monsters) - monsterIndex))
@@ -454,6 +719,45 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 				continue
 			}
 			next, eventType := tickWorldMonster(monster, candidates, now, func(id string) bool { parsed, e := uuid.Parse(id); return e == nil && isWSConnected(parsed) })
+			var action worldMonsterActionResult
+			attackDue := monster.State == MonsterStateAttack && next.State == MonsterStateAttack && (next.NextAttackAt.IsZero() || !next.NextAttackAt.After(now))
+			if attackDue {
+				targetID, parseErr := uuid.Parse(next.TargetID)
+				target, exists := playerSnapshots[targetID]
+				entry, indexed := worldPosIndex.Get(next.TargetID)
+				valid := parseErr == nil && exists && indexed && isWSConnected(targetID) && !target.Dead && target.HP > 0 &&
+					target.Region == next.RegionID && entry.Region == target.Region && entry.X == target.X && entry.Y == target.Y &&
+					!IsSafeZone(target.Region, target.X, target.Y) && math.Hypot(float64(target.X)-next.X, float64(target.Y)-next.Y) <= next.AttackRange
+				if !valid {
+					next.State, next.TargetID = MonsterStateReturn, ""
+					next.Revision++
+					eventType = "monster_returned"
+				} else {
+					token := fmt.Sprintf("%s:%d", monster.InstanceID, monster.Revision)
+					action, err = applyWorldMonsterAction(ctx, next, target, token)
+					if err != nil {
+						continue
+					}
+					if action.Rejected {
+						next.State, next.TargetID = MonsterStateReturn, ""
+						next.Revision++
+						eventType = "monster_returned"
+					} else {
+						interval := time.Duration(next.AttackIntervalMS) * time.Millisecond
+						if interval <= 0 {
+							interval = 2 * time.Second
+						}
+						next.NextAttackAt = now.Add(interval)
+						if next.Revision == monster.Revision {
+							next.Revision++
+						}
+						eventType = ""
+						if action.Died {
+							next.State, next.TargetID = MonsterStateReturn, ""
+						}
+					}
+				}
+			}
 			if eventType == "monster_moved" {
 				if !monster.LastSeenAt.IsZero() && now.Sub(monster.LastSeenAt) < worldMonsterMoveEventGap {
 					eventType = ""
@@ -473,6 +777,21 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 			}
 			if eventType != "" {
 				broadcastWorldCombat(next, eventType, nil)
+			}
+			if action.Applied {
+				payload := map[string]any{"target_id": monster.TargetID, "damage": action.Damage, "hp": action.HP, "shield": action.Shield}
+				broadcastWorldCombat(next, "action_started", payload)
+				broadcastWorldCombat(next, "action_resolved", payload)
+				broadcastWorldCombat(next, "entity_damaged", payload)
+				if action.Died {
+					worldMonsterMetrics.kills.Add(1)
+					for i := range monsters {
+						if monsters[i].TargetID == monster.TargetID {
+							monsters[i].TargetID = ""
+							monsters[i].State = MonsterStateReturn
+						}
+					}
+				}
 			}
 		}
 	}

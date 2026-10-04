@@ -1661,9 +1661,7 @@ func Simulate(state *CombatState) []CombatLog {
 							netDmg *= (1.0 - natResVal)
 						}
 						netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))
-						if netDmg < 1 {
-							netDmg = 1
-						}
+						netDmg = ResolveBaseDamage(netDmg, 0)
 						totalHitDmg += netDmg
 						totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, !isAlly, rng)
 					}
@@ -2978,13 +2976,14 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	}
 
 	// Direct HP damage (no shield)
-	target.HP -= damage
 	if spillToAperture {
+		target.HP -= damage
 		redirectApertureOverflow(state, target, logs, turn)
-	} else if target.HP < 0 {
-		target.HP = 0
+		return hpDamageDealt + damage
 	}
-	return hpDamageDealt + damage
+	resolved := ResolveBasicDamage(damage, 0, 0, target.HP, 0)
+	target.HP = resolved.HP
+	return hpDamageDealt + resolved.HPDamage
 }
 
 // redirectApertureOverflow spills damage that reduced a defending ally below 0 HP

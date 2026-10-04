@@ -309,13 +309,13 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		handlers.SetWSStatsProvider(shub.GetStats)
 		handlers.SetWSConnectedProvider(shub.IsConnected)
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
+			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
 		handlers.WorldCellBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
+			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
 		handlers.WorldCombatBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
-			shub.BroadcastToTargets(ws.ChannelName(channel), payload, targets)
+			shub.BroadcastToTargets(ws.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
 	}
 	worker.PlayerEventPublisher = func(playerID uuid.UUID, eventType string, domains ...string) {
@@ -954,4 +954,17 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 	}
 
 	return r
+}
+
+func worldEventEnvelope(channel string, payload []byte) []byte {
+	event := struct {
+		Type    string          `json:"type"`
+		Channel string          `json:"channel"`
+		Data    json.RawMessage `json:"data"`
+	}{Type: "event", Channel: channel, Data: payload}
+	wrapped, err := json.Marshal(event)
+	if err != nil {
+		return payload
+	}
+	return wrapped
 }
