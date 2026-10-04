@@ -18,7 +18,6 @@ type Account struct {
 	AvatarURL       string    `json:"avatar_url"`
 	IsAdmin         bool      `json:"is_admin"`
 	IsDisguised     bool      `json:"is_disguised"`
-	IsDead          bool      `json:"is_dead"`
 	FakeRank        int       `json:"fake_rank"`
 	FakeSubRank     int       `json:"fake_sub_rank"`
 	FakeVitalGu     string    `json:"fake_vital_gu"`
@@ -41,7 +40,6 @@ func NewAccount(p *Player) Account {
 		AvatarURL:       p.AvatarURL,
 		IsAdmin:         p.IsAdmin,
 		IsDisguised:     p.IsDisguised,
-		IsDead:          p.IsDead,
 		FakeRank:        p.FakeRank,
 		FakeSubRank:     p.FakeSubRank,
 		FakeVitalGu:     p.FakeVitalGu,
@@ -64,7 +62,6 @@ func (s Account) Apply(p *Player) {
 	p.AvatarURL = s.AvatarURL
 	p.IsAdmin = s.IsAdmin
 	p.IsDisguised = s.IsDisguised
-	p.IsDead = s.IsDead
 	p.FakeRank = s.FakeRank
 	p.FakeSubRank = s.FakeSubRank
 	p.FakeVitalGu = s.FakeVitalGu

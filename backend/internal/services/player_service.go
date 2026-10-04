@@ -165,7 +165,7 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       COALESCE(needs_onboarding, false),
 		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
    COALESCE(immortal_state, '{}'), growth_data,
-		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), COALESCE(is_dead, false), statuses,
+		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses,
 		       COALESCE(p.version, 0), COALESCE(p.state_revision, 0) + COALESCE((
 		           SELECT SUM(pcr.state_revision) FROM player_collection_revisions pcr WHERE pcr.player_id = p.id
 		       ), 0)
@@ -196,7 +196,7 @@ FROM players p
 		&player.CurrentThought, &player.MaxThought, &player.RegenRate,
 		&player.ImmortalState,
 		&player.GrowthData,
-		&player.Race, &player.Gender, &player.Constitution, &player.IsDead, &player.Statuses,
+		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 		&player.Version, &player.StateRevision,
 	)
 	if err != nil {
@@ -269,13 +269,8 @@ FROM players p
 
 // setDefaults initializes default values for empty fields.
 func (s *PlayerService) setDefaults(player *models.Player) {
-	dummyP := models.Player{}
-	dummyP.Race = player.Race
-	if gamefx.Get(&dummyP).Immortal {
-		player.IsDead = false
-	} else if player.Lifespan <= 0 {
+	if player.Lifespan < 0 {
 		player.Lifespan = 0
-		player.IsDead = true
 	}
 	if player.TimeSpeedMultiplier <= 0 {
 		player.TimeSpeedMultiplier = 1.0
@@ -454,7 +449,6 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			player.Lifespan -= yearsPassed
 			if player.Lifespan <= 0 {
 				player.Lifespan = 0
-				player.IsDead = true
 			}
 			poolChanged = true
 		}
@@ -668,11 +662,11 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
 			    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
-			    is_dead = $11, version = version + 1
-			WHERE id = $12
+			    version = version + 1
+			WHERE id = $11
 		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
 		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.IsDead, player.ID)
+		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
 	if err != nil {
 		return player, err
 	}

@@ -539,7 +539,7 @@ func MovePlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
 		return
 	}
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"})
 		return
 	}
@@ -823,7 +823,7 @@ func MovePlayerPath(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)})
 		return
 	}
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể di chuyển!"})
 		return
 	}

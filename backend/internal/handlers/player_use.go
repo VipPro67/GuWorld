@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -78,7 +79,7 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		hasLifespanBoost := item.HasEffect("lifespan_boost")
 		hasRaceChange := item.HasEffect("change_race")
 		if !hasLifespanBoost && !hasRaceChange {
@@ -136,11 +137,11 @@ func UseItem(c *gin.Context) {
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
 		    primeval_stones = $5, lifespan = $6, human_qi = $7,
-		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11, is_dead = $12
-		WHERE id = $13`,
+		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11
+		WHERE id = $12`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
-		player.Race, player.Constitution, player.SoulHP, player.MaxSoul, player.IsDead,
+		player.Race, player.Constitution, player.SoulHP, player.MaxSoul,
 		player.ID,
 	)
 	if err != nil {
@@ -293,11 +294,11 @@ func UseItems(c *gin.Context) {
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
 		    primeval_stones = $5, lifespan = $6, human_qi = $7,
-		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11, is_dead = $12
-		WHERE id = $13`,
+		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11
+		WHERE id = $12`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
-		player.Race, player.Constitution, player.SoulHP, player.MaxSoul, player.IsDead,
+		player.Race, player.Constitution, player.SoulHP, player.MaxSoul,
 		player.ID,
 	)
 	if err != nil {

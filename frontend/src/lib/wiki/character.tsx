@@ -122,7 +122,7 @@ export const characterPages: WikiPage[] = [
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Thọ nguyên (Lifespan)</td>
                   <td className="p-3">Tuổi thọ còn lại của cơ thể, hao mòn dần theo thời gian thực (tỷ lệ thuận với hệ số gia tốc thời gian tu luyện).</td>
-                  <td className="p-3">Về 0 đồng nghĩa sinh mệnh tàn lụi (<span className="text-red-400 font-semibold">is_dead</span>) — bị khóa mọi hoạt động tu luyện &amp; chiến đấu. Cần dùng Thọ Nguyên Cổ hoặc chuyển thành Cương Thi.</td>
+                  <td className="p-3">Về 0 đồng nghĩa sinh mệnh tàn lụi — bị khóa mọi hoạt động tu luyện &amp; chiến đấu. Cần dùng Thọ Nguyên Cổ hoặc chuyển thành Cương Thi.</td>
                 </tr>
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Áp lực vách khiếu</td>
@@ -300,10 +300,10 @@ export const characterPages: WikiPage[] = [
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
-              <h4 className="font-bold text-red-400 font-serif">1. Tuổi Thọ & Trạng Thái Tử Vong (is_dead)</h4>
+              <h4 className="font-bold text-red-400 font-serif">1. Tuổi Thọ & Trạng Thái Tử Vong</h4>
               <p className="text-[var(--text-secondary)] leading-relaxed">
                 • Tuổi thọ của Cổ sư bị hao mòn liên tục theo thời gian thực (nhân với hệ số gia tốc <span className="font-mono text-amber-300">time_speed_multiplier</span>).<br />
-                • Khi tuổi thọ tụt về <strong>0</strong>, nhân vật đi vào trạng thái tử vong (<span className="text-red-400 font-mono">is_dead = true</span>).<br />
+                • Khi tuổi thọ tụt về <strong>0</strong>, nhân vật đi vào trạng thái tử vong (cõi chết).<br />
                 • Cổ sư tử vong bị phong tỏa hoàn toàn các thao tác chiến đấu, khai thác, thám hiểm và tu luyện cho đến khi dùng <strong>Thọ Nguyên Cổ</strong> kéo dài tuổi thọ hoặc biến đổi chủng tộc.
               </p>
             </div>

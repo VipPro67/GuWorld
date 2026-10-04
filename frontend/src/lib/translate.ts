@@ -244,8 +244,8 @@ export {
   masteryLevelForPoints,
   masteryKeyForPoints,
   masteryLevelRequiredForRank,
-} from "./balance";
-export type { PathMasteryLevelKey } from "./balance";
+} from "./balance.ts";
+export type { PathMasteryLevelKey } from "./balance.ts";
 export const MASTERY_LEVEL_KEYS = [
   "Ordinary",
   "Master",

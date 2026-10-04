@@ -86,13 +86,8 @@ func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (mode
 
 func setDefaultPlayerStatusFields(player *models.Player) {
 	// Unlocked recipes are now stored in player_recipe_progress table
-	dummyP := models.Player{}
-	dummyP.Race = player.Race
-	if gamefx.Get(&dummyP).Immortal {
-		player.IsDead = false
-	} else if player.Lifespan <= 0 {
+	if player.Lifespan < 0 {
 		player.Lifespan = 0
-		player.IsDead = true
 	}
 	if player.TimeSpeedMultiplier <= 0 {
 		if player.Rank >= 6 {

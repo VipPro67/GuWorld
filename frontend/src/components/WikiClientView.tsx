@@ -17,13 +17,21 @@ import {
   ArrowLeft,
   MapPin,
   Skull,
-  Map as MapIcon
+  Map as MapIcon,
+  RotateCcw,
 } from "lucide-react";
 import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
-import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
+import { translatePath } from "@/lib/translate";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
+import {
+  EFFECT_CATEGORIES,
+  extractGuSearchableText,
+  matchesGuEffect,
+  extractGuEffectBadges,
+  removeAccents,
+} from "@/lib/gu-effect-search";
 
 
 // Types
@@ -94,14 +102,6 @@ function getGuTypeIcon(type: string): string {
   return guTypeIcons[type] || "🔮";
 }
 
-function removeAccents(str: string): string {
-  return str
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "D");
-}
-
 export default function WikiClientView({
   initialGus,
   initialItems,
@@ -127,6 +127,7 @@ export default function WikiClientView({
   const [guPath, setGuPath] = useState<string>("all");
   const [guRarity, setGuRarity] = useState<string>("all");
   const [guType, setGuType] = useState<string>("all");
+  const [guEffect, setGuEffect] = useState<string>("all");
 
   // Item Filters State
   const [itemRank, setItemRank] = useState<string>("all");
@@ -143,6 +144,43 @@ export default function WikiClientView({
   // Region Filters State
   const [regionZoneType, setRegionZoneType] = useState<string>("all");
   const [regionRank, setRegionRank] = useState<string>("all");
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setGuRank("all");
+    setGuPath("all");
+    setGuRarity("all");
+    setGuType("all");
+    setGuEffect("all");
+    setItemRank("all");
+    setItemType("all");
+    setRecipeRank("all");
+    setRecipeSort("none");
+    setMonsterType("all");
+    setMonsterRank("all");
+    setRegionZoneType("all");
+    setRegionRank("all");
+  };
+
+  const hasActiveFilters = useMemo(() => {
+    if (searchQuery.trim()) return true;
+    if (activeTab === "gus") {
+      return guRank !== "all" || guPath !== "all" || guRarity !== "all" || guType !== "all" || guEffect !== "all";
+    }
+    if (activeTab === "items") {
+      return itemRank !== "all" || itemType !== "all";
+    }
+    if (activeTab === "recipes") {
+      return recipeRank !== "all" || recipeSort !== "none";
+    }
+    if (activeTab === "monsters") {
+      return monsterType !== "all" || monsterRank !== "all";
+    }
+    if (activeTab === "regions") {
+      return regionZoneType !== "all" || regionRank !== "all";
+    }
+    return false;
+  }, [activeTab, searchQuery, guRank, guPath, guRarity, guType, guEffect, itemRank, itemType, recipeRank, recipeSort, monsterType, monsterRank, regionZoneType, regionRank]);
 
   // Expand state for long lists in region and monster cards
   const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({});
@@ -309,6 +347,15 @@ export default function WikiClientView({
     return map;
   }, [initialMonsterSpawns]);
 
+  // Search index for Gus including effects, food item names, tags, paths, and stats
+  const guSearchIndex = useMemo(() => {
+    const map = new Map<string, string>();
+    initialGus.forEach((g) => {
+      map.set(`${g.id}_${g.rank}`, extractGuSearchableText(g, itemMap));
+    });
+    return map;
+  }, [initialGus, itemMap]);
+
   // Reset filters when changing tabs
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -318,13 +365,15 @@ export default function WikiClientView({
   // Filtered lists
   const filteredGus = useMemo(() => {
     return initialGus.filter((gu) => {
-      // Search check
+      // Search check across name, id, description, effects, tags, food names
       if (cleanSearch) {
-        const nameClean = removeAccents((gu.name || "").toLowerCase());
-        const idClean = removeAccents((gu.id || "").toLowerCase());
-        const descClean = removeAccents((gu.description || "").toLowerCase());
-        const matchText = nameClean.includes(cleanSearch) || idClean.includes(cleanSearch) || descClean.includes(cleanSearch);
-        if (!matchText) return false;
+        const indexed = guSearchIndex.get(`${gu.id}_${gu.rank}`);
+        if (indexed) {
+          if (!indexed.includes(cleanSearch)) return false;
+        } else {
+          const fallback = extractGuSearchableText(gu, itemMap);
+          if (!fallback.includes(cleanSearch)) return false;
+        }
       }
       // Rank check
       if (guRank !== "all" && gu.rank !== Number(guRank)) return false;
@@ -334,10 +383,12 @@ export default function WikiClientView({
       if (guRarity !== "all" && gu.rarity !== Number(guRarity)) return false;
       // Type check
       if (guType !== "all" && gu.gu_type !== guType) return false;
+      // Effect category check
+      if (guEffect !== "all" && !matchesGuEffect(gu, guEffect)) return false;
 
       return true;
     }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  }, [initialGus, cleanSearch, guRank, guPath, guRarity, guType]);
+  }, [initialGus, cleanSearch, guRank, guPath, guRarity, guType, guEffect, guSearchIndex, itemMap]);
 
   const filteredItems = useMemo(() => {
     return initialItems.filter((item) => {
@@ -581,7 +632,7 @@ export default function WikiClientView({
                   type="text"
                   placeholder={
                     activeTab === "gus"
-                      ? "Tìm kiếm Cổ trùng theo tên, ID, mô tả..."
+                      ? "Tìm Cổ trùng theo tên, hiệu ứng (choáng, hút máu, độc...), thức ăn, ID..."
                       : activeTab === "items"
                       ? "Tìm kiếm Vật phẩm theo tên, ID, mô tả..."
                       : activeTab === "recipes"
@@ -613,12 +664,42 @@ export default function WikiClientView({
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
                 <span>Bộ lọc</span>
+                {hasActiveFilters && (
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse ml-0.5" />
+                )}
               </button>
             </div>
 
+            {/* Quick Effect Filters for Gus */}
+            {activeTab === "gus" && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+                <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
+                  <Sparkles className="w-3 h-3 text-indigo-400" />
+                  Hiệu ứng:
+                </span>
+                {EFFECT_CATEGORIES.map((cat) => {
+                  const isActive = guEffect === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setGuEffect(cat.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-mono shrink-0 transition-all flex items-center gap-1 cursor-pointer border ${
+                        isActive
+                          ? "bg-indigo-600/30 text-indigo-200 border-indigo-500/60 shadow-sm font-bold"
+                          : "bg-zinc-900/40 text-zinc-400 border-zinc-800/60 hover:text-zinc-200 hover:border-zinc-700/80 hover:bg-zinc-800/30"
+                      }`}
+                    >
+                      <span>{cat.icon}</span>
+                      <span>{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Filters Collapse Drawer */}
             {showFilters && (
-              <div className="p-4 rounded-xl bg-zinc-950/30 border border-[var(--border)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 animate-fadeIn">
+              <div className="p-4 rounded-xl bg-zinc-950/30 border border-[var(--border)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 animate-fadeIn">
                 {activeTab === "gus" && (
                   <>
                     {/* Gu Path */}
@@ -684,6 +765,22 @@ export default function WikiClientView({
                         {allGuTypes.map((t) => (
                           <option key={t} value={t}>
                             {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Gu Effect */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider">Hiệu ứng</label>
+                      <select
+                        value={guEffect}
+                        onChange={(e) => setGuEffect(e.target.value)}
+                        className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none"
+                      >
+                        {EFFECT_CATEGORIES.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.icon} {cat.label}
                           </option>
                         ))}
                       </select>
@@ -805,6 +902,46 @@ export default function WikiClientView({
                 )}
               </div>
             )}
+
+            {/* Results count & Quick reset */}
+            <div className="flex items-center justify-between text-xs font-mono text-[var(--text-muted)] pt-1">
+              <div>
+                <span>Hiển thị </span>
+                <span className="font-bold text-[var(--text-primary)]">
+                  {activeTab === "gus"
+                    ? filteredGus.length
+                    : activeTab === "items"
+                    ? filteredItems.length
+                    : activeTab === "recipes"
+                    ? filteredRecipes.length
+                    : activeTab === "monsters"
+                    ? filteredMonsters.length
+                    : filteredRegions.length}
+                </span>
+                <span> / </span>
+                <span>
+                  {activeTab === "gus"
+                    ? initialGus.length
+                    : activeTab === "items"
+                    ? initialItems.length
+                    : activeTab === "recipes"
+                    ? initialRecipes.length
+                    : activeTab === "monsters"
+                    ? initialMonsters.length
+                    : initialRegions.length}
+                </span>
+                <span> {activeTab === "gus" ? "Cổ trùng" : activeTab === "items" ? "Vật phẩm" : activeTab === "recipes" ? "Cổ phương" : activeTab === "monsters" ? "Quái vật" : "Khu vực"}</span>
+              </div>
+              {hasActiveFilters && (
+                <button
+                  onClick={resetFilters}
+                  className="inline-flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 font-mono transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Đặt lại bộ lọc</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -880,84 +1017,142 @@ export default function WikiClientView({
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredGus.map((gu) => (
-                  <Link
-                    key={gu.id + gu.rank}
-                    href={`/wiki/gu/${gu.id}`}
-                    className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-indigo-500/30 transition-all hover:bg-[var(--bg-elevated)] shadow-sm hover:shadow-md cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-xl shrink-0 p-1.5 rounded-lg bg-zinc-950/50 border border-zinc-800/40">
-                          {getGuTypeIcon(gu.gu_type)}
-                        </span>
-                        <div className="min-w-0">
-                          <h3 className="text-xs font-serif font-bold text-[var(--text-primary)] group-hover:text-indigo-400 transition-colors truncate">
-                            {gu.name}
-                          </h3>
-                          <p className="text-[9px] text-[var(--text-muted)] font-mono mt-0.5">
-                            Rank {gu.rank} · {gu.gu_type}
-                          </p>
-                        </div>
-                      </div>
-                      {gu.rarity > 0 && (
-                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold shrink-0 border border-zinc-800/60 ${rarityColors[gu.rarity] || "text-[var(--text-muted)]"}`}>
-                          {rarityLabels[gu.rarity] || `Độ hiếm ${gu.rarity}`}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mt-3 line-clamp-2 italic font-serif">
-                      &ldquo;{gu.description}&rdquo;
-                    </p>
-
-                    <div className="flex flex-wrap gap-1 mt-auto pt-3 border-t border-zinc-900/60">
-                      {gu.path && gu.path.map((pathName) => {
-                        const pathColor = getPathColor(pathName);
-                        return (
-                          <span
-                            key={pathName}
-                            className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-semibold border ${pathColor.bg} ${pathColor.text} ${pathColor.border}`}
-                          >
-                            pathName
+                {filteredGus.map((gu) => {
+                  const effectBadges = extractGuEffectBadges(gu, 3);
+                  return (
+                    <Link
+                      key={gu.id + "_" + gu.rank}
+                      href={`/wiki/gu/${gu.id}`}
+                      className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-indigo-500/40 transition-all hover:bg-[var(--bg-elevated)] hover:-translate-y-0.5 duration-200 shadow-sm hover:shadow-md cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-xl shrink-0 p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/40 group-hover:border-indigo-500/30 transition-colors">
+                            {getGuTypeIcon(gu.gu_type)}
                           </span>
-                        );
-                      })}
-                      {gu.combat_tags.slice(0, 2).map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-1.5 py-0.5 rounded bg-zinc-900/50 text-[8px] text-zinc-500 border border-zinc-800/40 font-mono"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* Source Locations */}
-                    {guSourceMap.has(gu.id) && (guSourceMap.get(gu.id)!.wildRegions.length > 0 || guSourceMap.get(gu.id)!.dropMonsters.length > 0) && (
-                      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-zinc-900/40">
-                        {guSourceMap.get(gu.id)!.wildRegions.slice(0, 2).map((rId) => {
-                          const region = regionMap.get(rId);
-                          return (
-                            <span key={`w-${rId}`} className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1">
-                              <MapPin className="w-2.5 h-2.5" />
-                              {region ? region.name : rId}
-                            </span>
-                          );
-                        })}
-                        {guSourceMap.get(gu.id)!.dropMonsters.slice(0, 2).map((mId) => {
-                          const monster = monsterMap.get(mId);
-                          return (
-                            <span key={`m-${mId}`} className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1">
-                              <Skull className="w-2.5 h-2.5" />
-                              {monster ? monster.name : mId}
-                            </span>
-                          );
-                        })}
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-serif font-bold text-[var(--text-primary)] group-hover:text-indigo-400 transition-colors truncate">
+                              {gu.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] text-zinc-400 font-mono">
+                                Chuyển {gu.rank}
+                              </span>
+                              <span className="text-zinc-600">·</span>
+                              <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                                {gu.gu_type}
+                              </span>
+                              {gu.is_immortal && (
+                                <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-500/30 rounded">
+                                  Tiên Cổ
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {gu.rarity > 0 && (
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold shrink-0 border ${rarityColors[gu.rarity] || "text-[var(--text-muted)] border-zinc-800/60"}`}>
+                            {rarityLabels[gu.rarity] || `Độ hiếm ${gu.rarity}`}
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </Link>
-                ))}
+
+                      {gu.description && (
+                        <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mt-3 line-clamp-2 italic font-serif">
+                          &ldquo;{gu.description}&rdquo;
+                        </p>
+                      )}
+
+                      {/* Effects Preview */}
+                      {effectBadges.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2.5">
+                          {effectBadges.map((badge, idx) => (
+                            <span
+                              key={idx}
+                              className={`px-1.5 py-0.5 rounded text-[8px] font-mono border flex items-center gap-1 ${badge.color}`}
+                            >
+                              <span>{badge.icon}</span>
+                              <span className="truncate max-w-[130px]">{badge.text}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Food Types with Item Names */}
+                      {gu.food_types && gu.food_types.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-zinc-900/60 text-[9px] font-mono text-[var(--text-muted)]">
+                          <span className="text-rose-400 shrink-0 font-semibold">🍖 Thức ăn:</span>
+                          <div className="flex flex-wrap gap-1 min-w-0">
+                            {gu.food_types.slice(0, 2).map((foodId) => {
+                              const foodItem = itemMap.get(foodId);
+                              const foodName = foodItem ? foodItem.name : foodId;
+                              return (
+                                <span
+                                  key={foodId}
+                                  className="px-1.5 py-0.2 rounded bg-rose-950/20 text-rose-300 border border-rose-500/15 text-[8px] truncate max-w-[110px]"
+                                  title={foodName}
+                                >
+                                  {foodName}
+                                </span>
+                              );
+                            })}
+                            {gu.food_types.length > 2 && (
+                              <span className="text-[8px] text-[var(--text-muted)] self-center">
+                                +{gu.food_types.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-1 mt-auto pt-2.5 border-t border-zinc-900/60">
+                        {gu.path && gu.path.map((pathName) => {
+                          const pathColor = getPathColor(pathName);
+                          return (
+                            <span
+                              key={pathName}
+                              className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-semibold border ${pathColor.bg} ${pathColor.text} ${pathColor.border}`}
+                            >
+                              {translatePath(pathName) || pathName}
+                            </span>
+                          );
+                        })}
+                        {gu.combat_tags && gu.combat_tags.slice(0, 2).map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-1.5 py-0.5 rounded bg-zinc-900/50 text-[8px] text-zinc-500 border border-zinc-800/40 font-mono"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Source Locations */}
+                      {guSourceMap.has(gu.id) && (guSourceMap.get(gu.id)!.wildRegions.length > 0 || guSourceMap.get(gu.id)!.dropMonsters.length > 0) && (
+                        <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-zinc-900/40">
+                          {guSourceMap.get(gu.id)!.wildRegions.slice(0, 2).map((rId) => {
+                            const region = regionMap.get(rId);
+                            return (
+                              <span key={`w-${rId}`} className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1">
+                                <MapPin className="w-2.5 h-2.5" />
+                                {region ? region.name : rId}
+                              </span>
+                            );
+                          })}
+                          {guSourceMap.get(gu.id)!.dropMonsters.slice(0, 2).map((mId) => {
+                            const monster = monsterMap.get(mId);
+                            return (
+                              <span key={`m-${mId}`} className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1">
+                                <Skull className="w-2.5 h-2.5" />
+                                {monster ? monster.name : mId}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>

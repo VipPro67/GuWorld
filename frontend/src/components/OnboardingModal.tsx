@@ -147,7 +147,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
               <span>Cơ Chế Tuổi Thọ & Tiên Cương (Cương Thi)</span>
             </div>
             <p className="text-[11px] text-zinc-300 leading-relaxed font-serif">
-              • <strong>Tuổi Thọ:</strong> Cổ sư bị tiêu hao thọ nguyên theo thời gian thực (tăng tốc theo <span className="text-amber-400 font-mono">time_speed</span>). Khi thọ nguyên giảm về 0, nhân vật sẽ rơi vào cõi chết (<span className="text-red-400 font-semibold">is_dead</span>) và bị phong tỏa các hoạt động.
+              • <strong>Tuổi Thọ:</strong> Cổ sư bị tiêu hao thọ nguyên theo thời gian thực (tăng tốc theo <span className="text-amber-400 font-mono">time_speed</span>). Khi thọ nguyên giảm về 0, nhân vật sẽ rơi vào cõi chết và bị phong tỏa các hoạt động.
               <br />
               • <strong>Cương Thi (Tiên Cương):</strong> Chủng tộc sở hữu <span className="text-emerald-400 font-semibold">Bất Tử Tuổi Thọ</span> nhưng bị phong tỏa hoàn toàn khả năng tự hồi phục HP/Chân Nguyên/Hồn Phách. Tiên Khiếu Cương Thi bị khóa gia tốc thời gian ở <span className="text-amber-400 font-mono">1.0</span> và bị suy thoái theo thời gian.
             </p>

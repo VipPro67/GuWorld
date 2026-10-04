@@ -270,8 +270,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			clearedCellsJSON, _ := json.Marshal(player.ClearedCells)
 
 			player.HP = float64(finalPlayerHP)
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, path_masteries = $5, aptitude_percent = $6, lifespan = $7, cleared_cells = $8, is_dead = $9, version = version + 1 WHERE id = $10`
-			args = append(args, player.HP, finalMana, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.AptitudePercent, player.Lifespan, clearedCellsJSON, player.IsDead, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, path_masteries = $5, aptitude_percent = $6, lifespan = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
+			args = append(args, player.HP, finalMana, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.AptitudePercent, player.Lifespan, clearedCellsJSON, player.ID)
 
 			summary["loot"] = lootDetailLogs
 		}

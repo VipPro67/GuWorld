@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -126,7 +127,7 @@ func CreateBuybackOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player details"})
 		return
 	}
-	if creator.IsDead {
+	if gamefx.IsDeadState(&creator) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể tạo đơn giao dịch!"})
 		return
 	}
@@ -370,7 +371,7 @@ func SellToBuybackOrder(c *gin.Context) {
 	defer tx.Rollback()
 
 	actor, err := evaluateManaTx(tx, authID)
-	if err != nil || actor.IsDead {
+	if err != nil || gamefx.IsDeadState(&actor) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể thực hiện giao dịch!"})
 		return
 	}
@@ -711,7 +712,7 @@ func CancelBuybackOrder(c *gin.Context) {
 	defer tx.Rollback()
 
 	creator, err := evaluateManaTx(tx, authID)
-	if err != nil || creator.IsDead {
+	if err != nil || gamefx.IsDeadState(&creator) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể hủy đơn!"})
 		return
 	}

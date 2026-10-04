@@ -598,7 +598,7 @@ export default function Home() {
                 <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">⏳</span>
                   <div>
-                    <span className="font-bold text-red-400">Cơ chế Tuổi Thọ & Trạng Thái Tử Vong (is_dead)</span>
+                    <span className="font-bold text-red-400">Cơ chế Tuổi Thọ & Trạng Thái Tử Vong</span>
                     <p className="text-[var(--text-secondary)] mt-0.5">Thọ nguyên tiêu hao dần theo thời gian thực (nhân hệ số gia tốc time_speed). Khi tuổi thọ giảm về 0, Cổ sư rơi vào cõi chết và bị phong tỏa mọi hoạt động chiến đấu, thám hiểm, tu luyện cho tới khi khôi phục tuổi thọ.</p>
                   </div>
                 </div>
@@ -789,8 +789,8 @@ export default function Home() {
 
       {activeTrade && activeTrade.status === "ACCEPTED" && <TradeRoomModal />}
 
-      {/* Dead Player Overlay */}
-      {player && player.is_dead && (
+      {/* Dead Player Overlay — cõi chết is derived from lifespan on the server */}
+      {player && player.lifespan <= 0 && (
         <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-zinc-950 border border-red-900/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl shadow-red-950/50">
             <div className="w-16 h-16 bg-red-950/50 border border-red-800/40 rounded-full flex items-center justify-center mx-auto text-red-500 text-3xl font-extrabold animate-pulse">

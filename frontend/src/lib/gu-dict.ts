@@ -25,18 +25,35 @@ export interface GuDictionaryItem {
 
 import { INTERNAL_BACKEND_URL as BACKEND_URL } from "./config";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cachedWikiData: any = null;
+function getStaticWikiData() {
+  if (cachedWikiData) return cachedWikiData;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedWikiData = require("@/data/wiki-cache.json");
+    return cachedWikiData;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchAllGus(): Promise<GuDictionaryItem[]> {
   try {
     const res = await fetch(`${BACKEND_URL}/api/dictionary/gus`, {
       cache: "force-cache",
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : Object.values(data || {});
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : Object.values(data || {});
+    }
   } catch {
-    return [];
+    // Fallback below
   }
+
+  const staticData = getStaticWikiData();
+  return staticData?.gus || [];
 }
 
 export async function fetchGuById(id: string): Promise<GuDictionaryItem | null> {
@@ -169,27 +186,39 @@ export async function fetchDictionaryUnified(): Promise<{
       request("regions"),
       request("monster-spawns"),
     ]);
-    if ([guRes, itemRes, monsterRes, lootRes, regionRes, spawnRes].some((res) => !res.ok)) {
-      return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
+    if ([guRes, itemRes, monsterRes, lootRes, regionRes, spawnRes].every((res) => res.ok)) {
+      const guData = await guRes.json();
+      const itemsRecord: Record<string, ItemSpec> = await itemRes.json();
+      const monstersRecord: Record<string, MonsterTemplate> = await monsterRes.json();
+      const gus = Array.isArray(guData) ? guData : Object.values(guData || {});
+      const items = Object.values(itemsRecord).map((item) => ({
+        ...item,
+        item_type: item.item_type || item.type || "Material",
+      }));
+      const monsters = Object.values(monstersRecord);
+      const lootTables: LootTable[] = await lootRes.json();
+      const regions: WikiRegion[] = await regionRes.json();
+      const monsterSpawns: WikiMonsterSpawn[] = await spawnRes.json();
+
+      return { gus, items, monsters, lootTables, regions, monsterSpawns };
     }
-
-    const guData = await guRes.json();
-    const itemsRecord: Record<string, ItemSpec> = await itemRes.json();
-    const monstersRecord: Record<string, MonsterTemplate> = await monsterRes.json();
-    const gus = Array.isArray(guData) ? guData : Object.values(guData || {});
-    const items = Object.values(itemsRecord).map((item) => ({
-      ...item,
-      item_type: item.item_type || item.type || "Material",
-    }));
-    const monsters = Object.values(monstersRecord);
-    const lootTables: LootTable[] = await lootRes.json();
-    const regions: WikiRegion[] = await regionRes.json();
-    const monsterSpawns: WikiMonsterSpawn[] = await spawnRes.json();
-
-    return { gus, items, monsters, lootTables, regions, monsterSpawns };
   } catch {
-    return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
+    // Fallback below
   }
+
+  const staticData = getStaticWikiData();
+  if (staticData) {
+    return {
+      gus: staticData.gus || [],
+      items: staticData.items || [],
+      monsters: staticData.monsters || [],
+      lootTables: staticData.lootTables || [],
+      regions: staticData.regions || [],
+      monsterSpawns: staticData.monsterSpawns || [],
+    };
+  }
+
+  return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
 }
 
 export async function fetchMasterRecipes(): Promise<RefiningRecipe[]> {
@@ -198,10 +227,28 @@ export async function fetchMasterRecipes(): Promise<RefiningRecipe[]> {
       cache: "force-cache",
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data || [];
+    if (res.ok) {
+      const data = await res.json();
+      return data || [];
+    }
   } catch {
-    return [];
+    // Fallback below
   }
+
+  const staticData = getStaticWikiData();
+  return staticData?.recipes || [];
+}
+
+export async function fetchAllItems(): Promise<ItemSpec[]> {
+  const { items } = await fetchDictionaryUnified();
+  return items;
+}
+
+export async function fetchItemMap(): Promise<Map<string, ItemSpec>> {
+  const items = await fetchAllItems();
+  const map = new Map<string, ItemSpec>();
+  for (const item of items) {
+    map.set(item.id, item);
+  }
+  return map;
 }

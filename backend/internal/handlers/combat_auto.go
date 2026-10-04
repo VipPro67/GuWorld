@@ -76,7 +76,7 @@ func AutoCombatStart(c *gin.Context) {
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể bắt đầu giao tranh!"})
 		return
 	}
@@ -271,8 +271,8 @@ func AutoCombatStart(c *gin.Context) {
 				_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
 			}
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, is_dead = $9, version = version + 1 WHERE id = $10`
-			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.ImmortalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.IsDead, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
+			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.ImmortalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
 		}
 	} else {
 		defUpdateQuery, defArgs, defLogs := applyAutoCombatDefeat(tx, &player, simState, isVirtual, isTribulation, finalMana)

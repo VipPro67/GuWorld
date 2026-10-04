@@ -101,9 +101,20 @@ type worldCombatPlayer struct {
 	Region   string
 	X, Y     int
 	Dead     bool
+	Race     string
+	Lifespan float64
 	Defense  float64
 	Attack   float64
 	Statuses models.StatusList
+}
+
+// deadInCoiChet mirrors gamefx.IsDeadState for rows loaded by raw SQL instead of
+// the player service: Cõi Chết is derived from lifespan + race, never stored.
+func (p worldCombatPlayer) deadInCoiChet() bool {
+	probe := models.Player{}
+	probe.Race = p.Race
+	probe.Lifespan = p.Lifespan
+	return gamefx.IsDeadState(&probe)
 }
 
 type worldMonsterActionResult struct {
@@ -117,7 +128,7 @@ func loadWorldCombatPlayerSnapshots(ctx context.Context, ids []uuid.UUID) (map[u
 		return out, nil
 	}
 	rows, err := db.DB.QueryContext(ctx, `
-		SELECT p.id, p.hp, p.current_region, p.x, p.y, p.is_dead, p.rank, p.sub_rank,
+		SELECT p.id, p.hp, p.current_region, p.x, p.y, p.lifespan, COALESCE(p.race, ''), p.rank, p.sub_rank,
 		       p.statuses, p.growth_data, p.path_masteries,
 		       COALESCE(dm.marks, '{}'::jsonb), `+db.GuInventoryAggregate("p.id")+`
 		FROM players p
@@ -136,10 +147,11 @@ func loadWorldCombatPlayerSnapshots(ctx context.Context, ids []uuid.UUID) (map[u
 	for rows.Next() {
 		var p models.Player
 		var snap worldCombatPlayer
-		if err := rows.Scan(&snap.ID, &snap.HP, &snap.Region, &snap.X, &snap.Y, &snap.Dead,
+		if err := rows.Scan(&snap.ID, &snap.HP, &snap.Region, &snap.X, &snap.Y, &snap.Lifespan, &snap.Race,
 			&p.Rank, &p.SubRank, &p.Statuses, &p.GrowthData, &p.PathMasteries, &p.DaoMarks, &p.GuInventory); err != nil {
 			return nil, err
 		}
+		snap.Dead = snap.deadInCoiChet()
 		p.ID, p.HP, p.CurrentRegion, p.X, p.Y = snap.ID, snap.HP, snap.Region, snap.X, snap.Y
 		snap.Statuses = p.Statuses
 		snap.Defense = calculateWorldPlayerDefense(&p)
@@ -273,12 +285,14 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 	var hp float64
 	var region string
 	var x, y int
-	var dead bool
+	var lifespan float64
+	var race string
 	var statuses models.StatusList
-	if err := tx.QueryRowContext(ctx, `SELECT hp,current_region,x,y,is_dead,statuses FROM players WHERE id=$1 FOR UPDATE`, target.ID).
-		Scan(&hp, &region, &x, &y, &dead, &statuses); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT hp,current_region,x,y,lifespan,COALESCE(race,''),statuses FROM players WHERE id=$1 FOR UPDATE`, target.ID).
+		Scan(&hp, &region, &x, &y, &lifespan, &race, &statuses); err != nil {
 		return worldMonsterActionResult{}, err
 	}
+	dead := worldCombatPlayer{Race: race, Lifespan: lifespan}.deadInCoiChet()
 	if dead || hp <= 0 || region != monster.RegionID || x != target.X || y != target.Y || isWorldMonsterSafeZone(region, x, y) || math.Hypot(float64(x)-monster.X, float64(y)-monster.Y) > monster.AttackRange {
 		return worldMonsterActionResult{Rejected: true}, nil
 	}
@@ -291,7 +305,7 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 		return worldMonsterActionResult{}, err
 	}
 	died := hp > 0 && resolved.HP <= 0
-	if _, err = tx.ExecContext(ctx, `UPDATE players SET hp=$1,statuses=$2,is_dead=(is_dead OR $3),version=version+1 WHERE id=$4`, resolved.HP, statusJSON, died, target.ID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE players SET hp=$1,statuses=$2,version=version+1 WHERE id=$3`, resolved.HP, statusJSON, target.ID); err != nil {
 		return worldMonsterActionResult{}, err
 	}
 	if died {

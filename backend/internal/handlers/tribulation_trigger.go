@@ -152,7 +152,6 @@ func CheckAndTriggerTribulations() error {
 			ts       float64
 			rank     int
 			race     string
-			isDead   bool
 		}
 		pMap := make(map[string]*pdata, len(apertures))
 		{
@@ -160,14 +159,14 @@ func CheckAndTriggerTribulations() error {
 			for i, ap := range apertures {
 				pids[i] = ap.PlayerID
 			}
-			if pRows, qErr := db.DB.Query(`SELECT id, lifespan, time_speed_multiplier, rank, COALESCE(race, ''), COALESCE(is_dead, false) FROM players WHERE id = ANY($1::uuid[])`, pq.Array(pids)); qErr != nil {
+			if pRows, qErr := db.DB.Query(`SELECT id, lifespan, time_speed_multiplier, rank, COALESCE(race, '') FROM players WHERE id = ANY($1::uuid[])`, pq.Array(pids)); qErr != nil {
 				logger.S.Errorf("CheckAndTriggerTribulations: batch-read players error: %v", qErr)
 			} else {
 				defer pRows.Close()
 				for pRows.Next() {
 					var id string
 					var d pdata
-					if err := pRows.Scan(&id, &d.lifespan, &d.ts, &d.rank, &d.race, &d.isDead); err == nil {
+					if err := pRows.Scan(&id, &d.lifespan, &d.ts, &d.rank, &d.race); err == nil {
 						pMap[id] = &d
 					}
 				}
@@ -307,21 +306,21 @@ func CheckAndTriggerTribulations() error {
 			// Look up player data from batch
 			currentLifespan := 100.0
 			playerRace := ""
-			isDead := false
 			if pd, ok := pMap[ap.PlayerID]; ok {
 				currentLifespan = pd.lifespan
 				timeSpeedMultiplier = pd.ts
 				playerRace = pd.race
-				isDead = pd.isDead
-			}
-
-			if isDead {
-				continue
 			}
 
 			dummyP := models.Player{}
 			dummyP.Race = playerRace
+			dummyP.Lifespan = currentLifespan
 			isImmortal := gamefx.Get(&dummyP).Immortal
+
+			// A player in Cõi Chết has no aperture progression to run.
+			if gamefx.IsDeadState(&dummyP) {
+				continue
+			}
 
 			if isImmortal {
 				timeSpeedMultiplier = 1.0
@@ -355,7 +354,6 @@ func CheckAndTriggerTribulations() error {
 				lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, decay: lifespanDecay})
 
 				if newLifespan <= 0.0 {
-					_, _ = db.DB.Exec(`UPDATE players SET is_dead = true WHERE id = $1`, ap.PlayerID)
 					// Freeze aperture (keep per-aperture Exec: different SET clause)
 					_, _ = db.DB.Exec(`
 						UPDATE immortal_apertures

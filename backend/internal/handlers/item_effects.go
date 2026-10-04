@@ -135,9 +135,6 @@ func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec, va
 
 func lifespanBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
 	player.Lifespan += val
-	if player.Lifespan > 0 {
-		player.IsDead = false
-	}
 	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.0f năm thọ nguyên tối đa và hồi phục %.0f năm tuổi thọ!", item.Name, val, val), nil
 }
 
