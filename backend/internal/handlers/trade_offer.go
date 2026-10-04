@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -76,11 +77,11 @@ func InitiateTrade(c *gin.Context) {
 		}
 	}
 
-	if sender.IsDead {
+	if gamefx.IsDeadState(&sender) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Không thể giao dịch!"})
 		return
 	}
-	if receiver.IsDead {
+	if gamefx.IsDeadState(&receiver) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương đã rơi vào cõi chết. Không thể giao dịch!"})
 		return
 	}

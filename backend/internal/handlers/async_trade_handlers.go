@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -142,7 +143,7 @@ func CreateTradeOffer(c *gin.Context) {
 	defer tx.Rollback()
 
 	creator, err := evaluateManaTx(tx, authID)
-	if err != nil || creator.IsDead {
+	if err != nil || gamefx.IsDeadState(&creator) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể tạo đơn trao đổi!"})
 		return
 	}
@@ -414,7 +415,7 @@ func AcceptTradeOffer(c *gin.Context) {
 	defer tx.Rollback()
 
 	acceptor, err := evaluateManaTx(tx, authID)
-	if err != nil || acceptor.IsDead {
+	if err != nil || gamefx.IsDeadState(&acceptor) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể chấp nhận trao đổi!"})
 		return
 	}
@@ -705,7 +706,7 @@ func CancelTradeOffer(c *gin.Context) {
 	defer tx.Rollback()
 
 	creator, err := evaluateManaTx(tx, authID)
-	if err != nil || creator.IsDead {
+	if err != nil || gamefx.IsDeadState(&creator) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể hủy đơn trao đổi!"})
 		return
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -91,7 +92,7 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể tạo giao dịch Bảo Hoàng Thiên!"})
 		return
 	}
@@ -476,7 +477,7 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể đấu giá Bảo Hoàng Thiên!"})
 		return
 	}
@@ -640,7 +641,7 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load buyer details"})
 		return
 	}
-	if buyer.IsDead {
+	if gamefx.IsDeadState(&buyer) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể mua vật phẩm Bảo Hoàng Thiên!"})
 		return
 	}

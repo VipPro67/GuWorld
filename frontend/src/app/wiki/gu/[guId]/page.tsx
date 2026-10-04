@@ -1,10 +1,11 @@
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
+export const dynamicParams = true;
 import type { Metadata } from "next";
 import Link from "next/link";
-import { fetchAllGus, fetchGuById, type GuDictionaryItem } from "@/lib/gu-dict";
+import { fetchAllGus, fetchGuById, fetchAllItems, type GuDictionaryItem, type ItemSpec } from "@/lib/gu-dict";
 import { notFound } from "next/navigation";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
-import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
+import { translatePath } from "@/lib/translate";
 
 type Props = {
   params: Promise<{ guId: string }>;
@@ -110,7 +111,7 @@ function GuStatBar({ label, value, max }: { label: string; value: number; max: n
   );
 }
 
-function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
+function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<string, ItemSpec> }) {
 
   const maxRank = 9;
   const maxCost = 100;
@@ -145,7 +146,7 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
               </span>
               {gu.path && gu.path.map(p => (
                 <span key={p} className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
-                  translatePath
+                  {translatePath(p) || p}
                 </span>
               ))}
               <span className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
@@ -215,28 +216,58 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
           </section>
 
           <section className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono mb-3">Thức ăn</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] font-mono">Thức ăn</h2>
+              {gu.food_types.length > 0 && (
+                <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                  {gu.food_types.length} loại vật phẩm
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               {gu.food_types.length > 0 ? (
-                gu.food_types.map((food) => (
-                  <span key={food} className="px-3 py-1 rounded-xl bg-rose-950/20 text-xs text-rose-400 font-mono border border-rose-500/10">
-                    🍖 {food}
-                  </span>
-                ))
+                gu.food_types.map((food) => {
+                  const item = itemMap[food];
+                  const foodName = item ? item.name : food;
+                  return (
+                    <Link
+                      key={food}
+                      href={`/wiki?tab=items&search=${encodeURIComponent(foodName)}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/25 hover:bg-rose-900/40 text-xs text-rose-300 hover:text-rose-200 font-mono border border-rose-500/20 hover:border-rose-400/40 transition-all cursor-pointer shadow-sm group"
+                      title={item ? `${item.name} (${item.item_type || "Vật phẩm"})` : food}
+                    >
+                      <span className="group-hover:scale-110 transition-transform">🍖</span>
+                      <span className="font-semibold">{foodName}</span>
+                      {item && item.rank && item.rank > 0 && (
+                        <span className="text-[10px] text-rose-400/70 font-normal ml-0.5">
+                          · Cấp {item.rank}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })
               ) : (
                 <span className="text-xs text-[var(--text-muted)] font-mono">Không cần ăn</span>
               )}
             </div>
           </section>
-        </div>
 
-        <div className="mt-8 text-center">
-          <Link
-            href="/wiki"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-elevated)] text-xs text-[var(--text-secondary)] hover:text-[var(--brand)] font-mono transition-colors border border-[var(--border)]"
-          >
-            ← Quay lại Thư Viện Cổ Trùng
-          </Link>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <Link
+              href={`/wiki?tab=recipes&search=${encodeURIComponent(gu.name)}`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-950/20 hover:bg-amber-900/30 text-xs text-amber-300 hover:text-amber-200 font-mono border border-amber-500/20 hover:border-amber-400/40 transition-all"
+            >
+              <span>📜</span>
+              <span>Tìm Cổ phương luyện {gu.name}</span>
+            </Link>
+
+            <Link
+              href="/wiki"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-elevated)] text-xs text-[var(--text-secondary)] hover:text-[var(--brand)] font-mono transition-colors border border-[var(--border)]"
+            >
+              ← Quay lại Thư Viện Cổ Trùng
+            </Link>
+          </div>
         </div>
 
         <script
@@ -261,7 +292,8 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
 
 export async function generateStaticParams() {
   const gus = await fetchAllGus();
-  return gus.map((gu) => ({ guId: gu.id }));
+  const uniqueIds = Array.from(new Set(gus.map((gu) => gu.id)));
+  return uniqueIds.map((guId) => ({ guId }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -305,7 +337,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function GuWikiPage({ params }: Props) {
   const { guId } = await params;
-  const gu = await fetchGuById(guId);
+  const [gu, items] = await Promise.all([
+    fetchGuById(guId),
+    fetchAllItems(),
+  ]);
   if (!gu) notFound();
-  return <GuPageContent gu={gu} />;
+
+  const itemMap: Record<string, ItemSpec> = {};
+  for (const item of items) {
+    itemMap[item.id] = item;
+  }
+
+  return <GuPageContent gu={gu} itemMap={itemMap} />;
 }

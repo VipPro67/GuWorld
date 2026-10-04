@@ -327,9 +327,6 @@ func applyLoveGuPenalties(player *models.Player, logs []simulator.CombatLog) {
 	}
 	if loveLifespanPenalty > 0 && !gamefx.Get(player).Immortal {
 		player.Lifespan = math.Max(0.0, player.Lifespan-loveLifespanPenalty)
-		if player.Lifespan <= 0 {
-			player.IsDead = true
-		}
 	}
 	if loveStonesPenalty {
 		player.PrimevalStones = player.PrimevalStones / 2

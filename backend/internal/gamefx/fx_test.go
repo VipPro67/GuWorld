@@ -230,12 +230,42 @@ func TestCuongThiRaceEffects(t *testing.T) {
 
 func TestDeadPlayerBlockedAction(t *testing.T) {
 	p := &models.Player{}
-	p.IsDead = true
+	p.CultivationState.Lifespan = 0
+	if !IsDeadState(p) {
+		t.Fatalf("expected lifespan 0 player to be dead")
+	}
 	if !HasBlockedAction(p, "explore") {
 		t.Errorf("expected dead player to have explore action blocked")
 	}
 	if !HasBlockedAction(p, "cultivate") {
 		t.Errorf("expected dead player to have cultivate action blocked")
+	}
+
+	alive := &models.Player{}
+	alive.Lifespan = 12
+	if IsDeadState(alive) {
+		t.Errorf("expected player with lifespan to be alive")
+	}
+	if HasBlockedAction(alive, "explore") {
+		t.Errorf("expected alive player to have explore action allowed")
+	}
+}
+
+func TestImmortalRaceNeverDead(t *testing.T) {
+	p := &models.Player{}
+	p.Lifespan = 0
+	p.Race = "cuong_thi"
+	if IsDeadState(p) {
+		t.Errorf("expected immortal race with zero lifespan to not be dead")
+	}
+	if HasBlockedAction(p, "cultivate") {
+		t.Errorf("expected immortal race with zero lifespan to not be blocked")
+	}
+}
+
+func TestIsDeadStateNilPlayer(t *testing.T) {
+	if IsDeadState(nil) {
+		t.Errorf("expected nil player to not be dead")
 	}
 }
 

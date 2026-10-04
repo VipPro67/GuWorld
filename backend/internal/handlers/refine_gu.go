@@ -54,7 +54,7 @@ func RefineGu(c *gin.Context) {
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể luyện Cổ!"})
 		return
 	}

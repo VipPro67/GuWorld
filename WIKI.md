@@ -41,10 +41,10 @@ Khi đăng ký, đạo hữu mặc định Nhân Tộc  và chọn **Giới tín
 
 Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` (seed từ `data/Race.csv`): admin thêm chủng tộc mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Chủng tộc" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
 
-### Tuổi thọ & Trạng thái Tử Vong (is_dead)
+### Tuổi thọ & Trạng thái Tử Vong
 
 - **Cơ chế Tuổi thọ**: Cổ sư tiêu hao thọ nguyên theo thời gian thực (tốc độ hao mòn = thời gian thực × `time_speed_multiplier`).
-- **Rơi vào Cõi Chết (`is_dead`)**: Khi thọ nguyên giảm xuống $\le 0$, Cổ sư bị chuyển sang trạng thái tử vong (`is_dead = true`). Trong trạng thái này, mọi thao tác tu luyện, trùng kích, chiến đấu, thám hiểm và đào quặng bị phong tỏa hoàn toàn cho tới khi sử dụng **Thọ Nguyên Cổ** khôi phục tuổi thọ hoặc chuyển chủng tộc.
+- **Rơi vào Cõi Chết**: Khi thọ nguyên giảm xuống $\le 0$, Cổ sư bị chuyển sang trạng thái tử vong. Trạng thái này **không lưu riêng** — được suy ra từ `lifespan` mỗi lần đọc (`gamefx.IsDeadState`). Trong trạng thái này, mọi thao tác tu luyện, trùng kích, chiến đấu, thám hiểm và đào quặng bị phong tỏa hoàn toàn cho tới khi sử dụng **Thọ Nguyên Cổ** khôi phục tuổi thọ hoặc chuyển chủng tộc.
 - **Tiên Cương (Chủng tộc Cương Thi)**:
   - **Bất tử tuổi thọ**: Thọ nguyên không bị suy giảm theo thời gian.
   - **Phong tỏa Hồi phục**: Bị cấm tự động hồi phục HP (`DisableHPRegen`), Chân Nguyên/Tiên Nguyên (`DisableManaRegen`), Nguyên Lực (`DisableResourceRegen`) và Thần Hồn (`DisableSoulRegen`).

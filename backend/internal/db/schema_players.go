@@ -81,7 +81,6 @@ func schemaPlayers() error {
 		last_login_ip VARCHAR(50) NOT NULL DEFAULT '',
 		last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL,
 		active_session_id VARCHAR(64) NOT NULL DEFAULT '',
-		is_dead BOOLEAN NOT NULL DEFAULT false,
 		version INT NOT NULL DEFAULT 0,
 		state_revision BIGINT NOT NULL DEFAULT 0
 	);`); err != nil {
@@ -121,13 +120,10 @@ func schemaPlayers() error {
 		return err
 	}
 
-	if err := execSchema("players_is_dead_column", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='is_dead') THEN
-			ALTER TABLE players ADD COLUMN is_dead BOOLEAN NOT NULL DEFAULT false;
-		END IF;
-	END $$;`); err != nil {
+	// Cõi Chết is derived from lifespan + race (gamefx.IsDeadState); the column
+	// itself is no longer needed.
+	if err := execSchema("players_drop_is_dead_column", `
+	ALTER TABLE players DROP COLUMN IF EXISTS is_dead;`); err != nil {
 		return err
 	}
 

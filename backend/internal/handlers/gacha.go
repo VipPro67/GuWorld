@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -367,7 +368,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
 	}
-	if player.IsDead {
+	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể rút quẻ!"})
 		return
 	}

@@ -702,13 +702,25 @@ func StatusDisplayName(status string) string {
 	return status
 }
 
+// IsDeadState reports whether the player has entered Cõi Chết. Lifespan is the
+// single source of truth — the immortal race never decays lifespan, so a
+// zero-lifespan immortal is not dead.
+func IsDeadState(p *models.Player) bool {
+	if p == nil || p.Lifespan > 0 {
+		return false
+	}
+	dummyP := models.Player{}
+	dummyP.Race = p.Race
+	return !Get(&dummyP).Immortal
+}
+
 // HasBlockedAction reports whether any of the player's active (non-expired)
 // statuses block the given action.
 func HasBlockedAction(p *models.Player, action string) bool {
 	if p == nil {
 		return false
 	}
-	if p.IsDead {
+	if IsDeadState(p) {
 		return true
 	}
 	return Get(p).BlockedActions[action]
