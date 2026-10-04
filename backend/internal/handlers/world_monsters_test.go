@@ -105,14 +105,14 @@ func TestMonsterMovedBroadcastContainsPostCASAuthoritativeState(t *testing.T) {
 	}
 }
 
-func TestMovementCoalescingDoesNotSuppressStateTransition(t *testing.T) {
+func TestPausedAttackTransitionsBackToChase(t *testing.T) {
 	now := time.Now().UTC()
 	monster := testMonster(now.Add(-time.Second))
-	monster.State, monster.X, monster.LastSeenAt, monster.RegionID, monster.RespawnSeconds = MonsterStateChase, 3.5, now.Add(-100*time.Millisecond), "field", 30
+	monster.State, monster.X, monster.LastSeenAt, monster.RegionID, monster.RespawnSeconds = MonsterStateAttack, 3.5, now.Add(-100*time.Millisecond), "field", 30
 	events := installMonsterTransitionTest(t, monster, now, true)
 	processWorldMonsterTick(context.Background(), now)
-	if len(*events) != 1 || (*events)[0].EventType != "action_started" || (*events)[0].Payload["state"] != MonsterStateAttack {
-		t.Fatalf("coalescing lost transition: %+v", *events)
+	if len(*events) != 1 || (*events)[0].EventType != "monster_targeted" || (*events)[0].Payload["state"] != MonsterStateChase {
+		t.Fatalf("paused attack did not return to chase: %+v", *events)
 	}
 }
 
@@ -227,7 +227,7 @@ func TestMoveMonsterTowardDoesNotTunnelThroughSafeZone(t *testing.T) {
 	}
 }
 
-func TestWorldMonsterChaseAttackChaseAndElapsedMovement(t *testing.T) {
+func TestWorldMonsterChasesWithoutContactAttacking(t *testing.T) {
 	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
 	now := time.Now()
 	m := testMonster(now)
@@ -240,8 +240,8 @@ func TestWorldMonsterChaseAttackChaseAndElapsedMovement(t *testing.T) {
 	}
 	c[0].X = 5
 	m, event = tickWorldMonster(m, c, now.Add(2500*time.Millisecond), active)
-	if m.State != MonsterStateAttack || event != "action_started" {
-		t.Fatalf("attack=%+v event=%s", m, event)
+	if m.State != MonsterStateChase || m.X != 4 || event != "" {
+		t.Fatalf("monster should wait in chase range without attacking: monster=%+v event=%s", m, event)
 	}
 	c[0].X = 8
 	m, event = tickWorldMonster(m, c, now.Add(3*time.Second), active)
@@ -503,12 +503,12 @@ func installWorldAttackTest(t *testing.T, now time.Time, monsters []WorldMonster
 	return &events, &calls
 }
 
-func TestWorldMonsterAttackTriggersPlayerCounterattack(t *testing.T) {
+func TestWorldMonsterContactDoesNotDamageOrCounterattack(t *testing.T) {
 	now := time.Now().UTC()
 	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Attack: 25}
 	m := testMonster(now.Add(-time.Second))
 	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
-	_, _ = installWorldAttackTest(t, now, []WorldMonster{m}, p)
+	_, attacks := installWorldAttackTest(t, now, []WorldMonster{m}, p)
 	var counters atomic.Int64
 	applyWorldPlayerCounter = func(_ context.Context, monster WorldMonster, target worldCombatPlayer, commandID string, _ time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
 		counters.Add(1)
@@ -517,162 +517,8 @@ func TestWorldMonsterAttackTriggersPlayerCounterattack(t *testing.T) {
 		return cache.WorldMonsterHit, monster, 20, nil
 	}
 	processWorldMonsterTick(context.Background(), now)
-	if counters.Load() != 1 {
-		t.Fatalf("counterattacks=%d, want 1", counters.Load())
-	}
-}
-
-func TestWorldMonsterLethalAttackDoesNotTriggerCounterattack(t *testing.T) {
-	now := time.Now().UTC()
-	p := worldCombatPlayer{ID: uuid.New(), HP: 10, Region: "field", X: 1, Attack: 25}
-	m := testMonster(now.Add(-time.Second))
-	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
-	_, _ = installWorldAttackTest(t, now, []WorldMonster{m}, p)
-	applyWorldMonsterAction = func(context.Context, WorldMonster, worldCombatPlayer, string) (worldMonsterActionResult, error) {
-		return worldMonsterActionResult{Applied: true, Died: true, Damage: 10, HP: 0}, nil
-	}
-	var counters atomic.Int64
-	applyWorldPlayerCounter = func(context.Context, WorldMonster, worldCombatPlayer, string, time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
-		counters.Add(1)
-		return "", WorldMonster{}, 0, nil
-	}
-	processWorldMonsterTick(context.Background(), now)
-	if counters.Load() != 0 {
-		t.Fatal("dead player counterattacked")
-	}
-}
-
-func TestWorldMonsterAttackCooldownAndSlowTickResolveOneAction(t *testing.T) {
-	now := time.Now().UTC()
-	player := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Y: 0, Defense: 2}
-	monster := testMonster(now.Add(-time.Second))
-	monster.State = MonsterStateAttack
-	monster.TargetID = player.ID.String()
-	monster.AttackRange = 2
-	monster.BaseAttack = 12
-	monster.AttackIntervalMS = 1500
-	monster.NextAttackAt = now.Add(time.Second)
-	events, calls := installWorldAttackTest(t, now, []WorldMonster{monster}, player)
-	processWorldMonsterTick(context.Background(), now)
-	if calls.Load() != 0 {
-		t.Fatalf("attack before cooldown: %d", calls.Load())
-	}
-	*events = (*events)[:0]
-	monster.NextAttackAt = now.Add(-10 * time.Second)
-	worldMonsterBucketCursor.Store(0)
-	// Reinstalling is unnecessary: expose the delayed monster through the loader again.
-	loaded := false
-	worldMonstersInBucket = func(context.Context, string, int, int) ([]WorldMonster, error) {
-		if loaded {
-			return nil, nil
-		}
-		loaded = true
-		return []WorldMonster{monster}, nil
-	}
-	processWorldMonsterTick(context.Background(), now.Add(20*time.Second))
-	if calls.Load() != 1 {
-		t.Fatalf("slow tick resolved %d actions, want one", calls.Load())
-	}
-	var kinds []string
-	for _, e := range *events {
-		kinds = append(kinds, e.EventType)
-	}
-	if len(kinds) != 3 || kinds[0] != "action_started" || kinds[1] != "action_resolved" || kinds[2] != "entity_damaged" {
-		t.Fatalf("events=%v", kinds)
-	}
-}
-
-func TestWorldMonsterAttackRejectsInvalidTargets(t *testing.T) {
-	now := time.Now().UTC()
-	for _, tc := range []struct {
-		name   string
-		mutate func(*worldCombatPlayer)
-	}{
-		{"dead", func(p *worldCombatPlayer) { p.HP = 0; p.Dead = true }},
-		{"teleported", func(p *worldCombatPlayer) { p.Region = "elsewhere" }},
-		{"out_of_range", func(p *worldCombatPlayer) { p.X = 20 }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1}
-			tc.mutate(&p)
-			m := testMonster(now.Add(-time.Second))
-			m.State = MonsterStateAttack
-			m.TargetID = p.ID.String()
-			m.AttackRange = 2
-			m.NextAttackAt = now.Add(-time.Second)
-			_, calls := installWorldAttackTest(t, now, []WorldMonster{m}, p)
-			processWorldMonsterTick(context.Background(), now)
-			if calls.Load() != 0 {
-				t.Fatalf("invalid target was damaged")
-			}
-		})
-	}
-}
-
-func TestWorldMonsterAttackRejectsDisconnectedTarget(t *testing.T) {
-	now := time.Now().UTC()
-	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1}
-	m := testMonster(now.Add(-time.Second))
-	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
-	_, calls := installWorldAttackTest(t, now, []WorldMonster{m}, p)
-	SetWSConnectedProvider(func(uuid.UUID) bool { return false })
-	processWorldMonsterTick(context.Background(), now)
-	if calls.Load() != 0 {
-		t.Fatal("disconnected target was damaged")
-	}
-}
-
-func TestWorldMonsterAttackRejectsSafeZoneTarget(t *testing.T) {
-	now := time.Now().UTC()
-	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: HubRegionID, X: 15000, Y: 10000}
-	m := testMonster(now.Add(-time.Second))
-	m.RegionID, m.X, m.Y = p.Region, float64(p.X), float64(p.Y)
-	m.SpawnX, m.SpawnY = m.X, m.Y
-	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
-	// Register the hub as safe AFTER installWorldAttackTest, whose default stub
-	// reports no safe zones. Cleanups unwind LIFO, so the original seam is
-	// restored once both are done.
-	_, calls := installWorldAttackTest(t, now, []WorldMonster{m}, p)
-	stubSafeZoneLookup(t, func(region string, _, _ int) bool { return region == HubRegionID })
-	processWorldMonsterTick(context.Background(), now)
-	if calls.Load() != 0 {
-		t.Fatal("safe-zone target was damaged")
-	}
-}
-
-func TestWorldMonsterSimultaneousAttacksDeathExactlyOnce(t *testing.T) {
-	now := time.Now().UTC()
-	p := worldCombatPlayer{ID: uuid.New(), HP: 10, Region: "field", X: 1}
-	m1 := testMonster(now.Add(-time.Second))
-	m1.State = MonsterStateAttack
-	m1.TargetID = p.ID.String()
-	m1.AttackRange = 2
-	m1.NextAttackAt = now.Add(-time.Second)
-	m2 := m1
-	m2.InstanceID = "m2"
-	_, _ = installWorldAttackTest(t, now, []WorldMonster{m1, m2}, p)
-	var hp atomic.Int64
-	hp.Store(10)
-	var deaths atomic.Int64
-	applyWorldMonsterAction = func(context.Context, WorldMonster, worldCombatPlayer, string) (worldMonsterActionResult, error) {
-		for {
-			old := hp.Load()
-			if old <= 0 {
-				return worldMonsterActionResult{}, nil
-			}
-			next := old - 10
-			if hp.CompareAndSwap(old, next) {
-				d := next == 0
-				if d {
-					deaths.Add(1)
-				}
-				return worldMonsterActionResult{Applied: true, Died: d, Damage: 10, HP: float64(next)}, nil
-			}
-		}
-	}
-	processWorldMonsterTick(context.Background(), now)
-	if deaths.Load() != 1 || hp.Load() != 0 {
-		t.Fatalf("hp=%d deaths=%d, want exactly one death", hp.Load(), deaths.Load())
+	if attacks.Load() != 0 || counters.Load() != 0 {
+		t.Fatalf("contact combat calls: attacks=%d counterattacks=%d, want zero", attacks.Load(), counters.Load())
 	}
 }
 

@@ -314,7 +314,11 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 		return worldMonsterActionResult{}, err
 	}
 	if died {
-		applyDeathDropRecord(tx, &target.ID, nil, false, DeathPos{Region: region, X: x, Y: y})
+		killerName := monster.MonsterTemplateID
+		if template, ok := models.MonsterRegistry[monster.MonsterTemplateID]; ok && template.Name != "" {
+			killerName = template.Name
+		}
+		applyDeathDropRecord(tx, &target.ID, nil, false, DeathPos{Region: region, X: x, Y: y, KillerName: killerName})
 	}
 	result := worldMonsterActionResult{Applied: true, Died: died, Damage: resolved.HPDamage + resolved.ShieldAbsorbed, HP: resolved.HP, Shield: resolved.Shield}
 	if _, err = tx.ExecContext(ctx, `UPDATE world_monster_actions SET applied=$2,died=$3,damage=$4,remaining_hp=$5,remaining_shield=$6 WHERE action_token=$1`, actionToken, result.Applied, result.Died, result.Damage, result.HP, result.Shield); err != nil {
@@ -671,10 +675,10 @@ func tickWorldMonster(monster WorldMonster, candidates []WorldPosEntry, now time
 	} else {
 		monster.TargetID = target.ID
 		distance := math.Hypot(target.X-monster.X, target.Y-monster.Y)
-		if distance <= monster.AttackRange {
-			monster.State = MonsterStateAttack
-		} else {
-			monster.State = MonsterStateChase
+		// Ordinary world monsters currently only pursue players. Damage is
+		// resolved exclusively after the player explicitly enters auto-combat.
+		monster.State = MonsterStateChase
+		if distance > monster.AttackRange {
 			moveMonsterToward(&monster, target.X, target.Y, dt)
 		}
 	}
@@ -789,13 +793,10 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 		bucketCenterX := b.BX*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
 		bucketCenterY := b.BY*WorldMonsterAOIBucket + WorldMonsterAOIBucket/2
 		candidates := worldPosIndex.Nearby(bucketCenterX, bucketCenterY, worldMonsterBucketQueryRadius, "")
+		// Contact attacks are paused. Do not batch-load combat snapshots merely
+		// because a cached pre-deploy monster is still in ATTACK state; the tick
+		// below transitions it back to CHASE.
 		needsCombatPlayers := false
-		for _, monster := range monsters {
-			if monster.State == MonsterStateAttack && (monster.NextAttackAt.IsZero() || !monster.NextAttackAt.After(now)) {
-				needsCombatPlayers = true
-				break
-			}
-		}
 		playerSnapshots := map[uuid.UUID]worldCombatPlayer{}
 		if needsCombatPlayers {
 			playerIDs := make([]uuid.UUID, 0, len(candidates))
