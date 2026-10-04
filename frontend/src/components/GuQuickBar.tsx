@@ -100,7 +100,14 @@ export function GuQuickBar() {
 
     if (slot.isTargeted) {
       if (slot.effectType === "damage" && selectedTarget?.instanceId) {
-        setTargetingGu(null);
+        // Keep cast mode armed if the moving monster produces a transient
+        // conflict/error. useGuOnMap clears it only after a successful cast.
+        setTargetingGu({
+          guInstanceId: slot.gu.instance_id,
+          guId: slot.gu.gu_id,
+          name: slot.spec.name,
+          mode: "monster",
+        });
         await useGuOnMap(slot.gu.instance_id, Math.floor(selectedTarget.x), Math.floor(selectedTarget.y), selectedTarget.instanceId);
         return;
       }
