@@ -1,6 +1,9 @@
 package db
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 const emptyBlockV2 = `{"schema_version":2,"blocks":[]}`
 
@@ -11,6 +14,13 @@ func effectCatalogColumns(table string) error {
 	if _, ok := effectOwnerTables[table]; !ok {
 		return fmt.Errorf("unsupported effect owner %q", table)
 	}
+	current, err := effectCatalogColumnsCurrent(table)
+	if err != nil {
+		return fmt.Errorf("inspect %s effect catalog columns: %w", table, err)
+	}
+	if current {
+		return nil
+	}
 	return execSchema(table+"_effect_catalog_upgrade", fmt.Sprintf(`
 	ALTER TABLE %s ADD COLUMN IF NOT EXISTS schema_version INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE %s ALTER COLUMN schema_version SET DEFAULT 2;
@@ -18,6 +28,43 @@ func effectCatalogColumns(table string) error {
 	ALTER TABLE %s ADD COLUMN IF NOT EXISTS content_hash TEXT NOT NULL DEFAULT '';
 	ALTER TABLE %s ALTER COLUMN effects SET DEFAULT '{"schema_version":2,"blocks":[]}'::jsonb;
 `, table, table, table, table, table))
+}
+
+// effectCatalogColumnsCurrent prevents an already-completed upgrade from
+// issuing ALTER TABLE on every boot. Even ALTER ... IF NOT EXISTS takes a
+// strong table lock in PostgreSQL, which can contend with a serving replica.
+func effectCatalogColumnsCurrent(table string) (bool, error) {
+	rows, err := schemaDB().Query(`
+		SELECT column_name, data_type, is_nullable, COALESCE(column_default, '')
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = $1
+		  AND column_name IN ('effects', 'schema_version', 'catalog_revision', 'content_hash')`, table)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	type columnInfo struct{ dataType, nullable, defaultValue string }
+	columns := make(map[string]columnInfo, 4)
+	for rows.Next() {
+		var name, dataType, nullable, value string
+		if err := rows.Scan(&name, &dataType, &nullable, &value); err != nil {
+			return false, err
+		}
+		columns[name] = columnInfo{strings.ToLower(dataType), nullable, strings.ToLower(value)}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	effectsDefault := columns["effects"].defaultValue
+	return len(columns) == 4 &&
+		columns["effects"].dataType == "jsonb" && columns["effects"].nullable == "NO" &&
+		columns["schema_version"].dataType == "integer" && columns["schema_version"].nullable == "NO" && columns["schema_version"].defaultValue == "2" &&
+		columns["catalog_revision"].dataType == "bigint" && columns["catalog_revision"].nullable == "NO" && columns["catalog_revision"].defaultValue == "0" &&
+		columns["content_hash"].dataType == "text" && columns["content_hash"].nullable == "NO" && strings.HasPrefix(columns["content_hash"].defaultValue, "''") &&
+		strings.Contains(effectsDefault, "schema_version") &&
+		strings.Contains(effectsDefault, "blocks"), nil
 }
 
 var effectOwnerTables = map[string]struct{}{

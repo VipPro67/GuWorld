@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,11 @@ import (
 )
 
 var DB *sql.DB
+
+// InitSchema uses package-level executor routing for the legacy schema
+// functions. Keep concurrent callers in this process from replacing it while
+// PostgreSQL's advisory lock serializes callers in other processes.
+var initSchemaMu sync.Mutex
 
 type csvImportExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -80,6 +86,16 @@ func (m migrationConn) QueryRow(query string, args ...interface{}) *sql.Row {
 	return m.conn.QueryRowContext(context.Background(), query, args...)
 }
 
+// retryingMigrationConn applies the startup retry policy to every required
+// statement, including seeds and backfills that do not use execSchema.
+type retryingMigrationConn struct{ migrationConn }
+
+func (m retryingMigrationConn) Exec(query string, args ...interface{}) (sql.Result, error) {
+	attempts := migrationPositiveInt("DB_MIGRATION_RETRY_ATTEMPTS", 6, 20)
+	delay := time.Duration(migrationPositiveInt("DB_MIGRATION_RETRY_DELAY_MS", 1000, 60000)) * time.Millisecond
+	return execWithRetry(m.migrationConn, query, args, attempts, delay, time.Sleep)
+}
+
 // migrationTimeoutMs reads an env override in milliseconds, falling back to
 // def when unset or unparseable (a bad value must not break boot).
 func migrationTimeoutMs(key, def string) string {
@@ -87,10 +103,20 @@ func migrationTimeoutMs(key, def string) string {
 	if raw == "" {
 		return def
 	}
-	if _, err := strconv.Atoi(raw); err != nil {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
 		return def
 	}
 	return raw
+}
+
+func migrationPositiveInt(key string, def, maximum int) int {
+	raw := strings.TrimSpace(getEnv(key, strconv.Itoa(def)))
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 || value > maximum {
+		return def
+	}
+	return value
 }
 
 // Connect establishes a connection to the PostgreSQL database
@@ -137,6 +163,9 @@ func Connect() error {
 // sect mines. Gameplay dictionaries (Item, Gu, Recipe, ...) are NOT auto-seeded
 // here — import them via the Admin panel "Dữ liệu" tab.
 func InitSchema() error {
+	initSchemaMu.Lock()
+	defer initSchemaMu.Unlock()
+
 	if DB == nil {
 		return fmt.Errorf("database connection is nil")
 	}
@@ -154,10 +183,19 @@ func InitSchema() error {
 	if _, err := migConn.ExecContext(context.Background(), fmt.Sprintf("SET statement_timeout = %s", migrationTimeoutMs("DB_MIGRATION_STATEMENT_TIMEOUT_MS", "300000"))); err != nil {
 		return fmt.Errorf("set migration statement_timeout: %w", err)
 	}
-	if _, err := migConn.ExecContext(context.Background(), fmt.Sprintf("SET lock_timeout = %s", migrationTimeoutMs("DB_MIGRATION_LOCK_TIMEOUT_MS", "60000"))); err != nil {
+	if _, err := migConn.ExecContext(context.Background(), fmt.Sprintf("SET lock_timeout = %s", migrationTimeoutMs("DB_MIGRATION_LOCK_TIMEOUT_MS", "10000"))); err != nil {
 		return fmt.Errorf("set migration lock_timeout: %w", err)
 	}
-	schemaExec = migrationConn{conn: migConn}
+	const schemaAdvisoryLockID int64 = 77202403
+	if err := acquireSchemaAdvisoryLock(migConn, schemaAdvisoryLockID); err != nil {
+		return err
+	}
+	defer func() {
+		if _, err := migConn.ExecContext(context.Background(), `SELECT pg_advisory_unlock($1)`, schemaAdvisoryLockID); err != nil {
+			logger.S.Warnf("failed to release database schema advisory lock: %v", err)
+		}
+	}()
+	schemaExec = retryingMigrationConn{migrationConn{conn: migConn}}
 	defer func() { schemaExec = nil }()
 
 	if _, err := schemaDB().Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`); err != nil {
@@ -262,19 +300,50 @@ func InitSchema() error {
 	// Clean up any stale active_combat records for non-leader party members.
 	// IS NOT NULL guard keeps the boot UPDATE idempotent (no rewrite when
 	// already clean), avoiding a full-table rewrite under statement_timeout.
-	_, _ = schemaDB().Exec(`UPDATE players SET active_combat = NULL WHERE active_combat IS NOT NULL AND party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`)
+	if _, err := schemaDB().Exec(`UPDATE players SET active_combat = NULL WHERE active_combat IS NOT NULL AND party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`); err != nil {
+		return fmt.Errorf("clean stale party combat state: %w", err)
+	}
 
 	// Sát Khí is permanent now: strip any leftover expires_at from existing
 	// sat_khi status entries so they no longer decay over time.
-	_, _ = schemaDB().Exec(`
+	if _, err := schemaDB().Exec(`
 UPDATE players SET statuses = COALESCE((
 	SELECT jsonb_agg(CASE WHEN e->>'id' = 'sat_khi' THEN e - 'expires_at' ELSE e END)
 	FROM jsonb_array_elements(statuses) e
 ), '[]'::jsonb)
-WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(statuses) e WHERE e->>'id' = 'sat_khi' AND e ? 'expires_at')`)
+WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(statuses) e WHERE e->>'id' = 'sat_khi' AND e ? 'expires_at')`); err != nil {
+		return fmt.Errorf("clean expired sat_khi status fields: %w", err)
+	}
 
 	logger.S.Info("Database schema initialized successfully")
 	return nil
+}
+
+func acquireSchemaAdvisoryLock(conn *sql.Conn, lockID int64) error {
+	waitTimeout := time.Duration(migrationPositiveInt("DB_MIGRATION_ADVISORY_LOCK_TIMEOUT_MS", 120000, 3600000)) * time.Millisecond
+	pollInterval := time.Duration(migrationPositiveInt("DB_MIGRATION_RETRY_DELAY_MS", 1000, 60000)) * time.Millisecond
+	deadline := time.Now().Add(waitTimeout)
+	for attempt := 1; ; attempt++ {
+		var acquired bool
+		if err := conn.QueryRowContext(context.Background(), `SELECT pg_try_advisory_lock($1)`, lockID).Scan(&acquired); err != nil {
+			return fmt.Errorf("acquire database schema advisory lock: %w", err)
+		}
+		if acquired {
+			return nil
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return fmt.Errorf("timed out after %s waiting for another database schema initializer", waitTimeout)
+		}
+		if attempt == 1 || attempt%10 == 0 {
+			logger.S.Warnf("waiting for another database schema initializer (attempt %d)", attempt)
+		}
+		if pollInterval > remaining {
+			time.Sleep(remaining)
+		} else {
+			time.Sleep(pollInterval)
+		}
+	}
 }
 
 // execSchema runs a single DDL statement, wrapping errors with the schema name.
@@ -283,6 +352,57 @@ func execSchema(name, sql string) error {
 		return fmt.Errorf("failed to create %s: %w", name, err)
 	}
 	return nil
+}
+
+func execSchemaWithRetry(executor csvImportExecutor, name, query string, attempts int, delay time.Duration, sleep func(time.Duration)) error {
+	_, err := execWithRetry(executor, query, nil, attempts, delay, sleep)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %w", name, err)
+	}
+	return nil
+}
+
+func execWithRetry(executor csvImportExecutor, query string, args []interface{}, attempts int, delay time.Duration, sleep func(time.Duration)) (sql.Result, error) {
+	for attempt := 1; attempt <= attempts; attempt++ {
+		result, err := executor.Exec(query, args...)
+		if err != nil {
+			if !isRetryableSchemaError(err) || attempt == attempts {
+				return nil, fmt.Errorf("database initialization statement failed after %d attempt(s): %w", attempt, err)
+			}
+			wait := cappedRetryDelay(delay, attempt)
+			logger.S.Warnf("transient database lock during initialization (attempt %d/%d); retrying in %s: %v", attempt, attempts, wait, err)
+			sleep(wait)
+			continue
+		}
+		return result, nil
+	}
+	return nil, fmt.Errorf("database initialization statement has invalid retry count %d", attempts)
+}
+
+func cappedRetryDelay(initial time.Duration, attempt int) time.Duration {
+	const maximum = 10 * time.Second
+	wait := initial
+	if wait <= 0 {
+		return 0
+	}
+	for n := 1; n < attempt && wait < maximum; n++ {
+		if wait > maximum/2 {
+			return maximum
+		}
+		wait *= 2
+	}
+	if wait > maximum {
+		return maximum
+	}
+	return wait
+}
+
+func isRetryableSchemaError(err error) bool {
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) {
+		return false
+	}
+	return pqErr.Code == "55P03" || pqErr.Code == "40P01" || pqErr.Code == "40001"
 }
 
 // seedHubRegion seeds the default spawn region so the players.current_region FK
