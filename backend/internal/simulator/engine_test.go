@@ -131,7 +131,7 @@ func TestSpecialBehaviorComesFromEffectMechanicNotSourceID(t *testing.T) {
 		target.VirtualShield = 100
 		state := &CombatState{Seed: 1, Allies: []*CombatantAuto{attacker}, Enemies: []*CombatantAuto{target}}
 		var logs []CombatLog
-		applyDamageToTarget(state, attacker, target, action.Damage, &logs, 2, hasMechanic(action.Mechanics, "ON_HIT", "BYPASS_SHIELD"), false, rand.New(rand.NewSource(1)))
+		applyDamageToTarget(state, attacker, target, action.Damage, &logs, 2, hasMechanic(action.Mechanics, "ON_HIT", "BYPASS_SHIELD"), false, false, rand.New(rand.NewSource(1)))
 		return target.HP, target.VirtualShield
 	}
 
@@ -1133,7 +1133,7 @@ func TestDamageBreakdownCarriesStatProvenance(t *testing.T) {
 }
 
 // TestCasterAttenuationInCombat verifies that when a Rank 9 immortal uses a Rank 4
-// Gu for self-buff (Invincible), Caster Attenuation suppresses the proc chance.
+// Gu for self-buff (Bất Hoại), Caster Attenuation suppresses the proc chance.
 func TestCasterAttenuationInCombat(t *testing.T) {
 	immortal := newTestCombatant("immortal", "Player", 50000, 100)
 	immortal.Rank = 9
@@ -1152,7 +1152,7 @@ func TestCasterAttenuationInCombat(t *testing.T) {
 	}
 	missFound := false
 	for _, l := range logs {
-		if strings.Contains(l.Detail, "không kích hoạt thành công hiệu ứng [Bất Tử]") || l.Action == "STATUS_MISS" {
+		if strings.Contains(l.Detail, "không kích hoạt thành công hiệu ứng [Bất Hoại]") || l.Action == "STATUS_MISS" {
 			missFound = true
 			break
 		}

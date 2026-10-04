@@ -54,7 +54,7 @@ func MechanicTiming(trigger string) (Timing, bool) {
 	switch trigger {
 	case "ALWAYS_ON":
 		return TimingAlwaysOn, true
-	case "ON_CONSUME", "ON_USE":
+	case "ON_CONSUME", "ON_USE", "ON_ACTION":
 		return TimingOnAction, true
 	case "ON_TICK":
 		return TimingScheduled, true

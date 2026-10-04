@@ -26,6 +26,7 @@ func TestMechanicTimingGroups(t *testing.T) {
 	cases := map[string]Timing{
 		"ON_CONSUME":          TimingOnAction,
 		"ON_USE":              TimingOnAction,
+		"ON_ACTION":           TimingOnAction,
 		"ON_TICK":             TimingScheduled,
 		"CAPABILITY":          TimingCapability,
 		"ON_CAST":             TimingOnEvent,

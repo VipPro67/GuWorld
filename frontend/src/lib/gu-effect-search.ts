@@ -26,7 +26,8 @@ export const STATUS_NAMES_VI: Record<string, string> = {
   REGEN: "Hồi Phục",
   THORNS: "Gai Phản Đòn",
   TAUNT: "Khiêu Khích",
-  INVINCIBLE: "Bất Tử",
+  INVINCIBLE: "Bất Hoại",
+  LAST_STAND: "Bất Tử",
   EVASION: "Né Tránh",
   CONFUSE: "Hỗn Loạn",
   CONFUSION: "Hỗn Loạn",
@@ -104,7 +105,7 @@ export const EFFECT_CATEGORIES: EffectCategoryOption[] = [
   { id: "heal", label: "Hồi máu (HP)", icon: "💚", keywords: ["heal", "hoi mau", "hoi hp", "regen", "hoi phuc"] },
   { id: "mana", label: "Chân nguyên", icon: "💧", keywords: ["mana", "chan nguyen", "mana_regen"] },
   { id: "stealth", label: "Tàng hình", icon: "👻", keywords: ["stealth", "tang hinh"] },
-  { id: "invincible", label: "Bất tử / Hồi sinh", icon: "🌟", keywords: ["invincible", "bat tu", "reborn", "hoi sinh"] },
+  { id: "invincible", label: "Bất hoại / Bất tử / Hồi sinh", icon: "🌟", keywords: ["invincible", "bat hoai", "last stand", "last_stand", "bat tu", "reborn", "hoi sinh"] },
   { id: "direct_hp", label: "Sát thương trực tiếp", icon: "💥", keywords: ["direct_hp", "xuyen khien", "sat thuong truc tiep"] },
   { id: "crit_evade", label: "Bạo kích / Né", icon: "🎯", keywords: ["crit", "bao kich", "evasion", "ne tranh"] },
   { id: "stat_buff", label: "Tăng chỉ số (Công/Thủ)", icon: "📊", keywords: ["stat_mod", "tang cong", "tang thu", "attack", "defense"] },
@@ -241,7 +242,7 @@ export function matchesGuEffect(gu: GuDictionaryItem, effectId: string): boolean
           if (statusId === "STEALTH" || code === "STEALTH") return true;
           break;
         case "invincible":
-          if (statusId === "INVINCIBLE" || code === "REBORN" || opType === "BARRIER") return true;
+          if (statusId === "INVINCIBLE" || statusId === "LAST_STAND" || code === "REBORN" || opType === "BARRIER") return true;
           break;
         case "direct_hp":
           if (opType === "DIRECT_HP" || subType === "MAX_HP_PERCENT" || code === "BYPASS_SHIELD") return true;

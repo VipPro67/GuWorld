@@ -161,7 +161,8 @@ loại inventory; nó không chứng minh có executor.
 | **TAUNT** (Khiêu Khích) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | Cưỡng chế mục tiêu đơn của đối phương phải tấn công người thi triển. |
 | **STEALTH** (Ẩn Thân) | 2 lượt | 2 lượt | 3 lượt | 3 lượt | 4 lượt | Không thể bị chọn làm mục tiêu của kỹ năng đơn mục tiêu (vẫn chịu sát thương AoE). |
 | **HASTE** (Gia Tốc) | 15% / 2t | 25% / 3t | 35% / 3t | 45% / 4t | 55% / 4t | Tăng % tốc độ hành động (`EffectiveSpeed`), đẩy sớm lượt đánh. |
-| **INVINCIBLE** (Bất Tử) | 1 lượt | 1 lượt | 1 lượt | 1 lượt | 2 lượt | Miễn nhiễm $100\%$ mọi nguồn sát thương và kháng toàn bộ hiệu ứng mới. |
+| **INVINCIBLE** (Bất Hoại) | 1 lượt | 1 lượt | 1 lượt | 1 lượt | 2 lượt | Tự buff, **không dính sát thương nào** — kể cả DoT (BURN/BLEED/POISON), `%MaxHP` trực tiếp, Hồn Thương, Phản Phệ, Gai Phản Đòn. `CategoryBuff` ⇒ không bị dispel. Log `BLOCKED` / `*_ABSORBED` (đòn vẫn ghi trong log dùng Cổ nhưng không trừ HP). Sát Khí tầng $>10$ xuyên và giết được (`BLOCKED_BREAK`). |
+| **LAST_STAND** (Bất Tử) | Theo `turns` | Theo `turns` | Theo `turns` | Theo `turns` | Theo `turns` | Tự buff, **vẫn nhận sát thương** nhưng HP **sàn 1** (`LastStandMinHP`) — không bao giờ bị đẩy về 0. Không tự hồi khi kích hoạt: đã ≤1 HP thì vẫn chết nếu không có buff. `CategoryImmortal` ⇒ **bị dispel** (tẩy trừ có đáp án cho một effect cứu chết). Sát Khí tầng $>10$ bỏ qua sàn và giết được. |
 | **EVASION** (Né Tránh) | Theo `value` | Theo `value` | Theo `value` | Theo `value` | Theo `value` | Tự buff, cường độ né = `value` (%), gộp **max** và cap **75%**. Không dispel, không qua cổng kháng CC (chỉ chịu `chance` × Caster Attenuation). Nguồn né **duy nhất** trong combat. Bị Sát Khí (`SAT_KHI_GUARANTEE`, `sat_khi_level > 10`) xuyên. |
 
 ---

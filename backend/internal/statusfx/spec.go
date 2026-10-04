@@ -179,9 +179,21 @@ var Registry = map[string]StatusSpec{
 		Category: CategoryBuff, Path: "earth", BaseChance: 1.0,
 		SelfTarget: true, DefaultTurns: 3,
 	},
+	// INVINCIBLE is Bất Hoại: blocks every damage path, including DoT and
+	// %MaxHP riders that never reach applyDamageToTarget. CategoryBuff keeps it
+	// non-dispellable. Strength is fixed (Value 100 is the sentinel for
+	// DamageTakenReduction >= 1.0); op.Value is ignored.
 	StatusInvincible: {
-		ID: StatusInvincible, Behaviour: BehaviourInvincible, Label: "Bất Tử",
+		ID: StatusInvincible, Behaviour: BehaviourInvincible, Label: "Bất Hoại",
 		Category: CategoryBuff, Path: "void", BaseChance: 1.0,
+		SelfTarget: true, DefaultTurns: 1,
+	},
+	// LAST_STAND is Bất Tử: damage lands normally, but HP cannot fall below
+	// LastStandMinHP while the buff is up. CategoryImmortal (not CategoryBuff)
+	// makes it dispellable, giving cleanse a counterplay to a save effect.
+	StatusLastStand: {
+		ID: StatusLastStand, Behaviour: BehaviourLastStand, Label: "Bất Tử",
+		Category: CategoryImmortal, Path: "rules", BaseChance: 1.0,
 		SelfTarget: true, DefaultTurns: 1,
 	},
 	// EVASION is the only dodge source in combat. Self buff, never dispellable,

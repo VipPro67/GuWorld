@@ -349,7 +349,13 @@ type CombatantAuto struct {
 	AccuracyPenalty      float64            // 0..1 miss chance (BLIND)
 	EvasionChance        float64            // 0..1 dodge chance from EVASION statuses (merged by max, cap EvasionChanceCap)
 	ImmuneDreamStatus    bool               // immune to dream-path statuses (FORGET_DREAM)
-	DamageTakenReduction float64            // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP / INVINCIBLE)
+	DamageTakenReduction float64            // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP)
+	// IsInvincible is Bất Hoại: takes no damage from any source, including the
+	// DoT and %MaxHP paths that bypass applyDamageToTarget. IsLastStand is Bất
+	// Tử: damage still lands but HP never reaches 0. Sát Khí (level > 10) pierces
+	// both.
+	IsInvincible         bool
+	IsLastStand          bool
 	CritRateBonus        float64            // extra crit chance (0..1) from Gu active effects
 	IgnoreDefenseFlat    float64            // flat defense ignored by attacker
 	IgnoreDefensePct     float64            // % defense ignored by attacker (0..1)

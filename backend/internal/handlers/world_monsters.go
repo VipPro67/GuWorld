@@ -234,7 +234,11 @@ func calculateWorldPlayerDefense(p *models.Player) float64 {
 	return defense * (1 + allPct) * statusStatFactor(p, "defense")
 }
 
-func worldStatusDefense(statuses models.StatusList) (shield, reduction float64) {
+// worldStatusDefense returns the shield, the fractional damage reduction, and
+// whether Bất Tử (LAST_STAND) is active — overworld combat does not run the
+// turn-based simulator, so the HP floor has to be handed to ResolveBasicDamage
+// as minHP.
+func worldStatusDefense(statuses models.StatusList) (shield, reduction float64, lastStand bool) {
 	for _, st := range statuses.Active() {
 		if st.ID == "virtual_shield" {
 			shield += math.Max(0, st.Value)
@@ -242,6 +246,8 @@ func worldStatusDefense(statuses models.StatusList) (shield, reduction float64) 
 		switch {
 		case strings.EqualFold(st.ID, statusfx.StatusInvincible), strings.EqualFold(st.ID, "invulnerable"):
 			reduction = 1
+		case strings.EqualFold(st.ID, statusfx.StatusLastStand):
+			lastStand = true
 		case strings.EqualFold(st.ID, statusfx.StatusDamageReduction):
 			value := st.Value
 			if value > 1 {
@@ -302,8 +308,12 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 		return worldMonsterActionResult{Rejected: true}, nil
 	}
 	statuses.Expire(time.Now())
-	shield, reduction := worldStatusDefense(statuses)
-	resolved := simulator.ResolveBasicDamage(monster.BaseAttack, target.Defense, reduction, hp, shield)
+	shield, reduction, lastStand := worldStatusDefense(statuses)
+	minHP := 0.0
+	if lastStand {
+		minHP = simulator.LastStandMinHP
+	}
+	resolved := simulator.ResolveBasicDamage(monster.BaseAttack, target.Defense, reduction, hp, shield, minHP)
 	setWorldVirtualShield(&statuses, resolved.Shield)
 	statusJSON, err := json.Marshal(statuses)
 	if err != nil {

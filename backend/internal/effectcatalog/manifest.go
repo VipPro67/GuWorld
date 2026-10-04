@@ -129,14 +129,15 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 	add("ON_TURN_START", DispositionSupported, "combat", "POEM_INTENT")
 	add("ON_BATTLE_START", DispositionSupported, "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY")
 	add("ON_CAST", DispositionSupported, "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE")
-	add("ON_HIT", DispositionSupported, "combat", "BYPASS_SHIELD")
+	add("ON_HIT", DispositionSupported, "combat", "BYPASS_SHIELD", "GUARANTEED_HIT")
+	add("ON_ACTION", DispositionSupported, "combat", "GUARANTEED_HIT")
 	add("BEFORE_HIT", DispositionSupported, "combat", "FIRST_TURN_EVADE")
 	add("PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT")
 	// COMBAT_PASSIVE is the canonical alias for the PASSIVE trigger. New data
 	// should use it; PASSIVE is retained so existing Gu rows keep validating.
 	// Both mean the same ON_EVENT timing (see timing.go), never the passive
 	// section (ALWAYS_ON character stats).
-	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY")
+	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY", "GUARANTEED_HIT")
 	add("CAPABILITY", DispositionSupported, "world", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "SACRIFICE_NPC", "DEDUCTION_INSTANT_FINISH")
 	return result
 }
@@ -172,7 +173,7 @@ var statusDefinitions = func() map[string]Definition {
 	}
 	add(DispositionSupported, "statusfx", "BLEED", "POISON", "BURN", "FEAR", "CONFUSE", "STEALTH", "SLEEP", "BLIND", "CHARM", "BIND", "FORGET_EGO", "FORGET_REALITY",
 		"SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "REGEN", "ATK_UP", "DEF_UP", "THORNS", "TAUNT",
-		"HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "EVASION", "REVIVE_LOCK",
+		"HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "LAST_STAND", "EVASION", "REVIVE_LOCK",
 		"ESSENCE_LEAK", "GU_SEAL", "SOUL_WOUND", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH")
 	add(DispositionPartial, "combat-legacy", "STUN", "FREEZE", "SILENCE")
 	add(DispositionMigrate, "effect-runtime-v2", "ROOT", "CONFUSION", "DECAY")

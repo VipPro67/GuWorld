@@ -890,9 +890,23 @@ func Simulate(state *CombatState) []CombatLog {
 		}
 
 		// transitions for the opposing side after each executed action.
-		postActionChecks := func(opposing []*CombatantAuto) {
+		// attacker lets the Bất Tử floor know whether Sát Khí is piercing; nil for
+	// self-inflicted or non-combat damage.
+	postActionChecks := func(opposing []*CombatantAuto, attacker *CombatantAuto) {
 			for _, tgt := range opposing {
 				if tgt.HP <= 0 && !tgt.IsDead {
+					// Catch-all for any HP write site that did not apply the Bất Tử
+					// floor itself. Idempotent: guarded sites already clamped.
+					if applyLastStandFloor(tgt, satKhiPiercesImmunity(attacker)) {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   tgt.ID,
+							ActorName: tgt.Name,
+							Action:    "LAST_STAND_FLOORED",
+							Detail:    fmt.Sprintf("%s suýt gục ngã nhưng [Bất Tử] giữ lại 1 HP!", tgt.Name),
+						})
+						continue
+					}
 					tgt.HP = 0
 					tgt.IsDead = true
 					turnLogs = append(turnLogs, CombatLog{
@@ -1172,13 +1186,17 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 					// Nghịch Chuyển Cổ: hostile Gu effects aimed at the holder
 					// are reversed — the confusion fizzles, the strike lands.
-					if hasReverseCalamity(actor) {
+					if hasReverseCalamity(actor) || isGuaranteedHit(actor, a) {
+						reason := "Nghịch Chuyển Cổ đảo nghịch"
+						if isGuaranteedHit(actor, a) {
+							reason = "Đòn đánh Tất Trúng phớt lờ"
+						}
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "REVERSE_NEGATE",
-							Detail:    fmt.Sprintf("Nghịch Chuyển Cổ đảo nghịch [Lãng Quên Chí] của %s về hư vô!", d.Name),
+							Detail:    fmt.Sprintf("%s [Lãng Quên Chí] của %s về hư vô!", reason, d.Name),
 						})
 						continue
 					}
@@ -1488,7 +1506,7 @@ func Simulate(state *CombatState) []CombatLog {
 				if chosenEffect == "crit_500" {
 					effectMsg = "Tấn công chí mạng tăng 500%!"
 				} else if chosenEffect == "invulnerable_1_turn" {
-					effectMsg = "Miễn nhiễm mọi sát thương trong 1 lượt (Bất tử)!"
+					effectMsg = "Miễn nhiễm mọi sát thương trong 1 lượt (Bất Hoại)!"
 					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
 						ID:       "invulnerable",
 						Type:     "buff",
@@ -1499,7 +1517,9 @@ func Simulate(state *CombatState) []CombatLog {
 					effectMsg = "Giảm trực tiếp 90% lượng HP hiện tại của kẻ địch!"
 					damageToEnemy := firstTarget.HP * 0.90
 					firstTarget.HP -= damageToEnemy
-					if firstTarget.HP < 1.0 {
+					if applyLastStandFloor(firstTarget, false) {
+						effectMsg = "Giảm trực tiếp 90% lượng HP hiện tại của kẻ địch — nhưng [Bất Tử] giữ lại 1 HP!"
+					} else if firstTarget.HP < 1.0 {
 						firstTarget.HP = 1.0
 					}
 				}
@@ -1575,7 +1595,8 @@ func Simulate(state *CombatState) []CombatLog {
 
 					// Evasion: dodge chance from the target's EVASION status.
 					satKhiGuaranteed := hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState != nil && actor.CustomState["sat_khi_level"] > 10
-					if missCh := target.EvasionChance; missCh > 0 && rng.Float64() < missCh && !satKhiGuaranteed {
+					sureHit := satKhiGuaranteed || isGuaranteedHit(actor, a)
+					if missCh := target.EvasionChance; missCh > 0 && rng.Float64() < missCh && !sureHit {
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:       turn,
 							ActorId:    actor.ID,
@@ -1594,7 +1615,7 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 
 					// Blind: chance to miss the target entirely
-					if actor.IsBlinded && actor.AccuracyPenalty > 0 {
+					if actor.IsBlinded && actor.AccuracyPenalty > 0 && !sureHit {
 						if rng.Float64() < actor.AccuracyPenalty {
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:       turn,
@@ -1663,7 +1684,7 @@ func Simulate(state *CombatState) []CombatLog {
 						netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))
 						netDmg = ResolveBaseDamage(netDmg, 0)
 						totalHitDmg += netDmg
-						totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, !isAlly, rng)
+						totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, sureHit, !isAlly, rng)
 					}
 					if !hadEvaded && target.CustomState != nil && target.CustomState["first_turn_evade_used"] == turn {
 						evadedThisStrike[target] = true
@@ -1776,7 +1797,7 @@ func Simulate(state *CombatState) []CombatLog {
 						phantomNet := (a.PhantomDmg * dmgMultiplier) - phantomDef
 						phantomNet *= (1.0 - pathBonus(target.PathResistance, a.Path))
 						phantomNet = math.Max(1, phantomNet)
-						phantomDealt := applyDamageToTarget(state, actor, target, phantomNet, &turnLogs, turn, shieldBypass, !isAlly, rng)
+						phantomDealt := applyDamageToTarget(state, actor, target, phantomNet, &turnLogs, turn, shieldBypass, sureHit, !isAlly, rng)
 						totalDamageDealt += phantomDealt
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
@@ -1839,7 +1860,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 				if a.ThornsDmg > 0 && totalDamageDealt > 0 {
 					thornsNet := math.Max(1, a.ThornsDmg-float64(actor.BaseDef))
-					applyDamageToTarget(state, firstTarget, actor, thornsNet, &turnLogs, turn, false, false, rng)
+					applyDamageToTarget(state, firstTarget, actor, thornsNet, &turnLogs, turn, false, false, false, rng)
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
@@ -1920,7 +1941,16 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("[%s] tước %.0f khiên của %s (còn %.0f khiên)!", a.Name, strip, target.Name, target.VirtualShield),
 							})
 						}
-						if a.DamageHPPercent > 0 {
+						if a.DamageHPPercent > 0 && isImmuneToDamage(target, satKhiPiercesImmunity(actor)) {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "HP_PERCENT_ABSORBED",
+								TargetId:  target.ID,
+								Detail:    fmt.Sprintf("%s miễn nhiễm %s nhờ Bất Hoại!", target.Name, a.Name),
+							})
+						} else if a.DamageHPPercent > 0 {
 							hpPct := a.DamageHPPercent
 							if target.Rank > actionRank {
 								supp, _ := statusfx.TargetSuppressionFactor(actionRank, target.Rank)
@@ -1929,8 +1959,13 @@ func Simulate(state *CombatState) []CombatLog {
 							if hpPct > 0 {
 								direct := target.MaxHP * hpPct
 								target.HP -= direct
+								floored := applyLastStandFloor(target, satKhiPiercesImmunity(actor))
 								if target.HP < 0 {
 									target.HP = 0
+								}
+								hpPctDetail := fmt.Sprintf("[%s] đánh thẳng vào bản ngã, %s mất %.0f HP trực tiếp (còn %.0f HP)!", a.Name, target.Name, direct, target.HP)
+								if floored {
+									hpPctDetail = fmt.Sprintf("[%s] đánh thẳng %.0f HP vào %s nhưng [Bất Tử] giữ lại 1 HP!", a.Name, direct, target.Name)
 								}
 								turnLogs = append(turnLogs, CombatLog{
 									Turn:      turn,
@@ -1939,7 +1974,7 @@ func Simulate(state *CombatState) []CombatLog {
 									Action:    "HP_PERCENT",
 									TargetId:  target.ID,
 									Damage:    direct,
-									Detail:    fmt.Sprintf("[%s] đánh thẳng vào bản ngã, %s mất %.0f HP trực tiếp (còn %.0f HP)!", a.Name, target.Name, direct, target.HP),
+									Detail:    hpPctDetail,
 								})
 							} else {
 								turnLogs = append(turnLogs, CombatLog{
@@ -2222,7 +2257,7 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 					if checkActionCondition(a, actor, primaryTgt) {
 						out := runOne(actor, a, isAlly, enemyTargets)
-						postActionChecks(enemyTargets)
+						postActionChecks(enemyTargets, actor)
 						if out.executed {
 							if executedInPrePass[actor] == nil {
 								executedInPrePass[actor] = make(map[int]bool)
@@ -2459,7 +2494,7 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 
 					out := runOne(actor, a, isAlly, enemyTargets)
-					postActionChecks(enemyTargets)
+					postActionChecks(enemyTargets, actor)
 					if out.abort {
 						executedDamageThisTurn = true
 						break
@@ -2496,7 +2531,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				out := runOne(actor, fallbackAction, isAlly, enemyTargets)
 				_ = out // fallback always counts as the turn pass action
-				postActionChecks(enemyTargets)
+				postActionChecks(enemyTargets, actor)
 			}
 		}
 
@@ -2684,7 +2719,7 @@ func buildSnapshot(state *CombatState) *CombatSnapshot {
 	return snap
 }
 
-func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int, shieldBypass bool, spillToAperture bool, rng *rand.Rand) float64 {
+func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int, shieldBypass bool, guaranteedHit bool, spillToAperture bool, rng *rand.Rand) float64 {
 	if damage < 1 {
 		damage = 1
 	}
@@ -2693,13 +2728,17 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	// Multi-hit/AoE follow-ups land normally, as do percent riders attached
 	// to the evaded strike (skipped via evadedThisStrike in runOne).
 	// Cấm Cổ suppresses this priority effect: the strike lands in normal order.
-	if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") && suppressesPriority(actor) {
+	if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") && (suppressesPriority(actor) || guaranteedHit) {
+		reason := "Cấm Cổ trấn áp"
+		if guaranteedHit {
+			reason = "Đòn đánh Tất Trúng phá vỡ"
+		}
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   actor.ID,
 			ActorName: actor.Name,
 			Action:    "PRIORITY_SUPPRESSED",
-			Detail:    fmt.Sprintf("Cấm Cổ trấn áp [Định Tiên Du] của %s — đòn đánh trúng như bình thường!", target.Name),
+			Detail:    fmt.Sprintf("%s [Định Tiên Du] của %s — đòn đánh trúng như bình thường!", reason, target.Name),
 		})
 	} else if turn == 1 && hasMechanic(target.Mechanics, "BEFORE_HIT", "FIRST_TURN_EVADE") {
 		if target.CustomState == nil {
@@ -2718,33 +2757,27 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		}
 	}
 
-	// Invulnerable check (INVINCIBLE status or mechanic-granted "invulnerable")
-	isInvulnerable := target.DamageTakenReduction >= 1.0
-	if !isInvulnerable {
-		for _, eff := range target.ActiveEffects {
-			if (strings.EqualFold(eff.ID, "invulnerable") || strings.EqualFold(eff.ID, statusfx.StatusInvincible)) && eff.Duration >= 0 { // remains active
-				isInvulnerable = true
-				break
-			}
-		}
-	}
-	if isInvulnerable && !(actor.CustomState != nil && hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") && actor.CustomState["sat_khi_level"] > 10) {
+	// Bất Hoại blocks every damage path. The DoT / %MaxHP / SOUL_WOUND / BACKLASH /
+	// THORNS routes write HP directly and are guarded at their own sites, so
+	// this gate only covers the ordinary-strike path. Sát Khí (level > 10) pierces.
+	satKhiPierce := satKhiPiercesImmunity(actor)
+	if isImmuneToDamage(target, satKhiPierce) {
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   actor.ID,
 			ActorName: actor.Name,
 			Action:    "BLOCKED",
-			Detail:    fmt.Sprintf("%s miễn nhiễm mọi sát thương nhờ trạng thái Bất Tử!", target.Name),
+			Detail:    fmt.Sprintf("%s miễn nhiễm mọi sát thương nhờ Bất Hoại!", target.Name),
 		})
 		return 0
 	}
-	if isInvulnerable {
+	if satKhiPierce && (target.IsInvincible || target.DamageTakenReduction >= 1.0) {
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   actor.ID,
 			ActorName: actor.Name,
 			Action:    "BLOCKED_BREAK",
-			Detail:    fmt.Sprintf("Sát khí Tất Sát xuyên qua Bất Tử! %s vẫn nhận sát thương!", target.Name),
+			Detail:    fmt.Sprintf("Sát khí Tất Sát xuyên qua Bất Hoại! %s vẫn nhận sát thương!", target.Name),
 		})
 	}
 
@@ -2793,6 +2826,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 	// Phá Không Cổ shield bypass
 	if shieldBypass {
 		target.HP -= damage
+		applyLastStandFloor(target, satKhiPierce)
 		if spillToAperture {
 			redirectApertureOverflow(state, target, logs, turn)
 		} else if target.HP < 0 {
@@ -2873,6 +2907,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 
 				if shieldIgnored > 0 {
 					target.HP -= shieldIgnored
+					applyLastStandFloor(target, satKhiPierce)
 					if target.HP < 0 {
 						target.HP = 0
 					}
@@ -2935,6 +2970,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		damage -= absorbed
 		target.VirtualShield = 0
 		target.HP -= damage
+		applyLastStandFloor(target, satKhiPierce)
 		if spillToAperture {
 			redirectApertureOverflow(state, target, logs, turn)
 		} else if target.HP < 0 {
@@ -2959,7 +2995,11 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 		redirectApertureOverflow(state, target, logs, turn)
 		return hpDamageDealt + damage
 	}
-	resolved := ResolveBasicDamage(damage, 0, 0, target.HP, 0)
+	minHP := 0.0
+	if target.IsLastStand && !satKhiPiercesImmunity(actor) {
+		minHP = LastStandMinHP
+	}
+	resolved := ResolveBasicDamage(damage, 0, 0, target.HP, 0, minHP)
 	target.HP = resolved.HP
 	return hpDamageDealt + resolved.HPDamage
 }
