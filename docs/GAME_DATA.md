@@ -1183,7 +1183,7 @@ Sensitive request fields and multipart bodies are excluded from `change_data`.
 
 `monster_templates`, `monster_spawns`, and `map_cells` remain PostgreSQL static data. Ordinary non-boss monster HP, target, state, statuses, position, timestamps, and revision are ephemeral Redis data under `world:monster:*`; they are not written to PostgreSQL per hit or movement. `monster_spawns.id` is the stable spawn identity. Runtime defaults are a 12-cell aggro radius, 1.5-cell attack range, 24-cell leash, speed 1 cell/second, and 2-second attack interval. Monsters cannot spawn in, acquire targets in, attack into, or cross a `HUB`/`SAFE_ZONE`. Runtime TTL is the spawn respawn duration plus a five-minute replay-safety window.
 
-Ordinary monster attacks batch-load player combat snapshots once per active AOI bucket. A due `ATTACK` resolves at most once per tick with the simulator's defense/reduction/shield pipeline. A surviving player automatically answers each successful hit with one basic counterattack, resolved against the monster's defense through the atomic Redis hit path. The short PostgreSQL mutation is claimed in `world_monster_actions` by the stable monster-instance/revision token, so retries and simultaneous lethal hits cannot apply HP loss or death drops twice.
+Ordinary world monsters pursue nearby players and continue moving on the map, but do not deal contact damage or trigger automatic counterattacks. Combat damage starts only when the player explicitly enters auto-combat. When a monster defeats a player in auto-combat, its display name is stored in the ground drop's `killer_name`.
 
 Monster runtime AOI uses **32×32-cell buckets**, separate from the legacy
 300×300 player-position broadcast index. The activation/fan-out radius is 25

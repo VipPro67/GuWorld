@@ -221,9 +221,10 @@ func reduceSatKhiOnDeath(tx *sql.Tx, playerID uuid.UUID) {
 }
 
 type DeathPos struct {
-	Region string
-	X      int
-	Y      int
+	Region     string
+	X          int
+	Y          int
+	KillerName string
 }
 
 // applyDeathDrop applies the death penalty to a fully-loaded in-memory loser.
@@ -465,6 +466,8 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 	var killerName string
 	if winnerID != nil {
 		_ = tx.QueryRow(`SELECT username FROM players WHERE id = $1`, *winnerID).Scan(&killerName)
+	} else if len(deathPos) > 0 {
+		killerName = deathPos[0].KillerName
 	}
 
 	summary := ""

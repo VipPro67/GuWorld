@@ -428,7 +428,11 @@ func Flee(c *gin.Context) {
 							winnerID = &winner
 						}
 					}
-					dropSummary := applyDeathDropRecord(tx, &authID, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+					killerName := ""
+					if winnerID == nil {
+						killerName = enemyName
+					}
+					dropSummary := applyDeathDropRecord(tx, &authID, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName})
 					_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
 					if dropSummary != "" {
 						if winnerID != nil {
@@ -506,7 +510,7 @@ func Flee(c *gin.Context) {
 		if player.HP <= 0 {
 			deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 			player.HP = 1.0
-			dropSummary := applyDeathDropRecord(tx, &authID, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+			dropSummary := applyDeathDropRecord(tx, &authID, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: enemyName})
 			player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, deathRegion, deathX, deathY)
 			droppedOnFlee = true
 			_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)

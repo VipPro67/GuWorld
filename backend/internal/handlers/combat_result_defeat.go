@@ -76,7 +76,11 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 				winnerID = &tUUID
 			}
 		}
-		dropSummary := applyDeathDrop(tx, player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+		killerName := ""
+		if winnerID == nil && player.ActiveCombat != nil {
+			killerName = player.ActiveCombat.EnemyName
+		}
+		dropSummary := applyDeathDrop(tx, player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName})
 		player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
 		setWorldPosFromPlayer(player)
 		if dropSummary != "" {
