@@ -105,6 +105,28 @@ func TestSelectMonsterTargetDeterministicAndRegionSafe(t *testing.T) {
 	}
 }
 
+func TestSelectMonsterTargetRejectsSafeZone(t *testing.T) {
+	previous := isWorldMonsterSafeZone
+	isWorldMonsterSafeZone = func(_ string, x, _ int) bool { return x >= 2 }
+	t.Cleanup(func() { isWorldMonsterSafeZone = previous })
+	m := testMonster(time.Now())
+	if _, ok := selectMonsterTarget(m, []WorldPosEntry{{ID: "safe", Region: "field", X: 2}}, func(string) bool { return true }); ok {
+		t.Fatal("monster acquired a target inside a safe zone")
+	}
+}
+
+func TestMoveMonsterTowardDoesNotTunnelThroughSafeZone(t *testing.T) {
+	previous := isWorldMonsterSafeZone
+	isWorldMonsterSafeZone = func(_ string, x, _ int) bool { return x == 2 }
+	t.Cleanup(func() { isWorldMonsterSafeZone = previous })
+	m := testMonster(time.Now())
+	m.Speed, m.LeashRadius = 10, 20
+	moveMonsterToward(&m, 5, 0, 1)
+	if m.X != 0 || m.Y != 0 {
+		t.Fatalf("monster crossed a safe cell: (%v,%v)", m.X, m.Y)
+	}
+}
+
 func TestWorldMonsterChaseAttackChaseAndElapsedMovement(t *testing.T) {
 	now := time.Now()
 	m := testMonster(now)
@@ -332,7 +354,7 @@ func TestWorldMonsterWorkerStopsWithContext(t *testing.T) {
 func installWorldAttackTest(t *testing.T, now time.Time, monsters []WorldMonster, player worldCombatPlayer) (*[]WorldCombatEvent, *atomic.Int64) {
 	t.Helper()
 	previousIndex, previousLoader, previousCAS := worldPosIndex, worldMonstersInBucket, casWorldMonster
-	previousPlayers, previousAction, previousBroadcaster := loadWorldCombatPlayers, applyWorldMonsterAction, WorldCombatBroadcaster
+	previousPlayers, previousAction, previousCounter, previousBroadcaster := loadWorldCombatPlayers, applyWorldMonsterAction, applyWorldPlayerCounter, WorldCombatBroadcaster
 	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
 	worldPosIndex.Set(WorldPosEntry{ID: player.ID.String(), Region: player.Region, X: player.X, Y: player.Y, TS: now.UnixMilli()})
 	loaded := false
@@ -370,10 +392,50 @@ func installWorldAttackTest(t *testing.T, now time.Time, monsters []WorldMonster
 		casWorldMonster = previousCAS
 		loadWorldCombatPlayers = previousPlayers
 		applyWorldMonsterAction = previousAction
+		applyWorldPlayerCounter = previousCounter
 		WorldCombatBroadcaster = previousBroadcaster
 		SetWSConnectedProvider(nil)
 	})
 	return &events, &calls
+}
+
+func TestWorldMonsterAttackTriggersPlayerCounterattack(t *testing.T) {
+	now := time.Now().UTC()
+	p := worldCombatPlayer{ID: uuid.New(), HP: 100, Region: "field", X: 1, Attack: 25}
+	m := testMonster(now.Add(-time.Second))
+	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
+	_, _ = installWorldAttackTest(t, now, []WorldMonster{m}, p)
+	var counters atomic.Int64
+	applyWorldPlayerCounter = func(_ context.Context, monster WorldMonster, target worldCombatPlayer, commandID string, _ time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
+		counters.Add(1)
+		monster.HP -= 20
+		monster.Revision++
+		return cache.WorldMonsterHit, monster, 20, nil
+	}
+	processWorldMonsterTick(context.Background(), now)
+	if counters.Load() != 1 {
+		t.Fatalf("counterattacks=%d, want 1", counters.Load())
+	}
+}
+
+func TestWorldMonsterLethalAttackDoesNotTriggerCounterattack(t *testing.T) {
+	now := time.Now().UTC()
+	p := worldCombatPlayer{ID: uuid.New(), HP: 10, Region: "field", X: 1, Attack: 25}
+	m := testMonster(now.Add(-time.Second))
+	m.State, m.TargetID, m.AttackRange, m.NextAttackAt = MonsterStateAttack, p.ID.String(), 2, now.Add(-time.Second)
+	_, _ = installWorldAttackTest(t, now, []WorldMonster{m}, p)
+	applyWorldMonsterAction = func(context.Context, WorldMonster, worldCombatPlayer, string) (worldMonsterActionResult, error) {
+		return worldMonsterActionResult{Applied: true, Died: true, Damage: 10, HP: 0}, nil
+	}
+	var counters atomic.Int64
+	applyWorldPlayerCounter = func(context.Context, WorldMonster, worldCombatPlayer, string, time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
+		counters.Add(1)
+		return "", WorldMonster{}, 0, nil
+	}
+	processWorldMonsterTick(context.Background(), now)
+	if counters.Load() != 0 {
+		t.Fatal("dead player counterattacked")
+	}
 }
 
 func TestWorldMonsterAttackCooldownAndSlowTickResolveOneAction(t *testing.T) {
