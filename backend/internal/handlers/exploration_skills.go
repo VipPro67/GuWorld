@@ -389,6 +389,7 @@ func UseGuOnMap(c *gin.Context) {
 		damageDealt = simulator.ResolveBaseDamage(rawDmg, monster.BaseDefense)
 		outcome, updated, hitErr := cache.HitWorldMonster(c.Request.Context(), monster.RegionID, monster.InstanceID, player.ID.String()+":"+req.CommandID, monster.Revision, damageDealt, time.Now().UTC(), time.Duration(monster.RespawnSeconds)*time.Second, monsterTTL(monster.RespawnSeconds))
 		if hitErr != nil {
+			logger.S.Errorf("[WorldGuCast] failed to update monster %s in region %s: %v", monster.InstanceID, monster.RegionID, hitErr)
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Cannot update monster state"})
 			return
 		}

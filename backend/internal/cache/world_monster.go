@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -17,6 +18,8 @@ type WorldMonster struct {
 	InstanceID        string              `json:"instance_id"`
 	SpawnID           string              `json:"spawn_id"`
 	MonsterTemplateID string              `json:"monster_template_id"`
+	Rank              int                 `json:"rank"`
+	SubRank           int                 `json:"sub_rank"`
 	RegionID          string              `json:"region_id"`
 	X                 float64             `json:"x"`
 	Y                 float64             `json:"y"`
@@ -201,34 +204,91 @@ func RespawnWorldMonster(ctx context.Context, defeated, replacement WorldMonster
 // retries and simultaneous finishing blows unable to grant a second reward.
 func HitWorldMonster(ctx context.Context, regionID, instanceID, commandID string, expectedRevision int64, damage float64, now time.Time, respawnAfter, ttl time.Duration) (WorldMonsterHitResult, WorldMonster, error) {
 	var out WorldMonster
+	if damage <= 0 || math.IsNaN(damage) || math.IsInf(damage, 0) {
+		return "", out, fmt.Errorf("invalid monster damage %v", damage)
+	}
+	if ttl <= 0 {
+		return "", out, fmt.Errorf("invalid monster ttl %s", ttl)
+	}
+	if Client == nil {
+		return "", out, errors.New("redis unavailable")
+	}
 	key := worldMonsterKey(regionID, instanceID)
 	commandKey := "world:monster:command:" + commandID
-	result, err := Client.Eval(ctx, `
-		if redis.call('EXISTS', KEYS[2]) == 1 then return {'DUPLICATE', ''} end
-		local raw = redis.call('GET', KEYS[1]); if not raw then return {'ALREADY_DEFEATED', ''} end
-		local m = cjson.decode(raw)
-		if m.state == 'DEFEATED' then return {'ALREADY_DEFEATED', raw} end
-		if m.revision ~= tonumber(ARGV[1]) then return {'REVISION_CONFLICT', raw} end
-		m.hp = math.max(0, m.hp - tonumber(ARGV[2])); m.revision = m.revision + 1
-		m.last_hit_at = ARGV[3]; m.last_update_at = ARGV[3]
-		local outcome = 'HIT'
-		if m.hp <= 0 then m.state = 'DEFEATED'; m.target_id = ''; m.respawn_at = ARGV[4]; outcome = 'FIRST_KILL' end
-		local updated = cjson.encode(m)
-		redis.call('SET', KEYS[1], updated, 'PX', ARGV[5])
-		redis.call('SET', KEYS[2], outcome, 'PX', ARGV[5])
-		return {outcome, updated}
-	`, []string{key, commandKey}, expectedRevision, damage, now.Format(time.RFC3339Nano), now.Add(respawnAfter).Format(time.RFC3339Nano), ttl.Milliseconds()).Slice()
-	if err != nil {
-		return "", out, err
+	var outcome WorldMonsterHitResult
+	apply := func(tx *redis.Tx) error {
+		if exists, err := tx.Exists(ctx, commandKey).Result(); err != nil {
+			return err
+		} else if exists > 0 {
+			outcome = WorldMonsterAlreadyDefeated
+			return nil
+		}
+		raw, err := tx.Get(ctx, key).Bytes()
+		if errors.Is(err, redis.Nil) {
+			outcome = WorldMonsterAlreadyDefeated
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return err
+		}
+		if out.State == "DEFEATED" {
+			outcome = WorldMonsterAlreadyDefeated
+			return nil
+		}
+		if out.Revision != expectedRevision {
+			outcome = WorldMonsterRevisionConflict
+			return nil
+		}
+		outcome = applyWorldMonsterHit(&out, damage, now, respawnAfter)
+		updated, err := json.Marshal(out)
+		if err != nil {
+			return err
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, key, updated, ttl)
+			pipe.Set(ctx, commandKey, outcome, ttl)
+			return nil
+		})
+		return err
 	}
-	outcome, _ := result[0].(string)
-	if outcome == "DUPLICATE" {
-		return WorldMonsterAlreadyDefeated, out, nil
-	}
-	if raw, _ := result[1].(string); raw != "" {
-		if err := json.Unmarshal([]byte(raw), &out); err != nil {
-			return "", out, err
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		out, outcome = WorldMonster{}, WorldMonsterHit
+		err = Client.Watch(ctx, apply, key, commandKey)
+		if !errors.Is(err, redis.TxFailedErr) {
+			return outcome, out, err
 		}
 	}
-	return WorldMonsterHitResult(outcome), out, nil
+	if errors.Is(err, redis.TxFailedErr) {
+		if exists, existsErr := Client.Exists(ctx, commandKey).Result(); existsErr != nil {
+			return "", WorldMonster{}, existsErr
+		} else if exists > 0 {
+			return WorldMonsterAlreadyDefeated, WorldMonster{}, nil
+		}
+		latest, exists, getErr := GetWorldMonster(ctx, regionID, instanceID)
+		if getErr != nil {
+			return "", WorldMonster{}, getErr
+		}
+		if exists {
+			return WorldMonsterRevisionConflict, latest, nil
+		}
+		return WorldMonsterAlreadyDefeated, WorldMonster{}, nil
+	}
+	return outcome, out, err
+}
+
+func applyWorldMonsterHit(monster *WorldMonster, damage float64, now time.Time, respawnAfter time.Duration) WorldMonsterHitResult {
+	monster.HP = max(0, monster.HP-damage)
+	monster.Revision++
+	monster.LastHitAt, monster.LastUpdateAt = now, now
+	if monster.HP > 0 {
+		return WorldMonsterHit
+	}
+	monster.State = "DEFEATED"
+	monster.TargetID = ""
+	monster.RespawnAt = now.Add(respawnAfter)
+	return WorldMonsterFirstKill
 }
