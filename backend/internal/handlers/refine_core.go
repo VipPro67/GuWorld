@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -149,7 +150,7 @@ func GetRecipes(c *gin.Context) {
 	}
 
 	// 1. Fetch player's unlocked recipes via RecipeSvc
-	recipeProgresses, err := RecipeSvc.ListByPlayer(playerID.String())
+	recipeProgresses, err := RecipeSvc.ListByPlayerContext(c.Request.Context(), db.DB, playerID.String())
 	if err != nil {
 		logger.S.Error(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player recipes"})

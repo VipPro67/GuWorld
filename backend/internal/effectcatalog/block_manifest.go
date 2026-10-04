@@ -172,6 +172,16 @@ func init() {
 		},
 		Domain: "combat",
 	}
+	NativeHooks["CLEANSE_REGIONAL_WALL"] = NativeHook{
+		Triggers: values("ON_BATTLE_START"),
+		Params:   map[string]ParamSpec{},
+		Domain:   "combat",
+	}
+	NativeHooks["FAKE_REGIONAL_WALL"] = NativeHook{
+		Triggers: values("ON_BATTLE_START"),
+		Params:   map[string]ParamSpec{},
+		Domain:   "combat",
+	}
 	register("BEFORE_HIT", "combat", "FIRST_TURN_EVADE")
 	register("COMBAT_PASSIVE", "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY")
 	register("CAPABILITY", "capability", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "CONCEAL_GU", "SEVER_CLUES", "ARENA_IDENTITY_MASK", "PORTAL_CREATE", "RANDOM_PORTAL", "CAPTURE_BONUS")

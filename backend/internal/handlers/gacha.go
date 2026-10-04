@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math/rand"
@@ -17,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type GachaRewardItem struct {
@@ -244,23 +246,32 @@ func getPrecomputedPools() *precomputedPools {
 
 func (pc *precomputedPools) rollGu(rankKey string, excludedImmortal map[string]bool) (string, int) {
 	pool := pc.guByRank[rankKey]
-	total := pc.totalByRank[rankKey]
-	if len(pool) == 0 || total <= 0 {
+	if len(pool) == 0 {
 		return "", 0
 	}
 
-	// Fast path: if no immortals to exclude, or rankKey doesn't contain immortal ranks, roll normally
+	// Recalculate eligible weight so excluded immortal Gu can never be selected
+	// by the fallback path and the remaining entries keep their relative odds.
+	var total float64
+	for _, g := range pool {
+		if excludedImmortal == nil || !excludedImmortal[g.id] {
+			total += g.weight
+		}
+	}
+	if total <= 0 {
+		return "", 0
+	}
 	r := rand.Float64() * total
 	for _, g := range pool {
 		if excludedImmortal != nil && excludedImmortal[g.id] {
-			continue // Skip excluded immortal Gus. This slightly shifts probabilities but is very fast.
+			continue
 		}
 		r -= g.weight
 		if r <= 0 {
 			return g.id, g.rank
 		}
 	}
-	return pool[0].id, pool[0].rank
+	return "", 0
 }
 
 func (pc *precomputedPools) rollRecipe(rankKey string) (string, string, int) {
@@ -302,8 +313,10 @@ type immortalCache struct {
 	ttlSec   int64
 }
 
-func getCachedImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
-	return db.GetExistingImmortalGuIDs(tx)
+func getCachedImmortalGuIDs(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}) (map[string]bool, error) {
+	return db.GetExistingImmortalGuIDs(ctx, q)
 }
 
 func timeNowUnix() int64 {
@@ -356,7 +369,18 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
+	// Populate the global catalog before reserving a transaction connection.
+	// A cold cache queries refining_recipes through db.DB; doing that while a
+	// transaction is open can exhaust the pool under concurrent gacha traffic.
+	pc := getPrecomputedPools()
+	excludedImmortal, err := getCachedImmortalGuIDs(c.Request.Context(), db.DB)
+	if err != nil {
+		logger.S.Errorf("gacha: load existing immortal Gu failed for player %s: %v", playerID, err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database đang bận, vui lòng thử lại"})
+		return
+	}
+
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
 		return
@@ -386,21 +410,17 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	excludedImmortal, err := getCachedImmortalGuIDs(tx)
+	// Load player's unlocked recipes
+	recipes, err := RecipeSvc.ListByPlayerContext(c.Request.Context(), tx, player.ID.String())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		logger.S.Errorf("gacha: load recipes failed for player %s: %v", player.ID, err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database đang bận, vui lòng thử lại"})
 		return
 	}
-
-	// Load player's unlocked recipes
-	recipes, _ := RecipeSvc.ListByPlayer(player.ID.String())
 	unlockedMap := make(map[string]*services.RecipeProgress)
 	for idx := range recipes {
 		unlockedMap[recipes[idx].RecipeID] = &recipes[idx]
 	}
-
-	// Pre-compute weighted pools once (globally cached)
-	pc := getPrecomputedPools()
 
 	// Roll all rewards, batch items, apply non-item rewards in-memory
 	rewards := make([]GachaResultItem, quantity)
@@ -451,10 +471,14 @@ func runGachaOpen(c *gin.Context, forced int) {
 	}
 
 	// Upsert ONLY recipes that were unlocked or updated
-	for _, rp := range touchedRecipes {
-		if err := RecipeSvc.Upsert(tx, rp); err != nil {
+	if len(touchedRecipes) > 0 {
+		batch := make([]*services.RecipeProgress, 0, len(touchedRecipes))
+		for _, rp := range touchedRecipes {
+			batch = append(batch, rp)
+		}
+		if err := RecipeSvc.UpsertBatch(tx, batch); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật bí phương"})
-			fmt.Println("Error updating recipe progress:", err)
+			logger.S.Errorf("gacha: update recipes failed for player %s: %v", player.ID, err)
 			return
 		}
 	}

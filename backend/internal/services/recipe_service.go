@@ -1,11 +1,16 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
 	"github.com/lib/pq"
 )
+
+type recipeQueryer interface {
+	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+}
 
 // RecipeProgress represents a player's progress on a single refining recipe.
 type RecipeProgress struct {
@@ -31,7 +36,14 @@ func NewRecipeService(db *sql.DB) *RecipeService {
 
 // ListByPlayer returns all recipe progress rows for a player.
 func (s *RecipeService) ListByPlayer(playerID string) ([]RecipeProgress, error) {
-	rows, err := s.db.Query(`
+	return s.ListByPlayerContext(context.Background(), s.db, playerID)
+}
+
+// ListByPlayerContext returns recipe progress using the supplied connection or
+// transaction. Callers already inside a transaction must pass that transaction
+// so they do not retain one pool connection while waiting for a second one.
+func (s *RecipeService) ListByPlayerContext(ctx context.Context, q recipeQueryer, playerID string) ([]RecipeProgress, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT player_id, recipe_id, completion_rate, is_unlocked, deduce_count,
 		       last_deduce_at, favorite, created_at, updated_at
 		FROM player_recipe_progress

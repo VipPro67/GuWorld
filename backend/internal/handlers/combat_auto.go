@@ -767,6 +767,10 @@ func buildStatProvenance(player *models.Player, finalStats map[string]float64, f
 // buildSimCombatant constructs a simulator.CombatantAuto from player + Gu loadout.
 // Shared by AutoCombatStart (combat_auto.go) and AutoResolveCombat (combat_auto_resolve.go).
 func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInitiator bool, reqLoadout *simulator.CombatLoadout) (*simulator.CombatantAuto, error) {
+	// Cổ mang CLEANSE_REGIONAL_WALL: gỡ Áp Chế Giới Vực khỏi bản thân trước
+	// khi tính stat để trận không kế thừa debuff thế giới. player ở đây luôn là
+	// nhân vật được build (initiator/ally/defender), scan qua loadout của chính nó.
+	maybeCleanseRegionalWall(player)
 	playerStats := CalculatePlayerStats(player)
 	actor := models.CombatantFromPlayer(player, playerStats)
 

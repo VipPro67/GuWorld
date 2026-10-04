@@ -64,6 +64,15 @@ gate closed; it is never inferred from a default counter.
 
 Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/patch schema và chỉ seed dữ liệu hệ thống tối thiểu; các dictionary gameplay phải được import/export qua Admin → **Dữ liệu**. Riêng quest hiện vẫn được đồng bộ từ CSV lúc khởi tạo schema.
 
+### Chỉ mục vận hành
+
+`players` có chỉ mục `(created_at DESC, id DESC)` phục vụ phân trang mặc định
+trong danh sách người chơi của Admin. `notifications` có chỉ mục riêng cho thông
+báo chưa đọc, còn `player_recipe_progress` dùng khóa chính
+`(player_id, recipe_id)`. Các truy vấn tương ứng timeout đồng thời thường là dấu
+hiệu nghẽn pool, tải database hoặc khóa schema, không nên xử lý bằng cách chỉ tăng
+`statement_timeout`.
+
 ### Authorization data
 
 Authorization của Admin được chuẩn hóa trong bốn bảng: `admin_roles`,
@@ -253,6 +262,8 @@ Danh sách hiện tại (7 trạng thái):
 | `sinh_khi_tan` | Sinh Khí Tàn | Tầng I -10%, II -25%, III -35%, IV -50%, V -99% attack/defense/speed (Value âm ghi đè stat_mods) | 300 phút, refresh mỗi hit | — |
 
 Sinh Khí Tàn do **Sát Sinh Khí Cổ** (`GU_KILL_ENERGY`, rank 9 Sát Đạo) gây ra: đánh trúng ở PvP thật thì defender persistent +1 tầng (tối đa V, tầng V vẫn ăn hit refresh, không miễn nhiễm). Công thức luyện: `GU_KILL_HEAVEN_DAO` rank 8 + `heaven_qi_rank8/9`, `kill_path_material`, `primordial_kill_origin_stone` (vật liệu Hỗn Độn trong spec gốc chưa tồn tại dưới dạng item nên tạm thay bằng tiên tài Sát Đạo hiện có). Cơ chế **data-driven trên Cổ**: `Gu.csv` block `ON_HIT` + `UNIQUE PERSIST_STATUS_ON_HIT` (`params.status_key=sinh_khi_tan, pvp_only=true`); engine gắn `CombatLog.SourceGuID/HitLanded` (khiên hấp thụ hết vẫn tính hit, né/mù/miễn nhiễm không tính); hook post-combat `handlers.maybeGrantPersistentHitStatuses` (dùng chung `AutoCombatStart` + `AutoResolveCombat`) grant theo spec, Cổ mới chỉ cần thêm block tương tự. Helper: `gamefx.SinhKhiTanTierFromValue/ValueForTier/TierName`, `handlers.GrantSinhKhiTanHit`, `models.GuPersistentHitStatus`, `handlers.CleanseSinhKhiTanOneTier` (thanh tẩy tụt 1 tầng, hết tầng I thì xóa).
+
+**Ngũ Hành Thiên Chướng Trận** (`FIVE_ELEMENTS_DIVINE_BARRIER_ARRAY`, rank 9 Sát Đạo): 2 effect `ON_BATTLE_START` đều tác động status.<br>① `UNIQUE CLEANSE_REGIONAL_WALL` — gỡ `regional_wall_suppression` (Áp Chế Giới Vực) khỏi bản thân ở `handlers.buildSimCombatant` trước khi tính `CalculatePlayerStats` (helper `handlers.playerHasBattleStartMechanic` quét loadout `models.CompiledGuEffects`).<br>② `UNIQUE FAKE_REGIONAL_WALL` — chỉ trong PvP player-vs-player; giảm công/thủ/tốc của địch theo **rank của địch** qua cùng formula `gamefx.RegionalWallDebuff`, áp thẳng vào `CombatantAuto.BaseDmg/BaseDef/Speed` trong `buildSimCombatState`. Recipe: `GU_KILL_ENERGY` rank 9 + `heaven_qi_rank9` ×10, `kill_path_material` ×20, `primordial_kill_origin_stone` ×10.
 
 Helper dùng chung: `gamefx.Get(player)` (resolve effects + BlockedActions), `gamefx.HasBlockedAction(player, action)`, `gamefx.BlockingStatuses(player, action)`, `handlers.GrantPlayerStatus/RevokePlayerStatus/CleanExpiredPlayerStatuses` (cấp/gỡ/dọn trạng thái trong transaction), worker `worker.StartStatusExpiryWorker` (dọn hết hạn mỗi phút).
 
