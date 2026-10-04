@@ -36,6 +36,8 @@ export interface ScoreDetail {
   clue: number;
   luck_roll: number;
   total: number;
+  /** Flat Cảnh giới lưu phái base (already included in realm_dao). Dominant pillar. */
+  attain_base?: number;
   rank_divisor?: number;
 }
 

@@ -339,13 +339,26 @@ export const gameplayPages: WikiPage[] = [
     content: (
       <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
         <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-          <h3 className="font-bold text-amber-300 mb-2">Ba trụ điểm (cả công lẫn thủ)</h3>
-          <ul className="list-disc list-inside space-y-1">
-            <li><strong>Cổ trùng:</strong> công lấy Trinh Sát của Cổ trang bị; thủ lấy Ngụy Trang + năng lực đặc biệt (Thái Độ Cổ, Cổ che giấu).</li>
-            <li><strong>Cảnh giới + Đạo ngân:</strong> Trí đạo là lực suy tính chính (cũng là lá chắn đối kháng); Ám che thân/vị/khí; Tín khuếch đại manh mối (công) hoặc bóp méo manh mối (thủ); Vận gieo xúc xắc mỗi lần dò; Thiên che thiên cơ (Tiên nhân); Biến hóa trả hàng giả.</li>
-            <li><strong>Manh mối:</strong> tên đúng +20, đúng vùng +15, đúng tông môn +10, Cổ nghi vấn đúng +10, khí tức +30, dò mù −40. Chỉ manh mối <strong>đúng thật</strong> mới tính, và bị chặn trần.</li>
-            <li><strong>Chi phí:</strong> mỗi lần dò tốn <strong>Nguyên Thạch</strong> (tối thiểu 100) hoặc <strong>Tiên Nguyên Thạch</strong> (Tiên nhân) — không tốn Chân Nguyên.</li>
+          <h3 className="font-bold text-amber-300 mb-2">Ba trụ điểm — cảnh giới là trụ số một</h3>
+          <p className="mb-2 text-neutral-400">
+            Sức dò chia làm ba trụ, <strong>càng đầu bảng càng quan trọng</strong>:
+          </p>
+          <ul className="list-disc list-inside space-y-1.5">
+            <li>
+              <strong className="text-purple-300">① Cảnh giới lưu phái (Trí đạo) — trụ số một.</strong> Mỗi bậc cộng thẳng vào điểm, không phụ thuộc tu vi:
+              {" "}<strong>Phàm +0 · Đại Sư +50 · Tông Sư +140 · Đại Tông Sư +280 · Vô Thượng +470</strong>, cộng thêm một hệ số nhân nhẹ ×1.00 → ×1.30.
+              Đây là con đường <strong>đáng đầu tư nhất</strong>: mỗi bậc lên đều đáng hơn cả trăm điểm, và không bị tu vi thấp kéo lùi.
+            </li>
+            <li>
+              <strong className="text-cyan-300">② Cổ trùng.</strong> Mỗi Cổ Trinh Sát đang trang bị cộng theo phẩm bậc (Cổ 3 chuyển +15, Cổ 7 chuyển +35, Cổ 9 chuyển +45). Xếp sau cảnh giới nhưng vẫn rõ ràng — trang bị đủ Cổ là bước nhảy rõ rệt.
+            </li>
+            <li>
+              <strong className="text-amber-300">③ Đạo ngân — yếu nhất, bão hòa rất sớm.</strong> Đạo ngân Trí/Tín chỉ tăng tối đa <strong>+20%</strong> điểm nền, và đạt trần khi khoảng 3.000 điểm đạo ngân. Một bậc cảnh giới luôn đáng hơn toàn bộ đạo ngân, nên <strong>đừng dồn đạo ngân thay vì luyện cảnh giới</strong>.
+            </li>
           </ul>
+          <p className="mt-2 text-neutral-400">
+            Ngoài ra còn có <strong>Manh mối</strong> (tên đúng +20, đúng vùng +15, đúng tông môn +10, Cổ nghi vấn đúng +10, khí tức đúng +30, dò mù −40 — chỉ manh mối <em>đúng thật</em> mới tính) và <strong>Vận số</strong> gieo mỗi lần dò. Mỗi lần dò tốn <strong>Nguyên Thạch</strong> (tối thiểu 100) hoặc <strong>Tiên Nguyên Thạch</strong> (Tiên nhân) — không tốn Chân Nguyên.
+          </p>
         </section>
         <section className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
           <h3 className="font-bold text-emerald-300 mb-2">Bốn kết quả (so điểm tổng cuối)</h3>
@@ -353,9 +366,9 @@ export const gameplayPages: WikiPage[] = [
             <li><strong>Đại thành công</strong> (≥+30 người / +20 Cổ): tọa độ thật, tu vi thật, toàn bộ Cổ trang bị; được gieo ấn ký.</li>
             <li><strong>Tiểu thành công</strong>: vùng + tu vi ước lượng + 2 Cổ, tọa độ bị giấu.</li>
             <li><strong>Màn sương</strong>: mất tài nguyên, trắng tay.</li>
-            <li><strong>Phản phệ</strong>: trọng thương HP + Hồn, trừ 20 Chân Nguyên (cố định), <strong>lộ ngược tọa độ cho mục tiêu</strong>.</li>
+            <li><strong>Phản phệ</strong>: mất <strong>15% HP và 15% Hồn tối đa</strong> cùng 20 Chân Nguyên, và <strong>lộ ngược tọa độ cho mục tiêu</strong>.</li>
           </ul>
-          <p className="mt-2">Sau mỗi lần dò, bảng <strong>điểm của chính đạo hữu</strong> hiện đầy đủ để biết thiếu ở đâu — điểm thủ của địch không bao giờ lộ.</p>
+          <p className="mt-2">Chênh lệch tu vi được tính theo tỉ lệ dịu, nên lệch 2 bậc chỉ khiến bạn <em>màn sương</em> chứ chưa chắc chắn phản phệ. Sau mỗi lần dò, bảng <strong>điểm của chính đạo hữu</strong> hiện đầy đủ để biết thiếu ở đâu — điểm thủ của địch không bao giờ lộ.</p>
         </section>
         <section className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20">
           <h3 className="font-bold text-purple-300 mb-2">Suy tính Cổ & Ấn ký</h3>

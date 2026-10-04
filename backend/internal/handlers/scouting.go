@@ -315,19 +315,19 @@ func ExecuteDivination(c *gin.Context) {
 	// Fetch target sect name for clue validation (server-side only)
 	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id::text FROM sect_members WHERE player_id = (SELECT id FROM players WHERE username = $1)`, req.TargetUsername).Scan(&req.TargetSectName)
 
-	// 1. Fetch Viewer
+	// 1. Fetch Viewer (statuses needed for max HP on backfire)
 	var viewer models.Player
 	var viewerDaoMarks models.DaoMarksMap
 	err = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.immortal_stones,
 		       p.primeval_stones, p.hp, p.base_hp, p.soul_hp, p.max_soul, p.current_region, p.x, p.y,
-		       `+db.GuInventoryAggregate("p.id")+`, p.path_masteries
+		       `+db.GuInventoryAggregate("p.id")+`, p.path_masteries, p.statuses
 		FROM players p
 		WHERE p.id = $1
 	`, viewerID).Scan(
 		&viewer.ID, &viewer.Username, &viewer.Rank, &viewer.SubRank, &viewer.CurrentMana, &viewer.MaxMana,
 		&viewer.ImmortalStones, &viewer.PrimevalStones, &viewer.HP, &viewer.BaseHP, &viewer.SoulHP, &viewer.MaxSoul,
-		&viewer.CurrentRegion, &viewer.X, &viewer.Y, &viewer.GuInventory, &viewer.PathMasteries,
+		&viewer.CurrentRegion, &viewer.X, &viewer.Y, &viewer.GuInventory, &viewer.PathMasteries, &viewer.Statuses,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load viewer data: " + err.Error()})
@@ -422,7 +422,7 @@ func ExecuteDivination(c *gin.Context) {
 	}
 
 	// 4. Evaluate Divination (final delta only)
-	statusType, delta, backfireDamage, myScore := gamefx.EvaluateDivination(
+	statusType, delta, backfireRatio, myScore := gamefx.EvaluateDivination(
 		&viewer,
 		&target,
 		models.FilterEquippedActive(viewer.GuInventory),
@@ -456,17 +456,30 @@ func ExecuteDivination(c *gin.Context) {
 	newHP := viewer.HP
 	newSoulHP := viewer.SoulHP
 
+	var backfireDamage, backfireSoulDamage float64
+
 	if statusType == "backfire" {
 		// Fixed mana drain, never a percentage.
 		newMana -= divinationBackfireMana
 		if newMana < 0 {
 			newMana = 0
 		}
-		newHP -= backfireDamage * 0.5
+		// HP / Soul damage is a bounded fraction of the attacker's own maxima, so a
+		// bad roll against a high-rank target can never be instantly lethal.
+		maxHP := gamefx.EffectiveMaxHP(&viewer)
+		if maxHP <= 0 {
+			maxHP = viewer.BaseHP
+		}
+		maxSoul := float64(viewer.MaxSoul)
+
+		backfireDamage = maxHP * backfireRatio
+		backfireSoulDamage = maxSoul * backfireRatio
+
+		newHP -= backfireDamage
 		if newHP < 1.0 {
 			newHP = 1.0
 		}
-		newSoulHP -= int(backfireDamage * 0.5)
+		newSoulHP -= int(backfireSoulDamage)
 		if newSoulHP < 1 {
 			newSoulHP = 1
 		}
@@ -551,7 +564,7 @@ func ExecuteDivination(c *gin.Context) {
 
 	case "backfire":
 		resp.BackfireDamage = backfireDamage
-		resp.BackfireSoulDamage = backfireDamage * 0.5
+		resp.BackfireSoulDamage = backfireSoulDamage
 		resp.Message = "Thiên cơ phản phệ! Đối phương tu vi/phòng ngự trí đạo vượt trội, bạn bị trọng thương linh hồn và tổn thất 20 Chân Nguyên!"
 	}
 
@@ -1207,7 +1220,7 @@ func ExecuteDivineGu(c *gin.Context) {
 	`, targetGu.ID, targetGu.Rank).Scan(&reqGusJSON, &reqMatsJSON, &successRate)
 
 	// 6. Evaluate Divination (final delta only)
-	statusType, delta, backfireDamage, backfireSoulDamage, myScore := gamefx.EvaluateGuDivination(
+	statusType, delta, backfireHPRatio, backfireSoulRatio, myScore := gamefx.EvaluateGuDivination(
 		&viewer,
 		models.FilterEquippedActive(viewer.GuInventory),
 		viewerDaoMarks,
@@ -1237,6 +1250,7 @@ func ExecuteDivineGu(c *gin.Context) {
 	newMana := viewer.CurrentMana
 	newHP := viewer.HP
 	newSoulHP := viewer.SoulHP
+	var backfireDamage, backfireSoulDamage float64
 
 	if statusType == "backfire" {
 		// Fixed mana drain, never a percentage.
@@ -1244,13 +1258,21 @@ func ExecuteDivineGu(c *gin.Context) {
 		if newMana < 0 {
 			newMana = 0
 		}
-		newHP -= backfireDamage * 0.5
+		// Bounded fraction of the diviner's own maxima, same rule as /divine.
+		maxHP := gamefx.EffectiveMaxHP(&viewer)
+		if maxHP <= 0 {
+			maxHP = viewer.BaseHP
+		}
+		backfireDamage = maxHP * backfireHPRatio
+		backfireSoulDamage = float64(viewer.MaxSoul) * backfireSoulRatio
+
+		newHP -= backfireDamage
 		if newHP < 1.0 {
 			newHP = 1.0
 		}
 		newSoulHP -= int(backfireSoulDamage)
-		if newSoulHP < 0 {
-			newSoulHP = 0
+		if newSoulHP < 1 {
+			newSoulHP = 1
 		}
 	}
 

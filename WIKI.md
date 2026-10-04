@@ -1080,16 +1080,36 @@ Không ai được xem trộm hồ sơ từ xa. Muốn biết địch ở đâu,
   Mỗi điểm giảm 1% cơ hội bị quái phục kích lân cận (`50 + rank*2 - disguise`, sàn 5%, trần 95%)
   và thu hẹp cửa sổ gặp quái ngẫu nhiên khi khám phá (`70 - disguise`, sàn 40%).
 
-### Ba trụ điểm (áp cho cả hai phe)
-1. **Cổ trùng:** phe công lấy chỉ số Trinh Sát (Investigation) của Cổ đang trang bị; phe thủ lấy Ngụy Trang (DisguiseLevel) + năng lực đặc biệt (`PERFECT_DISGUISE` như Thái Độ Cổ, `CONCEAL_GU`).
-2. **Cảnh giới lưu phái + Đạo ngân:**
-   - **Trí đạo:** lực suy tính chính của phe công; đồng thời là lá chắn đối kháng trực tiếp của phe thủ.
+### Ba trụ điểm (áp cho cả hai phe) — cảnh giới là trụ số một
+
+Sức dò chia làm ba trụ, **càng đầu bảng càng nặng**:
+
+1. **Cảnh giới lưu phái (Trí đạo) — trụ số một.** Mỗi bậc cộng thẳng vào điểm và **không phụ thuộc tu vi**, nên người tu vi thấp vẫn có thể vượt kẻ tu vi cao nếu cảnh giới đủ sâu:
+
+   | Bậc | Phàm Thai | Đại Sư | Tông Sư | Đại Tông Sư | Vô Thượng |
+   | --- | --- | --- | --- | --- | --- |
+   | Cộng phẳng | +0 | **+50** | **+140** | **+280** | **+470** |
+   | Nhân thêm | ×1.00 | ×1.05 | ×1.12 | ×1.20 | ×1.30 |
+
+   Mốc cảnh giới: 10.000 / 100.000 / 1.000.000 / 10.000.000 Chân Ý. Cảnh giới tích từ **4 nguồn**: dùng Cổ, chiến đấu, thi triển sát chiêu, và luyện Cổ.
+
+2. **Cổ trùng.** Mỗi Cổ đang trang bị cộng theo phẩm bậc (Cổ rank *n* → `+5n`): Cổ 3 chuyển +15, Cổ 7 chuyển +35, Cổ 9 chuyển +45. Phe thủ đối xứng bằng Ngụy Trang (`DISGUISE ×5`) + `PERFECT_DISGUISE` (+80, Thái Độ Cổ) + `CONCEAL_GU` (+30), nên **cùng lượng Cổ thì hai phe cân bằng**.
+
+3. **Đạo ngân — yếu nhất, bão hòa rất sớm.** Đạo ngân Trí/Tín (phe công) hoặc Che/Ám/Biến Hóa (phe thủ) chỉ tăng tối đa **+20%** điểm nền, đạt trần quanh 3.000 điểm đạo ngân và chỉ hoạt động từ Tiên nhân (bậc 6+). **Một bậc cảnh giới luôn đáng hơn toàn bộ đạo ngân** — đừng dồn đạo ngân thay vì luyện cảnh giới.
+
+**Thứ tự ưu tiên đo được** (mức tăng tối đa mỗi trụ): cảnh giới **+578** · cổ trùng **+360** · đạo ngân **+68**.
+
+Các cơ chế phụ:
    - **Ám đạo (thủ):** che bản thân, vị trí, khí tức; tăng rào cản khoảng cách.
    - **Tín đạo:** phe công khuếch đại giá trị manh mối; phe thủ phong tỏa, bóp méo manh mối (Tông Sư Tín đạo trừ tới 36%, tối đa một nửa).
    - **Vận đạo:** gieo xúc xắc vận số mỗi lần suy diễn — phe công tu Vận cao thì kết quả ổn định, phe thủ Vận cao thì kết quả lệch xấu cho kẻ dò.
    - **Thiên đạo (Tiên nhân):** che / bóp méo thiên cơ (màn Thiên Cơ), chỉ Trí/Thiên phe công mới xuyên được.
    - **Biến hóa đạo (thủ):** đổi dấu vết, thân phận, đạo ngân biểu hiện — khiến kết quả trả về là hàng giả.
-3. **Manh mối (clue):** tên đúng +20, đúng vùng +15, đúng tông môn +10, Cổ nghi vấn đúng +10 (đều phải **đúng thật** mới tính), khí tức Cổ mục tiêu +30, dò mù không tên −40. Manh mối bị chặn trần, không thể thay tu vi.
+   - **Manh mối (clue):** tên đúng +20, đúng vùng +15, đúng tông môn +10, Cổ nghi vấn đúng +10 (đều phải **đúng thật** mới tính), khí tức Cổ mục tiêu +30, dò mù không tên −40. Manh mối bị chặn trần ±40, không thể thay tu vi.
+
+### Chênh lệch tu vi được tính dịu
+
+Điểm chênh lệch cuối được nhân với hệ số `(10 / bậc tu vi mục tiêu)^0.6`, nên **lệch 2 bậc chỉ khiến màn sương chứ chưa chắc chắn phản phệ**. Dồn đạo ngân cũng không còn đủ sức bù nổi khoảng cách tu vi.
 
 ### Chi phí suy diễn
 
@@ -1101,7 +1121,7 @@ Không ai được xem trộm hồ sơ từ xa. Muốn biết địch ở đâu,
 | ≥ +30 (người) / +20 (Cổ) | **Đại thành công:** tọa độ thật, tu vi thật, toàn bộ Cổ trang bị; được gieo ấn ký |
 | ≥ 0 / ≥ −10 (Cổ) | **Tiểu thành công:** vùng + tu vi ước lượng + 2 Cổ (tọa độ bị giấu) |
 | ≥ −30 / ≥ −40 (Cổ) | **Màn sương:** mất tài nguyên, trắng tay |
-| Thấp hơn | **Thiên cơ phản phệ:** trọng thương HP + Hồn, trừ 20 Chân Nguyên (cố định, không theo %), **lộ ngược tọa độ cho mục tiêu** |
+| Thấp hơn | **Thiên cơ phản phệ:** mất **15% HP tối đa + 15% Hồn tối đa** và 20 Chân Nguyên (cố định), **lộ ngược tọa độ cho mục tiêu**. Sát thương tính theo tỉ lệ nên không bao giờ một lần dò khiến bạn tử vong, dù đối thủ có yếu hay mạnh |
 
 Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ / cảnh giới / manh mối / vận / tổng) hiện đầy đủ để biết mình thiếu ở đâu — điểm phòng ngự của địch không bao giờ lộ.
 

@@ -521,9 +521,36 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 
 | Method | Endpoint | Mô tả |
 | --- | --- | --- |
-| POST | `/scouting/inspect` | Trinh sát cục bộ mục tiêu. Bắt buộc cùng vị trí/FOV (hoặc cùng Party/Sect). Body: `{"target_id", "target_username"}`. Response: `PlayerProfileResponse` + `delta_score` + `my_score{stat, realm_dao, clue, luck_roll, total}` (full ≥30, partial ≥−10). |
-| POST | `/scouting/divine` | Suy diễn thiên cơ từ xa bằng Đạo ngân & Chân ý Trí/Tín Đạo. Body: `{"target_username", "suspected_region", "suspected_sect", "suspected_gu", "item_clue_id", "resource_type", "resource_amount"}`. Mọi clue đều validate đúng-thật mới tính điểm (sai = 0). Response thêm `my_score` (điểm của người dò; điểm thủ không lộ). |
-| POST | `/scouting/divine-gu` | Suy tính cổ trùng (ai nắm giữ, đã luyện ra chưa, số lượng thiên hạ, bí phương & thức ăn). Body: `{"gu_query", "target_rank", "resource_type", "resource_amount"}`. Điểm thô chia cho divisor theo bậc Cổ (R1-5: 1/2/3/4/5, R6-9: 10/18/30/50); khó còn lại = che giấu chủ mạnh nhất ×0.5 (Cổ kho/ngủ ×0.5 nữa; tự sở hữu cộng hưởng +250, bỏ qua def chủ) + màn sương 15. Response thêm `my_score` (kèm `rank_divisor`). |
+| POST | `/scouting/inspect` | Trinh sát cục bộ mục tiêu. Bắt buộc cùng vị trí/FOV (hoặc cùng Party/Sect). Body: `{"target_id", "target_username"}`. Response: `PlayerProfileResponse` + `delta_score` + `my_score` (full ≥30, partial ≥−10). |
+| POST | `/scouting/divine` | Suy diễn thiên cơ từ xa. Ưu tiên điểm: **Cảnh giới lưu phái > Cổ trùng > Đạo ngân**. Body: `{"target_username", "suspected_region", "suspected_sect", "suspected_gu", "item_clue_id", "resource_type", "resource_amount"}`. Mọi clue đều validate đúng-thật mới tính điểm (sai = 0). Response thêm `my_score` (điểm của người dò; điểm thủ không lộ). |
+| POST | `/scouting/divine-gu` | Suy tính cổ trùng (ai nắm giữ, đã luyện ra chưa, số lượng thiên hạ, bí phương & thức ăn). Body: `{"gu_query", "target_rank", "resource_type", "resource_amount"}`. Điểm thô chia cho divisor theo bậc Cổ (R1-5: 1/2/3/4/5, R6-9: 10/18/30/50); khó còn lại = che giấu chủ mạnh nhất ×0.5 (Cổ kho/ngủ ×0.5 nữa; tự sở hữu cộng hưởng +250, bỏ qua def chủ) + màn sương 15. Response thêm `my_score` (kèm `attain_base`, `rank_divisor`). |
+
+#### Công thức điểm trinh sát
+
+Hằng số ở `backend/internal/gamefx/balance.go` (mục `7. TRINH SÁT / SUY DIỄN THIÊN CƠ`), engine ở `internal/gamefx/scouting_engine.go`.
+
+```
+stat     = BaseRankPower(rank) + 5.0 × Σ INVESTIGATION        // Cổ trùng (Cổ rank n → +5n)
+realmDao = stat × (AttainMult[L] × DaoMult(m) − 1) + AttainBase[L]
+clue     = clamp(±40, clue thô × tín) + min(resBonus, 25% core)
+Δ_n      = (P_raw − D_raw) × (10 / BaseRankPower(rank_mục_tiêu))^0.6
+```
+
+| Bậc cảnh giới | 0 | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- | --- |
+| `AttainBase` (phẳng) | 0 | 50 | 140 | 280 | 470 |
+| `AttainMult` | ×1.00 | ×1.05 | ×1.12 | ×1.20 | ×1.30 |
+
+`DaoMult(m) = 1 + 0.20·m/(m+3000)` — bão hòa, trần **+20%** stat (chỉ rank ≥ 6).
+
+**Thứ tự ưu tiên** (mức tăng tối đa mỗi trụ, R7 + 4 Cổ R9): cảnh giới **+578** · cổ trùng **+360** · đạo ngân **+68**.
+
+**Ngưỡng kết quả** (`/divine`, `/inspect`): full Δ ≥ +30 · partial Δ ≥ 0 · fogged Δ ≥ −30 · backfire Δ < −30.
+**Ngưỡng Cổ** (`/divine-gu`): full ≥ +20 · partial ≥ −10 · fogged ≥ −40.
+
+**Phản phệ** chỉ trừ **15% max HP và 15% max Soul** (`ScoutingBackfireRatio`) cộng 20 Chân Nguyên cố định — không còn công thức tuyệt đối `|Δ|×rank×5` nên không thể bị giết chết tức thời.
+
+`ScoreDetail` trả về: `stat`, `realm_dao`, `clue`, `luck_roll`, `total`, `attain_base` (base cảnh giới phẳng, đã nằm trong `realm_dao`), `rank_divisor` (chỉ `/divine-gu`).
 | POST | `/scouting/apply-mark` | Gieo ấn ký truy tung lên mục tiêu (Trí Niệm / Huyết Mạch). Giới hạn 3 (phàm nhân) / 10 (tiên nhân). Body: `{"target_id", "mark_type"}`. |
 | GET | `/scouting/tracked-targets` | Lấy danh sách con mồi đang mang ấn ký kèm tọa độ thời gian thực `(region, x, y)`. |
 | POST | `/scouting/sever-clues` | Đoạn tuyệt thiên cơ, chém đứt toàn bộ ấn ký đang theo dõi và tàn dư ô bản đồ. Tốn 20 Chân Nguyên (cố định). |

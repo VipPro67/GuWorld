@@ -51,29 +51,26 @@ func BaseRankPower(rank int) float64 {
 	}
 }
 
-// GetPathAttainmentMultiplier returns multiplier based on highest attainment level among candidate paths
-func GetPathAttainmentMultiplier(masteries models.PathMasteriesMap, paths ...string) float64 {
-	highestLevel := maxPathLevel(masteries, paths...)
-
-	switch highestLevel {
-	case 1:
-		return 1.2 // Master (Đại Sư)
-	case 2:
-		return 1.5 // Grandmaster (Tông Sư)
-	case 3:
-		return 2.0 // Great Grandmaster (Đại Tông Sư)
-	case 4:
-		return 3.0 // Supreme Grandmaster (Vô Thượng)
-	default:
-		return 1.0 // Ordinary (Phàm Thai)
+// GetPathAttainment returns the flat base and the mild multiplier granted by the
+// highest Cảnh giới lưu phái level (0-4) attained among the candidate paths.
+// The base is flat so cultivation rank stays the only rank-dependent term.
+func GetPathAttainment(masteries models.PathMasteriesMap, paths ...string) (base, mult float64) {
+	lvl := maxPathLevel(masteries, paths...)
+	if lvl < 0 {
+		lvl = 0
 	}
+	if lvl >= len(ScoutingAttainBase) {
+		lvl = len(ScoutingAttainBase) - 1
+	}
+	return ScoutingAttainBase[lvl], ScoutingAttainMult[lvl]
 }
 
-// daoMult converts raw dao marks into a saturating multiplier.
-// The old linear 1+m/1000 exploded for whales (100k marks = 100x, multiplied
-// again by attainment mult); this asymptotes to 5x: 0 marks = 1x,
-// 1000 marks ≈ 2.3x, 8000+ marks ≈ 5x.
-func daoMult(marks ...int64) float64 {
+// scoutingDaoMult converts raw dao marks into a saturating multiplier.
+// Deliberately the weakest pillar: capped at +20% of stat (ScoutingDaoCeiling)
+// so it can never outscale Cảnh giới lưu phái or equipped Gu. Unlike the old
+// ×5 asymptote this also keeps the multiplier off the Gu-invested stat, so
+// stacking trinh sát Gu stays worthwhile at high realm.
+func scoutingDaoMult(marks ...int64) float64 {
 	var total int64
 	for _, m := range marks {
 		total += m
@@ -81,23 +78,36 @@ func daoMult(marks ...int64) float64 {
 	if total <= 0 {
 		return 1.0
 	}
-	return 1 + 4*float64(total)/(float64(total)+2000)
+	return 1 + ScoutingDaoCeiling*float64(total)/(float64(total)+ScoutingDaoSoftcap)
+}
+
+// scoutingRankNorm softens the rank gap between the two sides so a 2-rank
+// difference loses the roll instead of instantly backfiring.
+func scoutingRankNorm(targetRank int) float64 {
+	power := BaseRankPower(targetRank)
+	if power <= 0 {
+		power = BaseRankPower(1)
+	}
+	return math.Pow(10.0/power, ScoutingRankNormExp)
 }
 
 // maxPathLevel returns the highest attained realm level (0-4) among candidate paths.
+// Matching is exact after CleanPath normalisation. The previous substring match
+// let unrelated paths alias each other — probe "information" matched "formation",
+// and "transformation" matched "formation" — handing free attainment levels.
 func maxPathLevel(masteries models.PathMasteriesMap, paths ...string) int {
 	highestLevel := 0
 	for _, p := range paths {
-		clean := strings.ToLower(strings.TrimSpace(p))
-		clean = strings.TrimSuffix(clean, " path")
+		clean := CleanPath(p)
+		if clean == "" {
+			continue
+		}
 		for pathKey, pts := range masteries {
-			normKey := strings.ToLower(strings.TrimSpace(pathKey))
-			normKey = strings.TrimSuffix(normKey, " path")
-			if strings.Contains(normKey, clean) || strings.Contains(clean, normKey) {
-				lvl := PathMasteryLevel(pts)
-				if lvl > highestLevel {
-					highestLevel = lvl
-				}
+			if CleanPath(pathKey) != clean {
+				continue
+			}
+			if lvl := PathMasteryLevel(pts); lvl > highestLevel {
+				highestLevel = lvl
 			}
 		}
 	}
@@ -108,7 +118,7 @@ func sumInvestigation(gus []models.GuInstance) float64 {
 	sum := 0.0
 	for _, gu := range gus {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
-			sum += models.GuStatValue(spec, "INVESTIGATION")
+			sum += models.GuStatValue(spec, "INVESTIGATION") * ScoutingInvestigationWeight
 		}
 	}
 	return sum
@@ -117,7 +127,7 @@ func sumInvestigation(gus []models.GuInstance) float64 {
 func sumDisguise(gus []models.GuInstance) (disguise float64, perfect bool, conceal bool) {
 	for _, gu := range gus {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
-			disguise += models.GuStatValue(spec, "DISGUISE") * 5.0
+			disguise += models.GuStatValue(spec, "DISGUISE") * ScoutingDisguiseWeight
 			_, hasPerfect := models.GuNativeMechanic(spec, "PERFECT_DISGUISE")
 			_, hasConceal := models.GuNativeMechanic(spec, "CONCEAL_GU")
 			perfect = perfect || hasPerfect
@@ -151,17 +161,20 @@ func DeductionBreakdown(
 	suspectedGuValid bool,
 	extraClue float64,
 ) models.ScoreDetail {
-	// Pillar 1: Cổ stats (scouting).
+	// Pillar 1: Cổ stats (scouting). INVESTIGATION carries ScoutingInvestigationWeight
+	// so trinh sát Gu are a real pillar instead of a rounding error.
 	basePower := BaseRankPower(viewer.Rank)
 	stat := basePower + sumInvestigation(viewerGus)
 
-	// Pillar 2: cảnh giới + đạo ngân. Trí đạo là core mult.
-	attainMult := GetPathAttainmentMultiplier(viewer.PathMasteries, "wisdom")
+	// Pillar 2: Cảnh giới lưu phái (dominant) + đạo ngân (minor).
+	// The flat attain base is the single biggest lever on the pillar, and dao
+	// marks can no longer inflate it.
+	attainBase, attainMult := GetPathAttainment(viewer.PathMasteries, "wisdom")
 	daoBonus := 1.0
 	if viewer.Rank >= 6 && viewerDaoMarks != nil {
-		daoBonus = daoMult(viewerDaoMarks["wisdom"], viewerDaoMarks["information"])
+		daoBonus = scoutingDaoMult(viewerDaoMarks["wisdom"], viewerDaoMarks["information"])
 	}
-	realmDao := stat * (attainMult*daoBonus - 1)
+	realmDao := stat*(attainMult*daoBonus-1) + attainBase
 
 	// Pillar 3: clue (thông tin phe công nắm). Validated server-side.
 	clue := 0.0
@@ -214,10 +227,11 @@ func DeductionBreakdown(
 
 	totalClue := clue + resBonus
 	return models.ScoreDetail{
-		Stat:     stat,
-		RealmDao: realmDao,
-		Clue:     totalClue,
-		Total:    corePower + totalClue,
+		Stat:       stat,
+		RealmDao:   realmDao,
+		Clue:       totalClue,
+		Total:      corePower + totalClue,
+		AttainBase: attainBase,
 	}
 }
 
@@ -255,16 +269,16 @@ func ConcealmentBreakdown(
 	}
 	stat := baseDefense + disguiseSum + capabilityBonus
 
-	// Pillar 2: cảnh giới + đạo ngân.
+	// Pillar 2: Cảnh giới lưu phái (same flat base as the attacker) + đạo ngân.
 	// Trí đối kháng trực tiếp, Ám che thân/vị/khí, Biến hóa đổi dấu vết (+điểm nhẹ).
-	attainMult := GetPathAttainmentMultiplier(target.PathMasteries, "dark", "transformation", "wisdom", "concealment")
+	attainBase, attainMult := GetPathAttainment(target.PathMasteries, "dark", "transformation", "wisdom", "concealment")
 	daoBonus := 1.0
 	if target.Rank >= 6 && targetDaoMarks != nil {
-		daoBonus = daoMult(targetDaoMarks["concealment"], targetDaoMarks["dark"], targetDaoMarks["transformation"])
+		daoBonus = scoutingDaoMult(targetDaoMarks["concealment"], targetDaoMarks["dark"], targetDaoMarks["transformation"])
 	}
 	transLvl := maxPathLevel(target.PathMasteries, "transformation")
 	darkLvl := maxPathLevel(target.PathMasteries, "dark")
-	realmDao := stat*(attainMult*daoBonus-1) + float64(transLvl)*8.0
+	realmDao := stat*(attainMult*daoBonus-1) + attainBase + float64(transLvl)*8.0
 
 	// Thiên đạo veil: che / bóp méo thiên cơ, chỉ Tiên nhân.
 	veil := 0.0
@@ -378,12 +392,15 @@ func EvaluateInspect(
 	myScore.LuckRoll = luck
 	myScore.Total += luck
 
-	return myScore.Total - (def.Total - pierce), myScore
+	delta = (myScore.Total - (def.Total - pierce)) * scoutingRankNorm(target.Rank)
+	return delta, myScore
 }
 
 // EvaluateDivination computes the final delta and categorizes the outcome.
 // Only the final delta is compared; myScore (attacker's own breakdown incl. luck)
 // is returned for the client, defender numbers stay hidden.
+// backfireRatio is the fraction of the attacker's max HP / max Soul to burn —
+// resolved against real max values by the caller so it is never unbounded.
 func EvaluateDivination(
 	viewer *models.Player,
 	target *models.Player,
@@ -395,7 +412,7 @@ func EvaluateDivination(
 	resourceBonus float64,
 	itemClueValid bool,
 	suspectedGuValid bool,
-) (statusType string, delta float64, backfireDamage float64, myScore models.ScoreDetail) {
+) (statusType string, delta float64, backfireRatio float64, myScore models.ScoreDetail) {
 	myScore = DeductionBreakdown(viewer, viewerGus, viewerDao, clues, target, resourceBonus, itemClueValid, suspectedGuValid, 0)
 	def := ConcealmentBreakdown(target, targetGus, targetDao, viewer.CurrentRegion)
 
@@ -407,24 +424,26 @@ func EvaluateDivination(
 	myScore.LuckRoll = luck
 	myScore.Total += luck
 
-	delta = myScore.Total - (def.Total - pierce)
+	// Chuẩn hoá chênh rank: hai bên ở xa nhau về tu vi bị kéo lại gần nhau,
+	// nên lệch 2 bậc chỉ là mất trắng chứ không phản phệ tức thời.
+	delta = (myScore.Total - (def.Total - pierce)) * scoutingRankNorm(target.Rank)
 
-	if delta >= 30.0 {
+	switch {
+	case delta >= 30.0:
 		return "full", delta, 0.0, myScore
-	} else if delta >= 0.0 {
+	case delta >= 0.0:
 		return "partial", delta, 0.0, myScore
-	} else if delta >= -30.0 {
+	case delta >= -30.0:
 		return "fogged", delta, 0.0, myScore
 	}
 	// Backfire: delta < -30
-	damage := -delta * float64(target.Rank) * 5.0
-	return "backfire", delta, damage, myScore
+	return "backfire", delta, ScoutingBackfireRatio, myScore
 }
 
 // CalculateSeverCluesPower calculates the ability to purge tracking marks
 func CalculateSeverCluesPower(player *models.Player, gus []models.GuInstance) float64 {
 	basePower := BaseRankPower(player.Rank)
-	attainMult := GetPathAttainmentMultiplier(player.PathMasteries, "sword", "wisdom", "dark", "rule")
+	_, attainMult := GetPathAttainment(player.PathMasteries, "sword", "wisdom", "dark", "rule")
 
 	guBonus := 0.0
 	for _, gu := range gus {
@@ -461,20 +480,20 @@ func EvaluateGuDivination(
 	holdersCount int,
 	maxHolderDefense float64,
 	resourceBonus float64,
-) (statusType string, delta float64, backfireDamage float64, backfireSoulDamage float64, myScore models.ScoreDetail) {
+) (statusType string, delta float64, backfireHPRatio float64, backfireSoulRatio float64, myScore models.ScoreDetail) {
 	basePower := BaseRankPower(viewer.Rank)
 	investigationSum := sumInvestigation(viewerGus)
 
 	paths := append([]string{"wisdom", "information", "refinement"}, targetGu.Path...)
-	attainMult := GetPathAttainmentMultiplier(viewer.PathMasteries, paths...)
+	attainBase, attainMult := GetPathAttainment(viewer.PathMasteries, paths...)
 
 	daoBonus := 1.0
 	if viewer.Rank >= 6 && viewerDao != nil {
-		daoBonus = daoMult(viewerDao["wisdom"], viewerDao["information"], viewerDao["refinement"])
+		daoBonus = scoutingDaoMult(viewerDao["wisdom"], viewerDao["information"], viewerDao["refinement"])
 	}
 
 	stat := basePower + investigationSum
-	realmDao := stat * (attainMult*daoBonus - 1)
+	realmDao := stat*(attainMult*daoBonus-1) + attainBase
 
 	resBonus := resourceBonus
 	if resBonus > (stat+realmDao)*0.35 {
@@ -512,6 +531,7 @@ func EvaluateGuDivination(
 		Clue:        clue / divisor,
 		LuckRoll:    luck,
 		Total:       (stat+realmDao+clue)/divisor + luck,
+		AttainBase:  attainBase / divisor,
 		RankDivisor: divisor,
 	}
 
@@ -529,8 +549,8 @@ func EvaluateGuDivination(
 	} else if delta >= -40.0 {
 		return "fogged", delta, 0.0, 0.0, myScore
 	}
-	// Backfire when trying to divine high-tier Gu beyond mortal perception
-	dmg := -delta * float64(targetGu.Rank) * 3.5
-	soulDmg := -delta * 1.5
-	return "backfire", delta, dmg, soulDmg, myScore
+	// Backfire when trying to divine high-tier Gu beyond mortal perception.
+	// Returned as fractions of the diviner's max HP / max Soul so the caller can
+	// resolve them against real maxima instead of an unbounded absolute number.
+	return "backfire", delta, ScoutingBackfireRatio, ScoutingBackfireRatio, myScore
 }

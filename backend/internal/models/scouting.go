@@ -38,15 +38,17 @@ type ResidualTrace struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
-// ScoreDetail is the attacker's own 3-pillar breakdown (stat / realm+dao / clue)
-// plus the Vận đạo luck roll. Returned to the client as `my_score`;
-// defender numbers are never exposed.
+// ScoreDetail is the attacker's own breakdown of the divination pillars, in
+// descending weight: cảnh giới lưu phái (attain_base), tu vi + Cổ trùng (stat),
+// cảnh giới/đạo ngân multiplier (realm_dao), manh mối (clue) and the Vận đạo luck
+// roll. Returned to the client as `my_score`; defender numbers are never exposed.
 type ScoreDetail struct {
 	Stat        float64 `json:"stat"`
 	RealmDao    float64 `json:"realm_dao"`
 	Clue        float64 `json:"clue"`
 	LuckRoll    float64 `json:"luck_roll"`
 	Total       float64 `json:"total"`
+	AttainBase  float64 `json:"attain_base,omitempty"`
 	RankDivisor float64 `json:"rank_divisor,omitempty"`
 }
 

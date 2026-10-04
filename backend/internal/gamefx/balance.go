@@ -384,7 +384,48 @@ func ImmortalPenaltyRates(rank int) (daoLossRate float64, masteryLossRate float6
 }
 
 // ========================================================================
-// 7. GIỚI VỰC BÍCH (REGIONAL WALL SUPPRESSION)
+// 7. TRINH SÁT / SUY DIỄN THIÊN CƠ (SCOUTING BALANCE)
+// ========================================================================
+
+// Trinh sát có 3 trụ, theo thứ tự ưu tiên giảm dần:
+//  1. Cảnh giới lưu phái (path_masteries) — trụ số một
+//  2. Cổ trùng (INVESTIGATION)
+//  3. Đạo ngân (immortal_apertures.dao_marks)
+
+// ScoutingAttainBase là base PHẲNG theo bậc cảnh giới (0-4), cộng thẳng vào
+// realm_dao mà không nhân rank. Nhờ vậy tu vi là yếu tố phụ thuộc rank duy
+// nhất, còn cảnh giới trả về giá trị ở mọi bậc.
+var ScoutingAttainBase = [5]float64{0, 50, 140, 280, 470}
+
+// ScoutingAttainMult là phần nhân nhẹ lên stat theo bậc cảnh giới. Giữ ở mức
+// thấp (trần ×1.30) để đạo ngân không thể nhấn chìm cảnh giới.
+var ScoutingAttainMult = [5]float64{1.00, 1.05, 1.12, 1.20, 1.30}
+
+// ScoutingInvestigationWeight hệ số cho chỉ số INVESTIGATION của Cổ trang bị.
+// Đối xứng với DISGUISE ×5 của phe thủ (xem ScoutingDisguiseWeight) để công và
+// thủ cùng lượng Cổ thì cân bằng.
+const ScoutingInvestigationWeight = 5.0
+
+// ScoutingDisguiseWeight là hệ số cho chỉ số DISGUISE của Cổ trang bị (phe thủ).
+const ScoutingDisguiseWeight = 5.0
+
+// Đạo ngân là trụ yếu nhất: hệ số bão hòa, trần +20% stat.
+const (
+	ScoutingDaoCeiling = 0.20
+	ScoutingDaoSoftcap = 3000.0
+)
+
+// ScoutingRankNormExp là số mũ của chuẩn hoá chênh rank áp lên delta cuối.
+// Mũ 0.6 thay vì 1.0 để lệch 2 bậc là mất trắng nhưng không phản phệ ngay.
+const ScoutingRankNormExp = 0.6
+
+// ScoutingBackfireRatio là trần sát thương phản phệ tính theo % max HP / max
+// Soul, thay cho công thức cũ |delta| × rank × 5 không trần (một lần dò có thể
+// trừ hàng chục nghìn HP khi đối thủ không có gì).
+const ScoutingBackfireRatio = 0.15
+
+// ========================================================================
+// 8. GIỚI VỰC BÍCH (REGIONAL WALL SUPPRESSION)
 // ========================================================================
 
 // RegionalWallDebuff calculates the debuff percentage (negative float64) and duration

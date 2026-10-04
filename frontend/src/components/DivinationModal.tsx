@@ -25,30 +25,43 @@ import {
 
 const MyScoreBreakdown: React.FC<{ score?: ScoreDetail }> = ({ score }) => {
   if (!score) return null;
+  // Cảnh giới lưu phái là trụ số một, nên tách riêng khỏi realm_dao để
+  // người chơi thấy rõ mình đang thiếu ở đâu.
   const rows: Array<[string, number]> = [
-    ["Cổ trinh sát", score.stat],
-    ["Cảnh giới + Đạo ngân", score.realm_dao],
+    ["Cảnh giới lưu phái", score.attain_base ?? 0],
+    ["Tu vi + Cổ trinh sát", score.stat],
+    ["Cảnh giới × Đạo ngân", score.realm_dao - (score.attain_base ?? 0)],
     ["Manh mối", score.clue],
     ["Vận số", score.luck_roll],
   ];
   const divisor = score.rank_divisor && score.rank_divisor > 1 ? score.rank_divisor : 0;
-  return (
-    <div className="mb-3 grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-5">
-      {rows.map(([label, value]) => (
-        <div key={label} className="rounded bg-neutral-900/80 px-2 py-1.5">
-          <div className="text-neutral-500">{label}</div>
-          <div className={`font-mono font-semibold ${value < 0 ? "text-red-300" : "text-emerald-300"}`}>
-            {value < 0 ? "−" : "+"}
-            {formatNumber(Math.abs(value), 1)}
-          </div>
-        </div>
-      ))}
-      <div className="rounded bg-amber-950/40 px-2 py-1.5">
-        <div className="text-neutral-500">Tổng điểm ta</div>
-        <div className="font-mono font-semibold text-amber-300">{formatNumber(score.total, 1)}</div>
+  const cell = (label: string, value: number, highlight = false) => (
+    <div
+      className={
+        highlight
+          ? "rounded bg-amber-950/40 px-2 py-1.5"
+          : "rounded bg-neutral-900/80 px-2 py-1.5"
+      }
+    >
+      <div className="text-neutral-500">{label}</div>
+      <div
+        className={`font-mono font-semibold ${
+          highlight ? "text-amber-300" : value < 0 ? "text-red-300" : "text-emerald-300"
+        }`}
+      >
+        {value < 0 ? "−" : "+"}
+        {formatNumber(Math.abs(value), 1)}
       </div>
+    </div>
+  );
+  return (
+    <div className="mb-3 grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-3">
+      {rows.map(([label, value]) => (
+        <div key={label}>{cell(label, value)}</div>
+      ))}
+      <div>{cell("Tổng điểm ta", score.total, true)}</div>
       {divisor > 0 && (
-        <div className="col-span-2 rounded bg-neutral-900/80 px-2 py-1.5 text-neutral-400 sm:col-span-5">
+        <div className="col-span-2 rounded bg-neutral-900/80 px-2 py-1.5 text-neutral-400 sm:col-span-3">
           Đã chia theo bậc Cổ: <span className="font-mono font-semibold text-cyan-300">÷{formatNumber(divisor, 1)}</span>
         </div>
       )}
