@@ -2771,8 +2771,10 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 // GetExistingImmortalGuIDs returns the set of gu_ids that currently have at least one
 // rank >= 6 (Immortal Gu) instance anywhere in the world: any player's player_gu,
 // unexpired ACTIVE auction listings, unexpired ground drops, or the sect vault.
-func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
-	rows, err := tx.Query(`
+func GetExistingImmortalGuIDs(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}) (map[string]bool, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
 		UNION
 		SELECT DISTINCT elem->>'gu_id' FROM auction,

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // Supported searchBy values: all, id, username, email, item, gu.
@@ -30,6 +31,9 @@ func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
 	like := "%" + search + "%"
 	switch by {
 	case "id":
+		if id, err := uuid.Parse(search); err == nil {
+			return `players.id = $1`, []interface{}{id}
+		}
 		return `players.id::text ILIKE $1`, []interface{}{like}
 	case "username":
 		return `public.immutable_unaccent(username) ILIKE public.immutable_unaccent($1)`, []interface{}{like}
@@ -93,6 +97,7 @@ func AdminListPlayers(c *gin.Context) {
 		countQuery += ` WHERE ` + where
 	}
 	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
+		logger.S.Errorf("admin players: count failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng người chơi"})
 		return
 	}
@@ -107,6 +112,7 @@ func AdminListPlayers(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
+		logger.S.Errorf("admin players: list failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách người chơi"})
 		return
 	}
@@ -147,6 +153,11 @@ func AdminListPlayers(c *gin.Context) {
 			"human_qi":        humanQi,
 			"lifespan":        lifespan,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		logger.S.Errorf("admin players: row iteration failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

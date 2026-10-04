@@ -7,6 +7,25 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func TestRollGuNeverReturnsExcludedGu(t *testing.T) {
+	pc := &precomputedPools{
+		guByRank: map[string][]weightedGuEntry{
+			"6": {
+				{id: "excluded", rank: 6, weight: 99},
+				{id: "eligible", rank: 6, weight: 1},
+			},
+		},
+		totalByRank: map[string]float64{"6": 100},
+	}
+
+	for i := 0; i < 100; i++ {
+		id, _ := pc.rollGu("6", map[string]bool{"excluded": true})
+		if id != "eligible" {
+			t.Fatalf("excluded Gu was returned: %q", id)
+		}
+	}
+}
+
 func TestDeductGachaCostAmount(t *testing.T) {
 	p := &models.Player{
 		ResourceState: models.ResourceState{

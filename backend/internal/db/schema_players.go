@@ -206,6 +206,10 @@ func schemaPlayers() error {
 	CREATE INDEX IF NOT EXISTS idx_players_party_id ON players (party_id);`); err != nil {
 		return err
 	}
+	if err := execSchema("players_created_at_id_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_created_at_id ON players (created_at DESC, id DESC);`); err != nil {
+		return err
+	}
 	if err := execSchema("players_username_trgm_idx", `
 	CREATE INDEX IF NOT EXISTS idx_players_username_trgm ON players USING gin (public.immutable_unaccent(username) gin_trgm_ops);`); err != nil {
 		return err

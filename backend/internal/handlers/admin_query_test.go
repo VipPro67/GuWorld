@@ -5,7 +5,19 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
+
+func TestAdminPlayerSearchClauseUsesPrimaryKeyForExactUUID(t *testing.T) {
+	id := uuid.MustParse("6f85c649-0f7b-41b5-a288-1ff9be1cdacb")
+	where, args := adminPlayerSearchClause("all", id.String())
+	if where != "players.id = $1" {
+		t.Fatalf("expected primary-key predicate, got %q", where)
+	}
+	if len(args) != 1 || args[0] != id {
+		t.Fatalf("expected parsed UUID argument, got %#v", args)
+	}
+}
 
 func TestParseAdminPageQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)

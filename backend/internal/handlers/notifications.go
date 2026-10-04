@@ -69,7 +69,7 @@ func GetUnreadNotificationsCount(c *gin.Context) {
 		return
 	}
 	var count int
-	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM notifications WHERE player_id = $1 AND is_read = FALSE`, playerID).Scan(&count); err != nil {
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM notifications WHERE player_id = $1 AND is_read = FALSE`, playerID).Scan(&count); err != nil {
 		logger.S.Errorf("notify: unread count failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load unread count"})
 		return
@@ -96,7 +96,7 @@ func MarkNotificationsRead(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no IDs provided"})
 		return
 	}
-	if _, err := db.DB.Exec(`UPDATE notifications SET is_read = TRUE WHERE player_id = $1 AND id = ANY($2)`, playerID, pq.Array(payload.IDs)); err != nil {
+	if _, err := db.DB.ExecContext(c.Request.Context(), `UPDATE notifications SET is_read = TRUE WHERE player_id = $1 AND id = ANY($2)`, playerID, pq.Array(payload.IDs)); err != nil {
 		logger.S.Errorf("notify: mark read failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
 		return
@@ -112,7 +112,7 @@ func MarkAllNotificationsRead(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if _, err := db.DB.Exec(`UPDATE notifications SET is_read = TRUE WHERE player_id = $1 AND is_read = FALSE`, playerID); err != nil {
+	if _, err := db.DB.ExecContext(c.Request.Context(), `UPDATE notifications SET is_read = TRUE WHERE player_id = $1 AND is_read = FALSE`, playerID); err != nil {
 		logger.S.Errorf("notify: mark all read failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
 		return
