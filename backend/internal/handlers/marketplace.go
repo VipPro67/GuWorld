@@ -564,7 +564,7 @@ func PlaceBid(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "refund failed"})
 			return
 		}
-		notify.Send(db.DB, prevBidderID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency))
+		notify.Send(tx, prevBidderID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency))
 	}
 
 	if currency == "primeval" {

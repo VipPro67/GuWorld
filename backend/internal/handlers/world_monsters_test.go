@@ -117,7 +117,81 @@ func TestMovementCoalescingDoesNotSuppressStateTransition(t *testing.T) {
 }
 
 func testMonster(now time.Time) WorldMonster {
-	return WorldMonster{InstanceID: "m1", SpawnID: "s1", RegionID: "field", X: 0, Y: 0, SpawnX: 0, SpawnY: 0, HP: 100, MaxHP: 100, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now, AggroRadius: 10, AttackRange: 1, LeashRadius: 15, Speed: 2}
+	return WorldMonster{InstanceID: "m1", SpawnID: "s1", RegionID: "field", Rank: 5, X: 0, Y: 0, SpawnX: 0, SpawnY: 0, HP: 100, MaxHP: 100, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now, AggroRadius: 10, AttackRange: 1, LeashRadius: 15, Speed: 2}
+}
+
+func TestWorldMonsterAggroProfileScalesWithRankAndStaysLocal(t *testing.T) {
+	rank1Aggro, rank1Leash := worldMonsterAggroProfile(1)
+	rank5Aggro, rank5Leash := worldMonsterAggroProfile(5)
+	rank9Aggro, rank9Leash := worldMonsterAggroProfile(9)
+	if rank1Aggro != 2 || rank5Aggro != 4 || rank9Aggro != 6 {
+		t.Fatalf("unexpected aggro radii: rank1=%v rank5=%v rank9=%v", rank1Aggro, rank5Aggro, rank9Aggro)
+	}
+	if rank1Leash != 5 || rank5Leash != 7 || rank9Leash != 9 {
+		t.Fatalf("unexpected leash radii: rank1=%v rank5=%v rank9=%v", rank1Leash, rank5Leash, rank9Leash)
+	}
+	if aggro, leash := worldMonsterAggroProfile(99); aggro != rank9Aggro || leash != rank9Leash {
+		t.Fatalf("rank cap not applied: aggro=%v leash=%v", aggro, leash)
+	}
+}
+
+func TestApplyWorldMonsterTuningUpgradesLegacyCachedMonster(t *testing.T) {
+	previous := resolveWorldMonsterCell
+	resolveWorldMonsterCell = func(int, int) models.Cell { return models.Cell{Content: "wolf", Rank: 7, SubRank: 2} }
+	t.Cleanup(func() { resolveWorldMonsterCell = previous })
+	monster := WorldMonster{MonsterTemplateID: "wolf", Rank: 0, AggroRadius: 12, LeashRadius: 24, Speed: 0.5}
+	applyWorldMonsterTuning(context.Background(), &monster)
+	if monster.Rank != 7 || monster.SubRank != 2 || monster.AggroRadius != 5 || monster.LeashRadius != 8 || monster.Speed != 0.25 {
+		t.Fatalf("legacy monster was not retuned: %+v", monster)
+	}
+}
+
+func TestApplyWorldMonsterTuningRecoversLegacyFixedSpawnRank(t *testing.T) {
+	previousCell, previousRank := resolveWorldMonsterCell, loadWorldMonsterSpawnRank
+	resolveWorldMonsterCell = func(int, int) models.Cell { return models.Cell{} }
+	loadWorldMonsterSpawnRank = func(_ context.Context, spawnID string) (int, error) {
+		if spawnID != "fixed-spawn" {
+			t.Fatalf("unexpected spawn id %q", spawnID)
+		}
+		return 8, nil
+	}
+	t.Cleanup(func() { resolveWorldMonsterCell, loadWorldMonsterSpawnRank = previousCell, previousRank })
+	monster := WorldMonster{SpawnID: "fixed-spawn", MonsterTemplateID: "wolf", Rank: 0}
+	applyWorldMonsterTuning(context.Background(), &monster)
+	if monster.Rank != 8 || monster.AggroRadius != 5.5 || monster.LeashRadius != 8.5 || monster.Speed != 0.25 {
+		t.Fatalf("fixed legacy monster was not retuned: %+v", monster)
+	}
+}
+
+func TestRankScaledAggroControlsActualTickBehavior(t *testing.T) {
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
+	now := time.Now()
+	active := func(string) bool { return true }
+
+	rank1 := testMonster(now.Add(-time.Second))
+	rank1.Rank = 1
+	applyWorldMonsterTuning(context.Background(), &rank1)
+	outside := []WorldPosEntry{{ID: "p", Region: "field", X: 3, Y: 0}}
+	if got, _ := tickWorldMonster(rank1, outside, now, active); got.State != MonsterStateIdle {
+		t.Fatalf("rank-1 monster aggroed outside two cells: %+v", got)
+	}
+	inside := []WorldPosEntry{{ID: "p", Region: "field", X: 2, Y: 0}}
+	if got, _ := tickWorldMonster(rank1, inside, now, active); got.State != MonsterStateChase || got.X != 0.25 {
+		t.Fatalf("rank-1 monster did not chase slowly inside two cells: %+v", got)
+	}
+
+	rank9 := testMonster(now.Add(-time.Second))
+	rank9.Rank = 9
+	applyWorldMonsterTuning(context.Background(), &rank9)
+	farther := []WorldPosEntry{{ID: "p", Region: "field", X: 6, Y: 0}}
+	if got, _ := tickWorldMonster(rank9, farther, now, active); got.State != MonsterStateChase {
+		t.Fatalf("rank-9 monster did not use its larger detection range: %+v", got)
+	}
+	rank9.State, rank9.X, rank9.TargetID = MonsterStateChase, 4, "p"
+	beyondLeash := []WorldPosEntry{{ID: "p", Region: "field", X: 10, Y: 0}}
+	if got, _ := tickWorldMonster(rank9, beyondLeash, now, active); got.State != MonsterStateReturn {
+		t.Fatalf("monster did not return when target exceeded leash: %+v", got)
+	}
 }
 
 func TestSelectMonsterTargetDeterministicAndRegionSafe(t *testing.T) {
