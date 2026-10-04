@@ -153,7 +153,7 @@ func PaySectSalary(c *gin.Context) {
 	var pid uuid.UUID
 	for _, m := range members {
 		pid = m.PlayerID
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.Log(tx, auditlog.Entry{
 			PlayerID:       &pid,
 			Action:         "SECT_SALARY_RECEIVED",
 			EntityType:     "sect",
@@ -174,7 +174,7 @@ func PaySectSalary(c *gin.Context) {
 	}
 
 	pid = playerID
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.Log(tx, auditlog.Entry{
 		PlayerID:       &pid,
 		Action:         "SECT_SALARY_PAID",
 		EntityType:     "sect",

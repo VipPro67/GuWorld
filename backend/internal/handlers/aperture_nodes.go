@@ -219,7 +219,7 @@ func PlaceApertureNode(c *gin.Context) {
 			if spec, ok := models.GetGu(requiredGuID, guRank); ok {
 				consumedGuName = spec.Name
 			}
-			auditlog.Log(db.DB, auditlog.Entry{
+			auditlog.Log(tx, auditlog.Entry{
 				PlayerID:       &playerID,
 				Action:         "aperture.consume_gu",
 				EntityType:     "gu_instance",

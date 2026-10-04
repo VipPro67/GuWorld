@@ -535,7 +535,7 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 		_ = SendSystemMessage("world", sql.NullString{}, justiceMsg)
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.Log(tx, auditlog.Entry{
 		PlayerID:       &loserID,
 		Action:         "combat.death_penalty",
 		EntityType:     "player",
