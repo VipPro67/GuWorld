@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
-import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldObject } from "@/store/useWorldStore";
+import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldMonster, type WorldObject } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 const BG_COLOR = 0x1d1e2c;
@@ -83,6 +83,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const sectsContainerRef = useRef<Container>(new Container());
   const dropsContainerRef = useRef<Container>(new Container());
   const monstersContainerRef = useRef<Container>(new Container());
+  const runtimeMonstersContainerRef = useRef<Container>(new Container());
   const monsterLabelsContainerRef = useRef<Container>(new Container());
   const playersContainerRef = useRef<Container>(new Container());
   const fogRef = useRef<Graphics>(new Graphics());
@@ -112,6 +113,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const isFineMovementRef = useRef(false);
   const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
+  const monsterMarkersRef = useRef<Map<string, { container: Container; body: Graphics; hpBar: Graphics; monster: WorldMonster; renderX: number; renderY: number; fromX: number; fromY: number; toX: number; toY: number; receivedAt: number; serverTime: number; duration: number; revision: number; state: WorldMonster["state"]; active: boolean }>>(new Map());
   const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk; px: number; py: number }>>(new Map());
   const monsterLabelRenderKeyRef = useRef("");
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
@@ -134,6 +136,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const cellRegion = useWorldStore((s) => s.cellRegion);
   const nearbyWindow = useWorldStore((s) => s.nearbyWindow);
   const nearbyPlayers = useWorldStore((s) => s.nearbyPlayers);
+  const monsters = useWorldStore((s) => s.monsters);
+  const hasMonsterSnapshot = useWorldStore((s) => s.hasMonsterSnapshot);
   const fetchNearbyCells = useWorldStore((s) => s.fetchNearbyCells);
   const fetchNearbyPlayers = useWorldStore((s) => s.fetchNearbyPlayers);
   const fetchCellsRect = useWorldStore((s) => s.fetchCellsRect);
@@ -161,6 +165,99 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
   const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
   const selectedTarget = useWorldStore((s) => s.selectedTarget);
+
+  const selectRuntimeMonster = useCallback((monster: WorldMonster) => {
+    const spec = useGameStore.getState().monsterDictionary[monster.monster_template_id];
+    useWorldStore.getState().selectTarget({
+      instanceId: monster.instance_id,
+      x: monster.x,
+      y: monster.y,
+      cellType: "Monster",
+      contentId: monster.monster_template_id,
+      name: spec?.name || monster.monster_template_id,
+      hp: monster.hp,
+      maxHp: monster.max_hp,
+    });
+  }, []);
+
+  const paintRuntimeMonster = useCallback((marker: { body: Graphics; hpBar: Graphics; monster: WorldMonster; state: WorldMonster["state"] }) => {
+    const { body, hpBar, monster } = marker;
+    body.clear();
+    const styles = {
+      IDLE: { color: 0xf87171, shape: "triangle" },
+      CHASE: { color: 0xfb923c, shape: "arrow" },
+      ATTACK: { color: 0xef4444, shape: "diamond" },
+      RETURN: { color: 0x60a5fa, shape: "ring" },
+      DEFEATED: { color: 0x71717a, shape: "triangle" },
+    } as const;
+    const style = styles[monster.state];
+    if (style.shape === "ring") body.circle(0, 0, 0.46).stroke({ color: style.color, width: 0.14 });
+    else if (style.shape === "diamond") body.poly([0, -0.58, 0.58, 0, 0, 0.58, -0.58, 0]).fill(style.color).stroke({ color: 0x7f1d1d, width: 0.08 });
+    else if (style.shape === "arrow") body.poly([-0.48, -0.42, 0.58, 0, -0.48, 0.42, -0.18, 0]).fill(style.color).stroke({ color: 0x9a3412, width: 0.07 });
+    else body.poly([0, -0.55, 0.5, 0.42, -0.5, 0.42]).fill(style.color).stroke({ color: 0x991b1b, width: 0.07 });
+    hpBar.clear();
+    const selected = useWorldStore.getState().selectedTarget?.instanceId === monster.instance_id;
+    if (monster.hp < monster.max_hp || selected) {
+      hpBar.rect(-0.55, -0.78, 1.1, 0.13).fill(0x27272a);
+      hpBar.rect(-0.52, -0.75, 1.04 * Math.max(0, Math.min(1, monster.hp / Math.max(1, monster.max_hp))), 0.07).fill(monster.hp / Math.max(1, monster.max_hp) < 0.3 ? 0xef4444 : 0x22c55e);
+    }
+  }, []);
+
+  const syncRuntimeMonsters = useCallback((entities: Record<string, WorldMonster>) => {
+    const container = runtimeMonstersContainerRef.current;
+    const markers = monsterMarkersRef.current;
+    const alive = new Set(Object.keys(entities));
+    const now = performance.now();
+    for (const monster of Object.values(entities)) {
+      if (monster.state === "DEFEATED") continue;
+      const toX = monster.x + 0.5;
+      const toY = monster.y + 0.5;
+      let marker = markers.get(monster.instance_id);
+      if (!marker) {
+        const group = new Container();
+        const body = new Graphics();
+        const hpBar = new Graphics();
+        group.addChild(body, hpBar);
+        group.position.set(toX, toY);
+        group.eventMode = "static";
+        group.cursor = "pointer";
+        group.hitArea = new Circle(0, 0, 0.8);
+        group.on("pointertap", (event: FederatedPointerEvent) => {
+          event.stopPropagation();
+          const store = useWorldStore.getState();
+          const current = store.monsters[monster.instance_id];
+          if (!current) return;
+          selectRuntimeMonster(current);
+          if (store.targetingGu) void store.useGuOnMap(store.targetingGu.guInstanceId, Math.floor(current.x), Math.floor(current.y));
+        });
+        marker = { container: group, body, hpBar, monster, renderX: toX, renderY: toY, fromX: toX, fromY: toY, toX, toY, receivedAt: now, serverTime: Date.parse(monster.last_update_at), duration: 400, revision: monster.revision, state: monster.state, active: false };
+        markers.set(monster.instance_id, marker);
+        container.addChild(group);
+      } else if (monster.revision > marker.revision) {
+        marker.fromX = marker.container.position.x;
+        marker.fromY = marker.container.position.y;
+        marker.toX = toX;
+        marker.toY = toY;
+        const nextServerTime = Date.parse(monster.last_update_at);
+        marker.duration = Number.isFinite(nextServerTime) && Number.isFinite(marker.serverTime)
+          ? Math.max(150, Math.min(800, nextServerTime - marker.serverTime))
+          : 400;
+        marker.receivedAt = now;
+        marker.serverTime = nextServerTime;
+        marker.revision = monster.revision;
+        marker.active = marker.fromX !== toX || marker.fromY !== toY;
+      }
+      marker.monster = monster;
+      marker.state = monster.state;
+      paintRuntimeMonster(marker);
+    }
+    for (const [id, marker] of markers) {
+      if (alive.has(id) && entities[id].state !== "DEFEATED") continue;
+      container.removeChild(marker.container);
+      marker.container.destroy({ children: true });
+      markers.delete(id);
+    }
+  }, [paintRuntimeMonster, selectRuntimeMonster]);
 
   const drawTargetRing = useCallback(() => {
     const ring = targetRingRef.current;
@@ -1302,6 +1399,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
     for (const c of cells) {
       if (c.cell_type === "Monster") {
+        if (useWorldStore.getState().hasMonsterSnapshot) continue;
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
         batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
         monsterCount++;
@@ -1369,7 +1467,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     if (!settings.monster) return;
     const invR = useWorldStore.getState().investigationRange;
     const labelCells = cells
-      .filter((c) => (c.cell_type === "Monster" || c.cell_type === "Resource" || c.cell_type === "WildGu") && Math.hypot(c.x + 0.5 - player.x, c.y + 0.5 - player.y) <= invR)
+      .filter((c) => (c.cell_type !== "Monster" || !useWorldStore.getState().hasMonsterSnapshot) && (c.cell_type === "Monster" || c.cell_type === "Resource" || c.cell_type === "WildGu") && Math.hypot(c.x + 0.5 - player.x, c.y + 0.5 - player.y) <= invR)
       .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
       .slice(0, 100);
 
@@ -1749,6 +1847,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       stageRef.current.addChild(sectsContainerRef.current);
       stageRef.current.addChild(dropsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
+      stageRef.current.addChild(runtimeMonstersContainerRef.current);
       stageRef.current.addChild(monsterLabelsContainerRef.current);
       stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);
@@ -1784,6 +1883,28 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             m.active = false;
           }
         }
+
+        for (const marker of monsterMarkersRef.current.values()) {
+          if (marker.active) {
+            const elapsed = performance.now() - marker.receivedAt;
+            const duration = marker.duration;
+            const t = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - t, 3);
+            marker.renderX = marker.fromX + (marker.toX - marker.fromX) * eased;
+            marker.renderY = marker.fromY + (marker.toY - marker.fromY) * eased;
+            marker.container.position.set(marker.renderX, marker.renderY);
+            if (t >= 1) marker.active = false;
+          }
+          marker.body.scale.set(1);
+          if (marker.state !== "RETURN") marker.body.rotation = 0;
+          if (marker.state === "ATTACK") marker.body.scale.set(1 + Math.sin(performance.now() / 70) * 0.12);
+          else if (marker.state === "CHASE") marker.body.rotation = Math.sin(performance.now() / 120) * 0.12;
+          else if (marker.state === "RETURN") marker.body.rotation += 0.025;
+          else marker.body.scale.set(1 + Math.sin(performance.now() / 350) * 0.04);
+        }
+        const selectedInstance = useWorldStore.getState().selectedTarget?.instanceId;
+        const selectedMarker = selectedInstance ? monsterMarkersRef.current.get(selectedInstance) : undefined;
+        if (selectedMarker) targetRingRef.current.position.copyFrom(selectedMarker.container.position);
 
         // Labels only need recalculating when zoom or label preferences change.
         // Previously every animation frame walked every map child, which was
@@ -1959,6 +2080,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         appRef.current = null;
       }
       monsterChunksRef.current.clear();
+      monsterMarkersRef.current.clear();
     };
 
   }, []);
@@ -1971,7 +2093,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   useEffect(() => {
     if (!appReady || !appRef.current) return;
     syncMonsterChunks(cellChunks, cellRegion, nearbyWindow);
-  }, [appReady, cellChunks, cellRegion, nearbyWindow, labelSettings.monster, labelSettings.bossNearby, gamePlayer?.x, gamePlayer?.y, investigationRange, monsterDictionary, itemDictionary, guDictionary, syncMonsterChunks]);
+  }, [appReady, cellChunks, cellRegion, nearbyWindow, hasMonsterSnapshot, labelSettings.monster, labelSettings.bossNearby, gamePlayer?.x, gamePlayer?.y, investigationRange, monsterDictionary, itemDictionary, guDictionary, syncMonsterChunks]);
+
+  useEffect(() => {
+    if (!appReady || !appRef.current) return;
+    syncRuntimeMonsters(monsters);
+  }, [appReady, monsters, selectedTarget?.instanceId, syncRuntimeMonsters]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
@@ -2074,7 +2201,42 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     };
     const onWorldCombat = (e: Event) => {
       const event = (e as CustomEvent<WorldCombatEvent>).detail;
-      if (event) useWorldStore.getState().applyCombatEvent(event);
+      if (!event) return;
+      const before = useWorldStore.getState();
+      const current = before.monsters[event.entity_id];
+      const accepted = !before.seenCombatEvents.includes(event.event_id) && (!current || event.entity_revision > current.revision);
+      before.applyCombatEvent(event);
+      if (!accepted) return;
+      if (event.event_type === "action_started") {
+        const app = appRef.current;
+        const targetID = typeof event.payload?.target_id === "string" ? event.payload.target_id : "";
+        const remoteTarget = playerMarkersRef.current.get(targetID)?.container.position;
+        const localPlayer = useGameStore.getState().player;
+        const localTarget = localPlayer?.id === targetID ? playerRef.current.position : undefined;
+        const target = remoteTarget ?? localTarget;
+        if (app && target) {
+          const projectile = new Graphics().circle(0, 0, 0.13).fill(0xfbbf24);
+          const fromX = event.position.x + 0.5;
+          const fromY = event.position.y + 0.5;
+          const toX = target.x;
+          const toY = target.y;
+          projectile.position.set(fromX, fromY);
+          skillFxContainerRef.current.addChild(projectile);
+          const started = performance.now();
+          const animateProjectile = () => {
+            const t = Math.min((performance.now() - started) / 280, 1);
+            projectile.position.set(fromX + (toX - fromX) * t, fromY + (toY - fromY) * t);
+            if (t >= 1) {
+              app.ticker.remove(animateProjectile);
+              projectile.destroy();
+            }
+          };
+          app.ticker.add(animateProjectile);
+        }
+      } else if (event.event_type === "action_resolved" || event.event_type === "entity_damaged") {
+        const damage = typeof event.payload?.damage === "number" ? event.payload.damage : 0;
+        useWorldStore.getState().triggerSkillFx("damage", damage, damage > 0 ? `-${Math.round(damage)}` : "✦", event.position.x, event.position.y);
+      }
     };
 
     const onWorldCell = (e: Event) => {
