@@ -292,6 +292,7 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 		Scan(&hp, &region, &x, &y, &lifespan, &race, &statuses); err != nil {
 		return worldMonsterActionResult{}, err
 	}
+	dead := worldCombatPlayer{Race: race, Lifespan: lifespan}.deadInCoiChet()
 	if dead || hp <= 0 || region != monster.RegionID || x != target.X || y != target.Y || isWorldMonsterSafeZone(region, x, y) || math.Hypot(float64(x)-monster.X, float64(y)-monster.Y) > monster.AttackRange {
 		return worldMonsterActionResult{Rejected: true}, nil
 	}
