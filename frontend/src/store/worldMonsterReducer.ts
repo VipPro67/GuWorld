@@ -45,6 +45,17 @@ export function legacyMonsterHasRuntimeReplacement(
   );
 }
 
+// Static cell chunks only need repainting when the set of runtime spawn
+// replacements changes. Movement, HP, and revision updates deliberately do not
+// affect this key, avoiding a full chunk repaint on every chase tick.
+export function runtimeMonsterReplacementKey(monsters: Record<string, WorldMonster>): string {
+  return [...new Set(Object.values(monsters)
+    .filter((monster) => monster.state !== "DEFEATED")
+    .map((monster) => `${monster.region_id}:${Math.floor(monster.spawn_x)},${Math.floor(monster.spawn_y)}`))]
+    .sort()
+    .join("|");
+}
+
 export interface WorldMonsterReducerState<TSelection extends MonsterSelection = MonsterSelection> {
   monsters: Record<string, WorldMonster>;
   seenCombatEvents: string[];

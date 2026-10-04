@@ -4,12 +4,12 @@ import { useMemo, useEffect } from "react";
 import { guSpecFor, useGameStore, type GuInstance, type GuSpec } from "@/store/useGameStore";
 import { canCreatePortal, operationsBy, usesRandomPortal } from "@/lib/effect-blocks";
 import { useWorldStore } from "@/store/useWorldStore";
-import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair } from "lucide-react";
+import { Sparkles, Heart, Shield, Zap, Flame, Compass, Crosshair, Swords } from "lucide-react";
 
 interface GuSkillSlot {
   gu: GuInstance;
   spec: GuSpec;
-  effectType: "heal" | "mana_regen" | "buff_atk" | "buff_def" | "buff_speed" | "shield" | "teleport" | "utility";
+  effectType: "damage" | "heal" | "mana_regen" | "buff_atk" | "buff_def" | "buff_speed" | "shield" | "teleport" | "utility";
   label: string;
   isTargeted: boolean;
   cost: number;
@@ -20,6 +20,7 @@ export function GuQuickBar() {
   const guDictionary = useGameStore((s) => s.guDictionary);
   const useGuOnMap = useWorldStore((s) => s.useGuOnMap);
   const targetingGu = useWorldStore((s) => s.targetingGu);
+  const selectedTarget = useWorldStore((s) => s.selectedTarget);
   const setTargetingGu = useWorldStore((s) => s.setTargetingGu);
 
   // Filter equipped Gu that have usable active effects on World Map
@@ -38,11 +39,16 @@ export function GuQuickBar() {
       let label = "Kích hoạt";
       let isTargeted = false;
       const first = operations[0];
+      const damage = operations.find((operation) => operation.op === "DAMAGE");
       const status = operations.find((operation) => operation.op === "STATUS");
       if (canCreatePortal(spec.effects) || usesRandomPortal(spec.effects)) {
         type = "teleport";
         isTargeted = canCreatePortal(spec.effects);
         label = isTargeted ? "Dịch Chuyển" : "Dịch Chuyển Ngẫu Nhiên";
+      } else if (damage) {
+        type = "damage";
+        isTargeted = true;
+        label = `${damage.value || ""} Dmg`.trim();
       } else if (first?.op === "HEAL") {
         type = first.resource === "MANA" ? "mana_regen" : "heal";
         label = `${first.resource === "MANA" ? "+" : "Hồi "}${first.value || 0} ${first.resource || "HP"}`;
@@ -93,6 +99,11 @@ export function GuQuickBar() {
     }
 
     if (slot.isTargeted) {
+      if (slot.effectType === "damage" && selectedTarget?.instanceId) {
+        setTargetingGu(null);
+        await useGuOnMap(slot.gu.instance_id, Math.floor(selectedTarget.x), Math.floor(selectedTarget.y), selectedTarget.instanceId);
+        return;
+      }
       if (targetingGu?.guInstanceId === slot.gu.instance_id) {
         setTargetingGu(null);
       } else {
@@ -100,8 +111,14 @@ export function GuQuickBar() {
           guInstanceId: slot.gu.instance_id,
           guId: slot.gu.gu_id,
           name: slot.spec.name,
+          mode: slot.effectType === "damage" ? "monster" : "position",
         });
-        useGameStore.getState().addToast(`Đã chọn ${slot.spec.name}! Hãy nhấp vị trí trên bản đồ để Dịch chuyển.`, "info");
+        useGameStore.getState().addToast(
+          slot.effectType === "damage"
+            ? `Đã chọn ${slot.spec.name}! Hãy nhấp trực tiếp vào quái vật để tung chiêu.`
+            : `Đã chọn ${slot.spec.name}! Hãy nhấp vị trí trên bản đồ để dịch chuyển.`,
+          "info",
+        );
       }
     } else {
       setTargetingGu(null);
@@ -126,7 +143,7 @@ export function GuQuickBar() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [usableSlots, player, targetingGu]);
+  }, [usableSlots, player, targetingGu, selectedTarget]);
 
   if (usableSlots.length === 0) {
     return null;
@@ -148,6 +165,8 @@ export function GuQuickBar() {
         return <Shield className="w-4 h-4 text-purple-400" />;
       case "teleport":
         return <Compass className="w-4 h-4 text-cyan-400" />;
+      case "damage":
+        return <Swords className="w-4 h-4 text-red-400" />;
       default:
         return <Sparkles className="w-4 h-4 text-amber-400" />;
     }
@@ -158,7 +177,10 @@ export function GuQuickBar() {
       {targetingGu && (
         <div className="px-3 py-1 bg-amber-950/90 border border-amber-500/50 rounded-full text-xs text-amber-300 font-serif shadow-lg animate-pulse flex items-center gap-1.5">
           <Crosshair className="w-3.5 h-3.5" />
-          <span>Đang chọn tọa độ cho <strong>{targetingGu.name}</strong> (Nhấn phím lại để hủy)</span>
+          <span>
+            {targetingGu.mode === "monster" ? "Nhấp quái vật để tung" : "Đang chọn tọa độ cho"}{" "}
+            <strong>{targetingGu.name}</strong> (Nhấn phím lại để hủy)
+          </span>
         </div>
       )}
 

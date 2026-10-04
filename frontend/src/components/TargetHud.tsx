@@ -57,6 +57,11 @@ export function TargetHud() {
               {Math.round(selectedTarget.hp).toLocaleString("vi-VN")} / {Math.round(selectedTarget.maxHp).toLocaleString("vi-VN")}
             </span>
           </div>
+          {selectedTarget.instanceId && (
+            <div className="mt-1 text-[9px] text-amber-300/80 font-serif">
+              Bấm kỹ năng sát thương hoặc phím 1–5 để tung chiêu
+            </div>
+          )}
         </div>
 
         {/* Clear target button */}

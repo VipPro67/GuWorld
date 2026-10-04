@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { legacyMonsterHasRuntimeReplacement, reduceWorldCombatEvent, type WorldCombatEvent, type WorldMonster, type WorldMonsterReducerState } from "./worldMonsterReducer.ts";
+import { legacyMonsterHasRuntimeReplacement, reduceWorldCombatEvent, runtimeMonsterReplacementKey, type WorldCombatEvent, type WorldMonster, type WorldMonsterReducerState } from "./worldMonsterReducer.ts";
 
 const monster = (overrides: Partial<WorldMonster> = {}): WorldMonster => ({
   instance_id: "instance-1", spawn_id: "spawn-1", monster_template_id: "wolf", region_id: "field",
@@ -69,6 +69,14 @@ test("an empty runtime snapshot does not hide procedural cell monsters", () => {
   assert.equal(legacyMonsterHasRuntimeReplacement({ x: 10, y: 12 }, {
     "instance-1": monster({ x: 11, y: 12, spawn_x: 10, spawn_y: 12 }),
   }), true);
+});
+
+test("runtime replacement key changes only when active spawn replacements change", () => {
+  const original = { "instance-1": monster() };
+  const moved = { "instance-1": monster({ x: 99, y: 88, revision: 20, hp: 50 }) };
+  assert.equal(runtimeMonsterReplacementKey(original), runtimeMonsterReplacementKey(moved));
+  assert.notEqual(runtimeMonsterReplacementKey(original), runtimeMonsterReplacementKey({}));
+  assert.equal(runtimeMonsterReplacementKey({ "instance-1": monster({ state: "DEFEATED" }) }), "");
 });
 
 test("records distinct informational combat events at the same entity revision", () => {

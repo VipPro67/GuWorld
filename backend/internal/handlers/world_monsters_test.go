@@ -383,8 +383,6 @@ func installWorldAttackTest(t *testing.T, now time.Time, monsters []WorldMonster
 	t.Helper()
 	previousIndex, previousLoader, previousCAS := worldPosIndex, worldMonstersInBucket, casWorldMonster
 	previousPlayers, previousAction, previousCounter, previousBroadcaster := loadWorldCombatPlayers, applyWorldMonsterAction, applyWorldPlayerCounter, WorldCombatBroadcaster
-	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
-	stubCounterAttack(t)
 	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
 	worldPosIndex.Set(WorldPosEntry{ID: player.ID.String(), Region: player.Region, X: player.X, Y: player.Y, TS: now.UnixMilli()})
 	loaded := false

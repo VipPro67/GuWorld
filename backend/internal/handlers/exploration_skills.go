@@ -345,10 +345,15 @@ func UseGuOnMap(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Target is out of cast range"})
 			return
 		}
-		rawDmg := effectValue
-		if rawDmg <= 0 {
-			rawDmg = math.Max(20, CalculatePlayerStats(&player)["attack"]*0.8)
+		stats := CalculatePlayerStats(&player)
+		attacker := models.CombatantFromPlayer(&player, stats)
+		combatCtx := &CombatContext{Attacker: &attacker}
+		attackAction, buildErr := BuildCombatAction(combatCtx, specs)
+		if buildErr != nil || attackAction.Dmg <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không có kỹ năng sát thương để tấn công quái vật."})
+			return
 		}
+		rawDmg := attackAction.Dmg
 		damageDealt = simulator.ResolveBaseDamage(rawDmg, monster.BaseDefense)
 		outcome, updated, hitErr := cache.HitWorldMonster(c.Request.Context(), monster.RegionID, monster.InstanceID, player.ID.String()+":"+req.CommandID, monster.Revision, damageDealt, time.Now().UTC(), time.Duration(monster.RespawnSeconds)*time.Second, monsterTTL(monster.RespawnSeconds))
 		if hitErr != nil {

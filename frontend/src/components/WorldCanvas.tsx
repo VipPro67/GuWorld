@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
 import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldMonster, type WorldObject } from "@/store/useWorldStore";
-import { legacyMonsterHasRuntimeReplacement } from "@/store/worldMonsterReducer";
+import { legacyMonsterHasRuntimeReplacement, runtimeMonsterReplacementKey } from "@/store/worldMonsterReducer";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 const BG_COLOR = 0x1d1e2c;
@@ -116,7 +116,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
   const monsterMarkersRef = useRef<Map<string, { container: Container; body: Graphics; hpBar: Graphics; monster: WorldMonster; renderX: number; renderY: number; fromX: number; fromY: number; toX: number; toY: number; receivedAt: number; serverTime: number; duration: number; revision: number; state: WorldMonster["state"]; active: boolean }>>(new Map());
-  const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk; px: number; py: number }>>(new Map());
+  const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk; px: number; py: number; runtimeKey: string }>>(new Map());
   const monsterLabelRenderKeyRef = useRef("");
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
   const nextRenderObjectIdRef = useRef(1);
@@ -139,6 +139,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const nearbyWindow = useWorldStore((s) => s.nearbyWindow);
   const nearbyPlayers = useWorldStore((s) => s.nearbyPlayers);
   const monsters = useWorldStore((s) => s.monsters);
+  const runtimeReplacementKey = runtimeMonsterReplacementKey(monsters);
   const hasMonsterSnapshot = useWorldStore((s) => s.hasMonsterSnapshot);
   const fetchNearbyCells = useWorldStore((s) => s.fetchNearbyCells);
   const fetchNearbyPlayers = useWorldStore((s) => s.fetchNearbyPlayers);
@@ -230,7 +231,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           const current = store.monsters[monster.instance_id];
           if (!current) return;
           selectRuntimeMonster(current);
-          if (store.targetingGu) void store.useGuOnMap(store.targetingGu.guInstanceId, Math.floor(current.x), Math.floor(current.y));
+          if (store.targetingGu) void store.useGuOnMap(
+            store.targetingGu.guInstanceId,
+            Math.floor(current.x),
+            Math.floor(current.y),
+            store.targetingGu.mode === "monster" ? current.instance_id : undefined,
+          );
         });
         marker = { container: group, body, hpBar, monster, renderX: toX, renderY: toY, fromX: toX, fromY: toY, toX, toY, receivedAt: now, serverTime: Date.parse(monster.last_update_at), duration: 400, revision: monster.revision, state: monster.state, active: false };
         markers.set(monster.instance_id, marker);
@@ -734,7 +740,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             maxHp: runtimeTarget.max_hp,
           });
         }
-        s.useGuOnMap(s.targetingGu.guInstanceId, tx, ty);
+        if (s.targetingGu.mode === "monster" && !runtimeTarget) {
+          useGameStore.getState().addToast("Hãy nhấp trực tiếp vào quái vật để tung chiêu.", "info");
+          return;
+        }
+        s.useGuOnMap(s.targetingGu.guInstanceId, tx, ty, s.targetingGu.mode === "monster" ? runtimeTarget?.instance_id : undefined);
         return;
       }
 
@@ -1527,6 +1537,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     const px = Math.round(player?.x ?? useWorldStore.getState().liveX);
     const py = Math.round(player?.y ?? useWorldStore.getState().liveY);
     const visionRadius = useWorldStore.getState().investigationRange;
+    const runtimeKey = runtimeMonsterReplacementKey(useWorldStore.getState().monsters);
 
     const overscan = CELL_CHUNK_SIZE;
     const minWorldX = app ? Math.max(0, (-stage.position.x / scale) - overscan) : window.x - window.r;
@@ -1555,12 +1566,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         }
         visibleChunkVersions.push(`${key}@${objectId}@${px},${py}`);
         const existing = rendered.get(key);
-        if (existing?.source === chunk && existing?.px === px && existing?.py === py) continue;
+        if (existing?.source === chunk && existing?.px === px && existing?.py === py && existing.runtimeKey === runtimeKey) continue;
 
         const chunkContainer = existing?.container ?? new Container();
         if (!existing) monstersContainerRef.current.addChild(chunkContainer);
         drawMonsterChunk(chunkContainer, Object.values(chunk.cells), px, py, visionRadius);
-        rendered.set(key, { container: chunkContainer, source: chunk, px, py });
+        rendered.set(key, { container: chunkContainer, source: chunk, px, py, runtimeKey });
       }
     }
 
@@ -1581,7 +1592,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       }
       return objectId;
     });
-    const labelRenderKey = `${visibleChunkVersions.join("|")}:${Number(settings.monster)}${Number(settings.bossNearby)}:${state.player?.x ?? 0},${state.player?.y ?? 0}:${useWorldStore.getState().investigationRange}:${dictionaryIds.join(",")}`;
+    const labelRenderKey = `${visibleChunkVersions.join("|")}:${runtimeKey}:${Number(settings.monster)}${Number(settings.bossNearby)}:${state.player?.x ?? 0},${state.player?.y ?? 0}:${useWorldStore.getState().investigationRange}:${dictionaryIds.join(",")}`;
     if (labelRenderKey !== monsterLabelRenderKeyRef.current) {
       monsterLabelRenderKeyRef.current = labelRenderKey;
       drawMonsterLabels(visibleCells);
@@ -2101,6 +2112,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     if (!appReady || !appRef.current) return;
     syncRuntimeMonsters(monsters);
   }, [appReady, monsters, selectedTarget?.instanceId, syncRuntimeMonsters]);
+
+  useEffect(() => {
+    if (!appReady || !appRef.current) return;
+    scheduleMonsterChunkSyncRef.current();
+  }, [appReady, runtimeReplacementKey]);
 
   useEffect(() => {
     if (!appReady || !gamePlayer) return;
