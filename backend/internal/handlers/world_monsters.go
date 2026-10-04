@@ -37,7 +37,7 @@ const (
 	worldMonsterTickInterval = 250 * time.Millisecond
 	worldMonsterSafetyTTL    = 5 * time.Minute
 	worldMonsterMoveEventGap = 400 * time.Millisecond
-	worldMonsterDefaultSpeed = 1.0
+	worldMonsterDefaultSpeed = 0.5
 	// Monster AOI is deliberately independent from the 300-cell player
 	// position broadcast index. The client investigation radius is capped at
 	// 25 cells, so 32-cell buckets keep a view to at most 3x3 small buckets.
