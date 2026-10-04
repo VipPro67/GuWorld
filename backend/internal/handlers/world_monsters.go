@@ -75,6 +75,7 @@ var worldMonsterBucketCursor atomic.Uint64
 var (
 	worldMonstersInBucket   = cache.WorldMonstersInBucket
 	materializeWorldMonster = cache.MaterializeWorldMonster
+	casWorldMonster         = cache.CASWorldMonster
 )
 
 type monsterSpawnRow struct {
@@ -232,7 +233,18 @@ func broadcastWorldCombat(monster WorldMonster, eventType string, payload map[st
 	if WorldCombatBroadcaster == nil {
 		return
 	}
-	event := WorldCombatEvent{EventID: uuid.NewString(), ServerTime: time.Now().UTC(), RegionID: monster.RegionID, EntityID: monster.InstanceID, EntityRevision: monster.Revision, EventType: eventType, Position: WorldPosition{monster.X, monster.Y}, Payload: payload}
+	authoritative := make(map[string]any, len(payload)+7)
+	for key, value := range payload {
+		authoritative[key] = value
+	}
+	authoritative["entity"] = monster
+	authoritative["state"] = monster.State
+	authoritative["target_id"] = monster.TargetID
+	authoritative["x"] = monster.X
+	authoritative["y"] = monster.Y
+	authoritative["hp"] = monster.HP
+	authoritative["max_hp"] = monster.MaxHP
+	event := WorldCombatEvent{EventID: uuid.NewString(), ServerTime: time.Now().UTC(), RegionID: monster.RegionID, EntityID: monster.InstanceID, EntityRevision: monster.Revision, EventType: eventType, Position: WorldPosition{monster.X, monster.Y}, Payload: authoritative}
 	targets := map[uuid.UUID]struct{}{}
 	for _, p := range worldPosIndex.Nearby(int(monster.X), int(monster.Y), WorldMonsterActivationRadius, "") {
 		if p.Region != monster.RegionID {
@@ -454,7 +466,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 			}
 			bx, by := monsterBucket(int(next.X), int(next.Y))
 			oldBX, oldBY := monsterBucket(int(monster.X), int(monster.Y))
-			ok, err := cache.CASWorldMonster(ctx, monster, next, monster.Revision, oldBX, oldBY, bx, by, monsterTTL(monster.RespawnSeconds))
+			ok, err := casWorldMonster(ctx, monster, next, monster.Revision, oldBX, oldBY, bx, by, monsterTTL(monster.RespawnSeconds))
 			if err != nil || !ok {
 				worldMonsterMetrics.conflicts.Add(1)
 				continue

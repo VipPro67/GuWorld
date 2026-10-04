@@ -2,14 +2,93 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
+
+func installMonsterTransitionTest(t *testing.T, monster WorldMonster, now time.Time, casOK bool) *[]WorldCombatEvent {
+	t.Helper()
+	playerID := uuid.New()
+	previousIndex, previousLoader, previousCAS := worldPosIndex, worldMonstersInBucket, casWorldMonster
+	previousBroadcaster := WorldCombatBroadcaster
+	worldPosIndex = newPositionIndex(WorldPosIndexBucket)
+	worldPosIndex.Reconcile([]WorldPosEntry{{ID: playerID.String(), Region: monster.RegionID, X: 4, Y: 0, TS: now.UnixMilli()}})
+	loaded := false
+	worldMonstersInBucket = func(_ context.Context, region string, bx, by int) ([]WorldMonster, error) {
+		if loaded || region != monster.RegionID || bx != 0 || by != 0 {
+			return nil, nil
+		}
+		loaded = true
+		return []WorldMonster{monster}, nil
+	}
+	casWorldMonster = func(_ context.Context, _, _ cache.WorldMonster, _ int64, _, _, _, _ int, _ time.Duration) (bool, error) {
+		return casOK, nil
+	}
+	SetWSConnectedProvider(func(id uuid.UUID) bool { return id == playerID })
+	events := make([]WorldCombatEvent, 0, 1)
+	WorldCombatBroadcaster = func(_ string, payload []byte, _ map[uuid.UUID]struct{}) {
+		var event WorldCombatEvent
+		if err := json.Unmarshal(payload, &event); err != nil {
+			t.Fatalf("decode combat event: %v", err)
+		}
+		events = append(events, event)
+	}
+	t.Cleanup(func() {
+		worldPosIndex, worldMonstersInBucket, casWorldMonster = previousIndex, previousLoader, previousCAS
+		WorldCombatBroadcaster = previousBroadcaster
+		SetWSConnectedProvider(nil)
+	})
+	return &events
+}
+
+func TestMonsterMovedBroadcastsOnlyAfterSuccessfulCAS(t *testing.T) {
+	now := time.Now().UTC()
+	monster := testMonster(now.Add(-time.Second))
+	monster.State = MonsterStateChase
+	monster.TargetID = "existing-target"
+	monster.RegionID = "field"
+	monster.RespawnSeconds = 30
+
+	failedEvents := installMonsterTransitionTest(t, monster, now, false)
+	processWorldMonsterTick(context.Background(), now)
+	if len(*failedEvents) != 0 {
+		t.Fatalf("broadcast %d events after failed CAS", len(*failedEvents))
+	}
+}
+
+func TestMonsterMovedBroadcastContainsPostCASAuthoritativeState(t *testing.T) {
+	now := time.Now().UTC()
+	playerID := uuid.NewString()
+	monster := testMonster(now.Add(-time.Second))
+	monster.State, monster.TargetID, monster.RegionID, monster.RespawnSeconds = MonsterStateChase, playerID, "field", 30
+	events := installMonsterTransitionTest(t, monster, now, true)
+	processWorldMonsterTick(context.Background(), now)
+	if len(*events) != 1 || (*events)[0].EventType != "monster_moved" {
+		t.Fatalf("events=%+v, want one monster_moved", *events)
+	}
+	event := (*events)[0]
+	if event.Payload["state"] != MonsterStateChase || event.Payload["target_id"] == "" || event.Position.X <= monster.X || event.EntityRevision <= monster.Revision {
+		t.Fatalf("event did not carry authoritative post-CAS entity: %+v", event)
+	}
+}
+
+func TestMovementCoalescingDoesNotSuppressStateTransition(t *testing.T) {
+	now := time.Now().UTC()
+	monster := testMonster(now.Add(-time.Second))
+	monster.State, monster.X, monster.LastSeenAt, monster.RegionID, monster.RespawnSeconds = MonsterStateChase, 3.5, now.Add(-100*time.Millisecond), "field", 30
+	events := installMonsterTransitionTest(t, monster, now, true)
+	processWorldMonsterTick(context.Background(), now)
+	if len(*events) != 1 || (*events)[0].EventType != "action_started" || (*events)[0].Payload["state"] != MonsterStateAttack {
+		t.Fatalf("coalescing lost transition: %+v", *events)
+	}
+}
 
 func testMonster(now time.Time) WorldMonster {
 	return WorldMonster{InstanceID: "m1", SpawnID: "s1", RegionID: "field", X: 0, Y: 0, SpawnX: 0, SpawnY: 0, HP: 100, MaxHP: 100, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now, AggroRadius: 10, AttackRange: 1, LeashRadius: 15, Speed: 2}
