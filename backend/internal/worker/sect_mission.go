@@ -29,33 +29,39 @@ func StartSectMissionWorker(ctx context.Context, db *sql.DB, interval time.Durat
 }
 
 func processSectMissionTick(db *sql.DB) {
-	// Batched by ctid so each statement locks at most 500 rows instead of
-	// scanning and locking the whole table under one statement_timeout.
-	expired, err := db.Exec(`
-		UPDATE player_sect_missions SET status = 'EXPIRED'
-		WHERE ctid IN (
-			SELECT ctid FROM player_sect_missions
-			WHERE status = 'IN_PROGRESS' AND expires_at IS NOT NULL AND expires_at <= now()
-			LIMIT 500
-		)
-	`)
-	if err != nil {
-		logger.S.Errorf("Sect Mission Worker Error expiring player missions: %v", err)
-	} else if n, _ := expired.RowsAffected(); n > 0 {
-		logger.S.Infof("Sect Mission Worker: marked %d player mission(s) EXPIRED", n)
+	var hasExpiredPlayerMissions bool
+	_ = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM player_sect_missions WHERE status = 'IN_PROGRESS' AND expires_at IS NOT NULL AND expires_at <= now())`).Scan(&hasExpiredPlayerMissions)
+	if hasExpiredPlayerMissions {
+		expired, err := db.Exec(`
+			UPDATE player_sect_missions SET status = 'EXPIRED'
+			WHERE ctid IN (
+				SELECT ctid FROM player_sect_missions
+				WHERE status = 'IN_PROGRESS' AND expires_at IS NOT NULL AND expires_at <= now()
+				LIMIT 200
+			)
+		`)
+		if err != nil {
+			logger.S.Errorf("Sect Mission Worker Error expiring player missions: %v", err)
+		} else if n, _ := expired.RowsAffected(); n > 0 {
+			logger.S.Infof("Sect Mission Worker: marked %d player mission(s) EXPIRED", n)
+		}
 	}
 
-	deleted, err := db.Exec(`
-		DELETE FROM sect_missions
-		WHERE ctid IN (
-			SELECT ctid FROM sect_missions
-			WHERE expires_at IS NOT NULL AND expires_at <= now()
-			LIMIT 200
-		)
-	`)
-	if err != nil {
-		logger.S.Errorf("Sect Mission Worker Error deleting expired missions: %v", err)
-	} else if n, _ := deleted.RowsAffected(); n > 0 {
-		logger.S.Infof("Sect Mission Worker: removed %d expired board mission(s)", n)
+	var hasExpiredBoardMissions bool
+	_ = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM sect_missions WHERE expires_at IS NOT NULL AND expires_at <= now())`).Scan(&hasExpiredBoardMissions)
+	if hasExpiredBoardMissions {
+		deleted, err := db.Exec(`
+			DELETE FROM sect_missions
+			WHERE ctid IN (
+				SELECT ctid FROM sect_missions
+				WHERE expires_at IS NOT NULL AND expires_at <= now()
+				LIMIT 50
+			)
+		`)
+		if err != nil {
+			logger.S.Errorf("Sect Mission Worker Error deleting expired missions: %v", err)
+		} else if n, _ := deleted.RowsAffected(); n > 0 {
+			logger.S.Infof("Sect Mission Worker: removed %d expired board mission(s)", n)
+		}
 	}
 }
