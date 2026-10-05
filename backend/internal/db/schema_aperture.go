@@ -39,6 +39,11 @@ func schemaAperture() error {
 	`); err != nil {
 		return err
 	}
+	if err := execSchema("immortal_apertures_healing_idx", `
+	CREATE INDEX IF NOT EXISTS idx_immortal_apertures_healing ON immortal_apertures (aperture_hp) WHERE state != 'DESTROYED' AND aperture_hp < max_aperture_hp;
+	`); err != nil {
+		return err
+	}
 
 	// Ensure tribulation_pending_at column exists in case the table was created earlier.
 	if err := execSchema("immortal_apertures_tribulation_pending_at_upgrade", `

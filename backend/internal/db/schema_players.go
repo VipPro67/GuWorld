@@ -123,6 +123,11 @@ func schemaPlayers() error {
 	`); err != nil {
 		return err
 	}
+	if err := execSchema("players_last_activity_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_last_activity ON players (last_activity);
+	`); err != nil {
+		return err
+	}
 
 	// Cõi Chết is derived from lifespan + race (gamefx.IsDeadState); the column
 	// itself is no longer needed.
