@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -92,6 +94,18 @@ func csrfProtection(c *gin.Context) {
 	}
 }
 
+const sessionCacheTTL = 5 * time.Minute
+
+// InvalidateSessionCache clears the cached active_session_id for a player (called on logout/kick).
+func InvalidateSessionCache(playerID uuid.UUID) {
+	_ = cache.Delete("auth:session:" + playerID.String())
+}
+
+// SetSessionCache updates the cached active_session_id for a player (called on login).
+func SetSessionCache(playerID uuid.UUID, sessionID string) {
+	_ = cache.SetJSON("auth:session:"+playerID.String(), sessionID, sessionCacheTTL)
+}
+
 // AuthRequired is a Gin middleware that enforces authentication
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -142,28 +156,30 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		// Verify the player and active session in one primary-key lookup. Use the
-		// request context so a disconnected client does not leave a query queued
-		// for a pool connection or running in PostgreSQL.
+		// Fast path: check Redis session cache to avoid a PostgreSQL roundtrip on every authenticated API call.
 		var dbSessionID string
-		err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&dbSessionID)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			stats := db.DB.Stats()
-			logger.L.Error("authentication_database_error",
-				zap.String("player_id", playerID.String()), zap.Error(err),
-				zap.Int("open_connections", stats.OpenConnections), zap.Int("in_use_connections", stats.InUse),
-				zap.Int("idle_connections", stats.Idle), zap.Int64("pool_wait_count", stats.WaitCount),
-				zap.Duration("pool_wait_duration", stats.WaitDuration))
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
-			c.Abort()
-			return
-		}
-		if errors.Is(err, sql.ErrNoRows) {
-			// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
-			// Let's just return 401. The frontend interceptor will call logout().
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
-			c.Abort()
-			return
+		sessionCacheKey := "auth:session:" + playerID.String()
+		if errCache := cache.GetJSON(sessionCacheKey, &dbSessionID); errCache != nil || dbSessionID == "" {
+			err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&dbSessionID)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				stats := db.DB.Stats()
+				logger.L.Error("authentication_database_error",
+					zap.String("player_id", playerID.String()), zap.Error(err),
+					zap.Int("open_connections", stats.OpenConnections), zap.Int("in_use_connections", stats.InUse),
+					zap.Int("idle_connections", stats.Idle), zap.Int64("pool_wait_count", stats.WaitCount),
+					zap.Duration("pool_wait_duration", stats.WaitDuration))
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
+				c.Abort()
+				return
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
+				// Let's just return 401. The frontend interceptor will call logout().
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
+				c.Abort()
+				return
+			}
+			_ = cache.SetJSON(sessionCacheKey, dbSessionID, sessionCacheTTL)
 		}
 
 		// Validate session_id matches the active session in database

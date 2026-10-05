@@ -28,32 +28,11 @@ func GetActiveTribulation(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	suppressed, err := suppressTribulationsForDeadAperture(tx, playerID.String())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trạng thái Tiên Cương"})
-		return
-	}
-	if suppressed {
-		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
-			return
-		}
-		c.JSON(http.StatusOK, nil)
-		return
-	}
-
-	// 1. Fetch active event
+	// 1. Fetch active event lock-free
 	var ev models.TribulationEvent
 	var endedAt sql.NullTime
 	var hpAfter sql.NullFloat64
-	err = tx.QueryRow(`
+	err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT id, aperture_id, player_id, tribulation_type, path, difficulty, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at
 		FROM tribulation_events
 		WHERE player_id = $1 AND status = 'ACTIVE'
@@ -68,6 +47,21 @@ func GetActiveTribulation(c *gin.Context) {
 		return
 	}
 
+	// If an active event exists, check if dead aperture suppression applies (zombie/undead immortals)
+	var race string
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(race, '') FROM players WHERE id = $1`, playerID).Scan(&race)
+	if raceHasDeadAperture(race) {
+		tx, errTx := db.DB.Begin()
+		if errTx == nil {
+			defer tx.Rollback()
+			if suppressed, errS := suppressTribulationsForDeadAperture(tx, playerID.String()); errS == nil && suppressed {
+				_ = tx.Commit()
+				c.JSON(http.StatusOK, nil)
+				return
+			}
+		}
+	}
+
 	if hpAfter.Valid {
 		ev.ApertureHPAfter = &hpAfter.Float64
 	}
@@ -75,8 +69,8 @@ func GetActiveTribulation(c *gin.Context) {
 		ev.EndedAt = &endedAt.Time
 	}
 
-	// 2. Fetch enemies
-	rows, err := tx.Query(`
+	// 2. Fetch enemies lock-free
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, event_id, name, enemy_type, path, hp, max_hp, attack, defense, target_node_id, x, y, is_boss, is_dead, rank, sub_rank
 		FROM tribulation_enemies
 		WHERE event_id = $1 AND is_dead = false
@@ -98,11 +92,6 @@ func GetActiveTribulation(c *gin.Context) {
 			}
 			enemies = append(enemies, en)
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
-		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

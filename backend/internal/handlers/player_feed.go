@@ -23,11 +23,15 @@ func GetPlayerInventoryGus(c *gin.Context) {
 		return
 	}
 
-	if tx, errTx := db.DB.Begin(); errTx == nil {
-		if errH := worker.EvaluatePlayerHungerTx(tx, authID); errH == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
+	// Fast path: avoid opening a transaction and taking a FOR UPDATE lock on the
+	// hot players row unless 3+ hours have passed since last_hunger_tick_at.
+	if worker.NeedsHungerEvaluation(db.DB, authID) {
+		if tx, errTx := db.DB.Begin(); errTx == nil {
+			if errH := worker.EvaluatePlayerHungerTx(tx, authID); errH == nil {
+				_ = tx.Commit()
+			} else {
+				_ = tx.Rollback()
+			}
 		}
 	}
 

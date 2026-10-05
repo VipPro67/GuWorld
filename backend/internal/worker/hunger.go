@@ -337,6 +337,22 @@ func playerLiveGuIDs(tx *sql.Tx, playerID uuid.UUID) ([]string, error) {
 	return ids, rows.Err()
 }
 
+// NeedsHungerEvaluation performs a lock-free check to determine if a player's Gus
+// require hunger decay evaluation (i.e. >= 3 hours since last_hunger_tick_at).
+// Read paths can use this to skip acquiring a write transaction and FOR UPDATE lock entirely.
+func NeedsHungerEvaluation(q interface{ QueryRow(query string, args ...any) *sql.Row }, playerID uuid.UUID) bool {
+	var lastTick time.Time
+	err := q.QueryRow(`
+		SELECT COALESCE(last_hunger_tick_at, created_at, NOW())
+		FROM players
+		WHERE id = $1
+	`, playerID).Scan(&lastTick)
+	if err != nil {
+		return false
+	}
+	return time.Since(lastTick) >= 3*time.Hour
+}
+
 // EvaluatePlayerHungerTx performs lazy on-demand decay of a player's Gus.
 // It checks the player's last_hunger_tick_at timestamp, and if one or more
 // 3-hour intervals have passed, decays the player's Gus according to their state.

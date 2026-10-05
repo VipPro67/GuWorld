@@ -39,7 +39,8 @@ func GetPlayerStatus(c *gin.Context) {
 		return
 	}
 
-	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
+	// player.MaterialsInventory is already populated by loadRow() inside ProjectStatus.
+	// No need to call loadMaterialsInventory() again here.
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	writeTrimmedPlayerStatus(c, player)
 }
