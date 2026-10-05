@@ -5,11 +5,43 @@ import (
 	"encoding/json"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
+
+const heavenDaoPath = "heaven"
+
+// eligibleOrdinaryDaoMarkPaths returns a fresh reward pool for ordinary
+// ascension and tribulation rewards. Heaven Path is intentionally reserved for
+// a separate acquisition mechanic.
+func eligibleOrdinaryDaoMarkPaths(paths []string) []string {
+	eligible := make([]string, 0, len(paths))
+	for _, path := range paths {
+		normalized := strings.TrimSpace(strings.ToLower(path))
+		normalized = strings.TrimSpace(strings.TrimSuffix(normalized, " path"))
+		if normalized != "" && normalized != heavenDaoPath {
+			eligible = append(eligible, normalized)
+		}
+	}
+	return eligible
+}
+
+func randomOrdinaryDaoMarkPaths(paths []string, count int) []string {
+	eligible := eligibleOrdinaryDaoMarkPaths(paths)
+	rand.Shuffle(len(eligible), func(i, j int) {
+		eligible[i], eligible[j] = eligible[j], eligible[i]
+	})
+	if count < 0 {
+		count = 0
+	}
+	if count > len(eligible) {
+		count = len(eligible)
+	}
+	return eligible[:count]
+}
 
 func daoMarkGainMultiplierTx(tx *sql.Tx, playerID string) float64 {
 	var constitution string
@@ -78,9 +110,22 @@ func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int64
 }
 
 func distributeDaoMarks(mainPath string, totalMarks int64) map[string]int64 {
+	return distributeDaoMarksFromPaths(mainPath, totalMarks, models.AllGuPaths())
+}
+
+func distributeDaoMarksFromPaths(mainPath string, totalMarks int64, paths []string) map[string]int64 {
 	rewards := make(map[string]int64)
 	if totalMarks <= 0 {
 		return rewards
+	}
+	eligiblePaths := eligibleOrdinaryDaoMarkPaths(paths)
+	if len(eligiblePaths) == 0 {
+		return rewards
+	}
+	mainPath = strings.TrimSpace(strings.ToLower(mainPath))
+	mainPath = strings.TrimSpace(strings.TrimSuffix(mainPath, " path"))
+	if mainPath == heavenDaoPath || mainPath == "" {
+		mainPath = eligiblePaths[rand.Intn(len(eligiblePaths))]
 	}
 	// Main path gets 70%
 	mainAmount := int64(float64(totalMarks) * 0.7)
@@ -91,9 +136,8 @@ func distributeDaoMarks(mainPath string, totalMarks int64) map[string]int64 {
 
 	remaining := totalMarks - mainAmount
 	if remaining > 0 {
-		allPaths := models.AllGuPaths()
 		otherPaths := []string{}
-		for _, p := range allPaths {
+		for _, p := range eligiblePaths {
 			if p != mainPath {
 				otherPaths = append(otherPaths, p)
 			}
@@ -102,6 +146,10 @@ func distributeDaoMarks(mainPath string, totalMarks int64) map[string]int64 {
 			otherPaths[i], otherPaths[j] = otherPaths[j], otherPaths[i]
 		})
 
+		if len(otherPaths) == 0 {
+			rewards[mainPath] += remaining
+			return rewards
+		}
 		numExtra := rand.Intn(2) + 1 // 1 or 2 extra paths
 		if numExtra > len(otherPaths) {
 			numExtra = len(otherPaths)

@@ -719,33 +719,6 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 	defer tx.Rollback()
 
-	// Pick a random path for the Calamity, prioritizing the player's Vital Gu path if they have one
-	var vitalGuID string
-	var vitalGuRank int
-	errVital := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE player_id = $1 AND is_vital = true LIMIT 1`, playerID).Scan(&vitalGuID, &vitalGuRank)
-
-	supportedPaths := models.AllGuPaths()
-	matchedPaths := []string{}
-	if errVital == nil && vitalGuID != "" {
-		if guItem, found := models.GetGu(vitalGuID, vitalGuRank); found {
-			for _, p := range guItem.Path {
-				normalizedP := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
-				for _, sp := range supportedPaths {
-					if normalizedP == sp {
-						matchedPaths = append(matchedPaths, sp)
-					}
-				}
-			}
-		}
-	}
-
-	var path string
-	if len(matchedPaths) > 0 && rand.Float64() < 0.7 {
-		path = matchedPaths[rand.Intn(len(matchedPaths))]
-	} else {
-		path = supportedPaths[rand.Intn(len(supportedPaths))]
-	}
-
 	var rank int
 	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&rank)
 	if err != nil {
@@ -753,6 +726,23 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 
 	tribulationType = models.SanitizeTribulationTypeForRank(rank, tribulationType)
+
+	var vitalPaths []string
+	var vitalGuID string
+	var vitalGuRank int
+	errVital := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE player_id = $1 AND is_vital = true LIMIT 1`, playerID).Scan(&vitalGuID, &vitalGuRank)
+	if errVital == nil {
+		if vitalGu, found := models.GetGu(vitalGuID, vitalGuRank); found {
+			vitalPaths = vitalGu.Path
+		}
+	} else if errVital != sql.ErrNoRows {
+		return fmt.Errorf("query Vital Gu for tribulation affinity: %w", errVital)
+	}
+
+	path, ok := chooseTribulationPath(models.AllGuPaths(), vitalPaths, tribulationType, rand.Float64())
+	if !ok {
+		return fmt.Errorf("no eligible dao paths available for tribulation")
+	}
 
 	var daoMarksRaw []byte
 	err = tx.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoMarksRaw)
@@ -916,6 +906,61 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 
 	return tx.Commit()
+}
+
+func vitalGuPathChance(tribulationType string) float64 {
+	switch tribulationType {
+	case "EARTH_CALAMITY":
+		return 0.80
+	case "HEAVENLY_TRIBULATION":
+		return 0.85
+	case "GRAND_TRIBULATION":
+		return 0.90
+	case "MYRIAD_TRIBULATION":
+		return 0.95
+	case "CHAOS_CALAMITY":
+		return 1.00
+	default:
+		return 0
+	}
+}
+
+// chooseTribulationPath keeps a tier-scaled affinity with the Vital Gu's
+// ordinary paths. Heaven Path is never eligible. When the affinity roll fails,
+// choosing from non-vital paths keeps the configured probability exact.
+func chooseTribulationPath(supportedPaths, vitalPaths []string, tribulationType string, roll float64) (string, bool) {
+	eligible := eligibleOrdinaryDaoMarkPaths(supportedPaths)
+	if len(eligible) == 0 {
+		return "", false
+	}
+
+	eligibleSet := make(map[string]struct{}, len(eligible))
+	for _, path := range eligible {
+		eligibleSet[path] = struct{}{}
+	}
+	vitalSet := make(map[string]struct{})
+	for _, path := range eligibleOrdinaryDaoMarkPaths(vitalPaths) {
+		if _, exists := eligibleSet[path]; exists {
+			vitalSet[path] = struct{}{}
+		}
+	}
+
+	matchedVital := make([]string, 0, len(vitalSet))
+	fallback := make([]string, 0, len(eligible))
+	for _, path := range eligible {
+		if _, matched := vitalSet[path]; matched {
+			matchedVital = append(matchedVital, path)
+		} else {
+			fallback = append(fallback, path)
+		}
+	}
+	if len(matchedVital) > 0 && roll < vitalGuPathChance(tribulationType) {
+		return matchedVital[rand.Intn(len(matchedVital))], true
+	}
+	if len(fallback) > 0 {
+		return fallback[rand.Intn(len(fallback))], true
+	}
+	return eligible[rand.Intn(len(eligible))], true
 }
 
 func autoResolveEvent(eventID string, playerID string) {
