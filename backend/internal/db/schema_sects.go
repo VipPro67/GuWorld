@@ -29,64 +29,6 @@ func schemaSects() error {
 		return err
 	}
 
-	if err := execSchema("sects_last_relocated_at_column", `
-	ALTER TABLE sects ADD COLUMN IF NOT EXISTS last_relocated_at TIMESTAMP WITH TIME ZONE;
-	`); err != nil {
-		return err
-	}
-
-	if err := execSchema("sects_defensive_array_ready_at_column", `
-	ALTER TABLE sects ADD COLUMN IF NOT EXISTS defensive_array_ready_at TIMESTAMP WITH TIME ZONE;
-	`); err != nil {
-		return err
-	}
-
-	if err := execSchema("sects_territory_columns", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='map_x') THEN
-			ALTER TABLE sects ADD COLUMN map_x INT NOT NULL DEFAULT 50;
-			ALTER TABLE sects ADD COLUMN map_y INT NOT NULL DEFAULT 50;
-			ALTER TABLE sects ADD COLUMN shield_until TIMESTAMP WITH TIME ZONE;
-		END IF;
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='buildings') THEN
-			ALTER TABLE sects ADD COLUMN buildings JSONB NOT NULL DEFAULT '{"main_hall": 1, "defensive_array": 1, "spirit_vein": 1, "treasury": 1, "training_ground": 1}';
-		END IF;
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='last_territory_tick_at') THEN
-			ALTER TABLE sects ADD COLUMN last_territory_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
-	if err := execSchema("sects_last_vault_decay_column", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='last_vault_decay_at') THEN
-			ALTER TABLE sects ADD COLUMN last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
-	// Drop legacy vault JSONB columns — vault data now lives in sect_vault_gu,
-	// sect_vault_materials, sect_vault_recipes.
-	if err := execSchema("drop_sects_vault_columns", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='vault_gu') THEN
-			ALTER TABLE sects DROP COLUMN vault_gu;
-		END IF;
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='vault_materials') THEN
-			ALTER TABLE sects DROP COLUMN vault_materials;
-		END IF;
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sects' AND column_name='vault_recipes') THEN
-			ALTER TABLE sects DROP COLUMN vault_recipes;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
 	if err := execSchema("npcs", `
 	CREATE TABLE IF NOT EXISTS npcs (
 		id VARCHAR(50) PRIMARY KEY,
@@ -115,18 +57,6 @@ func schemaSects() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("sect_missions_bigint_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sect_missions' AND column_name='target_amount' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE sect_missions ALTER COLUMN target_amount TYPE BIGINT USING COALESCE(target_amount, 0)::BIGINT;
-		END IF;
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sect_missions' AND column_name='reward_contribution' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE sect_missions ALTER COLUMN reward_contribution TYPE BIGINT USING COALESCE(reward_contribution, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
 	if err := execSchema("sect_missions_expires_idx", `
 	CREATE INDEX IF NOT EXISTS idx_sect_missions_expires ON sect_missions (expires_at);`); err != nil {
 		return err
@@ -146,19 +76,6 @@ func schemaSects() error {
 		territory_credited_today INTEGER NOT NULL DEFAULT 0,
 		is_defending BOOLEAN NOT NULL DEFAULT FALSE
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("sect_members_defending_column", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sect_members' AND column_name='is_defending') THEN
-			ALTER TABLE sect_members ADD COLUMN is_defending BOOLEAN NOT NULL DEFAULT FALSE;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-	if err := execSchema("sect_members_sect_idx", `
-	CREATE INDEX IF NOT EXISTS idx_sect_members_sect ON sect_members (sect_id);`); err != nil {
 		return err
 	}
 	if err := execSchema("sect_members_sect_rank_idx", `
@@ -209,19 +126,6 @@ func schemaSects() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("player_sect_missions_bigint_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='player_sect_missions' AND column_name='current_progress' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE player_sect_missions ALTER COLUMN current_progress TYPE BIGINT USING COALESCE(current_progress, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-	if err := execSchema("player_sect_missions_player_idx", `
-	CREATE INDEX IF NOT EXISTS idx_player_sect_missions_player ON player_sect_missions (player_id);`); err != nil {
-		return err
-	}
 	// Index on foreign key to prevent full table scans on DELETE FROM sect_missions CASCADE
 	if err := execSchema("player_sect_missions_mission_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_sect_missions_mission ON player_sect_missions (mission_id);`); err != nil {
@@ -230,14 +134,6 @@ func schemaSects() error {
 	// Composite index for background expiry worker
 	if err := execSchema("player_sect_missions_status_expires_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_sect_missions_status_expires ON player_sect_missions (status, expires_at);`); err != nil {
-		return err
-	}
-
-	// Drop old mine tables if they exist
-	if err := execSchema("drop_sect_mines", `
-	DROP TABLE IF EXISTS sect_mine_defenders;
-	DROP TABLE IF EXISTS sect_mines;
-	`); err != nil {
 		return err
 	}
 
@@ -292,7 +188,8 @@ func schemaSects() error {
 		hunger DOUBLE PRECISION NOT NULL DEFAULT 100.0 CHECK (hunger >= 0),
 		instance_id VARCHAR(80) DEFAULT '',
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		CONSTRAINT chk_sect_vault_gu_immortal_qty CHECK (rank < 6 OR quantity <= 1)
 	);`); err != nil {
 		return err
 	}
@@ -304,61 +201,14 @@ func schemaSects() error {
 	CREATE INDEX IF NOT EXISTS idx_sect_vault_gu_gu_id ON sect_vault_gu (gu_id, rank);`); err != nil {
 		return err
 	}
-	// Tiên Cổ (rank>=6) trong kho: quantity luôn 1, 1 gu_id chỉ 1 row toàn server.
-	if err := execSchema("sect_vault_gu_immortal_rules", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_sect_vault_gu_immortal_qty') THEN
-			ALTER TABLE sect_vault_gu
-			ADD CONSTRAINT chk_sect_vault_gu_immortal_qty CHECK (rank < 6 OR quantity <= 1) NOT VALID;
-		END IF;
-		IF NOT EXISTS (
-			SELECT 1 FROM sect_vault_gu WHERE rank >= 6 AND quantity > 0
-			GROUP BY gu_id HAVING COUNT(*) > 1
-		) THEN
-			CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_vault_gu_immortal
-			ON sect_vault_gu (gu_id) WHERE rank >= 6 AND quantity > 0;
-		ELSE
-			RAISE NOTICE 'uq_sect_vault_gu_immortal skipped: duplicate immortal Gu in vault';
-		END IF;
-	END $$;`); err != nil {
+	if err := execSchema("idx_sect_vault_gu_gu_id_lower", `
+	CREATE INDEX IF NOT EXISTS idx_sect_vault_gu_gu_id_lower ON sect_vault_gu (LOWER(gu_id), rank);`); err != nil {
 		return err
 	}
-
-	if err := execSchema("sect_vault_gu_consolidate_mortal", `
-	DO $$
-	BEGIN
-		IF EXISTS (
-			SELECT 1 FROM sect_vault_gu
-			WHERE rank < 6
-			GROUP BY sect_id, gu_id, rank
-			HAVING COUNT(*) > 1 OR bool_or(id <> (sect_id || ':' || gu_id || ':' || rank))
-		) THEN
-			CREATE TEMP TABLE tmp_consolidate_vault_gu AS
-			SELECT 
-				(sect_id || ':' || gu_id || ':' || rank) AS canonical_id,
-				sect_id,
-				gu_id,
-				rank,
-				SUM(quantity) AS total_qty,
-				MAX(cost) AS max_cost,
-				MAX(hunger) AS max_hunger,
-				MIN(created_at) AS min_created_at,
-				MAX(updated_at) AS max_updated_at
-			FROM sect_vault_gu
-			WHERE rank < 6
-			GROUP BY sect_id, gu_id, rank;
-
-			DELETE FROM sect_vault_gu WHERE rank < 6;
-
-			INSERT INTO sect_vault_gu (id, sect_id, gu_id, rank, quantity, cost, hunger, instance_id, created_at, updated_at)
-			SELECT canonical_id, sect_id, gu_id, rank, total_qty, max_cost, max_hunger, '', min_created_at, max_updated_at
-			FROM tmp_consolidate_vault_gu
-			WHERE total_qty > 0;
-
-			DROP TABLE tmp_consolidate_vault_gu;
-		END IF;
-	END $$;`); err != nil {
+	// Tiên Cổ (rank>=6) trong kho: quantity luôn 1, 1 gu_id chỉ 1 row toàn server.
+	if err := execSchema("uq_sect_vault_gu_immortal", `
+	CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_vault_gu_immortal
+	ON sect_vault_gu (gu_id) WHERE rank >= 6 AND quantity > 0;`); err != nil {
 		return err
 	}
 
@@ -370,10 +220,6 @@ func schemaSects() error {
 		unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		PRIMARY KEY (sect_id, recipe_id)
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("idx_sect_vault_recipes_sect", `
-	CREATE INDEX IF NOT EXISTS idx_sect_vault_recipes_sect ON sect_vault_recipes (sect_id);`); err != nil {
 		return err
 	}
 

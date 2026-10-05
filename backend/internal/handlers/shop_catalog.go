@@ -316,6 +316,17 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 }
 
 func findCaravanShopItem(itemID string, rank int) (*ShopItem, error) {
+	// Fast path: check active caravan catalog cache to avoid heavy joins
+	var cachedItems []ShopItem
+	if err := cache.GetJSON(shopCatalogCacheKey(), &cachedItems); err == nil && len(cachedItems) > 0 {
+		for _, item := range cachedItems {
+			if item.ID == itemID && (rank == 0 || item.Rank == rank) {
+				cp := item
+				return &cp, nil
+			}
+		}
+	}
+
 	query := `
 		SELECT c.id, 
 		       COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name, 

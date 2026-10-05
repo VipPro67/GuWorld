@@ -18,11 +18,6 @@ func schemaCombat() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("combat_history_player_idx", `
-	CREATE INDEX IF NOT EXISTS idx_combat_history_player ON combat_history (player_id);`); err != nil {
-		return err
-	}
-
 	if err := execSchema("combat_sessions", `
 	CREATE TABLE IF NOT EXISTS combat_sessions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -58,10 +53,5 @@ func schemaCombat() error {
 	CREATE INDEX IF NOT EXISTS idx_arena_rankings_points ON arena_rankings (points DESC);`); err != nil {
 		return err
 	}
-	if err := execSchema("arena_rankings_player_idx", `
-	CREATE INDEX IF NOT EXISTS idx_arena_rankings_player ON arena_rankings (player_id);`); err != nil {
-		return err
-	}
-
 	return nil
 }

@@ -4,29 +4,16 @@ import "github.com/vippro67/GuWorld/backend/internal/authz"
 
 func schemaAuthorization() error {
 	if err := execSchema("authorization", `
-	CREATE TABLE IF NOT EXISTS admin_roles (
-		key VARCHAR(100) PRIMARY KEY,
-		description TEXT NOT NULL DEFAULT ''
-	);
 	CREATE TABLE IF NOT EXISTS admin_permissions (
 		key VARCHAR(150) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL DEFAULT '',
 		description TEXT NOT NULL DEFAULT ''
 	);
-	-- Forward-patch: a briefly-wired UUID-based revision declared
-	-- admin_permissions with a NOT NULL name column. Keep the seed valid
-	-- on both shapes; nothing in live code reads this table's name.
-	ALTER TABLE admin_permissions ADD COLUMN IF NOT EXISTS name VARCHAR(100) NOT NULL DEFAULT '';
 	CREATE TABLE IF NOT EXISTS admin_role_permissions (
 		role_key VARCHAR(100) NOT NULL REFERENCES admin_roles(key) ON DELETE CASCADE,
 		permission_key VARCHAR(150) NOT NULL REFERENCES admin_permissions(key) ON DELETE CASCADE,
 		PRIMARY KEY (role_key, permission_key)
 	);
-	CREATE TABLE IF NOT EXISTS player_admin_roles (
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		role_key VARCHAR(100) NOT NULL REFERENCES admin_roles(key) ON DELETE CASCADE,
-		PRIMARY KEY (player_id, role_key)
-	);
-	CREATE INDEX IF NOT EXISTS idx_player_admin_roles_role_key ON player_admin_roles(role_key);
 
 	-- name/level are owned by the admin_roles step; include them so this
 	-- seed is valid regardless of which step created the table first.

@@ -86,17 +86,12 @@ func schemaPlayers() error {
 		last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL,
 		active_session_id VARCHAR(64) NOT NULL DEFAULT '',
 		version INT NOT NULL DEFAULT 0,
-		state_revision BIGINT NOT NULL DEFAULT 0
+		state_revision BIGINT NOT NULL DEFAULT 0,
+		death_arena_title VARCHAR(100) DEFAULT '',
+		active_concealment JSONB NOT NULL DEFAULT '{}'::jsonb,
+		last_sever_clues_at TIMESTAMPTZ DEFAULT NULL,
+		last_resonance_scan_at TIMESTAMPTZ DEFAULT NULL
 	);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("players_state_revision_column", `
-	ALTER TABLE players ADD COLUMN IF NOT EXISTS state_revision BIGINT NOT NULL DEFAULT 0;`); err != nil {
-		return err
-	}
-	if err := execSchema("players_admin_permissions_column", `
-	ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_permissions TEXT[] NOT NULL DEFAULT ARRAY['*']::TEXT[];`); err != nil {
 		return err
 	}
 
@@ -126,71 +121,6 @@ func schemaPlayers() error {
 	if err := execSchema("players_last_activity_idx", `
 	CREATE INDEX IF NOT EXISTS idx_players_last_activity ON players (last_activity);
 	`); err != nil {
-		return err
-	}
-
-	// Cõi Chết is derived from lifespan + race (gamefx.IsDeadState); the column
-	// itself is no longer needed.
-	if err := execSchema("players_drop_is_dead_column", `
-	ALTER TABLE players DROP COLUMN IF EXISTS is_dead;`); err != nil {
-		return err
-	}
-
-	if err := execSchema("players_version_column", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='version') THEN
-			ALTER TABLE players ADD COLUMN version INT NOT NULL DEFAULT 0;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
-	if err := execSchema("players_last_hunger_tick_column", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_hunger_tick_at') THEN
-			ALTER TABLE players ADD COLUMN last_hunger_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
-	if err := execSchema("players_fingerprint_columns", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='register_fingerprint') THEN
-			ALTER TABLE players ADD COLUMN register_fingerprint VARCHAR(255) NOT NULL DEFAULT '';
-		END IF;
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='register_ip') THEN
-			ALTER TABLE players ADD COLUMN register_ip VARCHAR(50) NOT NULL DEFAULT '';
-		END IF;
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_login_fingerprint') THEN
-			ALTER TABLE players ADD COLUMN last_login_fingerprint VARCHAR(255) NOT NULL DEFAULT '';
-		END IF;
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_login_ip') THEN
-			ALTER TABLE players ADD COLUMN last_login_ip VARCHAR(50) NOT NULL DEFAULT '';
-		END IF;
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_login_time') THEN
-			ALTER TABLE players ADD COLUMN last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL;
-		END IF;
-		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='active_session_id') THEN
-			ALTER TABLE players ADD COLUMN active_session_id VARCHAR(64) NOT NULL DEFAULT '';
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
-	if err := execSchema("players_stones_type_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='primeval_stones' AND data_type <> 'numeric') THEN
-			ALTER TABLE players ALTER COLUMN primeval_stones TYPE NUMERIC(30,3) USING ROUND(COALESCE(primeval_stones, 0)::NUMERIC, 3);
-		END IF;
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='immortal_stones' AND data_type <> 'numeric') THEN
-			ALTER TABLE players ALTER COLUMN immortal_stones TYPE NUMERIC(30,3) USING ROUND(COALESCE(immortal_stones, 0)::NUMERIC, 3);
-		END IF;
-	END $$;`); err != nil {
 		return err
 	}
 
@@ -376,21 +306,6 @@ func schemaPlayerExtras() error {
 		milestone5_rewarded BOOLEAN NOT NULL DEFAULT false,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("referrals_deposit_stones_type_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referrals' AND column_name='deposit_amount_stones' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE referrals ALTER COLUMN deposit_amount_stones TYPE BIGINT USING COALESCE(deposit_amount_stones, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-	if err := execSchema("referrals_milestone_cols", `
-	ALTER TABLE referrals ADD COLUMN IF NOT EXISTS milestone4_rewarded BOOLEAN NOT NULL DEFAULT false;
-	ALTER TABLE referrals ADD COLUMN IF NOT EXISTS milestone5_rewarded BOOLEAN NOT NULL DEFAULT false;
-	`); err != nil {
 		return err
 	}
 	if err := execSchema("referrals_referrer_idx", `

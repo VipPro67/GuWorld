@@ -19,13 +19,6 @@ func schemaBeastBetting() error {
 		return err
 	}
 
-	if err := execSchema("beast_betting_rounds_created_at_unique", `
-	ALTER TABLE beast_betting_rounds
-		DROP CONSTRAINT IF EXISTS beast_betting_rounds_created_at_key,
-		ADD CONSTRAINT beast_betting_rounds_created_at_key UNIQUE (created_at);`); err != nil {
-		return err
-	}
-
 	if err := execSchema("beast_bets", `
 	CREATE TABLE IF NOT EXISTS beast_bets (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

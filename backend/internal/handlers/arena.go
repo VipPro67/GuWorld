@@ -29,8 +29,9 @@ func EnsurePlayerArenaRanking(tx *sql.Tx, playerID uuid.UUID) (int, error) {
 	var rank int
 	err := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", playerID).Scan(&rank)
 	if err == sql.ErrNoRows {
-		// Acquire lock to serialize rank assignment across all concurrent requests
-		_, errLock := tx.Exec("LOCK TABLE arena_rankings IN SHARE ROW EXCLUSIVE MODE")
+		// Acquire transaction-scoped advisory lock to serialize rank assignment
+		// without table-locking arena_rankings against concurrent readers/writers.
+		_, errLock := tx.Exec("SELECT pg_advisory_xact_lock(7429104)")
 		if errLock != nil {
 			return 0, errLock
 		}
@@ -68,21 +69,36 @@ func GetArenaLeaderboard(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
+	var dailyChallenges int
+	var lastChallengeAt time.Time
+	var existingRank int
 
-	// Ensure caller has ranking
-	_, err = EnsurePlayerArenaRanking(tx, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng Võ Đài"})
-		return
-	}
-	if errCommit := tx.Commit(); errCommit != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failure"})
+	// Fast path: load player's current arena rank & daily stats lock-free
+	err := db.DB.QueryRowContext(c.Request.Context(), "SELECT rank, daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", authID).
+		Scan(&existingRank, &dailyChallenges, &lastChallengeAt)
+
+	if err == sql.ErrNoRows {
+		// Slow path for first-time visitors: initialize ranking
+		tx, errTx := db.DB.BeginTx(c.Request.Context(), nil)
+		if errTx != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+		defer tx.Rollback()
+
+		_, err = EnsurePlayerArenaRanking(tx, authID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng Võ Đài"})
+			return
+		}
+		if errCommit := tx.Commit(); errCommit != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failure"})
+			return
+		}
+		dailyChallenges = 0
+		lastChallengeAt = time.Now()
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player ranking"})
 		return
 	}
 
@@ -106,10 +122,6 @@ func GetArenaLeaderboard(c *gin.Context) {
 			leaderboard = append(leaderboard, r)
 		}
 	}
-
-	var dailyChallenges int
-	var lastChallengeAt time.Time
-	_ = db.DB.QueryRowContext(c.Request.Context(), "SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", authID).Scan(&dailyChallenges, &lastChallengeAt)
 
 	now := time.Now()
 	lastChallengeLocal := lastChallengeAt.In(now.Location())

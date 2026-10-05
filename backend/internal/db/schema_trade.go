@@ -11,14 +11,9 @@ func schemaParties() error {
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		leader_id UUID NOT NULL,
 		members JSONB NOT NULL DEFAULT '[]',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		formation JSONB NOT NULL DEFAULT '[]'
 	);`); err != nil {
-		return err
-	}
-	// Party battle formation set by the leader: ordered [{kind,id}] where kind
-	// is player|pet|npc. Empty = legacy auto behavior.
-	if err := execSchema("parties_formation", `
-	ALTER TABLE parties ADD COLUMN IF NOT EXISTS formation JSONB NOT NULL DEFAULT '[]';`); err != nil {
 		return err
 	}
 	return nil
@@ -53,24 +48,8 @@ func schemaTrade() error {
 	CREATE INDEX IF NOT EXISTS idx_auction_bidder ON auction (highest_bidder_id);`); err != nil {
 		return err
 	}
-	if err := execSchema("auction_status_idx", `
-	CREATE INDEX IF NOT EXISTS idx_auction_status ON auction (status);`); err != nil {
-		return err
-	}
 	if err := execSchema("auction_status_endtime_buyer_idx", `
 	CREATE INDEX IF NOT EXISTS idx_auction_status_endtime_buyer ON auction (status, end_time, target_buyer_id);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("auction_price_type_upgrade", `
-	DO $$
-	BEGIN
-		ALTER TABLE auction ALTER COLUMN start_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(start_price, 0)::NUMERIC, 3);
-		ALTER TABLE auction ALTER COLUMN current_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(current_price, 0)::NUMERIC, 3);
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='quantity' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE auction ALTER COLUMN quantity TYPE BIGINT USING COALESCE(quantity, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
 		return err
 	}
 
@@ -116,6 +95,10 @@ func schemaTrade() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("party_invitations_invitee_idx", `
+	CREATE INDEX IF NOT EXISTS idx_party_invitations_invitee ON party_invitations (invitee_id, status);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("mine_slots", `
 	CREATE TABLE IF NOT EXISTS mine_slots (
@@ -132,7 +115,6 @@ func schemaTrade() error {
 	);`); err != nil {
 		return err
 	}
-	execSchema("mine_slots_type", `ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS mine_type VARCHAR(20) NOT NULL DEFAULT 'mortal';`)
 	if err := execSchema("mine_slots_occupier_idx", `
 	CREATE INDEX IF NOT EXISTS idx_mine_slots_occupier ON mine_slots (occupier_id);`); err != nil {
 		return err
@@ -163,14 +145,8 @@ func schemaTrade() error {
 	);`); err != nil {
 		return err
 	}
-	execSchema("buyback_orders_order_type", `ALTER TABLE buyback_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(10) NOT NULL DEFAULT 'BUY';`)
-	execSchema("buyback_orders_item_data", `ALTER TABLE buyback_orders ADD COLUMN IF NOT EXISTS item_data JSONB DEFAULT NULL;`)
 	if err := execSchema("buyback_buyer_idx", `
 	CREATE INDEX IF NOT EXISTS idx_buyback_buyer ON buyback_orders (buyer_id);`); err != nil {
-		return err
-	}
-	if err := execSchema("buyback_status_idx", `
-	CREATE INDEX IF NOT EXISTS idx_buyback_status ON buyback_orders (status);`); err != nil {
 		return err
 	}
 	if err := execSchema("buyback_status_end_time_idx", `
@@ -192,17 +168,12 @@ func schemaTrade() error {
 	);`); err != nil {
 		return err
 	}
-	execSchema("trade_offers_player_id", `ALTER TABLE trade_offers ADD COLUMN IF NOT EXISTS player_id UUID REFERENCES players(id) ON DELETE CASCADE;`)
 	if err := execSchema("trade_offers_creator_idx", `
 	CREATE INDEX IF NOT EXISTS idx_trade_offers_creator ON trade_offers (creator_id);`); err != nil {
 		return err
 	}
 	if err := execSchema("trade_offers_player_idx", `
 	CREATE INDEX IF NOT EXISTS idx_trade_offers_player ON trade_offers (player_id);`); err != nil {
-		return err
-	}
-	if err := execSchema("trade_offers_status_idx", `
-	CREATE INDEX IF NOT EXISTS idx_trade_offers_status ON trade_offers (status);`); err != nil {
 		return err
 	}
 	if err := execSchema("trade_offers_status_end_time_idx", `

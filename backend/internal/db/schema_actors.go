@@ -84,13 +84,6 @@ func schemaActors() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("non_player_actors_domain_columns", `
-	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS formation_slot INT NOT NULL DEFAULT 0;
-	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT '';
-	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'NONE';`); err != nil {
-		return err
-	}
-
 	indexes := []struct{ name, ddl string }{
 		{"non_player_actors_owner_kind_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_owner_kind ON non_player_actors (owner_player_id, actor_kind);`},
 		{"non_player_actors_aperture_kind_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_aperture_kind ON non_player_actors (aperture_id, actor_kind);`},
@@ -119,9 +112,6 @@ func schemaActors() error {
 		UNIQUE (actor_id, slot),
 		CONSTRAINT actor_gu_equipment_slot_check CHECK (slot BETWEEN 1 AND 9)
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("actor_gu_equipment_actor_idx", `CREATE INDEX IF NOT EXISTS idx_actor_gu_equipment_actor ON actor_gu_equipment(actor_id, slot);`); err != nil {
 		return err
 	}
 	if err := execSchema("actor_gu_equipment_guard", `

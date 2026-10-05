@@ -1,7 +1,5 @@
 package db
 
-import "github.com/vippro67/GuWorld/backend/pkg/logger"
-
 // World schema: regions/map, monsters, quests and instance templates. These are
 // created before players so players.current_region can reference regions(id).
 
@@ -27,19 +25,10 @@ func schemaWorld() error {
 		entry_x INT NOT NULL DEFAULT 0,
 		entry_y INT NOT NULL DEFAULT 0,
 		pool_weights JSONB NOT NULL DEFAULT '{}',
-		paths JSONB NOT NULL DEFAULT '[]'
+		paths JSONB NOT NULL DEFAULT '[]',
+		safe_zone_x INT,
+		safe_zone_y INT
 	);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("regions_paths_column", `
-	ALTER TABLE regions ADD COLUMN IF NOT EXISTS paths JSONB NOT NULL DEFAULT '[]';`); err != nil {
-		return err
-	}
-
-	if err := execSchema("regions_safe_zone", `
-	ALTER TABLE regions ADD COLUMN IF NOT EXISTS safe_zone_x INT;
-	ALTER TABLE regions ADD COLUMN IF NOT EXISTS safe_zone_y INT;`); err != nil {
 		return err
 	}
 
@@ -68,15 +57,6 @@ func schemaWorld() error {
 	);`); err != nil {
 		return err
 	}
-	// Add missing columns for existing databases without requiring a full wipe
-	if err := execSchema("monster_templates_alter_cols", `
-	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS gu_pool JSONB NOT NULL DEFAULT '[]';
-	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS is_capturable BOOLEAN NOT NULL DEFAULT false;
-	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS capture_chance DOUBLE PRECISION NOT NULL DEFAULT 0.20;
-	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS pet_hunger_per_hour DOUBLE PRECISION NOT NULL DEFAULT 2.0;
-	`); err != nil {
-		logger.S.Warnf("Failed to alter monster_templates columns: %v", err)
-	}
 	if err := execSchema("monster_templates_loot_table_idx", `
 	CREATE INDEX IF NOT EXISTS idx_monster_templates_loot_table ON monster_templates (loot_table_id);`); err != nil {
 		return err
@@ -99,10 +79,6 @@ func schemaWorld() error {
 		created_at TIMESTAMP DEFAULT NOW(),
 		updated_at TIMESTAMP DEFAULT NOW()
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("monster_spawns_region_idx", `
-	CREATE INDEX IF NOT EXISTS idx_monster_spawns_region ON monster_spawns (region_id);`); err != nil {
 		return err
 	}
 	if err := execSchema("monster_spawns_monster_idx", `
@@ -128,11 +104,6 @@ func schemaWorld() error {
 		remaining_shield DOUBLE PRECISION NOT NULL DEFAULT 0,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
-	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS applied BOOLEAN NOT NULL DEFAULT FALSE;
-	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS died BOOLEAN NOT NULL DEFAULT FALSE;
-	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS damage DOUBLE PRECISION NOT NULL DEFAULT 0;
-	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS remaining_hp DOUBLE PRECISION NOT NULL DEFAULT 0;
-	ALTER TABLE world_monster_actions ADD COLUMN IF NOT EXISTS remaining_shield DOUBLE PRECISION NOT NULL DEFAULT 0;
 	CREATE INDEX IF NOT EXISTS idx_world_monster_actions_created_at ON world_monster_actions(created_at);`); err != nil {
 		return err
 	}

@@ -75,11 +75,6 @@ func schemaDeathArena() error {
 		return err
 	}
 
-	if err := execSchema("idx_death_arena_team_members_player", `
-	CREATE INDEX IF NOT EXISTS idx_death_arena_team_members_player ON death_arena_team_members(player_id);`); err != nil {
-		return err
-	}
-
 	// Matches table
 	if err := execSchema("death_arena_matches", `
 	CREATE TABLE IF NOT EXISTS death_arena_matches (
@@ -97,11 +92,6 @@ func schemaDeathArena() error {
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		finished_at TIMESTAMPTZ
 	);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("idx_death_arena_matches_tournament", `
-	CREATE INDEX IF NOT EXISTS idx_death_arena_matches_tournament ON death_arena_matches(tournament_id);`); err != nil {
 		return err
 	}
 
@@ -163,12 +153,6 @@ func schemaDeathArena() error {
 
 	if err := execSchema("idx_death_arena_champion_rewards_player", `
 	CREATE INDEX IF NOT EXISTS idx_death_arena_champion_rewards_player ON death_arena_champion_rewards(player_id);`); err != nil {
-		return err
-	}
-
-	// Add death_arena_title column to players
-	if err := execSchema("players_add_death_arena_title", `
-	ALTER TABLE players ADD COLUMN IF NOT EXISTS death_arena_title VARCHAR(100) DEFAULT '';`); err != nil {
 		return err
 	}
 
