@@ -441,15 +441,16 @@ func Ascension(c *gin.Context) {
 		if player.DaoMarks == nil {
 			player.DaoMarks = models.DaoMarksMap{}
 		}
-		// Randomize the 2 paths chosen on ascension
-		pathsList := models.AllGuPaths()
-		rand.Shuffle(len(pathsList), func(i, j int) {
-			pathsList[i], pathsList[j] = pathsList[j], pathsList[i]
-		})
-		//get path vital gu
-
-		player.DaoMarks[pathsList[0]] = 100
-		player.DaoMarks[pathsList[1]] = 100
+		// Ordinary ascension grants two random paths. Heaven Path is reserved
+		// for its own acquisition mechanic.
+		ascensionPaths := randomOrdinaryDaoMarkPaths(models.AllGuPaths(), 2)
+		if len(ascensionPaths) != 2 {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không đủ lưu phái hợp lệ để ban Đạo Ngân thăng tiên"})
+			return
+		}
+		for _, path := range ascensionPaths {
+			player.DaoMarks[path] = 100
+		}
 
 		// Set first tribulation to 10 days from now (simulated real-time)
 		nextTrib := time.Now().Add(10 * 24 * time.Hour)

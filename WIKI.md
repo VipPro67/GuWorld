@@ -127,10 +127,11 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - **Bonus Nhân Khí:** Mỗi 100.000 Nhân Khí cộng thêm `+20%` tỉ lệ (`qiBonus = (NhânKhí / 100.000) * 20%`).
   - **Giới hạn tối đa:** Tổng tỉ lệ thành công tối đa là **90%**.
   - **Ví dụ tại 100.000 Nhân Khí:** Giáp = 40%, Ất/Bính/Đinh = 25%. Để đạt max 90%, Tư chất Giáp cần 350.000 Nhân Khí, các tư chất còn lại cần 425.000 Nhân Khí.
-- **Thành công:** lên Lục Chuyển Cổ Tiên, nhận 10 Tiên Nguyên Thạch, Đạo Ngân Thiên/Địa = 100. Kiếp đầu tiên giáng lâm vào **năm nội bộ thứ 10**, tương đương khoảng **2–10 giờ đời thật** tùy phẩm chất Tiên Khiếu (xem mục Gia tốc thời gian). **Tiên Khiếu được khai mở ngay**, phẩm cấp được định đoạt theo Nhân Khí tại thời điểm thăng tiên (xem mục Tiên khiếu).
+- **Thành công:** lên Lục Chuyển Cổ Tiên, nhận 10 Tiên Nguyên Thạch và 100 Đạo Ngân ở mỗi một trong 2 lưu phái ngẫu nhiên (không gồm Thiên Đạo). Kiếp đầu tiên giáng lâm vào **năm nội bộ thứ 10**, tương đương khoảng **2–10 giờ đời thật** tùy phẩm chất Tiên Khiếu (xem mục Gia tốc thời gian). **Tiên Khiếu được khai mở ngay**, phẩm cấp được định đoạt theo Nhân Khí tại thời điểm thăng tiên (xem mục Tiên khiếu).
 - **Thất bại:** Nhân Khí về 0, tu vi phế bỏ rơi về Nhất Chuyển Sơ giai, mất hết tiến độ phá vách.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
 - Tai kiếp có worker kiểm tra tự động mỗi 60 giây. Khi năm nội bộ đạt mốc tiếp theo, worker sinh kiếp và resolve.
+- **Lưu phái tai kiếp ưu tiên lưu phái của Cổ bản mệnh** nếu đó không phải Thiên Đạo. Tỉ lệ ưu tiên bắt đầu từ 80% và tăng theo cấp tai kiếp: Địa Tai **80%**, Thiên Kiếp **85%**, Hạo Kiếp **90%**, Vạn Kiếp **95%**, Hỗn Độn Đại Nạn **100%**; lượt không kích hoạt ưu tiên sẽ chọn ngẫu nhiên trong các lưu phái thường còn lại. Thiên Đạo không xuất hiện trong lưu phái chính hoặc phần Đạo Ngân phụ của phần thưởng tai kiếp.
 - **Bảo hộ khi vắng mặt:** nếu đến mốc tai kiếp mà đạo hữu **đang offline**, tai kiếp sẽ không sinh quái và không phá hoại — Tiên Khiếu chuyển trạng thái **"Kiếp Lực Tích Lũy"** (`TRIBULATION_PENDING`). Khi đạo hữu online trở lại, tai kiếp mới giáng xuống (trong vòng 60 giây) và có **5 phút chuẩn bị** trước khi quái bắt đầu di chuyển/phá mỏ. Thời gian nội bộ vẫn trôi bình thường nên không thể trốn kiếp vô hạn; nếu giữ kiếp offline quá **24 giờ**, phần thưởng Đạo Ngân sẽ bị **giảm còn một nửa**. Bộ đếm 6 giờ tự kết toán chỉ tính thời gian online.
 - **Quái tai kiếp không phá hủy trực tiếp mỏ tài nguyên.** Khi tiếp cận linh mạch tài nguyên, mỗi yêu tướng mỗi nhát làm giảm `hp` mỏ theo loại kiếp: Địa Tai -1, Thiên Kiếp -2, Hạo Kiếp -4, Vạn Kiếp -8, Hỗn Độn Đại Nạn -16. Đại Yêu di chuyển quanh quẩn và đánh mỏ với sát thương gấp đôi yêu tướng.
 - **Combat tai kiếp dùng giao diện chiến đấu thông thường:** nhấn **"Xuất Trận Chiến Đấu"** trong bảng điều khiển tai kiếp sẽ mở màn chiến đấu (auto-combat) chống toàn bộ quái tai kiếp còn sống, mang theo đội hình Cổ như đánh mỏ/PvP/PvE. Giáp ảo (`shield_flat` từ Cổ) và **máu của đạo hữu tiêu hao trước**; sát thương tràn qua (vượt quá giáp + máu) mới trừ trực tiếp vào **Sinh lực Tiên Khiếu** (`immortal_apertures.aperture_hp`). Thanh **Máu Tiên Khiếu** hiển thị ngay trong màn chiến đấu và cập nhật theo từng lượt.
@@ -271,7 +272,7 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 
 ### Đạo ngân, Xung Đột Quy Tắc & Cân Bằng Lưu Phái (Dao Mark Conflict)
 
-Đạo Ngân là vết khắc cô đọng của quy luật tự nhiên tích lũy trên thân thể và Tiên Khiếu của Cổ Tiên qua **49 lưu phái** (tích lũy từ Độ Kiếp, Thăng Tiên, Nuốt Tiên Khiếu hoặc Luyện Cổ).
+Đạo Ngân là vết khắc cô đọng của quy luật tự nhiên tích lũy trên thân thể và Tiên Khiếu của Cổ Tiên qua **49 lưu phái** (tích lũy từ Độ Kiếp, Thăng Tiên, Nuốt Tiên Khiếu hoặc Luyện Cổ). Riêng Đạo Ngân Thiên Đạo không thể nhận từ Thăng Tiên hay Độ Kiếp thông thường và cần một cơ chế riêng biệt.
 
 #### 1. Bảng Phân Loại 10 Nhóm Đạo (Dao Groups)
 Các lưu phái trong cùng một nhóm hoàn toàn tương thích **100% (Xung đột = 0.0)**:
