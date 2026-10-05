@@ -67,7 +67,8 @@ Nguồn dữ liệu chính nằm trong `backend/data/`. `db.InitSchema()` tạo/
 ### Chỉ mục vận hành
 
 `players` có chỉ mục `(created_at DESC, id DESC)` phục vụ phân trang mặc định
-trong danh sách người chơi của Admin. `notifications` có chỉ mục riêng cho thông
+trong danh sách người chơi của Admin và chỉ mục bán phần `google_id IS NOT NULL`
+phục vụ tra cứu tài khoản trong callback Google OAuth. `notifications` có chỉ mục riêng cho thông
 báo chưa đọc, còn `player_recipe_progress` dùng khóa chính
 `(player_id, recipe_id)`. Các truy vấn tương ứng timeout đồng thời thường là dấu
 hiệu nghẽn pool, tải database hoặc khóa schema, không nên xử lý bằng cách chỉ tăng

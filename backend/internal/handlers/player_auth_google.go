@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,6 +22,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
+
+var googleOAuthHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // GoogleLogin redirects user to Google OAuth2 consent page
 func GoogleLogin(c *gin.Context) {
@@ -113,7 +116,13 @@ func GoogleCallback(c *gin.Context) {
 	data.Set("redirect_uri", redirectURI)
 	data.Set("grant_type", "authorization_code")
 
-	resp, err := http.PostForm(tokenURL, data)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Google token request"})
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := googleOAuthHTTPClient.Do(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange authorization code: " + err.Error()})
 		return
@@ -137,8 +146,14 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	// Fetch user profile using access token
-	userinfoURL := "https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + tokenResp.AccessToken
-	userinfoResp, err := http.Get(userinfoURL)
+	userinfoURL := "https://www.googleapis.com/oauth2/v2/userinfo"
+	userinfoReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, userinfoURL, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Google user info request"})
+		return
+	}
+	userinfoReq.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
+	userinfoResp, err := googleOAuthHTTPClient.Do(userinfoReq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info: " + err.Error()})
 		return
@@ -165,7 +180,11 @@ func GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
+	if db.DB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
+		return
+	}
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -177,7 +196,7 @@ func GoogleCallback(c *gin.Context) {
 	var existingPlayerID uuid.UUID
 
 	// 1. Try to search by google_id
-	err = tx.QueryRow(`SELECT id FROM players WHERE google_id = $1`, googleUser.ID).Scan(&existingPlayerID)
+	err = tx.QueryRowContext(c.Request.Context(), `SELECT id FROM players WHERE google_id = $1`, googleUser.ID).Scan(&existingPlayerID)
 	if err == nil {
 		hasPlayer = true
 	} else if err != sql.ErrNoRows {
@@ -187,10 +206,10 @@ func GoogleCallback(c *gin.Context) {
 
 	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
-		err = tx.QueryRow(`SELECT id FROM players WHERE email = $1`, googleUser.Email).Scan(&existingPlayerID)
+		err = tx.QueryRowContext(c.Request.Context(), `SELECT id FROM players WHERE email = $1`, googleUser.Email).Scan(&existingPlayerID)
 		if err == nil {
 			// Merge Account: update players table to link Google account ID
-			_, err = tx.Exec("UPDATE players SET google_id = $1 WHERE id = $2", googleUser.ID, existingPlayerID)
+			_, err = tx.ExecContext(c.Request.Context(), "UPDATE players SET google_id = $1 WHERE id = $2", googleUser.ID, existingPlayerID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge account: " + err.Error()})
 				return
@@ -226,7 +245,7 @@ func GoogleCallback(c *gin.Context) {
 
 		// Check duplicate username and resolve
 		var exists bool
-		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE username = $1)", username).Scan(&exists)
+		err = tx.QueryRowContext(c.Request.Context(), "SELECT EXISTS(SELECT 1 FROM players WHERE username = $1)", username).Scan(&exists)
 		if err == nil && exists {
 			username = fmt.Sprintf("%s_%d", username, rand.Intn(9000)+1000)
 		}
@@ -306,7 +325,7 @@ func GoogleCallback(c *gin.Context) {
 
 		var activeCombatBytes []byte
 		hx, hy := hubEntryPoint()
-		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, googleUser.Email, googleUser.ID, refCode, equippedGus, hx, hy).Scan(
+		err = tx.QueryRowContext(c.Request.Context(), queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, googleUser.Email, googleUser.ID, refCode, equippedGus, hx, hy).Scan(
 			&player.ID, &player.Username, &player.Rank, &player.SubRank,
 			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
@@ -351,16 +370,16 @@ func GoogleCallback(c *gin.Context) {
 		// Handle referral code logic
 		if referralCode != "" {
 			var referrerID uuid.UUID
-			err = tx.QueryRow("SELECT id FROM players WHERE ref_code = $1", referralCode).Scan(&referrerID)
+			err = tx.QueryRowContext(c.Request.Context(), "SELECT id FROM players WHERE ref_code = $1", referralCode).Scan(&referrerID)
 			if err == nil {
 				if referrerID != player.ID {
 					clientIP := c.ClientIP()
 					userAgent := c.Request.UserAgent()
 					var count int
-					_ = tx.QueryRow("SELECT COUNT(*) FROM referrals WHERE referee_ip = $1 AND referee_device = $2", clientIP, userAgent).Scan(&count)
+					_ = tx.QueryRowContext(c.Request.Context(), "SELECT COUNT(*) FROM referrals WHERE referee_ip = $1 AND referee_device = $2", clientIP, userAgent).Scan(&count)
 					isSuspicious := count > 0
 
-					_, err = tx.Exec(`
+					_, err = tx.ExecContext(c.Request.Context(), `
 						INSERT INTO referrals (referrer_id, referee_id, referee_ip, referee_device, is_suspicious)
 						VALUES ($1, $2, $3, $4, $5)
 					`, referrerID, player.ID, clientIP, userAgent, isSuspicious)
@@ -380,7 +399,7 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	var otherAccountsCount int
-	err = tx.QueryRow(`
+	err = tx.QueryRowContext(c.Request.Context(), `
 		SELECT COUNT(DISTINCT id) FROM players
 		WHERE last_login_fingerprint = $1
 		  AND last_login_time > NOW() - INTERVAL '24 hours'
@@ -438,7 +457,7 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	// Update last login info
-	_, err = tx.Exec(`
+	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
 		SET last_login_fingerprint = $1, last_login_ip = $2, last_login_time = NOW()
 		WHERE id = $3`,
@@ -448,19 +467,21 @@ func GoogleCallback(c *gin.Context) {
 		return
 	}
 
+	// Rotate the session in the same transaction as the login state. Besides
+	// avoiding another pool checkout, this prevents concurrent callbacks from
+	// committing player state and session IDs in different orders.
+	sessionID := uuid.New().String()
+	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Google login state"})
 		return
 	}
 
 	// Generate JWT session token
-	sessionID := uuid.New().String()
-	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
-		return
-	}
-
 	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})

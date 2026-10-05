@@ -142,16 +142,23 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		// Verify player actually exists in the database
-		var exists bool
+		// Verify the player and active session in one primary-key lookup. Use the
+		// request context so a disconnected client does not leave a query queued
+		// for a pool connection or running in PostgreSQL.
 		var dbSessionID string
-		err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id=$1), COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&exists, &dbSessionID)
+		err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&dbSessionID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			stats := db.DB.Stats()
+			logger.L.Error("authentication_database_error",
+				zap.String("player_id", playerID.String()), zap.Error(err),
+				zap.Int("open_connections", stats.OpenConnections), zap.Int("in_use_connections", stats.InUse),
+				zap.Int("idle_connections", stats.Idle), zap.Int64("pool_wait_count", stats.WaitCount),
+				zap.Duration("pool_wait_duration", stats.WaitDuration))
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
 			c.Abort()
 			return
 		}
-		if errors.Is(err, sql.ErrNoRows) || !exists {
+		if errors.Is(err, sql.ErrNoRows) {
 			// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
 			// Let's just return 401. The frontend interceptor will call logout().
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
