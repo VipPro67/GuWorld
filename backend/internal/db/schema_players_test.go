@@ -26,3 +26,13 @@ func TestCollectionRevisionTableIsExcludedFromDynamicTriggers(t *testing.T) {
 		t.Fatal("revision table must not install a recursive ownership trigger")
 	}
 }
+
+func TestGoogleLoginLookupHasPlayerIndex(t *testing.T) {
+	sql := strings.ToLower(playerGoogleIDIndexSchema)
+	if !strings.Contains(sql, "on players (google_id)") {
+		t.Fatal("Google login lookup must have an index on players.google_id")
+	}
+	if !strings.Contains(sql, "where google_id is not null") {
+		t.Fatal("Google login index must omit players without a linked Google account")
+	}
+}
