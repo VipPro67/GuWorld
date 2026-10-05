@@ -69,7 +69,11 @@ func main() {
 	}
 
 	if err := cache.Connect(); err != nil {
-		logger.S.Fatalf("Redis connection failed (required): %v", err)
+		// Redis is required for full functionality, but a transient startup
+		// failure (e.g. Docker DNS not ready) must not crash-loop the server:
+		// restarting replays InitSchema's heavy backfills/DDL and can take the
+		// whole database down. Continue with in-memory fallbacks instead.
+		logger.S.Errorf("Redis unavailable after retries, continuing with in-memory fallbacks: %v", err)
 	} else {
 		_ = cache.Delete("game_dictionary_unified", "game_dictionary_gus", "game_dictionary_items", "game_dictionary_monsters", "game_dictionary_constitutions", "game_dictionary_races", "game_dictionary_loot_tables", "game_dictionary_regions", "game_dictionary_monster_spawns")
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -62,15 +63,41 @@ func Connect() error {
 		options.TLSConfig = tlsConfig
 	}
 
-	Client = redis.NewClient(options)
+	// A transient DNS/container-startup race must not crash the server (see
+	// main): retry with linear backoff before giving up. All cache helpers are
+	// nil-safe, so a nil client after this is a supported degraded mode.
+	attempts := envPositiveInt("REDIS_CONNECT_ATTEMPTS", 8)
+	delay := time.Duration(envPositiveInt("REDIS_CONNECT_DELAY_MS", 1000)) * time.Millisecond
 
-	// Test the connection
-	if err := Client.Ping(Ctx).Err(); err != nil {
-		logger.S.Errorf("Failed to connect to Redis: %v", err)
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		Client = redis.NewClient(options)
+		if err = Client.Ping(Ctx).Err(); err == nil {
+			return nil
+		}
+		logger.S.Warnf("Redis connect attempt %d/%d failed: %v", attempt, attempts, err)
+		_ = Client.Close()
 		Client = nil // Set to nil to indicate Redis is not available
-		return err
+		if attempt < attempts {
+			time.Sleep(time.Duration(attempt) * delay)
+		}
 	}
-	return nil
+
+	logger.S.Errorf("Failed to connect to Redis after %d attempts: %v", attempts, err)
+	return err
+}
+
+// envPositiveInt reads a positive integer env var, falling back to def.
+func envPositiveInt(key string, def int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return def
+	}
+	return v
 }
 
 func newRedisTLSConfig(host, serverName, caFile string) (*tls.Config, error) {

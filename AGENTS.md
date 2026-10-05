@@ -35,7 +35,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - **Thể chất (constitution) là data-driven.** Danh sách seed từ `data/Constitution.csv` → bảng `constitution_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm thể chất mới: sửa CSV + Import bảng "Thể chất" trong Admin. Format effects xem `docs/GAME_DATA.md`.
 - **Chủng tộc (race) là data-driven.** Danh sách seed từ `data/Race.csv` → bảng `race_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm chủng tộc mới: sửa CSV + Import bảng "Chủng tộc" trong Admin. `players.race` luôn là 1 key duy nhất (default `human`).
 - **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters. All workers accept `context.Context` for graceful shutdown.
-- **Redis is required.** Server fails to start without Redis.
+- **Redis is required for full functionality, but startup is resilient.** Connects with bounded retries/backoff (`REDIS_CONNECT_ATTEMPTS`/`REDIS_CONNECT_DELAY_MS`) and, if still unavailable, keeps running with in-memory fallbacks and a nil cache client rather than crash-looping (a restart replays `InitSchema`'s heavy backfills/DDL and can take the database down).
 - **JSONB fields** use `interface{}` with custom `Scan`/`Value`. Watch for type assertion panics. `CombatState.Scan` now returns empty struct (not nil) on null.
 - **Handlers return errors** to Gin; no panic recovery middleware.
 
