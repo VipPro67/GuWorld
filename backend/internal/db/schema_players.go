@@ -267,7 +267,7 @@ const playerCollectionRevisionSchema = `
 	DECLARE fk record;
 	BEGIN
 		FOR fk IN
-			SELECT c.conrelid::regclass AS table_name, a.attname AS column_name,
+			SELECT c.conrelid::regclass AS table_name, c.conrelid AS table_oid, a.attname AS column_name,
 			       'trg_state_revision_' || c.conrelid::oid || '_' || a.attnum AS trigger_name
 			FROM pg_constraint c
 			JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
@@ -280,11 +280,19 @@ const playerCollectionRevisionSchema = `
 			  AND c.conrelid <> 'players'::regclass
 			  AND c.conrelid <> 'player_collection_revisions'::regclass
 		LOOP
-			EXECUTE format('DROP TRIGGER IF EXISTS %I ON %s', fk.trigger_name, fk.table_name);
-			EXECUTE format(
-				'CREATE TRIGGER %I AFTER INSERT OR UPDATE OR DELETE ON %s FOR EACH ROW EXECUTE FUNCTION bump_player_collection_state_revision(%L)',
-				fk.trigger_name, fk.table_name, fk.column_name
-			);
+			-- Only create missing triggers. DROP+CREATE on every boot takes an
+			-- ACCESS EXCLUSIVE lock on ~60 hot player tables, blocking traffic
+			-- during rolling restarts. The trigger name encodes the FK column,
+			-- so an existing name always has the matching owner argument.
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_trigger t
+				WHERE t.tgrelid = fk.table_oid AND t.tgname = fk.trigger_name
+			) THEN
+				EXECUTE format(
+					'CREATE TRIGGER %I AFTER INSERT OR UPDATE OR DELETE ON %s FOR EACH ROW EXECUTE FUNCTION bump_player_collection_state_revision(%L)',
+					fk.trigger_name, fk.table_name, fk.column_name
+				);
+			END IF;
 		END LOOP;
 	END $$;`
 

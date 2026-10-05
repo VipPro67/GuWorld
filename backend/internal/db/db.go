@@ -490,23 +490,26 @@ func seedMineSlots() error {
 // }
 
 // backfillWallets mirrors each player's stone balances into the wallet table.
+// The anti-join makes this a no-op once every player has a wallet, avoiding an
+// O(players) insert/conflict-check write storm on every boot.
 func backfillWallets() error {
 	if _, err := schemaDB().Exec(`
 	INSERT INTO wallets (user_id, immortal_jade)
-	SELECT id, 0
-	FROM players
-	ON CONFLICT (user_id) DO NOTHING;`); err != nil {
+	SELECT p.id, 0
+	FROM players p
+	WHERE NOT EXISTS (SELECT 1 FROM wallets w WHERE w.user_id = p.id)`); err != nil {
 		return err
 	}
 	return nil
 }
 
-// backfillLeaderboardSettings ensures every player has a leaderboard row.
+// backfillLeaderboardSettings ensures every player has a leaderboard row. The
+// anti-join makes it a no-op once populated instead of re-inserting per boot.
 func backfillLeaderboardSettings() error {
 	if _, err := schemaDB().Exec(`
 	INSERT INTO leaderboard_settings (player_id, show_on_leaderboard)
-	SELECT id, TRUE FROM players
-	ON CONFLICT (player_id) DO NOTHING;`); err != nil {
+	SELECT p.id, TRUE FROM players p
+	WHERE NOT EXISTS (SELECT 1 FROM leaderboard_settings ls WHERE ls.player_id = p.id)`); err != nil {
 		return err
 	}
 	return nil

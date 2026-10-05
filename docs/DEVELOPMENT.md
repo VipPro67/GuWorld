@@ -33,7 +33,8 @@ Các biến thường dùng:
 | `CORS_ALLOWED_ORIGINS` | Danh sách origin frontend, mặc định `http://localhost:3000`. |
 | `JWT_SECRET` | Ký token/cookie auth. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Cấu hình SMTP (ví dụ: Brevo) để gửi mã OTP đăng ký. |
-| `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_SSL` | Redis connection config (bắt buộc). Redis TLS luôn xác minh certificate. |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_SSL` | Redis connection config. Redis TLS luôn xác minh certificate. |
+| `REDIS_CONNECT_ATTEMPTS`, `REDIS_CONNECT_DELAY_MS` | Số lần thử kết nối Redis lúc boot và độ trễ backoff cơ bản; mặc định 8 lần/1000 ms. Hết lượt thử mà vẫn lỗi thì server vẫn chạy với fallback in-memory (cache client = nil) thay vì crash-loop. |
 | `REDIS_TLS_SERVER_NAME`, `REDIS_TLS_CA_FILE` | Tùy chọn hostname xác minh và CA PEM riêng khi `REDIS_SSL=true`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Dùng cho `/auth/google/*`; chỉ cấu hình bằng environment/secret store. |
 | PayOS vars | Dùng cho topup/webhook nếu bật payment thật. |

@@ -766,17 +766,17 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		chat := api.Group("/chat")
 		chat.Use(middleware.AuthRequired())
 		{
-			chat.POST("/mail/send", handlers.SendPrivateMail)
-			chat.GET("/mail/inbox", handlers.GetInbox)
+			chat.POST("/mail/send", middleware.RateLimitByPlayer(20, time.Minute), handlers.SendPrivateMail)
+			chat.GET("/mail/inbox", middleware.RateLimitByPlayer(30, time.Minute), handlers.GetInbox)
 			chat.POST("/bao-hoang/send", middleware.RateLimitByIP(30, time.Minute), handlers.SendBaoHoangChat)
-			chat.GET("/bao-hoang/messages", handlers.GetBaoHoangMessages)
+			chat.GET("/bao-hoang/messages", middleware.RateLimitByPlayer(60, time.Minute), handlers.GetBaoHoangMessages)
 		}
 
 		// Explore — per player: 25/min
 		api.POST("/explore", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.ExploreNode)
 		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Retreat)
 		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
-		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
+		api.GET("/explore/grid", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
