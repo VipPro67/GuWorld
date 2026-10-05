@@ -1,5 +1,9 @@
 package db
 
+const playerGoogleIDIndexSchema = `
+	CREATE INDEX IF NOT EXISTS idx_players_google_id ON players (google_id)
+	WHERE google_id IS NOT NULL;`
+
 // Player/account schema. players is the hub most gameplay tables reference;
 // it is created after parties so the players.party_id FK can be declared inline.
 // The circular parties.leader_id -> players FK is added via ALTER below.
@@ -239,6 +243,13 @@ func schemaPlayers() error {
 	// btree, so every login seq-scans players without this expression index.
 	if err := execSchema("players_email_lower_idx", `
 	CREATE INDEX IF NOT EXISTS idx_players_email_lower ON players (LOWER(email));`); err != nil {
+		return err
+	}
+
+	// Google OAuth resolves an account by google_id before falling back to
+	// email. Keep null-only password accounts out of the index while avoiding a
+	// full players scan on every callback.
+	if err := execSchema("players_google_id_idx", playerGoogleIDIndexSchema); err != nil {
 		return err
 	}
 
