@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -200,13 +201,17 @@ func LoginPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên đăng nhập"})
 		return
 	}
+	middleware.SetSessionCache(player.ID, sessionID)
 
 	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
 		return
 	}
-	player.CanAccessAdmin, err = middleware.PlayerHasAdminAccess(c.Request.Context(), player.ID)
+	// Invalidate any stale admin-access cache entry so the fresh value is
+	// fetched and cached for subsequent /auth/me polls.
+	_ = cache.Delete("admin_access:" + player.ID.String())
+	player.CanAccessAdmin, err = cachedPlayerHasAdminAccess(c.Request.Context(), player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve admin access"})
 		return
@@ -222,10 +227,30 @@ func LoginPlayer(c *gin.Context) {
 // LogoutPlayer clears the auth cookie for the current browser session.
 func LogoutPlayer(c *gin.Context) {
 	if playerID, exists := middleware.GetPlayerID(c); exists {
-		_ = playerID
+		middleware.InvalidateSessionCache(playerID)
 	}
 	clearAuthCookie(c)
 	c.Status(http.StatusNoContent)
+}
+
+// adminAccessCacheTTL is how long we cache the admin access result per player.
+// Admin role changes are rare; 60s staleness is acceptable.
+const adminAccessCacheTTL = 60 * time.Second
+
+// cachedPlayerHasAdminAccess checks player admin access with a Redis cache
+// to avoid a 3-table JOIN on every /auth/me poll request.
+func cachedPlayerHasAdminAccess(ctx context.Context, playerID uuid.UUID) (bool, error) {
+	cacheKey := "admin_access:" + playerID.String()
+	var cached bool
+	if err := cache.GetJSON(cacheKey, &cached); err == nil {
+		return cached, nil
+	}
+	result, err := middleware.PlayerHasAdminAccess(ctx, playerID)
+	if err != nil {
+		return false, err
+	}
+	_ = cache.SetJSON(cacheKey, result, adminAccessCacheTTL)
+	return result, nil
 }
 
 // GetCurrentPlayer returns the authenticated player from the httpOnly cookie session.
@@ -249,10 +274,11 @@ func GetCurrentPlayer(c *gin.Context) {
 		return
 	}
 
-	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
+	// player.MaterialsInventory is already populated by loadRow() inside ProjectAndPersistBestEffort.
+	// No need to call loadMaterialsInventory() again here.
 	player.CompletedQuests = loadCompletedQuests(playerID.String())
 	player.UnlockedRecipes = loadUnlockedRecipes(playerID.String())
-	player.CanAccessAdmin, err = middleware.PlayerHasAdminAccess(c.Request.Context(), playerID)
+	player.CanAccessAdmin, err = cachedPlayerHasAdminAccess(c.Request.Context(), playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve admin access"})
 		return

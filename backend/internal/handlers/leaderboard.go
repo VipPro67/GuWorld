@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 )
@@ -41,6 +43,11 @@ type LeaderboardSettings struct {
 }
 
 const cacheTTL = 24 * time.Hour
+
+// playerRankCacheTTL is how long we cache a player's own leaderboard rank.
+// The leaderboard list itself is cached for 24h; per-player rank being ~5min
+// stale is acceptable and avoids a full ROW_NUMBER() scan per request.
+const playerRankCacheTTL = 5 * time.Minute
 
 type leaderboardCacheEntry struct {
 	entries      []LeaderboardEntry
@@ -89,6 +96,45 @@ func ensureLeaderboardSetting(playerID uuid.UUID) {
 	}
 }
 
+type cachedRankResult struct {
+	Rank  int     `json:"rank"`
+	Value float64 `json:"value"`
+	Found bool    `json:"found"`
+}
+
+// cachedGetMyRank returns the calling player's position on the given leaderboard
+// category, using a Redis cache to avoid a full ROW_NUMBER() window-function scan
+// on every request when the top-50 list is already served from the in-memory cache.
+func cachedGetMyRank(category string, authID uuid.UUID) (*int, float64) {
+	cacheKey := fmt.Sprintf("lb_rank:%s:%s", category, authID.String())
+	var cached cachedRankResult
+	if err := cache.GetJSON(cacheKey, &cached); err == nil {
+		if !cached.Found {
+			return nil, 0
+		}
+		return &cached.Rank, cached.Value
+	}
+
+	rankQuery := buildRankQuery(category)
+	if rankQuery == "" {
+		return nil, 0
+	}
+
+	var pos int
+	var myValue float64
+	err := db.DB.QueryRow(rankQuery, authID).Scan(&pos, &myValue)
+	result := cachedRankResult{Found: err == nil}
+	if err == nil {
+		result.Rank = pos
+		result.Value = myValue
+	}
+	_ = cache.SetJSON(cacheKey, result, playerRankCacheTTL)
+	if !result.Found {
+		return nil, 0
+	}
+	return &result.Rank, result.Value
+}
+
 func GetLeaderboard(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -123,17 +169,7 @@ func GetLeaderboard(c *gin.Context) {
 
 	// Try cache
 	if cached, ok := leaderboardCacheLoad(category); ok {
-		var myRank *int
-		var myValue float64
-
-		rankQuery := buildRankQuery(category)
-		if rankQuery != "" {
-			var pos int
-			err := db.DB.QueryRowContext(c.Request.Context(), rankQuery, authID).Scan(&pos, &myValue)
-			if err == nil {
-				myRank = &pos
-			}
-		}
+		myRank, myValue := cachedGetMyRank(category, authID)
 
 		c.JSON(http.StatusOK, LeaderboardResponse{
 			Category:     category,
@@ -288,17 +324,7 @@ func GetLeaderboard(c *gin.Context) {
 	lastUpdatedStr = time.Now().Format("2006-01-02T15:04:05Z07:00")
 
 	// Get caller's rank & value
-	var myRank *int
-	var myValue float64
-
-	rankQuery := buildRankQuery(category)
-	if rankQuery != "" {
-		var pos int
-		err := db.DB.QueryRowContext(c.Request.Context(), rankQuery, authID).Scan(&pos, &myValue)
-		if err == nil {
-			myRank = &pos
-		}
-	}
+	myRank, myValue := cachedGetMyRank(category, authID)
 
 	c.JSON(http.StatusOK, LeaderboardResponse{
 		Category:     category,

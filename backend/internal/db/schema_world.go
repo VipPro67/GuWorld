@@ -109,6 +109,10 @@ func schemaWorld() error {
 	CREATE INDEX IF NOT EXISTS idx_monster_spawns_monster ON monster_spawns (monster_id);`); err != nil {
 		return err
 	}
+	if err := execSchema("monster_spawns_region_xy_idx", `
+	CREATE INDEX IF NOT EXISTS idx_monster_spawns_region_xy ON monster_spawns (region_id, x, y);`); err != nil {
+		return err
+	}
 
 	// Durable action claims bridge Redis monster CAS with PostgreSQL player
 	// updates. Replaying the same monster revision can never damage/drop twice.

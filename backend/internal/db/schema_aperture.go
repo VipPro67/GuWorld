@@ -291,6 +291,10 @@ func schemaAperture() error {
 	CREATE INDEX IF NOT EXISTS idx_tribulation_events_player ON tribulation_events (player_id);`); err != nil {
 		return err
 	}
+	if err := execSchema("tribulation_events_player_status_idx", `
+	CREATE INDEX IF NOT EXISTS idx_tribulation_events_player_status ON tribulation_events (player_id, status);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("tribulation_events_float_upgrade", `
 	DO $$

@@ -49,6 +49,9 @@ func GetMyAuditLogs(c *gin.Context) {
 	if err != nil || limit <= 0 {
 		limit = 50
 	}
+	if limit > 100 {
+		limit = 100
+	}
 	offset, err := strconv.Atoi(offsetStr)
 	if err != nil || offset < 0 {
 		offset = 0

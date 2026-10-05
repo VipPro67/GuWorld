@@ -125,6 +125,12 @@ func schemaSocial() error {
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at);`); err != nil {
 		return err
 	}
+	// Composite index for the most common query: player's logs ordered by time DESC.
+	// Covers WHERE player_id = $1 ORDER BY created_at DESC without merging two indexes.
+	if err := execSchema("audit_logs_player_created_idx", `
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_player_created ON audit_logs (player_id, created_at DESC);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("notifications", `
 	CREATE TABLE IF NOT EXISTS notifications (
