@@ -36,7 +36,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   onRetreat,
 }) => {
   const [selectedGuIds, setSelectedGuIds] = useState<string[]>([]);
-  const [selectedKillerMoveIds, setSelectedKillerMoveIds] = useState<string[]>([]);
 
   const [simulationLogs, setSimulationLogs] = useState<Record<string, unknown>[]>([]);
   const [simulationWinner, setSimulationWinner] = useState<string | null>(null);
@@ -55,8 +54,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const resolveTribulation = useGameStore((state) => state.resolveTribulation);
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
   const fetchMineSlots = useGameStore((state) => state.fetchMineSlots);
-  const killerMoves = useGameStore((state) => state.killerMoves);
-  //const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
   const combatSettings = useGameStore((state) => state.combatSettings);
   const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
   const addToast = useGameStore((state) => state.addToast);
@@ -95,10 +92,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       addToast("Bạn đang trong tổ đội. Trưởng nhóm sẽ điều khiển trận chiến.", "info");
     }
   }, [isPartyMemberNotLeader, addToast]);
-
-  // useEffect(() => {
-  //   void fetchKillerMoves();
-  // }, [fetchKillerMoves]);
 
   // Pre-populate auto settings from persistent combat config
   const combatSettingsFetched = useRef(false);
@@ -152,7 +145,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     const tribulationEventId = isPracticeMode ? undefined : player.active_combat?.tribulation_event_id;
     const loadout = {
       GuIds: selectedGuIds,
-      KillerMoveIds: selectedKillerMoveIds,
       ImmortalGuId: null,
       AutoHealHP: autoHealHP,
       HealThreshold: healThreshold,
@@ -196,14 +188,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         return;
       }
       setSelectedGuIds([...selectedGuIds, id]);
-    }
-  };
-
-  const toggleKillerMove = (id: string) => {
-    if (selectedKillerMoveIds.includes(id)) {
-      setSelectedKillerMoveIds(selectedKillerMoveIds.filter(i => i !== id));
-    } else {
-      setSelectedKillerMoveIds([...selectedKillerMoveIds, id]);
     }
   };
 
@@ -453,7 +437,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
     if (gus.length === 0) {
       setSelectedGuIds([]);
-      setSelectedKillerMoveIds([]);
       return;
     }
 
@@ -606,7 +589,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
     if (!best) {
       setSelectedGuIds([]);
-      setSelectedKillerMoveIds([]);
       return;
     }
 
@@ -678,43 +660,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
     setSelectedGuIds(picked);
 
-    const activeGuIds = new Set(
-      (player.gu_inventory || [])
-        .filter(gu => gu.status === "ACTIVE")
-        .map(gu => gu.instance_id)
-    );
-
-    const validKMs = killerMoves.filter(move => {
-      if (!activeGuIds.has(move.core_player_gu_id)) {
-        return false;
-      }
-
-      if (move.slots) {
-        for (const slot of move.slots) {
-          if (!activeGuIds.has(slot.player_gu_id)) {
-            return false;
-          }
-        }
-      }
-
-      return true;
-    });
-
-    const matchingKMs = validKMs.filter(km => {
-      if (pathPriority.length === 0) {
-        return true;
-      }
-
-      return pathPriority.some(
-        path => normalize(path) === normalize(km.path)
-      );
-    });
-
-    setSelectedKillerMoveIds(
-      matchingKMs
-        .slice(0, 3)
-        .map(km => km.id)
-    );
   }, [
     eligibleGus,
     guDictionary,
@@ -723,7 +668,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     player.dao_marks,
     player.path_masteries,
     player.gu_inventory,
-    killerMoves,
   ]);
 
   const hasAutoRecommended = useRef(false);
@@ -746,8 +690,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       }
 
       if (instanceIds.length > 0) {
-        // Populate recommended killer moves, then override the Gu selection
-        // with the player's saved loadout (higher priority than recommendation).
         recommendLoadout();
         setSelectedGuIds(instanceIds.slice(0, 15));
         hasAutoRecommended.current = true;
@@ -762,24 +704,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [settingsLoaded, eligibleGus, combatSettings, recommendLoadout]);
 
   // Sorting for Gu list
-  // Only show killer moves whose component Gus are all ACTIVE
-  const validKillerMoves = useMemo(() => {
-    const activeGuIds = new Set(
-      (player.gu_inventory || [])
-        .filter(gu => gu.status === "ACTIVE")
-        .map(gu => gu.instance_id)
-    );
-    return killerMoves.filter(move => {
-      if (!activeGuIds.has(move.core_player_gu_id)) return false;
-      if (move.slots) {
-        for (const slot of move.slots) {
-          if (!activeGuIds.has(slot.player_gu_id)) return false;
-        }
-      }
-      return true;
-    });
-  }, [killerMoves, player.gu_inventory]);
-
   const sortedEligibleGus = useMemo(() => {
     const gus = [...eligibleGus];
     if (guSortMode === "rank") {
@@ -1329,55 +1253,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                         <span className="text-[8px] text-white font-bold">✓</span>
                       </div>
                     )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Killer Moves */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-2 mb-3">
-            <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2">
-              <Swords className="w-4 h-4 text-purple-400" />
-              Sát Chiêu
-            </h3>
-            <span className="text-[10px] text-zinc-600">{selectedKillerMoveIds.length} đã chọn</span>
-          </div>
-          {validKillerMoves.length === 0 ? (
-            <p className="text-sm text-zinc-500 italic">Chưa có sát chiêu hợp lệ (cần đầy đủ Cổ trùng thành phần).</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {validKillerMoves.map(move => {
-                const isSelected = selectedKillerMoveIds.includes(move.id);
-                const firstGuId = selectedGuIds.length > 0 ? selectedGuIds[0] : null;
-                const firstSelectedGu = eligibleGus.find(g => g.instance_id === firstGuId);
-                const firstSpec = firstSelectedGu ? guSpecFor(firstSelectedGu.gu_id, firstSelectedGu.rank) : null;
-                const pathMatch = firstSpec?.path ? firstSpec.path.includes(move.path) : move.path === bestPath;
-                return (
-                  <div
-                    key={move.id}
-                    onClick={() => toggleKillerMove(move.id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-purple-500 bg-purple-950/30 ring-1 ring-purple-500/30' :
-                        pathMatch ? 'border-zinc-700 bg-zinc-900/60' :
-                          'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
-                      }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-bold text-sm text-zinc-200">{move.name}</div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${(move.stability ?? 0) >= 80 ? 'bg-emerald-900/50 text-emerald-300' : (move.stability ?? 0) >= 50 ? 'bg-yellow-900/50 text-yellow-300' : 'bg-red-900/50 text-red-300'}`}>
-                        {(move.stability ?? 0).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${pathMatch ? `${getPathColor(move.path).bg} ${getPathColor(move.path).text} ${getPathColor(move.path).border}` : 'bg-zinc-800 text-zinc-500'
-                        }`}>
-                        {move.path}
-                      </span>
-                      <span className="text-[10px] text-zinc-500">DMG <Num value={Math.round(move.damage_value)} /></span>
-                      <span className="text-[10px] text-zinc-500">Mana <Num value={Math.round(move.total_mana_cost)} /></span>
-                    </div>
                   </div>
                 );
               })}

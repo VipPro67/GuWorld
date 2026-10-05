@@ -546,46 +546,6 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		enemyActions = append(enemyActions, act)
 	}
 
-	// For PVP defender with UUID, load active killer moves if any
-	isPVP := activeCombat != nil && (activeCombat.EnemyType == "PVP" || enemy.Kind == "Player")
-	if isPVP && activeCombat.TargetPlayerID != "" {
-		if targetUUID, errParse := uuid.Parse(activeCombat.TargetPlayerID); errParse == nil && tx != nil {
-			var selectedKMIDs []string
-			if cs != nil && len(cs.KMPriorities) > 0 {
-				for _, kp := range cs.KMPriorities {
-					selectedKMIDs = append(selectedKMIDs, kp.KillerMoveID)
-				}
-			}
-			kmMap, slotsMap, errKM := loadKillerMovesBatch(tx, targetUUID, selectedKMIDs)
-			if errKM == nil {
-				ownedGuInstMap := make(map[string]bool)
-				for _, g := range enemy.GuInventory {
-					if !g.Equipped || g.Status != "ACTIVE" {
-						continue
-					}
-					ownedGuInstMap[g.InstanceID] = true
-				}
-				for kmID, km := range kmMap {
-					slots := slotsMap[kmID]
-					if ownedGuInstMap[km.CorePlayerGuID] {
-						allValid := true
-						for _, slot := range slots {
-							if !ownedGuInstMap[slot.PlayerGuID] {
-								allValid = false
-								break
-							}
-						}
-						if allValid {
-							act := buildSimActionFromKillerMove(km, slots, enemy.DaoMarks)
-							act.SourceID = kmID
-							enemyActions = append(enemyActions, act)
-						}
-					}
-				}
-			}
-		}
-	}
-
 	// Basic attack fallback
 	enemyActions = append(enemyActions, simulator.SimAction{
 		ActionType: "BASIC_ATTACK",
@@ -605,15 +565,6 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 			case "GU_SKILL":
 				for _, t := range cs.GuPriorities {
 					if t.GuID == act.SourceID {
-						act.Priority = t.Priority
-						act.UseCondition = t.UseCondition
-						act.ConditionValue = t.ConditionValue
-						break
-					}
-				}
-			case "KILLER_MOVE":
-				for _, t := range cs.KMPriorities {
-					if t.KillerMoveID == act.SourceID {
 						act.Priority = t.Priority
 						act.UseCondition = t.UseCondition
 						act.ConditionValue = t.ConditionValue
@@ -837,19 +788,17 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		}
 	}
 
-	var selectedKMIDs []string
 	var autoHealHP bool
 	var healThreshold float64
 	var autoRestoreMana bool
 	var manaThreshold float64
 
-	if isInitiator && reqLoadout != nil && (len(reqLoadout.GuIds) > 0 || len(reqLoadout.KillerMoveIds) > 0) {
+	if isInitiator && reqLoadout != nil && len(reqLoadout.GuIds) > 0 {
 		for _, id := range reqLoadout.GuIds {
 			if inst, ok := resolveGuInstance(id); ok {
 				addSelectedGuInstance(inst)
 			}
 		}
-		selectedKMIDs = reqLoadout.KillerMoveIds
 		autoHealHP = reqLoadout.AutoHealHP
 		healThreshold = reqLoadout.HealThreshold
 		autoRestoreMana = reqLoadout.AutoRestoreMana
@@ -869,27 +818,6 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		if len(selectedGuInstances) == 0 {
 			for _, inst := range allEquippedActiveGus {
 				addSelectedGuInstance(inst)
-			}
-		}
-
-		// Automatically select all active killer moves they have
-		kmMap, slotsMap, errLoadBatch := loadKillerMovesBatch(tx, player.ID, nil)
-		if errLoadBatch == nil {
-			for kmID, km := range kmMap {
-				slots := slotsMap[kmID]
-				// Check if component Gus are active
-				if ownedGuInstanceSet[km.CorePlayerGuID] {
-					allSlotsValid := true
-					for _, slot := range slots {
-						if !ownedGuInstanceSet[slot.PlayerGuID] {
-							allSlotsValid = false
-							break
-						}
-					}
-					if allSlotsValid {
-						selectedKMIDs = append(selectedKMIDs, kmID)
-					}
-				}
 			}
 		}
 
@@ -940,25 +868,6 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		}
 	}
 
-	// Add killer moves
-	if len(selectedKMIDs) > 0 {
-		kmMap, slotsMap, errLoadBatch := loadKillerMovesBatch(tx, player.ID, selectedKMIDs)
-		if errLoadBatch == nil {
-			for _, kmID := range selectedKMIDs {
-				km, ok := kmMap[kmID]
-				if !ok {
-					continue
-				}
-				slots := slotsMap[kmID]
-				act := buildSimActionFromKillerMove(km, slots, player.DaoMarks)
-				act.SourceID = kmID
-				act.Damage *= attackFactor
-				act.Defense *= defenseFactor
-				allActions = append(allActions, act)
-			}
-		}
-	}
-
 	// Basic attack fallback
 	allActions = append(allActions, simulator.SimAction{
 		ActionType: "BASIC_ATTACK",
@@ -976,15 +885,6 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		case "GU_SKILL":
 			for _, t := range settings.GuPriorities {
 				if t.GuID == act.SourceID || (act.InstanceID != "" && t.GuID == act.InstanceID) {
-					act.Priority = t.Priority
-					act.UseCondition = t.UseCondition
-					act.ConditionValue = t.ConditionValue
-					break
-				}
-			}
-		case "KILLER_MOVE":
-			for _, t := range settings.KMPriorities {
-				if t.KillerMoveID == act.SourceID {
 					act.Priority = t.Priority
 					act.UseCondition = t.UseCondition
 					act.ConditionValue = t.ConditionValue
@@ -1185,7 +1085,6 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	} else {
 		simCombatant.Loadout = &simulator.CombatLoadout{
 			GuIds:           selectedGuIDs,
-			KillerMoveIds:   selectedKMIDs,
 			AutoHealHP:      autoHealHP,
 			HealThreshold:   healThreshold,
 			AutoRestoreMana: autoRestoreMana,

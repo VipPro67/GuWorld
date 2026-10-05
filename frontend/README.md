@@ -41,7 +41,6 @@ Nếu biến này không tồn tại, store dùng mặc định `http://localhos
 | `src/components/Aperture.tsx` | View nhân vật/không khiếu, tu luyện, profile, quest. |
 | `src/components/GuInventory.tsx` | Inventory Cổ. |
 | `src/components/RefiningFurnace.tsx` | Luyện Cổ/suy diễn recipe. |
-| `src/components/killer-moves/KillerMoveBuilder.tsx` | Tạo/quản lý sát chiêu. |
 | `src/components/ExplorationMap.tsx` | Bản đồ khám phá. |
 | `src/components/CombatScreen.tsx` | Combat UI. |
 | `src/components/DungeonView.tsx` | Instance/phó bản. |

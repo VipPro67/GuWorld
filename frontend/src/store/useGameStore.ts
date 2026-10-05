@@ -333,13 +333,6 @@ export interface GuTactic {
   condition_value: number;
 }
 
-export interface KillerMoveTactic {
-  killer_move_id: string;
-  priority: number;
-  use_condition: string;
-  condition_value: number;
-}
-
 export interface AutoCombatConfig {
   auto_heal_hp: boolean;
   heal_threshold: number;
@@ -347,40 +340,7 @@ export interface AutoCombatConfig {
   mana_threshold: number;
   category_priorities?: string[];
   gu_priorities: GuTactic[];
-  km_priorities: KillerMoveTactic[];
   skip_battle: boolean;
-}
-
-export interface KillerMoveSlot {
-  id: string;
-  killer_move_id: string;
-  player_gu_id: string;
-  slot_type: "CORE" | "SUPPORT" | string;
-  slot_index: number;
-  created_at: string;
-}
-
-export interface KillerMove {
-  id: string;
-  player_id: string;
-  name: string;
-  path: string;
-  move_type: string;
-  rank_required: number;
-  core_player_gu_id: string;
-  total_mana_cost: number;
-  stability: number;
-  damage_value: number;
-  defense_value: number;
-  cooldown: number;
-  cast_time: number;
-  effects?: Record<string, number> | string | null;
-  is_mastered: boolean;
-  is_stable: boolean;
-  is_instant_cast: boolean;
-  created_at: string;
-  updated_at: string;
-  slots?: KillerMoveSlot[];
 }
 
 export interface ManaSnapshot {

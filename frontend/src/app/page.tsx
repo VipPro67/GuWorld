@@ -46,7 +46,6 @@ const AuditLogsView = dynamic(() => import("@/components/AuditLogsView").then(m 
 const LeaderboardView = dynamic(() => import("@/components/LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
 const TrainingRoom = dynamic(() => import("@/components/TrainingRoom").then(m => m.TrainingRoom), { ssr: false });
 const UtilitiesView = dynamic(() => import("@/components/UtilitiesView").then(m => m.UtilitiesView), { ssr: false });
-const KillerMoveBuilder = dynamic(() => import("@/components/killer-moves/KillerMoveBuilder").then(m => m.KillerMoveBuilder), { ssr: false });
 
 export default function Home() {
   const [
@@ -418,10 +417,7 @@ export default function Home() {
               onRefine={refineGu}
             />
           </div>
-        ) : currentView === "kill-moves" ? (
-          <KillerMoveBuilder/>
-        )
-        : currentView === "topup" ? (
+        ) : currentView === "topup" ? (
           <div className="w-full">
             <PremiumStoreView defaultTab="topup" />
           </div>

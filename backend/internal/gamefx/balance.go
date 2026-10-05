@@ -34,8 +34,6 @@ const (
 	PathMasteryEfficiencyLossPerLevel = 0.20
 	// PathMasteryBattleGainPerRankMultiplier is the cap multiplier per battle based on cultivation rank (rank * 10).
 	PathMasteryBattleGainPerRankMultiplier = 10
-	// PathMasteryKillerMoveBaseGain is the base mastery points earned when casting a killer move.
-	PathMasteryKillerMoveBaseGain = 2
 )
 
 // PathMasteryGuUseBaseGains defines the base Chân Ý earned each time a Gu is

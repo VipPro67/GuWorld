@@ -19,7 +19,6 @@ const (
 	FormatGu       Format = "gu"
 	FormatItem     Format = "item"
 	FormatGameFX   Format = "gamefx"
-	FormatKiller   Format = "killer_move"
 	FormatAperture Format = "aperture_variant_event"
 )
 
@@ -224,8 +223,6 @@ func Convert(format Format, sourceID string, raw []byte) Result {
 		return ConvertItem(sourceID, raw)
 	case FormatGameFX:
 		return ConvertGameFX(sourceID, raw)
-	case FormatKiller:
-		return ConvertKillerMove(sourceID, raw)
 	case FormatAperture:
 		return ConvertApertureEvent(sourceID, raw)
 	default:
@@ -378,9 +375,6 @@ var gameFXMappings = map[string]string{"stat_mods": "STAT_MODS", "refine": "REFI
 func ConvertGameFX(id string, raw []byte) Result {
 	return convertFlatNative(FormatGameFX, id, raw, "ALWAYS_ON", gameFXMappings)
 }
-func ConvertKillerMove(id string, raw []byte) Result {
-	return convertFlatNative(FormatKiller, id, raw, "ON_ACTION", map[string]string{"damage": "DAMAGE", "defense": "DEFENSE", "heal": "HEAL", "shield": "SHIELD", "lifesteal": "LIFESTEAL", "life_steal": "LIFESTEAL", "ignore_defense": "IGNORE_DEFENSE", "target_selector": "TARGET_SELECTOR", "curve_attack": "BYPASS_FRONTLINE"})
-}
 func ConvertApertureEvent(id string, raw []byte) Result {
 	var x any
 	if json.Unmarshal(raw, &x) != nil {
@@ -471,7 +465,7 @@ func nz[T any](v []T) []T {
 }
 func (f Format) Valid() bool {
 	switch f {
-	case FormatGu, FormatItem, FormatGameFX, FormatKiller, FormatAperture:
+	case FormatGu, FormatItem, FormatGameFX, FormatAperture:
 		return true
 	}
 	return false

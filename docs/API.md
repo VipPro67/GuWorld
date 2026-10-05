@@ -115,7 +115,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/achievements/claim` |
 | POST | `/achievements/select` |
 
-## Inventory, refining and killer moves
+## Inventory and refining
 
 | Method | Path |
 | --- | --- |
@@ -132,12 +132,6 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/drop-batch` |
 | POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |
 | POST | `/refine/deduce` | Suy diễn recipe. |
-| POST | `/killer-moves/calculate` |
-| POST | `/killer-moves` |
-| GET | `/killer-moves` |
-| GET | `/killer-moves/:id` |
-| DELETE | `/killer-moves/:id` |
-| POST | `/combat/cast-killer-move` |
 | POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Như `/combat/start`. |
 | GET | `/combat/history` | 20 entry gần nhất, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). |
