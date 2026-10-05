@@ -127,6 +127,10 @@ func schemaSects() error {
 	END $$;`); err != nil {
 		return err
 	}
+	if err := execSchema("sect_missions_expires_idx", `
+	CREATE INDEX IF NOT EXISTS idx_sect_missions_expires ON sect_missions (expires_at);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("sect_members", `
 	CREATE TABLE IF NOT EXISTS sect_members (
@@ -216,6 +220,16 @@ func schemaSects() error {
 	}
 	if err := execSchema("player_sect_missions_player_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_sect_missions_player ON player_sect_missions (player_id);`); err != nil {
+		return err
+	}
+	// Index on foreign key to prevent full table scans on DELETE FROM sect_missions CASCADE
+	if err := execSchema("player_sect_missions_mission_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_sect_missions_mission ON player_sect_missions (mission_id);`); err != nil {
+		return err
+	}
+	// Composite index for background expiry worker
+	if err := execSchema("player_sect_missions_status_expires_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_sect_missions_status_expires ON player_sect_missions (status, expires_at);`); err != nil {
 		return err
 	}
 

@@ -149,9 +149,19 @@ func StartAuctionSettlementWorker(ctx context.Context) {
 }
 
 func settleExpiredBuybackOrders() error {
+	// Cheap guard: bail before any heavy row fetch / JSON unmarshal when no buyback order is expired.
+	var hasExpired bool
+	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM buyback_orders WHERE status='ACTIVE' AND end_time <= NOW())`).Scan(&hasExpired); err != nil {
+		return err
+	}
+	if !hasExpired {
+		return nil
+	}
+
 	rows, err := db.DB.Query(`
 		SELECT id, buyer_id, order_type, item_type, item_target, COALESCE(item_data, 'null'::jsonb), unit_price, quantity_requested, quantity_filled, currency 
-		FROM buyback_orders WHERE status = 'ACTIVE' AND end_time <= NOW()`)
+		FROM buyback_orders WHERE status = 'ACTIVE' AND end_time <= NOW()
+		ORDER BY end_time LIMIT 50`)
 	if err != nil {
 		return err
 	}
@@ -248,7 +258,16 @@ func settleExpiredBuybackOrders() error {
 }
 
 func settleExpiredTradeOffers() error {
-	rows, err := db.DB.Query(`SELECT id, creator_id, offered_data FROM trade_offers WHERE status = 'ACTIVE' AND end_time <= NOW()`)
+	// Cheap guard: bail before querying when no trade offer is expired.
+	var hasExpired bool
+	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM trade_offers WHERE status='ACTIVE' AND end_time <= NOW())`).Scan(&hasExpired); err != nil {
+		return err
+	}
+	if !hasExpired {
+		return nil
+	}
+
+	rows, err := db.DB.Query(`SELECT id, creator_id, offered_data FROM trade_offers WHERE status = 'ACTIVE' AND end_time <= NOW() ORDER BY end_time LIMIT 50`)
 	if err != nil {
 		return err
 	}

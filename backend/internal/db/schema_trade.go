@@ -173,6 +173,10 @@ func schemaTrade() error {
 	CREATE INDEX IF NOT EXISTS idx_buyback_status ON buyback_orders (status);`); err != nil {
 		return err
 	}
+	if err := execSchema("buyback_status_end_time_idx", `
+	CREATE INDEX IF NOT EXISTS idx_buyback_status_end_time ON buyback_orders (status, end_time);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("trade_offers", `
 	CREATE TABLE IF NOT EXISTS trade_offers (
@@ -199,6 +203,10 @@ func schemaTrade() error {
 	}
 	if err := execSchema("trade_offers_status_idx", `
 	CREATE INDEX IF NOT EXISTS idx_trade_offers_status ON trade_offers (status);`); err != nil {
+		return err
+	}
+	if err := execSchema("trade_offers_status_end_time_idx", `
+	CREATE INDEX IF NOT EXISTS idx_trade_offers_status_end_time ON trade_offers (status, end_time);`); err != nil {
 		return err
 	}
 

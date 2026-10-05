@@ -208,13 +208,15 @@ func LoginPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
 		return
 	}
-	// Invalidate any stale admin-access cache entry so the fresh value is
-	// fetched and cached for subsequent /auth/me polls.
-	_ = cache.Delete("admin_access:" + player.ID.String())
-	player.CanAccessAdmin, err = cachedPlayerHasAdminAccess(c.Request.Context(), player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve admin access"})
-		return
+	if player.IsAdmin {
+		_ = cache.Delete("admin_access:" + player.ID.String())
+		if canAdmin, errAdmin := cachedPlayerHasAdminAccess(c.Request.Context(), player.ID); errAdmin == nil {
+			player.CanAccessAdmin = canAdmin
+		} else {
+			player.CanAccessAdmin = true
+		}
+	} else {
+		player.CanAccessAdmin = false
 	}
 	setAuthCookie(c, token)
 
@@ -278,10 +280,14 @@ func GetCurrentPlayer(c *gin.Context) {
 	// No need to call loadMaterialsInventory() again here.
 	player.CompletedQuests = loadCompletedQuests(playerID.String())
 	player.UnlockedRecipes = loadUnlockedRecipes(playerID.String())
-	player.CanAccessAdmin, err = cachedPlayerHasAdminAccess(c.Request.Context(), playerID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve admin access"})
-		return
+	if player.IsAdmin {
+		if canAdmin, errAdmin := cachedPlayerHasAdminAccess(c.Request.Context(), playerID); errAdmin == nil {
+			player.CanAccessAdmin = canAdmin
+		} else {
+			player.CanAccessAdmin = true
+		}
+	} else {
+		player.CanAccessAdmin = false
 	}
 	c.JSON(http.StatusOK, player)
 }
