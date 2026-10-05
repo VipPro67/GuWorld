@@ -329,28 +329,9 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	}
 	go func() {
 		summaryStr := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
-		combatantInfosIface := make([]interface{}, len(combatantInfos))
-		for i, ci := range combatantInfos {
-			combatantInfosIface[i] = ci
-		}
-		SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summaryStr, combatantInfosIface, enemyName, enemyType, player.CurrentRegion)
-
-		if enemyType == "PVP" && targetPlayerID != "" && targetPlayerID != "dummy" {
-			defenderWinner := "Phe Ta"
-			if alliesAlive {
-				defenderWinner = "Phe Địch"
-			}
-			defenderCombatantInfos := make([]interface{}, len(combatantInfos))
-			for i, ci := range combatantInfos {
-				defCI := ci
-				if defCI.Kind == "ally" {
-					defCI.Kind = "enemy"
-				} else if defCI.Kind == "enemy" {
-					defCI.Kind = "ally"
-				}
-				defenderCombatantInfos[i] = defCI
-			}
-			SaveCombatHistory(uuid.MustParse(targetPlayerID), defenderWinner, toInterfaceSlice(logs), summaryStr, defenderCombatantInfos, player.Username, "PVP", player.CurrentRegion)
+		if enemyType == "PVP" {
+			attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
+			savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, enemyName, player.Username, player.CurrentRegion)
 		}
 	}()
 

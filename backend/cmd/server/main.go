@@ -149,9 +149,7 @@ func main() {
 	playerSvc := services.NewPlayerService(db.DB)
 	handlers.PlayerSvc = playerSvc
 	handlers.RecipeSvc = services.NewRecipeService(db.DB)
-	handlers.MapService = services.NewMapService(db.DB)
 	handlers.CombatSessionSvc = services.NewCombatSessionService(db.DB)
-	handlers.DaoSvc = services.NewDaoService(db.DB)
 	handlers.InventorySvc = services.NewInventoryService(db.DB)
 	handlers.QuestSvc = services.NewQuestService(db.DB)
 	handlers.AchievementSvc = services.NewAchievementService(db.DB)
@@ -162,6 +160,7 @@ func main() {
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
 	worker.StartPetHungerWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartGrowthWorker(ctx, db.DB, 1*time.Hour)
+	worker.StartCombatHistoryCleanupWorker(ctx, db.DB, time.Minute)
 	handlers.StartTribulationWorker(ctx)
 	handlers.StartWorldIndexSyncWorker(ctx)
 	handlers.StartWorldMonsterWorker(ctx)

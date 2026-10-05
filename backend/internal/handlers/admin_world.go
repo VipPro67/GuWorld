@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -24,6 +25,22 @@ type AdminMapCellResponse struct {
 	Metadata       map[string]interface{} `json:"metadata"`
 	RespawnSeconds int                    `json:"respawn_seconds"`
 	IsActive       bool                   `json:"is_active"`
+	LastClearedAt  *time.Time             `json:"last_cleared_at"`
+	ClearedBy      *string                `json:"cleared_by"`
+}
+
+func validateAdminRegionInput(c *gin.Context, req *models.Region) bool {
+	req.ID, req.Name, req.ZoneType = strings.TrimSpace(req.ID), strings.TrimSpace(req.Name), strings.TrimSpace(req.ZoneType)
+	if req.ID == "" || len(req.ID) > 50 || req.Name == "" || len(req.Name) > 100 || req.ZoneType == "" || len(req.ZoneType) > 20 || len(req.ParentID) > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID (1-50), tên (1-100) và loại zone hợp lệ là bắt buộc"})
+		return false
+	}
+	if req.Width < 1 || req.Height < 1 || req.MinRank < 1 || req.MaxRank < req.MinRank {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kích thước hoặc khoảng rank khu vực không hợp lệ"})
+		return false
+	}
+	if req.Paths == nil { req.Paths = []string{} }
+	return true
 }
 
 // AdminListRegions lists regions with search and pagination
@@ -43,10 +60,11 @@ func AdminListRegions(c *gin.Context) {
 	}
 	offset := (page - 1) * pageSize
 
-	query := `SELECT id, name, COALESCE(description,''), width, height, min_rank, max_rank, is_active, 
+	query := `SELECT id, name, COALESCE(description,''), width, height, min_rank, max_rank, is_active,
 	                 COALESCE(parent_id,''), zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y,
 	                 safe_zone_x, safe_zone_y,
-	                 COALESCE(pool_weights::text, '{}') 
+	                 COALESCE(pool_weights::text, '{}'), COALESCE(paths::text,'[]'),
+	                 COALESCE(created_at,NOW()), COALESCE(updated_at,NOW())
 	          FROM regions`
 	countQuery := `SELECT COUNT(*) FROM regions`
 
@@ -90,8 +108,9 @@ func AdminListRegions(c *gin.Context) {
 		var parentID sql.NullString
 		var safeZoneX sql.NullInt64
 		var safeZoneY sql.NullInt64
+		var pathsRaw string
 		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive,
-			&parentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &safeZoneX, &safeZoneY, &poolRaw); err != nil {
+			&parentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &safeZoneX, &safeZoneY, &poolRaw, &pathsRaw, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Scan error"})
 			return
 		}
@@ -100,6 +119,10 @@ func AdminListRegions(c *gin.Context) {
 		}
 		if poolRaw != "" {
 			_ = json.Unmarshal([]byte(poolRaw), &r.PoolWeights)
+		}
+		if err := json.Unmarshal([]byte(pathsRaw), &r.Paths); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc paths của khu vực"})
+			return
 		}
 		if safeZoneX.Valid {
 			val := int(safeZoneX.Int64)
@@ -111,6 +134,7 @@ func AdminListRegions(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
+	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách khu vực"}); return }
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":      list,
@@ -134,8 +158,7 @@ func AdminCreateRegion(c *gin.Context) {
 		return
 	}
 
-	if req.ID == "" || req.Name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID và Tên không được để trống"})
+	if !validateAdminRegionInput(c, &req) {
 		return
 	}
 
@@ -144,6 +167,8 @@ func AdminCreateRegion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu pool_weights"})
 		return
 	}
+	pathsBytes, err := json.Marshal(req.Paths)
+	if err != nil { c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu paths"}); return }
 
 	var parentID interface{}
 	if req.ParentID != "" {
@@ -152,21 +177,20 @@ func AdminCreateRegion(c *gin.Context) {
 		parentID = nil
 	}
 
-	query := `INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, 
-	                              parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`
+	query := `INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active,
+	                              parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, paths)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`
 
 	_, err = db.DB.ExecContext(c.Request.Context(), query,
 		req.ID, req.Name, req.Description, req.Width, req.Height, req.MinRank, req.MaxRank, req.IsActive,
-		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes)
+		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, pathsBytes)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo khu vực: " + err.Error()})
 		return
 	}
 
-	// Reload the registry
-	_ = LoadZoneRegistry(db.DB)
+	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo khu vực nhưng không thể tải lại bản đồ: " + err.Error()}); return }
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_region",
@@ -196,12 +220,17 @@ func AdminUpdateRegion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.ID != "" && req.ID != id { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID khu vực"}); return }
+	req.ID = id
+	if !validateAdminRegionInput(c, &req) { return }
 
 	poolWeightsBytes, err := json.Marshal(req.PoolWeights)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu pool_weights"})
 		return
 	}
+	pathsBytes, err := json.Marshal(req.Paths)
+	if err != nil { c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu paths"}); return }
 
 	var parentID interface{}
 	if req.ParentID != "" {
@@ -210,29 +239,30 @@ func AdminUpdateRegion(c *gin.Context) {
 		parentID = nil
 	}
 
-	query := `UPDATE regions 
-          SET name = $1, description = $2, width = $3, height = $4, min_rank = $5, max_rank = $6, 
-              is_active = $7, parent_id = $8, zone_type = $9, min_x = $10, min_y = $11, 
-              max_x = $12, max_y = $13, entry_x = $14, entry_y = $15, safe_zone_x = $16, safe_zone_y = $17, pool_weights = $18, updated_at = NOW()
-          WHERE id = $19`
+	query := `UPDATE regions
+	          SET name = $1, description = $2, width = $3, height = $4, min_rank = $5, max_rank = $6,
+	              is_active = $7, parent_id = $8, zone_type = $9, min_x = $10, min_y = $11,
+	              max_x = $12, max_y = $13, entry_x = $14, entry_y = $15, safe_zone_x = $16, safe_zone_y = $17, pool_weights = $18, paths = $19, updated_at = NOW()
+	          WHERE id = $20`
 
 	res, err := db.DB.ExecContext(c.Request.Context(), query,
 		req.Name, req.Description, req.Width, req.Height, req.MinRank, req.MaxRank, req.IsActive,
-		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, id)
+		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, pathsBytes, id)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật khu vực: " + err.Error()})
 		return
 	}
 
-	rowsAffected, _ := res.RowsAffected()
+	rowsAffected, err := res.RowsAffected()
+	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận khu vực đã cập nhật"}); return }
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy khu vực"})
 		return
 	}
 
 	// Reload the registry
-	_ = LoadZoneRegistry(db.DB)
+	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu khu vực nhưng không thể tải lại bản đồ: " + err.Error()}); return }
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_region",
@@ -264,14 +294,15 @@ func AdminDeleteRegion(c *gin.Context) {
 		return
 	}
 
-	rowsAffected, _ := res.RowsAffected()
+	rowsAffected, err := res.RowsAffected()
+	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận khu vực đã xóa"}); return }
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy khu vực"})
 		return
 	}
 
 	// Reload the registry
-	_ = LoadZoneRegistry(db.DB)
+	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa khu vực nhưng không thể tải lại bản đồ: " + err.Error()}); return }
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_region",
@@ -302,8 +333,8 @@ func AdminListMapCells(c *gin.Context) {
 	}
 	offset := (page - 1) * pageSize
 
-	query := `SELECT id, region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text, '{}'), 
-	                 respawn_seconds, is_active 
+	query := `SELECT id, region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text, '{}'),
+	                 respawn_seconds, is_active, last_cleared_at, cleared_by::text
 	          FROM map_cells`
 	countQuery := `SELECT COUNT(*) FROM map_cells`
 
@@ -358,16 +389,21 @@ func AdminListMapCells(c *gin.Context) {
 	for rows.Next() {
 		var cell AdminMapCellResponse
 		var metaRaw string
+		var lastClearedAt sql.NullTime
+		var clearedBy sql.NullString
 		if err := rows.Scan(&cell.ID, &cell.RegionID, &cell.X, &cell.Y, &cell.CellType, &cell.ContentID,
-			&metaRaw, &cell.RespawnSeconds, &cell.IsActive); err != nil {
+			&metaRaw, &cell.RespawnSeconds, &cell.IsActive, &lastClearedAt, &clearedBy); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Scan error"})
 			return
 		}
 		if metaRaw != "" {
 			_ = json.Unmarshal([]byte(metaRaw), &cell.Metadata)
 		}
+		if lastClearedAt.Valid { cell.LastClearedAt = &lastClearedAt.Time }
+		if clearedBy.Valid { cell.ClearedBy = &clearedBy.String }
 		list = append(list, cell)
 	}
+	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách ô bản đồ"}); return }
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":      list,
@@ -391,10 +427,11 @@ func AdminCreateMapCell(c *gin.Context) {
 		return
 	}
 
-	if req.RegionID == "" || req.CellType == "" {
+	if req.RegionID == "" || len(req.RegionID) > 50 || req.CellType == "" || len(req.CellType) > 50 || req.RespawnSeconds < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Region ID và Cell Type không được để trống"})
 		return
 	}
+	if req.Metadata == nil { req.Metadata = map[string]interface{}{} }
 
 	metaBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
@@ -402,13 +439,13 @@ func AdminCreateMapCell(c *gin.Context) {
 		return
 	}
 
-	query := `INSERT INTO map_cells (region_id, x, y, cell_type, content_id, metadata, respawn_seconds, is_active)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	query := `INSERT INTO map_cells (region_id, x, y, cell_type, content_id, metadata, respawn_seconds, is_active, last_cleared_at, cleared_by)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	          RETURNING id`
 
 	var createdID string
 	err = db.DB.QueryRowContext(c.Request.Context(), query,
-		req.RegionID, req.X, req.Y, req.CellType, req.ContentID, metaBytes, req.RespawnSeconds, req.IsActive).Scan(&createdID)
+		req.RegionID, req.X, req.Y, req.CellType, req.ContentID, metaBytes, req.RespawnSeconds, req.IsActive, req.LastClearedAt, req.ClearedBy).Scan(&createdID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo ô bản đồ: " + err.Error()})
@@ -417,8 +454,7 @@ func AdminCreateMapCell(c *gin.Context) {
 
 	req.ID = createdID
 
-	// Reload the registry
-	_ = LoadZoneRegistry(db.DB)
+	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo ô bản đồ nhưng không thể tải lại registry: " + err.Error()}); return }
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_map_cell",
@@ -448,6 +484,12 @@ func AdminUpdateMapCell(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.ID != "" && req.ID != id { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID ô bản đồ"}); return }
+	if req.RegionID == "" || len(req.RegionID) > 50 || req.CellType == "" || len(req.CellType) > 50 || req.RespawnSeconds < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Region ID, Cell Type hoặc thời gian hồi không hợp lệ"})
+		return
+	}
+	if req.Metadata == nil { req.Metadata = map[string]interface{}{} }
 
 	metaBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
@@ -455,27 +497,27 @@ func AdminUpdateMapCell(c *gin.Context) {
 		return
 	}
 
-	query := `UPDATE map_cells 
-	          SET region_id = $1, x = $2, y = $3, cell_type = $4, content_id = $5, 
-	              metadata = $6, respawn_seconds = $7, is_active = $8
-	          WHERE id = $9`
+	query := `UPDATE map_cells
+	          SET region_id = $1, x = $2, y = $3, cell_type = $4, content_id = $5,
+	              metadata = $6, respawn_seconds = $7, is_active = $8, last_cleared_at = $9, cleared_by = $10
+	          WHERE id = $11`
 
 	res, err := db.DB.ExecContext(c.Request.Context(), query,
-		req.RegionID, req.X, req.Y, req.CellType, req.ContentID, metaBytes, req.RespawnSeconds, req.IsActive, id)
+		req.RegionID, req.X, req.Y, req.CellType, req.ContentID, metaBytes, req.RespawnSeconds, req.IsActive, req.LastClearedAt, req.ClearedBy, id)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ô bản đồ: " + err.Error()})
 		return
 	}
 
-	rowsAffected, _ := res.RowsAffected()
+	rowsAffected, err := res.RowsAffected()
+	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận ô bản đồ đã cập nhật"}); return }
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy ô bản đồ"})
 		return
 	}
 
-	// Reload the registry
-	_ = LoadZoneRegistry(db.DB)
+	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu ô bản đồ nhưng không thể tải lại registry: " + err.Error()}); return }
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_map_cell",
@@ -507,14 +549,14 @@ func AdminDeleteMapCell(c *gin.Context) {
 		return
 	}
 
-	rowsAffected, _ := res.RowsAffected()
+	rowsAffected, err := res.RowsAffected()
+	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận ô bản đồ đã xóa"}); return }
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy ô bản đồ"})
 		return
 	}
 
-	// Reload the registry
-	_ = LoadZoneRegistry(db.DB)
+	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa ô bản đồ nhưng không thể tải lại registry: " + err.Error()}); return }
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_map_cell",

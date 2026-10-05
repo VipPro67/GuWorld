@@ -110,7 +110,6 @@ const UNIQUE_NAMES: Record<string, string> = {
   CHAT_PERCEIVE: "Cảm Ứng Thiên Cơ",
   IGNORE_MOVEMENT_RANGE: "Vượt Giới Hạn Di Chuyển",
   LOOT_PREVIEW: "Thấu Thị Chiến Lợi Phẩm",
-  SACRIFICE_NPC: "Tế Lễ Sinh Linh",
   POEM_INTENT: "Thi Ý",
   DOUBLE_DAMAGE_DEALT: "Nhân Đôi Sát Thương",
   MANA_REGEN_TICK: "Hồi Chân Nguyên Định Kỳ",

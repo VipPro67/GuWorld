@@ -53,12 +53,23 @@ func adminRouteSpecs() []adminRouteSpec {
 		// billing
 		{http.MethodGet, "/topup-orders", "billing.read", handlers.AdminListTopupOrders, "", "", false, "", false, false, false},
 		{http.MethodGet, "/wallet-transactions", "billing.read", handlers.AdminListWalletTransactions, "", "", false, "", false, false, false},
+		// combat history is append-only; admins can inspect but not rewrite or delete it.
+		{http.MethodGet, "/combat-history", "combat_history.read", handlers.AdminListCombatHistory, "", "", false, "", false, false, false},
+		{http.MethodGet, "/combat-history/:id", "combat_history.read", handlers.AdminGetCombatHistory, "", "", false, "", false, false, false},
+		{http.MethodGet, "/arena-rankings", "arena_rankings.read", handlers.AdminListArenaRankings, "", "", false, "", false, false, false},
+		{http.MethodPut, "/arena-rankings/:player_id", "arena_rankings.update", handlers.AdminUpdateArenaRanking, "admin.update_arena_ranking", "arena_rankings", false, "", false, true, false},
 		// players
 		{http.MethodGet, "/players/online", "players.read", handlers.AdminListOnlinePlayers, "", "", false, "", false, false, false},
 		{http.MethodGet, "/players", "players.read", handlers.AdminListPlayers, "", "", false, "", false, false, false},
 		{http.MethodGet, "/players/:id", "players.read", handlers.AdminGetPlayerDetail, "", "", false, "", false, false, false},
 		{http.MethodGet, "/players/:id/items", "players.read", handlers.AdminListPlayerItems, "", "", false, "", false, false, false},
+		{http.MethodPut, "/players/:id/items/:item_id/:category", "players.update", handlers.AdminUpdatePlayerInventoryItem, "admin.update_player_inventory_item", "player_inventory_items", false, "path", false, false, false},
 		{http.MethodGet, "/players/:id/gus", "players.read", handlers.AdminListPlayerGus, "", "", false, "", false, false, false},
+		{http.MethodGet, "/players/:id/quests", "players.read", handlers.AdminListPlayerQuests, "", "", false, "", false, false, false},
+		{http.MethodGet, "/players/:id/instance-sessions", "players.read", handlers.AdminListPlayerInstanceSessions, "", "", false, "", false, false, false},
+		{http.MethodGet, "/players/:id/sect-missions", "players.read", handlers.AdminListPlayerSectMissions, "", "", false, "", false, false, false},
+		{http.MethodGet, "/players/:id/tracking-marks", "players.read", handlers.AdminListPlayerTrackingMarks, "", "", false, "", false, false, false},
+		{http.MethodGet, "/players/:id/achievements", "players.read", handlers.AdminListPlayerAchievements, "", "", false, "", false, false, false},
 		{http.MethodPut, "/players/:id", "players.update", handlers.AdminUpdatePlayer, "admin.update_player", "player", false, "", false, false, false},
 		// apertures
 		{http.MethodGet, "/apertures", "apertures.read", handlers.AdminListApertures, "", "", false, "", false, false, false},
@@ -70,6 +81,17 @@ func adminRouteSpecs() []adminRouteSpec {
 		// players
 		{http.MethodPost, "/players/:id/items", "players.inventory.grant", handlers.AdminAddPlayerItems, "admin.add_player_items", "player", false, "", false, false, false},
 		{http.MethodDelete, "/players/:id/items", "players.delete", handlers.AdminRemovePlayerItems, "admin.remove_player_items", "player", true, "path", false, false, true},
+		{http.MethodPut, "/players/:id/recipes/:recipe_id", "players.update", handlers.AdminUpdatePlayerRecipe, "admin.update_recipe_progress", "player_recipe_progress", false, "path", false, false, false},
+		{http.MethodPut, "/players/:id/quests/:quest_id", "players.update", handlers.AdminUpdatePlayerQuest, "admin.update_quest_progress", "player_quest_progress", false, "path", false, false, false},
+		{http.MethodDelete, "/players/:id/quests/:quest_id", "players.delete", handlers.AdminDeletePlayerQuest, "admin.delete_quest_progress", "player_quest_progress", true, "path", false, false, true},
+		{http.MethodPut, "/players/:id/instance-sessions/:session_id", "players.update", handlers.AdminUpdatePlayerInstanceSession, "admin.update_instance_session", "player_instance_sessions", false, "path", false, false, false},
+		{http.MethodDelete, "/players/:id/instance-sessions/:session_id", "players.delete", handlers.AdminDeletePlayerInstanceSession, "admin.delete_instance_session", "player_instance_sessions", true, "path", false, false, true},
+		{http.MethodPut, "/players/:id/sect-missions/:mission_row_id", "players.update", handlers.AdminUpdatePlayerSectMission, "admin.update_player_sect_mission", "player_sect_missions", false, "path", false, false, false},
+		{http.MethodPut, "/players/:id/tracking-marks/:mark_id", "players.update", handlers.AdminUpdatePlayerTrackingMark, "admin.update_player_tracking_mark", "player_tracking_marks", false, "path", false, false, false},
+		{http.MethodDelete, "/players/:id/tracking-marks/:mark_id", "players.delete", handlers.AdminDeletePlayerTrackingMark, "admin.delete_player_tracking_mark", "player_tracking_marks", true, "path", false, false, true},
+		{http.MethodPost, "/players/:id/achievements", "players.update", handlers.AdminAddPlayerAchievement, "admin.add_player_achievement", "player_achievements", false, "path", false, false, false},
+		{http.MethodPut, "/players/:id/achievements/:achievement_id", "players.update", handlers.AdminUpdatePlayerAchievement, "admin.update_player_achievement", "player_achievements", false, "path", false, false, false},
+		{http.MethodDelete, "/players/:id/achievements/:achievement_id", "players.delete", handlers.AdminDeletePlayerAchievement, "admin.delete_player_achievement", "player_achievements", true, "path", false, false, true},
 		{http.MethodPost, "/players/:id/gus", "players.inventory.grant", handlers.AdminAddPlayerGus, "admin.add_player_gus", "player", false, "", false, false, false},
 		{http.MethodDelete, "/players/:id/gus/:instance_id", "players.delete", handlers.AdminRemovePlayerGu, "admin.remove_player_gu", "player", true, "path", false, false, true},
 		{http.MethodGet, "/players/:id/pets", "players.read", handlers.AdminListPlayerPets, "", "", false, "", false, false, false},
@@ -85,6 +107,10 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/sects/:id/members/:memberId/leader", "sects.update", handlers.AdminSetSectLeader, "admin.set_sect_leader", "sect", false, "", false, false, false},
 		{http.MethodDelete, "/sects/:id/members/:memberId", "sects.delete", handlers.AdminKickSectMember, "admin.kick_sect_member", "sect", true, "path", false, false, true},
 		{http.MethodPost, "/sects/:id/members", "sects.update", handlers.AdminAddToSect, "admin.add_to_sect", "sect", false, "", false, false, false},
+		{http.MethodGet, "/sects/:id/defenders", "sects.read", handlers.AdminListSectDefenders, "", "", false, "", false, false, false},
+		{http.MethodDelete, "/sects/:id/defenders/:defender_id", "sects.delete", handlers.AdminRemoveSectDefender, "admin.remove_sect_defender", "sect", true, "path", false, false, true},
+		{http.MethodGet, "/sects/:id/requests", "sects.read", handlers.AdminListSectRequests, "", "", false, "", false, false, false},
+		{http.MethodDelete, "/sects/:id/requests/:request_type/:request_id", "sects.delete", handlers.AdminDeleteSectRequest, "admin.delete_sect_request", "sect", true, "path", false, false, true},
 		{http.MethodDelete, "/sects/:id", "sects.delete", handlers.AdminDeleteSect, "admin.delete_sect", "sect", true, "path", false, false, true},
 		{http.MethodGet, "/sects/:id/missions", "sects.read", handlers.AdminListSectMissions, "", "", false, "", false, false, false},
 		{http.MethodPost, "/sects/:id/missions", "sects.update", handlers.AdminCreateSectMission, "admin.create_sect_mission", "sect", false, "", false, false, false},
@@ -111,6 +137,13 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodDelete, "/regions/:id", "regions.delete", handlers.AdminDeleteRegion, "admin.delete_region", "region", true, "path", false, false, true},
 		// map_cells
 		{http.MethodGet, "/map-cells", "map_cells.read", handlers.AdminListMapCells, "", "", false, "", false, false, false},
+		{http.MethodGet, "/residual-traces", "regions.read", handlers.AdminListResidualTraces, "", "", false, "", false, false, false},
+		{http.MethodPut, "/residual-traces/:id", "regions.update", handlers.AdminUpdateResidualTrace, "admin.update_residual_trace", "world_residual_traces", false, "path", false, false, false},
+		{http.MethodDelete, "/residual-traces/:id", "regions.delete", handlers.AdminDeleteResidualTrace, "admin.delete_residual_trace", "world_residual_traces", true, "path", false, false, true},
+		// map_ground_drops
+		{http.MethodGet, "/map-drops", "map_drops.read", handlers.AdminListMapGroundDrops, "", "", false, "", false, false, false},
+		{http.MethodPut, "/map-drops/:id", "map_drops.update", handlers.AdminUpdateMapGroundDrop, "admin.update_map_drop", "map_ground_drops", false, "", false, false, false},
+		{http.MethodDelete, "/map-drops/:id", "map_drops.delete", handlers.AdminDeleteMapGroundDrop, "admin.delete_map_drop", "map_ground_drops", true, "path", false, false, true},
 		{http.MethodPost, "/map-cells", "map_cells.update", handlers.AdminCreateMapCell, "admin.create_map_cell", "map_cell", false, "", false, false, false},
 		{http.MethodPut, "/map-cells/:id", "map_cells.update", handlers.AdminUpdateMapCell, "admin.update_map_cell", "map_cell", false, "", false, false, false},
 		{http.MethodDelete, "/map-cells/:id", "map_cells.delete", handlers.AdminDeleteMapCell, "admin.delete_map_cell", "map_cell", true, "path", false, false, true},
@@ -204,10 +237,32 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPut, "/sect-mines/:id", "sect_mines.update", handlers.AdminUpdateSectMine, "admin.update_sect_mine", "sect_mine", false, "", false, false, false},
 		// apertures
 		{http.MethodGet, "/apertures/:id/nodes", "apertures.read", handlers.AdminListApertureNodes, "", "", false, "", false, false, false},
+		{http.MethodGet, "/apertures/:id/tribulations", "apertures.read", handlers.AdminListApertureTribulations, "", "", false, "", false, false, false},
 		{http.MethodPost, "/apertures/:id/nodes", "apertures.update", handlers.AdminCreateApertureNode, "admin.create_aperture_node", "aperture", false, "", false, false, false},
+		{http.MethodPut, "/apertures/:id/nodes/:node_id", "apertures.update", handlers.AdminUpdateApertureNode, "admin.update_aperture_node", "aperture", false, "", false, false, false},
 		{http.MethodDelete, "/apertures/:id/nodes/:node_id", "apertures.delete", handlers.AdminDeleteApertureNode, "admin.delete_aperture_node", "aperture", true, "path", false, false, true},
+		{http.MethodGet, "/apertures/:id/nodes/:node_id/workers", "apertures.read", handlers.AdminListApertureNodeWorkers, "", "", false, "", false, false, false},
+		{http.MethodPost, "/apertures/:id/nodes/:node_id/workers", "apertures.update", handlers.AdminUpsertApertureNodeWorker, "admin.upsert_aperture_node_worker", "aperture", false, "", false, false, false},
+		{http.MethodDelete, "/apertures/:id/nodes/:node_id/workers/:worker_id", "apertures.delete", handlers.AdminDeleteApertureNodeWorker, "admin.delete_aperture_node_worker", "aperture", true, "path", false, false, true},
+		{http.MethodGet, "/apertures/:id/refinement-queue", "apertures.read", handlers.AdminListApertureRefinementJobs, "", "", false, "", false, false, false},
+		{http.MethodPost, "/apertures/:id/refinement-queue", "apertures.update", handlers.AdminCreateApertureRefinementJob, "admin.create_aperture_refinement_job", "aperture", false, "", false, false, false},
+		{http.MethodPut, "/apertures/:id/refinement-queue/:job_id", "apertures.update", handlers.AdminUpdateApertureRefinementJob, "admin.update_aperture_refinement_job", "aperture", false, "", false, false, false},
+		{http.MethodDelete, "/apertures/:id/refinement-queue/:job_id", "apertures.delete", handlers.AdminDeleteApertureRefinementJob, "admin.delete_aperture_refinement_job", "aperture", true, "path", false, false, true},
+		{http.MethodGet, "/apertures/:id/settlements", "apertures.read", handlers.AdminListApertureSettlements, "", "", false, "", false, false, false},
+		{http.MethodPost, "/apertures/:id/settlements", "apertures.update", handlers.AdminCreateApertureSettlement, "admin.create_aperture_settlement", "aperture", false, "", false, false, false},
+		{http.MethodPut, "/apertures/:id/settlements/:settlement_id", "apertures.update", handlers.AdminUpdateApertureSettlement, "admin.update_aperture_settlement", "aperture", false, "", false, false, false},
+		{http.MethodDelete, "/apertures/:id/settlements/:settlement_id", "apertures.delete", handlers.AdminDeleteApertureSettlement, "admin.delete_aperture_settlement", "aperture", true, "path", false, false, true},
+		{http.MethodGet, "/apertures/:id/events", "apertures.read", handlers.AdminListApertureEvents, "", "", false, "", false, false, false},
+		{http.MethodPost, "/apertures/:id/events", "apertures.update", handlers.AdminCreateApertureEvent, "admin.create_aperture_event", "aperture", false, "", false, false, false},
+		{http.MethodPut, "/apertures/:id/events/:event_id", "apertures.update", handlers.AdminUpdateApertureEvent, "admin.update_aperture_event", "aperture", false, "", false, false, false},
+		{http.MethodDelete, "/apertures/:id/events/:event_id", "apertures.delete", handlers.AdminDeleteApertureEvent, "admin.delete_aperture_event", "aperture", true, "path", false, false, true},
+		{http.MethodGet, "/apertures/:id/variant-npcs", "apertures.read", handlers.AdminListVariantNPCs, "", "", false, "", false, false, false},
+		{http.MethodPost, "/apertures/:id/variant-npcs", "apertures.update", handlers.AdminCreateVariantNPC, "admin.create_variant_npc", "aperture", false, "", false, false, false},
+		{http.MethodPut, "/apertures/:id/variant-npcs/:npc_id", "apertures.update", handlers.AdminUpdateVariantNPC, "admin.update_variant_npc", "aperture", false, "", false, false, false},
+		{http.MethodDelete, "/apertures/:id/variant-npcs/:npc_id", "apertures.delete", handlers.AdminDismissVariantNPC, "admin.dismiss_variant_npc", "aperture", true, "path", false, false, true},
 		{http.MethodGet, "/apertures/:id/variant-humans", "apertures.read", handlers.AdminListApertureVariantHumans, "", "", false, "", false, false, false},
 		{http.MethodPost, "/apertures/:id/variant-humans", "apertures.update", handlers.AdminCreateApertureVariantHuman, "admin.create_aperture_variant_human", "aperture", false, "", false, false, false},
+		{http.MethodPut, "/apertures/:id/variant-humans/:vh_id", "apertures.update", handlers.AdminUpdateApertureVariantHuman, "admin.update_aperture_variant_human", "aperture", false, "", false, false, false},
 		{http.MethodDelete, "/apertures/:id/variant-humans/:vh_id", "apertures.delete", handlers.AdminDeleteApertureVariantHuman, "admin.delete_aperture_variant_human", "aperture", true, "path", false, false, true},
 	}
 }
@@ -494,7 +549,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			player.POST("/use-items", handlers.UseItems)
 			player.POST("/recharge", handlers.RechargeWithStones)
 			player.POST("/clear-stress", handlers.ClearStress)
-			player.POST("/sacrifice", handlers.SacrificeNPC)
 			player.GET("/profile/:username", handlers.GetPlayerProfile)
 			player.PUT("/profile/settings", handlers.UpdateProfileSettings)
 			player.GET("/referrals", handlers.GetReferralStats)

@@ -342,29 +342,9 @@ func AutoCombatStart(c *gin.Context) {
 	}
 	go func() {
 		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
-		combatantInfosIface := make([]interface{}, len(combatantInfos))
-		for i, ci := range combatantInfos {
-			combatantInfosIface[i] = ci
-		}
-		SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfosIface, enemyName, enemyType, player.CurrentRegion)
-
-		// Also save history for PvP target player (defender)
-		if enemyType == "PVP" && targetPlayerID != "" && targetPlayerID != "dummy" {
-			defenderWinner := "Phe Ta"
-			if alliesAlive { // Attacker won, so defender lost!
-				defenderWinner = "Phe Địch"
-			}
-			defenderCombatantInfos := make([]interface{}, len(combatantInfos))
-			for i, ci := range combatantInfos {
-				defCI := ci
-				if defCI.Kind == "ally" {
-					defCI.Kind = "enemy"
-				} else if defCI.Kind == "enemy" {
-					defCI.Kind = "ally"
-				}
-				defenderCombatantInfos[i] = defCI
-			}
-			SaveCombatHistory(uuid.MustParse(targetPlayerID), defenderWinner, toInterfaceSlice(logs), summary, defenderCombatantInfos, player.Username, "PVP", player.CurrentRegion)
+		if enemyType == "PVP" {
+			attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
+			savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summary, combatantInfos, enemyName, player.Username, player.CurrentRegion)
 		}
 	}()
 	c.JSON(http.StatusOK, gin.H{

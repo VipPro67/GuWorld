@@ -7,7 +7,6 @@ export interface MiscSlice {
   auditLogsLoading: boolean;
   fetchAuditLogs: (filters?: { action?: string; entity_type?: string; success?: boolean; search?: string; limit?: number; offset?: number }) => Promise<void>;
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
-  sacrificeNPC: (npcId: string) => Promise<{ success: boolean; message: string } | null>;
 }
 
 export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, MiscSlice> = (set, get) => ({
@@ -39,45 +38,6 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Tịnh hóa lỗi: ${err.message}`);
-      return { success: false, message: err.message };
-    } finally {
-      get().endAction("player:misc");
-    }
-  },
-
-  sacrificeNPC: async (npcId: string) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:misc")) return null;
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/sacrifice`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ npc_id: npcId }),
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Hiến tế thất bại.");
-
-      const updatedPlayer = { ...get().player };
-      if (updatedPlayer) {
-        updatedPlayer.aptitude_percent = data.new_aptitude;
-        updatedPlayer.aptitude_type = data.aptitude_type;
-        updatedPlayer.aperture_stress = data.aperture_stress;
-        get().setPlayerFromServer(updatedPlayer as ApiResponseData);
-      }
-
-      get().addLog(data.message || "Hiến tế hoàn tất.");
-      return { success: true, message: data.message };
-    } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      set({ error: err.message });
-      get().addToast(err.message || "Thao tác thất bại.", "error");
-      get().addLog(`Hiến tế lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
       get().endAction("player:misc");

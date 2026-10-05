@@ -473,9 +473,6 @@ func validateMechanicParams(action string, raw json.RawMessage, path string, rep
 		requireOptionalRange("miss_chance", 0, 1)
 		requireOptionalRange("backfire_chance", 0, 1)
 		requireOptionalRange("backfire_disable_turns", 0, 10)
-	case "SACRIFICE_NPC":
-		requireRange("aptitude_gain", 1, 99)
-		requireRange("aptitude_cap", 1, 100)
 	}
 }
 

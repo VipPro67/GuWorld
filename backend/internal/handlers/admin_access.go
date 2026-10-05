@@ -12,7 +12,7 @@ import (
 
 // Bump this marker whenever the legacy permission grant or resource catalog
 // changes so clients can invalidate their cached access snapshot.
-const legacyAdminPermissionVersion = "admin-catalog-v3"
+const legacyAdminPermissionVersion = "admin-catalog-v5"
 
 // AdminGetMe returns the effective access snapshot for the authenticated admin.
 // Until persisted RBAC is introduced, is_admin actors use the explicit legacy

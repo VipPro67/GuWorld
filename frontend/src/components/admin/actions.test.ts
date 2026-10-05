@@ -22,7 +22,8 @@ test("known sensitive actions have the expected policies", () => {
 	assert.equal(ADMIN_ACTIONS.flushRedis.reauthenticationRequired, true);
 	assert.equal(ADMIN_ACTIONS.adjustPlayerResources.permission, "players.resources.adjust");
 	assert.equal(ADMIN_ACTIONS.assignPlayerRoles.permission, "admin_roles.assign");
-	assert.equal(ADMIN_ACTIONS.mutatePayment.permission, "billing.mutate");
+  assert.equal(ADMIN_ACTIONS.mutatePayment.permission, "billing.mutate");
+  assert.deepEqual(ADMIN_ACTIONS.updateArenaRanking, { permission: "arena_rankings.update", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false });
 });
 
 test("visibility accepts exact permissions and the admin wildcard", () => {
@@ -37,7 +38,7 @@ const rolePermissions: Record<string, readonly string[]> = {
   observer: ADMIN_NAVIGATION.filter((item) => item.permission !== "billing.read").map((item) => item.permission),
   support_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "gus.read", "audit.read"],
   content_admin: ["game_data.read", "game_data.import", "game_data.import_all", "cache.reload"],
-  game_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "sects.read", "apertures.read", "gus.read", "shop.read", "mine_slots.read", "gift_codes.read", "audit.read", "monitoring.read"],
+  game_admin: ["players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "sects.read", "apertures.read", "gus.read", "combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update", "shop.read", "mine_slots.read", "gift_codes.read", "audit.read", "monitoring.read"],
   finance_viewer: ["billing.read"],
   super_admin: ["admin.*"],
 };
@@ -45,10 +46,10 @@ const rolePermissions: Record<string, readonly string[]> = {
 test("role matrix exposes only permitted navigation resources", () => {
   const expected: Record<string, readonly string[]> = {
     anonymous: [], player: [],
-    observer: ["players", "sects", "apertures", "gu_history", "data", "shop", "mines", "gift_codes", "logs", "monitoring"],
+    observer: ["players", "sects", "apertures", "gu_history", "combat_history", "map_drops", "arena_rankings", "data", "shop", "mines", "gift_codes", "logs", "monitoring"],
     support_admin: ["players", "gu_history", "logs"],
     content_admin: ["data"],
-    game_admin: ["players", "sects", "apertures", "gu_history", "shop", "mines", "gift_codes", "logs", "monitoring"],
+    game_admin: ["players", "sects", "apertures", "gu_history", "combat_history", "map_drops", "arena_rankings", "shop", "mines", "gift_codes", "logs", "monitoring"],
     finance_viewer: ["topup_wallet"],
     super_admin: ADMIN_NAVIGATION.map((item) => item.key),
   };

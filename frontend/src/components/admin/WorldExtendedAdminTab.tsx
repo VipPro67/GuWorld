@@ -2,13 +2,16 @@ import React, { useEffect, useState, useCallback } from "react";
 import { authFetch } from "@/lib/auth";
 import { Plus, RefreshCw, X, MapPin, ListTodo, Shield } from "lucide-react";
 import { AdminDataGrid, AdminGridColumn } from "./AdminDataGrid";
+import { prepareAdminAction } from "./actions";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 export const WorldExtendedAdminTab: React.FC<{
   type: "spawns" | "quests" | "dungeons";
   addToast: (msg: string, type: "success" | "error" | "info") => void;
-}> = ({ type, addToast }) => {
+  canWrite?: boolean;
+  canDelete?: boolean;
+}> = ({ type, addToast, canWrite = true, canDelete = true }) => {
   const [data, setData] = useState<ApiResponseData[]>([]);
   const [loading, setLoading] = useState(false);
   const [editItem, setEditItem] = useState<ApiResponseData | null>(null);
@@ -41,10 +44,11 @@ export const WorldExtendedAdminTab: React.FC<{
   }, [fetchData]);
 
   const handleSave = async () => {
-    if (!editItem || !editItem.id) {
-      addToast("ID không được để trống", "error");
+    if (!editItem || (!editItem.id && type !== "spawns") || (!isNew && !editItem.id)) {
+      addToast(type === "spawns" ? "Dữ liệu chưa hợp lệ" : "ID không được để trống", "error");
       return;
     }
+    if (!canWrite) return;
     try {
       const endpoint =
         type === "spawns"
@@ -84,7 +88,7 @@ export const WorldExtendedAdminTab: React.FC<{
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(`Bạn có chắc muốn xóa '${id}'?`)) return;
+    if (!canDelete) return;
     try {
       const endpoint =
         type === "spawns"
@@ -92,7 +96,15 @@ export const WorldExtendedAdminTab: React.FC<{
           : type === "quests"
           ? "/api/admin/quests"
           : "/api/admin/dungeons";
-      const res = await authFetch(`${BACKEND_URL}${endpoint}/${id}`, { method: "DELETE" });
+      const url = `${BACKEND_URL}${endpoint}/${id}`;
+      const action = type === "spawns" ? "deleteMonsterSpawn" : type === "quests" ? "deleteWorldQuest" : "deleteDungeon";
+      const prepared = prepareAdminAction(action, `xóa ${title.toLocaleLowerCase()}`, new URL(url).pathname);
+      if (!prepared) return;
+      const res = await authFetch(url, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": prepared.idempotencyKey },
+        body: JSON.stringify(prepared),
+      });
       if (res.ok) {
         addToast("Xóa thành công", "success");
         fetchData();
@@ -141,21 +153,21 @@ export const WorldExtendedAdminTab: React.FC<{
           {title} ({data.length})
         </h3>
         <div className="flex items-center gap-2">
-          <button
+          {canWrite && <button
             onClick={() => {
               setIsNew(true);
               setEditItem(
                 type === "spawns"
                   ? { id: "", region_id: "", monster_id: "", x: 0, y: 0, spawn_mode: "normal", chance: 1.0, respawn_seconds: 300, min_rank: 1, max_rank: 9, is_boss_spawn: false, is_active: true }
                   : type === "quests"
-                  ? { id: "", title: "", description: "", req_desc: "", message: "", rewards: {} }
-                  : { id: "", name: "", type: "normal", required_rank: 1, entry_item: "", description: "", rewards: {}, map_data: {}, cooldown_hours: 24 }
+                  ? { id: "", title: "", description: "", req_desc: "", message: "", rewards: [] }
+                  : { id: "", name: "", type: "normal", required_rank: 1, entry_item: "", description: "", rewards: {}, map_data: [], cooldown_hours: 24 }
               );
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> Thêm mới
-          </button>
+          </button>}
           <button
             onClick={fetchData}
             className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
@@ -166,8 +178,8 @@ export const WorldExtendedAdminTab: React.FC<{
       </div>
 
       <AdminDataGrid rows={data} columns={columns} rowKey={(item) => item.id} loading={loading}
-        onEdit={(item) => { setIsNew(false); setEditItem(structuredClone(item)); }}
-        onCopy={copyItem} onDelete={(item) => handleDelete(item.id)} />
+        onEdit={canWrite ? (item) => { setIsNew(false); setEditItem(structuredClone(item)); } : undefined}
+        onCopy={canWrite ? copyItem : undefined} onDelete={canDelete ? (item) => handleDelete(item.id) : undefined} />
 
       {/* Edit Modal */}
       {editItem && (
@@ -190,7 +202,7 @@ export const WorldExtendedAdminTab: React.FC<{
                   disabled={!isNew}
                   value={editItem.id || ""}
                   onChange={(e) => setEditItem({ ...editItem, id: e.target.value })}
-                  placeholder="ID duy nhất"
+                  placeholder={type === "spawns" ? "Để trống để tự tạo UUID" : "ID duy nhất"}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 disabled:opacity-60"
                 />
               </div>
@@ -243,7 +255,7 @@ export const WorldExtendedAdminTab: React.FC<{
                       <input
                         type="number"
                         step="0.1"
-                        value={editItem.chance || 1.0}
+                        value={editItem.chance ?? 1.0}
                         onChange={(e) => setEditItem({ ...editItem, chance: Number(e.target.value) })}
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50"
                       />
@@ -252,7 +264,7 @@ export const WorldExtendedAdminTab: React.FC<{
                       <label className="text-[11px] font-bold text-zinc-500 font-mono">Thời gian hồi (Giây)</label>
                       <input
                         type="number"
-                        value={editItem.respawn_seconds || 300}
+                        value={editItem.respawn_seconds ?? 300}
                         onChange={(e) => setEditItem({ ...editItem, respawn_seconds: Number(e.target.value) })}
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50"
                       />
@@ -331,7 +343,7 @@ export const WorldExtendedAdminTab: React.FC<{
                       <label className="text-[11px] font-bold text-zinc-500 font-mono">Hồi Chiêu (Giờ)</label>
                       <input
                         type="number"
-                        value={editItem.cooldown_hours || 24}
+                        value={editItem.cooldown_hours ?? 24}
                         onChange={(e) => setEditItem({ ...editItem, cooldown_hours: Number(e.target.value) })}
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50"
                       />
@@ -355,12 +367,12 @@ export const WorldExtendedAdminTab: React.FC<{
               >
                 Hủy
               </button>
-              <button
+              {canWrite && <button
                 onClick={handleSave}
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer"
               >
                 Lưu
-              </button>
+              </button>}
             </div>
           </div>
         </div>

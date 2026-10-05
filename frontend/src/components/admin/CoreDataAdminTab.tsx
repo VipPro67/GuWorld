@@ -14,6 +14,10 @@ type Props = {
   onEdit: (row: ApiResponseData) => void;
   onCopy: (row: ApiResponseData) => void;
   onDelete: (row: ApiResponseData) => void;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canCopy?: boolean;
+  canDelete?: boolean;
 };
 
 function arrayLength(value: unknown): number {
@@ -48,6 +52,8 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
       { key: "name", label: "Tên", value: (row) => row.name, className: "font-semibold text-zinc-200" },
       { key: "item_type", label: "Loại", value: (row) => row.item_type },
       { key: "rank", label: "Rank", value: (row) => row.rank },
+      { key: "rarity", label: "Độ hiếm", value: (row) => row.rarity },
+      { key: "path", label: "Tiên khiếu", value: (row) => row.path || "—" },
       { key: "base_price", label: "Giá", value: (row) => row.base_price, render: (row) => Number(row.base_price ?? 0).toLocaleString("vi-VN"), className: "text-right font-mono text-yellow-500" },
     ],
   },
@@ -99,13 +105,13 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
   },
 };
 
-export function CoreDataAdminTab({ kind, rows, loading, onCreate, onEdit, onCopy, onDelete }: Props) {
+export function CoreDataAdminTab({ kind, rows, loading, onCreate, onEdit, onCopy, onDelete, canCreate = true, canEdit = true, canCopy = true, canDelete = true }: Props) {
   const config = configs[kind];
   return <div className="space-y-4 rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-4">
     <div className="flex items-center justify-between">
       <h3 className="flex items-center gap-2 font-serif text-sm font-bold text-zinc-200">{config.icon}{config.title}</h3>
-      <button onClick={onCreate} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"><Plus className="h-3.5 w-3.5" />Thêm</button>
+      {canCreate && <button onClick={onCreate} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"><Plus className="h-3.5 w-3.5" />Thêm</button>}
     </div>
-    <AdminDataGrid rows={rows} columns={config.columns} rowKey={config.rowKey} loading={loading} onEdit={onEdit} onCopy={onCopy} onDelete={onDelete} />
+    <AdminDataGrid rows={rows} columns={config.columns} rowKey={config.rowKey} loading={loading} onEdit={canEdit ? onEdit : undefined} onCopy={canCopy ? onCopy : undefined} onDelete={canDelete ? onDelete : undefined} />
   </div>;
 }

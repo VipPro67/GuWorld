@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -391,7 +393,7 @@ func AdminListItemItems(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), COALESCE(rarity,0) FROM item_dictionary ORDER BY name`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), COALESCE(rarity,0), COALESCE(path,'') FROM item_dictionary ORDER BY name`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -408,14 +410,20 @@ func AdminListItemItems(c *gin.Context) {
 		BasePrice   float64         `json:"base_price"`
 		ImageURL    string          `json:"image_url"`
 		Rarity      int             `json:"rarity"`
+		Path        string          `json:"path"`
 	}
 	items := []ItemRow{}
 	for rows.Next() {
 		var r ItemRow
-		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL, &r.Rarity); err != nil {
-			continue
+		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL, &r.Rarity, &r.Path); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ từ điển vật phẩm"})
+			return
 		}
 		items = append(items, r)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc từ điển vật phẩm"})
+		return
 	}
 	c.JSON(http.StatusOK, items)
 }
@@ -430,6 +438,26 @@ type AdminItemInput struct {
 	BasePrice   float64         `json:"base_price"`
 	ImageURL    string          `json:"image_url"`
 	Rarity      int             `json:"rarity"`
+	Path        string          `json:"path"`
+}
+
+func validateAdminItemInput(c *gin.Context, req *AdminItemInput) bool {
+	req.ID = strings.TrimSpace(req.ID)
+	req.Name = strings.TrimSpace(req.Name)
+	req.ItemType = strings.TrimSpace(req.ItemType)
+	if req.ID == "" || len(req.ID) > 50 || req.Name == "" || len(req.Name) > 100 || req.ItemType == "" || len(req.ItemType) > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID (1-50), tên (1-100) và loại vật phẩm (1-50) là bắt buộc"})
+		return false
+	}
+	if req.Rank < 1 || req.Rarity < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bậc phải từ 1 trở lên và độ hiếm không được âm"})
+		return false
+	}
+	if len(req.Path) > 50 || math.IsNaN(req.BasePrice) || math.IsInf(req.BasePrice, 0) || req.BasePrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đường tu tối đa 50 ký tự; giá phải là số không âm hợp lệ"})
+		return false
+	}
+	return true
 }
 
 func AdminCreateItemItem(c *gin.Context) {
@@ -438,26 +466,29 @@ func AdminCreateItemItem(c *gin.Context) {
 		return
 	}
 	var req AdminItemInput
-	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Name == "" || req.ItemType == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ (id, name, item_type là bắt buộc)"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	if req.Rank < 1 {
-		req.Rank = 1
+	if !validateAdminItemInput(c, &req) {
+		return
 	}
 	if len(req.Effects) == 0 {
-		req.Effects = json.RawMessage(`[]`)
+		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
 	}
 	if !validateAdminEffects(c, "item", req.ID, req.Effects) {
 		return
 	}
-	_, err := db.DB.Exec(`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,base_price,image_url,rarity) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		req.ID, req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL, req.Rarity)
+	_, err := db.DB.Exec(`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,base_price,image_url,rarity,path) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		req.ID, req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL, req.Rarity, req.Path)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	models.LoadItemRegistry(db.DB)
+	if err := models.LoadItemRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu vật phẩm nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_item", "id=%s", req.ID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo vật phẩm"})
 }
@@ -473,63 +504,39 @@ func AdminUpdateItemItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}
-	args := []interface{}{}
-	idx := 1
-	if req.Name != "" {
-		sets = append(sets, "name=$"+strconv.Itoa(idx))
-		args = append(args, req.Name)
-		idx++
-	}
-	if req.ItemType != "" {
-		sets = append(sets, "item_type=$"+strconv.Itoa(idx))
-		args = append(args, req.ItemType)
-		idx++
-	}
-	if req.Rank > 0 {
-		sets = append(sets, "rank=$"+strconv.Itoa(idx))
-		args = append(args, req.Rank)
-		idx++
-	}
-	if req.Description != "" || true {
-		sets = append(sets, "description=$"+strconv.Itoa(idx))
-		args = append(args, req.Description)
-		idx++
-	}
-	if req.BasePrice > 0 || true {
-		sets = append(sets, "base_price=$"+strconv.Itoa(idx))
-		args = append(args, req.BasePrice)
-		idx++
-	}
-	if req.Rarity >= 0 || true {
-		sets = append(sets, "rarity=$"+strconv.Itoa(idx))
-		args = append(args, req.Rarity)
-		idx++
-	}
-	if req.ImageURL != "" {
-		sets = append(sets, "image_url=$"+strconv.Itoa(idx))
-		args = append(args, req.ImageURL)
-		idx++
-	}
-	if len(req.Effects) > 0 {
-		if !validateAdminEffects(c, "item", itemID, req.Effects) {
-			return
-		}
-		sets = append(sets, "effects=$"+strconv.Itoa(idx))
-		args = append(args, req.Effects)
-		idx++
-	}
-	if len(sets) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+	if req.ID != "" && req.ID != itemID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID vật phẩm; hãy tạo vật phẩm mới"})
 		return
 	}
-	args = append(args, itemID)
-	_, err := db.DB.Exec(`UPDATE item_dictionary SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
+	req.ID = itemID
+	if !validateAdminItemInput(c, &req) {
+		return
+	}
+	if len(req.Effects) == 0 {
+		req.Effects = json.RawMessage(`{"schema_version":2,"blocks":[]}`)
+	}
+	if !validateAdminEffects(c, "item", itemID, req.Effects) {
+		return
+	}
+	result, err := db.DB.Exec(`UPDATE item_dictionary SET name=$1,item_type=$2,rank=$3,effects=$4,description=$5,base_price=$6,image_url=$7,rarity=$8,path=$9 WHERE id=$10`,
+		req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL, req.Rarity, req.Path, itemID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	models.LoadItemRegistry(db.DB)
+	count, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận vật phẩm đã được cập nhật"})
+		return
+	}
+	if count == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm"})
+		return
+	}
+	if err := models.LoadItemRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu vật phẩm nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_item", "id=%s", itemID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật vật phẩm"})
 }
@@ -540,12 +547,42 @@ func AdminDeleteItemItem(c *gin.Context) {
 		return
 	}
 	itemID := c.Param("id")
-	_, err := db.DB.Exec(`DELETE FROM item_dictionary WHERE id=$1`, itemID)
+	var owned int64
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_inventory_items WHERE item_id=$1`, itemID).Scan(&owned); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra túi đồ người chơi"})
+		return
+	}
+	if owned > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Không thể xóa: vật phẩm đang có trong túi đồ của %d dòng dữ liệu người chơi", owned)})
+		return
+	}
+	var shopEntries int64
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM caravan_shop_items WHERE id=$1`, itemID).Scan(&shopEntries); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra vật phẩm trong cửa hàng"})
+		return
+	}
+	if shopEntries > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Không thể xóa: vật phẩm đang có trong %d mục cửa hàng; hãy gỡ khỏi cửa hàng trước", shopEntries)})
+		return
+	}
+	result, err := db.DB.Exec(`DELETE FROM item_dictionary WHERE id=$1`, itemID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	models.LoadItemRegistry(db.DB)
+	count, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận vật phẩm đã được xóa"})
+		return
+	}
+	if count == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm"})
+		return
+	}
+	if err := models.LoadItemRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa vật phẩm nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_item", "id=%s", itemID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa vật phẩm"})
 }
@@ -566,6 +603,7 @@ func AdminListRecipes(c *gin.Context) {
 	type RecipeRow struct {
 		ID                        string          `json:"id"`
 		TargetGuID                string          `json:"target_gu_id"`
+		TargetRank                int             `json:"target_rank"`
 		TargetGuName              string          `json:"target_gu_name,omitempty"`
 		RequiredGus               json.RawMessage `json:"required_gus"`
 		RequiredMaterials         json.RawMessage `json:"required_materials"`
@@ -579,13 +617,45 @@ func AdminListRecipes(c *gin.Context) {
 		var targetGuID string
 		var targetRank, variant int
 		if err := rows.Scan(&targetGuID, &targetRank, &variant, &r.TargetGuName, &r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate, &r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil {
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách cổ phương"})
+			return
 		}
 		r.TargetGuID = targetGuID
+		r.TargetRank = targetRank
 		r.ID = fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant)
 		items = append(items, r)
 	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách cổ phương"})
+		return
+	}
 	c.JSON(http.StatusOK, items)
+}
+
+func validateAdminRecipeInput(c *gin.Context, req *AdminRecipeInput) bool {
+	if strings.TrimSpace(req.TargetGuID) == "" || len(req.TargetGuID) > 50 || req.TargetRank < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đích và bậc đích hợp lệ là bắt buộc"})
+		return false
+	}
+	if math.IsNaN(req.SuccessRate) || math.IsInf(req.SuccessRate, 0) || req.SuccessRate < 0 || req.SuccessRate > 1 ||
+		math.IsNaN(req.PrimevalStonesCost) || math.IsInf(req.PrimevalStonesCost, 0) || req.PrimevalStonesCost < 0 ||
+		math.IsNaN(req.ImmortalEssenceStonesCost) || math.IsInf(req.ImmortalEssenceStonesCost, 0) || req.ImmortalEssenceStonesCost < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tỉ lệ thành công phải từ 0 đến 1; chi phí không được âm"})
+		return false
+	}
+	if len(req.RequiredGus) == 0 {
+		req.RequiredGus = json.RawMessage(`{}`)
+	}
+	if len(req.RequiredMaterials) == 0 {
+		req.RequiredMaterials = json.RawMessage(`{}`)
+	}
+	var requiredGus, requiredMaterials map[string]json.RawMessage
+	if json.Unmarshal(req.RequiredGus, &requiredGus) != nil || requiredGus == nil ||
+		json.Unmarshal(req.RequiredMaterials, &requiredMaterials) != nil || requiredMaterials == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng và nguyên liệu yêu cầu phải là đối tượng JSON hợp lệ"})
+		return false
+	}
+	return true
 }
 
 type AdminRecipeInput struct {
@@ -605,35 +675,31 @@ func AdminCreateRecipe(c *gin.Context) {
 		return
 	}
 	var req AdminRecipeInput
-	if err := c.ShouldBindJSON(&req); err != nil || req.TargetGuID == "" {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	targetRank := 1
-	if req.TargetRank > 0 {
-		targetRank = req.TargetRank
+	if !validateAdminRecipeInput(c, &req) {
+		return
 	}
+	targetRank := req.TargetRank
 	var exists bool
-	db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.TargetGuID, targetRank).Scan(&exists)
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.TargetGuID, targetRank).Scan(&exists); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác thực cổ trùng đích"})
+		return
+	}
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "target_gu_id không tồn tại"})
 		return
 	}
-	if req.SuccessRate <= 0 {
-		req.SuccessRate = 0.5
-	}
-	if len(req.RequiredGus) == 0 {
-		req.RequiredGus = json.RawMessage(`{}`)
-	}
-	if len(req.RequiredMaterials) == 0 {
-		req.RequiredMaterials = json.RawMessage(`{}`)
-	}
-
 	variant := 1
 	if tg, tr, v, err := ParseRecipeID(req.ID); err == nil && tg == req.TargetGuID && tr == targetRank {
 		variant = v
 	} else {
-		_ = db.DB.QueryRow(`SELECT COALESCE(MAX(variant), 0) + 1 FROM refining_recipes WHERE target_gu_id = $1 AND target_rank = $2`, req.TargetGuID, targetRank).Scan(&variant)
+		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(MAX(variant), 0) + 1 FROM refining_recipes WHERE target_gu_id = $1 AND target_rank = $2`, req.TargetGuID, targetRank).Scan(&variant); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác định biến thể cổ phương"})
+			return
+		}
 	}
 
 	_, err := db.DB.Exec(`INSERT INTO refining_recipes(target_gu_id,target_rank,variant,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -664,53 +730,22 @@ func AdminUpdateRecipe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}
-	args := []interface{}{}
-	idx := 1
-	if req.TargetGuID != "" {
-		sets = append(sets, "target_gu_id=$"+strconv.Itoa(idx))
-		args = append(args, req.TargetGuID)
-		idx++
-	}
-	if req.TargetRank > 0 {
-		sets = append(sets, "target_rank=$"+strconv.Itoa(idx))
-		args = append(args, req.TargetRank)
-		idx++
-	}
-	if req.SuccessRate > 0 {
-		sets = append(sets, "success_rate=$"+strconv.Itoa(idx))
-		args = append(args, req.SuccessRate)
-		idx++
-	}
-	if req.PrimevalStonesCost > 0 {
-		sets = append(sets, "primeval_stones_cost=$"+strconv.Itoa(idx))
-		args = append(args, req.PrimevalStonesCost)
-		idx++
-	}
-	if req.ImmortalEssenceStonesCost > 0 {
-		sets = append(sets, "immortal_essence_stones_cost=$"+strconv.Itoa(idx))
-		args = append(args, req.ImmortalEssenceStonesCost)
-		idx++
-	}
-	if len(req.RequiredGus) > 0 {
-		sets = append(sets, "required_gus=$"+strconv.Itoa(idx))
-		args = append(args, req.RequiredGus)
-		idx++
-	}
-	if len(req.RequiredMaterials) > 0 {
-		sets = append(sets, "required_materials=$"+strconv.Itoa(idx))
-		args = append(args, req.RequiredMaterials)
-		idx++
-	}
-	if len(sets) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+	if req.TargetGuID != "" && req.TargetGuID != targetGuID || req.TargetRank != 0 && req.TargetRank != targetRank {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi cổ trùng hoặc bậc đích sau khi tạo; hãy tạo cổ phương mới"})
 		return
 	}
-
-	args = append(args, targetGuID, targetRank, variant)
-	whereClause := fmt.Sprintf(" WHERE target_gu_id=$%d AND target_rank=$%d AND variant=$%d", idx, idx+1, idx+2)
-	_, err = db.DB.Exec(`UPDATE refining_recipes SET `+strings.Join(sets, ", ")+whereClause, args...)
+	req.TargetGuID, req.TargetRank = targetGuID, targetRank
+	if !validateAdminRecipeInput(c, &req) {
+		return
+	}
+	var updatedID string
+	err = db.DB.QueryRowContext(c.Request.Context(), `UPDATE refining_recipes SET required_gus=$1,required_materials=$2,success_rate=$3,primeval_stones_cost=$4,immortal_essence_stones_cost=$5 WHERE target_gu_id=$6 AND target_rank=$7 AND variant=$8 RETURNING target_gu_id`,
+		req.RequiredGus, req.RequiredMaterials, req.SuccessRate, req.PrimevalStonesCost, req.ImmortalEssenceStonesCost, targetGuID, targetRank, variant).Scan(&updatedID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ phương"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -730,9 +765,18 @@ func AdminDeleteRecipe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID cổ phương không hợp lệ"})
 		return
 	}
-	_, err = db.DB.Exec(`DELETE FROM refining_recipes WHERE target_gu_id=$1 AND target_rank=$2 AND variant=$3`, targetGuID, targetRank, variant)
+	result, err := db.DB.Exec(`DELETE FROM refining_recipes WHERE target_gu_id=$1 AND target_rank=$2 AND variant=$3`, targetGuID, targetRank, variant)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận cổ phương đã được xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ phương"})
 		return
 	}
 	revision := invalidateRecipeCatalog()

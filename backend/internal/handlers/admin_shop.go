@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -52,10 +51,13 @@ func AdminListShopItems(c *gin.Context) {
 	for rows.Next() {
 		var item AdminShopItem
 		if err := rows.Scan(&item.ID, &item.Rank, &item.Price, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name, &item.ItemType); err != nil {
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách cửa hàng"})
+			return
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"}); return }
+	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách cửa hàng"}); return }
 
 	c.JSON(http.StatusOK, items)
 }
@@ -76,14 +78,21 @@ func AdminCreateShopItem(c *gin.Context) {
 	}
 
 	var req AdminShopItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Price < 0.001 || !pricing.IsValidAmount(req.Price) {
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+	if strings.TrimSpace(req.ID) == "" || len(req.ID) > 50 || req.Rank < 0 || req.Price < 0.001 || !pricing.IsValidAmount(req.Price) || req.Stock < -1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
 
 	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
-	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists)
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh mặt hàng"})
+		return
+	}
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary, gu_dictionary hoặc công thức"})
 		return
@@ -91,7 +100,10 @@ func AdminCreateShopItem(c *gin.Context) {
 	// A pinned rank must exist for the target Gu (rank = 0 means auto).
 	if req.Rank > 0 {
 		var guRankExists bool
-		_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.ID, req.Rank).Scan(&guRankExists)
+		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.ID, req.Rank).Scan(&guRankExists); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh bậc cổ trùng"})
+			return
+		}
 		if !guRankExists {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không có rank này trong gu_dictionary"})
 			return
@@ -116,22 +128,28 @@ func AdminUpdateShopItem(c *gin.Context) {
 	}
 
 	itemID := c.Param("id")
-	rank := 0
-	if raw := c.Param("rank"); raw != "" {
-		fmt.Sscanf(raw, "%d", &rank)
+	rank, err := strconv.Atoi(c.Param("rank"))
+	if err != nil || rank < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bậc cửa hàng không hợp lệ"})
+		return
 	}
 	var req AdminShopItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.Price < 0.001 || !pricing.IsValidAmount(req.Price) {
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+	if req.ID != "" && req.ID != itemID || req.Rank != 0 && req.Rank != rank || req.Price < 0.001 || !pricing.IsValidAmount(req.Price) || req.Stock < -1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
 
-	_, err := db.DB.Exec(`UPDATE caravan_shop_items SET price=$1, stock=$2, is_default=$3, sort_order=$4, updated_at=NOW() WHERE id=$5 AND rank=$6`,
+	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE caravan_shop_items SET price=$1, stock=$2, is_default=$3, sort_order=$4, updated_at=NOW() WHERE id=$5 AND rank=$6`,
 		req.Price, req.Stock, req.IsDefault, req.SortOrder, itemID, rank)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 		return
 	}
+	updated, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã cập nhật"}); return }; if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng cửa hàng"}); return }
 
 	auditlog.Logf(db.DB, &adminID, "admin.update_shop_item", "id=%s rank=%d price=%.3f stock=%d is_default=%v", itemID, rank, req.Price, req.Stock, req.IsDefault)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng"})
@@ -144,16 +162,18 @@ func AdminDeleteShopItem(c *gin.Context) {
 	}
 
 	itemID := c.Param("id")
-	rank := 0
-	if raw := c.Param("rank"); raw != "" {
-		fmt.Sscanf(raw, "%d", &rank)
+	rank, err := strconv.Atoi(c.Param("rank"))
+	if err != nil || rank < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bậc cửa hàng không hợp lệ"})
+		return
 	}
 
-	_, err := db.DB.Exec(`DELETE FROM caravan_shop_items WHERE id=$1 AND rank=$2`, itemID, rank)
+	result, err := db.DB.Exec(`DELETE FROM caravan_shop_items WHERE id=$1 AND rank=$2`, itemID, rank)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return
 	}
+	deleted, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng đã xóa"}); return }; if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng cửa hàng"}); return }
 
 	auditlog.Logf(db.DB, &adminID, "admin.delete_shop_item", "id=%s rank=%d", itemID, rank)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi shop"})
@@ -196,10 +216,12 @@ func AdminListArenaShopItems(c *gin.Context) {
 	for rows.Next() {
 		var item AdminArenaShopItem
 		if err := rows.Scan(&item.ID, &item.Price, &item.Qty, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name); err != nil {
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách Arena Shop"})
+			return
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách Arena Shop"}); return }
 
 	c.JSON(http.StatusOK, items)
 }
@@ -220,17 +242,21 @@ func AdminCreateArenaShopItem(c *gin.Context) {
 	}
 
 	var req AdminArenaShopItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Price <= 0 {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	if req.Qty <= 0 {
-		req.Qty = 1
+	if strings.TrimSpace(req.ID) == "" || len(req.ID) > 50 || req.Price <= 0 || req.Qty < 1 || req.Stock < -1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
 	}
 
 	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
-	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists)
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác minh mặt hàng"})
+		return
+	}
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary, gu_dictionary hoặc công thức"})
 		return
@@ -259,16 +285,18 @@ func AdminUpdateArenaShopItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	if req.Qty <= 0 {
-		req.Qty = 1
+	if req.ID != "" && req.ID != itemID || req.Price <= 0 || req.Qty < 1 || req.Stock < -1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Giá, số lượng hoặc tồn kho không hợp lệ"})
+		return
 	}
 
-	_, err := db.DB.Exec(`UPDATE arena_shop_items SET price=$1, qty=$2, stock=$3, is_default=$4, sort_order=$5, updated_at=NOW() WHERE id=$6`,
+	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE arena_shop_items SET price=$1, qty=$2, stock=$3, is_default=$4, sort_order=$5, updated_at=NOW() WHERE id=$6`,
 		req.Price, req.Qty, req.Stock, req.IsDefault, req.SortOrder, itemID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 		return
 	}
+	updated, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã cập nhật"}); return }; if updated == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng Arena Shop"}); return }
 
 	auditlog.Logf(db.DB, &adminID, "admin.update_arena_shop_item", "id=%s price=%d qty=%d stock=%d is_default=%v", itemID, req.Price, req.Qty, req.Stock, req.IsDefault)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng Arena Shop"})
@@ -282,11 +310,12 @@ func AdminDeleteArenaShopItem(c *gin.Context) {
 
 	itemID := c.Param("id")
 
-	_, err := db.DB.Exec(`DELETE FROM arena_shop_items WHERE id=$1`, itemID)
+	result, err := db.DB.Exec(`DELETE FROM arena_shop_items WHERE id=$1`, itemID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return
 	}
+	deleted, err := result.RowsAffected(); if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận mặt hàng Arena Shop đã xóa"}); return }; if deleted == 0 { c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy mặt hàng Arena Shop"}); return }
 
 	auditlog.Logf(db.DB, &adminID, "admin.delete_arena_shop_item", "id=%s", itemID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi Arena Shop"})
@@ -302,6 +331,7 @@ type AdminMineSlot struct {
 	MonsterID      *string    `json:"monster_id"`
 	MonsterRank    int        `json:"monster_rank"`
 	MonsterSubRank int        `json:"monster_sub_rank"`
+	MineType       string     `json:"mine_type"`
 	OccupiedAt     *time.Time `json:"occupied_at"`
 	LastClaimedAt  *time.Time `json:"last_claimed_at"`
 	AbandonedAt    *time.Time `json:"abandoned_at"`
@@ -313,7 +343,7 @@ func AdminListMineSlots(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT m.id, m.rarity, m.occupier_id, COALESCE(p.username, ''), m.monster_id, m.monster_rank, m.monster_sub_rank,
+		SELECT m.id, m.rarity, m.occupier_id, COALESCE(p.username, ''), m.monster_id, m.monster_rank, m.monster_sub_rank, m.mine_type,
 			m.occupied_at, m.last_claimed_at, m.abandoned_at
 		FROM mine_slots m
 		LEFT JOIN players p ON m.occupier_id = p.id
@@ -329,14 +359,19 @@ func AdminListMineSlots(c *gin.Context) {
 	for rows.Next() {
 		var s AdminMineSlot
 		var occupierName string
-		if err := rows.Scan(&s.ID, &s.Rarity, &s.OccupierID, &occupierName, &s.MonsterID, &s.MonsterRank, &s.MonsterSubRank,
+		if err := rows.Scan(&s.ID, &s.Rarity, &s.OccupierID, &occupierName, &s.MonsterID, &s.MonsterRank, &s.MonsterSubRank, &s.MineType,
 			&s.OccupiedAt, &s.LastClaimedAt, &s.AbandonedAt); err != nil {
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách mỏ"})
+			return
 		}
 		if occupierName != "" {
 			s.OccupierName = &occupierName
 		}
 		slots = append(slots, s)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách mỏ"})
+		return
 	}
 
 	c.JSON(http.StatusOK, slots)
@@ -381,11 +416,13 @@ func AdminUpdateMineSlot(c *gin.Context) {
 		idx++
 	}
 	if req.MonsterRank != nil {
+		if *req.MonsterRank < 1 || *req.MonsterRank > 9 { c.JSON(http.StatusBadRequest, gin.H{"error":"Cấp quái phải từ 1 đến 9"}); return }
 		sets = append(sets, "monster_rank=$"+strconv.Itoa(idx))
 		args = append(args, *req.MonsterRank)
 		idx++
 	}
 	if req.MonsterSubRank != nil {
+		if *req.MonsterSubRank < 1 || *req.MonsterSubRank > 10 { c.JSON(http.StatusBadRequest, gin.H{"error":"Cấp phụ quái phải từ 1 đến 10"}); return }
 		sets = append(sets, "monster_sub_rank=$"+strconv.Itoa(idx))
 		args = append(args, *req.MonsterSubRank)
 		idx++
@@ -399,10 +436,12 @@ func AdminUpdateMineSlot(c *gin.Context) {
 	args = append(args, slotID)
 	query := `UPDATE mine_slots SET ` + strings.Join(sets, ", ") + ` WHERE id=$` + strconv.Itoa(idx)
 
-	if _, err := db.DB.Exec(query, args...); err != nil {
+	result, err := db.DB.ExecContext(c.Request.Context(), query, args...)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật mỏ: " + err.Error()})
 		return
 	}
+	if n, _ := result.RowsAffected(); n == 0 { c.JSON(http.StatusNotFound, gin.H{"error":"Không tìm thấy mỏ"}); return }
 
 	auditlog.Logf(db.DB, &adminID, "admin.update_mine_slot", "slot=%d rarity=%v rank=%v subRank=%v", slotID, req.Rarity, req.MonsterRank, req.MonsterSubRank)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mỏ thành công"})
@@ -420,7 +459,7 @@ func AdminResetMineSlot(c *gin.Context) {
 		return
 	}
 
-	_, err = db.DB.Exec(`
+	result, err := db.DB.ExecContext(c.Request.Context(), `
 		UPDATE mine_slots
 		SET occupier_id = NULL, monster_id = NULL, occupied_at = NULL, last_claimed_at = NULL, abandoned_at = NOW()
 		WHERE id = $1
@@ -429,6 +468,7 @@ func AdminResetMineSlot(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể reset mỏ: " + err.Error()})
 		return
 	}
+	if n, _ := result.RowsAffected(); n == 0 { c.JSON(http.StatusNotFound, gin.H{"error":"Không tìm thấy mỏ"}); return }
 
 	auditlog.Logf(db.DB, &adminID, "admin.reset_mine_slot", "slot=%d", slotID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã reset mỏ thành công"})
