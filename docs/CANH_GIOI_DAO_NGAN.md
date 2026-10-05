@@ -56,8 +56,10 @@ Frontend đồng bộ: `ImmortalApertureView.tsx:1850-1855`
 | **Thiên Kiếp** (Tribulation) | `tribulation.go:874-883` | Earth: 250 + diff×50. Heavenly: 750 + diff×150. Grand: 7250 + diff×500. Myriad: 86750 + diff×2000 |
 | **Item effect** `dao_mark_gain` | `item_effects.go:118-131` | `player.DaoMarks[pathKey] += int(val)` |
 | **Item effect** `soul_boost` | `item_effects.go:109-115` | `player.DaoMarks["soul"] += int(val)` |
-| **Phi Thăng** (Ascension) | `cultivate.go:385-386` | Ban đầu: heaven=100, earth=100 (key lowercase theo `normalizePath`) |
+| **Phi Thăng** (Ascension) | `cultivate.go` | 100 Đạo Ngân cho mỗi một trong 2 lưu phái ngẫu nhiên, không gồm Thiên Đạo |
 | **Sát Chiêu** (V2) | `SAT_CHIEU_MECHANIC.md:254-255` | `DaoMarks[CorePath] += BaseDaoMarkValue × dao_mark_multiplier` |
+
+Lưu phái tai kiếp ưu tiên lưu phái Cổ bản mệnh không phải Thiên Đạo theo cấp: Địa Tai 80%, Thiên Kiếp 85%, Hạo Kiếp 90%, Vạn Kiếp 95%, Hỗn Độn Đại Nạn 100%. Nếu không kích hoạt ưu tiên, hệ thống chọn trong các lưu phái thường còn lại.
 
 ### 1.5 Cập Nhật Đạo Ngân
 
