@@ -168,24 +168,15 @@ type GuTactic struct {
 	ConditionValue float64 `json:"condition_value"`
 }
 
-// KillerMoveTactic defines auto-combat behavior for a specific killer move.
-type KillerMoveTactic struct {
-	KillerMoveID   string  `json:"killer_move_id"`
-	Priority       int     `json:"priority"`
-	UseCondition   string  `json:"use_condition"`
-	ConditionValue float64 `json:"condition_value"`
-}
-
 // AutoCombatConfig holds a player's persistent auto-combat settings.
 type AutoCombatConfig struct {
-	AutoHealHP         bool               `json:"auto_heal_hp"`
-	HealThreshold      float64            `json:"heal_threshold"`
-	AutoRestoreMana    bool               `json:"auto_restore_mana"`
-	ManaThreshold      float64            `json:"mana_threshold"`
-	CategoryPriorities []string           `json:"category_priorities"`
-	GuPriorities       []GuTactic         `json:"gu_priorities"`
-	KMPriorities       []KillerMoveTactic `json:"km_priorities"`
-	SkipBattle         bool               `json:"skip_battle"`
+	AutoHealHP         bool       `json:"auto_heal_hp"`
+	HealThreshold      float64    `json:"heal_threshold"`
+	AutoRestoreMana    bool       `json:"auto_restore_mana"`
+	ManaThreshold      float64    `json:"mana_threshold"`
+	CategoryPriorities []string   `json:"category_priorities"`
+	GuPriorities       []GuTactic `json:"gu_priorities"`
+	SkipBattle         bool       `json:"skip_battle"`
 }
 
 func scanBytes(value interface{}) ([]byte, bool) {
@@ -243,7 +234,6 @@ func DefaultAutoCombatConfig() AutoCombatConfig {
 		ManaThreshold:      30,
 		CategoryPriorities: []string{"other", "shield", "heal", "damage"},
 		GuPriorities:       []GuTactic{},
-		KMPriorities:       []KillerMoveTactic{},
 		SkipBattle:         false,
 	}
 }

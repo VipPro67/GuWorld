@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -365,85 +364,6 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
-
-func scanKillerMoveRow(rows *sql.Rows) (models.KillerMove, error) {
-	var m models.KillerMove
-	err := rows.Scan(
-		&m.ID, &m.PlayerID, &m.Name, &m.Path, &m.MoveType, &m.RankRequired,
-		&m.CorePlayerGuID, &m.TotalManaCost, &m.SuccessRate, &m.DamageValue,
-		&m.DefenseValue, &m.Cooldown, &m.ChannelTime, &m.Effects, &m.IsMastered,
-		&m.IsReliable, &m.IsInstantCast, &m.CreatedAt, &m.UpdatedAt,
-	)
-	return m, err
-}
-
-func loadKillerMovesBatch(tx *sql.Tx, playerID uuid.UUID, ids []string) (map[string]models.KillerMove, map[string][]models.KillerMoveSlot, error) {
-	if tx == nil {
-		return nil, nil, nil
-	}
-	var query string
-	var args []any
-	if ids == nil {
-		query = `SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast, created_at, updated_at 
-		         FROM killer_moves WHERE player_id = $1`
-		args = []any{playerID}
-	} else {
-		if len(ids) == 0 {
-			return nil, nil, nil
-		}
-		query = `SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast, created_at, updated_at 
-		         FROM killer_moves WHERE player_id = $1 AND id = ANY($2)`
-		args = []any{playerID, pq.Array(ids)}
-	}
-
-	rows, err := tx.Query(query, args...)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	kmMap := make(map[string]models.KillerMove)
-	var kmIDs []string
-	for rows.Next() {
-		m, err := scanKillerMoveRow(rows)
-		if err != nil {
-			rows.Close()
-			return nil, nil, err
-		}
-		kmMap[m.ID] = m
-		kmIDs = append(kmIDs, m.ID)
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return nil, nil, err
-	}
-	// Close before the next query: a Tx pins one connection, overlapping
-	// queries corrupt the protocol and poison the transaction.
-	rows.Close()
-
-	slotsMap := make(map[string][]models.KillerMoveSlot)
-	if len(kmIDs) > 0 {
-		slotRows, err := tx.Query(`SELECT id, killer_move_id, player_gu_id, slot_type, slot_index, created_at 
-		                           FROM killer_move_slots WHERE killer_move_id = ANY($1) 
-		                           ORDER BY killer_move_id, slot_index ASC`, pq.Array(kmIDs))
-		if err != nil {
-			return nil, nil, err
-		}
-		defer slotRows.Close()
-
-		for slotRows.Next() {
-			var s models.KillerMoveSlot
-			if err := slotRows.Scan(&s.ID, &s.KillerMoveID, &s.PlayerGuID, &s.SlotType, &s.SlotIndex, &s.CreatedAt); err != nil {
-				return nil, nil, err
-			}
-			slotsMap[s.KillerMoveID] = append(slotsMap[s.KillerMoveID], s)
-		}
-		if err = slotRows.Err(); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return kmMap, slotsMap, nil
-}
 
 func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem, actionType string) (simulator.SimAction, error) {
 	// Mortal users cannot use immortal Gu that cost mana (skip the action).
@@ -867,53 +787,6 @@ func computeGlobalAllStatsBuff(selectedGuIDs []string, resolveSpec func(string) 
 		total = 0.5
 	}
 	return total
-}
-
-func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot, daoMarks models.DaoMarksMap) simulator.SimAction {
-	act := simulator.SimAction{
-		ActionType: "KILLER_MOVE",
-		Name:       km.Name,
-		Rank:       km.RankRequired,
-		Damage:     km.DamageValue,
-		DamageMult: 1.0,
-		Defense:    km.DefenseValue,
-		ManaCost:   km.TotalManaCost,
-		Path:       []string{km.Path},
-	}
-
-	// Strip the dao bonus baked in at creation so the engine re-applies it
-	// using the current dao marks (and reports it in the combat log).
-	if mult, ok := simulator.DaoMultiplier(simulator.DaoMarks(daoMarks), act.Path); ok && mult > 1.0 {
-		act.Damage /= mult
-		act.Defense /= mult
-	}
-
-	var effects map[string]float64
-	if err := json.Unmarshal(km.Effects, &effects); err == nil {
-		for effectKey, v := range effects {
-			switch strings.ToLower(effectKey) {
-			case "life_steal", "blood_drain":
-				act.LifeStealPct += v / 100.0
-			case "multi_hit":
-				act.MultiHit = int(v)
-			case "phantom_attack":
-				act.PhantomDmg += v
-			case "thorns_damage":
-				act.ThornsDmg += v
-			case "heal":
-				act.Healing += v
-			default:
-				if op, err := statusfx.ResolveStatusWithTier(effectKey, int(v)); err == nil {
-					act.StatusOps = append(act.StatusOps, op)
-				} else if op, err := statusfx.ResolveStatus(effectKey, v, 0); err == nil {
-					act.StatusOps = append(act.StatusOps, op)
-				}
-			}
-		}
-	}
-
-	act.TargetType = "SINGLE"
-	return act
 }
 
 // combatMechanicsForSpec is the migration adapter. Registry-loaded definitions

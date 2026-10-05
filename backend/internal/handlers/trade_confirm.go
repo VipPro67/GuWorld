@@ -13,7 +13,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
@@ -542,17 +541,11 @@ func ConfirmTrade(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
 				return
 			}
-			if _, err := tx.Exec(`UPDATE killer_moves SET player_id = $1, updated_at = NOW() WHERE core_player_gu_id = $2`, receiver.ID, instID); err != nil {
-				logger.S.Warnf("Failed to transfer killer move for gu %s: %v", instID, err)
-			}
 		}
 		for _, instID := range receiverOffer.Gus {
 			if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, updated_at = NOW() WHERE id = $2`, sender.ID, instID); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
 				return
-			}
-			if _, err := tx.Exec(`UPDATE killer_moves SET player_id = $1, updated_at = NOW() WHERE core_player_gu_id = $2`, sender.ID, instID); err != nil {
-				logger.S.Warnf("Failed to transfer killer move for gu %s: %v", instID, err)
 			}
 		}
 

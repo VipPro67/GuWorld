@@ -354,7 +354,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
       const response = await authFetch(`${BACKEND_URL}/api/scouting/sever-clues`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ use_killer_move: false }),
+        body: JSON.stringify({}),
       });
 
       if (response.status === 401) {

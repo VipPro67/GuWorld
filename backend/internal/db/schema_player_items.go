@@ -64,49 +64,6 @@ func schemaPlayerItems() error {
 		return err
 	}
 
-	if err := execSchema("killer_moves", `
-	CREATE TABLE IF NOT EXISTS killer_moves (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		name VARCHAR(80) NOT NULL,
-		path VARCHAR(50) NOT NULL DEFAULT '',
-		move_type VARCHAR(30) NOT NULL DEFAULT 'UTILITY',
-		rank_required INTEGER NOT NULL DEFAULT 1,
-		core_player_gu_id VARCHAR(80) NOT NULL REFERENCES player_gu(id) ON DELETE CASCADE,
-		total_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
-		success_rate DOUBLE PRECISION NOT NULL DEFAULT 0,
-		damage_value DOUBLE PRECISION NOT NULL DEFAULT 0,
-		defense_value DOUBLE PRECISION NOT NULL DEFAULT 0,
-		cooldown INTEGER NOT NULL DEFAULT 0,
-		channel_time INTEGER NOT NULL DEFAULT 1,
-		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}',
-		is_mastered BOOLEAN NOT NULL DEFAULT FALSE,
-		is_reliable BOOLEAN NOT NULL DEFAULT FALSE,
-		is_instant_cast BOOLEAN NOT NULL DEFAULT FALSE,
-		usage_count INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`); err != nil {
-		return err
-	}
-	if err := execSchema("killer_moves_player_path_idx", `
-	CREATE INDEX IF NOT EXISTS idx_killer_moves_player_path ON killer_moves (player_id, path);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("killer_move_slots", `
-	CREATE TABLE IF NOT EXISTS killer_move_slots (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		killer_move_id UUID NOT NULL REFERENCES killer_moves(id) ON DELETE CASCADE,
-		player_gu_id VARCHAR(80) NOT NULL REFERENCES player_gu(id) ON DELETE CASCADE,
-		slot_type VARCHAR(20) NOT NULL CHECK (slot_type IN ('CORE','SUPPORT')),
-		slot_index INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE (killer_move_id, slot_index)
-	);`); err != nil {
-		return err
-	}
-
 	if err := execSchema("player_gu_state_idx", `
 	CREATE INDEX IF NOT EXISTS idx_player_gu_state ON player_gu (state);`); err != nil {
 		return err

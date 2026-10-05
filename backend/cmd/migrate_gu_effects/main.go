@@ -28,7 +28,7 @@ type aggregate struct {
 func main() {
 	var formatName, source, output, reportPath string
 	var write bool
-	flag.StringVar(&formatName, "format", "gu", "gu, item, gamefx, killer_move, or aperture_variant_event")
+	flag.StringVar(&formatName, "format", "gu", "gu, item, gamefx, or aperture_variant_event")
 	flag.StringVar(&source, "source", "data/Gu.csv", "source CSV (gu/item) or JSON file")
 	flag.StringVar(&output, "output", "", "candidate output path (required with -write)")
 	flag.StringVar(&reportPath, "report", "", "machine-readable audit report; defaults to stdout")

@@ -649,18 +649,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			actors.GET("/:id", handlers.GetActor)
 		}
 
-		// Killer Moves — group: 30/min, per player: 20/min
-		killerMoves := api.Group("/killer-moves")
-		killerMoves.Use(middleware.AuthRequired())
-		killerMoves.Use(middleware.RateLimitByPlayer(20, time.Minute))
-		{
-			killerMoves.POST("/calculate", handlers.CalculateKillerMove)
-			killerMoves.POST("", handlers.CreateKillerMove)
-			killerMoves.GET("", handlers.ListKillerMoves)
-			killerMoves.GET("/:id", handlers.GetKillerMove)
-			killerMoves.DELETE("/:id", handlers.DeleteKillerMove)
-		}
-
 		// Combat — group: 60/min, per player: 60/min
 		combat := api.Group("/combat")
 		combat.Use(middleware.AuthRequired())
@@ -668,7 +656,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/practice", handlers.PracticeCombatStart)
-			combat.POST("/cast-killer-move", handlers.CastKillerMove)
 			combat.POST("/capture", handlers.CaptureMonster)
 			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
@@ -800,7 +787,6 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
 		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)
 		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
-		api.POST("/explore/use_killer_move", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseKillerMoveOnMap)
 
 		// Ground drops / Chiến lợi phẩm trên bản đồ
 		api.GET("/world/drops", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetTileGroundDrops)

@@ -305,21 +305,6 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-amber-400/30",
       iconColor: "text-amber-500",
     },
-     {
-      id: "kill-moves",
-      label: "Sát Chiêu",
-      // icon: Sword,
-      // gradient: "from-rose-500 to-red-600",
-      // glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
-      // borderColor: "border-rose-400/20",
-      // iconColor: "text-rose-100",
-      locked: true, // Locked for dev
-      icon: Lock,
-      gradient: "from-zinc-800 to-zinc-950",
-      glow: "",
-      borderColor: "border-zinc-800",
-      iconColor: "text-zinc-600",
-    },
     {
       id: "world-map",
       label: "Ngũ Vực",

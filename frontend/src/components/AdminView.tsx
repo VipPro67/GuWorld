@@ -1938,7 +1938,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                                 const sExp = typeof s === "string" ? undefined : s.expires_at;
                                 let displayName = statusDictionary?.[sId]?.name || statusLabels[sId] || sId;
                                 if (sId.startsWith("cd_gu_")) displayName = "Hồi chiêu Cổ Trùng";
-                                else if (sId.startsWith("cd_km_")) displayName = "Hồi chiêu Sát Chiêu";
                                 const statusEffects = statusDictionary?.[sId]?.effects;
 
                                 return (

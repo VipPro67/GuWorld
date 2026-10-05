@@ -53,6 +53,8 @@ const MAX_CELL_CHUNKS = 512;
 
 const currentCellRegion = () => useGameStore.getState().player?.current_region ?? "";
 let monsterSnapshotRequest = 0;
+let lastMonsterSnapshotAt = 0;
+const MONSTER_SNAPSHOT_MIN_INTERVAL_MS = 5000;
 const chunkKey = (region: string, x: number, y: number) =>
   `${region}:${Math.floor(x / CELL_CHUNK_SIZE)},${Math.floor(y / CELL_CHUNK_SIZE)}`;
 const cellKey = (x: number, y: number) => `${x},${y}`;
@@ -214,7 +216,7 @@ interface WorldStoreState {
   invalidateCell: (x: number, y: number) => void;
   mergeWSCells: (cells: NearbyCell[]) => void;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
-  fetchMonsterSnapshot: (r?: number) => Promise<boolean>;
+  fetchMonsterSnapshot: (r?: number, force?: boolean) => Promise<boolean>;
   applyCombatEvent: (event: WorldCombatEvent) => void;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
@@ -608,7 +610,12 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     }
   },
 
-  fetchMonsterSnapshot: async (r = 25) => {
+  fetchMonsterSnapshot: async (r = 25, force = false) => {
+    // Movement-threshold effect and WS spawn events can fire many times per
+    // second while walking; coalesce into at most one snapshot per interval.
+    const now = Date.now();
+    if (!force && now - lastMonsterSnapshotAt < MONSTER_SNAPSHOT_MIN_INTERVAL_MS) return true;
+    lastMonsterSnapshotAt = now;
     const requestID = ++monsterSnapshotRequest;
     const requestedRegion = currentCellRegion();
     set((s) => s.monsterSnapshotRegion === requestedRegion

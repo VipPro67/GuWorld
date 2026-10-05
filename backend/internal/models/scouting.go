@@ -119,7 +119,6 @@ type ApplyMarkRequest struct {
 
 // SeverCluesRequest is used to purge marks and traces
 type SeverCluesRequest struct {
-	UseKillerMove bool `json:"use_killer_move"`
 }
 
 // SeverCluesResponse is returned after purging

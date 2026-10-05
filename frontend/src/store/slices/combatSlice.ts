@@ -7,16 +7,10 @@ import type {
   CombatState,
   CombatHistoryEntry,
   AutoCombatConfig,
-  KillerMove,
   ExploreResponse,
 } from "@/store/useGameStore";
 
 export interface CombatSlice {
-  killerMoves: KillerMove[];
-  killerMovesLoaded: boolean;
-  fetchKillerMoves: () => Promise<void>;
-  deleteKillerMove: (id: string) => Promise<boolean>;
-  castKillerMove: (id: string, targetId?: string, usedExtraGuThisTurn?: boolean) => Promise<{ player: Player; logs: string[]; victory?: boolean; defeat?: boolean } | null>;
   explore: () => Promise<void>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
   executeAutoCombat: (loadout: ApiResponseData) => Promise<{ logs: ApiResponseData[]; winner: string; combatants?: ApiResponseData[] } | null>;
@@ -36,8 +30,6 @@ export interface CombatSlice {
 }
 
 export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, CombatSlice> = (set, get) => ({
-  killerMoves: [],
-  killerMovesLoaded: false,
   combatSettings: null,
   combatSettingsLoading: false,
   combatHistory: [],
@@ -133,25 +125,6 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
     }
   },
 
-  fetchKillerMoves: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/killer-moves`);
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Không thể tải sát chiêu.");
-      set({ killerMoves: data.killer_moves || [], killerMovesLoaded: true });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Không thể tải sát chiêu.";
-      set({ error: message, killerMovesLoaded: true });
-      get().addLog(`Tải sát chiêu thất bại: ${message}`);
-    }
-  },
-
   fetchCombatSettings: async () => {
     const { token, logout } = get();
     if (!token) return;
@@ -195,68 +168,6 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
       set({ error: message });
       get().addLog(`Lưu cài đặt thất bại: ${message}`);
       return false;
-    } finally {
-      get().endAction("player:combat");
-    }
-  },
-
-  deleteKillerMove: async (id) => {
-    const { token, logout } = get();
-    if (!token) return false;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/killer-moves/${id}`, { method: "DELETE" });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Không thể xóa sát chiêu.");
-      set((state: ApiResponseData) => ({ killerMoves: state.killerMoves.filter((move: ApiResponseData) => move.id !== id) }));
-      get().addLog(data.message || "Đã xóa sát chiêu.");
-      return true;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Không thể xóa sát chiêu.";
-      set({ error: message });
-      get().addLog(`Xóa sát chiêu thất bại: ${message}`);
-      return false;
-    }
-  },
-
-  castKillerMove: async (id, targetId, usedExtraGuThisTurn = false) => {
-    const { player, token, logout } = get();
-    if (!player || !token || !get().beginAction("player:combat")) return null;
-    set({ error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/combat/cast-killer-move`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          killer_move_id: id,
-          target_id: targetId || "",
-          used_extra_gu_this_turn: usedExtraGuThisTurn,
-        }),
-      });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Thi triển sát chiêu thất bại.");
-      get().applyInventoryFromResponse(data);
-      if (data.logs && Array.isArray(data.logs)) {
-        data.logs.forEach((logLine: string) => get().addLog(logLine));
-      }
-      if (data.compound_effects && Array.isArray(data.compound_effects)) {
-        data.compound_effects.forEach((ce: { name: string; description: string }) => {
-          get().addLog(`⟐ [${ce.name}] ${ce.description}`);
-        });
-      }
-      return data;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Thi triển sát chiêu thất bại.";
-      set({ error: message });
-      get().addLog(`Thi triển sát chiêu thất bại: ${message}`);
-      return null;
     } finally {
       get().endAction("player:combat");
     }

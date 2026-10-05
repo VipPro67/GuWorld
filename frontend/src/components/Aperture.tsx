@@ -237,7 +237,6 @@ export const Aperture: React.FC<ApertureProps> = ({
     const spec = guSpecFor(g.gu_id, g.rank);
     return g.status === "ACTIVE" && g.equipped && Boolean(spec && isCombatEligible(spec));
   });
-  const killerMoves = store.killerMoves || [];
   const percent = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
   const rankName = RANK_NAMES[rank] ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
@@ -302,7 +301,6 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [csAutoRestoreMana, setCsAutoRestoreMana] = useState(saved.auto_restore_mana);
   const [csManaThreshold, setCsManaThreshold] = useState(saved.mana_threshold);
   const [csGuPriorities, setCsGuPriorities] = useState(saved.gu_priorities || []);
-  const [csKMPriorities, setCsKMPriorities] = useState(saved.km_priorities || []);
   const [csSkipBattle, setCsSkipBattle] = useState(saved.skip_battle);
   const [combatCategoryTab, setCombatCategoryTab] = useState<"all" | "damage" | "heal" | "shield" | "other">("all");
   const [combatSettingsLoaded, setCombatSettingsLoaded] = useState(false);
@@ -324,7 +322,6 @@ export const Aperture: React.FC<ApertureProps> = ({
       setCsManaThreshold(cs.mana_threshold);
       setCsSkipBattle(cs.skip_battle);
       setCsGuPriorities(cs.gu_priorities || []);
-      setCsKMPriorities(cs.km_priorities || []);
     }
   }, [store.combatSettings, combatSettingsLoaded]);
 
@@ -1799,66 +1796,6 @@ export const Aperture: React.FC<ApertureProps> = ({
                     )}
                   </div>
 
-                  {/* Killer Move Priorities */}
-                  <div className="border-t border-zinc-900/30 pt-3">
-                    <div className="text-[10px] text-zinc-400 font-bold mb-2">Sát Chiêu (ưu tiên)</div>
-                    {killerMoves.length === 0 ? (
-                      <p className="text-[10px] text-zinc-600 italic">Chưa có sát chiêu nào. Vào Sát Chiêu Đường để tạo.</p>
-                    ) : (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {killerMoves.map((km, idx) => {
-                          const tactic = csKMPriorities.find(t => t.killer_move_id === km.id);
-                          const priority = tactic?.priority ?? idx + 1;
-                          const condition = tactic?.use_condition || "always";
-                          const condVal = tactic?.condition_value || 30;
-                          return (
-                            <div key={km.id} className="flex items-center gap-2 bg-zinc-950/50 rounded-lg px-2.5 py-1.5 border border-zinc-900">
-                              <span className="text-[10px] text-zinc-500 font-mono w-4">{priority}</span>
-                              <span className="text-[11px] text-zinc-200 flex-1 truncate">{km.name}</span>
-                              <select value={condition}
-                                onChange={e => {
-                                  const newList = csKMPriorities.filter(t => t.killer_move_id !== km.id);
-                                  newList.push({ killer_move_id: km.id, priority, use_condition: e.target.value, condition_value: condVal });
-                                  setCsKMPriorities(newList);
-                                }}
-                                className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
-                              >
-                                <option value="always">Luôn</option>
-                                <option value="hp_below">HP &lt; %</option>
-                                <option value="mana_above">Chân nguyên &gt; %</option>
-                                <option value="enemy_hp_below">Máu địch &lt; %</option>
-                              </select>
-                              {condition !== "always" && (
-                                <input type="number" min="1" max="99" value={condVal}
-                                  onChange={e => {
-                                    const newList = csKMPriorities.filter(t => t.killer_move_id !== km.id);
-                                    newList.push({ killer_move_id: km.id, priority, use_condition: condition, condition_value: Number(e.target.value) });
-                                    setCsKMPriorities(newList);
-                                  }}
-                                  className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
-                                />
-                              )}
-                              <div className="flex gap-0.5">
-                                <button type="button"
-                                  onClick={() => {
-                                    const newList = csKMPriorities.map(t => t.killer_move_id === km.id ? { ...t, priority: Math.max(1, priority - 1) } : t);
-                                    setCsKMPriorities(newList);
-                                  }}
-                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▲</button>
-                                <button type="button"
-                                  onClick={() => {
-                                    const newList = csKMPriorities.map(t => t.killer_move_id === km.id ? { ...t, priority: priority + 1 } : t);
-                                    setCsKMPriorities(newList);
-                                  }}
-                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▼</button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
                   {/* Save Combat Settings */}
                   <button
                     type="button"
@@ -1870,7 +1807,6 @@ export const Aperture: React.FC<ApertureProps> = ({
                         auto_restore_mana: csAutoRestoreMana,
                         mana_threshold: csManaThreshold,
                         gu_priorities: csGuPriorities,
-                        km_priorities: csKMPriorities,
                         skip_battle: csSkipBattle,
                       });
                       if (success) {

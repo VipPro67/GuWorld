@@ -23,7 +23,7 @@ func TestFormatSpecificConverters(t *testing.T) {
 		wantConverted int
 		wantAmbiguous int
 	}{
-		{"gu", FormatGu, 5, 0}, {"item", FormatItem, 2, 0}, {"gamefx", FormatGameFX, 3, 0}, {"killer_move", FormatKiller, 3, 0}, {"aperture", FormatAperture, 0, 1},
+		{"gu", FormatGu, 5, 0}, {"item", FormatItem, 2, 0}, {"gamefx", FormatGameFX, 3, 0}, {"aperture", FormatAperture, 0, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -52,7 +52,7 @@ func TestAmbiguousNeverGuessesAndGateStaysClosed(t *testing.T) {
 }
 
 func TestDuplicateAliasesAndExplicitDivergenceAreReported(t *testing.T) {
-	r := ConvertKillerMove("move", []byte(`{"lifesteal":0.1,"life_steal":0.2}`))
+	r := convertFlatNative(FormatItem, "item", []byte(`{"restore_hp":10,"heal":20}`), "ON_CONSUME", map[string]string{"restore_hp": "HEAL", "heal": "HEAL"})
 	if len(r.Report.Duplicate) != 1 || r.Report.MigrationGate {
 		t.Fatalf("duplicate report = %+v", r.Report)
 	}
