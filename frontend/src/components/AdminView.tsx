@@ -4348,12 +4348,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </button>
           </div>
 
-          {sectsLoading && sects.length === 0 ? (
+          {sectsLoading && sects?.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-3">
               <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
               <span className="text-xs text-zinc-500 font-mono">Đang tải danh sách tông môn...</span>
             </div>
-          ) : sects.length === 0 ? (
+          ) : sects?.length === 0 ? (
             <div className="text-center py-16 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl space-y-2">
               <Building2 className="w-10 h-10 text-zinc-700 mx-auto" />
               <p className="text-sm text-zinc-400 font-medium">Không có tông môn nào.</p>
@@ -4375,7 +4375,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   </tr>
                 </thead>
                 <tbody>
-                  {sects.map((s: ApiResponseData) => (
+                  {sects?.map((s: ApiResponseData) => (
                     <tr key={s.id} onClick={() => { setSelectedSectId(s.id); }} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
                       <td className="px-3 py-2.5 text-zinc-500 font-mono whitespace-nowrap">{s.id}</td>
                       <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{s.name}</td>
@@ -4788,7 +4788,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá cơ bản</label><input type="number" min={0} step="0.001" value={itemEdit.base_price} onChange={e => setItemEdit({...itemEdit, base_price: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Độ hiếm</label><input type="number" min={0} max={9} value={itemEdit.rarity ?? 0} onChange={e => setItemEdit({...itemEdit, rarity: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiên khiếu</label><input maxLength={50} value={itemEdit.path || ""} onChange={e => setItemEdit({...itemEdit, path: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Lưu Phái</label><input maxLength={50} value={itemEdit.path || ""} onChange={e => setItemEdit({...itemEdit, path: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Ảnh</label>
