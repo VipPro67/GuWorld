@@ -116,7 +116,13 @@ func (s *lastActivityStore) flush() {
 		i++
 	}
 
-	_, err := db.DB.Exec(`
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Rollback()
+	_, _ = tx.Exec(`SET LOCAL lock_timeout = '1500'`)
+	_, err = tx.Exec(`
 		WITH updates(id, last_activity) AS (
 			SELECT unnest($1::text[]), unnest($2::timestamptz[])
 		)
@@ -135,6 +141,7 @@ func (s *lastActivityStore) flush() {
 		s.mu.Unlock()
 		return
 	}
+	_ = tx.Commit()
 
 	logger.S.Debugf("Last-activity flush: updated %d player(s)", len(snapshot))
 }
