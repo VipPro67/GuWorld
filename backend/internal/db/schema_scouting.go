@@ -35,12 +35,5 @@ func schemaScouting() error {
 		return err
 	}
 
-	if err := execSchema("players_scouting_columns", `
-	ALTER TABLE players ADD COLUMN IF NOT EXISTS active_concealment JSONB NOT NULL DEFAULT '{}'::jsonb;
-	ALTER TABLE players ADD COLUMN IF NOT EXISTS last_sever_clues_at TIMESTAMPTZ DEFAULT NULL;
-	ALTER TABLE players ADD COLUMN IF NOT EXISTS last_resonance_scan_at TIMESTAMPTZ DEFAULT NULL;`); err != nil {
-		return err
-	}
-
 	return nil
 }

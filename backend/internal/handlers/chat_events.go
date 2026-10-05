@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -102,12 +103,19 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 }
 
 func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, error) {
+	return loadBaoHoangMessagesContext(context.Background(), channel, sectID)
+}
+
+func loadBaoHoangMessagesContext(ctx context.Context, channel string, sectID sql.NullString) ([]ChatItem, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	globalUUID := "00000000-0000-0000-0000-000000000000"
 	var rows *sql.Rows
 	var err error
 
 	if channel == "sect" {
-		rows, err = db.DB.Query(`
+		rows, err = db.DB.QueryContext(ctx, `
 			SELECT * FROM (
 				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
 				FROM messages m
@@ -119,7 +127,7 @@ func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, er
 			ORDER BY sub.created_at ASC
 		`, globalUUID, channel, sectID.String)
 	} else {
-		rows, err = db.DB.Query(`
+		rows, err = db.DB.QueryContext(ctx, `
 			SELECT * FROM (
 				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
 				FROM messages m

@@ -310,7 +310,7 @@ func GetBaoHoangMessages(c *gin.Context) {
 		sectID = sql.NullString{String: key[len("sect:"):], Valid: true}
 	}
 
-	messages, err := loadBaoHoangMessages(channel, sectID)
+	messages, err := loadBaoHoangMessagesContext(c.Request.Context(), channel, sectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load global chat"})
 		return

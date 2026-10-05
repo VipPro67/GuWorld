@@ -2305,6 +2305,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     let lastPrefetchPoll = Date.now();
     const unifiedTick = () => {
       const now = Date.now();
+      // No network traffic from hidden tabs; WS events keep state fresh.
+      if (document.visibilityState !== "visible") return;
       // WebSocket tile commands make frequent cell polling redundant; keep 60s as fallback.
       if (now - lastCellsPoll >= 60000) {
         lastCellsPoll = now;

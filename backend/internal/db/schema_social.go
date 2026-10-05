@@ -20,16 +20,16 @@ func schemaSocial() error {
 	CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages (sender_id);`); err != nil {
 		return err
 	}
-	if err := execSchema("messages_receiver_idx", `
-	CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages (receiver_id);`); err != nil {
-		return err
-	}
 	if err := execSchema("messages_sect_idx", `
 	CREATE INDEX IF NOT EXISTS idx_messages_sect ON messages (sect_id);`); err != nil {
 		return err
 	}
 	if err := execSchema("messages_receiver_channel_created_idx", `
 	CREATE INDEX IF NOT EXISTS idx_messages_receiver_channel_created ON messages (receiver_id, channel, created_at DESC);`); err != nil {
+		return err
+	}
+	if err := execSchema("messages_sect_channel_created_idx", `
+	CREATE INDEX IF NOT EXISTS idx_messages_sect_channel_created ON messages (receiver_id, channel, sect_id, created_at DESC);`); err != nil {
 		return err
 	}
 
@@ -102,19 +102,6 @@ func schemaSocial() error {
 		error_message TEXT,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("audit_logs_patch_columns", `
-	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_username TEXT NOT NULL DEFAULT '';
-	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS effective_roles JSONB NOT NULL DEFAULT '[]';
-	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS effective_permission TEXT NOT NULL DEFAULT '';
-	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS change_data JSONB NOT NULL DEFAULT '{}';
-	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS reason TEXT NOT NULL DEFAULT '';
-	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS request_id TEXT NOT NULL DEFAULT '';`); err != nil {
-		return err
-	}
-	if err := execSchema("audit_logs_player_idx", `
-	CREATE INDEX IF NOT EXISTS idx_audit_logs_player ON audit_logs (player_id);`); err != nil {
 		return err
 	}
 	if err := execSchema("audit_logs_action_idx", `

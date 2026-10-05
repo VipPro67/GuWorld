@@ -44,24 +44,8 @@ func schemaPayment() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("wallet_transactions_decimal_upgrade", `
-	ALTER TABLE wallet_transactions ALTER COLUMN amount TYPE NUMERIC(30,3) USING ROUND(amount::NUMERIC, 3);
-	ALTER TABLE wallet_transactions ALTER COLUMN balance_before TYPE NUMERIC(30,3) USING ROUND(balance_before::NUMERIC, 3);
-	ALTER TABLE wallet_transactions ALTER COLUMN balance_after TYPE NUMERIC(30,3) USING ROUND(balance_after::NUMERIC, 3);
-	`); err != nil {
-		return err
-	}
 	if err := execSchema("wallet_transactions_user_idx", `
 	CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user ON wallet_transactions (user_id);`); err != nil {
-		return err
-	}
-	// Self-heal the type CHECK on existing databases (CREATE TABLE IF NOT EXISTS
-	// does not update the constraint of an already-created table).
-	if err := execSchema("wallet_transactions_type_check", `
-	ALTER TABLE wallet_transactions
-		DROP CONSTRAINT IF EXISTS wallet_transactions_type_check,
-		ADD CONSTRAINT wallet_transactions_type_check
-		CHECK (type IN ('TOPUP','SPEND','REFUND','ADMIN_ADJUST','PACKAGE_REWARD','EXCHANGE'));`); err != nil {
 		return err
 	}
 	if err := execSchema("wallet_transactions_topup_order_unique", `

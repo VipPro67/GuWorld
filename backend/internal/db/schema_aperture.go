@@ -46,29 +46,6 @@ func schemaAperture() error {
 	}
 
 	// Ensure tribulation_pending_at column exists in case the table was created earlier.
-	if err := execSchema("immortal_apertures_tribulation_pending_at_upgrade", `
-	ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS tribulation_pending_at TIMESTAMP WITH TIME ZONE;
-	`); err != nil {
-		return err
-	}
-
-	if err := execSchema("immortal_apertures_remove_total_tribulation_count", `
-	ALTER TABLE immortal_apertures DROP COLUMN IF EXISTS tribulation_count;
-	`); err != nil {
-		return err
-	}
-
-	if err := execSchema("immortal_apertures_float_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='immortal_apertures' AND column_name='aperture_hp' AND data_type IN ('bigint', 'integer', 'int')) THEN
-			ALTER TABLE immortal_apertures ALTER COLUMN aperture_hp TYPE DOUBLE PRECISION USING aperture_hp::DOUBLE PRECISION;
-			ALTER TABLE immortal_apertures ALTER COLUMN max_aperture_hp TYPE DOUBLE PRECISION USING max_aperture_hp::DOUBLE PRECISION;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
 	if err := execSchema("aperture_resource_nodes", `
 	CREATE TABLE IF NOT EXISTS aperture_resource_nodes (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,22 +80,6 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("aperture_resource_nodes_prod_amount_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='aperture_resource_nodes' AND column_name='production_amount' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE aperture_resource_nodes ALTER COLUMN production_amount TYPE BIGINT USING COALESCE(production_amount, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
-	if err := execSchema("aperture_resource_nodes_production_key_upgrade", `
-	ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS production_key VARCHAR(100);
-	`); err != nil {
-		return err
-	}
-
 	if err := execSchema("aperture_nodes_interval_idx", `
 	CREATE INDEX IF NOT EXISTS idx_aperture_nodes_interval ON aperture_resource_nodes (node_category, node_type, production_interval_hours);`); err != nil {
 		return err
@@ -148,19 +109,17 @@ func schemaAperture() error {
 		oppression DOUBLE PRECISION NOT NULL DEFAULT 0.0,
 		rebellion_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0,
 		labor_intensity VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+		prosperity DOUBLE PRECISION NOT NULL DEFAULT 50.0,
+		gu_master_count INTEGER NOT NULL DEFAULT 0,
+		gu_immortal_count INTEGER NOT NULL DEFAULT 0,
+		food_stored DOUBLE PRECISION NOT NULL DEFAULT 0,
+		food_per_capita DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+		population_growth_rate DOUBLE PRECISION NOT NULL DEFAULT 0.001,
+		mortality_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0005,
 		created_at TIMESTAMP DEFAULT now(),
 		updated_at TIMESTAMP DEFAULT now(),
 		UNIQUE (aperture_id, race)
 	);`); err != nil {
-		return err
-	}
-
-	// --- Phase 1: Variant Human Economy columns ---
-	if err := execSchema("variant_humans_prosperity_upgrade", `
-	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS prosperity DOUBLE PRECISION NOT NULL DEFAULT 50.0;
-	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS gu_master_count INTEGER NOT NULL DEFAULT 0;
-	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS gu_immortal_count INTEGER NOT NULL DEFAULT 0;
-	`); err != nil {
 		return err
 	}
 
@@ -199,6 +158,8 @@ func schemaAperture() error {
 		current_quantity INTEGER NOT NULL DEFAULT 0,
 		priority INTEGER NOT NULL DEFAULT 0,
 		enabled BOOLEAN NOT NULL DEFAULT true,
+		last_error TEXT NOT NULL DEFAULT '',
+		last_processed_at TIMESTAMP WITH TIME ZONE,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 	);`); err != nil {
@@ -209,23 +170,6 @@ func schemaAperture() error {
 	`); err != nil {
 		return err
 	}
-	if err := execSchema("aperture_refinement_queue_status_upgrade", `
-	ALTER TABLE aperture_refinement_queue ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '';
-	ALTER TABLE aperture_refinement_queue ADD COLUMN IF NOT EXISTS last_processed_at TIMESTAMP WITH TIME ZONE;
-	`); err != nil {
-		return err
-	}
-
-	// --- Phase 2: Society Simulation columns ---
-	if err := execSchema("variant_humans_society_upgrade", `
-	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS food_stored DOUBLE PRECISION NOT NULL DEFAULT 0;
-	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS food_per_capita DOUBLE PRECISION NOT NULL DEFAULT 1.0;
-	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS population_growth_rate DOUBLE PRECISION NOT NULL DEFAULT 0.001;
-	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS mortality_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0005;
-	`); err != nil {
-		return err
-	}
-
 	// --- Phase 2: Settlements ---
 	if err := execSchema("aperture_variant_settlements", `
 	CREATE TABLE IF NOT EXISTS aperture_variant_settlements (
@@ -266,9 +210,6 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
-	if err := effectCatalogColumns("aperture_variant_events"); err != nil {
-		return err
-	}
 	if err := execSchema("aperture_variant_events_aperture_idx", `
 	CREATE INDEX IF NOT EXISTS idx_aperture_variant_events_aperture ON aperture_variant_events (aperture_id, resolved);
 	`); err != nil {
@@ -292,23 +233,8 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("tribulation_events_player_idx", `
-	CREATE INDEX IF NOT EXISTS idx_tribulation_events_player ON tribulation_events (player_id);`); err != nil {
-		return err
-	}
 	if err := execSchema("tribulation_events_player_status_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_events_player_status ON tribulation_events (player_id, status);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("tribulation_events_float_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tribulation_events' AND column_name='aperture_hp_before' AND data_type IN ('bigint', 'integer', 'int')) THEN
-			ALTER TABLE tribulation_events ALTER COLUMN aperture_hp_before TYPE DOUBLE PRECISION USING aperture_hp_before::DOUBLE PRECISION;
-			ALTER TABLE tribulation_events ALTER COLUMN aperture_hp_after TYPE DOUBLE PRECISION USING aperture_hp_after::DOUBLE PRECISION;
-		END IF;
-	END $$;`); err != nil {
 		return err
 	}
 
@@ -337,26 +263,6 @@ func schemaAperture() error {
 	}
 	if err := execSchema("tribulation_enemies_event_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_enemies_event ON tribulation_enemies (event_id);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("tribulation_enemies_rank_cols", `
-	ALTER TABLE tribulation_enemies ADD COLUMN IF NOT EXISTS rank INTEGER NOT NULL DEFAULT 6;
-	ALTER TABLE tribulation_enemies ADD COLUMN IF NOT EXISTS sub_rank INTEGER NOT NULL DEFAULT 1;
-	`); err != nil {
-		return err
-	}
-
-	if err := execSchema("tribulation_enemies_float_upgrade", `
-	DO $$
-	BEGIN
-		ALTER TABLE tribulation_enemies ALTER COLUMN hp TYPE DOUBLE PRECISION USING hp::DOUBLE PRECISION;
-		ALTER TABLE tribulation_enemies ALTER COLUMN max_hp TYPE DOUBLE PRECISION USING max_hp::DOUBLE PRECISION;
-		ALTER TABLE tribulation_enemies ALTER COLUMN attack TYPE DOUBLE PRECISION USING attack::DOUBLE PRECISION;
-		ALTER TABLE tribulation_enemies ALTER COLUMN defense TYPE DOUBLE PRECISION USING defense::DOUBLE PRECISION;
-	EXCEPTION WHEN OTHERS THEN
-		NULL;
-	END $$;`); err != nil {
 		return err
 	}
 

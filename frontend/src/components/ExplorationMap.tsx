@@ -6,6 +6,7 @@ import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, C
 
 import { LogConsole } from "./LogConsole";
 import { GamePanel, GameButton } from "@/components/ui";
+import { usePolling } from "@/lib/usePolling";
 // UI migrated to shared components
 
 interface ExplorationMapProps {
@@ -115,18 +116,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
   useEffect(() => {
     loadGrid();
-
-    let intervalId: NodeJS.Timeout;
-    if (isExploringActiveRegion) {
-      intervalId = setInterval(() => {
-        loadGrid();
-      }, 5000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.current_region, player.x, player.y, isExploringActiveRegion]);
+  usePolling(loadGrid, 10000, isExploringActiveRegion);
 
   const handleCreateParty = async () => {
     setPartyLoading(true);

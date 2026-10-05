@@ -24,7 +24,8 @@ func schemaPlayerItems() error {
 		equipped_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
 		growth_hours DOUBLE PRECISION NOT NULL DEFAULT 0,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		last_fed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
 		return err
 	}
@@ -47,38 +48,15 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_gu_gu_id ON player_gu (gu_id);`); err != nil {
 		return err
 	}
-	// last_fed_at: mốc lần cuối cổ trùng được cho ăn, dùng để ghi vào audit log
-	// chết đói (độ no trước khi chết + thời gian không được cho ăn). Chỉ các
-	// handler cho ăn ghi trực tiếp cột này; không nằm trong đường sync bulk.
-	if err := execSchema("player_gu_last_fed_at", `
-	ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS last_fed_at TIMESTAMPTZ;`); err != nil {
-		return err
-	}
-	// Backfill dòng cũ: coi như được cho ăn lúc tạo (idempotent).
-	if err := execSchema("player_gu_last_fed_at_backfill", `
-	UPDATE player_gu SET last_fed_at = created_at WHERE last_fed_at IS NULL;`); err != nil {
-		return err
-	}
-	if err := execSchema("player_gu_last_fed_at_default", `
-	ALTER TABLE player_gu ALTER COLUMN last_fed_at SET DEFAULT CURRENT_TIMESTAMP;`); err != nil {
+	if err := execSchema("player_gu_gu_id_lower_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_gu_id_lower ON player_gu (LOWER(gu_id));`); err != nil {
 		return err
 	}
 	// Tiên Cổ (rank>=6) duy nhất cross-rank toàn server: 1 gu_id chỉ 1 instance
-	// đang sống. Tạo index chỉ khi chưa có trùng (giữ row tạo sớm nhất), nếu
-	// trùng thì NOTICE để admin xử lý tay, không chặn startup, không xóa đồ user.
+	// đang sống.
 	if err := execSchema("uq_player_gu_immortal", `
-	DO $$
-	BEGIN
-		IF NOT EXISTS (
-			SELECT 1 FROM player_gu WHERE gu_rank >= 6 OR rank >= 6
-			GROUP BY gu_id HAVING COUNT(*) > 1
-		) THEN
-			CREATE UNIQUE INDEX IF NOT EXISTS uq_player_gu_immortal
-			ON player_gu (gu_id) WHERE gu_rank >= 6 OR rank >= 6;
-		ELSE
-			RAISE NOTICE 'uq_player_gu_immortal skipped: duplicate immortal Gu exists';
-		END IF;
-	END $$;`); err != nil {
+	CREATE UNIQUE INDEX IF NOT EXISTS uq_player_gu_immortal
+	ON player_gu (gu_id) WHERE gu_rank >= 6 OR rank >= 6;`); err != nil {
 		return err
 	}
 	if err := execSchema("player_gu_vital_idx", `
@@ -111,9 +89,6 @@ func schemaPlayerItems() error {
 	);`); err != nil {
 		return err
 	}
-	if err := effectCatalogColumns("killer_moves"); err != nil {
-		return err
-	}
 	if err := execSchema("killer_moves_player_path_idx", `
 	CREATE INDEX IF NOT EXISTS idx_killer_moves_player_path ON killer_moves (player_id, path);`); err != nil {
 		return err
@@ -129,10 +104,6 @@ func schemaPlayerItems() error {
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE (killer_move_id, slot_index)
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("idx_killer_move_slots_gu", `
-	CREATE INDEX IF NOT EXISTS idx_killer_move_slots_gu ON killer_move_slots (player_gu_id);`); err != nil {
 		return err
 	}
 
@@ -163,15 +134,6 @@ func schemaPlayerItems() error {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		PRIMARY KEY (player_id, item_id, category)
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("player_inventory_items_quantity_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='player_inventory_items' AND column_name='quantity' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE player_inventory_items ALTER COLUMN quantity TYPE BIGINT USING COALESCE(quantity, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
 		return err
 	}
 	if err := execSchema("player_inventory_items_player_cat_idx", `
@@ -221,16 +183,6 @@ func schemaPlayerItems() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("player_dao_path_dao_marks_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='player_dao_path' AND column_name='dao_marks' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE player_dao_path ALTER COLUMN dao_marks TYPE BIGINT USING COALESCE(dao_marks, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
 	if err := execSchema("player_map_progress", `
 	CREATE TABLE IF NOT EXISTS player_map_progress (
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -259,6 +211,10 @@ func schemaPlayerItems() error {
 	}
 	if err := execSchema("player_active_session_idx", `
 	CREATE UNIQUE INDEX IF NOT EXISTS player_active_session_idx ON player_instance_sessions (player_id) WHERE status = 'ACTIVE';`); err != nil {
+		return err
+	}
+	if err := execSchema("player_instance_sessions_player_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_instance_sessions_player ON player_instance_sessions (player_id);`); err != nil {
 		return err
 	}
 

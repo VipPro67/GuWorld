@@ -21,20 +21,7 @@ func schemaDictionaries() error {
 	);`); err != nil {
 		return err
 	}
-	if err := effectCatalogColumns("item_dictionary"); err != nil {
-		return err
-	}
 
-	if err := execSchema("item_dictionary_path_upgrade", `
-	ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT '';
-	`); err != nil {
-		return err
-	}
-	if err := execSchema("dictionary_price_decimal_upgrade", `
-	ALTER TABLE item_dictionary ALTER COLUMN base_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(base_price, 0)::NUMERIC, 3);
-	`); err != nil {
-		return err
-	}
 	if err := execSchema("gu_dictionary", `
 	CREATE TABLE IF NOT EXISTS gu_dictionary (
 		id VARCHAR(50) NOT NULL,
@@ -61,15 +48,6 @@ func schemaDictionaries() error {
 	);`); err != nil {
 		return err
 	}
-	if err := effectCatalogColumns("gu_dictionary"); err != nil {
-		return err
-	}
-	if err := execSchema("gu_dictionary_price_decimal_upgrade", `
-	ALTER TABLE gu_dictionary ALTER COLUMN base_price TYPE NUMERIC(30,3) USING ROUND(COALESCE(base_price, 0)::NUMERIC, 3);
-	`); err != nil {
-		return err
-	}
-
 	if err := execSchema("constitution_dictionary", `
 	CREATE TABLE IF NOT EXISTS constitution_dictionary (
     tier INTEGER NOT NULL DEFAULT 0,
@@ -79,9 +57,6 @@ func schemaDictionaries() error {
 	);`); err != nil {
 		return err
 	}
-	if err := effectCatalogColumns("constitution_dictionary"); err != nil {
-		return err
-	}
 
 	if err := execSchema("race_dictionary", `
 	CREATE TABLE IF NOT EXISTS race_dictionary (
@@ -89,9 +64,6 @@ func schemaDictionaries() error {
 		name VARCHAR(200) NOT NULL,
 		effects JSONB NOT NULL DEFAULT '{"schema_version":2,"blocks":[]}'
 	);`); err != nil {
-		return err
-	}
-	if err := effectCatalogColumns("race_dictionary"); err != nil {
 		return err
 	}
 
@@ -107,9 +79,6 @@ func schemaDictionaries() error {
 		blocked_actions JSONB NOT NULL DEFAULT '[]',
 		description TEXT NOT NULL DEFAULT ''
 	);`); err != nil {
-		return err
-	}
-	if err := effectCatalogColumns("status_dictionary"); err != nil {
 		return err
 	}
 
@@ -140,15 +109,6 @@ func schemaDictionaries() error {
 		return err
 	}
 
-	if err := execSchema("refining_recipes_stones_type_upgrade", `
-	DO $$
-	BEGIN
-		ALTER TABLE refining_recipes ALTER COLUMN primeval_stones_cost TYPE NUMERIC(30,3) USING ROUND(COALESCE(primeval_stones_cost, 0)::NUMERIC, 3);
-		ALTER TABLE refining_recipes ALTER COLUMN immortal_essence_stones_cost TYPE NUMERIC(30,3) USING ROUND(COALESCE(immortal_essence_stones_cost, 0)::NUMERIC, 3);
-	END $$;`); err != nil {
-		return err
-	}
-
 	// Shop ids are polymorphic (an item id, a gu id or a recipe key) so they
 	// deliberately have no FK to item_dictionary. A shop entry is keyed by
 	// (id, rank): rank > 0 pins a specific dictionary rank (used for multi-rank
@@ -167,22 +127,6 @@ func schemaDictionaries() error {
 	);`); err != nil {
 		return err
 	}
-	// Upgrade legacy databases that still carry the single-column (id) primary
-	// key: add the rank column and promote the key to the composite (id, rank).
-	if err := execSchema("caravan_shop_items_rank_upgrade", `
-	ALTER TABLE caravan_shop_items ADD COLUMN IF NOT EXISTS rank INTEGER NOT NULL DEFAULT 0;
-	ALTER TABLE caravan_shop_items DROP CONSTRAINT IF EXISTS caravan_shop_items_pkey;
-	ALTER TABLE caravan_shop_items ADD CONSTRAINT caravan_shop_items_pkey PRIMARY KEY (id, rank);`); err != nil {
-		return err
-	}
-	if err := execSchema("caravan_shop_items_price_upgrade", `
-	DO $$
-	BEGIN
-		ALTER TABLE caravan_shop_items ALTER COLUMN price TYPE NUMERIC(30,3) USING ROUND(COALESCE(price, 0)::NUMERIC, 3);
-	END $$;`); err != nil {
-		return err
-	}
-
 	// Tracks how much of each daily-random shop item (auto pool: rank < 5 Gus +
 	// their food) remains for the current day. The per-day stock resets
 	// naturally because the primary key includes `day`.
@@ -209,16 +153,6 @@ func schemaDictionaries() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("arena_shop_items_price_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='arena_shop_items' AND column_name='price' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE arena_shop_items ALTER COLUMN price TYPE BIGINT USING COALESCE(price, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
-		return err
-	}
-
 	return nil
 }
 

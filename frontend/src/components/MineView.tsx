@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
+import { usePolling } from "@/lib/usePolling";
 import { Sword, LogOut, Coins, Flame, Gift, Clock, User, ShieldAlert, Loader2, Skull } from "lucide-react";
 const mineRarityRates: Record<string, { stonesPerMin: number; qiPerMin: number; chestChance: number }> = {
   "Siêu Cấp":      { stonesPerMin: 60, qiPerMin: 15, chestChance: 0.5 },
@@ -28,11 +29,8 @@ export const MineView: React.FC = () => {
   // Fetch slots on mount and set polling interval
   useEffect(() => {
     fetchMineSlots();
-    const interval = setInterval(() => {
-      fetchMineSlots();
-    }, 10000); // Poll every 10s
-    return () => clearInterval(interval);
   }, [fetchMineSlots]);
+  usePolling(fetchMineSlots, 15000);
 
   // Keep a local timer to update the duration strings in real-time
   useEffect(() => {

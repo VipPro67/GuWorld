@@ -77,8 +77,8 @@ func GetImmortalAperture(c *gin.Context) {
 
 	ap.TribulationCount = ap.TotalTribulationCount()
 	isImmortalPlayer := gamefx.Get(&player).Immortal
-	if isImmortalPlayer {
-		tx, txErr := db.DB.Begin()
+	if isImmortalPlayer && raceHasDeadAperture(player.Race) {
+		tx, txErr := db.DB.BeginTx(c.Request.Context(), nil)
 		if txErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trạng thái Tiên Cương"})
 			return
@@ -147,9 +147,11 @@ func GetImmortalAperture(c *gin.Context) {
 		}
 	}
 
-	// Consolidate updates into a single query only if changed
-	if ap.State != originalState || ap.ImmortalEssence != originalEssence || ap.InternalYearsPassed != originalYears {
-		_, errUpd := db.DB.Exec(`
+	// Consolidate updates: only persist real state transitions or periodic checkpoints (>60s)
+	// to avoid hammering the database with row-locking UPDATEs on every GET request/poll.
+	shouldPersist := ap.State != originalState || ap.ImmortalEssence != originalEssence || (now.Sub(updatedAt) >= 60*time.Second && ap.InternalYearsPassed != originalYears)
+	if shouldPersist {
+		_, errUpd := db.DB.ExecContext(c.Request.Context(), `
 			UPDATE immortal_apertures
 			SET state = $1, immortal_essence = $2, internal_years_passed = $3, updated_at = $4
 			WHERE id = $5

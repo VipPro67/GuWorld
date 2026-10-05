@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
+import { usePolling } from "@/lib/usePolling";
 import { Crosshair, MapPin, Radar, RefreshCw, Scissors, ShieldAlert, X } from "lucide-react";
 
 export const TrackingRadarDrawer: React.FC = () => {
@@ -14,14 +15,10 @@ export const TrackingRadarDrawer: React.FC = () => {
   } = useGameStore();
 
   useEffect(() => {
-    if (isRadarDrawerOpen) {
-      fetchTrackedTargets();
-      const interval = setInterval(() => {
-        fetchTrackedTargets();
-      }, 10000);
-      return () => clearInterval(interval);
-    }
+    if (isRadarDrawerOpen) fetchTrackedTargets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRadarDrawerOpen, fetchTrackedTargets]);
+  usePolling(fetchTrackedTargets, 10000, isRadarDrawerOpen);
 
   if (!isRadarDrawerOpen) return null;
 

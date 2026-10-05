@@ -25,7 +25,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 ## Backend Conventions (agent would likely miss)
 
 - **No service layer.** Handlers are fat but split per domain in `backend/internal/handlers/` (e.g. `player_auth.go`, `player_inventory.go`, `player_stats.go`, `player_explore.go`, `player_daongan.go`, `player_profile.go`, `combat.go`: 2400+ lines). All gameplay logic lives there.
-- **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). When adding **new columns** to existing tables, you MUST append an `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` statement immediately after the `CREATE TABLE` to automatically patch existing databases without requiring the user to wipe their data. Modify SQL in `schema_*.go` accordingly. Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` (`player_auth.go`) maps each registration region to its hub and falls back to `Southern_Border`.
+- **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). When adding **new columns**, declare them inline in the `CREATE TABLE` of the matching `schema_*.go` file (fresh init; no ALTER patches). Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` (`player_auth.go`) maps each registration region to its hub and falls back to `Southern_Border`.
 - **DB reset note:** `players.race`, `players.constitution`, `players.current_region` have FKs. `InitSchema` pre-seeds the `''` race/constitution keys and the `Southern_Border` region so registration works before CSV import; race/constitution registry loaders filter out `''` keys.
 - CSV data is managed through the Admin panel.
 - CSV files are not automatically seeded on startup.
@@ -146,7 +146,7 @@ For non-trivial changes:
 * Never assume a table or column exists.
 * Inspect `backend/internal/db/schema_*.go` before writing SQL against project tables.
 * Preserve existing constraints and indexes.
-* Avoid destructive schema changes unless explicitly requested. When adding new columns, use `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` instead of dropping tables.
+* Schema khởi tạo mới: cột mới sửa trực tiếp trong `CREATE TABLE` của `schema_*.go`; không dùng ALTER patch.
 * For data migrations, consider existing production rows and duplicate-key constraints.
 * Be careful with concurrent updates to `player`, `player_gu`, combat state, and other frequently updated tables.
 * Prefer transactions for operations that modify multiple related records.
