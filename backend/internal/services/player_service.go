@@ -675,7 +675,9 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 	player.Version++
 
 	if player.Rank >= 6 {
-		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)
+		// Only write when the projected essence actually changed; this runs on
+		// every mana persist and was rewriting the same value millions of times.
+		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2 AND immortal_essence <> $1`, int(player.CurrentMana), player.ID)
 	}
 
 	return player, nil
@@ -745,7 +747,9 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 	player.Version++
 
 	if player.Rank >= 6 {
-		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)
+		// Only write when the projected essence actually changed; this runs on
+		// every mana persist and was rewriting the same value millions of times.
+		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2 AND immortal_essence <> $1`, int(player.CurrentMana), player.ID)
 	}
 
 	return player, nil

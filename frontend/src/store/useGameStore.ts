@@ -2344,9 +2344,6 @@ export const useGameStore = create<GameState>((set, get) => {
   fetchDictionary: async (forceFresh = false) => {
     let cachedEtag: string | undefined;
 
-    // Trigger regions preload concurrently
-    void get().fetchRegions();
-
     // 1. Instant Cache Hydration: Read from IndexedDB first
     if (!forceFresh) {
       try {

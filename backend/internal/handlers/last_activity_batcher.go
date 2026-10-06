@@ -149,5 +149,7 @@ func (s *lastActivityStore) flush() {
 // StartLastActivityFlusher starts the background batch flusher for SSE heartbeat
 // last_activity updates.  Called from main.go during startup.
 func StartLastActivityFlusher(ctx context.Context) {
-	lastActivity.StartFlusher(ctx, 30*time.Second)
+	// 2 phút thay vì 30s: batch này UPDATE toàn bộ row players đang online, nên
+	// flush thưa hơn giảm tranh chấp row-lock với gameplay (last-seen vẫn đủ mịn).
+	lastActivity.StartFlusher(ctx, 120*time.Second)
 }

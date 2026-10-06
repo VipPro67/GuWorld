@@ -1343,6 +1343,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             if (itemPicker.tab === "recipe") {
               list = list.filter((x: ApiResponseData) => x.target_gu_id);
             }
+            if (itemPicker.source === "vault" && itemPicker.tab === "item") {
+              list = list.filter((x: ApiResponseData) => {
+                const itType = (x.item_type || x.type || "").toLowerCase();
+                return itType !== "consumable" && itType !== "currency";
+              });
+            }
             return list.length === 0 ? (
               <div className="text-center py-8 text-zinc-500 text-xs italic">Không tìm thấy</div>
             ) : (
@@ -3234,6 +3240,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowStockVault(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !stockVaultId} onClick={async () => {
+                  const targetSpec = itemDictionary[stockVaultId] || shopSearchItems.find(it => it.id === stockVaultId);
+                  const itType = (targetSpec?.item_type || targetSpec?.type || "").toLowerCase();
+                  if (stockVaultType === "material" && (itType === "consumable" || itType === "currency")) {
+                    if (addToast) addToast("Không thể nhập vật phẩm loại Tiêu hao hoặc Tiền tệ vào bảo khố", "error");
+                    return;
+                  }
                   const ok = await exec(`${BACKEND_URL}/api/admin/sects/${selectedSectId}/vault/stock`, "POST", { item_type: stockVaultType, item_id: stockVaultId, quantity: stockVaultType === "recipe" ? 1 : stockVaultQty });
                   if (ok) { fetchSectDetail(selectedSectId!); setShowStockVault(false); }
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">

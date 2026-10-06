@@ -90,6 +90,7 @@ export function WorldPage() {
   const sectMembers = useGameStore((s) => s.sectMembers);
   const fetchSectMembers = useGameStore((s) => s.fetchSectMembers);
   const mySectStatus = useGameStore((s) => s.mySectStatus);
+  const fetchMySectStatus = useGameStore((s) => s.fetchMySectStatus);
   const [attackTargetSect, setAttackTargetSect] = useState<ApiResponseData | null>(null);
 
   // RefiningFurnace
@@ -182,7 +183,8 @@ export function WorldPage() {
     fetchGroundDrops();
     fetchSectsMap();
     fetchMyTeleportArrays();
-  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap, fetchMyTeleportArrays]);
+    fetchMySectStatus();
+  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap, fetchMyTeleportArrays, fetchMySectStatus]);
 
   const setInvestigationRange = useWorldStore((s) => s.setInvestigationRange);
 

@@ -357,8 +357,29 @@ func NeedsHungerEvaluation(q interface{ QueryRow(query string, args ...any) *sql
 // It checks the player's last_hunger_tick_at timestamp, and if one or more
 // 3-hour intervals have passed, decays the player's Gus according to their state.
 func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
+	const tickInterval = 3 * time.Hour
+
+	// Fast path: hunger only advances every 3h. Read without the players row
+	// lock first so hot polling/mutation paths don't serialize on it; the lock
+	// is acquired only when a tick is actually due.
 	var lastTick time.Time
 	err := tx.QueryRow(`
+		SELECT COALESCE(last_hunger_tick_at, created_at, NOW())
+		FROM players
+		WHERE id = $1
+	`, playerID).Scan(&lastTick)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if now.Before(lastTick) || int(now.Sub(lastTick)/tickInterval) <= 0 {
+		return nil
+	}
+
+	// A tick is due: lock the row and re-read so concurrent callers cannot
+	// decay the same interval twice.
+	err = tx.QueryRow(`
 		SELECT COALESCE(last_hunger_tick_at, created_at, NOW())
 		FROM players
 		WHERE id = $1
@@ -367,9 +388,6 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-
-	now := time.Now()
-	const tickInterval = 3 * time.Hour
 	if now.Before(lastTick) {
 		return nil
 	}

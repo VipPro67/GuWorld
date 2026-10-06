@@ -177,18 +177,28 @@ func DonateMaterials(c *gin.Context) {
 	var matRank int
 	var itemType string
 	if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, req.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
-		matRank = 1
-		dbBasePrice = 0
-		itemType = ""
+		if spec, ok := models.ItemRegistry[req.MaterialID]; ok {
+			dbBasePrice = spec.BasePrice
+			matRank = spec.Rank
+			itemType = spec.Type
+			if itemType == "" {
+				itemType = spec.ItemType
+			}
+		} else {
+			matRank = 1
+			dbBasePrice = 0
+			itemType = ""
+		}
+	}
+	if strings.EqualFold(itemType, "Consumable") || strings.EqualFold(itemType, "Currency") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Không thể quyên góp vật phẩm thuộc loại Tiêu hao hoặc Tiền tệ vào bảo khố tông môn!"})
+		return
 	}
 	pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
 
 	gainedContribution := int64(pointsPerItem) * req.Amount
 
 	preferredCat := "materials"
-	if itemType == "Consumable" {
-		preferredCat = "consumables"
-	}
 
 	remainingDeduct := req.Amount
 	for _, iv := range invs {
@@ -755,13 +765,14 @@ func DonateBulk(c *gin.Context) {
 				itemType = ""
 			}
 			pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
+			if strings.EqualFold(itemType, "Consumable") || strings.EqualFold(itemType, "Currency") {
+				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Không thể quyên góp vật phẩm thuộc loại Tiêu hao hoặc Tiền tệ vào bảo khố: %s", materialName)})
+				return
+			}
 			gained := int64(pointsPerItem) * matReq.Amount
 			totalGainedContribution += gained
 
 			preferredCat := "materials"
-			if itemType == "Consumable" {
-				preferredCat = "consumables"
-			}
 
 			// Update Inventory
 			remainingDeduct := matReq.Amount

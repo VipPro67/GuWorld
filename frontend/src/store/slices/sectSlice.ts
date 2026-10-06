@@ -622,9 +622,17 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   stockSectVault: async (itemType, itemId, quantity) => {
-    const { token, logout } = get();
+    const { token, logout, itemDictionary } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
+    const item = itemDictionary?.[itemId];
+    const itType = (item?.item_type || item?.type || "").toLowerCase();
+    const argType = (itemType || "").toLowerCase();
+    if (itType === "consumable" || itType === "currency" || argType === "consumable" || argType === "currency") {
+      get().addToast("Không thể nhập vật phẩm loại Tiêu hao hoặc Tiền tệ vào bảo khố!", "error");
+      get().endAction("sect");
+      return false;
+    }
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/vault/stock`, {
         method: "POST",
@@ -651,9 +659,20 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   stockSectVaultBulk: async (items) => {
-    const { token, logout } = get();
+    const { token, logout, itemDictionary } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
+    const invalidItem = items.find(it => {
+      const item = itemDictionary?.[it.item_id];
+      const itType = (item?.item_type || item?.type || "").toLowerCase();
+      const argType = (it.item_type || "").toLowerCase();
+      return itType === "consumable" || itType === "currency" || argType === "consumable" || argType === "currency";
+    });
+    if (invalidItem) {
+      get().addToast("Không thể nhập vật phẩm loại Tiêu hao hoặc Tiền tệ vào bảo khố!", "error");
+      get().endAction("sect");
+      return false;
+    }
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/vault/stock/bulk`, {
         method: "POST",

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -270,3 +271,62 @@ func TestPlanVaultGuDeductionsImmortalSingleOnly(t *testing.T) {
 		t.Fatal("expected error when buying immortal gu > 1, got nil")
 	}
 }
+
+func TestStockVaultRejectsConsumableAndCurrency(t *testing.T) {
+	// Register mock items in ItemRegistry
+	models.ItemRegistry["test_consumable_item"] = models.ItemSpec{
+		ID:       "test_consumable_item",
+		Name:     "Test Pill",
+		Type:     "Consumable",
+		ItemType: "Consumable",
+		Rank:     1,
+	}
+	models.ItemRegistry["test_currency_item"] = models.ItemSpec{
+		ID:       "test_currency_item",
+		Name:     "Test Coin",
+		Type:     "Currency",
+		ItemType: "Currency",
+		Rank:     1,
+	}
+	models.ItemRegistry["test_material_item"] = models.ItemSpec{
+		ID:       "test_material_item",
+		Name:     "Test Ore",
+		Type:     "Material",
+		ItemType: "Material",
+		Rank:     1,
+	}
+
+	// 1. Direct itemType consumable
+	_, code, _ := stockItemUnitCost(nil, 10, "consumable", "test_consumable_item")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for consumable itemType, got %d", code)
+	}
+
+	// 2. Direct itemType currency
+	_, code, _ = stockItemUnitCost(nil, 10, "currency", "test_currency_item")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for currency itemType, got %d", code)
+	}
+
+	// 3. itemType material but item is Consumable in dictionary
+	_, code, _ = stockItemUnitCost(nil, 10, "material", "test_consumable_item")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for material that is Consumable, got %d", code)
+	}
+
+	// 4. itemType material but item is Currency in dictionary
+	_, code, _ = stockItemUnitCost(nil, 10, "material", "test_currency_item")
+	if code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for material that is Currency, got %d", code)
+	}
+
+	// 5. Normal material item should succeed
+	unitCost, code, msg := stockItemUnitCost(nil, 10, "material", "test_material_item")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 OK for valid Material item, got %d (msg: %s)", code, msg)
+	}
+	if unitCost <= 0 {
+		t.Fatalf("expected positive unitCost, got %d", unitCost)
+	}
+}
+

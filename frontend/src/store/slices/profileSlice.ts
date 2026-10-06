@@ -75,7 +75,6 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       if (typeof window !== "undefined") {
         localStorage.setItem("gu_player_id", player.id);
       }
-      void get().fetchMySectStatus();
       void get().fetchGuInventory();
       await get().fetchUnreadNotificationsCount();
       try {

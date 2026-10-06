@@ -478,6 +478,8 @@ export const SectView: React.FC = () => {
       return getRecipeCost(rank);
     }
     const spec = itemDictionary[id];
+    const itType = (spec?.item_type || spec?.type || "").toLowerCase();
+    if (itType === "consumable" || itType === "currency") return 0;
     const rank = spec?.rank || 1;
     return rank * 50; // backend: 50 quỹ / hạng
   };
@@ -2270,6 +2272,8 @@ export const SectView: React.FC = () => {
 
             const filteredMaterials = playerMaterials.filter(([matId]) => {
               const spec = itemDictionary[matId];
+              const itType = (spec?.item_type || spec?.type || "").toLowerCase();
+              if (itType === "consumable" || itType === "currency") return false;
               const name = spec?.name || matId;
               const rank = spec?.rank || 1;
               const paths = parsePaths(spec?.path);
@@ -3776,7 +3780,11 @@ export const SectView: React.FC = () => {
                     ? Object.entries(guDictionary || {}).filter(([, spec]) => Math.max(spec.rank || 1, spec.rarity || 0) < 6)
                     : stockItemType === "recipe"
                     ? recipeEntries.filter(([, spec]) => Math.max(spec.rank || 1, spec.rarity || 0) < 6)
-                    : Object.entries(itemDictionary || {}).filter(([, spec]) => Math.max(spec.rank || 1, spec.rarity || 0) < 6);
+                    : Object.entries(itemDictionary || {}).filter(([, spec]) => {
+                        const itType = (spec.item_type || spec.type || "").toLowerCase();
+                        if (itType === "consumable" || itType === "currency") return false;
+                        return Math.max(spec.rank || 1, spec.rarity || 0) < 6;
+                      });
 
                   const availableRanks = Array.from(new Set(allEntries.map(([, spec]) => (spec.rank || 1)))).sort((a, b) => a - b);
 
@@ -3866,6 +3874,11 @@ const rank = spec.rank || 1;
                               const sel = stockSelections[id];
 
                               const toggleSelect = () => {
+                                const itemSpec = itemDictionary[id];
+                                const itType = (itemSpec?.item_type || itemSpec?.type || "").toLowerCase();
+                                if (stockItemType === "material" && (itType === "consumable" || itType === "currency")) {
+                                  return;
+                                }
                                 setStockSelections(prev => {
                                   const next = { ...prev };
                                   if (next[id]) {
@@ -3986,11 +3999,21 @@ const rank = spec.rank || 1;
                               </div>
                               <button
                                 onClick={async () => {
-                                  const payload = Object.values(stockSelections).map(it => ({
-                                    item_type: it.item_type,
-                                    item_id: it.item_id,
-                                    quantity: it.quantity,
-                                  }));
+                                  const payload = Object.values(stockSelections)
+                                    .filter(it => {
+                                      const spec = itemDictionary[it.item_id];
+                                      const itType = (spec?.item_type || spec?.type || it.item_type || "").toLowerCase();
+                                      return itType !== "consumable" && itType !== "currency";
+                                    })
+                                    .map(it => ({
+                                      item_type: it.item_type,
+                                      item_id: it.item_id,
+                                      quantity: it.quantity,
+                                    }));
+                                  if (payload.length === 0) {
+                                    addToast("Không có vật phẩm hợp lệ để nhập kho!", "error");
+                                    return;
+                                  }
                                   const ok = await stockSectVaultBulk(payload);
                                   if (ok) setStockSelections({});
                                 }}

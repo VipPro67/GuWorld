@@ -149,17 +149,23 @@ func Connect() error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	maxOpen := 100
+	// Keep the pool below the RDS max_connections ceiling (81 on the current
+	// instance) so we don't race other clients for the last slots. Requests
+	// queue in Go instead of failing on "too many clients".
+	maxOpen := 60
 	if v := os.Getenv("DB_MAX_OPEN_CONNS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxOpen = n
 		}
 	}
-	maxIdle := 50
+	maxIdle := 20
 	if v := os.Getenv("DB_MAX_IDLE_CONNS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxIdle = n
 		}
+	}
+	if maxIdle > maxOpen {
+		maxIdle = maxOpen
 	}
 	DB.SetMaxOpenConns(maxOpen)
 	DB.SetMaxIdleConns(maxIdle)

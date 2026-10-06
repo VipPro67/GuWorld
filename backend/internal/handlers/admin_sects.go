@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -462,7 +463,11 @@ func AdminStockSectVault(c *gin.Context) {
 		return
 	}
 
-	switch req.ItemType {
+	switch strings.ToLower(req.ItemType) {
+	case "consumable", "currency":
+		c.JSON(http.StatusForbidden, gin.H{"error": "Không thể nhập vật phẩm loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn"})
+		return
+
 	case "gu":
 		if req.Rank <= 0 {
 			req.Rank = 1
@@ -486,6 +491,21 @@ func AdminStockSectVault(c *gin.Context) {
 		`, rowID, sectID, req.ItemID, req.Rank, req.Quantity, hunger, stockInstID)
 
 	case "material":
+		var dbItemType string
+		err := tx.QueryRow(`SELECT COALESCE(item_type, '') FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&dbItemType)
+		if err != nil {
+			if spec, ok := models.ItemRegistry[req.ItemID]; ok {
+				dbItemType = spec.Type
+				if dbItemType == "" {
+					dbItemType = spec.ItemType
+				}
+			}
+		}
+		if strings.EqualFold(dbItemType, "Consumable") || strings.EqualFold(dbItemType, "Currency") {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Không thể nhập vật phẩm loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn"})
+			return
+		}
+
 		_, err = tx.Exec(`
 			INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
 			VALUES ($1, $2, $3)

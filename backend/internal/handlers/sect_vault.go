@@ -88,6 +88,9 @@ func planVaultGuDeductions(matchedRows []VaultGuRow, quantity int64) ([]VaultGuD
 // Returns (unitCost, httpStatusOK, "") on success; otherwise (0, status, errorMessage).
 func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int64, int, string) {
 	itemType = strings.ToLower(itemType)
+	if itemType == "consumable" || itemType == "currency" {
+		return 0, http.StatusForbidden, "Không thể nhập vật phẩm loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn."
+	}
 	if itemType == "gu" {
 		return 0, http.StatusForbidden, "Không thể nhập Cổ trùng vào bảo khố."
 	}
@@ -99,11 +102,28 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int6
 			maxLevel = 5
 		}
 		var matRank, matRarity int
-		err := tx.QueryRow(`SELECT COALESCE(rank, 1), COALESCE(rarity, 0) FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank, &matRarity)
-		if err != nil {
-			matRank = 1
-			matRarity = 0
+		var dbItemType string
+		var err error = sql.ErrNoRows
+		if tx != nil {
+			err = tx.QueryRow(`SELECT COALESCE(rank, 1), COALESCE(rarity, 0), COALESCE(item_type, '') FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank, &matRarity, &dbItemType)
 		}
+		if err != nil {
+			if spec, ok := models.ItemRegistry[itemID]; ok {
+				matRank = spec.Rank
+				matRarity = spec.Rarity
+				dbItemType = spec.Type
+				if dbItemType == "" {
+					dbItemType = spec.ItemType
+				}
+			} else {
+				return 0, http.StatusBadRequest, "Vật phẩm không tồn tại trong từ điển"
+			}
+		}
+
+		if strings.EqualFold(dbItemType, "Consumable") || strings.EqualFold(dbItemType, "Currency") {
+			return 0, http.StatusForbidden, "Không thể nhập vật phẩm thuộc loại Tiêu hao (Consumable) hoặc Tiền tệ (Currency) vào bảo khố tông môn."
+		}
+
 		effectiveLevel := matRank
 		if matRarity > effectiveLevel {
 			effectiveLevel = matRarity
