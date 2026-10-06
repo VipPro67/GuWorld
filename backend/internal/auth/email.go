@@ -2,11 +2,14 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"math/big"
+	"net"
 	"net/smtp"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -65,11 +68,76 @@ func SendEmailOTP(toEmail string, otp string) error {
 	auth := smtp.PlainAuth("", smtpUsername, smtpPassword, smtpHost)
 	addr := smtpHost + ":" + smtpPort
 
-	err := smtp.SendMail(addr, auth, mailFrom, []string{toEmail}, msg)
+	err := sendMailWithTimeout(addr, auth, mailFrom, []string{toEmail}, msg, 8*time.Second)
 	if err != nil {
 		logger.S.Errorf("Failed to send SMTP email to %s: %v", toEmail, err)
 		return err
 	}
 
 	return nil
+}
+
+func sendMailWithTimeout(addr string, a smtp.Auth, from string, to []string, msg []byte, timeout time.Duration) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+
+	var conn net.Conn
+	dialer := &net.Dialer{Timeout: timeout}
+
+	if port == "465" {
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: host})
+	} else {
+		conn, err = dialer.Dial("tcp", addr)
+	}
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_ = conn.SetDeadline(time.Now().Add(timeout))
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	if port != "465" {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			config := &tls.Config{ServerName: host}
+			if err = client.StartTLS(config); err != nil {
+				return err
+			}
+		}
+	}
+
+	if a != nil {
+		if ok, _ := client.Extension("AUTH"); ok {
+			if err = client.Auth(a); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err = client.Mail(from); err != nil {
+		return err
+	}
+	for _, rec := range to {
+		if err = client.Rcpt(rec); err != nil {
+			return err
+		}
+	}
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err = w.Write(msg); err != nil {
+		return err
+	}
+	if err = w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }

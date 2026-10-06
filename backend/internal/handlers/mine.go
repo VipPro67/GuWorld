@@ -492,7 +492,7 @@ func AttackMineSlot(c *gin.Context) {
 	var occupierIDStr *string
 	var monsterIDStr *string
 	var monsterRank, monsterSubRank int
-	err = tx.QueryRow("SELECT occupier_id, monster_id, monster_rank, monster_sub_rank FROM mine_slots WHERE id = $1", req.SlotID).Scan(&occupierIDStr, &monsterIDStr, &monsterRank, &monsterSubRank)
+	err = tx.QueryRow("SELECT occupier_id, monster_id, monster_rank, monster_sub_rank FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&occupierIDStr, &monsterIDStr, &monsterRank, &monsterSubRank)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ không tồn tại"})

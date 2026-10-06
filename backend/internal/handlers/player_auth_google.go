@@ -23,7 +23,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
-var googleOAuthHTTPClient = &http.Client{Timeout: 10 * time.Second}
+var googleOAuthHTTPClient = &http.Client{Timeout: 5 * time.Second}
 
 // GoogleLogin redirects user to Google OAuth2 consent page
 func GoogleLogin(c *gin.Context) {
@@ -191,6 +191,8 @@ func GoogleCallback(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	_, _ = tx.ExecContext(c.Request.Context(), "SET LOCAL lock_timeout = '3000ms'")
+
 	var player models.Player
 	var hasPlayer bool
 	var existingPlayerID uuid.UUID
@@ -222,7 +224,7 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	if hasPlayer {
-		player, err = evaluateManaTxEquipped(tx, existingPlayerID)
+		player, err = PlayerSvc.ProjectStatusEquipped(tx, existingPlayerID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player: " + err.Error()})
 			return
@@ -456,23 +458,16 @@ func GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	// Update last login info
+	// Update last login info and rotate session in a single write
+	sessionID := uuid.New().String()
 	_, err = tx.ExecContext(c.Request.Context(), `
 		UPDATE players
-		SET last_login_fingerprint = $1, last_login_ip = $2, last_login_time = NOW()
-		WHERE id = $3`,
-		fingerprint, c.ClientIP(), player.ID)
+		SET last_login_fingerprint = $1, last_login_ip = $2, last_login_time = NOW(),
+		    active_session_id = $3
+		WHERE id = $4`,
+		fingerprint, c.ClientIP(), sessionID, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Google login details"})
-		return
-	}
-
-	// Rotate the session in the same transaction as the login state. Besides
-	// avoiding another pool checkout, this prevents concurrent callbacks from
-	// committing player state and session IDs in different orders.
-	sessionID := uuid.New().String()
-	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
 		return
 	}
 

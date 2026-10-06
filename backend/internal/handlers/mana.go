@@ -24,8 +24,8 @@ func evaluateManaTxEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 }
 
 // evaluateManaTxEquippedReadonly loads an equipped-only player and projects
-// status in memory without persisting. Used for ally loading in auto-combat
-// where the caller manages the ally's own writes.
+// status in memory without acquiring write locks or persisting. Used for
+// reading opponent / ally snapshots in arena, mine, sect war, and exploration.
 func evaluateManaTxEquippedReadonly(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	return PlayerSvc.EvaluateManaEquipped(tx, id)
+	return PlayerSvc.ProjectStatusEquipped(tx, id)
 }
