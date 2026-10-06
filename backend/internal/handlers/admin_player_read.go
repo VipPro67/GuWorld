@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -94,27 +93,12 @@ func AdminListPlayers(c *gin.Context) {
 
 	var total int
 	if where == "" {
-		// Optimization for default listing: avoid costly full-table sequential scan COUNT(*) on players.
-		// Try Redis cache first (TTL 60s).
-		const countCacheKey = "admin:players:total_count"
-		var cachedCount int
-		if err := cache.GetJSON(countCacheKey, &cachedCount); err == nil && cachedCount > 0 {
-			total = cachedCount
-		} else {
-			// Try fast catalog estimation from pg_class
-			var estimatedCount int64
-			errEst := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(reltuples::bigint, 0) FROM pg_class WHERE relname = 'players'`).Scan(&estimatedCount)
-			if errEst == nil && estimatedCount > 0 {
-				total = int(estimatedCount)
-			} else {
-				// Fallback to exact count if statistics are not yet available
-				if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM players`).Scan(&total); err != nil {
-					logger.S.Errorf("admin players: count failed: %v", err)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng người chơi"})
-					return
-				}
-			}
-			_ = cache.SetJSON(countCacheKey, total, 60*time.Second)
+		var err error
+		total, err = fastCountTable(c, "players", "admin:players:total_count", 60*time.Second)
+		if err != nil {
+			logger.S.Errorf("admin players: count failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng người chơi"})
+			return
 		}
 	} else {
 		// When filtering with search criteria, execute targeted COUNT(*)

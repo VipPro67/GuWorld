@@ -575,9 +575,18 @@ func AdminGetAuditLogs(c *gin.Context) {
 	}
 
 	var total int
-	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm nhật ký"})
-		return
+	if len(countArgs) == 0 {
+		var err error
+		total, err = fastCountTable(c, "audit_logs", "admin:audit_logs:total_count", 60*time.Second)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm nhật ký"})
+			return
+		}
+	} else {
+		if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm nhật ký"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

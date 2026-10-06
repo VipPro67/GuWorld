@@ -966,9 +966,18 @@ func AdminListTopupOrders(c *gin.Context) {
 		add(` AND user_id::text = ?`, userID)
 	}
 	var total int
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM topup_orders`+where, args...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm danh sách đơn nạp"})
-		return
+	if len(args) == 0 {
+		var err error
+		total, err = fastCountTable(c, "topup_orders", "admin:topup_orders:total_count", 60*time.Second)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm danh sách đơn nạp"})
+			return
+		}
+	} else {
+		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM topup_orders`+where, args...).Scan(&total); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm danh sách đơn nạp"})
+			return
+		}
 	}
 	query := `SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders` + where + ` ORDER BY ` + paging.Sort + ` ` + paging.Direction + `, order_code DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, append(args, paging.PageSize, paging.Offset)...)
