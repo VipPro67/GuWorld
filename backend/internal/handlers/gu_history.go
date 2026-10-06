@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -61,18 +62,27 @@ func AdminListGuHistory(c *gin.Context) {
 		argIdx++
 	}
 
-	countQuery := fmt.Sprintf(`
-		SELECT COUNT(*)
-		FROM gu_history_logs g
-		LEFT JOIN players pa ON g.actor_id = pa.id
-		LEFT JOIN players pt ON g.target_id = pt.id
-		%s
-	`, whereClause)
-
 	var total int
-	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count gu history logs"})
-		return
+	if len(args) == 0 {
+		var err error
+		total, err = fastCountTable(c, "gu_history_logs", "admin:gu_history_logs:total_count", 60*time.Second)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count gu history logs"})
+			return
+		}
+	} else {
+		countQuery := fmt.Sprintf(`
+			SELECT COUNT(*)
+			FROM gu_history_logs g
+			LEFT JOIN players pa ON g.actor_id = pa.id
+			LEFT JOIN players pt ON g.target_id = pt.id
+			%s
+		`, whereClause)
+
+		if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count gu history logs"})
+			return
+		}
 	}
 
 	query := fmt.Sprintf(`

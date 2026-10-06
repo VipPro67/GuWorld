@@ -373,9 +373,18 @@ func AdminListMapCells(c *gin.Context) {
 	args = append(args, pageSize, offset)
 
 	var total int
-	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng ô bản đồ"})
-		return
+	if len(countArgs) == 0 {
+		var err error
+		total, err = fastCountTable(c, "map_cells", "admin:map_cells:total_count", 60*time.Second)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng ô bản đồ"})
+			return
+		}
+	} else {
+		if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng ô bản đồ"})
+			return
+		}
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
