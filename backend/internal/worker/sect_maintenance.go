@@ -192,37 +192,39 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 		}
 
 		now := time.Now()
-		if s.funds >= fee {
-			newFunds := s.funds - fee
-			_, err := db.ExecContext(ctx, `
-				UPDATE sects SET funds = $1, last_maintenance_at = $2
-				WHERE id = $3
-			`, newFunds, now, s.id)
-			if err != nil {
-				logger.S.Errorf("SectMaintenanceWorker: failed to deduct fee for sect %s: %v", s.id, err)
-				continue
-			}
+		cutoff := now.Add(-24 * time.Hour)
+		var remainingFunds int64
+		errDeduct := db.QueryRowContext(ctx, `
+			UPDATE sects SET funds = funds - $1, last_maintenance_at = $2
+			WHERE id = $3 AND funds >= $1 AND (last_maintenance_at IS NULL OR last_maintenance_at <= $4)
+			RETURNING funds
+		`, fee, now, s.id, cutoff).Scan(&remainingFunds)
 
+		if errDeduct == nil {
 			vaultSlots := breakdown.MaterialsCount + breakdown.MortalGuCount + breakdown.ImmortalGuCount + int64(breakdown.RecipesCount)
 			chatMsg := fmt.Sprintf("[Bảo Trì] Tông môn đã thanh toán %d Quỹ duy trì hôm nay (Thành viên: %d, Kho: %d). Quỹ còn lại: %d Quỹ.",
-				fee, breakdown.MemberCount, vaultSlots, newFunds)
+				fee, breakdown.MemberCount, vaultSlots, remainingFunds)
 			sendSectSystemChatMessage(ctx, db, s.id, chatMsg)
 		} else {
-			newLevel := s.level - 1
-			if newLevel < 1 {
-				newLevel = 1
+			if errDeduct != sql.ErrNoRows {
+				logger.S.Errorf("SectMaintenanceWorker: failed to deduct fee for sect %s: %v", s.id, errDeduct)
+				continue
 			}
-			_, err := db.ExecContext(ctx, `
-				UPDATE sects SET level = $1, last_maintenance_at = $2
-				WHERE id = $3
-			`, newLevel, now, s.id)
-			if err != nil {
-				logger.S.Errorf("SectMaintenanceWorker: failed to downgrade sect %s: %v", s.id, err)
+			var newLevel int
+			errDown := db.QueryRowContext(ctx, `
+				UPDATE sects SET level = GREATEST(1, level - 1), last_maintenance_at = $1
+				WHERE id = $2 AND (last_maintenance_at IS NULL OR last_maintenance_at <= $3)
+				RETURNING level
+			`, now, s.id, cutoff).Scan(&newLevel)
+			if errDown != nil {
+				if errDown != sql.ErrNoRows {
+					logger.S.Errorf("SectMaintenanceWorker: failed to downgrade sect %s: %v", s.id, errDown)
+				}
 				continue
 			}
 
-			alertChat := fmt.Sprintf("[Bảo Trì] CẢNH BÁO: Tông môn không đủ quỹ duy trì (%d/%d), cấp bậc bị giáng xuống Cấp %d!",
-				s.funds, fee, newLevel)
+			alertChat := fmt.Sprintf("[Bảo Trì] CẢNH BÁO: Tông môn không đủ quỹ duy trì (cần %d), cấp bậc bị giáng xuống Cấp %d!",
+				fee, newLevel)
 			sendSectSystemChatMessage(ctx, db, s.id, alertChat)
 
 			notifySectLeader(ctx, db, s.id, s.level, newLevel, s.funds, fee)

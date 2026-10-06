@@ -413,16 +413,7 @@ func AcceptTradeOffer(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-
-	acceptor, err := evaluateManaTx(tx, authID)
-	if err != nil || gamefx.IsDeadState(&acceptor) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể chấp nhận trao đổi!"})
-		return
-	}
-	if !HasBaoHoangAccess(acceptor.GuInventory) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ và Thần Niệm Cổ để giao dịch Bảo Hoàng Thiên!"})
-		return
-	}
+	_, _ = tx.Exec("SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '8000', true)")
 
 	var creatorID uuid.UUID
 	var playerID uuid.UUID
@@ -443,19 +434,46 @@ func AcceptTradeOffer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đơn trao đổi không còn khả dụng hoặc đã hết hạn"})
 		return
 	}
-	if creatorID == acceptor.ID {
+	if creatorID == authID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể tự chấp nhận đơn trao đổi của mình"})
 		return
 	}
 	// Check if this is a targeted trade offer for someone else
-	if playerID != uuid.Nil && playerID != creatorID && playerID != acceptor.ID {
+	if playerID != uuid.Nil && playerID != creatorID && playerID != authID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đơn trao đổi này được chỉ định riêng cho đạo hữu khác"})
 		return
 	}
 
+	// Lock players in deterministic UUID order to prevent deadlocks with concurrent trades
+	var acceptor, creator models.Player
+	var creatorErr error
+	if authID.String() < creatorID.String() {
+		acceptor, err = evaluateManaTx(tx, authID)
+		if err != nil || gamefx.IsDeadState(&acceptor) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể chấp nhận trao đổi!"})
+			return
+		}
+		creator, creatorErr = evaluateManaTx(tx, creatorID)
+	} else {
+		creator, creatorErr = evaluateManaTx(tx, creatorID)
+		acceptor, err = evaluateManaTx(tx, authID)
+		if err != nil || gamefx.IsDeadState(&acceptor) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể chấp nhận trao đổi!"})
+			return
+		}
+	}
+
+	if !HasBaoHoangAccess(acceptor.GuInventory) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ và Thần Niệm Cổ để giao dịch Bảo Hoàng Thiên!"})
+		return
+	}
+
 	// Verify creator dual-gu access
-	creator, err := evaluateManaTx(tx, creatorID)
-	if err != nil || !HasBaoHoangAccess(creator.GuInventory) {
+	if creatorErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xử lý giao dịch với người tạo đơn: " + creatorErr.Error()})
+		return
+	}
+	if !HasBaoHoangAccess(creator.GuInventory) {
 		// Restore creator items and cancel offer
 		var offered models.TradeOfferData
 		_ = json.Unmarshal(offJSON, &offered)
@@ -704,12 +722,7 @@ func CancelTradeOffer(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-
-	creator, err := evaluateManaTx(tx, authID)
-	if err != nil || gamefx.IsDeadState(&creator) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể hủy đơn trao đổi!"})
-		return
-	}
+	_, _ = tx.Exec("SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '8000', true)")
 
 	var creatorID uuid.UUID
 	var offJSON []byte
@@ -720,12 +733,18 @@ func CancelTradeOffer(c *gin.Context) {
 		FROM trade_offers WHERE id = $1 FOR UPDATE`, offerUUID,
 	).Scan(&creatorID, &offJSON, &status)
 
-	if err != nil || creatorID != creator.ID {
+	if err != nil || creatorID != authID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đơn trao đổi không tồn tại hoặc bạn không có quyền hủy"})
 		return
 	}
 	if status != "ACTIVE" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đơn trao đổi không còn hoạt động"})
+		return
+	}
+
+	creator, err := evaluateManaTx(tx, authID)
+	if err != nil || gamefx.IsDeadState(&creator) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể hủy đơn trao đổi!"})
 		return
 	}
 

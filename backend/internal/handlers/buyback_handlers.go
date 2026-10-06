@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -369,6 +370,7 @@ func SellToBuybackOrder(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	_, _ = tx.Exec("SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '8000', true)")
 
 	actor, err := evaluateManaTx(tx, authID)
 	if err != nil || gamefx.IsDeadState(&actor) {
@@ -474,6 +476,7 @@ func SellToBuybackOrder(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Mục tiêu Cổ trùng của đơn thu mua không hợp lệ"})
 				return
 			}
+			sort.Strings(guInstIDs)
 			for _, instID := range guInstIDs {
 				var ownerID uuid.UUID
 				var guID, state string
