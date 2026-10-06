@@ -208,15 +208,8 @@ func UpdateProfileSettings(c *gin.Context) {
 			if err == nil {
 				_, _ = tx.Exec(`UPDATE immortal_apertures SET dao_marks = $1, aperture_hp = $2 WHERE player_id = $3`, newDaoJSON, newApertureHP, player.ID)
 			}
-			_, _ = tx.Exec(`UPDATE player_dao_path SET dao_marks = FLOOR(dao_marks * $1)::BIGINT WHERE player_id = $2`, 1.0-daoLossRate, player.ID.String())
-
 			// 2. Cập nhật Cảnh Giới Lưu Phái
 			player.PathMasteries = newMasteries
-			for k, v := range newMasteries {
-				lvl := gamefx.PathMasteryLevel(v)
-				masteryName := gamefx.PathMasteryLevelName(lvl)
-				_, _ = tx.Exec(`UPDATE player_dao_path SET mastery = $1 WHERE player_id = $2 AND path = $3`, masteryName, player.ID.String(), k)
-			}
 
 			// 3. Cập nhật Áp Lực Tiên Khiếu & Tiến Độ (không tụt tiểu cảnh giới)
 			player.ApertureStress += stressGain

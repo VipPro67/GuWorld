@@ -255,6 +255,9 @@ func InitSchema() error {
 			return fmt.Errorf("schema step %q: %w", s.name, err)
 		}
 	}
+	if err := removeLegacyNpcSacrificeEffect(); err != nil {
+		return fmt.Errorf("remove legacy NPC sacrifice effect: %w", err)
+	}
 	if err := installPlayerCollectionRevisionTriggers(); err != nil {
 		return fmt.Errorf("install player collection revision triggers: %w", err)
 	}
@@ -316,6 +319,39 @@ WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(statuses) e WHERE e->>'id' = 's
 	}
 
 	logger.S.Info("Database schema initialized successfully")
+	return nil
+}
+
+// removeLegacyNpcSacrificeEffect strips the retired sect-NPC sacrifice block
+// from persisted Gu effects while preserving any unrelated effects on the Gu.
+func removeLegacyNpcSacrificeEffect() error {
+	rows, err := schemaDB().Query(`SELECT id, rank, effects FROM gu_dictionary WHERE id='GU_BLOOD_SKULL' AND effects::text LIKE '%SACRIFICE_NPC%'`)
+	if err != nil { return err }
+	type guEffectRow struct { id string; rank int; effects []byte }
+	items := make([]guEffectRow, 0)
+	for rows.Next() { var item guEffectRow; if err := rows.Scan(&item.id, &item.rank, &item.effects); err != nil { rows.Close(); return err }; items = append(items, item) }
+	if err := rows.Err(); err != nil { rows.Close(); return err }
+	if err := rows.Close(); err != nil { return err }
+	for _, item := range items {
+		var array []json.RawMessage
+		if json.Unmarshal(item.effects, &array) == nil {
+			filtered := make([]json.RawMessage, 0, len(array))
+			for _, block := range array { if !strings.Contains(string(block), "SACRIFICE_NPC") { filtered = append(filtered, block) } }
+			updated, err := json.Marshal(filtered); if err != nil { return err }
+			if _, err := schemaDB().Exec(`UPDATE gu_dictionary SET effects=$1::jsonb WHERE id=$2 AND rank=$3`, string(updated), item.id, item.rank); err != nil { return err }
+			continue
+		}
+		var object map[string]json.RawMessage
+		if json.Unmarshal(item.effects, &object) != nil { continue }
+		var blocks []json.RawMessage
+		if json.Unmarshal(object["blocks"], &blocks) != nil { continue }
+		filtered := make([]json.RawMessage, 0, len(blocks))
+		for _, block := range blocks { if !strings.Contains(string(block), "SACRIFICE_NPC") { filtered = append(filtered, block) } }
+		updatedBlocks, err := json.Marshal(filtered); if err != nil { return err }
+		object["blocks"] = updatedBlocks
+		updated, err := json.Marshal(object); if err != nil { return err }
+		if _, err := schemaDB().Exec(`UPDATE gu_dictionary SET effects=$1::jsonb WHERE id=$2 AND rank=$3`, string(updated), item.id, item.rank); err != nil { return err }
+	}
 	return nil
 }
 
@@ -596,9 +632,6 @@ func SeedFromCSV() error {
 	}
 	if err := seedQuestsFromCSV(); err != nil {
 		return fmt.Errorf("quests seeding failed: %w", err)
-	}
-	if err := seedNPCs(); err != nil {
-		return fmt.Errorf("npcs seeding failed: %w", err)
 	}
 	logger.S.Info("All CSV data seeded successfully")
 	return nil
@@ -2940,41 +2973,6 @@ func GetExistingImmortalGuIDs(ctx context.Context, q interface {
 		}
 	}
 	return existing, rows.Err()
-}
-
-func seedNPCs() error {
-	var count int
-	err := activeCSVImportDB().QueryRow("SELECT COUNT(*) FROM npcs").Scan(&count)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		npcs := []struct {
-			id              string
-			name            string
-			sectID          string
-			role            string
-			aptitudePercent int
-		}{
-			{"npc_disciple_1", "Thạch Hạo (Đệ tử)", "gu_yue_clan", "DISCIPLE", 65},
-			{"npc_disciple_2", "Lâm Động (Đệ tử)", "gu_yue_clan", "DISCIPLE", 55},
-			{"npc_disciple_3", "Tiêu Viêm (Đệ tử)", "gu_yue_clan", "DISCIPLE", 70},
-			{"npc_clansman_1", "Cổ Nguyệt Đạt (Tộc nhân)", "gu_yue_clan", "CLANSMAN", 45},
-			{"npc_clansman_2", "Cổ Nguyệt Đạo (Tộc nhân)", "gu_yue_clan", "CLANSMAN", 50},
-		}
-		for _, npc := range npcs {
-			_, err = activeCSVImportDB().Exec(`
-				INSERT INTO npcs (id, name, sect_id, role, aptitude_percent)
-				VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (id) DO NOTHING
-			`, npc.id, npc.name, npc.sectID, npc.role, npc.aptitudePercent)
-			if err != nil {
-				return err
-			}
-		}
-		logger.S.Info("Seeded initial NPCs for Huyết Sọ Cổ hiến tế.")
-	}
-	return nil
 }
 
 // writeCSV is a helper that runs a SQL query and writes the result as a CSV file.

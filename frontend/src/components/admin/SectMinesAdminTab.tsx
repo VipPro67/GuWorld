@@ -33,6 +33,14 @@ export const SectMinesAdminTab: React.FC<{
 
   const handleSave = async () => {
     if (!editMine || !editMine.id) return;
+    let pendingMaterials: unknown;
+    try {
+      pendingMaterials = JSON.parse(String(editMine.pending_materials || "{}"));
+      if (!pendingMaterials || Array.isArray(pendingMaterials) || typeof pendingMaterials !== "object") throw new Error("object required");
+    } catch {
+      addToast("Nguyên liệu tích lũy phải là JSON object hợp lệ", "error");
+      return;
+    }
     try {
       const res = await authFetch(`${BACKEND_URL}/api/admin/sect-mines/${editMine.id}`, {
         method: "PUT",
@@ -41,6 +49,8 @@ export const SectMinesAdminTab: React.FC<{
           occupier_sect_id: editMine.occupier_sect_id,
           rarity: editMine.rarity,
           pending_funds: Number(editMine.pending_funds || 0),
+          pending_materials: pendingMaterials,
+          shield_until: editMine.shield_until ? new Date(String(editMine.shield_until).includes("T") ? String(editMine.shield_until) : String(editMine.shield_until).replace(" ", "T") + "Z").toISOString() : "",
         }),
       });
       if (res.ok) {
@@ -156,6 +166,26 @@ export const SectMinesAdminTab: React.FC<{
                   value={editMine.pending_funds || 0}
                   onChange={(e) => setEditMine({ ...editMine, pending_funds: e.target.value })}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Nguyên liệu tích lũy (JSON)</label>
+                <textarea
+                  value={typeof editMine.pending_materials === "string" ? editMine.pending_materials : JSON.stringify(editMine.pending_materials || {}, null, 2)}
+                  onChange={(e) => setEditMine({ ...editMine, pending_materials: e.target.value })}
+                  rows={4}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Khiên bảo vệ đến</label>
+                <input
+                  type="datetime-local"
+                  value={editMine.shield_until ? String(editMine.shield_until).replace(" ", "T").slice(0, 16) : ""}
+                  onChange={(e) => setEditMine({ ...editMine, shield_until: e.target.value })}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1"
                 />
               </div>
             </div>

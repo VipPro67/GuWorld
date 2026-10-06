@@ -377,7 +377,7 @@ export const characterPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cách nâng tư chất</h3>
           <ul className="list-disc list-inside text-xs text-[var(--text-secondary)] space-y-2 leading-relaxed">
-            <li><strong>Hiến tế NPC</strong> bằng Huyết Sọ Cổ: nghiền nát cốt nhục đệ tử môn phái để tăng <strong>+5% tư chất</strong> (tối đa 99%), nhưng làm tăng <strong>+40 áp lực vách khiếu</strong>.</li>
+            <li><strong>Huyết Sọ Cổ</strong> tăng <strong>+5% tư chất</strong> mỗi lần sử dụng (tối đa 99%) và tiêu hao 20 độ no của Cổ.</li>
             <li><strong>Hiệu ứng Cổ:</strong> một số Cổ trùng có hiệu ứng tăng trực tiếp tư chất Không khiếu (tối đa 99%).</li>
             <li>Khi tư chất thay đổi, phẩm cấp Linh Căn tự động cập nhật theo ngưỡng: &ge;80% = Giáp, &ge;60% = Ất, &ge;40% = Bính, dưới 40% = Đinh.</li>
             <li>Gợi ý cho đạo hữu Bính/Đinh: tận dụng <strong>Tửu Trùng</strong> và <strong>Xá Lợi Cổ</strong> để bù lại tốc độ tu luyện chậm chạp.</li>

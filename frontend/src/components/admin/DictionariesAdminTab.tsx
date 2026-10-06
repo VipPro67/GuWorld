@@ -3,17 +3,21 @@ import { authFetch } from "@/lib/auth";
 import { Plus, RefreshCw, X, Shield, Activity, Users } from "lucide-react";
 import { AdminDataGrid, AdminGridColumn } from "./AdminDataGrid";
 import { GuEffectsEditor, validateAllEffectEditors } from "./GuEffectsEditor";
+import { prepareAdminAction } from "./actions";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const EMPTY_EFFECTS = { schema_version: 2, blocks: [] };
 const parseEffectsForEditor = (value: ApiResponseData) => {
-  if (typeof value !== "string") return value || [];
-  try { return JSON.parse(value); } catch { return []; }
+  if (typeof value !== "string") return value || EMPTY_EFFECTS;
+  try { return JSON.parse(value); } catch { return EMPTY_EFFECTS; }
 };
 
 export const DictionariesAdminTab: React.FC<{
   type: "constitution" | "race" | "status";
   addToast: (msg: string, type: "success" | "error" | "info") => void;
-}> = ({ type, addToast }) => {
+  canWrite?: boolean;
+  canDelete?: boolean;
+}> = ({ type, addToast, canWrite = true, canDelete = true }) => {
   const [data, setData] = useState<ApiResponseData[]>([]);
   const [loading, setLoading] = useState(false);
   const [editItem, setEditItem] = useState<ApiResponseData | null>(null);
@@ -46,6 +50,7 @@ export const DictionariesAdminTab: React.FC<{
   }, [fetchData]);
 
   const handleSave = async () => {
+    if (!canWrite) return;
     if (!editItem || !editItem.key) {
       addToast("Key không được để trống", "error");
       return;
@@ -91,7 +96,7 @@ export const DictionariesAdminTab: React.FC<{
   };
 
   const handleDelete = async (key: string) => {
-    if (!confirm(`Bạn có chắc muốn xóa '${key}'?`)) return;
+    if (!canDelete) return;
     try {
       const endpoint =
         type === "constitution"
@@ -99,7 +104,11 @@ export const DictionariesAdminTab: React.FC<{
           : type === "race"
           ? "/api/admin/race-dictionary"
           : "/api/admin/status-dictionary";
-      const res = await authFetch(`${BACKEND_URL}${endpoint}/${key}`, { method: "DELETE" });
+      const url = `${BACKEND_URL}${endpoint}/${key}`;
+      const action = type === "constitution" ? "deleteConstitution" : type === "race" ? "deleteRaceDictionary" : "deleteStatusDictionary";
+      const prepared = prepareAdminAction(action, `xóa ${title.toLocaleLowerCase()}`, new URL(url).pathname);
+      if (!prepared) return;
+      const res = await authFetch(url, { method: "DELETE", headers: { "Content-Type": "application/json", "Idempotency-Key": prepared.idempotencyKey }, body: JSON.stringify(prepared) });
       if (res.ok) {
         addToast("Xóa thành công", "success");
         fetchData();
@@ -142,21 +151,21 @@ export const DictionariesAdminTab: React.FC<{
           {title} ({data.length})
         </h3>
         <div className="flex items-center gap-2">
-          <button
+          {canWrite && <button
             onClick={() => {
               setIsNew(true);
               setEditItem(
                 type === "constitution"
-                  ? { key: "", name: "", tier: 1, description: "", effects: [] }
+                  ? { key: "", name: "", tier: 1, description: "", effects: EMPTY_EFFECTS }
                   : type === "race"
-                  ? { key: "", name: "", description: "", effects: [] }
-                  : { key: "", name: "", description: "", effects: [], default_duration_minutes: 30, blocked_actions: [] }
+                  ? { key: "", name: "", description: "", effects: EMPTY_EFFECTS }
+                  : { key: "", name: "", description: "", effects: EMPTY_EFFECTS, default_duration_minutes: 30, blocked_actions: [] }
               );
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> Thêm mới
-          </button>
+          </button>}
           <button
             onClick={fetchData}
             className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
@@ -167,8 +176,8 @@ export const DictionariesAdminTab: React.FC<{
       </div>
 
       <AdminDataGrid rows={data} columns={columns} rowKey={(item) => item.key} loading={loading}
-        onEdit={(item) => { setIsNew(false); setEditItem(structuredClone(item)); }}
-        onCopy={copyItem} onDelete={(item) => handleDelete(item.key)} />
+        onEdit={canWrite ? (item) => { setIsNew(false); setEditItem(structuredClone(item)); } : undefined}
+        onCopy={canWrite ? copyItem : undefined} onDelete={canDelete ? (item) => handleDelete(item.key) : undefined} />
 
       {/* Edit / Create Modal */}
       {editItem && (
@@ -259,12 +268,12 @@ export const DictionariesAdminTab: React.FC<{
             </div>
 
             <div className="flex gap-3 justify-end pt-2">
-              <button
+              {canWrite && <button
                 onClick={() => setEditItem(null)}
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer"
               >
                 Hủy
-              </button>
+              </button>}
               <button
                 onClick={handleSave}
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer"

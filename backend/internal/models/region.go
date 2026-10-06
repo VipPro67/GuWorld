@@ -37,4 +37,5 @@ type Region struct {
 	EntryX      int       `json:"entry_x"`
 	EntryY      int       `json:"entry_y"`
 	PoolWeights ZonePools `json:"pool_weights"`
+	Paths       []string  `json:"paths"`
 }

@@ -17,6 +17,7 @@ import {
   Package,
   Bug,
   Info,
+  Eye,
   X,
   Coins,
   Sparkles,
@@ -64,6 +65,14 @@ import { TopupWalletAdminTab } from "./admin/TopupWalletAdminTab";
 import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
 import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
 import { SectMinesAdminTab } from "./admin/SectMinesAdminTab";
+import { ApertureChildrenAdmin } from "./admin/ApertureChildrenAdmin";
+import { ApertureRefinementQueueAdmin } from "./admin/ApertureRefinementQueueAdmin";
+import { ApertureSettlementsAdmin } from "./admin/ApertureSettlementsAdmin";
+import { ApertureEventsAdmin } from "./admin/ApertureEventsAdmin";
+import { ApertureNPCAdmin } from "./admin/ApertureNPCAdmin";
+import { ApertureTribulationsAdmin } from "./admin/ApertureTribulationsAdmin";
+import { SectDefendersAdmin } from "./admin/SectDefendersAdmin";
+import { SectRequestsAdmin } from "./admin/SectRequestsAdmin";
 import { GuHistoryAdminTab } from "./admin/GuHistoryAdminTab";
 import { AuditLogsAdminTab } from "./admin/modules/AuditLogsAdminTab";
 import { MonitoringAdminTab } from "./admin/modules/MonitoringAdminTab";
@@ -76,6 +85,9 @@ import { useAdminAccess } from "./admin/AdminAccessContext";
 import { canPerformAdminAction, prepareAdminAction } from "./admin/actions";
 import { DataImportWorkflow } from "./admin/DataImportWorkflow";
 import { PlayerRolesEditor } from "./admin/PlayerRolesEditor";
+import { CombatHistoryAdminTab } from "./admin/CombatHistoryAdminTab";
+import { MapDropsAdminTab } from "./admin/MapDropsAdminTab";
+import { ArenaRankingsAdminTab } from "./admin/ArenaRankingsAdminTab";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const PLAYER_QUERY_DEFAULTS = { page: "1", page_size: "50", search: "", search_by: "all", sort: "created_at", direction: "desc" };
@@ -253,7 +265,6 @@ interface PlayerDetail {
   gu_count: number;
   item_count: number;
   growth_data?: GrowthData;
-  dao_marks?: Record<string, number>;
   path_masteries?: Record<string, number>;
   passive_stats?: PassiveStatsResult;
   equipped_gus?: EquippedGuDetail[];
@@ -266,7 +277,47 @@ interface PlayerItemRow {
   rank: number;
   category: string;
   quantity: number;
+  completion_rate?: number;
+  is_unlocked?: boolean;
+  deduce_count?: number;
+  last_deduce_at?: string | null;
+  favorite?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
+
+interface PlayerQuestRow {
+  quest_id: string;
+  status: string;
+  progress_data: unknown;
+  completed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface PlayerInstanceSessionRow {
+  id: string;
+  instance_id: string;
+  current_stage: number;
+  status: "ACTIVE" | "COMPLETED" | "FAILED";
+  temp_inventory: unknown;
+  created_at: string;
+}
+
+interface PlayerSectMissionRow {
+  id: string; mission_id: string; title: string; sect_id: string; sect_name: string;
+  mission_type: string; target_id: string; target_amount: number; reward_contribution: number;
+  current_progress: number; status: string; assigned_at: string; expires_at?: string | null;
+}
+
+interface PlayerTrackingMarkRow {
+  id: string; tracker_id: string; tracker_username: string; target_id: string; target_username: string;
+  mark_type: string; power: number; expires_at: string; created_at: string; is_tracker: boolean;
+}
+
+interface PlayerAchievementRow { player_id:string; achievement_id:string; selected_title:string; selected_frame:string; unlocked_at:string; }
+
+
 
 interface PlayerGuRow {
   instance_id: string;
@@ -277,6 +328,16 @@ interface PlayerGuRow {
   status: string;
   equipped: boolean;
   is_vital: boolean;
+  gu_rank: number;
+  level: number;
+  location: string;
+  is_locked: boolean;
+  integration_time: number;
+  equipped_at?: string | null;
+  growth_hours: number;
+  created_at?: string;
+  updated_at?: string;
+  last_fed_at?: string | null;
 }
 
 const raceLabels: Record<string, string> = {
@@ -408,7 +469,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const adminAccess = useAdminAccess();
   const canAdminAction = (action: Parameters<typeof canPerformAdminAction>[1]) => canPerformAdminAction(adminAccess.effective_permissions, action);
   const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
-  const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "combat">("items");
+  const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets" | "quests" | "instances" | "sect_missions" | "tracking_marks" | "achievements" | "combat">("items");
   const [isCombatEquippedExpanded, setIsCombatEquippedExpanded] = useState(true);
   const [isCombatStatsExpanded, setIsCombatStatsExpanded] = useState(true);
   const [isCombatGrowthExpanded, setIsCombatGrowthExpanded] = useState(true);
@@ -451,6 +512,38 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [playerPetsLimit] = useState(20);
   const [playerPetsLoading, setPlayerPetsLoading] = useState(false);
   const [playerPetsSearch, setPlayerPetsSearch] = useState("");
+  const [playerQuests, setPlayerQuests] = useState<PlayerQuestRow[]>([]);
+  const [playerQuestsLoading, setPlayerQuestsLoading] = useState(false);
+  const [showQuestEditor, setShowQuestEditor] = useState<PlayerQuestRow | null>(null);
+  const [questStatus, setQuestStatus] = useState("ACTIVE");
+  const [questProgressData, setQuestProgressData] = useState("{}");
+  const [questCompletedAt, setQuestCompletedAt] = useState("");
+  const [instanceSessions, setInstanceSessions] = useState<PlayerInstanceSessionRow[]>([]);
+  const [instanceSessionsLoading, setInstanceSessionsLoading] = useState(false);
+  const [showInstanceSessionEditor, setShowInstanceSessionEditor] = useState<PlayerInstanceSessionRow | null>(null);
+  const [instanceSessionStage, setInstanceSessionStage] = useState("0");
+  const [instanceSessionStatus, setInstanceSessionStatus] = useState("ACTIVE");
+  const [instanceSessionInventory, setInstanceSessionInventory] = useState("[]");
+  const [playerSectMissions, setPlayerSectMissions] = useState<PlayerSectMissionRow[]>([]);
+  const [playerSectMissionsLoading, setPlayerSectMissionsLoading] = useState(false);
+  const [showPlayerSectMissionEditor, setShowPlayerSectMissionEditor] = useState<PlayerSectMissionRow | null>(null);
+  const [playerSectMissionProgress, setPlayerSectMissionProgress] = useState("0");
+  const [playerSectMissionStatus, setPlayerSectMissionStatus] = useState("IN_PROGRESS");
+  const [playerSectMissionExpiry, setPlayerSectMissionExpiry] = useState("");
+  const [playerTrackingMarks, setPlayerTrackingMarks] = useState<PlayerTrackingMarkRow[]>([]);
+  const [playerTrackingMarksLoading, setPlayerTrackingMarksLoading] = useState(false);
+  const [showTrackingMarkEditor, setShowTrackingMarkEditor] = useState<PlayerTrackingMarkRow | null>(null);
+  const [trackingMarkType, setTrackingMarkType] = useState("wisdom");
+  const [trackingMarkPower, setTrackingMarkPower] = useState("0");
+  const [trackingMarkExpiry, setTrackingMarkExpiry] = useState("");
+  const [playerAchievements, setPlayerAchievements] = useState<PlayerAchievementRow[]>([]);
+  const [availableAchievements, setAvailableAchievements] = useState<ApiResponseData[]>([]);
+  const [playerAchievementsLoading, setPlayerAchievementsLoading] = useState(false);
+  const [showAchievementEditor, setShowAchievementEditor] = useState<PlayerAchievementRow | null>(null);
+  const [achievementTitle, setAchievementTitle] = useState("");
+  const [achievementFrame, setAchievementFrame] = useState("");
+  const [achievementUnlockedAt, setAchievementUnlockedAt] = useState("");
+  const [achievementToGrant, setAchievementToGrant] = useState("");
 
   // Edit player modal
   const [showEditPlayer, setShowEditPlayer] = useState(false);
@@ -460,6 +553,15 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [showAddItem, setShowAddItem] = useState(false);
   const [addItemId, setAddItemId] = useState("");
   const [addItemQty, setAddItemQty] = useState(1);
+  const [addItemCategory, setAddItemCategory] = useState("materials");
+  const [showRecipeEditor, setShowRecipeEditor] = useState<PlayerItemRow | null>(null);
+  const [recipeCompletion, setRecipeCompletion] = useState("0");
+  const [recipeUnlocked, setRecipeUnlocked] = useState(false);
+  const [recipeDeduceCount, setRecipeDeduceCount] = useState("0");
+  const [recipeFavorite, setRecipeFavorite] = useState(false);
+  const [showInventoryItemEditor, setShowInventoryItemEditor] = useState<PlayerItemRow | null>(null);
+  const [inventoryEditQuantity, setInventoryEditQuantity] = useState("0");
+  const [inventoryEditCategory, setInventoryEditCategory] = useState("materials");
 
   const [showRemoveItem, setShowRemoveItem] = useState<string | null>(null);
   const [removeItemQty, setRemoveItemQty] = useState(1);
@@ -468,6 +570,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [addGuId, setAddGuId] = useState("");
   const [addGuRank, setAddGuRank] = useState("");
   const [addGuQty, setAddGuQty] = useState(1);
+  const [showGuEditor, setShowGuEditor] = useState<PlayerGuRow | null>(null);
+  const [guEditForm, setGuEditForm] = useState({ rank: "1", level: "1", hunger: "100", status: "ACTIVE", equipped: false, is_vital: false, is_locked: false, integration_time: "0" });
 
   const [showStones, setShowStones] = useState(false);
   const [stonesPrimeval, setStonesPrimeval] = useState("");
@@ -536,7 +640,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
-  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons">("import");
+  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "scouting" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons">("import");
   const [regions, setRegions] = useState<ApiResponseData[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(false);
   const [regionEdit, setRegionEdit] = useState<ApiResponseData | null>(null);
@@ -554,6 +658,13 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [mapCellsPage, setMapCellsPage] = useState(1);
   const [mapCellsTotal, setMapCellsTotal] = useState(0);
   const [mapCellsTotalPages, setMapCellsTotalPages] = useState(1);
+  const [residualTraces, setResidualTraces] = useState<ApiResponseData[]>([]);
+  const [residualTracesLoading, setResidualTracesLoading] = useState(false);
+  const [residualTraceSearch, setResidualTraceSearch] = useState("");
+  const [residualTracePage, setResidualTracePage] = useState(1);
+  const [residualTraceTotal, setResidualTraceTotal] = useState(0);
+  const [residualTraceEdit, setResidualTraceEdit] = useState<ApiResponseData | null>(null);
+  const [residualTraceForm, setResidualTraceForm] = useState({region_id:"",x:"0",y:"0",player_id:"",action_type:"move",dominant_path:"",dao_pulse_strength:"0",expires_at:""});
   const [gus, setGus] = useState<ApiResponseData[]>([]);
   const [gusLoading, setGusLoading] = useState(false);
   const [guEdit, setGuEdit] = useState<ApiResponseData | null>(null);
@@ -914,6 +1025,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     } catch {} finally { setMapCellsLoading(false); }
   }, [mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter]);
 
+  const fetchResidualTraces = useCallback(async (pageVal = residualTracePage, searchVal = residualTraceSearch) => {
+    setResidualTracesLoading(true);
+    try { const params=new URLSearchParams({page:String(pageVal),limit:"30",search:searchVal});const res=await authFetch(`${BACKEND_URL}/api/admin/residual-traces?${params}`);if(res.ok){const data=await res.json();setResidualTraces(data.data||[]);setResidualTraceTotal(data.total||0);} }
+    catch {} finally { setResidualTracesLoading(false); }
+  }, [residualTracePage,residualTraceSearch]);
+
   const ensureShopSearchLoaded = useCallback(async () => {
     if (shopSearchLoaded) return;
     const [g, i, r] = await Promise.all([
@@ -983,8 +1100,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       else if (dataTab === "loot_tables") fetchLootTables();
       else if (dataTab === "regions") fetchRegions(1, regionSearch);
       else if (dataTab === "map_cells") fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter);
+      else if (dataTab === "scouting") fetchResidualTraces(1, residualTraceSearch);
     }
-  }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables, fetchRegions, fetchMapCells, regionSearch, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter, addToast]);
+  }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables, fetchRegions, fetchMapCells, fetchResidualTraces, regionSearch, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter, residualTraceSearch, addToast]);
 
   useEffect(() => {
     if (section === "players" && playersTab === "online") fetchOnlinePlayers();
@@ -1082,6 +1200,42 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     } catch {} finally { setPlayerPetsLoading(false); }
   }, [playerPetsPage, playerPetsLimit, playerPetsSearch]);
 
+  const fetchPlayerQuests = useCallback(async (id: string) => {
+    setPlayerQuestsLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/quests`);
+      if (res.ok) setPlayerQuests((await res.json()).data || []);
+    } catch {} finally { setPlayerQuestsLoading(false); }
+  }, []);
+
+  const fetchInstanceSessions = useCallback(async (id: string) => {
+    setInstanceSessionsLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/instance-sessions`);
+      if (res.ok) setInstanceSessions((await res.json()).data || []);
+    } catch {} finally { setInstanceSessionsLoading(false); }
+  }, []);
+
+  const fetchPlayerSectMissions = useCallback(async (id: string) => {
+    setPlayerSectMissionsLoading(true);
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/sect-missions`); if(res.ok) setPlayerSectMissions((await res.json()).data || []); }
+    catch {} finally { setPlayerSectMissionsLoading(false); }
+  }, []);
+
+  const fetchPlayerTrackingMarks = useCallback(async (id: string) => {
+    setPlayerTrackingMarksLoading(true);
+    try { const res=await authFetch(`${BACKEND_URL}/api/admin/players/${id}/tracking-marks`);if(res.ok)setPlayerTrackingMarks((await res.json()).data||[]); }
+    catch {} finally { setPlayerTrackingMarksLoading(false); }
+  }, []);
+
+  const fetchPlayerAchievements = useCallback(async (id: string) => {
+    setPlayerAchievementsLoading(true);
+    try { const res=await authFetch(`${BACKEND_URL}/api/admin/players/${id}/achievements`);if(res.ok){const data=await res.json();setPlayerAchievements(data.data||[]);setAvailableAchievements(data.available||[]);if(data.available?.length)setAchievementToGrant(current=>current||data.available[0].id);} }
+    catch {} finally { setPlayerAchievementsLoading(false); }
+  }, []);
+
+
+
   useEffect(() => {
     if (selectedId && activeTab === "items") fetchPlayerItems(selectedId);
   }, [selectedId, activeTab, playerItemsPage, playerItemsSearch, fetchPlayerItems]);
@@ -1094,14 +1248,41 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
     if (selectedId && activeTab === "pets") fetchPlayerPets(selectedId);
   }, [selectedId, activeTab, playerPetsPage, playerPetsSearch, fetchPlayerPets]);
 
+  useEffect(() => {
+    if (selectedId && activeTab === "quests") fetchPlayerQuests(selectedId);
+  }, [selectedId, activeTab, fetchPlayerQuests]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "instances") fetchInstanceSessions(selectedId);
+  }, [selectedId, activeTab, fetchInstanceSessions]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "sect_missions") fetchPlayerSectMissions(selectedId);
+  }, [selectedId, activeTab, fetchPlayerSectMissions]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "tracking_marks") fetchPlayerTrackingMarks(selectedId);
+  }, [selectedId, activeTab, fetchPlayerTrackingMarks]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "achievements") fetchPlayerAchievements(selectedId);
+  }, [selectedId, activeTab, fetchPlayerAchievements]);
+
+
+
   const exec = async (url: string, method: string, body?: ApiResponseData) => {
     setActionLoading(true);
     try {
 	  const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey : undefined;
+      const requestBody = body ? { ...body } : undefined;
+      if (requestBody && typeof requestBody.confirmation_target === "string") {
+        const pathTargetRoute = method === "DELETE" || /\/api\/admin\/(?:players\/[^/]+\/(items(?:\/|$)|recipes\/|quests\/|instance-sessions\/|sect-missions\/|tracking-marks\/|achievements(?:\/|$))|residual-traces\/)/.test(new URL(url, window.location.origin).pathname);
+        if (pathTargetRoute) requestBody.confirmation_target = new URL(url, window.location.origin).pathname;
+      }
       const res = await authFetch(url, {
         method,
 		headers: { "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
-        body: body ? JSON.stringify(body) : undefined,
+        body: requestBody ? JSON.stringify(requestBody) : undefined,
       });
       const data = await res.json().catch(() => ({ error: "Lỗi không xác định" }));
       if (!res.ok) throw new Error(data.error || "Thất bại");
@@ -1109,6 +1290,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
         fetchDetail(selectedId);
         if (activeTab === "items") fetchPlayerItems(selectedId);
         else if (activeTab === "gus") fetchPlayerGus(selectedId);
+        else if (activeTab === "pets") fetchPlayerPets(selectedId);
+        else if (activeTab === "quests") fetchPlayerQuests(selectedId);
+        else if (activeTab === "instances") fetchInstanceSessions(selectedId);
+        else if (activeTab === "sect_missions") fetchPlayerSectMissions(selectedId);
+        else if (activeTab === "tracking_marks") fetchPlayerTrackingMarks(selectedId);
+        else if (activeTab === "achievements") fetchPlayerAchievements(selectedId);
       }
       if (addToast) addToast(data.message || "Thành công", "success");
       return true;
@@ -1230,6 +1417,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               {canAdminAction("updatePlayer") && <button onClick={() => {
               if (detail) {
                 setEditPlayerForm({
+                  username: detail.username || "", email: detail.email || "",
                   rank: String(detail.rank), sub_rank: String(detail.sub_rank),
                   aptitude_type: detail.aptitude_type || "", aptitude_percent: String(detail.aptitude_percent ?? ""),
                   aptitude_grade: detail.aptitude_grade || "", current_mana: String(detail.current_mana ?? ""),
@@ -1243,6 +1431,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   bio: detail.bio || "", avatar_url: detail.avatar_url || "",
                   race: detail.race || "", gender: detail.gender || "", constitution: detail.constitution || "",
                   statuses: (detail.statuses || []).map((s: string | { id: string }) => typeof s === "string" ? s : s.id).join(", "),
+                  path_masteries: JSON.stringify(detail.path_masteries || {}, null, 2),
                   current_thought: String(detail.current_thought ?? 0), max_thought: String(detail.max_thought ?? 0),
                   thought_regen_rate: String(detail.thought_regen_rate ?? 0), time_speed_multiplier: String(detail.time_speed_multiplier ?? 1),
                   selected_title: detail.selected_title || "", selected_frame: detail.selected_frame || "",
@@ -1319,6 +1508,21 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <button onClick={() => setActiveTab("pets")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "pets" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
                 <PawPrint className="w-3.5 h-3.5 inline mr-1.5" />Sủng vật ({playerPetsTotal})
               </button>
+              <button onClick={() => setActiveTab("quests")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "quests" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <ListTodo className="w-3.5 h-3.5 inline mr-1.5" />Nhiệm vụ ({playerQuests.length})
+              </button>
+              <button onClick={() => setActiveTab("instances")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "instances" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <Globe className="w-3.5 h-3.5 inline mr-1.5" />Phiên bí cảnh ({instanceSessions.length})
+              </button>
+              <button onClick={() => setActiveTab("sect_missions")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "sect_missions" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <ListTodo className="w-3.5 h-3.5 inline mr-1.5" />Nhiệm vụ tông môn ({playerSectMissions.length})
+              </button>
+              <button onClick={() => setActiveTab("tracking_marks")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "tracking_marks" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <Eye className="w-3.5 h-3.5 inline mr-1.5" />Ấn truy tung ({playerTrackingMarks.length})
+              </button>
+              <button onClick={() => setActiveTab("achievements")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "achievements" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <Star className="w-3.5 h-3.5 inline mr-1.5" />Thành tựu ({playerAchievements.length})
+              </button>
               <button onClick={() => setActiveTab("combat")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "combat" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
                 <Swords className="w-3.5 h-3.5 inline mr-1.5" />Chỉ số & Chiến đấu ({detail.equipped_gus?.length || 0})
               </button>
@@ -1335,7 +1539,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <button onClick={() => { setPlayerItemsPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
                     <Search className="w-3.5 h-3.5" /> Tìm
                   </button>
-                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddItemId(""); setAddItemQty(1); setShowAddItem(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
+                  {canAdminAction("grantPlayerInventory") && <button onClick={() => { setAddItemId(""); setAddItemQty(1); setAddItemCategory("materials"); setShowAddItem(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
                   </button>}
                 </div>
@@ -1356,8 +1560,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           <th className="px-3 py-2.5 font-semibold">ID</th>
                           <th className="px-3 py-2.5 font-semibold">Tên</th>
                           <th className="px-3 py-2.5 font-semibold">Loại</th>
+                          <th className="px-3 py-2.5 font-semibold">Nhóm</th>
+                          <th className="px-3 py-2.5 font-semibold">Tiến độ</th>
                           <th className="px-3 py-2.5 font-semibold">Bậc</th>
                           <th className="px-3 py-2.5 font-semibold text-right">Số lượng</th>
+                          <th className="px-3 py-2.5 font-semibold">Tạo / cập nhật</th>
                           <th className="px-3 py-2.5 font-semibold text-right">Thao tác</th>
                         </tr>
                       </thead>
@@ -1365,18 +1572,23 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                         {playerItems.map((it) => {
                           const spec = itemDictionary[it.item_id];
                           return (
-                            <tr key={it.item_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                            <tr key={`${it.item_id}::${it.category}`} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                               <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[100px] truncate" title={it.item_id}>{it.item_id}</td>
                               <td className="px-3 py-2.5 font-semibold text-zinc-200">{it.name || spec?.name || it.item_id}</td>
                               <td className="px-3 py-2.5">
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 border border-zinc-800 text-zinc-400">{translateItemType(it.item_type || spec?.item_type) || "?"}</span>
                               </td>
+                              <td className="px-3 py-2.5 text-zinc-400">{it.category || "materials"}</td>
+                              <td className="px-3 py-2.5 text-zinc-400">{it.category === "recipe" ? `${it.completion_rate ?? 0}%${it.is_unlocked ? " · mở" : " · khóa"}` : "—"}</td>
                               <td className="px-3 py-2.5 text-zinc-400">{it.rank || spec?.rank || "?"}</td>
                               <td className="px-3 py-2.5 text-right font-mono font-bold text-zinc-200">{it.quantity.toLocaleString()}</td>
+                              <td className="px-3 py-2.5 text-zinc-500">{it.created_at ? new Date(it.created_at).toLocaleDateString("vi-VN") : "—"}<span className="block text-[10px]">{it.updated_at ? new Date(it.updated_at).toLocaleDateString("vi-VN") : "—"}</span></td>
                               <td className="px-3 py-2.5 text-right">
-                                <button onClick={() => { setShowRemoveItem(it.item_id); setRemoveItemQty(1); }} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer" title="Xóa">
+                                {it.category !== "recipe" && canAdminAction("updatePlayerInventoryItem") && <button onClick={() => { setInventoryEditQuantity(String(it.quantity)); setInventoryEditCategory(it.category || "materials"); setShowInventoryItemEditor(it); }} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer mr-1" title="Sửa số lượng/nhóm"><Edit3 className="w-3.5 h-3.5" /></button>}
+                                {it.category === "recipe" && canAdminAction("updatePlayerRecipe") && <button onClick={() => { setRecipeCompletion(String(it.completion_rate ?? 0)); setRecipeUnlocked(Boolean(it.is_unlocked)); setRecipeDeduceCount(String(it.deduce_count ?? 0)); setRecipeFavorite(Boolean(it.favorite)); setShowRecipeEditor(it); }} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer mr-1" title="Sửa tiến độ"><Edit3 className="w-3.5 h-3.5" /></button>}
+                                {canAdminAction("deletePlayerInventoryItem") && <button onClick={() => { setShowRemoveItem(`${it.item_id}::${it.category}`); setRemoveItemQty(1); }} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer" title="Xóa">
                                   <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                </button>}
                               </td>
                             </tr>
                           );
@@ -1435,10 +1647,15 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           <th className="px-3 py-2.5 font-semibold">Instance ID</th>
                           <th className="px-3 py-2.5 font-semibold">Tên</th>
                           <th className="px-3 py-2.5 font-semibold">Bậc</th>
+                          <th className="px-3 py-2.5 font-semibold">Cấp</th>
                           <th className="px-3 py-2.5 font-semibold">Trạng thái</th>
                           <th className="px-3 py-2.5 font-semibold">Đói</th>
+                          <th className="px-3 py-2.5 font-semibold">Vị trí</th>
                           <th className="px-3 py-2.5 font-semibold">Trang bị</th>
                           <th className="px-3 py-2.5 font-semibold">Bản Mệnh</th>
+                          <th className="px-3 py-2.5 font-semibold">Khóa</th>
+                          <th className="px-3 py-2.5 font-semibold">Dung hợp / Tăng trưởng</th>
+                          <th className="px-3 py-2.5 font-semibold">Cập nhật / Cho ăn</th>
                           <th className="px-3 py-2.5 font-semibold text-right">Thao tác</th>
                         </tr>
                       </thead>
@@ -1450,20 +1667,30 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                               <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate" title={gu.instance_id}>{gu.instance_id.slice(0, 8)}...</td>
                               <td className="px-3 py-2.5 font-semibold text-zinc-200">{gu.name || spec?.name || gu.gu_id}</td>
                               <td className={`px-3 py-2.5 font-bold ${rankColor(gu.rank || spec?.rank || 1)}`}>{gu.rank || spec?.rank || "?"}</td>
+                              <td className="px-3 py-2.5 text-zinc-300">{gu.level}</td>
                               <td className="px-3 py-2.5">
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${statusColor(gu.status)}`}>{statusLabel(gu.status)}</span>
                               </td>
                               <td className="px-3 py-2.5 font-mono text-zinc-300">{gu.hunger}</td>
+                              <td className="px-3 py-2.5 text-zinc-400">{gu.location}</td>
                               <td className="px-3 py-2.5">{gu.equipped ? <span className="text-emerald-400 text-[11px] font-bold">✓</span> : <span className="text-zinc-600">–</span>}</td>
                               <td className="px-3 py-2.5">{gu.is_vital ? <Star className="w-3.5 h-3.5 text-amber-400" /> : <span className="text-zinc-600">–</span>}</td>
+                              <td className="px-3 py-2.5">{gu.is_locked ? "🔒" : "–"}</td>
+                              <td className="px-3 py-2.5 text-zinc-400">{gu.integration_time} / {gu.growth_hours}h</td>
+                              <td className="px-3 py-2.5 text-zinc-500">{gu.updated_at ? new Date(gu.updated_at).toLocaleDateString("vi-VN") : "—"}<span className="block text-[10px]">Ăn: {gu.last_fed_at ? new Date(gu.last_fed_at).toLocaleDateString("vi-VN") : "—"}</span></td>
                               <td className="px-3 py-2.5 text-right">
+                                {canAdminAction("updatePlayerGu") && <button onClick={() => { setGuEditForm({ rank: String(gu.rank), level: String(gu.level), hunger: String(gu.hunger), status: gu.status, equipped: gu.equipped, is_vital: gu.is_vital, is_locked: gu.is_locked, integration_time: String(gu.integration_time) }); setShowGuEditor(gu); }} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer mr-1" title="Sửa cổ trùng"><Edit3 className="w-3.5 h-3.5" /></button>}
                                 <button
                                   onClick={async () => {
-                                    if (!confirm("Xóa cổ trùng này?")) return;
-                                    await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus/${gu.instance_id}`, "DELETE");
+                                    if (!canAdminAction("deletePlayerGu")) return;
+                                    const endpoint = `${BACKEND_URL}/api/admin/players/${selectedId}/gus/${gu.instance_id}`;
+                                    const prepared = prepareAdminAction("deletePlayerGu", "xóa cổ trùng", endpoint);
+                                    if (!prepared) return;
+                                    await exec(endpoint, "DELETE", prepared);
                                   }}
                                   className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
                                   title="Xóa"
+                                  disabled={!canAdminAction("deletePlayerGu")}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1550,9 +1777,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                             <td className="px-3 py-2 text-right">
                               <button
                                 onClick={async () => {
-                                  if (!confirm(`Xóa vĩnh viễn sủng vật ${pet.monster_name || pet.monster_template_id}?`)) return;
-                                  const res = await authFetch(`${BACKEND_URL}/api/admin/players/${selectedId}/pets/${pet.id}`, { method: "DELETE" });
-                                  if (res.ok) fetchPlayerPets(selectedId!);
+                                  if (!canAdminAction("deletePlayerPet")) return;
+                                  const endpoint = `${BACKEND_URL}/api/admin/players/${selectedId}/pets/${pet.id}`;
+                                  const prepared = prepareAdminAction("deletePlayerPet", "xóa sủng vật", `${pet.monster_name || pet.monster_template_id} · ${pet.id}`);
+                                  if (!prepared) return;
+                                  await exec(endpoint, "DELETE", prepared);
                                 }}
                                 className="px-2 py-1 rounded bg-red-900/40 hover:bg-red-800 text-red-400 text-[10px] font-bold transition-colors cursor-pointer"
                               >
@@ -1577,6 +1806,39 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   </div>
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Quests Tab */}
+            {activeTab === "quests" && (
+              <div className="space-y-3">
+                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80"><table className="w-full text-left text-xs"><thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]"><th className="px-3 py-2.5">Quest ID</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Progress data</th><th className="px-3 py-2.5">Hoàn thành</th><th className="px-3 py-2.5 text-right">Thao tác</th></tr></thead><tbody>{playerQuests.map(q => <tr key={q.quest_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30"><td className="px-3 py-2.5 text-zinc-300 font-mono">{q.quest_id}</td><td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 border border-zinc-800 text-zinc-400">{q.status}</span></td><td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[360px] truncate" title={JSON.stringify(q.progress_data)}>{JSON.stringify(q.progress_data)}</td><td className="px-3 py-2.5 text-zinc-500">{q.completed_at ? new Date(q.completed_at).toLocaleString("vi-VN") : "—"}</td><td className="px-3 py-2.5 text-right">{canAdminAction("updatePlayerQuest") && <button onClick={() => { setQuestStatus(q.status); setQuestProgressData(JSON.stringify(q.progress_data || {}, null, 2)); setQuestCompletedAt(q.completed_at ? new Date(q.completed_at).toISOString().slice(0, 16) : ""); setShowQuestEditor(q); }} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 mr-1 cursor-pointer"><Edit3 className="w-3.5 h-3.5" /></button>}{canAdminAction("deletePlayerQuest") && <button onClick={async () => { const endpoint=`${BACKEND_URL}/api/admin/players/${selectedId}/quests/${encodeURIComponent(q.quest_id)}`; const prepared=prepareAdminAction("deletePlayerQuest","xóa tiến độ nhiệm vụ",endpoint); if(!prepared)return; await exec(endpoint,"DELETE",prepared); }} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>}</td></tr>)}</tbody></table></div>
+              </div>
+            )}
+
+            {/* Instance Sessions Tab */}
+            {activeTab === "instances" && (
+              <div className="space-y-3">
+                {instanceSessionsLoading ? <div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /><span className="text-xs text-zinc-500 font-mono mt-2">Đang tải phiên bí cảnh...</span></div> : instanceSessions.length === 0 ? <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl"><Globe className="w-8 h-8 text-zinc-700 mx-auto mb-2" /><p className="text-xs text-zinc-500">Người chơi chưa có phiên bí cảnh</p></div> : <div className="overflow-x-auto rounded-xl border border-zinc-800/80"><table className="w-full text-left text-xs"><thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]"><th className="px-3 py-2.5">Session ID</th><th className="px-3 py-2.5">Instance</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Inventory</th><th className="px-3 py-2.5">Tạo lúc</th><th className="px-3 py-2.5 text-right">Thao tác</th></tr></thead><tbody>{instanceSessions.map(session => <tr key={session.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30"><td className="px-3 py-2.5 font-mono text-zinc-500" title={session.id}>{session.id.slice(0, 8)}…</td><td className="px-3 py-2.5 text-zinc-200">{session.instance_id}</td><td className="px-3 py-2.5 font-mono text-zinc-300">{session.current_stage}</td><td className="px-3 py-2.5 text-zinc-300">{session.status}</td><td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[240px] truncate" title={JSON.stringify(session.temp_inventory)}>{JSON.stringify(session.temp_inventory)}</td><td className="px-3 py-2.5 text-zinc-500">{new Date(session.created_at).toLocaleString("vi-VN")}</td><td className="px-3 py-2.5 text-right">{canAdminAction("updatePlayerInstanceSession") && <button onClick={() => { setInstanceSessionStage(String(session.current_stage)); setInstanceSessionStatus(session.status); setInstanceSessionInventory(JSON.stringify(session.temp_inventory || [], null, 2)); setShowInstanceSessionEditor(session); }} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 mr-1 cursor-pointer"><Edit3 className="w-3.5 h-3.5" /></button>}{canAdminAction("deletePlayerInstanceSession") && <button onClick={async () => { const endpoint=`${BACKEND_URL}/api/admin/players/${selectedId}/instance-sessions/${session.id}`;const prepared=prepareAdminAction("deletePlayerInstanceSession","xóa phiên bí cảnh",endpoint);if(!prepared)return;await exec(endpoint,"DELETE",prepared); }} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>}</td></tr>)}</tbody></table></div>}
+              </div>
+            )}
+
+            {activeTab === "sect_missions" && (
+              <div className="space-y-3">
+                {playerSectMissionsLoading ? <div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin"/><span className="text-xs text-zinc-500 mt-2">Đang tải nhiệm vụ tông môn...</span></div> : playerSectMissions.length === 0 ? <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl"><ListTodo className="w-8 h-8 text-zinc-700 mx-auto mb-2"/><p className="text-xs text-zinc-500">Người chơi chưa có tiến độ nhiệm vụ tông môn</p></div> : <div className="overflow-x-auto rounded-xl border border-zinc-800/80"><table className="w-full text-left text-xs"><thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]"><th className="px-3 py-2.5">Nhiệm vụ / Tông môn</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Tiến độ</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Nhận lúc</th><th className="px-3 py-2.5">Hạn</th><th className="px-3 py-2.5 text-right">Thao tác</th></tr></thead><tbody>{playerSectMissions.map(m=><tr key={m.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30"><td className="px-3 py-2.5 text-zinc-200">{m.title}<span className="block text-[10px] text-zinc-500">{m.sect_name} · {m.mission_id}</span></td><td className="px-3 py-2.5 text-zinc-400">{m.mission_type}: {m.target_id} ({m.target_amount}) · thưởng {m.reward_contribution}</td><td className="px-3 py-2.5 font-mono text-zinc-300">{m.current_progress}/{m.target_amount}</td><td className="px-3 py-2.5 text-zinc-300">{m.status}</td><td className="px-3 py-2.5 text-zinc-500">{new Date(m.assigned_at).toLocaleString("vi-VN")}</td><td className="px-3 py-2.5 text-zinc-500">{m.expires_at ? new Date(m.expires_at).toLocaleString("vi-VN") : "Không hạn"}</td><td className="px-3 py-2.5 text-right">{canAdminAction("updatePlayerSectMission") && <button onClick={()=>{setPlayerSectMissionProgress(String(m.current_progress));setPlayerSectMissionStatus(m.status);setPlayerSectMissionExpiry(m.expires_at ? new Date(m.expires_at).toISOString().slice(0,16) : "");setShowPlayerSectMissionEditor(m);}} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 cursor-pointer" title="Sửa tiến độ"><Edit3 className="w-3.5 h-3.5"/></button>}</td></tr>)}</tbody></table></div>}
+              </div>
+            )}
+
+            {activeTab === "tracking_marks" && (
+              <div className="space-y-3">
+                {playerTrackingMarksLoading ? <div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin"/><span className="text-xs text-zinc-500 mt-2">Đang tải ấn truy tung...</span></div> : playerTrackingMarks.length===0 ? <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl"><Eye className="w-8 h-8 text-zinc-700 mx-auto mb-2"/><p className="text-xs text-zinc-500">Không có ấn truy tung liên quan</p></div> : <div className="overflow-x-auto rounded-xl border border-zinc-800/80"><table className="w-full text-left text-xs"><thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]"><th className="px-3 py-2.5">Tracker</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Loại ấn</th><th className="px-3 py-2.5">Uy lực</th><th className="px-3 py-2.5">Tạo lúc</th><th className="px-3 py-2.5">Hết hạn</th><th className="px-3 py-2.5 text-right">Thao tác</th></tr></thead><tbody>{playerTrackingMarks.map(mark=><tr key={mark.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30"><td className="px-3 py-2.5 text-zinc-300">{mark.tracker_username}<span className="block text-[10px] text-zinc-600 font-mono">{mark.tracker_id}</span></td><td className="px-3 py-2.5 text-zinc-300">{mark.target_username}<span className="block text-[10px] text-zinc-600 font-mono">{mark.target_id}</span></td><td className="px-3 py-2.5 text-zinc-300">{mark.mark_type}</td><td className="px-3 py-2.5 text-zinc-300">{mark.power}</td><td className="px-3 py-2.5 text-zinc-500">{new Date(mark.created_at).toLocaleString("vi-VN")}</td><td className="px-3 py-2.5 text-zinc-500">{new Date(mark.expires_at).toLocaleString("vi-VN")}</td><td className="px-3 py-2.5 text-right">{canAdminAction("updatePlayerTrackingMark")&&<button onClick={()=>{setTrackingMarkType(mark.mark_type);setTrackingMarkPower(String(mark.power));setTrackingMarkExpiry(new Date(mark.expires_at).toISOString().slice(0,16));setShowTrackingMarkEditor(mark);}} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 mr-1 cursor-pointer"><Edit3 className="w-3.5 h-3.5"/></button>}{canAdminAction("deletePlayerTrackingMark")&&<button onClick={async()=>{const endpoint=`${BACKEND_URL}/api/admin/players/${selectedId}/tracking-marks/${mark.id}`;const prepared=prepareAdminAction("deletePlayerTrackingMark","thu hồi ấn truy tung",endpoint);if(!prepared)return;await exec(endpoint,"DELETE",prepared);}} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 cursor-pointer"><Trash2 className="w-3.5 h-3.5"/></button>}</td></tr>)}</tbody></table></div>}
+              </div>
+            )}
+
+            {activeTab === "achievements" && (
+              <div className="space-y-3">
+                {canAdminAction("grantPlayerAchievement")&&availableAchievements.length>0&&<div className="flex gap-2"><select value={achievementToGrant} onChange={e=>setAchievementToGrant(e.target.value)} className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200">{availableAchievements.map(a=><option key={String(a.id)} value={String(a.id)}>{String(a.name)} · {String(a.id)}</option>)}</select><button onClick={async()=>{const endpoint=`${BACKEND_URL}/api/admin/players/${selectedId}/achievements`;const prepared=prepareAdminAction("grantPlayerAchievement","cấp thành tựu",endpoint);if(!prepared)return;await exec(endpoint,"POST",{achievement_id:achievementToGrant,...prepared});}} className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 cursor-pointer"><Plus className="w-3.5 h-3.5 inline mr-1"/>Cấp</button></div>}
+                {playerAchievementsLoading?<div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin"/><span className="text-xs text-zinc-500 mt-2">Đang tải thành tựu...</span></div>:playerAchievements.length===0?<div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl"><Star className="w-8 h-8 text-zinc-700 mx-auto mb-2"/><p className="text-xs text-zinc-500">Người chơi chưa mở khóa thành tựu</p></div>:<div className="overflow-x-auto rounded-xl border border-zinc-800/80"><table className="w-full text-left text-xs"><thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]"><th className="px-3 py-2.5">Mã thành tựu</th><th className="px-3 py-2.5">Danh hiệu</th><th className="px-3 py-2.5">Khung</th><th className="px-3 py-2.5">Mở khóa lúc</th><th className="px-3 py-2.5 text-right">Thao tác</th></tr></thead><tbody>{playerAchievements.map(a=><tr key={a.achievement_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30"><td className="px-3 py-2.5 font-mono text-zinc-300">{a.achievement_id}</td><td className="px-3 py-2.5 text-zinc-300">{a.selected_title||"—"}</td><td className="px-3 py-2.5 text-zinc-400">{a.selected_frame||"—"}</td><td className="px-3 py-2.5 text-zinc-500">{new Date(a.unlocked_at).toLocaleString("vi-VN")}</td><td className="px-3 py-2.5 text-right">{canAdminAction("updatePlayerAchievement")&&<button onClick={()=>{setAchievementTitle(a.selected_title);setAchievementFrame(a.selected_frame);setAchievementUnlockedAt(new Date(a.unlocked_at).toISOString().slice(0,16));setShowAchievementEditor(a);}} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 mr-1 cursor-pointer"><Edit3 className="w-3.5 h-3.5"/></button>}{canAdminAction("deletePlayerAchievement")&&<button onClick={async()=>{const endpoint=`${BACKEND_URL}/api/admin/players/${selectedId}/achievements/${encodeURIComponent(a.achievement_id)}`;const prepared=prepareAdminAction("deletePlayerAchievement","thu hồi thành tựu",endpoint);if(!prepared)return;await exec(endpoint,"DELETE",prepared);}} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 cursor-pointer"><Trash2 className="w-3.5 h-3.5"/></button>}</td></tr>)}</tbody></table></div>}
               </div>
             )}
 
@@ -2008,36 +2270,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                         )}
                       </div>
 
-                      {/* Dao Marks */}
-                      <div className="pt-3 border-t border-zinc-800/60">
-                        <h4 className="text-xs font-mono font-semibold text-zinc-400 mb-2.5 uppercase tracking-wider">
-                          Đạo Ngân Tích Lũy {detail.rank >= 6 ? "(Cổ Tiên)" : "(Chưa Thăng Tiên)"}
-                        </h4>
-                        {detail.rank >= 6 ? (
-                          detail.dao_marks && Object.keys(detail.dao_marks).length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {Object.entries(detail.dao_marks).map(([path, amount]) => {
-                                if (Number(amount) <= 0) return null;
-                                return (
-                                  <span
-                                    key={path}
-                                    className="text-xs px-3 py-1.5 rounded-xl border font-mono font-semibold flex items-center gap-1.5 bg-purple-950/20 text-purple-300 border-purple-900/40"
-                                  >
-                                    <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
-                                    {translatePath(path)}: +<Num value={Number(amount)} />
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="text-xs text-zinc-500 italic py-1">Chưa tích lũy Đạo Ngân nào.</div>
-                          )
-                        ) : (
-                          <div className="text-xs text-zinc-500 italic py-1">
-                            Cổ sư phàm nhân (Rank 1 - 5) chưa thăng tiên nên chưa có Thiên Địa Đạo Ngân.
-                          </div>
-                        )}
-                      </div>
                     </div>
                   )}
                 </div>
@@ -2108,16 +2340,124 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng</label>
                 <input type="number" min={1} value={addItemQty} onChange={e => setAddItemQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
               </div>
+              <div>
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Category</label>
+                <select value={addItemCategory} onChange={e => setAddItemCategory(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"><option value="materials">Nguyên liệu</option><option value="consumables">Tiêu hao</option><option value="equipment">Trang bị</option><option value="quest">Nhiệm vụ</option><option value="misc">Khác</option></select>
+              </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddItem(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading || !addItemId} onClick={async () => {
 				  const prepared = prepareAdminAction("grantPlayerInventory", "cấp vật phẩm cho người chơi", detail?.username || selectedId || "player");
                   if (!prepared) return;
-                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "POST", { item_id: addItemId, quantity: addItemQty, ...prepared });
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "POST", { item_id: addItemId, quantity: addItemQty, category: addItemCategory, ...prepared });
                   if (ok) setShowAddItem(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Thêm"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Instance Session Modal */}
+        {showGuEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm"><div className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa Cổ trùng</h3><button onClick={() => setShowGuEditor(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button></div>
+            <div className="text-xs text-zinc-400">{showGuEditor.name} · <span className="font-mono">{showGuEditor.instance_id}</span><div className="mt-1">Gu ID: {showGuEditor.gu_id} · vị trí: {showGuEditor.location} · tạo: {showGuEditor.created_at ? new Date(showGuEditor.created_at).toLocaleString("vi-VN") : "—"}</div></div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <label className="text-[11px] font-bold text-zinc-500">Bậc<input type="number" min={1} max={9} value={guEditForm.rank} onChange={e => setGuEditForm({...guEditForm, rank:e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label>
+              <label className="text-[11px] font-bold text-zinc-500">Cấp<input type="number" min={1} value={guEditForm.level} onChange={e => setGuEditForm({...guEditForm, level:e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label>
+              <label className="text-[11px] font-bold text-zinc-500">Đói (0–100)<input type="number" min={0} max={100} step={0.1} value={guEditForm.hunger} onChange={e => setGuEditForm({...guEditForm, hunger:e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label>
+              <label className="text-[11px] font-bold text-zinc-500">Trạng thái<select value={guEditForm.status} onChange={e => setGuEditForm({...guEditForm, status:e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1">{["ACTIVE","SLEEPING","SEALED","DEAD","EQUIPPING"].map(x=><option key={x}>{x}</option>)}</select></label>
+              <label className="text-[11px] font-bold text-zinc-500">Thời gian dung hợp<input type="number" min={0} step={0.1} value={guEditForm.integration_time} onChange={e => setGuEditForm({...guEditForm, integration_time:e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label>
+              <div className="space-y-2 text-xs text-zinc-300 pt-4"><label className="flex gap-2"><input type="checkbox" checked={guEditForm.equipped} onChange={e => setGuEditForm({...guEditForm, equipped:e.target.checked})} /> Trang bị</label><label className="flex gap-2"><input type="checkbox" checked={guEditForm.is_vital} onChange={e => setGuEditForm({...guEditForm, is_vital:e.target.checked, ...(e.target.checked ? {equipped:true,status:"ACTIVE"} : {})})} /> Bản Mệnh</label><label className="flex gap-2"><input type="checkbox" checked={guEditForm.is_locked} onChange={e => setGuEditForm({...guEditForm, is_locked:e.target.checked})} /> Khóa</label></div>
+            </div>
+            <div className="text-[10px] text-zinc-600">Gu rank: {showGuEditor.gu_rank} · tăng trưởng: {showGuEditor.growth_hours}h · cập nhật: {showGuEditor.updated_at ? new Date(showGuEditor.updated_at).toLocaleString("vi-VN") : "—"} · cho ăn: {showGuEditor.last_fed_at ? new Date(showGuEditor.last_fed_at).toLocaleString("vi-VN") : "—"}</div>
+            <div className="flex gap-3 justify-end"><button onClick={() => setShowGuEditor(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 cursor-pointer">Hủy</button><button disabled={actionLoading} onClick={async () => { const rank=Number(guEditForm.rank), level=Number(guEditForm.level), hunger=Number(guEditForm.hunger), integration=Number(guEditForm.integration_time); if (![rank,level,hunger,integration].every(Number.isFinite) || rank<1 || rank>9 || !Number.isInteger(rank) || level<1 || !Number.isInteger(level) || hunger<0 || hunger>100 || integration<0) { addToast("Giá trị bậc, cấp, đói hoặc dung hợp không hợp lệ", "error"); return; } const prepared=prepareAdminAction("updatePlayerGu","cập nhật Cổ trùng",`${showGuEditor.name} · ${showGuEditor.instance_id}`); if(!prepared)return; const ok=await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus/${showGuEditor.instance_id}`,"PUT",{rank,level,hunger,state:guEditForm.status,equipped:guEditForm.equipped,is_vital:guEditForm.is_vital,is_locked:guEditForm.is_locked,integration_time:integration,...prepared}); if(ok){setShowGuEditor(null); if(selectedId)fetchPlayerGus(selectedId);} }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 cursor-pointer disabled:opacity-50">{actionLoading ? "Đang xử lý..." : "Lưu"}</button></div>
+          </div></div>
+        )}
+
+        {/* Instance Session Modal */}
+        {showInstanceSessionEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm"><div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa phiên bí cảnh</h3><button onClick={() => setShowInstanceSessionEditor(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button></div>
+            <p className="text-xs text-zinc-400">Instance: <span className="font-bold text-zinc-200">{showInstanceSessionEditor.instance_id}</span> · ID <span className="font-mono">{showInstanceSessionEditor.id}</span></p>
+            <div className="grid grid-cols-2 gap-3"><label className="text-[11px] font-bold text-zinc-500 font-mono">Current stage<input type="number" min={0} step={1} value={instanceSessionStage} onChange={e => setInstanceSessionStage(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label><label className="text-[11px] font-bold text-zinc-500 font-mono">Status<select value={instanceSessionStatus} onChange={e => setInstanceSessionStatus(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"><option>ACTIVE</option><option>COMPLETED</option><option>FAILED</option></select></label></div>
+            <label className="text-[11px] font-bold text-zinc-500 font-mono">Temp inventory (JSON array)<textarea rows={6} value={instanceSessionInventory} onChange={e => setInstanceSessionInventory(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 font-mono mt-1" /></label>
+            <div className="flex gap-3 justify-end"><button onClick={() => setShowInstanceSessionEditor(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 cursor-pointer">Hủy</button><button disabled={actionLoading} onClick={async () => { const stage = Number(instanceSessionStage); let inventory: unknown; try { inventory = JSON.parse(instanceSessionInventory); } catch { addToast("Temp inventory không phải JSON hợp lệ", "error"); return; } if (!Number.isSafeInteger(stage) || stage < 0 || !Array.isArray(inventory)) { addToast("Stage phải là số nguyên không âm và inventory phải là mảng", "error"); return; } const prepared = prepareAdminAction("updatePlayerInstanceSession", "cập nhật phiên bí cảnh", `${showInstanceSessionEditor.instance_id} · ${showInstanceSessionEditor.id}`); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/instance-sessions/${showInstanceSessionEditor.id}`, "PUT", { current_stage: stage, status: instanceSessionStatus, temp_inventory: inventory, ...prepared }); if (ok) { setShowInstanceSessionEditor(null); if (selectedId) fetchInstanceSessions(selectedId); } }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 cursor-pointer disabled:opacity-50">{actionLoading ? "Đang xử lý..." : "Lưu"}</button></div>
+          </div></div>
+        )}
+
+        {/* Quest Progress Modal */}
+        {showQuestEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+            <div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa tiến độ nhiệm vụ</h3><button onClick={() => setShowQuestEditor(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button></div>
+              <p className="text-xs text-zinc-400">Quest: <span className="text-zinc-200 font-bold">{showQuestEditor.quest_id}</span></p>
+              <label className="text-[11px] font-bold text-zinc-500 font-mono">Trạng thái<select value={questStatus} onChange={e => setQuestStatus(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"><option value="ACTIVE">ACTIVE</option><option value="COMPLETED">COMPLETED</option><option value="FAILED">FAILED</option></select></label>
+              <label className="text-[11px] font-bold text-zinc-500 font-mono">Progress data (JSON)<textarea value={questProgressData} onChange={e => setQuestProgressData(e.target.value)} rows={6} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 font-mono mt-1" /></label>
+              <label className="text-[11px] font-bold text-zinc-500 font-mono">Completed at<input type="datetime-local" value={questCompletedAt} onChange={e => setQuestCompletedAt(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label>
+              <div className="flex gap-3 justify-end"><button onClick={() => setShowQuestEditor(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 cursor-pointer">Hủy</button><button disabled={actionLoading} onClick={async () => { let parsed: unknown; try { parsed = JSON.parse(questProgressData || "{}"); } catch { addToast("progress_data không phải JSON hợp lệ", "error"); return; } const prepared = prepareAdminAction("updatePlayerQuest", "cập nhật tiến độ nhiệm vụ", detail?.username || selectedId || "player"); if (!prepared) return; const completed = questCompletedAt ? new Date(questCompletedAt).toISOString() : null; const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/quests/${encodeURIComponent(showQuestEditor.quest_id)}`, "PUT", { status: questStatus, progress_data: parsed, completed_at: completed, ...prepared }); if (ok) { setShowQuestEditor(null); if (selectedId) fetchPlayerQuests(selectedId); } }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 cursor-pointer disabled:opacity-50">{actionLoading ? "Đang xử lý..." : "Lưu"}</button></div>
+            </div>
+          </div>
+        )}
+
+        {showPlayerSectMissionEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm"><div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa nhiệm vụ tông môn</h3><button onClick={()=>setShowPlayerSectMissionEditor(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500"/></button></div>
+            <div className="text-xs text-zinc-400">{showPlayerSectMissionEditor.title} · {showPlayerSectMissionEditor.sect_name}<span className="block font-mono text-[10px] mt-1">Row {showPlayerSectMissionEditor.id} · Mission {showPlayerSectMissionEditor.mission_id}</span></div>
+            <div className="grid grid-cols-2 gap-3"><label className="text-[11px] font-bold text-zinc-500">Tiến độ<input type="number" min={0} step={1} value={playerSectMissionProgress} onChange={e=>setPlayerSectMissionProgress(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label><label className="text-[11px] font-bold text-zinc-500">Trạng thái<select value={playerSectMissionStatus} onChange={e=>setPlayerSectMissionStatus(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"><option>IN_PROGRESS</option><option>EXPIRED</option></select></label></div>
+            <label className="text-[11px] font-bold text-zinc-500">Hạn nhiệm vụ (để trống nếu không hạn)<input type="datetime-local" value={playerSectMissionExpiry} onChange={e=>setPlayerSectMissionExpiry(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label>
+            <div className="text-[10px] text-zinc-600">Nhận lúc: {new Date(showPlayerSectMissionEditor.assigned_at).toLocaleString("vi-VN")} · Mục tiêu: {showPlayerSectMissionEditor.target_amount}</div>
+            <div className="flex gap-3 justify-end"><button onClick={()=>setShowPlayerSectMissionEditor(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 cursor-pointer">Hủy</button><button disabled={actionLoading} onClick={async()=>{const progress=Number(playerSectMissionProgress);if(!Number.isSafeInteger(progress)||progress<0){addToast("Tiến độ phải là số nguyên không âm","error");return;}const prepared=prepareAdminAction("updatePlayerSectMission","cập nhật nhiệm vụ tông môn",`${showPlayerSectMissionEditor.title} · ${showPlayerSectMissionEditor.id}`);if(!prepared)return;const expiry=playerSectMissionExpiry?new Date(playerSectMissionExpiry).toISOString():"";const ok=await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/sect-missions/${showPlayerSectMissionEditor.id}`,"PUT",{current_progress:progress,status:playerSectMissionStatus,expires_at:expiry,...prepared});if(ok){setShowPlayerSectMissionEditor(null);if(selectedId)fetchPlayerSectMissions(selectedId);}}} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 cursor-pointer disabled:opacity-50">{actionLoading?"Đang xử lý...":"Lưu"}</button></div>
+          </div></div>
+        )}
+
+        {showTrackingMarkEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm"><div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa ấn truy tung</h3><button onClick={()=>setShowTrackingMarkEditor(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500"/></button></div>
+            <div className="text-xs text-zinc-400">{showTrackingMarkEditor.tracker_username} → {showTrackingMarkEditor.target_username}<span className="block text-[10px] font-mono text-zinc-600">{showTrackingMarkEditor.id}</span></div>
+            <div className="grid grid-cols-2 gap-3"><label className="text-[11px] font-bold text-zinc-500">Loại ấn<select value={trackingMarkType} onChange={e=>setTrackingMarkType(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"><option value="wisdom">wisdom</option><option value="blood">blood</option></select></label><label className="text-[11px] font-bold text-zinc-500">Uy lực<input type="number" min={0} step={0.1} value={trackingMarkPower} onChange={e=>setTrackingMarkPower(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label></div>
+            <label className="text-[11px] font-bold text-zinc-500">Hết hạn<input type="datetime-local" value={trackingMarkExpiry} onChange={e=>setTrackingMarkExpiry(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label>
+            <div className="text-[10px] text-zinc-600">Tạo lúc: {new Date(showTrackingMarkEditor.created_at).toLocaleString("vi-VN")}</div>
+            <div className="flex gap-3 justify-end"><button onClick={()=>setShowTrackingMarkEditor(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 cursor-pointer">Hủy</button><button disabled={actionLoading} onClick={async()=>{const power=Number(trackingMarkPower);if(!Number.isFinite(power)||power<0||power>1e9||!trackingMarkExpiry){addToast("Uy lực hoặc hạn dùng không hợp lệ","error");return;}const prepared=prepareAdminAction("updatePlayerTrackingMark","cập nhật ấn truy tung",showTrackingMarkEditor.id);if(!prepared)return;const ok=await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/tracking-marks/${showTrackingMarkEditor.id}`,"PUT",{mark_type:trackingMarkType,power,expires_at:new Date(trackingMarkExpiry).toISOString(),...prepared});if(ok){setShowTrackingMarkEditor(null);if(selectedId)fetchPlayerTrackingMarks(selectedId);}}} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 cursor-pointer disabled:opacity-50">{actionLoading?"Đang xử lý...":"Lưu"}</button></div>
+          </div></div>
+        )}
+
+        {showAchievementEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80"><div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-bold text-zinc-100">Sửa thành tựu {showAchievementEditor.achievement_id}</h3>
+            <label className="text-[11px] font-bold text-zinc-500">Danh hiệu<input maxLength={100} value={achievementTitle} onChange={e=>setAchievementTitle(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label>
+            <label className="text-[11px] font-bold text-zinc-500">Khung<input maxLength={50} value={achievementFrame} onChange={e=>setAchievementFrame(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label>
+            <label className="text-[11px] font-bold text-zinc-500">Mở khóa lúc<input type="datetime-local" value={achievementUnlockedAt} onChange={e=>setAchievementUnlockedAt(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label>
+            <div className="flex gap-3 justify-end"><button onClick={()=>setShowAchievementEditor(null)} className="px-4 py-2 rounded-lg text-xs bg-zinc-900 text-zinc-400 border border-zinc-800">Hủy</button><button disabled={actionLoading} onClick={async()=>{if(!achievementUnlockedAt)return;const prepared=prepareAdminAction("updatePlayerAchievement","cập nhật thành tựu",showAchievementEditor.achievement_id);if(!prepared)return;const ok=await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/achievements/${encodeURIComponent(showAchievementEditor.achievement_id)}`,"PUT",{selected_title:achievementTitle,selected_frame:achievementFrame,unlocked_at:new Date(achievementUnlockedAt).toISOString(),...prepared});if(ok){setShowAchievementEditor(null);if(selectedId)fetchPlayerAchievements(selectedId);}}} className="px-4 py-2 rounded-lg text-xs bg-amber-600 text-zinc-100">Lưu</button></div>
+          </div></div>
+        )}
+        {/* Recipe Progress Modal */}
+        {showRecipeEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+            <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa tiến độ công thức</h3>
+                <button onClick={() => setShowRecipeEditor(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+              </div>
+              <p className="text-xs text-zinc-400">Công thức: <span className="text-zinc-200 font-bold">{showRecipeEditor.name || showRecipeEditor.item_id}</span></p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Hoàn thành (%)<input type="number" min={0} max={100} step="0.01" value={recipeCompletion} onChange={e => setRecipeCompletion(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label>
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lần suy diễn<input type="number" min={0} value={recipeDeduceCount} onChange={e => setRecipeDeduceCount(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label>
+              </div>
+              <div className="flex gap-5 text-xs text-zinc-300">
+                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={recipeUnlocked} onChange={e => setRecipeUnlocked(e.target.checked)} /> Đã mở khóa</label>
+                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={recipeFavorite} onChange={e => setRecipeFavorite(e.target.checked)} /> Yêu thích</label>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setShowRecipeEditor(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
+                <button disabled={actionLoading} onClick={async () => {
+                  const prepared = prepareAdminAction("updatePlayerRecipe", "cập nhật tiến độ công thức", detail?.username || selectedId || "player");
+                  if (!prepared) return;
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/recipes/${encodeURIComponent(showRecipeEditor.item_id)}`, "PUT", { completion_rate: Math.max(0, Math.min(100, Number(recipeCompletion) || 0)), is_unlocked: recipeUnlocked, deduce_count: Math.max(0, parseInt(recipeDeduceCount, 10) || 0), favorite: recipeFavorite, ...prepared });
+                  if (ok) { setShowRecipeEditor(null); if (selectedId) fetchPlayerItems(selectedId); }
+                }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">{actionLoading ? "Đang xử lý..." : "Lưu"}</button>
               </div>
             </div>
           </div>
@@ -2131,16 +2471,20 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <h3 className="text-sm font-bold text-zinc-100 font-serif">Xóa vật phẩm</h3>
                 <button onClick={() => setShowRemoveItem(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
               </div>
-              <p className="text-xs text-zinc-400">Vật phẩm: <span className="text-zinc-200 font-bold">{itemDictionary[showRemoveItem]?.name || playerItems.find(i => i.item_id === showRemoveItem)?.name || showRemoveItem}</span></p>
-              <p className="text-xs text-zinc-500">Hiện có: <span className="text-zinc-300 font-bold">{(() => { const row = playerItems.find(i => i.item_id === showRemoveItem); return (row?.quantity || 0).toLocaleString(); })()}</span></p>
+              <p className="text-xs text-zinc-400">Vật phẩm: <span className="text-zinc-200 font-bold">{itemDictionary[showRemoveItem.split("::")[0]]?.name || playerItems.find(i => `${i.item_id}::${i.category}` === showRemoveItem)?.name || showRemoveItem.split("::")[0]}</span></p>
+              <p className="text-xs text-zinc-500">Hiện có: <span className="text-zinc-300 font-bold">{(() => { const row = playerItems.find(i => `${i.item_id}::${i.category}` === showRemoveItem); return (row?.quantity || 0).toLocaleString(); })()}</span></p>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng xóa</label>
-                <input type="number" min={1} max={playerItems.find(i => i.item_id === showRemoveItem)?.quantity || 1} value={removeItemQty} onChange={e => setRemoveItemQty(Math.max(1, Math.min(parseInt(e.target.value) || 1, playerItems.find(i => i.item_id === showRemoveItem)?.quantity || 1)))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                <input type="number" min={1} max={playerItems.find(i => `${i.item_id}::${i.category}` === showRemoveItem)?.quantity || 1} value={removeItemQty} onChange={e => setRemoveItemQty(Math.max(1, Math.min(parseInt(e.target.value) || 1, playerItems.find(i => `${i.item_id}::${i.category}` === showRemoveItem)?.quantity || 1)))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowRemoveItem(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading} onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items`, "DELETE", { item_id: showRemoveItem, quantity: removeItemQty });
+                  const [itemId, category] = showRemoveItem.split("::");
+                  const endpoint = `${BACKEND_URL}/api/admin/players/${selectedId}/items`;
+                  const prepared = prepareAdminAction("deletePlayerInventoryItem", "thu hồi vật phẩm", endpoint);
+                  if (!prepared) return;
+                  const ok = await exec(endpoint, "DELETE", { item_id: itemId, category, quantity: removeItemQty, ...prepared });
                   if (ok) setShowRemoveItem(null);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Xóa"}
@@ -2148,6 +2492,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               </div>
             </div>
           </div>
+        )}
+
+        {showInventoryItemEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm"><div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa vật phẩm túi đồ</h3><button onClick={() => setShowInventoryItemEditor(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button></div>
+            <div className="text-xs text-zinc-400">{showInventoryItemEditor.name || showInventoryItemEditor.item_id} · <span className="font-mono">{showInventoryItemEditor.item_id}</span></div>
+            <div className="grid grid-cols-2 gap-3"><label className="text-[11px] font-bold text-zinc-500">Số lượng<input type="number" min={0} step={1} value={inventoryEditQuantity} onChange={e => setInventoryEditQuantity(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1" /></label><label className="text-[11px] font-bold text-zinc-500">Nhóm<select value={inventoryEditCategory} onChange={e => setInventoryEditCategory(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1">{["materials","consumables","equipment","quest","misc"].map(x=><option key={x}>{x}</option>)}</select></label></div>
+            <div className="text-[10px] text-zinc-600">Tạo: {showInventoryItemEditor.created_at ? new Date(showInventoryItemEditor.created_at).toLocaleString("vi-VN") : "—"} · Cập nhật: {showInventoryItemEditor.updated_at ? new Date(showInventoryItemEditor.updated_at).toLocaleString("vi-VN") : "—"}</div>
+            <div className="flex gap-3 justify-end"><button onClick={() => setShowInventoryItemEditor(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 cursor-pointer">Hủy</button><button disabled={actionLoading} onClick={async () => { const quantity=Number(inventoryEditQuantity); if(!Number.isSafeInteger(quantity)||quantity<0){addToast("Số lượng phải là số nguyên không âm", "error");return;} const prepared=prepareAdminAction("updatePlayerInventoryItem","cập nhật vật phẩm",`${showInventoryItemEditor.item_id} · ${showInventoryItemEditor.category}`);if(!prepared)return;const ok=await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/items/${encodeURIComponent(showInventoryItemEditor.item_id)}/${encodeURIComponent(showInventoryItemEditor.category)}`,"PUT",{quantity,category:inventoryEditCategory,...prepared});if(ok){setShowInventoryItemEditor(null);if(selectedId)fetchPlayerItems(selectedId);}}} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 cursor-pointer disabled:opacity-50">{actionLoading ? "Đang xử lý..." : "Lưu"}</button></div>
+          </div></div>
         )}
 
         {/* Add Gu Modal */}
@@ -2215,6 +2569,18 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <button onClick={() => setShowEditPlayer(false)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
               </div>
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tên đăng nhập</label>
+                  <input type="text" value={editPlayerForm.username || ""} onChange={e => setEditPlayerForm(f => ({ ...f, username: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Email</label>
+                  <input type="email" value={editPlayerForm.email || ""} onChange={e => setEditPlayerForm(f => ({ ...f, email: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Path mastery (JSON)</label>
+                  <textarea value={editPlayerForm.path_masteries || "{}"} onChange={e => setEditPlayerForm(f => ({ ...f, path_masteries: e.target.value }))} rows={3} placeholder={'{"fire": 100, "sword": 50}'} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 font-mono mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Tu vi (1-9)</label>
                   <input type="number" min={1} max={9} value={editPlayerForm.rank || ""} onChange={e => setEditPlayerForm(f => ({ ...f, rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
@@ -2397,6 +2763,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     if (next === undefined || next === "") return;
                     if (String(cur) !== String(next)) body[field] = next;
                   };
+                  set("username", detail.username, editPlayerForm.username);
+                  set("email", detail.email, editPlayerForm.email);
                   set("rank", detail.rank, num(editPlayerForm.rank));
                   set("sub_rank", detail.sub_rank, num(editPlayerForm.sub_rank));
                   set("aptitude_type", detail.aptitude_type || "", editPlayerForm.aptitude_type);
@@ -2435,6 +2803,17 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   set("needs_onboarding", detail.needs_onboarding, editPlayerForm.needs_onboarding === "true");
                   set("needs_soul_refine", detail.needs_soul_refine, editPlayerForm.needs_soul_refine === "true");
                   set("immortal_jade", detail.immortal_jade, num(editPlayerForm.immortal_jade));
+
+                  let pathMasteries: Record<string, number> | undefined;
+                  try {
+                    const parsed = JSON.parse(editPlayerForm.path_masteries || "{}");
+                    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object" || Object.entries(parsed).some(([key, value]) => !key.trim() || typeof value !== "number" || !Number.isInteger(value) || value < 0)) throw new Error("invalid");
+                    pathMasteries = parsed as Record<string, number>;
+                  } catch {
+                    if (addToast) addToast("Path mastery phải là JSON dạng { path: số nguyên không âm }", "error");
+                    return;
+                  }
+                  if (JSON.stringify(pathMasteries) !== JSON.stringify(detail.path_masteries || {})) body["path_masteries"] = pathMasteries;
 
                   const statusesRaw = (editPlayerForm.statuses || "").split(",").map(s => s.trim()).filter(Boolean);
                   const detailStatusIds = (detail.statuses || []).map((s: string | { id: string }) => typeof s === "string" ? s : s.id);
@@ -2715,6 +3094,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 )}
               </div>
             )}
+            <SectDefendersAdmin sectId={selectedSectId} canRemove={canAdminAction("removeSectDefender")} addToast={addToast} exec={exec} prepareDelete={(label, target) => prepareAdminAction("removeSectDefender", label, target)} />
+            <SectRequestsAdmin sectId={selectedSectId} canCancel={canAdminAction("cancelSectRequest")} addToast={addToast} exec={exec} prepareDelete={(label, target) => prepareAdminAction("cancelSectRequest", label, target)} />
           </>
         ) : (
           <div className="text-center py-16"><p className="text-sm text-red-400">Không thể tải thông tin</p></div>
@@ -3199,6 +3580,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             <button onClick={() => setDataTab("map_cells")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "map_cells" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <MapPin className="w-3.5 h-3.5 inline mr-1.5" />Ô bản đồ
             </button>
+            <button onClick={() => setDataTab("scouting")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "scouting" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Eye className="w-3.5 h-3.5 inline mr-1.5" />Dấu vết truy tung
+            </button>
             <button onClick={() => setDataTab("constitution")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "constitution" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Shield className="w-3.5 h-3.5 inline mr-1.5" />Thể chất
             </button>
@@ -3304,34 +3688,38 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
           {dataTab === "items" && (
             <CoreDataAdminTab kind="items" rows={items} loading={itemsLoading}
-              onCreate={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: [], description: "", base_price: 0, image_url: "", _isNew: true })}
+              canCreate={canAdminAction("updateItemDictionary")} canEdit={canAdminAction("updateItemDictionary")} canCopy={canAdminAction("updateItemDictionary")} canDelete={canAdminAction("deleteItemDictionary")}
+              onCreate={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: { schema_version: 2, blocks: [] }, description: "", base_price: 0, image_url: "", rarity: 0, path: "", _isNew: true })}
               onEdit={(item) => setItemEdit({ ...structuredClone(item), effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
               onCopy={(item) => setItemEdit({ ...structuredClone(item), id: "", _isNew: true, effects: typeof item.effects === "string" ? JSON.parse(item.effects) : item.effects })}
-              onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/item-dictionary/${item.id}`, "DELETE"); if (ok) fetchItems(); }} />
+              onDelete={async (item) => { const prepared = prepareAdminAction("deleteItemDictionary", "xóa vật phẩm", String(item.id)); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/item-dictionary/${item.id}`, "DELETE", prepared); if (ok) fetchItems(); }} />
           )}
 
           {dataTab === "recipes" && (
             <CoreDataAdminTab kind="recipes" rows={recipes} loading={recipesLoading}
-              onCreate={() => setRecipeEdit({ id: "", target_gu_id: "", target_gu_name: "", required_gus: {}, required_materials: {}, success_rate: 0.5, primeval_stones_cost: 0, immortal_essence_stones_cost: 0, _isNew: true })}
+              canCreate={canAdminAction("updateRecipe")} canEdit={canAdminAction("updateRecipe")} canCopy={canAdminAction("updateRecipe")} canDelete={canAdminAction("deleteRecipe")}
+              onCreate={() => setRecipeEdit({ id: "", target_gu_id: "", target_rank: 1, target_gu_name: "", required_gus: {}, required_materials: {}, success_rate: 0.5, primeval_stones_cost: 0, immortal_essence_stones_cost: 0, _isNew: true })}
               onEdit={(recipe) => setRecipeEdit({ ...structuredClone(recipe), required_gus: typeof recipe.required_gus === "string" ? JSON.parse(recipe.required_gus) : recipe.required_gus, required_materials: typeof recipe.required_materials === "string" ? JSON.parse(recipe.required_materials) : recipe.required_materials })}
               onCopy={(recipe) => setRecipeEdit({ ...structuredClone(recipe), id: "", _isNew: true, required_gus: typeof recipe.required_gus === "string" ? JSON.parse(recipe.required_gus) : recipe.required_gus, required_materials: typeof recipe.required_materials === "string" ? JSON.parse(recipe.required_materials) : recipe.required_materials })}
-              onDelete={async (recipe) => { if (!confirm(`Xóa ${recipe.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/recipes/${recipe.id}`, "DELETE"); if (ok) fetchRecipes(); }} />
+              onDelete={async (recipe) => { const prepared = prepareAdminAction("deleteRecipe", "xóa cổ phương", String(recipe.id)); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/recipes/${recipe.id}`, "DELETE", prepared); if (ok) fetchRecipes(); }} />
           )}
 
           {dataTab === "monsters" && (
             <CoreDataAdminTab kind="monsters" rows={monsters} loading={monstersLoading}
-              onCreate={() => setMonsterEdit({ id: "", name: "", type: "beast", max_hp: 100, base_attack: 10, base_defense: 5, gu_inventory: [], item_inventory: {}, dao_marks: {}, path_masteries: {}, ai_profile: "beast_basic", loot_table_id: "", description: "", is_active: true, is_capturable: false, capture_chance: 0.20, pet_hunger_per_hour: 2.0, _isNew: true })}
-              onEdit={(monster) => setMonsterEdit({ ...structuredClone(monster), gu_inventory: typeof monster.gu_inventory === "string" ? JSON.parse(monster.gu_inventory) : monster.gu_inventory || [], item_inventory: typeof monster.item_inventory === "string" ? JSON.parse(monster.item_inventory) : monster.item_inventory || {}, dao_marks: typeof monster.dao_marks === "string" ? JSON.parse(monster.dao_marks) : monster.dao_marks || {}, path_masteries: typeof monster.path_masteries === "string" ? JSON.parse(monster.path_masteries) : monster.path_masteries || {} })}
-              onCopy={(monster) => setMonsterEdit({ ...structuredClone(monster), id: "", _isNew: true, gu_inventory: typeof monster.gu_inventory === "string" ? JSON.parse(monster.gu_inventory) : monster.gu_inventory || [], item_inventory: typeof monster.item_inventory === "string" ? JSON.parse(monster.item_inventory) : monster.item_inventory || {}, dao_marks: typeof monster.dao_marks === "string" ? JSON.parse(monster.dao_marks) : monster.dao_marks || {}, path_masteries: typeof monster.path_masteries === "string" ? JSON.parse(monster.path_masteries) : monster.path_masteries || {} })}
-              onDelete={async (monster) => { if (!confirm(`Xóa quái vật ${monster.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/monsters/${monster.id}`, "DELETE"); if (ok) fetchMonsters(); }} />
+              canCreate={canAdminAction("updateMonster")} canEdit={canAdminAction("updateMonster")} canCopy={canAdminAction("updateMonster")} canDelete={canAdminAction("deleteMonster")}
+              onCreate={() => setMonsterEdit({ id: "", name: "", type: "beast", max_hp: 100, base_attack: 10, base_defense: 5, gu_inventory: [], gu_pool: [], item_inventory: {}, dao_marks: {}, path_masteries: {}, ai_profile: "beast_basic", loot_table_id: "", description: "", is_active: true, is_capturable: false, capture_chance: 0.20, pet_hunger_per_hour: 2.0, _isNew: true })}
+              onEdit={(monster) => setMonsterEdit({ ...structuredClone(monster), gu_inventory: typeof monster.gu_inventory === "string" ? JSON.parse(monster.gu_inventory) : monster.gu_inventory || [], gu_pool: typeof monster.gu_pool === "string" ? JSON.parse(monster.gu_pool) : monster.gu_pool || [], item_inventory: typeof monster.item_inventory === "string" ? JSON.parse(monster.item_inventory) : monster.item_inventory || {}, dao_marks: typeof monster.dao_marks === "string" ? JSON.parse(monster.dao_marks) : monster.dao_marks || {}, path_masteries: typeof monster.path_masteries === "string" ? JSON.parse(monster.path_masteries) : monster.path_masteries || {} })}
+              onCopy={(monster) => setMonsterEdit({ ...structuredClone(monster), id: "", _isNew: true, gu_inventory: typeof monster.gu_inventory === "string" ? JSON.parse(monster.gu_inventory) : monster.gu_inventory || [], gu_pool: typeof monster.gu_pool === "string" ? JSON.parse(monster.gu_pool) : monster.gu_pool || [], item_inventory: typeof monster.item_inventory === "string" ? JSON.parse(monster.item_inventory) : monster.item_inventory || {}, dao_marks: typeof monster.dao_marks === "string" ? JSON.parse(monster.dao_marks) : monster.dao_marks || {}, path_masteries: typeof monster.path_masteries === "string" ? JSON.parse(monster.path_masteries) : monster.path_masteries || {} })}
+              onDelete={async (monster) => { const prepared = prepareAdminAction("deleteMonster", "xóa quái vật", String(monster.name)); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/monsters/${monster.id}`, "DELETE", prepared); if (ok) fetchMonsters(); }} />
           )}
 
           {dataTab === "loot_tables" && (
             <CoreDataAdminTab kind="loot_tables" rows={lootTables} loading={lootTablesLoading}
+              canCreate={canAdminAction("updateLootTable")} canEdit={canAdminAction("updateLootTable")} canCopy={canAdminAction("updateLootTable")} canDelete={canAdminAction("deleteLootTable")}
               onCreate={() => setLootTableEdit({ id: "", name: "", entries: [], _isNew: true })}
               onEdit={(table) => setLootTableEdit({ ...structuredClone(table), entries: typeof table.entries === "string" ? JSON.parse(table.entries) : table.entries || [] })}
               onCopy={(table) => setLootTableEdit({ ...structuredClone(table), id: "", _isNew: true, entries: typeof table.entries === "string" ? JSON.parse(table.entries) : table.entries || [] })}
-              onDelete={async (table) => { if (!confirm(`Xóa bảng loot ${table.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/loot-tables/${table.id}`, "DELETE"); if (ok) fetchLootTables(); }} />
+              onDelete={async (table) => { const prepared = prepareAdminAction("deleteLootTable", "xóa bảng loot", String(table.name)); if (!prepared) return; const ok = await exec(`${BACKEND_URL}/api/admin/loot-tables/${table.id}`, "DELETE", prepared); if (ok) fetchLootTables(); }} />
           )}
 
           {dataTab === "regions" && (
@@ -3340,12 +3728,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
                   <Globe className="w-4 h-4 text-amber-400" />Quản Lý Khu Vực
                 </h3>
-                <button
-                  onClick={() => setRegionEdit({ id: "", name: "", description: "", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })}
+                {canAdminAction("updateRegion") && <button
+                  onClick={() => setRegionEdit({ id: "", name: "", description: "", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, safe_zone_x: null, safe_zone_y: null, parent_id: "", paths: [], pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />Thêm Khu Vực
-                </button>
+                </button>}
               </div>
 
               <div className="flex gap-2 mb-3">
@@ -3370,7 +3758,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <>
                   <AdminDataGrid rows={regions} loading={regionsLoading} showSearch={false} showPagination={false} sortable={false} rowKey={(region) => region.id} columns={[
                       { key: "id", label: "ID", value: (region) => region.id, className: "font-mono text-zinc-400" }, { key: "name", label: "Tên", value: (region) => region.name, className: "font-semibold text-zinc-200" }, { key: "description", label: "Mô tả", value: (region) => region.description, className: "max-w-[150px] truncate text-zinc-400" }, { key: "zone_type", label: "Loại", value: (region) => region.zone_type, className: "text-amber-400" }, { key: "size", label: "Kích thước", value: (region) => `${region.width}x${region.height}` }, { key: "coordinates", label: "Tọa độ", value: (region) => `${region.min_x},${region.min_y},${region.max_x},${region.max_y}`, render: (region) => `(${region.min_x},${region.min_y}) → (${region.max_x},${region.max_y})` }, { key: "rank", label: "Cảnh giới", value: (region) => `${region.min_rank}-${region.max_rank}`, render: (region) => `C${region.min_rank} - C${region.max_rank}` },
-                    ]} onEdit={(region) => setRegionEdit(structuredClone(region))} onCopy={(region) => setRegionEdit({ ...structuredClone(region), id: "", _isNew: true })} onDelete={async (region) => { if (!confirm(`Xóa khu vực "${region.name}" (${region.id})? Hành động này có thể ảnh hưởng đến dữ liệu liên kết.`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/regions/${region.id}`, "DELETE"); if (ok) fetchRegions(regionsPage, regionSearch); }} />
+                    ]} onEdit={canAdminAction("updateRegion") ? (region) => setRegionEdit(structuredClone(region)) : undefined} onCopy={canAdminAction("updateRegion") ? (region) => setRegionEdit({ ...structuredClone(region), id: "", _isNew: true }) : undefined} onDelete={canAdminAction("deleteRegion") ? async (region) => { const endpoint = `${BACKEND_URL}/api/admin/regions/${region.id}`; const prepared = prepareAdminAction("deleteRegion", "xóa khu vực", new URL(endpoint).pathname); if (!prepared) return; const ok = await exec(endpoint, "DELETE", prepared); if (ok) fetchRegions(regionsPage, regionSearch); } : undefined} />
                   <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
                     <div>Tổng số: <span className="text-zinc-300">{regionsTotal}</span> khu vực</div>
                     <div className="flex items-center gap-2">
@@ -3384,18 +3772,26 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </div>
           )}
 
+          {dataTab === "scouting" && (
+            <div className="space-y-3">
+              <div className="flex gap-2"><input value={residualTraceSearch} onChange={e=>setResidualTraceSearch(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setResidualTracePage(1);fetchResidualTraces(1,residualTraceSearch);}}} placeholder="Tìm khu vực, người chơi, loại hành động hoặc đạo mạch..." className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200"/><button onClick={()=>{setResidualTracePage(1);fetchResidualTraces(1,residualTraceSearch);}} className="px-3 py-2 rounded-lg bg-zinc-800 text-xs text-zinc-200"><Search className="w-3.5 h-3.5 inline mr-1"/>Tìm</button></div>
+              {residualTracesLoading?<div className="py-12 text-center text-xs text-zinc-500">Đang tải dấu vết thế giới...</div>:residualTraces.length===0?<div className="py-12 text-center text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-xl">Không có dấu vết truy tung</div>:<div className="overflow-x-auto rounded-xl border border-zinc-800/80"><table className="w-full text-left text-xs"><thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase text-[10px]"><th className="px-3 py-2.5">Khu vực / tọa độ</th><th className="px-3 py-2.5">Người chơi</th><th className="px-3 py-2.5">Sự kiện</th><th className="px-3 py-2.5">Đạo mạch / xung lực</th><th className="px-3 py-2.5">Tạo / hết hạn</th><th className="px-3 py-2.5 text-right">Thao tác</th></tr></thead><tbody>{residualTraces.map(trace=><tr key={String(trace.id)} className="border-t border-zinc-800/40"><td className="px-3 py-2.5 text-zinc-300">{String(trace.region_id)} ({String(trace.x)}, {String(trace.y)})</td><td className="px-3 py-2.5 text-zinc-300">{String(trace.player_username)}<span className="block text-[10px] text-zinc-600 font-mono">{String(trace.player_id)}</span></td><td className="px-3 py-2.5 text-zinc-400">{String(trace.action_type)}</td><td className="px-3 py-2.5 text-zinc-400">{String(trace.dominant_path)} · {String(trace.dao_pulse_strength)}</td><td className="px-3 py-2.5 text-zinc-500">{new Date(String(trace.created_at)).toLocaleString("vi-VN")}<span className="block text-[10px]">Hết: {new Date(String(trace.expires_at)).toLocaleString("vi-VN")}</span></td><td className="px-3 py-2.5 text-right">{canAdminAction("updateResidualTrace")&&<button onClick={()=>{setResidualTraceForm({region_id:String(trace.region_id),x:String(trace.x),y:String(trace.y),player_id:String(trace.player_id),action_type:String(trace.action_type),dominant_path:String(trace.dominant_path),dao_pulse_strength:String(trace.dao_pulse_strength),expires_at:new Date(String(trace.expires_at)).toISOString().slice(0,16)});setResidualTraceEdit(trace);}} className="p-1 text-zinc-500 hover:text-amber-400 cursor-pointer mr-1"><Edit3 className="w-3.5 h-3.5"/></button>}{canAdminAction("deleteResidualTrace")&&<button onClick={async()=>{const endpoint=`${BACKEND_URL}/api/admin/residual-traces/${trace.id}`;const prepared=prepareAdminAction("deleteResidualTrace","xóa dấu vết truy tung",`${trace.action_type} · ${trace.id}`);if(!prepared)return;await exec(endpoint,"DELETE",prepared);}} className="p-1 text-zinc-500 hover:text-red-400 cursor-pointer"><Trash2 className="w-3.5 h-3.5"/></button>}</td></tr>)}</tbody></table></div>}
+              <div className="flex justify-between text-xs text-zinc-500"><span>Tổng {residualTraceTotal} dấu vết</span><div className="flex gap-2"><button onClick={()=>{const p=Math.max(1,residualTracePage-1);setResidualTracePage(p);fetchResidualTraces(p,residualTraceSearch);}} disabled={residualTracePage<=1} className="px-3 py-1 bg-zinc-900 rounded disabled:opacity-40">Trước</button><span className="py-1">Trang {residualTracePage}/{Math.max(1,Math.ceil(residualTraceTotal/30))}</span><button onClick={()=>{const p=residualTracePage+1;setResidualTracePage(p);fetchResidualTraces(p,residualTraceSearch);}} disabled={residualTracePage>=Math.ceil(residualTraceTotal/30)} className="px-3 py-1 bg-zinc-900 rounded disabled:opacity-40">Sau</button></div></div>
+            </div>
+          )}
+
           {dataTab === "map_cells" && (
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-amber-400" />Quản Lý Ô Bản Đồ
                 </h3>
-                <button
-                  onClick={() => setMapCellEdit({ id: "", region_id: "", x: 0, y: 0, cell_type: "Resource", content_id: "", metadata: {}, respawn_seconds: 300, is_active: true, _isNew: true })}
+                {canAdminAction("updateMapCell") && <button
+                  onClick={() => setMapCellEdit({ id: "", region_id: "", x: 0, y: 0, cell_type: "Resource", content_id: "", metadata: {}, respawn_seconds: 300, is_active: true, last_cleared_at: null, cleared_by: null, _isNew: true })}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />Thêm Ô Bản Đồ
-                </button>
+                </button>}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3">
@@ -3450,7 +3846,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <>
                   <AdminDataGrid rows={mapCells} loading={mapCellsLoading} showSearch={false} showPagination={false} sortable={false} rowKey={(cell) => String(cell.id)} columns={[
                       { key: "region_id", label: "Khu vực", value: (cell) => cell.region_id, className: "font-mono text-[10px]" }, { key: "coordinates", label: "Tọa độ", value: (cell) => `${cell.x},${cell.y}`, render: (cell) => `(${cell.x}, ${cell.y})`, className: "font-mono text-amber-400" }, { key: "cell_type", label: "Loại ô", value: (cell) => cell.cell_type }, { key: "content_id", label: "Content ID", value: (cell) => cell.content_id, className: "font-mono text-zinc-400" }, { key: "respawn_seconds", label: "Respawn", value: (cell) => cell.respawn_seconds, render: (cell) => `${cell.respawn_seconds}s` }, { key: "metadata", label: "Metadata", value: (cell) => cell.metadata, render: (cell) => <span className="block max-w-[120px] truncate font-mono text-[10px] text-zinc-500">{JSON.stringify(cell.metadata)}</span> }, { key: "is_active", label: "Active", value: (cell) => cell.is_active, render: (cell) => cell.is_active ? "ON" : "OFF" },
-                    ]} onEdit={(cell) => setMapCellEdit(structuredClone(cell))} onCopy={(cell) => setMapCellEdit({ ...structuredClone(cell), id: "", _isNew: true })} onDelete={async (cell) => { if (!confirm(`Xóa ô bản đồ tại (${cell.x}, ${cell.y})?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/map-cells/${cell.id}`, "DELETE"); if (ok) fetchMapCells(mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); }} />
+                    ]} onEdit={canAdminAction("updateMapCell") ? (cell) => setMapCellEdit(structuredClone(cell)) : undefined} onCopy={canAdminAction("updateMapCell") ? (cell) => setMapCellEdit({ ...structuredClone(cell), id: "", last_cleared_at: null, cleared_by: null, _isNew: true }) : undefined} onDelete={canAdminAction("deleteMapCell") ? async (cell) => { const endpoint = `${BACKEND_URL}/api/admin/map-cells/${cell.id}`; const prepared = prepareAdminAction("deleteMapCell", "xóa ô bản đồ", new URL(endpoint).pathname); if (!prepared) return; const ok = await exec(endpoint, "DELETE", prepared); if (ok) fetchMapCells(mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); } : undefined} />
                   <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
                     <div>Tổng số: <span className="text-zinc-300">{mapCellsTotal}</span> ô</div>
                     <div className="flex items-center gap-2">
@@ -3464,12 +3860,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </div>
           )}
 
-          {dataTab === "constitution" && <DictionariesAdminTab type="constitution" addToast={addToast} />}
-          {dataTab === "race" && <DictionariesAdminTab type="race" addToast={addToast} />}
-          {dataTab === "status" && <DictionariesAdminTab type="status" addToast={addToast} />}
-          {dataTab === "spawns" && <WorldExtendedAdminTab type="spawns" addToast={addToast} />}
-          {dataTab === "quests" && <WorldExtendedAdminTab type="quests" addToast={addToast} />}
-          {dataTab === "dungeons" && <WorldExtendedAdminTab type="dungeons" addToast={addToast} />}
+          {dataTab === "constitution" && <DictionariesAdminTab type="constitution" addToast={addToast} canWrite={canAdminAction("updateConstitution")} canDelete={canAdminAction("deleteConstitution")} />}
+          {dataTab === "race" && <DictionariesAdminTab type="race" addToast={addToast} canWrite={canAdminAction("updateRaceDictionary")} canDelete={canAdminAction("deleteRaceDictionary")} />}
+          {dataTab === "status" && <DictionariesAdminTab type="status" addToast={addToast} canWrite={canAdminAction("updateStatusDictionary")} canDelete={canAdminAction("deleteStatusDictionary")} />}
+          {dataTab === "spawns" && <WorldExtendedAdminTab type="spawns" addToast={addToast} canWrite={canAdminAction("updateMonsterSpawn")} canDelete={canAdminAction("deleteMonsterSpawn")} />}
+          {dataTab === "quests" && <WorldExtendedAdminTab type="quests" addToast={addToast} canWrite={canAdminAction("updateWorldQuest")} canDelete={canAdminAction("deleteWorldQuest")} />}
+          {dataTab === "dungeons" && <WorldExtendedAdminTab type="dungeons" addToast={addToast} canWrite={canAdminAction("updateDungeon")} canDelete={canAdminAction("deleteDungeon")} />}
         </div>
       )}
 
@@ -3484,6 +3880,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
 
       {/* Audit Logs section */}
       {section === "logs" && <AuditLogsAdminTab />}
+      {section === "combat_history" && <CombatHistoryAdminTab addToast={addToast} />}
+      {section === "map_drops" && <MapDropsAdminTab addToast={addToast} canEdit={canAdminAction("updateMapDrop")} canDelete={canAdminAction("deleteMapDrop")} />}
+      {section === "arena_rankings" && <ArenaRankingsAdminTab addToast={addToast} canEdit={canAdminAction("updateArenaRanking")} />}
 
       {/* Shop section */}
       {section === "shop" && (
@@ -3505,9 +3904,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <Package className="w-4 h-4 text-emerald-400" />
                   Quản Lý Cửa Hàng
                 </h3>
-                <button onClick={() => { setShopForm({ id: "", rank: 0, price: 100, stock: -1, is_default: true, sort_order: 0 }); setShowShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                {canAdminAction("updateShop") && <button onClick={() => { setShopForm({ id: "", rank: 0, price: 100, stock: -1, is_default: true, sort_order: 0 }); setShowShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
                   <Plus className="w-3.5 h-3.5" />Thêm
-                </button>
+                </button>}
               </div>
               {shopLoading ? (
                 <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
@@ -3517,7 +3916,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
                 </div>
               ) : (
-                <AdminDataGrid rows={shopItems} loading={shopLoading} rowKey={(item) => `${item.id}:${item.rank ?? 0}`} columns={[{ key: "id", label: "ID", value: (item) => item.id }, { key: "rank", label: "Rank", value: (item) => item.rank ?? 0 }, { key: "name", label: "Tên", value: (item) => item.name || item.id }, { key: "item_type", label: "Loại", value: (item) => item.item_type }, { key: "price", label: "Giá", value: (item) => item.price }, { key: "stock", label: "Tồn kho", value: (item) => item.stock, render: (item) => item.stock === -1 ? "∞" : item.stock }, { key: "is_default", label: "Mặc định", value: (item) => item.is_default, render: (item) => item.is_default ? "✓" : "–" }, { key: "sort_order", label: "Thứ tự", value: (item) => item.sort_order }]} onEdit={(item) => { setShopForm({ id: item.id, rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(`${item.id}/${item.rank ?? 0}`); }} onCopy={(item) => { setShopForm({ id: "", rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopAdd(true); }} onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}/${item.rank ?? 0}`, "DELETE"); if (ok) fetchShopItems(); }} />
+                <AdminDataGrid rows={shopItems} loading={shopLoading} rowKey={(item) => `${item.id}:${item.rank ?? 0}`} columns={[{ key: "id", label: "ID", value: (item) => item.id }, { key: "rank", label: "Rank", value: (item) => item.rank ?? 0 }, { key: "name", label: "Tên", value: (item) => item.name || item.id }, { key: "item_type", label: "Loại", value: (item) => item.item_type }, { key: "price", label: "Giá", value: (item) => item.price }, { key: "stock", label: "Tồn kho", value: (item) => item.stock, render: (item) => item.stock === -1 ? "∞" : item.stock }, { key: "is_default", label: "Mặc định", value: (item) => item.is_default, render: (item) => item.is_default ? "✓" : "–" }, { key: "sort_order", label: "Thứ tự", value: (item) => item.sort_order }]} onEdit={canAdminAction("updateShop") ? (item) => { setShopForm({ id: item.id, rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(`${item.id}/${item.rank ?? 0}`); } : undefined} onCopy={canAdminAction("updateShop") ? (item) => { setShopForm({ id: "", rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopAdd(true); } : undefined} onDelete={canAdminAction("deleteShop") ? async (item) => { const endpoint = `${BACKEND_URL}/api/admin/shop/${item.id}/${item.rank ?? 0}`; const prepared = prepareAdminAction("deleteShop", "xóa mặt hàng khỏi cửa hàng", new URL(endpoint).pathname); if (!prepared) return; const ok = await exec(endpoint, "DELETE", prepared); if (ok) fetchShopItems(); } : undefined} />
               )}
             </div>
           )}
@@ -3529,9 +3928,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <Sword className="w-4 h-4 text-amber-400" />
                   Quản Lý Shop Đấu Trường
                 </h3>
-                <button onClick={() => { setArenaShopForm({ id: "", price: 50, qty: 1, stock: -1, is_default: true, sort_order: 0 }); setShowArenaShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                {canAdminAction("updateArenaShop") && <button onClick={() => { setArenaShopForm({ id: "", price: 50, qty: 1, stock: -1, is_default: true, sort_order: 0 }); setShowArenaShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
                   <Plus className="w-3.5 h-3.5" />Thêm
-                </button>
+                </button>}
               </div>
               {arenaShopLoading ? (
                 <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
@@ -3541,7 +3940,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
                 </div>
               ) : (
-                <AdminDataGrid rows={arenaShopItems} loading={arenaShopLoading} rowKey={(item) => item.id} columns={[{ key: "id", label: "ID", value: (item) => item.id }, { key: "name", label: "Tên", value: (item) => item.name || item.id }, { key: "price", label: "Giá (Xu ĐT)", value: (item) => item.price }, { key: "qty", label: "SL nhận", value: (item) => item.qty }, { key: "stock", label: "Tồn kho", value: (item) => item.stock, render: (item) => item.stock === -1 ? "∞" : item.stock }, { key: "is_default", label: "Mặc định", value: (item) => item.is_default, render: (item) => item.is_default ? "✓" : "–" }, { key: "sort_order", label: "Thứ tự", value: (item) => item.sort_order }]} onEdit={(item) => { setArenaShopForm({ id: item.id, price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopEdit(item.id); }} onCopy={(item) => { setArenaShopForm({ id: "", price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopAdd(true); }} onDelete={async (item) => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/arena-shop/${item.id}`, "DELETE"); if (ok) fetchArenaShopItems(); }} />
+                <AdminDataGrid rows={arenaShopItems} loading={arenaShopLoading} rowKey={(item) => item.id} columns={[{ key: "id", label: "ID", value: (item) => item.id }, { key: "name", label: "Tên", value: (item) => item.name || item.id }, { key: "price", label: "Giá (Xu ĐT)", value: (item) => item.price }, { key: "qty", label: "SL nhận", value: (item) => item.qty }, { key: "stock", label: "Tồn kho", value: (item) => item.stock, render: (item) => item.stock === -1 ? "∞" : item.stock }, { key: "is_default", label: "Mặc định", value: (item) => item.is_default, render: (item) => item.is_default ? "✓" : "–" }, { key: "sort_order", label: "Thứ tự", value: (item) => item.sort_order }]} onEdit={canAdminAction("updateArenaShop") ? (item) => { setArenaShopForm({ id: item.id, price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopEdit(item.id); } : undefined} onCopy={canAdminAction("updateArenaShop") ? (item) => { setArenaShopForm({ id: "", price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopAdd(true); } : undefined} onDelete={canAdminAction("deleteArenaShop") ? async (item) => { const endpoint = `${BACKEND_URL}/api/admin/arena-shop/${item.id}`; const prepared = prepareAdminAction("deleteArenaShop", "xóa mặt hàng Arena Shop", new URL(endpoint).pathname); if (!prepared) return; const ok = await exec(endpoint, "DELETE", prepared); if (ok) fetchArenaShopItems(); } : undefined} />
               )}
             </div>
           )}
@@ -3768,6 +4167,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <thead>
                     <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
                       <th className="px-3 py-2.5 font-semibold">#</th>
+                      <th className="px-3 py-2.5 font-semibold">Loại mỏ</th>
                       <th className="px-3 py-2.5 font-semibold">Phẩm chất</th>
                       <th className="px-3 py-2.5 font-semibold">Chủ sở hữu</th>
                       <th className="px-3 py-2.5 font-semibold">Quái canh</th>
@@ -3780,6 +4180,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     {mineSlots.map((slot: ApiResponseData) => (
                       <tr key={slot.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 text-zinc-500 font-mono">{slot.id}</td>
+                        <td className="px-3 py-2.5 text-zinc-400">{slot.mine_type || "mortal"}</td>
                         <td className="px-3 py-2.5 font-semibold">{slot.rarity}</td>
                         <td className="px-3 py-2.5 text-zinc-300">{slot.occupier_name || <span className="text-zinc-600 italic">Trống</span>}</td>
                         <td className="px-3 py-2.5 text-zinc-400">{slot.monster_id || <span className="text-zinc-600">—</span>}</td>
@@ -4262,6 +4663,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   </div>
                 </div>
 
+                {selectedApertureId && <div className="border-t border-zinc-800/80 pt-4 space-y-4"><ApertureTribulationsAdmin apertureId={selectedApertureId} addToast={addToast} /><ApertureChildrenAdmin apertureId={selectedApertureId} ownerUsername={String(apertures.find(ap => ap.id === selectedApertureId)?.username || "")} canEdit={canAdminAction("updateApertureChild")} canDelete={canAdminAction("deleteApertureChild")} addToast={addToast} exec={exec} prepareDelete={(label, target) => prepareAdminAction("deleteApertureChild", label, target)} /><ApertureRefinementQueueAdmin apertureId={selectedApertureId} canEdit={canAdminAction("updateApertureChild")} canDelete={canAdminAction("deleteApertureChild")} addToast={addToast} exec={exec} prepareDelete={(label, target) => prepareAdminAction("deleteApertureChild", label, target)} /><ApertureSettlementsAdmin apertureId={selectedApertureId} canEdit={canAdminAction("updateApertureChild")} canDelete={canAdminAction("deleteApertureChild")} addToast={addToast} exec={exec} prepareDelete={(label, target) => prepareAdminAction("deleteApertureChild", label, target)} /><ApertureEventsAdmin apertureId={selectedApertureId} canEdit={canAdminAction("updateApertureChild")} canDelete={canAdminAction("deleteApertureChild")} addToast={addToast} exec={exec} prepareDelete={(label, target) => prepareAdminAction("deleteApertureChild", label, target)} /><ApertureNPCAdmin apertureId={selectedApertureId} canEdit={canAdminAction("updateVariantNPC")} canDelete={canAdminAction("dismissVariantNPC")} addToast={addToast} exec={exec} prepareDelete={(label, target) => prepareAdminAction("dismissVariantNPC", label, target)} /></div>}
+
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-2 border-t border-zinc-800/80 pt-4">
                   <button type="button" onClick={() => { setSelectedApertureId(null); setApertureDetail(null); }} className="px-4 py-2 bg-zinc-850 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors">
@@ -4377,12 +4780,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{itemEdit.id ? "Sửa" : "Thêm"} Vật Phẩm</h3>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={itemEdit.id || ""} onChange={e => setItemEdit({...itemEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={itemEdit.id || ""} disabled={!itemEdit._isNew} onChange={e => setItemEdit({...itemEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-60" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên</label><input value={itemEdit.name || ""} onChange={e => setItemEdit({...itemEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label><select value={itemEdit.item_type} onChange={e => setItemEdit({...itemEdit, item_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="Material">Vật liệu</option><option value="Consumable">Tiêu hao</option><option value="Food">Thức ăn</option><option value="Currency">Tiền tệ</option></select></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Bậc</label><input type="number" min={1} value={itemEdit.rank} onChange={e => setItemEdit({...itemEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá cơ bản</label><input type="number" value={itemEdit.base_price} onChange={e => setItemEdit({...itemEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá cơ bản</label><input type="number" min={0} step="0.001" value={itemEdit.base_price} onChange={e => setItemEdit({...itemEdit, base_price: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Độ hiếm</label><input type="number" min={0} max={9} value={itemEdit.rarity ?? 0} onChange={e => setItemEdit({...itemEdit, rarity: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiên khiếu</label><input maxLength={50} value={itemEdit.path || ""} onChange={e => setItemEdit({...itemEdit, path: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Ảnh</label>
                 <div className="flex items-center gap-3">
@@ -4444,16 +4851,17 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{recipeEdit.id ? "Sửa" : "Thêm"} Cổ Phương</h3>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={recipeEdit.id || ""} onChange={e => setRecipeEdit({...recipeEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={recipeEdit.id || ""} disabled={!recipeEdit._isNew} onChange={e => setRecipeEdit({...recipeEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-60" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Cổ trùng đích</label>
-                  <select value={recipeEdit.target_gu_id} onChange={e => setRecipeEdit({...recipeEdit, target_gu_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                  <select value={recipeEdit.target_gu_id} disabled={!recipeEdit._isNew} onChange={e => { const target = gus.find((g: ApiResponseData) => g.id === e.target.value); setRecipeEdit({...recipeEdit, target_gu_id: e.target.value, target_rank: target?.rank || 1}); }} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-60">
                     <option value="">Chọn...</option>
                     {gus.map((g: ApiResponseData) => <option key={g.id} value={g.id}>{g.name} ({g.id})</option>)}
                   </select>
                 </div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Bậc cổ trùng đích</label><input type="number" min={1} disabled={!recipeEdit._isNew} value={recipeEdit.target_rank || 1} onChange={e => setRecipeEdit({...recipeEdit, target_rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-60" /></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ thành công</label><input type="number" step="0.01" min={0} max={1} value={recipeEdit.success_rate} onChange={e => setRecipeEdit({...recipeEdit, success_rate: parseFloat(e.target.value) || 0.5})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ thành công</label><input type="number" step="0.01" min={0} max={1} value={recipeEdit.success_rate} onChange={e => setRecipeEdit({...recipeEdit, success_rate: Number(e.target.value)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Nguyên Thạch</label><input type="number" min={0} step={0.001} value={recipeEdit.primeval_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, primeval_stones_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiên nguyên thạch</label><input type="number" step="any" value={recipeEdit.immortal_essence_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, immortal_essence_stones_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
@@ -4538,14 +4946,15 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="grid grid-cols-3 gap-3">
                 <div className="flex items-center gap-2 pt-5"><input type="checkbox" checked={monsterEdit.is_active !== false} onChange={e => setMonsterEdit({...monsterEdit, is_active: e.target.checked})} className="rounded" /><label className="text-xs text-zinc-300">Hoạt động</label></div>
                 <div className="flex items-center gap-2 pt-5"><input type="checkbox" checked={monsterEdit.is_capturable === true} onChange={e => setMonsterEdit({...monsterEdit, is_capturable: e.target.checked})} className="rounded" /><label className="text-xs text-zinc-300">Bắt được</label></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ bắt</label><input type="number" step="0.01" min={0} max={1} value={monsterEdit.capture_chance || 0.20} onChange={e => setMonsterEdit({...monsterEdit, capture_chance: parseFloat(e.target.value) || 0.20})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ bắt</label><input type="number" step="0.01" min={0} max={1} value={monsterEdit.capture_chance ?? 0.20} onChange={e => setMonsterEdit({...monsterEdit, capture_chance: Number(e.target.value)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Đói/giờ (pet)</label><input type="number" step="0.1" min={0} value={monsterEdit.pet_hunger_per_hour || 2.0} onChange={e => setMonsterEdit({...monsterEdit, pet_hunger_per_hour: parseFloat(e.target.value) || 2.0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Đói/giờ (pet)</label><input type="number" step="0.1" min={0} value={monsterEdit.pet_hunger_per_hour ?? 2.0} onChange={e => setMonsterEdit({...monsterEdit, pet_hunger_per_hour: Number(e.target.value)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               {/* JSONB fields as raw JSON */}
               <div className="border-t border-zinc-800 pt-3">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">gu_inventory (JSON)</label>
                 <textarea value={typeof monsterEdit.gu_inventory === "string" ? monsterEdit.gu_inventory : JSON.stringify(monsterEdit.gu_inventory || [], null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, gu_inventory: JSON.parse(e.target.value)}); } catch {} }} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
               </div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">gu_pool (JSON)</label><textarea value={typeof monsterEdit.gu_pool === "string" ? monsterEdit.gu_pool : JSON.stringify(monsterEdit.gu_pool || [], null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, gu_pool: JSON.parse(e.target.value)}); } catch {} }} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" /></div>
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">item_inventory (JSON)</label>
                 <textarea value={typeof monsterEdit.item_inventory === "string" ? monsterEdit.item_inventory : JSON.stringify(monsterEdit.item_inventory || {}, null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, item_inventory: JSON.parse(e.target.value)}); } catch {} }} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
@@ -4592,7 +5001,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     <input value={entry.gu_id || ""} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], gu_id: e.target.value}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="gu_id" className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="gu-list-lt" />
                     <input type="number" min={1} value={entry.min_qty || 1} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], min_qty: parseInt(e.target.value) || 1}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="min" className="w-14 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
                     <input type="number" min={1} value={entry.max_qty || 1} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], max_qty: parseInt(e.target.value) || 1}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="max" className="w-14 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
-                    <input type="number" step="0.01" min={0} max={1} value={entry.chance || 0.5} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], chance: parseFloat(e.target.value) || 0.5}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="%" className="w-16 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
+                    <input type="number" step="0.01" min={0} max={1} value={entry.chance ?? 0.5} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], chance: Number(e.target.value)}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="%" className="w-16 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
                     <button onClick={() => { const newEntries = lootTableEdit.entries.filter((_: ApiResponseData, i: number) => i !== idx); setLootTableEdit({...lootTableEdit, entries: newEntries}); }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 ))}
@@ -4652,6 +5061,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <input type="number" value={regionEdit.max_rank} onChange={e => setRegionEdit({...regionEdit, max_rank: parseInt(e.target.value) || 5})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Safe Zone X (để trống nếu không có)</label><input type="number" value={regionEdit.safe_zone_x ?? ""} onChange={e => setRegionEdit({...regionEdit, safe_zone_x: e.target.value === "" ? null : parseInt(e.target.value)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Safe Zone Y (để trống nếu không có)</label><input type="number" value={regionEdit.safe_zone_y ?? ""} onChange={e => setRegionEdit({...regionEdit, safe_zone_y: e.target.value === "" ? null : parseInt(e.target.value)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Min X</label>
@@ -4701,6 +5114,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Pool weights (JSON)</label>
                 <textarea value={typeof regionEdit.pool_weights === "string" ? regionEdit.pool_weights : JSON.stringify(regionEdit.pool_weights || {}, null, 2)} onChange={e => { try { setRegionEdit({...regionEdit, pool_weights: JSON.parse(e.target.value)}); } catch {} }} rows={5} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
               </div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Đạo mạch khu vực (paths, cách nhau bằng dấu phẩy)</label><input value={(Array.isArray(regionEdit.paths) ? regionEdit.paths : []).join(", ")} onChange={e => setRegionEdit({...regionEdit, paths: e.target.value.split(",").map((path: string) => path.trim()).filter(Boolean)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2 mt-4">
                   <input type="checkbox" checked={!!regionEdit.is_active} onChange={e => setRegionEdit({...regionEdit, is_active: e.target.checked})} className="w-4 h-4 bg-zinc-850 border-zinc-700 rounded" />
@@ -4716,6 +5130,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 if (!body.pool_weights) {
                   body.pool_weights = { cell_type_weights: {}, resources: [], wild_gus: [] };
                 }
+                if (!Array.isArray(body.paths)) body.paths = [];
                 const url = isNew ? `${BACKEND_URL}/api/admin/regions` : `${BACKEND_URL}/api/admin/regions/${regionEdit.id}`;
                 const method = isNew ? "POST" : "PUT";
                 const ok = await exec(url, method, body);
@@ -4784,6 +5199,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200"
                 />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Lần xóa gần nhất</label><input type="datetime-local" value={mapCellEdit.last_cleared_at ? new Date(String(mapCellEdit.last_cleared_at)).toISOString().slice(0, 16) : ""} onChange={e => setMapCellEdit({...mapCellEdit, last_cleared_at: e.target.value || null})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Cleared by (Player UUID)</label><input value={mapCellEdit.cleared_by || ""} onChange={e => setMapCellEdit({...mapCellEdit, cleared_by: e.target.value || null})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
               <div className="flex items-center gap-2 mt-3">
                 <input type="checkbox" checked={!!mapCellEdit.is_active} onChange={e => setMapCellEdit({...mapCellEdit, is_active: e.target.checked})} className="w-4 h-4 bg-zinc-850 border-zinc-700 rounded" />
                 <label className="text-xs font-semibold text-zinc-300">Hoạt động (is_active)</label>
@@ -4798,9 +5217,13 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   try {
                     body.metadata = JSON.parse(body.metadata);
                   } catch {
-                    body.metadata = {};
+                    addToast("Metadata không phải JSON hợp lệ", "error");
+                    return;
                   }
                 }
+                if (typeof body.last_cleared_at === "string" && body.last_cleared_at) body.last_cleared_at = new Date(body.last_cleared_at).toISOString();
+                else body.last_cleared_at = null;
+                if (typeof body.cleared_by === "string" && !body.cleared_by.trim()) body.cleared_by = null;
                 const url = isNew ? `${BACKEND_URL}/api/admin/map-cells` : `${BACKEND_URL}/api/admin/map-cells/${mapCellEdit.id}`;
                 const method = isNew ? "POST" : "PUT";
                 const ok = await exec(url, method, body);
@@ -4809,6 +5232,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
             </div>
           </div>
         </div>
+      )}
+      {residualTraceEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80"><div className="w-full max-w-2xl bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-zinc-100">Sửa dấu vết thế giới</h3><button onClick={()=>setResidualTraceEdit(null)} className="p-1 text-zinc-500 hover:text-white"><X className="w-4 h-4"/></button></div>
+          <div className="text-[10px] text-zinc-500 font-mono">ID {String(residualTraceEdit.id)} · tạo {new Date(String(residualTraceEdit.created_at)).toLocaleString("vi-VN")}</div>
+          <div className="grid grid-cols-2 gap-3">{([ ["region_id","Khu vực"],["x","X"],["y","Y"],["player_id","ID người chơi"],["action_type","Loại hành động"],["dominant_path","Đạo mạch"],["dao_pulse_strength","Cường độ xung lực"] ] as const).map(([key,label])=><label key={key} className="text-[11px] font-bold text-zinc-500">{label}<input value={residualTraceForm[key]} onChange={e=>setResidualTraceForm({...residualTraceForm,[key]:e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label>)}
+            <label className="text-[11px] font-bold text-zinc-500">Hết hạn<input type="datetime-local" value={residualTraceForm.expires_at} onChange={e=>setResidualTraceForm({...residualTraceForm,expires_at:e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1"/></label>
+          </div>
+          <div className="flex justify-end gap-3"><button onClick={()=>setResidualTraceEdit(null)} className="px-4 py-2 rounded-lg text-xs text-zinc-400 border border-zinc-800">Hủy</button><button disabled={actionLoading} onClick={async()=>{const x=Number(residualTraceForm.x),y=Number(residualTraceForm.y),power=Number(residualTraceForm.dao_pulse_strength);if(!Number.isInteger(x)||!Number.isInteger(y)||!Number.isFinite(power)||power<0||!residualTraceForm.expires_at){addToast("Tọa độ, cường độ hoặc hạn dùng không hợp lệ","error");return;}const endpoint=`${BACKEND_URL}/api/admin/residual-traces/${residualTraceEdit.id}`;const prepared=prepareAdminAction("updateResidualTrace","cập nhật dấu vết thế giới",`${residualTraceEdit.action_type} · ${residualTraceEdit.id}`);if(!prepared)return;const ok=await exec(endpoint,"PUT",{...residualTraceForm,x,y,dao_pulse_strength:power,expires_at:new Date(residualTraceForm.expires_at).toISOString(),...prepared});if(ok){setResidualTraceEdit(null);fetchResidualTraces(residualTracePage,residualTraceSearch);}}} className="px-4 py-2 rounded-lg text-xs text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-50">{actionLoading?"Đang lưu...":"Lưu"}</button></div>
+        </div></div>
       )}
       {renderItemPicker()}
     </div>

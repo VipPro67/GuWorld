@@ -264,7 +264,6 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"constitution":          player.Constitution,
 		"statuses":              player.Statuses,
 		"growth_data":           player.GrowthData,
-		"dao_marks":             player.DaoMarks,
 		"path_masteries":        player.PathMasteries,
 		"passive_stats":         passiveStats,
 		"equipped_gus":          equippedGus,
@@ -329,16 +328,8 @@ func AdminListPlayerItems(c *gin.Context) {
 		}
 	}
 
-	var total int
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_inventory_items WHERE `+where, args...).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm vật phẩm"})
-		return
-	}
-
-	query := `SELECT item_id, category, quantity FROM player_inventory_items WHERE ` + where + ` ORDER BY item_id ASC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
-	dataArgs := append(append([]interface{}{}, args...), limit, offset)
-
-	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
+	query := `SELECT item_id, category, quantity, created_at, updated_at FROM player_inventory_items WHERE ` + where + ` ORDER BY item_id ASC`
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải vật phẩm"})
 		return
@@ -349,7 +340,8 @@ func AdminListPlayerItems(c *gin.Context) {
 	for rows.Next() {
 		var itemID, category string
 		var quantity int
-		if err := rows.Scan(&itemID, &category, &quantity); err != nil {
+		var createdAt, updatedAt interface{}
+		if err := rows.Scan(&itemID, &category, &quantity, &createdAt, &updatedAt); err != nil {
 			continue
 		}
 		spec, ok := models.ItemRegistry[itemID]
@@ -367,16 +359,25 @@ func AdminListPlayerItems(c *gin.Context) {
 			"rank":      rank,
 			"category":  category,
 			"quantity":  quantity,
+			"created_at": createdAt,
+			"updated_at": updatedAt,
 		})
 	}
 
-	// Include unlocked recipes (Cổ phương) so admins can view/remove them too.
-	recipeCount := 0
-	if recipeRows, err := db.DB.QueryContext(c.Request.Context(), `SELECT recipe_id FROM player_recipe_progress WHERE player_id = $1 AND is_unlocked = true ORDER BY recipe_id`, playerID); err == nil {
+	// Include recipe progress rows (Cổ phương), including locked progress, so all fields remain editable.
+	if recipeRows, err := db.DB.QueryContext(c.Request.Context(), `SELECT recipe_id, completion_rate, is_unlocked, deduce_count, last_deduce_at, favorite FROM player_recipe_progress WHERE player_id = $1 ORDER BY recipe_id`, playerID); err == nil {
 		defer recipeRows.Close()
 		for recipeRows.Next() {
 			var recipeID string
-			if err := recipeRows.Scan(&recipeID); err != nil {
+			var completionRate float64
+			var isUnlocked bool
+			var deduceCount int
+			var lastDeduceAt interface{}
+			var favorite bool
+			if err := recipeRows.Scan(&recipeID, &completionRate, &isUnlocked, &deduceCount, &lastDeduceAt, &favorite); err != nil {
+				continue
+			}
+			if search != "" && !strings.Contains(strings.ToLower(recipeID), strings.ToLower(search)) {
 				continue
 			}
 			name := recipeID
@@ -390,17 +391,30 @@ func AdminListPlayerItems(c *gin.Context) {
 				name = spec.Name
 			}
 			data = append(data, gin.H{
-				"item_id":   recipeID,
-				"name":      name,
-				"item_type": "recipe",
-				"rank":      0,
-				"category":  "recipe",
-				"quantity":  1,
+				"item_id":         recipeID,
+				"name":            name,
+				"item_type":       "recipe",
+				"rank":            0,
+				"category":        "recipe",
+				"quantity":        1,
+				"completion_rate": completionRate,
+				"is_unlocked":     isUnlocked,
+				"deduce_count":    deduceCount,
+				"last_deduce_at":  lastDeduceAt,
+				"favorite":        favorite,
 			})
-			recipeCount++
 		}
 	}
-	total += recipeCount
+	total := len(data)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	data = data[start:end]
 
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": total})
 }
@@ -429,62 +443,48 @@ func AdminListPlayerGus(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
-	inv, err := db.LoadPlayerGus(db.DB, playerID.String(), false)
-	if err != nil {
+	var exists bool
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM players WHERE id=$1)`, playerID).Scan(&exists); err != nil || !exists {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
 	}
 
+	start := offset
+	end := offset + limit
+
+	// Expose persistence fields used by the admin editor, including read-only ownership metadata.
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours, created_at, updated_at, last_fed_at FROM player_gu WHERE player_id=$1 AND location <> 'ACTOR' ORDER BY created_at ASC, id ASC`, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
+		return
+	}
+	defer rows.Close()
+	all := make([]gin.H, 0)
+	for rows.Next() {
+		var id, guID, state, location string
+		var guRank, rank, level int
+		var hunger, integrationTime, growthHours float64
+		var locked, equipped, vital bool
+		var equippedAt, createdAt, updatedAt, lastFedAt interface{}
+		if err := rows.Scan(&id, &guID, &guRank, &rank, &level, &hunger, &state, &location, &locked, &equipped, &vital, &integrationTime, &equippedAt, &growthHours, &createdAt, &updatedAt, &lastFedAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"})
+			return
+		}
+		name := guID
+		if spec, ok := models.GetGu(guID, rank); ok { name = spec.Name } else if spec, ok := models.GetGuAny(guID); ok { name = spec.Name }
+		_ = guRank // returned separately because both rank columns are persisted
+		all = append(all, gin.H{"instance_id": id, "gu_id": guID, "name": name, "gu_rank": guRank, "rank": rank, "level": level, "hunger": hunger, "status": state, "location": location, "is_locked": locked, "equipped": equipped, "is_vital": vital, "integration_time": integrationTime, "equipped_at": equippedAt, "growth_hours": growthHours, "created_at": createdAt, "updated_at": updatedAt, "last_fed_at": lastFedAt})
+	}
+	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc chi tiết cổ trùng"}); return }
 	if search != "" {
 		lower := strings.ToLower(search)
-		guIDs := models.GuIDsByName(search)
-		filtered := models.GuInventory{}
-		for _, gu := range inv {
-			if strings.Contains(strings.ToLower(gu.GuID), lower) || strings.Contains(strings.ToLower(gu.InstanceID), lower) {
-				filtered = append(filtered, gu)
-				continue
-			}
-			for _, gid := range guIDs {
-				if gu.GuID == gid {
-					filtered = append(filtered, gu)
-					break
-				}
-			}
-		}
-		inv = filtered
+		ids := models.GuIDsByName(search)
+		filtered := make([]gin.H, 0, len(all))
+		for _, row := range all { guID := row["gu_id"].(string); instanceID := row["instance_id"].(string); matched := strings.Contains(strings.ToLower(guID), lower) || strings.Contains(strings.ToLower(instanceID), lower); for _, id := range ids { if guID == id { matched = true; break } }; if matched { filtered = append(filtered, row) } }
+		all = filtered
 	}
-
-	total := len(inv)
-	start := offset
-	if start > total {
-		start = total
-	}
-	end := offset + limit
-	if end > total {
-		end = total
-	}
-
-	data := []gin.H{}
-	for _, gu := range inv[start:end] {
-		name := gu.GuID
-		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
-			name = spec.Name
-		} else if spec, ok := models.GetGuAny(gu.GuID); ok {
-			name = spec.Name
-		}
-		data = append(data, gin.H{
-			"instance_id": gu.InstanceID,
-			"gu_id":       gu.GuID,
-			"name":        name,
-			"rank":        gu.Rank,
-			"hunger":      gu.Hunger,
-			"status":      gu.Status,
-			"equipped":    gu.Equipped,
-			"is_vital":    gu.IsVital,
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{"data": data, "total": total})
+	if start > len(all) { start = len(all) }; if end > len(all) { end = len(all) }
+	c.JSON(http.StatusOK, gin.H{"data": all[start:end], "total": len(all)})
 }
 
 func AdminSearchGus(c *gin.Context) {

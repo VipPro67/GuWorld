@@ -17,45 +17,48 @@ import (
 )
 
 type AdminUpdatePlayerRequest struct {
-	Rank                *int               `json:"rank"`
-	SubRank             *int               `json:"sub_rank"`
-	AptitudeType        *string            `json:"aptitude_type"`
-	AptitudePercent     *float64           `json:"aptitude_percent"`
-	AptitudeGrade       *string            `json:"aptitude_grade"`
-	CurrentMana         *float64           `json:"current_mana"`
-	MaxMana             *float64           `json:"max_mana"`
-	HP                  *float64           `json:"hp"`
-	BaseHP              *float64           `json:"base_hp"`
-	WallProgress        *float64           `json:"wall_progress"`
-	HumanQi             *float64           `json:"human_qi"`
-	Lifespan            *float64           `json:"lifespan"`
-	CurrentRegion       *string            `json:"current_region"`
-	X                   *int               `json:"x"`
-	Y                   *int               `json:"y"`
-	SoulHP              *float64           `json:"soul_hp"`
-	MaxSoul             *float64           `json:"max_soul"`
-	SoulTier            *string            `json:"soul_tier"`
-	ExploreCount        *int               `json:"explore_count"`
-	ApertureStress      *float64           `json:"aperture_stress"`
-	Bio                 *string            `json:"bio"`
-	AvatarURL           *string            `json:"avatar_url"`
-	Race                *string            `json:"race"`
-	Gender              *string            `json:"gender"`
-	Constitution        *string            `json:"constitution"`
-	Statuses            *models.StatusList `json:"statuses"`
-	CurrentThought      *float64           `json:"current_thought"`
-	MaxThought          *float64           `json:"max_thought"`
-	ThoughtRegenRate    *float64           `json:"thought_regen_rate"`
-	TimeSpeedMultiplier *float64           `json:"time_speed_multiplier"`
-	NeedsSoulRefine     *bool              `json:"needs_soul_refine"`
-	SelectedTitle       *string            `json:"selected_title"`
-	SelectedFrame       *string            `json:"selected_frame"`
-	FakeRank            *int               `json:"fake_rank"`
-	FakeSubRank         *int               `json:"fake_sub_rank"`
-	FakeVitalGu         *string            `json:"fake_vital_gu"`
-	IsDisguised         *bool              `json:"is_disguised"`
-	NeedsOnboarding     *bool              `json:"needs_onboarding"`
-	ImmortalJade        *float64           `json:"immortal_jade"`
+	Username            *string                  `json:"username"`
+	Email               *string                  `json:"email"`
+	Rank                *int                     `json:"rank"`
+	SubRank             *int                     `json:"sub_rank"`
+	AptitudeType        *string                  `json:"aptitude_type"`
+	AptitudePercent     *float64                 `json:"aptitude_percent"`
+	AptitudeGrade       *string                  `json:"aptitude_grade"`
+	CurrentMana         *float64                 `json:"current_mana"`
+	MaxMana             *float64                 `json:"max_mana"`
+	HP                  *float64                 `json:"hp"`
+	BaseHP              *float64                 `json:"base_hp"`
+	WallProgress        *float64                 `json:"wall_progress"`
+	HumanQi             *float64                 `json:"human_qi"`
+	Lifespan            *float64                 `json:"lifespan"`
+	CurrentRegion       *string                  `json:"current_region"`
+	X                   *int                     `json:"x"`
+	Y                   *int                     `json:"y"`
+	SoulHP              *float64                 `json:"soul_hp"`
+	MaxSoul             *float64                 `json:"max_soul"`
+	SoulTier            *string                  `json:"soul_tier"`
+	ExploreCount        *int                     `json:"explore_count"`
+	ApertureStress      *float64                 `json:"aperture_stress"`
+	Bio                 *string                  `json:"bio"`
+	AvatarURL           *string                  `json:"avatar_url"`
+	Race                *string                  `json:"race"`
+	Gender              *string                  `json:"gender"`
+	Constitution        *string                  `json:"constitution"`
+	Statuses            *models.StatusList       `json:"statuses"`
+	PathMasteries       *models.PathMasteriesMap `json:"path_masteries"`
+	CurrentThought      *float64                 `json:"current_thought"`
+	MaxThought          *float64                 `json:"max_thought"`
+	ThoughtRegenRate    *float64                 `json:"thought_regen_rate"`
+	TimeSpeedMultiplier *float64                 `json:"time_speed_multiplier"`
+	NeedsSoulRefine     *bool                    `json:"needs_soul_refine"`
+	SelectedTitle       *string                  `json:"selected_title"`
+	SelectedFrame       *string                  `json:"selected_frame"`
+	FakeRank            *int                     `json:"fake_rank"`
+	FakeSubRank         *int                     `json:"fake_sub_rank"`
+	FakeVitalGu         *string                  `json:"fake_vital_gu"`
+	IsDisguised         *bool                    `json:"is_disguised"`
+	NeedsOnboarding     *bool                    `json:"needs_onboarding"`
+	ImmortalJade        *float64                 `json:"immortal_jade"`
 }
 
 // AdminUpdatePlayer allows admins to edit a wide range of player attributes in one call.
@@ -92,6 +95,45 @@ func AdminUpdatePlayer(c *gin.Context) {
 	sets := []string{}
 	args := []interface{}{}
 	argIdx := 1
+
+	if req.Username != nil {
+		username := strings.TrimSpace(*req.Username)
+		if len(username) < 3 || len(username) > 50 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tên đăng nhập phải dài 3-50 ký tự"})
+			return
+		}
+		var exists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE username=$1 AND id<>$2)`, username, playerID).Scan(&exists); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra tên đăng nhập"})
+			return
+		}
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tên đăng nhập đã được sử dụng"})
+			return
+		}
+		sets = append(sets, "username=$"+strconv.Itoa(argIdx))
+		args = append(args, username)
+		argIdx++
+	}
+	if req.Email != nil {
+		email := strings.TrimSpace(strings.ToLower(*req.Email))
+		if email != "" && (!strings.Contains(email, "@") || len(email) > 255) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Email không hợp lệ"})
+			return
+		}
+		var exists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE email=$1 AND id<>$2)`, email, playerID).Scan(&exists); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra email"})
+			return
+		}
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email đã được sử dụng"})
+			return
+		}
+		sets = append(sets, "email=$"+strconv.Itoa(argIdx))
+		args = append(args, email)
+		argIdx++
+	}
 
 	if req.Rank != nil {
 		rank := *req.Rank
@@ -275,6 +317,20 @@ func AdminUpdatePlayer(c *gin.Context) {
 		}
 		sets = append(sets, "statuses=$"+strconv.Itoa(argIdx))
 		args = append(args, statuses)
+		argIdx++
+	}
+	if req.PathMasteries != nil {
+		normalized := make(models.PathMasteriesMap, len(*req.PathMasteries))
+		for path, points := range *req.PathMasteries {
+			path = strings.TrimSpace(path)
+			if path == "" || len(path) > 100 || points < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "path_masteries không hợp lệ"})
+				return
+			}
+			normalized[path] = points
+		}
+		sets = append(sets, "path_masteries=$"+strconv.Itoa(argIdx))
+		args = append(args, normalized)
 		argIdx++
 	}
 	if req.CurrentThought != nil {

@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -70,7 +72,7 @@ func AdminListMonsters(c *gin.Context) {
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, type, max_hp, base_attack, base_defense,
-		COALESCE(gu_inventory,'[]'::jsonb), COALESCE(item_inventory,'{}'::jsonb),
+		COALESCE(gu_inventory,'[]'::jsonb), COALESCE(gu_pool,'[]'::jsonb), COALESCE(item_inventory,'{}'::jsonb),
 		COALESCE(dao_marks,'{}'::jsonb), COALESCE(path_masteries,'{}'::jsonb),
 		COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''),
 		COALESCE(description,''), COALESCE(is_active,true),
@@ -90,6 +92,7 @@ func AdminListMonsters(c *gin.Context) {
 		BaseAttack       float64         `json:"base_attack"`
 		BaseDefense      float64         `json:"base_defense"`
 		GuInventory      json.RawMessage `json:"gu_inventory"`
+		GuPool           json.RawMessage `json:"gu_pool"`
 		ItemInventory    json.RawMessage `json:"item_inventory"`
 		DaoMarks         json.RawMessage `json:"dao_marks"`
 		PathMasteries    json.RawMessage `json:"path_masteries"`
@@ -105,12 +108,17 @@ func AdminListMonsters(c *gin.Context) {
 	for rows.Next() {
 		var r MonsterRow
 		if err := rows.Scan(&r.ID, &r.Name, &r.Type, &r.MaxHP, &r.BaseAttack, &r.BaseDefense,
-			&r.GuInventory, &r.ItemInventory, &r.DaoMarks, &r.PathMasteries,
+			&r.GuInventory, &r.GuPool, &r.ItemInventory, &r.DaoMarks, &r.PathMasteries,
 			&r.AIProfile, &r.LootTableID, &r.Description, &r.IsActive,
 			&r.IsCapturable, &r.CaptureChance, &r.PetHungerPerHour); err != nil {
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ dữ liệu quái vật"})
+			return
 		}
 		items = append(items, r)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách quái vật"})
+		return
 	}
 	c.JSON(http.StatusOK, items)
 }
@@ -123,6 +131,7 @@ type AdminMonsterInput struct {
 	BaseAttack       float64         `json:"base_attack"`
 	BaseDefense      float64         `json:"base_defense"`
 	GuInventory      json.RawMessage `json:"gu_inventory"`
+	GuPool           json.RawMessage `json:"gu_pool"`
 	ItemInventory    json.RawMessage `json:"item_inventory"`
 	DaoMarks         json.RawMessage `json:"dao_marks"`
 	PathMasteries    json.RawMessage `json:"path_masteries"`
@@ -135,28 +144,41 @@ type AdminMonsterInput struct {
 	PetHungerPerHour float64         `json:"pet_hunger_per_hour"`
 }
 
-func AdminCreateMonster(c *gin.Context) {
-	adminID, ok := requireAdmin(c)
-	if !ok {
-		return
+func normalizeAdminMonsterInput(c *gin.Context, req *AdminMonsterInput, creating bool) bool {
+	req.ID, req.Name, req.Type = strings.TrimSpace(req.ID), strings.TrimSpace(req.Name), strings.TrimSpace(req.Type)
+	if req.ID == "" || len(req.ID) > 50 || req.Name == "" || len(req.Name) > 100 || req.Type == "" || len(req.Type) > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID (1-50), tên (1-100) và loại quái vật (1-50) là bắt buộc"})
+		return false
 	}
-	var req AdminMonsterInput
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
-		return
-	}
-	if req.ID == "" || req.Name == "" || req.Type == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id, name, type là bắt buộc"})
-		return
-	}
-	if req.MaxHP <= 0 {
-		req.MaxHP = 100
+	if math.IsNaN(req.MaxHP) || math.IsInf(req.MaxHP, 0) || req.MaxHP <= 0 ||
+		math.IsNaN(req.BaseAttack) || math.IsInf(req.BaseAttack, 0) || req.BaseAttack < 0 ||
+		math.IsNaN(req.BaseDefense) || math.IsInf(req.BaseDefense, 0) || req.BaseDefense < 0 ||
+		math.IsNaN(req.CaptureChance) || math.IsInf(req.CaptureChance, 0) || req.CaptureChance < 0 || req.CaptureChance > 1 ||
+		math.IsNaN(req.PetHungerPerHour) || math.IsInf(req.PetHungerPerHour, 0) || req.PetHungerPerHour < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ số HP, tấn công, phòng thủ, tỉ lệ bắt hoặc mức đói không hợp lệ"})
+		return false
 	}
 	if req.AIProfile == "" {
 		req.AIProfile = "beast_basic"
 	}
+	if creating {
+		if req.IsActive == nil {
+			value := true
+			req.IsActive = &value
+		}
+		if req.IsCapturable == nil {
+			value := false
+			req.IsCapturable = &value
+		}
+	} else if req.IsActive == nil || req.IsCapturable == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu trạng thái hoạt động hoặc trạng thái có thể bắt"})
+		return false
+	}
 	if len(req.GuInventory) == 0 {
 		req.GuInventory = json.RawMessage(`[]`)
+	}
+	if len(req.GuPool) == 0 {
+		req.GuPool = json.RawMessage(`[]`)
 	}
 	if len(req.ItemInventory) == 0 {
 		req.ItemInventory = json.RawMessage(`{}`)
@@ -167,19 +189,31 @@ func AdminCreateMonster(c *gin.Context) {
 	if len(req.PathMasteries) == 0 {
 		req.PathMasteries = json.RawMessage(`{}`)
 	}
-	if req.CaptureChance <= 0 {
-		req.CaptureChance = 0.20
+	var guInventory, guPool []json.RawMessage
+	var itemInventory, daoMarks, pathMasteries map[string]json.RawMessage
+	if json.Unmarshal(req.GuInventory, &guInventory) != nil || guInventory == nil ||
+		json.Unmarshal(req.GuPool, &guPool) != nil || guPool == nil ||
+		json.Unmarshal(req.ItemInventory, &itemInventory) != nil || itemInventory == nil ||
+		json.Unmarshal(req.DaoMarks, &daoMarks) != nil || daoMarks == nil ||
+		json.Unmarshal(req.PathMasteries, &pathMasteries) != nil || pathMasteries == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Gu inventory và gu pool phải là mảng JSON; item inventory, dao marks và path masteries phải là đối tượng JSON"})
+		return false
 	}
-	if req.PetHungerPerHour <= 0 {
-		req.PetHungerPerHour = 2.0
+	return true
+}
+
+func AdminCreateMonster(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
 	}
-	isActive := true
-	if req.IsActive != nil {
-		isActive = *req.IsActive
+	var req AdminMonsterInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
 	}
-	isCapturable := false
-	if req.IsCapturable != nil {
-		isCapturable = *req.IsCapturable
+	if !normalizeAdminMonsterInput(c, &req, true) {
+		return
 	}
 	// loot_table_id FK references loot_tables(id); normalize '' to NULL so
 	// monsters without a loot table remain insertable.
@@ -188,16 +222,19 @@ func AdminCreateMonster(c *gin.Context) {
 		lootTableID = req.LootTableID
 	}
 
-	_, err := db.DB.Exec(`INSERT INTO monster_templates(id,name,type,max_hp,base_attack,base_defense,gu_inventory,item_inventory,dao_marks,path_masteries,ai_profile,loot_table_id,description,is_active,is_capturable,capture_chance,pet_hunger_per_hour) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+	_, err := db.DB.Exec(`INSERT INTO monster_templates(id,name,type,max_hp,base_attack,base_defense,gu_inventory,gu_pool,item_inventory,dao_marks,path_masteries,ai_profile,loot_table_id,description,is_active,is_capturable,capture_chance,pet_hunger_per_hour) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
 		req.ID, req.Name, req.Type, req.MaxHP, req.BaseAttack, req.BaseDefense,
-		req.GuInventory, req.ItemInventory, req.DaoMarks, req.PathMasteries,
-		req.AIProfile, lootTableID, req.Description, isActive, isCapturable,
+		req.GuInventory, req.GuPool, req.ItemInventory, req.DaoMarks, req.PathMasteries,
+		req.AIProfile, lootTableID, req.Description, *req.IsActive, *req.IsCapturable,
 		req.CaptureChance, req.PetHungerPerHour)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
 		return
 	}
-	models.LoadMonsterRegistry(db.DB)
+	if err := models.LoadMonsterRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu quái vật nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_monster", "id=%s name=%s", req.ID, req.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo quái vật"})
 }
@@ -213,101 +250,37 @@ func AdminUpdateMonster(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}
-	args := []interface{}{}
-	idx := 1
-	if req.Name != "" {
-		sets = append(sets, "name=$"+strconv.Itoa(idx))
-		args = append(args, req.Name)
-		idx++
-	}
-	if req.Type != "" {
-		sets = append(sets, "type=$"+strconv.Itoa(idx))
-		args = append(args, req.Type)
-		idx++
-	}
-	if req.MaxHP > 0 {
-		sets = append(sets, "max_hp=$"+strconv.Itoa(idx))
-		args = append(args, req.MaxHP)
-		idx++
-	}
-	if req.BaseAttack > 0 {
-		sets = append(sets, "base_attack=$"+strconv.Itoa(idx))
-		args = append(args, req.BaseAttack)
-		idx++
-	}
-	if req.BaseDefense > 0 {
-		sets = append(sets, "base_defense=$"+strconv.Itoa(idx))
-		args = append(args, req.BaseDefense)
-		idx++
-	}
-	if req.AIProfile != "" {
-		sets = append(sets, "ai_profile=$"+strconv.Itoa(idx))
-		args = append(args, req.AIProfile)
-		idx++
-	}
-	if req.LootTableID != "" || true {
-		sets = append(sets, "loot_table_id=$"+strconv.Itoa(idx))
-		args = append(args, req.LootTableID)
-		idx++
-	}
-	if req.Description != "" || true {
-		sets = append(sets, "description=$"+strconv.Itoa(idx))
-		args = append(args, req.Description)
-		idx++
-	}
-	if req.GuInventory != nil {
-		sets = append(sets, "gu_inventory=$"+strconv.Itoa(idx))
-		args = append(args, req.GuInventory)
-		idx++
-	}
-	if req.ItemInventory != nil {
-		sets = append(sets, "item_inventory=$"+strconv.Itoa(idx))
-		args = append(args, req.ItemInventory)
-		idx++
-	}
-	if req.DaoMarks != nil {
-		sets = append(sets, "dao_marks=$"+strconv.Itoa(idx))
-		args = append(args, req.DaoMarks)
-		idx++
-	}
-	if req.PathMasteries != nil {
-		sets = append(sets, "path_masteries=$"+strconv.Itoa(idx))
-		args = append(args, req.PathMasteries)
-		idx++
-	}
-	if req.IsActive != nil {
-		sets = append(sets, "is_active=$"+strconv.Itoa(idx))
-		args = append(args, *req.IsActive)
-		idx++
-	}
-	if req.IsCapturable != nil {
-		sets = append(sets, "is_capturable=$"+strconv.Itoa(idx))
-		args = append(args, *req.IsCapturable)
-		idx++
-	}
-	if req.CaptureChance > 0 {
-		sets = append(sets, "capture_chance=$"+strconv.Itoa(idx))
-		args = append(args, req.CaptureChance)
-		idx++
-	}
-	if req.PetHungerPerHour > 0 {
-		sets = append(sets, "pet_hunger_per_hour=$"+strconv.Itoa(idx))
-		args = append(args, req.PetHungerPerHour)
-		idx++
-	}
-	if len(sets) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+	if req.ID != "" && req.ID != monsterID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID quái vật; hãy tạo quái vật mới"})
 		return
 	}
-	sets = append(sets, "updated_at=NOW()")
-	args = append(args, monsterID)
-	_, err := db.DB.Exec(`UPDATE monster_templates SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
+	req.ID = monsterID
+	if !normalizeAdminMonsterInput(c, &req, false) {
+		return
+	}
+	var lootTableID interface{}
+	if strings.TrimSpace(req.LootTableID) != "" {
+		lootTableID = req.LootTableID
+	}
+	result, err := db.DB.Exec(`UPDATE monster_templates SET name=$1,type=$2,max_hp=$3,base_attack=$4,base_defense=$5,gu_inventory=$6,gu_pool=$7,item_inventory=$8,dao_marks=$9,path_masteries=$10,ai_profile=$11,loot_table_id=$12,description=$13,is_active=$14,is_capturable=$15,capture_chance=$16,pet_hunger_per_hour=$17,updated_at=NOW() WHERE id=$18`,
+		req.Name, req.Type, req.MaxHP, req.BaseAttack, req.BaseDefense, req.GuInventory, req.GuPool, req.ItemInventory, req.DaoMarks, req.PathMasteries, req.AIProfile, lootTableID, req.Description, *req.IsActive, *req.IsCapturable, req.CaptureChance, req.PetHungerPerHour, monsterID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 		return
 	}
-	models.LoadMonsterRegistry(db.DB)
+	updated, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận quái vật đã được cập nhật"})
+		return
+	}
+	if updated == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy quái vật"})
+		return
+	}
+	if err := models.LoadMonsterRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu quái vật nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_monster", "id=%s", monsterID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật quái vật"})
 }
@@ -318,12 +291,24 @@ func AdminDeleteMonster(c *gin.Context) {
 		return
 	}
 	monsterID := c.Param("id")
-	_, err := db.DB.Exec(`DELETE FROM monster_templates WHERE id=$1`, monsterID)
+	result, err := db.DB.Exec(`DELETE FROM monster_templates WHERE id=$1`, monsterID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return
 	}
-	models.LoadMonsterRegistry(db.DB)
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận quái vật đã được xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy quái vật"})
+		return
+	}
+	if err := models.LoadMonsterRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa quái vật nhưng không thể tải lại catalog: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_monster", "id=%s", monsterID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa quái vật"})
 }
@@ -350,9 +335,14 @@ func AdminListLootTables(c *gin.Context) {
 	for rows.Next() {
 		var r LootTableRow
 		if err := rows.Scan(&r.ID, &r.Name, &r.Entries); err != nil {
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ danh sách bảng loot"})
+			return
 		}
 		items = append(items, r)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách bảng loot"})
+		return
 	}
 	c.JSON(http.StatusOK, items)
 }
@@ -361,6 +351,24 @@ type AdminLootTableInput struct {
 	ID      string          `json:"id"`
 	Name    string          `json:"name"`
 	Entries json.RawMessage `json:"entries"`
+}
+
+func validateAdminLootTableInput(c *gin.Context, req *AdminLootTableInput) bool {
+	req.ID, req.Name = strings.TrimSpace(req.ID), strings.TrimSpace(req.Name)
+	if req.ID == "" || len(req.ID) > 50 || req.Name == "" || len(req.Name) > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID (1-50) và tên bảng loot (1-100) là bắt buộc"})
+		return false
+	}
+	if len(req.Entries) == 0 {
+		req.Entries = json.RawMessage(`[]`)
+	}
+	var entries []models.LootEntry
+	if json.Unmarshal(req.Entries, &entries) != nil || entries == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Danh sách loot phải là mảng JSON hợp lệ"})
+		return false
+	}
+	req.Entries = json.RawMessage(db.FilterImmortalLootEntries(string(req.Entries)))
+	return true
 }
 
 func AdminCreateLootTable(c *gin.Context) {
@@ -373,14 +381,9 @@ func AdminCreateLootTable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	if req.ID == "" || req.Name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id và name là bắt buộc"})
+	if !validateAdminLootTableInput(c, &req) {
 		return
 	}
-	if len(req.Entries) == 0 {
-		req.Entries = json.RawMessage(`[]`)
-	}
-	req.Entries = json.RawMessage(db.FilterImmortalLootEntries(string(req.Entries)))
 
 	_, err := db.DB.Exec(`INSERT INTO loot_tables(id,name,entries) VALUES($1,$2,$3::jsonb)`,
 		req.ID, req.Name, req.Entries)
@@ -404,28 +407,21 @@ func AdminUpdateLootTable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}
-	args := []interface{}{}
-	idx := 1
-	if req.Name != "" {
-		sets = append(sets, "name=$"+strconv.Itoa(idx))
-		args = append(args, req.Name)
-		idx++
-	}
-	if req.Entries != nil {
-		req.Entries = json.RawMessage(db.FilterImmortalLootEntries(string(req.Entries)))
-		sets = append(sets, "entries=$"+strconv.Itoa(idx)+"::jsonb")
-		args = append(args, req.Entries)
-		idx++
-	}
-	if len(sets) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+	if req.ID != "" && req.ID != tableID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID bảng loot; hãy tạo bảng mới"})
 		return
 	}
-	sets = append(sets, "updated_at=NOW()")
-	args = append(args, tableID)
-	_, err := db.DB.Exec(`UPDATE loot_tables SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
+	req.ID = tableID
+	if !validateAdminLootTableInput(c, &req) {
+		return
+	}
+	var updatedID string
+	err := db.DB.QueryRowContext(c.Request.Context(), `UPDATE loot_tables SET name=$1,entries=$2::jsonb,updated_at=NOW() WHERE id=$3 RETURNING id`, req.Name, req.Entries, tableID).Scan(&updatedID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bảng loot"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 		return
 	}
@@ -440,9 +436,18 @@ func AdminDeleteLootTable(c *gin.Context) {
 		return
 	}
 	tableID := c.Param("id")
-	_, err := db.DB.Exec(`DELETE FROM loot_tables WHERE id=$1`, tableID)
+	result, err := db.DB.Exec(`DELETE FROM loot_tables WHERE id=$1`, tableID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		return
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận bảng loot đã được xóa"})
+		return
+	}
+	if deleted == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bảng loot"})
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_loot_table", "id=%s", tableID)
