@@ -37,6 +37,7 @@ func UpdateTradeOffer(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	_, _ = tx.Exec("SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '8000', true)")
 
 	// 1. Load trade details
 	var senderID, receiverID uuid.UUID
@@ -196,6 +197,7 @@ func LockTrade(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	_, _ = tx.Exec("SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '8000', true)")
 
 	var senderID, receiverID uuid.UUID
 	var senderName, receiverName string
@@ -253,6 +255,7 @@ func UnlockTrade(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	_, _ = tx.Exec("SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '8000', true)")
 
 	var senderID, receiverID uuid.UUID
 	var senderName, receiverName string
@@ -310,6 +313,7 @@ func ConfirmTrade(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	_, _ = tx.Exec("SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '8000', true)")
 
 	var senderID, receiverID uuid.UUID
 	var senderName, receiverName string

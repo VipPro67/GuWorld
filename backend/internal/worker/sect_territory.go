@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/lib/pq"
@@ -92,11 +93,15 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 	if len(activeSects) == 0 {
 		return
 	}
+	sort.Slice(activeSects, func(i, j int) bool {
+		return activeSects[i].id < activeSects[j].id
+	})
 
 	sectIDs := make([]string, 0, len(activeSects))
 	for _, sr := range activeSects {
 		sectIDs = append(sectIDs, sr.id)
 	}
+	sort.Strings(sectIDs)
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -104,6 +109,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		return
 	}
 	defer tx.Rollback()
+	_, _ = tx.ExecContext(ctx, `SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '10000', true)`)
 
 	// 1a. Defender counts per sect
 	defenderCountMap := map[string]int{}
@@ -161,6 +167,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 	for pid := range allMemberIDSet {
 		allMemberIDs = append(allMemberIDs, pid)
 	}
+	sort.Strings(allMemberIDs)
 
 	now := time.Now()
 	today := now.Format("2006-01-02")
@@ -282,10 +289,24 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 			}
 		}
 
-		// Update sect_vault_materials using upsert
-		for sid, vault := range vaultMap {
-			for matID, qty := range vault {
-				_, err := tx.Exec(`
+		// Update sect_vault_materials using deterministic upsert order
+		sortedVaultSectIDs := make([]string, 0, len(vaultMap))
+		for sid := range vaultMap {
+			sortedVaultSectIDs = append(sortedVaultSectIDs, sid)
+		}
+		sort.Strings(sortedVaultSectIDs)
+
+		for _, sid := range sortedVaultSectIDs {
+			vault := vaultMap[sid]
+			sortedMatIDs := make([]string, 0, len(vault))
+			for matID := range vault {
+				sortedMatIDs = append(sortedMatIDs, matID)
+			}
+			sort.Strings(sortedMatIDs)
+
+			for _, matID := range sortedMatIDs {
+				qty := vault[matID]
+				_, err := tx.ExecContext(ctx, `
 					INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
 					VALUES ($1, $2, $3)
 					ON CONFLICT (sect_id, item_id) DO UPDATE SET
@@ -397,6 +418,9 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		}
 
 		if len(creditResults) > 0 {
+			sort.Slice(creditResults, func(i, j int) bool {
+				return creditResults[i].playerID < creditResults[j].playerID
+			})
 			crIDs := make([]string, 0, len(creditResults))
 			crDeltas := make([]int, 0, len(creditResults))
 			crPendings := make([]float64, 0, len(creditResults))
