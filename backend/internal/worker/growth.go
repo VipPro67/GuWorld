@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -394,7 +395,11 @@ func updatePlayerGrowthOnce(ctx context.Context, db *sql.DB, playerID string, gu
 	// Keeping this order aligned with hunger evaluation prevents a direct
 	// players <-> player_gu deadlock cycle.
 	var lockedPlayerID string
-	if err := tx.QueryRow(`SELECT id::text FROM players WHERE id = $1::uuid FOR UPDATE`, playerID).Scan(&lockedPlayerID); err != nil {
+	if err := tx.QueryRow(`SELECT id::text FROM players WHERE id = $1::uuid FOR UPDATE SKIP LOCKED`, playerID).Scan(&lockedPlayerID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Player row is locked by concurrent gameplay action, skip this growth tick cleanly
+			return nil
+		}
 		return err
 	}
 

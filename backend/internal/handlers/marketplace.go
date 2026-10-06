@@ -501,9 +501,13 @@ func PlaceBid(c *gin.Context) {
 		SELECT a.seller_id, p.username, a.currency, a.current_price, a.highest_bidder_id, a.status, a.end_time, a.listing_type, a.item_type, a.item_data 
 		FROM auction a
 		JOIN players p ON a.seller_id = p.id
-		WHERE a.id=$1 FOR UPDATE
+		WHERE a.id=$1 FOR UPDATE OF a NOWAIT
 	`, req.ListingID).Scan(&sellerID, &sellerName, &currency, &current, &bidder, &status, &end, &listingType, &itemType, &rawItemData)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Phiên đấu giá đang có người khác đặt giá, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
 		return
 	}
@@ -663,8 +667,12 @@ func BuyListing(c *gin.Context) {
 	var durationHours int
 	var rawItemData []byte
 	var targetBuyerID sql.NullString
-	err = tx.QueryRow(`SELECT seller_id, item_type, item_data, quantity, currency, current_price, status, listing_type, target_buyer_id, duration_hours FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &currency, &currentPrice, &status, &listingType, &targetBuyerID, &durationHours)
+	err = tx.QueryRow(`SELECT seller_id, item_type, item_data, quantity, currency, current_price, status, listing_type, target_buyer_id, duration_hours FROM auction WHERE id=$1 FOR UPDATE NOWAIT`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &currency, &currentPrice, &status, &listingType, &targetBuyerID, &durationHours)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Vật phẩm đang có người thanh toán hoặc cập nhật, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
 		return
 	}
@@ -865,8 +873,12 @@ func CancelListing(c *gin.Context) {
 	var rawItemData []byte
 	var qty int
 	var highestBidderID sql.NullString
-	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status,listing_type,highest_bidder_id FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &status, &listingType, &highestBidderID)
+	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status,listing_type,highest_bidder_id FROM auction WHERE id=$1 FOR UPDATE NOWAIT`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &status, &listingType, &highestBidderID)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Phiên giao dịch đang có người thao tác, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy listing"})
 		return
 	}

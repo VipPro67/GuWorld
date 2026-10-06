@@ -76,34 +76,20 @@ func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (i
 }
 
 func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi float64, chests int, mineType string) error {
-	var currentStones float64
-	var currentImmortalStones float64
-	var currentQi float64
-
-	err := tx.QueryRow(`
-		SELECT primeval_stones, immortal_stones, human_qi
-		FROM players WHERE id = $1 FOR UPDATE
-	`, playerID).Scan(&currentStones, &currentImmortalStones, &currentQi)
-	if err != nil {
-		return err
-	}
-
+	var stonesAdd, immortalAdd float64
 	if mineType == "immortal" {
-		currentImmortalStones += float64(stones)
+		immortalAdd = float64(stones)
 	} else {
-		currentStones += float64(stones)
+		stonesAdd = float64(stones)
 	}
 
-	currentQi += qi
-	if currentQi > 100000.0 {
-		currentQi = 100000.0
-	}
-
-	_, err = tx.Exec(`
+	_, err := tx.Exec(`
 		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, human_qi = $3
+		SET primeval_stones = primeval_stones + $1,
+		    immortal_stones = immortal_stones + $2,
+		    human_qi = LEAST(human_qi + $3, 100000.0)
 		WHERE id = $4
-	`, currentStones, currentImmortalStones, currentQi, playerID)
+	`, stonesAdd, immortalAdd, qi, playerID)
 	if err != nil {
 		return err
 	}
@@ -233,8 +219,12 @@ func OccupyMineSlot(c *gin.Context) {
 	var rarity string
 	var occupierID *string
 	var monsterIDCheck *string
-	err = tx.QueryRow("SELECT rarity, occupier_id, monster_id FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &occupierID, &monsterIDCheck)
+	err = tx.QueryRow("SELECT rarity, occupier_id, monster_id FROM mine_slots WHERE id = $1 FOR UPDATE NOWAIT", req.SlotID).Scan(&rarity, &occupierID, &monsterIDCheck)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Mỏ đang có người thao tác, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ không tồn tại"})
 		} else {
@@ -306,8 +296,12 @@ func ClaimMineRewards(c *gin.Context) {
 	var mineType string
 	var occupierID *string
 	var lastClaimedAt *time.Time
-	err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &mineType, &occupierID, &lastClaimedAt)
+	err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE NOWAIT", req.SlotID).Scan(&rarity, &mineType, &occupierID, &lastClaimedAt)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Mỏ đang có người thao tác, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify slot"})
 		return
 	}
@@ -388,8 +382,12 @@ func AbandonMineSlot(c *gin.Context) {
 	var mineType string
 	var occupierID *string
 	var lastClaimedAt *time.Time
-	err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &mineType, &occupierID, &lastClaimedAt)
+	err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE NOWAIT", req.SlotID).Scan(&rarity, &mineType, &occupierID, &lastClaimedAt)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Mỏ đang có người thao tác, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify slot"})
 		return
 	}
@@ -492,8 +490,12 @@ func AttackMineSlot(c *gin.Context) {
 	var occupierIDStr *string
 	var monsterIDStr *string
 	var monsterRank, monsterSubRank int
-	err = tx.QueryRow("SELECT occupier_id, monster_id, monster_rank, monster_sub_rank FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&occupierIDStr, &monsterIDStr, &monsterRank, &monsterSubRank)
+	err = tx.QueryRow("SELECT occupier_id, monster_id, monster_rank, monster_sub_rank FROM mine_slots WHERE id = $1 FOR UPDATE NOWAIT", req.SlotID).Scan(&occupierIDStr, &monsterIDStr, &monsterRank, &monsterSubRank)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Mỏ đang có người giao tranh hoặc thao tác, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ không tồn tại"})
 		} else {

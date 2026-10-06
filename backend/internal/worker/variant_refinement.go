@@ -124,7 +124,7 @@ func processRefinementJob(ctx context.Context, database *sql.DB, jobID string, r
 	err = tx.QueryRowContext(ctx, `
 		SELECT q.aperture_id, a.player_id, q.recipe_id, q.mode, q.target_quantity, q.current_quantity
 		FROM aperture_refinement_queue q JOIN immortal_apertures a ON a.id=q.aperture_id
-		WHERE q.id=$1 AND q.enabled=true FOR UPDATE OF q`, jobID).
+		WHERE q.id=$1 AND q.enabled=true FOR UPDATE OF q SKIP LOCKED`, jobID).
 		Scan(&apertureID, &playerID, &recipeID, &mode, &target, &current)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
@@ -261,7 +261,7 @@ func deductRefinementMaterial(ctx context.Context, tx *sql.Tx, playerID, itemID 
 	rows, err := tx.QueryContext(ctx, `
 		SELECT category, quantity FROM player_inventory_items
 		WHERE player_id=$1 AND item_id=$2 AND quantity>0
-		ORDER BY quantity DESC FOR UPDATE`, playerID, itemID)
+		ORDER BY quantity DESC FOR UPDATE SKIP LOCKED`, playerID, itemID)
 	if err != nil {
 		return err
 	}

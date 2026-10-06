@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -36,29 +38,26 @@ func UpgradeSect(c *gin.Context) {
 		return
 	}
 
-	// Fetch level and funds
-	var level int
-	var funds int64
-	err = tx.QueryRow(`SELECT level, funds FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&level, &funds)
+	// Atomic level upgrade and funds deduction with guard clause
+	var newLevel int
+	var newFunds int64
+	err = tx.QueryRow(`
+		UPDATE sects
+		SET level = level + 1,
+		    funds = funds - (level * level * 5000)
+		WHERE id = $1 AND funds >= (level * level * 5000)
+		RETURNING level, funds
+	`, sectID).Scan(&newLevel, &newFunds)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
-		return
-	}
-
-	cost := int64(level) * int64(level) * 5000
-	if funds < cost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để nâng cấp!"})
-		return
-	}
-
-	funds -= cost
-	level++
-
-	_, err = tx.Exec(`UPDATE sects SET level = $1, funds = $2 WHERE id = $3`, level, funds, sectID)
-	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để nâng cấp!"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upgrade sect"})
 		return
 	}
+	level := newLevel
+	funds := newFunds
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})

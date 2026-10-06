@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -26,8 +27,12 @@ func applyAutoCombatMineOccupation(tx *sql.Tx, player *models.Player, activeComb
 	var currentOccupierStr *string
 	var monsterIDStr *string
 	var lastClaimedAt *time.Time
-	err := tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
+	err := tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE NOWAIT", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
 	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			logger.S.Warnf("applyAutoCombatMineOccupation: mine slot %d is locked by concurrent transaction, skipping occupation", slotID)
+			return nil, false
+		}
 		if err != sql.ErrNoRows {
 			logger.S.Errorf("Failed to query mine slot %d: %v", slotID, err)
 			return nil, false

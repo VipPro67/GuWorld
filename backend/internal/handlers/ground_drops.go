@@ -183,14 +183,19 @@ func LootGroundDrop(c *gin.Context) {
 	err = tx.QueryRow(`
 		SELECT region_id, x, y, killer_id, killer_name, loser_id, loser_name, loot_data, protected_until, expires_at
 		FROM map_ground_drops
-		WHERE id = $1 FOR UPDATE
+		WHERE id = $1 FOR UPDATE NOWAIT
 	`, dropUUID).Scan(
 		&dropRegion, &dropX, &dropY, &killerID, &killerName, &loserID, &loserName, &lootBytes, &protectedUntil, &expiresAt,
 	)
-	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Chiến lợi phẩm không tồn tại hoặc đã biến mất"})
-		return
-	} else if err != nil {
+	if err != nil {
+		if db.IsLockNotAvailable(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Vật phẩm đang có người nhặt, vui lòng thử lại sau giây lát!", "code": "RESOURCE_BUSY"})
+			return
+		}
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chiến lợi phẩm không tồn tại hoặc đã biến mất"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query error"})
 		return
 	}

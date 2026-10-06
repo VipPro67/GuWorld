@@ -790,7 +790,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		destroyed int64
 	}
 	var matsList []stolenMat
-	matRows, err := tx.Query(`SELECT item_id, quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0 FOR UPDATE`, combat.TargetSectID)
+	matRows, err := tx.Query(`SELECT item_id, quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0 ORDER BY item_id ASC FOR UPDATE`, combat.TargetSectID)
 	if err != nil {
 		logger.S.Errorf("ApplySectWarVictory: failed to load vault materials for sect %s: %v", combat.TargetSectID, err)
 	} else {
@@ -881,7 +881,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 		destroyed  int64
 	}
 	var gusList []stolenGu
-	guRows, err := tx.Query(`SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 FOR UPDATE`, combat.TargetSectID)
+	guRows, err := tx.Query(`SELECT id, gu_id, rank, cost, quantity, hunger, COALESCE(instance_id, '') FROM sect_vault_gu WHERE sect_id = $1 AND quantity > 0 ORDER BY id ASC FOR UPDATE`, combat.TargetSectID)
 	if err != nil {
 		logger.S.Errorf("ApplySectWarVictory: failed to load vault Gus for sect %s: %v", combat.TargetSectID, err)
 	} else {
@@ -970,7 +970,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *models.Comba
 	}
 
 	// 4. Plunder vault_recipes
-	recRows, err := tx.Query(`SELECT recipe_id, completion_rate FROM sect_vault_recipes WHERE sect_id = $1 FOR UPDATE`, combat.TargetSectID)
+	recRows, err := tx.Query(`SELECT recipe_id, completion_rate FROM sect_vault_recipes WHERE sect_id = $1 ORDER BY recipe_id ASC FOR UPDATE`, combat.TargetSectID)
 	var targetVaultRecipes []models.SectVaultRecipe
 	if err != nil {
 		logger.S.Errorf("ApplySectWarVictory: failed to load vault recipes for sect %s: %v", combat.TargetSectID, err)

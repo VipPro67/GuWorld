@@ -204,7 +204,7 @@ func settleExpiredBuybackOrders() error {
 		if err := tx.QueryRow(`
 			SELECT buyer_id, order_type, item_type, item_target, COALESCE(item_data, 'null'::jsonb), unit_price,
 			       quantity_requested, quantity_filled, currency, status
-			FROM buyback_orders WHERE id = $1 FOR UPDATE`, eb.id,
+			FROM buyback_orders WHERE id = $1 FOR UPDATE SKIP LOCKED`, eb.id,
 		).Scan(&eb.buyerID, &eb.orderType, &eb.itemType, &eb.itemTarget, &eb.itemData, &eb.unitPrice,
 			&eb.quantityRequested, &eb.quantityFilled, &eb.currency, &currentStatus); err != nil || currentStatus != "ACTIVE" {
 			tx.Rollback()
@@ -296,7 +296,7 @@ func settleExpiredTradeOffers() error {
 			continue
 		}
 		var currentStatus string
-		if err := tx.QueryRow(`SELECT status FROM trade_offers WHERE id = $1 FOR UPDATE`, eo.id).Scan(&currentStatus); err != nil || currentStatus != "ACTIVE" {
+		if err := tx.QueryRow(`SELECT status FROM trade_offers WHERE id = $1 FOR UPDATE SKIP LOCKED`, eo.id).Scan(&currentStatus); err != nil || currentStatus != "ACTIVE" {
 			tx.Rollback()
 			continue
 		}

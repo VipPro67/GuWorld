@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -554,13 +555,13 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 		}
 
 		if payout > 0 {
-			var before float64
-			err = tx.QueryRow("SELECT primeval_stones FROM players WHERE id = $1 FOR UPDATE", pID).Scan(&before)
-			if err != nil {
-				return err
-			}
-			after := before + payout
-			_, err = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", payout, pID)
+			var before, after float64
+			err = tx.QueryRow(`
+				UPDATE players
+				SET primeval_stones = primeval_stones + $1
+				WHERE id = $2
+				RETURNING primeval_stones - $1, primeval_stones
+			`, payout, pID).Scan(&before, &after)
 			if err != nil {
 				return err
 			}
@@ -758,26 +759,19 @@ func PlaceBeastBet(c *gin.Context) {
 		return
 	}
 
-	var balance float64
-	err = tx.QueryRow("SELECT primeval_stones FROM players WHERE id = $1 FOR UPDATE", userID).Scan(&balance)
+	var balance, newBalance float64
+	err = tx.QueryRow(`
+		UPDATE players
+		SET primeval_stones = primeval_stones - $1
+		WHERE id = $2 AND primeval_stones >= $1
+		RETURNING primeval_stones + $1, primeval_stones
+	`, req.Amount, userID).Scan(&balance, &newBalance)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải số dư ví"})
-		return
-	}
-
-	if balance < req.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch. Đạo hữu chỉ có %.0f Nguyên Thạch", balance)})
-		return
-	}
-
-	newBalance := balance - req.Amount
-	res, err := tx.Exec("UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1", req.Amount, userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật số dư ví"})
 		return
 	}
 

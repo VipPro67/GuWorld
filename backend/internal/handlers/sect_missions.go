@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -492,23 +494,20 @@ func CreateCustomMission(c *gin.Context) {
 		return
 	}
 
-	// Check if sect has enough funds
+	// Deduct sect funds atomically with guard clause
 	var currentFunds int64
-	err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1 FOR UPDATE`, callerSectID).Scan(&currentFunds)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-
 	missionCost := req.RewardContribution
-	if currentFunds < missionCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ bang không đủ để ban bố nhiệm vụ này! (Cần tối thiểu " + strconv.FormatInt(missionCost, 10) + " quỹ bang)"})
-		return
-	}
-
-	// Deduct sect funds
-	_, err = tx.Exec(`UPDATE sects SET funds = funds - $1 WHERE id = $2`, missionCost, callerSectID)
+	err = tx.QueryRow(`
+		UPDATE sects
+		SET funds = funds - $1
+		WHERE id = $2 AND funds >= $1
+		RETURNING funds
+	`, missionCost, callerSectID).Scan(&currentFunds)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ bang không đủ để ban bố nhiệm vụ này! (Cần tối thiểu " + strconv.FormatInt(missionCost, 10) + " quỹ bang)"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct sect funds: " + err.Error()})
 		return
 	}

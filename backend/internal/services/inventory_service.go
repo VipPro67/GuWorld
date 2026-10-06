@@ -406,6 +406,7 @@ func (s *InventoryService) BulkRemoveItems(tx *sql.Tx, playerID, category string
 	rows, err := tx.Query(`
 		SELECT item_id, quantity FROM player_inventory_items
 		WHERE player_id = $1 AND category = $2 AND item_id = ANY($3)
+		ORDER BY item_id ASC
 		FOR UPDATE
 	`, playerID, category, pq.Array(ids))
 	if err != nil {
