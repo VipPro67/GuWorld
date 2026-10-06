@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,7 +39,7 @@ type CombatSummary struct {
 
 // SaveCombatHistory persists a completed combat result to the combat_history table.
 func SaveCombatHistory(playerID uuid.UUID, winner string, logs []interface{}, summary CombatSummary, combatants []interface{}, enemyName, enemyType, region string) {
-	if db.DB == nil {
+	if db.DB == nil || !strings.EqualFold(strings.TrimSpace(enemyType), "PVP") {
 		return
 	}
 
@@ -53,6 +54,72 @@ func SaveCombatHistory(playerID uuid.UUID, winner string, logs []interface{}, su
 	if err != nil {
 		fmt.Println("Error saving combat history:", err)
 	}
+}
+
+// savePVPCombatHistory writes a perspective-correct copy for every player in
+// each participating team. NPCs, pets, and other non-player combatants remain
+// in the replay payload but do not receive player history rows.
+func savePVPCombatHistory(attackerIDs, defenderIDs []uuid.UUID, attackerWinner string, logs []interface{}, summary CombatSummary, combatants []CombatantInfo, attackerEnemyName, defenderEnemyName, region string) {
+	attackerCombatants := combatantInfoInterfaces(combatants, false)
+	defenderCombatants := combatantInfoInterfaces(combatants, true)
+	defenderWinner := "Phe Ta"
+	if attackerWinner == "Phe Ta" {
+		defenderWinner = "Phe Địch"
+	}
+
+	for _, playerID := range uniquePlayerIDs(attackerIDs) {
+		SaveCombatHistory(playerID, attackerWinner, logs, summary, attackerCombatants, attackerEnemyName, "PVP", region)
+	}
+	for _, playerID := range uniquePlayerIDs(defenderIDs) {
+		SaveCombatHistory(playerID, defenderWinner, logs, summary, defenderCombatants, defenderEnemyName, "PVP", region)
+	}
+}
+
+func combatantInfoInterfaces(combatants []CombatantInfo, reverseSides bool) []interface{} {
+	result := make([]interface{}, len(combatants))
+	for i, combatant := range combatants {
+		if reverseSides {
+			if combatant.Kind == "ally" {
+				combatant.Kind = "enemy"
+			} else if combatant.Kind == "enemy" {
+				combatant.Kind = "ally"
+			}
+		}
+		result[i] = combatant
+	}
+	return result
+}
+
+func uniquePlayerIDs(playerIDs []uuid.UUID) []uuid.UUID {
+	seen := make(map[uuid.UUID]struct{}, len(playerIDs))
+	unique := make([]uuid.UUID, 0, len(playerIDs))
+	for _, playerID := range playerIDs {
+		if playerID == uuid.Nil {
+			continue
+		}
+		if _, exists := seen[playerID]; exists {
+			continue
+		}
+		seen[playerID] = struct{}{}
+		unique = append(unique, playerID)
+	}
+	return unique
+}
+
+func pvpHistoryPlayerIDs(attackerID uuid.UUID, simAllies []*simulator.CombatantAuto, defenderID string) (attackerIDs, defenderIDs []uuid.UUID) {
+	attackerIDs = append(attackerIDs, attackerID)
+	for _, ally := range simAllies {
+		if ally == nil || (ally.Kind != "Player" && ally.Kind != "Ally") {
+			continue
+		}
+		if id, err := uuid.Parse(ally.ID); err == nil {
+			attackerIDs = append(attackerIDs, id)
+		}
+	}
+	if id, err := uuid.Parse(defenderID); err == nil {
+		defenderIDs = append(defenderIDs, id)
+	}
+	return uniquePlayerIDs(attackerIDs), uniquePlayerIDs(defenderIDs)
 }
 
 func toInterfaceSlice(logs []simulator.CombatLog) []interface{} {
@@ -116,7 +183,7 @@ func ListCombatHistory(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(),
 		`SELECT id, player_id, winner, summary, enemy_name, enemy_type, region,
 		        COALESCE(jsonb_array_length(logs), 0), created_at
-		 FROM combat_history WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`,
+		 FROM combat_history WHERE player_id = $1 AND UPPER(enemy_type) = 'PVP' ORDER BY created_at DESC LIMIT 20`,
 		authID,
 	)
 	if err != nil {
@@ -154,7 +221,7 @@ func GetCombatHistory(c *gin.Context) {
 	var e CombatHistoryEntry
 	err := db.DB.QueryRowContext(c.Request.Context(),
 		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
-		 FROM combat_history WHERE id = $1 AND player_id = $2`,
+		 FROM combat_history WHERE id = $1 AND player_id = $2 AND UPPER(enemy_type) = 'PVP'`,
 		id, authID,
 	).Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Logs, &e.Summary, &e.Combatants, &e.EnemyName, &e.EnemyType, &e.Region, &e.CreatedAt)
 

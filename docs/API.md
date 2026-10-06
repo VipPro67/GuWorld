@@ -70,7 +70,6 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/player/referrals/bind` |
 | POST | `/player/simulate-deposit` | Admin only. |
 | POST | `/player/avatar` |
-| POST | `/player/sacrifice` |
 | POST | `/player/redeem-gift-code` |
 | GET | `/player/audit-logs` |
 | GET | `/player/notifications` |
@@ -134,8 +133,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Như `/combat/start`. |
-| GET | `/combat/history` | 20 entry gần nhất, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). |
-| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. |
+| GET | `/combat/history` | 20 trận PVP gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Mỗi người chơi tham chiến, gồm người khởi chiến, đồng minh là người chơi và đối thủ, có bản ghi riêng; PVE không được lưu và dữ liệu PVE cũ được worker xóa theo lô. |
+| GET | `/combat/history/:id` | Full một entry PVP: kèm `logs` và `combatants` JSONB để replay. |
 
 ## Exploration and combat
 
@@ -365,6 +364,16 @@ Hai endpoint sau thuộc nhóm protected `/api/admin`; chúng yêu cầu JWT/coo
 | GET | `/admin/resources` | Trả `{resources, permission_version}` từ allowlist compile-time và chỉ gồm resource mà actor có ít nhất một quyền. Mỗi phần tử có metadata `{key, domain, label, capabilities, read_permissions, write_permissions, risk_level, cache_invalidation, registry_reload, restart_required, audit_action_prefix, frontend_route}`. Catalog không dùng `information_schema`, không trả database schema/tên bảng/cột/SQL, và không dùng resource key từ client để sinh SQL. |
 
 Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là deterministic. `read_permissions` và `write_permissions` là các permission thực tế được route backend dùng; metadata cache/registry mô tả tác động vận hành của thao tác ghi. Hiện mọi thao tác hỗ trợ đều reload trong process nên `restart_required=false`. Client nên coi `permission_version` là giá trị opaque và tải lại quyền/catalog khi marker thay đổi.
+
+## Admin — combat history & map drops
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/admin/combat-history` | Phân trang và tìm kiếm lịch sử PVP; danh sách gọn, không tải logs lớn. |
+| GET | `/admin/combat-history/:id` | Chi tiết một bản ghi gồm summary, combatants và logs để replay. Chỉ đọc. |
+| GET | `/admin/map-drops` | Phân trang map drops, tìm kiếm và lọc còn hạn/đã hết hạn. |
+| PUT | `/admin/map-drops/:id` | Cập nhật vị trí, người chơi, loot JSON và thời hạn; được audit. |
+| DELETE | `/admin/map-drops/:id` | Xóa drop với lý do và xác nhận target. |
 
 ## Admin — players & gus
 

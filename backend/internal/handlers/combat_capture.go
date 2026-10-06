@@ -220,23 +220,8 @@ func CaptureMonster(c *gin.Context) {
 		return
 	}
 
-	// Bắt thất bại — combat vẫn tiếp diễn
-	captureLog := fmt.Sprintf("Cố gắng bắt %s thất bại! Tỷ lệ: %.1f%%", player.ActiveCombat.EnemyName, chance*100)
-	_, errHist := tx.Exec(`
-		INSERT INTO combat_history (player_id, winner, logs, summary, enemy_name, enemy_type, region)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`,
-		player.ID, "CAPTURE_FAILED",
-		fmt.Sprintf(`["%s"]`, captureLog),
-		fmt.Sprintf(`{"capture_chance":%.4f,"roll":%.4f}`, chance, roll),
-		player.ActiveCombat.EnemyName, player.ActiveCombat.EnemyType,
-		player.CurrentRegion,
-	)
-	if errHist != nil {
-		logger.S.Errorf("CaptureMonster: failed to insert combat_history: %v", errHist)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu lịch sử chiến đấu."})
-		return
-	}
+	// Bắt thất bại — combat vẫn tiếp diễn. PVE capture attempts are not
+	// combat history; combat_history is reserved for PVP matches.
 
 	if errTx := tx.Commit(); errTx != nil {
 		respondCombatTxErr(c, errTx, "Transaction commit failed")

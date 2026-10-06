@@ -29,15 +29,7 @@ func schemaSects() error {
 		return err
 	}
 
-	if err := execSchema("npcs", `
-	CREATE TABLE IF NOT EXISTS npcs (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE SET NULL,
-		role VARCHAR(50) DEFAULT 'DISCIPLE',
-		aptitude_percent INTEGER DEFAULT 50,
-		created_at TIMESTAMP DEFAULT now()
-	);`); err != nil {
+	if err := execSchema("drop_sect_sacrifice_npcs", `DROP TABLE IF EXISTS npcs CASCADE;`); err != nil {
 		return err
 	}
 

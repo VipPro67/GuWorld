@@ -38,13 +38,13 @@ ghi bằng domain command nhưng vẫn là `Internal/not exposed` nếu không c
 | aperture | `aperture_variant_settlements` | Internal/not exposed | Gameplay-owned child state. |
 | aperture | `aperture_variant_events` | Internal/not exposed | Event history/runtime. |
 | actors | `non_player_actors` | Domain command only | Canonical pet/NPC instances; pet admin commands are exposed, not a generic row editor. |
-| aperture | `tribulation_events` | Internal/not exposed | Runtime event state. |
-| aperture | `tribulation_enemies` | Internal/not exposed | Runtime combat state. |
+| aperture | `tribulation_events` | Read-only | Paginated per-aperture history includes event outcome, owner, rewards and spawned enemies. |
+| aperture | `tribulation_enemies` | Read-only | Returned nested under its tribulation event; no raw combat-state mutation. |
 | beast betting | `beast_betting_rounds` | Internal/not exposed | Betting lifecycle; future admin action must be a domain command. |
 | beast betting | `beast_bets` | Internal/not exposed | Financial/gameplay ledger; immutable from Admin. |
-| combat | `combat_history` | Internal/not exposed | Gameplay history, no Admin route. |
+| combat | `combat_history` | Read-only | `/admin/combat-history`; PVP history and replay logs, append-only. |
+| combat | `arena_rankings` | Domain command only | `/admin/arena-rankings`; view rank and adjust points/challenge counters with reason and audit. Rank remains runtime-owned. |
 | combat | `combat_sessions` | Internal/not exposed | Active session state, cấm editor. |
-| combat | `arena_rankings` | Internal/not exposed | Runtime ranking state. |
 | death arena | `death_arena_tournaments` | Internal/not exposed | Tournament aggregate state. |
 | death arena | `death_arena_teams` | Internal/not exposed | Tournament aggregate child. |
 | death arena | `death_arena_team_members` | Internal/not exposed | Tournament aggregate child. |
@@ -87,13 +87,12 @@ ghi bằng domain command nhưng vẫn là `Internal/not exposed` nếu không c
 | scouting | `player_tracking_marks` | Internal/not exposed | Private gameplay/security-sensitive tracking. |
 | scouting | `world_residual_traces` | Internal/not exposed | Runtime trace data. |
 | sects | `sects` | Domain command only | Detail/update/delete aggregate; không generic create/editor. |
-| sects | `npcs` | Internal/not exposed | Gameplay-owned NPC state. |
 | sects | `sect_missions` | Domain command only | List/create/delete trong sect; đồng thời có CSV seed. |
 | sects | `sect_members` | Domain command only | Add/kick/set leader commands. |
-| sects | `sect_join_requests` | Internal/not exposed | Workflow state. |
-| sects | `sect_promotion_requests` | Internal/not exposed | Workflow state. |
+| sects | `sect_join_requests` | Domain command only | Admin xem toàn bộ; chỉ hủy yêu cầu đang chờ, không sửa thô hoặc giả lập duyệt thành viên. |
+| sects | `sect_promotion_requests` | Domain command only | Admin xem cấp hiện tại/cấp yêu cầu; chỉ hủy yêu cầu đang chờ. |
 | sects | `player_sect_missions` | Internal/not exposed | Player progress. |
-| sects | `sect_defenders` | Internal/not exposed | Runtime defense state. |
+| sects | `sect_defenders` | Domain command only | Read full defense roster; remove defender through sect-scoped command, never edit combat power fields directly. |
 | sects | `sect_vault_materials` | Domain command only | Stock/remove vault command. |
 | sects | `sect_vault_gu` | Domain command only | Stock/remove vault command. |
 | sects | `sect_vault_recipes` | Domain command only | Stock/remove vault command. |
@@ -118,7 +117,7 @@ ghi bằng domain command nhưng vẫn là `Internal/not exposed` nếu không c
 | world | `map_cells` | Full CRUD | Specialized map-cell handlers + Zone registry reload; đồng thời có CSV. |
 | world | `quests` | Full CRUD | Specialized handlers; quest registry refresh gap phải đóng trước khi mở rộng UI. |
 | world | `instance_templates` | Full CRUD | `/admin/dungeons`; Dream Realm còn có CSV, instance cache gap phải đóng. |
-| world | `map_ground_drops` | Internal/not exposed | Ephemeral world state. |
+| world | `map_ground_drops` | Domain command | `/admin/map-drops`; browse active/expired drops, edit complete drop fields, or delete with reason and audit. |
 
 ## CSV và import/export catalog
 

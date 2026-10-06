@@ -16,6 +16,7 @@ var dashboard = []string{AdminAccessPermission}
 var readOnly = []string{
 	"monitoring.read", "players.read", "apertures.read", "gus.read", "sects.read",
 	"game_data.read", "audit.read", "regions.read", "map_cells.read", "shop.read",
+	"combat_history.read", "map_drops.read", "arena_rankings.read",
 	"arena_shop.read", "mine_slots.read", "gu_dictionary.read", "item_dictionary.read",
 	"recipes.read", "monsters.read", "loot_tables.read", "gift_codes.read",
 	"constitution_dictionary.read", "race_dictionary.read", "status_dictionary.read",
@@ -39,6 +40,7 @@ func BuiltinRoles() []BuiltinRole {
 			"monitoring.read", "monitoring.reset", "players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "players.delete",
 			"apertures.read", "apertures.update", "apertures.delete", "gus.read", "sects.read", "sects.update", "sects.delete", "audit.read",
 			"regions.read", "regions.update", "regions.delete", "map_cells.read", "map_cells.update", "map_cells.delete",
+			"combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update",
 			"shop.read", "shop.update", "shop.delete", "arena_shop.read", "arena_shop.update", "arena_shop.delete",
 			"mine_slots.read", "mine_slots.update", "gift_codes.read", "gift_codes.update", "monster_spawns.read", "monster_spawns.update", "monster_spawns.delete",
 			"dungeons.read", "dungeons.update", "dungeons.delete", "sect_mines.read", "sect_mines.update")},

@@ -138,7 +138,7 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 	// Both mean the same ON_EVENT timing (see timing.go), never the passive
 	// section (ALWAYS_ON character stats).
 	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY", "GUARANTEED_HIT")
-	add("CAPABILITY", DispositionSupported, "world", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "SACRIFICE_NPC", "DEDUCTION_INSTANT_FINISH")
+	add("CAPABILITY", DispositionSupported, "world", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "DEDUCTION_INSTANT_FINISH")
 	return result
 }
 

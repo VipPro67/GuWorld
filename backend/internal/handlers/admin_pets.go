@@ -180,14 +180,28 @@ func AdminUpdatePlayerPet(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.Nickname == "" || req.Rank < 1 || req.SubRank < 1 || req.HP < 0 || req.MaxHP <= 0 || req.Count < 1 || req.Hunger < 0 || req.MaxHunger < 0 || req.PetHungerPerHour < 0 || req.FormationSlot < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thông tin linh thú không hợp lệ"})
+		return
+	}
+	if req.HP > req.MaxHP {
+		req.HP = req.MaxHP
+	}
+	if req.Hunger > req.MaxHunger {
+		req.Hunger = req.MaxHunger
+	}
 
-	_, err := db.DB.ExecContext(c.Request.Context(), `
+	result, err := db.DB.ExecContext(c.Request.Context(), `
 		UPDATE non_player_actors SET name=$1, rank=$2, sub_rank=$3, hp=$4, max_hp=$5, base_attack=$6, base_defense=$7, speed=$8, count=$9, hunger=$10, max_hunger=$11, upkeep_rate=$12, execution_state=CASE WHEN UPPER($13) = 'SLEEPING' THEN 'RECOVERING' ELSE 'STORED' END, formation_slot=$14, updated_at=NOW(), version=version+1
 		WHERE id=$15 AND owner_player_id=$16 AND actor_kind='COMPANION_BEAST' AND lifecycle_state='ACTIVE'`,
 		req.Nickname, req.Rank, req.SubRank, req.HP, req.MaxHP, req.BaseAttack, req.BaseDefense, req.Speed, req.Count, req.Hunger, req.MaxHunger, req.PetHungerPerHour, req.State, req.FormationSlot, petID, playerID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật linh thú: " + err.Error()})
+		return
+	}
+	if affected, rowsErr := result.RowsAffected(); rowsErr != nil || affected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy linh thú của người chơi"})
 		return
 	}
 

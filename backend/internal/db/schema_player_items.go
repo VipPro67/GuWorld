@@ -128,32 +128,6 @@ func schemaPlayerItems() error {
 		return err
 	}
 
-	if err := execSchema("player_dao_path", `
-	CREATE TABLE IF NOT EXISTS player_dao_path (
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		path VARCHAR(50) NOT NULL,
-		mastery VARCHAR(50) NOT NULL DEFAULT 'Ordinary',
-		dao_marks BIGINT NOT NULL DEFAULT 0,
-		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		PRIMARY KEY (player_id, path)
-	);`); err != nil {
-		return err
-	}
-	if err := execSchema("player_map_progress", `
-	CREATE TABLE IF NOT EXISTS player_map_progress (
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		region_id VARCHAR(50) NOT NULL DEFAULT '',
-		cell_x INT NOT NULL,
-		cell_y INT NOT NULL,
-		explored BOOLEAN NOT NULL DEFAULT false,
-		cleared BOOLEAN NOT NULL DEFAULT false,
-		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		PRIMARY KEY (player_id, region_id, cell_x, cell_y)
-	);`); err != nil {
-		return err
-	}
-
 	if err := execSchema("player_instance_sessions", `
 	CREATE TABLE IF NOT EXISTS player_instance_sessions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

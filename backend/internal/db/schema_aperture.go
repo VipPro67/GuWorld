@@ -33,6 +33,48 @@ func schemaAperture() error {
 		return err
 	}
 
+	// player_dao_path was an obsolete duplicate store. Preserve any legacy-only
+	// path values as a fallback, while canonical immortal_apertures values win,
+	// then remove the duplicate table so new writes have one source of truth.
+	if err := execSchema("drop_legacy_player_dao_path", `
+	DO $$
+	BEGIN
+		IF to_regclass('public.player_dao_path') IS NOT NULL THEN
+			UPDATE players p
+			SET path_masteries = COALESCE((
+				SELECT jsonb_object_agg(
+					regexp_replace(lower(btrim(legacy.path)), '\s+path$', ''),
+					CASE lower(btrim(legacy.mastery))
+						WHEN 'master' THEN '10000'::jsonb
+						WHEN 'grandmaster' THEN '100000'::jsonb
+						WHEN 'great grandmaster' THEN '1000000'::jsonb
+						WHEN 'supreme grandmaster' THEN '10000000'::jsonb
+						ELSE '0'::jsonb
+					END
+				)
+				FROM player_dao_path legacy
+				WHERE legacy.player_id = p.id
+				  AND lower(btrim(legacy.mastery)) IN ('ordinary', 'master', 'grandmaster', 'great grandmaster', 'supreme grandmaster')
+			), '{}'::jsonb) || COALESCE(p.path_masteries, '{}'::jsonb)
+			WHERE EXISTS (
+				SELECT 1 FROM player_dao_path legacy
+				WHERE legacy.player_id = p.id
+				  AND lower(btrim(legacy.mastery)) IN ('ordinary', 'master', 'grandmaster', 'great grandmaster', 'supreme grandmaster')
+			);
+
+			UPDATE immortal_apertures ia
+			SET dao_marks = COALESCE((
+				SELECT jsonb_object_agg(legacy.path, legacy.dao_marks)
+				FROM player_dao_path legacy
+				WHERE legacy.player_id = ia.player_id
+			), '{}'::jsonb) || COALESCE(ia.dao_marks, '{}'::jsonb)
+			WHERE EXISTS (SELECT 1 FROM player_dao_path legacy WHERE legacy.player_id = ia.player_id);
+			DROP TABLE player_dao_path;
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
+
 	// Index for fast state-based lookups (used by RegenerateImmortalApertures guard).
 	if err := execSchema("immortal_apertures_state_idx", `
 	CREATE INDEX IF NOT EXISTS idx_immortal_apertures_state ON immortal_apertures (state);

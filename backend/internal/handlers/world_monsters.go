@@ -135,9 +135,9 @@ func loadWorldCombatPlayerSnapshots(ctx context.Context, ids []uuid.UUID) (map[u
 	rows, err := db.DB.QueryContext(ctx, `
 		SELECT p.id, p.hp, p.current_region, p.x, p.y, p.lifespan, COALESCE(p.race, ''), p.rank, p.sub_rank,
 		       p.statuses, p.growth_data, p.path_masteries,
-		       COALESCE(dm.marks, '{}'::jsonb), `+db.GuInventoryAggregate("p.id")+`
+		       COALESCE(ia.dao_marks, '{}'::jsonb), `+db.GuInventoryAggregate("p.id")+`
 		FROM players p
-		LEFT JOIN LATERAL (SELECT jsonb_object_agg(path, dao_marks) marks FROM player_dao_path WHERE player_id=p.id) dm ON true
+		LEFT JOIN immortal_apertures ia ON ia.player_id = p.id
 		WHERE p.id = ANY($1::uuid[])`, pq.Array(func() []string {
 		out := make([]string, len(ids))
 		for i := range ids {
