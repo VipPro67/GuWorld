@@ -582,9 +582,11 @@ func (s *PlayerService) ProjectAndPersistBestEffort(id uuid.UUID, equippedOnly b
 		return player, err
 	}
 	// Throttle persists: frontend polls /auth/me and /explore/grid at high
-	// frequency; persisting every poll fans out UPDATE players + version bumps
-	// that serialize on the same row. Only persist if >45s since last update.
-	if time.Since(player.LastManaUpdate) < 45*time.Second {
+	// frequency. Polling reads (equippedOnly = true) should remain completely
+	// lock-free because actual gameplay actions (combat, cultivate, inventory,
+	// travel) already persist authoritative mana & status on mutation.
+	// This eliminates row-lock contention and DB connection pool starvation.
+	if equippedOnly || time.Since(player.LastManaUpdate) < 45*time.Second {
 		return player, nil
 	}
 	tx, err := handle.Begin()

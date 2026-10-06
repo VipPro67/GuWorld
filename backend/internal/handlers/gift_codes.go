@@ -179,6 +179,8 @@ func RedeemGiftCode(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	_, _ = tx.Exec(`SET LOCAL lock_timeout = '3000ms'`)
+
 	var gc GiftCode
 	var rewardsJSON []byte
 	var createdBy sql.NullString
@@ -187,7 +189,6 @@ func RedeemGiftCode(c *gin.Context) {
 		SELECT id, code, rewards, max_uses, used_count, max_per_player, expires_at, is_active, created_by, created_at
 		FROM gift_codes
 		WHERE code = $1
-		FOR UPDATE
 	`, code).Scan(&gc.ID, &gc.Code, &rewardsJSON, &gc.MaxUses, &gc.UsedCount, &gc.MaxPerPlayer, &gc.ExpiresAt, &gc.IsActive, &createdBy, &gc.CreatedAt)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mã quà không tồn tại"})
@@ -260,9 +261,17 @@ func RedeemGiftCode(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE gift_codes SET used_count = used_count + 1 WHERE id = $1`, gc.ID)
+	res, err := tx.Exec(`
+		UPDATE gift_codes 
+		SET used_count = used_count + 1 
+		WHERE id = $1 AND is_active = true AND expires_at > NOW() AND used_count < max_uses
+	`, gc.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật mã quà"})
+		return
+	}
+	if rowsAffected, _ := res.RowsAffected(); rowsAffected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã quà này đã hết lượt sử dụng hoặc đã hết hạn"})
 		return
 	}
 

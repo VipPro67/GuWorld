@@ -149,8 +149,20 @@ func Connect() error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	DB.SetMaxOpenConns(50)
-	DB.SetMaxIdleConns(25)
+	maxOpen := 100
+	if v := os.Getenv("DB_MAX_OPEN_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxOpen = n
+		}
+	}
+	maxIdle := 50
+	if v := os.Getenv("DB_MAX_IDLE_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxIdle = n
+		}
+	}
+	DB.SetMaxOpenConns(maxOpen)
+	DB.SetMaxIdleConns(maxIdle)
 	DB.SetConnMaxLifetime(10 * time.Minute)
 	DB.SetConnMaxIdleTime(1 * time.Minute)
 

@@ -275,6 +275,8 @@ func UnequipAllGu(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	_, _ = tx.Exec("SET LOCAL lock_timeout = '3000ms'")
+
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
@@ -282,6 +284,7 @@ func UnequipAllGu(c *gin.Context) {
 	}
 
 	unequippedCount := 0
+	var toUpdate models.GuInventory
 	for i := range player.GuInventory {
 		gu := &player.GuInventory[i]
 		if gu.Equipped && !gu.IsVital {
@@ -319,16 +322,20 @@ func UnequipAllGu(c *gin.Context) {
 				}
 			}
 
-			if err := db.UpdatePlayerGu(tx, *gu); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu state"})
-				return
-			}
+			toUpdate = append(toUpdate, *gu)
 		}
 	}
 
 	if unequippedCount == 0 {
 		respondActionGuOnly(c, http.StatusOK, player, gin.H{"message": "Không có Cổ trùng nào có thể tháo."})
 		return
+	}
+
+	if len(toUpdate) > 0 {
+		if err := db.UpdatePlayerGusBulk(tx, toUpdate); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu state"})
+			return
+		}
 	}
 
 	player.EquippedGus = []string{}
