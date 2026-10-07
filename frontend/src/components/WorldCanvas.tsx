@@ -212,9 +212,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const syncRuntimeMonsters = useCallback((entities: Record<string, WorldMonster>) => {
     const container = runtimeMonstersContainerRef.current;
     const markers = monsterMarkersRef.current;
-    const alive = new Set(Object.keys(entities));
+    const player = useGameStore.getState().player;
+    const visionRadius = useWorldStore.getState().investigationRange;
+    const visibleEntities = Object.values(entities).filter((monster) =>
+      player && Math.hypot(monster.x - player.x, monster.y - player.y) <= visionRadius,
+    );
+    const alive = new Set(visibleEntities.map((monster) => monster.instance_id));
     const now = performance.now();
-    for (const monster of Object.values(entities)) {
+    for (const monster of visibleEntities) {
       if (monster.state === "DEFEATED") continue;
       const toX = monster.x + 0.5;
       const toY = monster.y + 0.5;
@@ -2118,7 +2123,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   useEffect(() => {
     if (!appReady || !appRef.current) return;
     syncRuntimeMonsters(monsters);
-  }, [appReady, monsters, selectedTarget?.instanceId, syncRuntimeMonsters]);
+  }, [appReady, monsters, selectedTarget?.instanceId, gamePlayer?.x, gamePlayer?.y, investigationRange, syncRuntimeMonsters]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
