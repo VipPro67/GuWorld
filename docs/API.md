@@ -56,6 +56,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | GET | `/player/stats` |
 | GET | `/player/passive-stats` | Detailed passive stats breakdown with per-source attribution. Không còn trả `evasion`/`accuracy` (né tránh giờ là status `EVASION` trong combat). |
 | POST | `/player/explore/:id` |
+| POST | `/player/complete-tutorial` | Hoàn tất giai đoạn Tân Thủ (lv0): chuyển rank 0 → Nhất Chuyển (rank 1). Idempotent với player đã rank ≥ 1 sẽ trả 400. |
 | POST | `/player/complete-onboarding` | Hoàn tất thiết lập ban đầu. Body: `{"starting_region","attack_gu_id","defense_gu_id","vital_gu_choice"}`. `starting_region` gồm `hub_nam_cuong`/`hub_trung_chau`/`hub_bac_nguyen`/`hub_tay_mac`/`hub_dong_hai`; người chơi được đặt vào HUB tương ứng của Đại Vực đã chọn. |
 | POST | `/player/use-item` |
 | POST | `/player/use-items` |

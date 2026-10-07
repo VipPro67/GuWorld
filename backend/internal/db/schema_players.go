@@ -19,7 +19,7 @@ func schemaPlayers() error {
 		email VARCHAR(255) NOT NULL DEFAULT '' UNIQUE,
 		google_id VARCHAR(255),
 		ref_code VARCHAR(50) NOT NULL DEFAULT '' UNIQUE,
-		rank INTEGER DEFAULT 1,
+		rank INTEGER DEFAULT 0,
 		sub_rank INTEGER DEFAULT 1,
 		aptitude_type VARCHAR(10) NOT NULL,
 		aptitude_percent INTEGER NOT NULL,

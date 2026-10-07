@@ -3,7 +3,7 @@ import { operationsBy, numericValue, type EffectEnvelope } from "@/lib/effect-bl
 export type EffectBadge = { key: string; label: string; className: string };
 
 export const rankLabel = (r: number) => {
-  const names = ["", "Nhất Chuyển", "Nhị Chuyển", "Tam Chuyển", "Tứ Chuyển", "Ngũ Chuyển", "Lục Tiên", "Thất Tiên", "Bát Tiên", "Cửu Tôn"];
+  const names = ["Phàm Nhân", "Nhất Chuyển", "Nhị Chuyển", "Tam Chuyển", "Tứ Chuyển", "Ngũ Chuyển", "Lục Tiên", "Thất Tiên", "Bát Tiên", "Cửu Tôn"];
   return names[r] || `Cửu Tôn`;
 };
 

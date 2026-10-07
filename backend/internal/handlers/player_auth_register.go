@@ -272,7 +272,7 @@ func RegisterPlayer(c *gin.Context) {
 	var player models.Player
 	query := `
 		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender, constitution, register_fingerprint, register_ip)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16, $17, $18)
+		VALUES ($1, $2, 0, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16, $17, $18)
 		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding, race, gender, constitution, statuses
 	`
 
@@ -371,6 +371,57 @@ func RegisterPlayer(c *gin.Context) {
 		Player: player,
 		Token:  token,
 	})
+}
+
+// CompleteTutorial is invoked when the player finishes the lv0 (Phàm Nhân)
+// onboarding-guidance phase. Rank advances from 0 → 1; needs_onboarding stays
+// true so the existing OnboardingModal (region/Gu/vital selection) shows next,
+// and all gameplay mutations remain locked behind RequireOnboarded until
+// complete-onboarding flips needs_onboarding=false.
+func CompleteTutorial(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
+	if player.Rank >= 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Giai đoạn Phàm Nhân đã kết thúc"})
+		return
+	}
+
+	if _, err := tx.Exec(`UPDATE players SET rank = 1, sub_rank = GREATEST(sub_rank, 1) WHERE id = $1`, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save tutorial completion"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+		return
+	}
+
+	player.Rank = 1
+	if player.SubRank < 1 {
+		player.SubRank = 1
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "player.tutorial_complete",
+		RequestSummary: "lv0 complete -> rank 1", Success: true,
+	})
+	c.JSON(http.StatusOK, gin.H{"player": player})
 }
 
 type CompleteOnboardingRequest struct {

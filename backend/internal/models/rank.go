@@ -5,6 +5,7 @@ import "fmt"
 // GetRankName returns the Vietnamese name for a cultivation rank.
 func GetRankName(rank int) string {
 	names := map[int]string{
+		0: "Phàm Nhân",
 		1: "Nhất Chuyển",
 		2: "Nhị Chuyển",
 		3: "Tam Chuyển",

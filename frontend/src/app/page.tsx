@@ -7,6 +7,7 @@ import { useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { LevelZeroView } from "@/components/LevelZeroView";
 import { LobbyView } from "@/components/LobbyView";
 import { Sparkles, HelpCircle, X, Handshake } from "@/lib/icons";
 import Link from "next/link";
@@ -57,6 +58,7 @@ export default function Home() {
     register,
     sendOTP,
     completeOnboarding,
+    completeTutorial,
     fetchPlayerStatus,
     initializeSession,
     reconcilePlayer,
@@ -112,6 +114,7 @@ export default function Home() {
       state.register,
       state.sendOTP,
       state.completeOnboarding,
+      state.completeTutorial,
       state.fetchPlayerStatus,
       state.initializeSession,
       state.reconcilePlayer,
@@ -351,6 +354,10 @@ export default function Home() {
               error={error}
               onClearError={clearError}
             />
+          </div>
+        ) : player.rank === 0 ? (
+          <div className="py-12 w-full flex justify-center">
+            <LevelZeroView onComplete={completeTutorial} />
           </div>
         ) : player.needs_onboarding ? (
           <div className="py-12 w-full flex justify-center">

@@ -532,12 +532,13 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		}
 
 		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)
-		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimitByPlayer(10, time.Minute), handlers.CreateTopupOrder)
+		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(10, time.Minute), handlers.CreateTopupOrder)
 		api.GET("/topup/orders/:orderCode", middleware.AuthRequired(), handlers.GetTopupOrder)
 
 		// Player endpoints — group: 60/min, per player: 30/min
 		player := api.Group("/player")
 		player.Use(middleware.AuthRequired())
+		player.Use(middleware.RequireOnboarded())
 		player.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			player.GET("/status/:id", handlers.GetPlayerStatus)
@@ -557,6 +558,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			player.POST("/simulate-deposit", middleware.RequirePermission(authz.AdminAccessPermission), handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
 			player.POST("/redeem-gift-code", handlers.RedeemGiftCode)
+			player.POST("/complete-tutorial", handlers.CompleteTutorial)
 			player.POST("/complete-onboarding", handlers.CompleteOnboarding)
 			player.GET("/combat-settings", handlers.GetCombatSettings)
 			player.PUT("/combat-settings", handlers.UpdateCombatSettings)
@@ -575,6 +577,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Mine — group: 40/min, per player: 25/min
 		mine := api.Group("/mine")
 		mine.Use(middleware.AuthRequired())
+		mine.Use(middleware.RequireOnboarded())
 		mine.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			mine.GET("/slots", handlers.GetMineSlots)
@@ -587,6 +590,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Cultivate — group: 30/min, per player: 20/min
 		cultivate := api.Group("/cultivate")
 		cultivate.Use(middleware.AuthRequired())
+		cultivate.Use(middleware.RequireOnboarded())
 		cultivate.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			cultivate.POST("/break-wall", handlers.BreakWall)
@@ -598,6 +602,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Quest — group: 40/min, per player: 25/min
 		quest := api.Group("/quest")
 		quest.Use(middleware.AuthRequired())
+		quest.Use(middleware.RequireOnboarded())
 		quest.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			quest.GET("", handlers.ListQuests)
@@ -607,6 +612,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Gacha — group: 50/min, per player: 15/min
 		gacha := api.Group("/gacha")
 		gacha.Use(middleware.AuthRequired())
+		gacha.Use(middleware.RequireOnboarded())
 		gacha.Use(middleware.RateLimitByGroup("gacha", 200, time.Minute))
 		gacha.GET("/pools", handlers.GetGachaPools)
 		gacha.Use(middleware.RateLimitByPlayer(1, time.Minute))
@@ -618,6 +624,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Achievement — group: 30/min, per player: 20/min
 		achievement := api.Group("/achievements")
 		achievement.Use(middleware.AuthRequired())
+		achievement.Use(middleware.RequireOnboarded())
 		achievement.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			achievement.GET("", handlers.GetAchievements)
@@ -628,6 +635,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Party — group: 30/min, per player: 20/min
 		party := api.Group("/party")
 		party.Use(middleware.AuthRequired())
+		party.Use(middleware.RequireOnboarded())
 		party.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			party.POST("/create", handlers.CreateParty)
@@ -642,6 +650,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Inventory — group: 30/min, per player: 20/min
 		inventory := api.Group("/inventory")
 		inventory.Use(middleware.AuthRequired())
+		inventory.Use(middleware.RequireOnboarded())
 		inventory.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			inventory.POST("/feed", handlers.FeedGu)
@@ -660,6 +669,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Refining — group: 30/min, per player: 20/min
 		refining := api.Group("/refine")
 		refining.Use(middleware.AuthRequired())
+		refining.Use(middleware.RequireOnboarded())
 		refining.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			refining.POST("", handlers.RefineGu)
@@ -669,6 +679,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Scouting & Divination — group: 60/min, per player: 30/min
 		scouting := api.Group("/scouting")
 		scouting.Use(middleware.AuthRequired())
+		scouting.Use(middleware.RequireOnboarded())
 		scouting.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			scouting.POST("/inspect", handlers.InspectLocalPlayer)
@@ -683,6 +694,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Pets — group: 30/min, per player: 20/min
 		pets := api.Group("/pets")
 		pets.Use(middleware.AuthRequired())
+		pets.Use(middleware.RequireOnboarded())
 		pets.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			pets.GET("", handlers.ListPlayerPets)
@@ -697,6 +709,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// and aperture routes so each command can enforce its own invariants.
 		actors := api.Group("/actors")
 		actors.Use(middleware.AuthRequired())
+		actors.Use(middleware.RequireOnboarded())
 		actors.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			actors.GET("", handlers.ListActors)
@@ -706,6 +719,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Combat — group: 60/min, per player: 60/min
 		combat := api.Group("/combat")
 		combat.Use(middleware.AuthRequired())
+		combat.Use(middleware.RequireOnboarded())
 		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
@@ -718,6 +732,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Immortal Aperture — group: 30/min, per player: 20/min
 		aperture := api.Group("/immortal-aperture")
 		aperture.Use(middleware.AuthRequired())
+		aperture.Use(middleware.RequireOnboarded())
 		aperture.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			aperture.GET("", handlers.GetImmortalAperture)
@@ -762,6 +777,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Dao Marks — group: 20/min, per player: 15/min
 		daoMarks := api.Group("/dao-marks")
 		daoMarks.Use(middleware.AuthRequired())
+		daoMarks.Use(middleware.RequireOnboarded())
 		daoMarks.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			daoMarks.GET("", handlers.GetDaoMarks)
@@ -771,6 +787,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Tribulations — group: 30/min, per player: 20/min
 		tribulations := api.Group("/tribulations")
 		tribulations.Use(middleware.AuthRequired())
+		tribulations.Use(middleware.RequireOnboarded())
 		tribulations.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			tribulations.GET("/active", handlers.GetActiveTribulation)
@@ -781,6 +798,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Arena — group: 40/min, per player: 25/min
 		arena := api.Group("/arena")
 		arena.Use(middleware.AuthRequired())
+		arena.Use(middleware.RequireOnboarded())
 		arena.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			arena.GET("/leaderboard", handlers.GetArenaLeaderboard)
@@ -792,6 +810,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Death Arena — group: 40/min, per player: 25/min
 		deathArena := api.Group("/death-arena")
 		deathArena.Use(middleware.AuthRequired())
+		deathArena.Use(middleware.RequireOnboarded())
 		deathArena.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			deathArena.GET("/current", handlers.GetCurrentTournament)
@@ -809,6 +828,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Leaderboard — group: 30/min, per player: 20/min
 		leaderboard := api.Group("/leaderboard")
 		leaderboard.Use(middleware.AuthRequired())
+		leaderboard.Use(middleware.RequireOnboarded())
 		leaderboard.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			leaderboard.GET("/:category", handlers.GetLeaderboard)
@@ -819,6 +839,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Chat — no group limit, per-route IP limit
 		chat := api.Group("/chat")
 		chat.Use(middleware.AuthRequired())
+		chat.Use(middleware.RequireOnboarded())
 		{
 			chat.POST("/mail/send", middleware.RateLimitByPlayer(20, time.Minute), handlers.SendPrivateMail)
 			chat.GET("/mail/inbox", middleware.RateLimitByPlayer(30, time.Minute), handlers.GetInbox)
@@ -829,9 +850,9 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		}
 
 		// Explore — per player: 25/min
-		api.POST("/explore", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.ExploreNode)
-		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Retreat)
-		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
+		api.POST("/explore", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.ExploreNode)
+		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Retreat)
+		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
 		api.GET("/explore/grid", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
@@ -840,18 +861,19 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/explore/players", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyPlayers)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
-		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
-		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
-		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)
-		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
+		api.POST("/explore/move", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
+		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
+		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)
+		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
 
 		// Ground drops / Chiến lợi phẩm trên bản đồ
 		api.GET("/world/drops", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetTileGroundDrops)
-		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
+		api.POST("/world/drops/:id/loot", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.LootGroundDrop)
 
 		// Teleportation Arrays / Truyền Tống Trận
 		teleport := api.Group("/teleport")
 		teleport.Use(middleware.AuthRequired())
+		teleport.Use(middleware.RequireOnboarded())
 		teleport.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			teleport.GET("/templates", handlers.GetTeleportTemplates)
@@ -870,6 +892,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/shop/list", handlers.GetShopList)
 		shop := api.Group("/shop")
 		shop.Use(middleware.AuthRequired())
+		shop.Use(middleware.RequireOnboarded())
 		shop.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			shop.POST("/buy-package", handlers.BuyPremiumPackage)
@@ -900,6 +923,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Trade — group: 25/min, per player: 8/min
 		trade := api.Group("/trade")
 		trade.Use(middleware.AuthRequired())
+		trade.Use(middleware.RequireOnboarded())
 		trade.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			trade.POST("/initiate", handlers.InitiateTrade)
@@ -916,6 +940,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Soul — group: 20/min, per player: 15/min
 		soul := api.Group("/soul")
 		soul.Use(middleware.AuthRequired())
+		soul.Use(middleware.RequireOnboarded())
 		soul.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			soul.POST("/refine", handlers.RefineSoul)
@@ -924,6 +949,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Instance — group: 30/min, per player: 20/min
 		instance := api.Group("/instance")
 		instance.Use(middleware.AuthRequired())
+		instance.Use(middleware.RequireOnboarded())
 		instance.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			instance.GET("/active", handlers.GetActiveInstance)
@@ -939,6 +965,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		// Sect — group: 40/min, per player: 25/min
 		sect := api.Group("/sects")
 		sect.Use(middleware.AuthRequired())
+		sect.Use(middleware.RequireOnboarded())
 		sect.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			sect.GET("", handlers.GetSects)
@@ -990,6 +1017,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.GET("/feedback/:id/comments", middleware.RateLimitByIP(40, time.Minute), handlers.GetFeedbackComments)
 		feedback := api.Group("/feedback")
 		feedback.Use(middleware.AuthRequired())
+		feedback.Use(middleware.RequireOnboarded())
 		feedback.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			feedback.POST("", handlers.SubmitFeedback)

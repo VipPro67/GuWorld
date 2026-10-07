@@ -997,6 +997,10 @@ Hệ thống cung cấp wiki trong game tại `/wiki`; phần dưới là lộ t
 6. **Thương hội & Tông môn:** Đấu giá vật phẩm tự do tại Bảo Hoàng Thiên và các hoạt động quyên góp, giao dịch bảo khố Tông Môn.
 7. **Thăng Tiên:** Đột phá lên Lục Chuyển Cổ Tiên ở Ngũ Chuyển Đỉnh Phong dựa trên Tư chất và tích lũy Nhân Khí (yêu cầu tối thiểu 100k Nhân Khí, xác suất gốc theo tư chất + bonus Nhân Khí, tối đa 90%). Thất bại phế bỏ tu vi về Nhất Chuyển.
 
+### Giai đoạn Phàm Nhân (lv0)
+
+Khi tạo tài khoản, người chơi bắt đầu ở **Phàm Nhân (rank 0)**, `needs_onboarding = true`. Trước khi chọn Cổ trùng và khu vực, màn hình "Lộ Trình Tân Thủ — Phàm Nhân" hiện ra để hướng dẫn cơ bản về Không Khiếu, Độ No, Thú/Cổ Trùng, khai thác, luyện Cổ và Cổ Chân Nhân tổng quan. Hoàn tất gọi `POST /api/player/complete-tutorial` → nhân vật lên **Nhất Chuyển (rank 1)**. Sau đó luồng `needs_onboarding` kích hoạt OnboardingModal (chọn Đại Vực khởi đầu + Cổ trùng Tấn công/Phòng thủ + Bản Mệnh), rồi gọi `POST /api/player/complete-onboarding` để chốt region/tọa độ và giải phóng mọi cơ chế chơi. Trong suốt giai đoạn `needs_onboarding = true`, mọi yêu cầu `POST/PUT/DELETE` ở phía server đều bị chặn (403) bởi middleware `RequireOnboarded`; chỉ có `complete-tutorial` và `complete-onboarding` được miễn.
+
 ## 20. Điều hướng giao diện và lộ trình chơi
 
 Sau khi đăng nhập, đại sảnh chia tính năng thành các nhóm:

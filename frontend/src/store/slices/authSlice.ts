@@ -33,6 +33,7 @@ export interface AuthSlice {
     defense_gu_id: string;
     vital_gu_choice: string;
   }) => Promise<boolean>;
+  completeTutorial: () => Promise<boolean>;
 }
 
 export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, AuthSlice> = (set, get) => ({
@@ -173,6 +174,35 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  completeTutorial: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/complete-tutorial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể hoàn tất hướng dẫn.");
+      }
+
+      const responseData = await response.json();
+      const player: Player = responseData.player;
+      get().setPlayerFromServer(player);
+      get().addLog("Phàm Nhân thức tỉnh! Tìm hiểu Cổ giới qua onboarding.");
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
