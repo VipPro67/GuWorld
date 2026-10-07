@@ -20,7 +20,10 @@ import (
 // scoped to a single player or a single region. The DB also enforces a global
 // (x, y) uniqueness, so all players resolve the same boss marker from the same
 // world coordinate.
-type persistentCellKey struct{ X, Y int }
+type persistentCellKey struct {
+	RegionID string
+	X, Y     int
+}
 
 // persistentCell is a cell on the shared map: boss, high-tier resource or a
 // safe point (village / portal). Only these cells touch the database; all
@@ -83,13 +86,13 @@ func LoadZoneRegistry(db *sql.DB) error {
 	}
 
 	rows, err := db.Query(`
-		SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100),
+		SELECT r.id, r.name, COALESCE(r.description,''), COALESCE(r.width,100), COALESCE(r.height,100),
 		       COALESCE(min_rank,1), COALESCE(max_rank,5), is_active,
 		       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'),
 		       COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0),
-		       COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}'),
-		       COALESCE(safe_zone_x,0), COALESCE(safe_zone_y,0)
-		FROM regions
+		       COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}'), COALESCE(rules::text,'{}'),
+		       COALESCE(safe_zone_x,0), COALESCE(safe_zone_y,0), COALESCE(rwm.world_map_id,'world_map')
+		FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id = r.id
 		WHERE is_active = TRUE
 	`)
 	if err != nil {
@@ -100,13 +103,13 @@ func LoadZoneRegistry(db *sql.DB) error {
 	for rows.Next() {
 		var z models.Region
 		var active bool
-		var poolRaw string
+		var poolRaw, rulesRaw string
 		var safeX, safeY sql.NullInt64
 		if err := rows.Scan(&z.ID, &z.Name, &z.Description, &z.Width, &z.Height,
 			&z.MinRank, &z.MaxRank, &active,
 			&z.ParentID, &z.ZoneType,
 			&z.MinX, &z.MinY, &z.MaxX, &z.MaxY,
-			&z.EntryX, &z.EntryY, &poolRaw, &safeX, &safeY); err != nil {
+			&z.EntryX, &z.EntryY, &poolRaw, &rulesRaw, &safeX, &safeY, &z.WorldMapID); err != nil {
 
 			logger.S.Warnf("zone registry scan: %v", err)
 			continue
@@ -127,6 +130,7 @@ func LoadZoneRegistry(db *sql.DB) error {
 		if poolRaw != "" && poolRaw != "{}" {
 			_ = json.Unmarshal([]byte(poolRaw), &z.PoolWeights)
 		}
+		z.Rules = json.RawMessage(rulesRaw)
 		// legacy width/height backfill
 		if z.MaxX == 0 && z.MaxY == 0 && z.Width > 1 && z.Height > 1 {
 			z.MaxX = z.Width - 1
@@ -168,10 +172,7 @@ func LoadZoneRegistry(db *sql.DB) error {
 				pc.Rank = meta.Rank
 			}
 		}
-		key := persistentCellKey{X: pc.X, Y: pc.Y}
-		if prev, exists := newReg.persistent[key]; exists && prev.RegionID != pc.RegionID {
-			logger.S.Warnf("shared persistent cell coordinate collision at (%d,%d): existing region=%s, new region=%s, cell=%s/%s", pc.X, pc.Y, prev.RegionID, pc.RegionID, prev.Type, pc.Type)
-		}
+		key := persistentCellKey{RegionID: pc.RegionID, X: pc.X, Y: pc.Y}
 		// Cell is considered cleared while within its respawn window.
 		if !pc.LastCleared.IsZero() && time.Since(pc.LastCleared) < time.Duration(pc.RespawnSeconds)*time.Second {
 			pc.cleared = true
@@ -268,6 +269,12 @@ func FindZoneAt(x, y int) *models.Region {
 	bestArea := 0
 	for i := range zoneReg.zones {
 		z := &zoneReg.zones[i]
+		// SECRET_REALM bounds are reused coordinates owned by a running
+		// shared spatial instance. They must never capture ordinary world-map
+		// positions; instance movement keeps its explicitly assigned region.
+		if strings.EqualFold(z.ZoneType, ZoneTypeSecret) {
+			continue
+		}
 		if !zoneContains(z, x, y) {
 			continue
 		}
@@ -276,6 +283,33 @@ func FindZoneAt(x, y int) *models.Region {
 			best = z
 			bestPriority = prio
 			bestArea = zoneArea(z)
+		}
+	}
+	return best
+}
+
+// FindZoneAtOnMap resolves overlapping coordinates only among regions assigned
+// to a single world-map layer. An empty layer keeps the legacy global lookup.
+func FindZoneAtOnMap(x, y int, mapID string) *models.Region {
+	if mapID == "" {
+		return FindZoneAt(x, y)
+	}
+	ensureZonesLoaded()
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+	var best *models.Region
+	bestPriority, bestArea := -1, 0
+	for i := range zoneReg.zones {
+		z := &zoneReg.zones[i]
+		if strings.EqualFold(z.ZoneType, ZoneTypeSecret) {
+			continue
+		}
+		if z.WorldMapID != mapID || !zoneContains(z, x, y) {
+			continue
+		}
+		prio, area := zonePriorityOf(z.ZoneType), zoneArea(z)
+		if best == nil || prio > bestPriority || (prio == bestPriority && area < bestArea) {
+			best, bestPriority, bestArea = z, prio, area
 		}
 	}
 	return best
@@ -310,6 +344,55 @@ func ZoneByID(id string) *models.Region {
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
 	return zoneReg.byID[id]
+}
+
+// regionScopeIDs returns a region and its containing regions on the same map.
+// Shared entities assigned to a large parent region can therefore be seen by
+// players whose current region is one of its child areas.
+func regionScopeIDs(regionID string) []string {
+	ids := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	child := ZoneByID(regionID)
+	mapID := ""
+	if child != nil {
+		mapID = child.WorldMapID
+	}
+	for current := regionID; current != ""; {
+		if _, duplicate := seen[current]; duplicate {
+			break
+		}
+		seen[current] = struct{}{}
+		ids = append(ids, current)
+		zone := ZoneByID(current)
+		if zone == nil || zone.ParentID == "" || zone.ParentID == current {
+			break
+		}
+		parent := ZoneByID(zone.ParentID)
+		if parent == nil || (mapID != "" && parent.WorldMapID != "" && parent.WorldMapID != mapID) {
+			break
+		}
+		current = zone.ParentID
+	}
+	if len(ids) == 0 && regionID != "" {
+		return []string{regionID}
+	}
+	return ids
+}
+
+func isRegionWithinScope(parentRegion, candidateRegion string) bool {
+	for _, id := range regionScopeIDs(candidateRegion) {
+		if id == parentRegion {
+			return true
+		}
+	}
+	return false
+}
+
+func worldMapIDForRegion(regionID string) string {
+	if region := ZoneByID(regionID); region != nil && region.WorldMapID != "" {
+		return region.WorldMapID
+	}
+	return "world_map"
 }
 
 // hubEntryPoint returns the hub (lobby) spawn coordinates.
@@ -355,9 +438,19 @@ func DeriveRegionAt(x, y int) string {
 	return HubRegionID
 }
 
+func DeriveRegionAtOnMap(x, y int, mapID string) string {
+	if z := FindZoneAtOnMap(x, y, mapID); z != nil {
+		return z.ID
+	}
+	return HubRegionID
+}
+
 // IsSafeZone returns true if the region or coordinates belong to a HUB or SAFE_ZONE.
 func IsSafeZone(regionID string, x, y int) bool {
-	if z := FindZoneAt(x, y); z != nil {
+	if z := ZoneByID(regionID); z != nil && zoneContains(z, x, y) {
+		return z.ZoneType == ZoneTypeHub || z.ZoneType == ZoneTypeSafe
+	}
+	if z := FindZoneAtOnMap(x, y, worldMapIDForRegion(regionID)); z != nil {
 		if z.ZoneType == ZoneTypeHub || z.ZoneType == ZoneTypeSafe {
 			return true
 		}
@@ -395,14 +488,31 @@ func SubZoneKey(x, y int) string {
 
 // MarkPersistentCellCleared records that a shared cell (boss / high resource)
 // was cleared and persists the respawn state to map_cells.
-func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) error {
-	key := persistentCellKey{X: x, Y: y}
-	zoneReg.mu.RLock()
-	pc, ok := zoneReg.persistent[key]
-	zoneReg.mu.RUnlock()
+
+func persistentCellForRegion(regionID string, x, y int) (persistentCell, bool) {
+	for current := regionID; current != ""; {
+		key := persistentCellKey{RegionID: current, X: x, Y: y}
+		zoneReg.mu.RLock()
+		pc, ok := zoneReg.persistent[key]
+		zoneReg.mu.RUnlock()
+		if ok {
+			return pc, true
+		}
+		zone := ZoneByID(current)
+		if zone == nil || zone.ParentID == current {
+			break
+		}
+		current = zone.ParentID
+	}
+	return persistentCell{}, false
+}
+
+func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, regionID string, x, y int) error {
+	pc, ok := persistentCellForRegion(regionID, x, y)
 	if !ok {
 		return nil
 	}
+	key := persistentCellKey{RegionID: pc.RegionID, X: x, Y: y}
 	wasCleared := pc.cleared
 	pc.LastCleared = time.Now()
 	pc.cleared = true
@@ -410,7 +520,7 @@ func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) error {
 	zoneReg.persistent[key] = pc
 	zoneReg.mu.Unlock()
 	if tx != nil {
-		if _, err := tx.Exec(`UPDATE map_cells SET last_cleared_at = NOW(), cleared_by = $1 WHERE x = $2 AND y = $3`, playerID, x, y); err != nil {
+		if _, err := tx.Exec(`UPDATE map_cells SET last_cleared_at = NOW(), cleared_by = $1 WHERE region_id=$2 AND x = $3 AND y = $4`, playerID, pc.RegionID, x, y); err != nil {
 			return err
 		}
 	}
@@ -424,7 +534,7 @@ func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) error {
 // no transaction is available). The DB state is updated lazily on the next
 // MarkPersistentCellCleared call for the same cell.
 func MarkPersistentCellClearedNoTx(x, y int) {
-	_ = MarkPersistentCellCleared(nil, uuid.Nil, x, y)
+	_ = MarkPersistentCellCleared(nil, uuid.Nil, DeriveRegionAt(x, y), x, y)
 }
 
 // PersistentCellAt returns the shared cell at (x,y) if any. found=false means
@@ -432,14 +542,13 @@ func MarkPersistentCellClearedNoTx(x, y int) {
 // respawn window (treat as empty). When the respawn window has elapsed, the
 // cell is lazily reset here (no background goroutine needed) and a respawn
 // event is broadcast so map clients can refresh the marker.
-func PersistentCellAt(x, y int) (pc persistentCell, found, cleared bool) {
-	key := persistentCellKey{X: x, Y: y}
-	zoneReg.mu.RLock()
-	pc, ok := zoneReg.persistent[key]
-	zoneReg.mu.RUnlock()
+
+func PersistentCellAt(regionID string, x, y int) (pc persistentCell, found, cleared bool) {
+	pc, ok := persistentCellForRegion(regionID, x, y)
 	if !ok {
 		return pc, false, false
 	}
+	key := persistentCellKey{RegionID: pc.RegionID, X: x, Y: y}
 	if pc.cleared && !pc.LastCleared.IsZero() && pc.RespawnSeconds > 0 &&
 		time.Since(pc.LastCleared) >= time.Duration(pc.RespawnSeconds)*time.Second {
 		zoneReg.mu.Lock()
@@ -498,7 +607,11 @@ func markBossCleared(tx *sql.Tx, player *models.Player) {
 	if et != "BOSS" && et != "WORLDBOSS" && et != "WORLD BOSS" {
 		return
 	}
-	_ = MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
+	region, x, y := player.CurrentRegion, player.X, player.Y
+	if player.ActiveCombat.WorldBossCellRegionID != "" {
+		region, x, y = player.ActiveCombat.WorldBossCellRegionID, player.ActiveCombat.WorldBossCellX, player.ActiveCombat.WorldBossCellY
+	}
+	_ = MarkPersistentCellCleared(tx, player.ID, region, x, y)
 }
 
 // recordVisitedSubZone appends a small-zone key to the player's visited set

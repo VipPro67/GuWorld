@@ -290,6 +290,9 @@ func InitSchema() error {
 	if err := seedHubRegion(); err != nil {
 		return fmt.Errorf("seed hub region: %w", err)
 	}
+	if err := seedStarterSpatialRealm(); err != nil {
+		return fmt.Errorf("seed starter spatial realm: %w", err)
+	}
 	if err := seedSystemPlayers(); err != nil {
 		return fmt.Errorf("seed system players: %w", err)
 	}
@@ -344,31 +347,74 @@ WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(statuses) e WHERE e->>'id' = 's
 // from persisted Gu effects while preserving any unrelated effects on the Gu.
 func removeLegacyNpcSacrificeEffect() error {
 	rows, err := schemaDB().Query(`SELECT id, rank, effects FROM gu_dictionary WHERE id='GU_BLOOD_SKULL' AND effects::text LIKE '%SACRIFICE_NPC%'`)
-	if err != nil { return err }
-	type guEffectRow struct { id string; rank int; effects []byte }
+	if err != nil {
+		return err
+	}
+	type guEffectRow struct {
+		id      string
+		rank    int
+		effects []byte
+	}
 	items := make([]guEffectRow, 0)
-	for rows.Next() { var item guEffectRow; if err := rows.Scan(&item.id, &item.rank, &item.effects); err != nil { rows.Close(); return err }; items = append(items, item) }
-	if err := rows.Err(); err != nil { rows.Close(); return err }
-	if err := rows.Close(); err != nil { return err }
+	for rows.Next() {
+		var item guEffectRow
+		if err := rows.Scan(&item.id, &item.rank, &item.effects); err != nil {
+			rows.Close()
+			return err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
 	for _, item := range items {
 		var array []json.RawMessage
 		if json.Unmarshal(item.effects, &array) == nil {
 			filtered := make([]json.RawMessage, 0, len(array))
-			for _, block := range array { if !strings.Contains(string(block), "SACRIFICE_NPC") { filtered = append(filtered, block) } }
-			updated, err := json.Marshal(filtered); if err != nil { return err }
-			if _, err := schemaDB().Exec(`UPDATE gu_dictionary SET effects=$1::jsonb WHERE id=$2 AND rank=$3`, string(updated), item.id, item.rank); err != nil { return err }
+			for _, block := range array {
+				if !strings.Contains(string(block), "SACRIFICE_NPC") {
+					filtered = append(filtered, block)
+				}
+			}
+			updated, err := json.Marshal(filtered)
+			if err != nil {
+				return err
+			}
+			if _, err := schemaDB().Exec(`UPDATE gu_dictionary SET effects=$1::jsonb WHERE id=$2 AND rank=$3`, string(updated), item.id, item.rank); err != nil {
+				return err
+			}
 			continue
 		}
 		var object map[string]json.RawMessage
-		if json.Unmarshal(item.effects, &object) != nil { continue }
+		if json.Unmarshal(item.effects, &object) != nil {
+			continue
+		}
 		var blocks []json.RawMessage
-		if json.Unmarshal(object["blocks"], &blocks) != nil { continue }
+		if json.Unmarshal(object["blocks"], &blocks) != nil {
+			continue
+		}
 		filtered := make([]json.RawMessage, 0, len(blocks))
-		for _, block := range blocks { if !strings.Contains(string(block), "SACRIFICE_NPC") { filtered = append(filtered, block) } }
-		updatedBlocks, err := json.Marshal(filtered); if err != nil { return err }
+		for _, block := range blocks {
+			if !strings.Contains(string(block), "SACRIFICE_NPC") {
+				filtered = append(filtered, block)
+			}
+		}
+		updatedBlocks, err := json.Marshal(filtered)
+		if err != nil {
+			return err
+		}
 		object["blocks"] = updatedBlocks
-		updated, err := json.Marshal(object); if err != nil { return err }
-		if _, err := schemaDB().Exec(`UPDATE gu_dictionary SET effects=$1::jsonb WHERE id=$2 AND rank=$3`, string(updated), item.id, item.rank); err != nil { return err }
+		updated, err := json.Marshal(object)
+		if err != nil {
+			return err
+		}
+		if _, err := schemaDB().Exec(`UPDATE gu_dictionary SET effects=$1::jsonb WHERE id=$2 AND rank=$3`, string(updated), item.id, item.rank); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -469,7 +515,52 @@ func seedHubRegion() error {
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
+	if _, err := schemaDB().Exec(`INSERT INTO region_world_maps (region_id, world_map_id) VALUES ('hub_nam_cuong', 'world_map') ON CONFLICT (region_id) DO NOTHING`); err != nil {
+		return err
+	}
 	return nil
+}
+
+// seedStarterSpatialRealm creates one small, fully walkable shared realm on a
+// fresh database. ON CONFLICT DO NOTHING keeps admin edits and later imports.
+func seedStarterSpatialRealm() error {
+	queries := []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO regions
+			(id,name,description,width,height,min_rank,max_rank,is_active,zone_type,min_x,min_y,max_x,max_y,entry_x,entry_y,pool_weights,paths)
+			VALUES ($1,$2,$3,20,20,1,2,TRUE,'SECRET_REALM',1000,1000,1019,1019,1000,1000,$4::jsonb,'[]'::jsonb)
+			ON CONFLICT (id) DO NOTHING`, []any{"realm_qingmu_valley", "Thanh Mộc Cốc", "Bí cảnh bản đồ khởi đầu, nơi người mới có thể khám phá tài nguyên và đối đầu dã trư.", `{"cell_type_weights":{"Monster":30,"Resource":40,"Empty":30},"resources":["ginseng","jade_stone"],"wild_gus":[]}`}},
+		{`INSERT INTO region_world_maps(region_id,world_map_id) VALUES ('realm_qingmu_valley','world_map') ON CONFLICT (region_id) DO NOTHING`, nil},
+		{`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,path)
+			VALUES ('ginseng','Nhân sâm','Food',1,'{"schema_version":2,"blocks":[]}'::jsonb,'Thức ăn mọc trong Thanh Mộc Cốc.','Wood Path'),
+			('jade_stone','Ngọc Thạch','Food',1,'{"schema_version":2,"blocks":[]}'::jsonb,'Ngọc thạch có linh khí, dùng dưỡng thương.','Earth Path')
+			ON CONFLICT (id) DO NOTHING`, nil},
+		{`INSERT INTO monster_templates(id,name,type,max_hp,base_attack,base_defense,ai_profile,description,is_active,is_capturable)
+			VALUES ('monster_wild_boar','Dã Trư','Normal',60,9,3,'beast_basic','Dã thú phổ biến tại Thanh Mộc Cốc.',TRUE,FALSE)
+			ON CONFLICT (id) DO NOTHING`, nil},
+		{`INSERT INTO monster_spawns(region_id,monster_id,spawn_mode,chance,respawn_seconds,min_rank,max_rank,is_active)
+			SELECT 'realm_qingmu_valley','monster_wild_boar','Random',1,60,1,2,TRUE
+			WHERE NOT EXISTS (SELECT 1 FROM monster_spawns WHERE region_id='realm_qingmu_valley' AND monster_id='monster_wild_boar' AND x IS NULL AND y IS NULL AND is_active=TRUE)`, nil},
+		{`INSERT INTO instance_templates(id,name,type,required_rank,entry_item,description,rewards,map_data,cooldown_hours,spatial_region_id,duration_minutes)
+			VALUES ('spatial_realm_qingmu_valley','Bí Cảnh Sơ Khai: Thanh Mộc Cốc','SPATIAL_REALM',1,'NONE','Một khu rừng linh khí dành cho chuyến thám hiểm đầu tiên. Tìm tài nguyên, chiến đấu với dã trư và trở lại bằng cổng ở phía đông điểm vào.','{}'::jsonb,'[]'::jsonb,0,'realm_qingmu_valley',60)
+			ON CONFLICT (id) DO NOTHING`, nil},
+	}
+	for _, item := range queries {
+		if _, err := schemaDB().Exec(item.query, item.args...); err != nil {
+			return err
+		}
+	}
+	_, err := schemaDB().Exec(`
+		INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
+		VALUES
+		('realm_qingmu_valley',1001,1000,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về"}'::jsonb,0,TRUE),
+		('realm_qingmu_valley',1002,1000,'Monster','monster_wild_boar','{"rank":1}'::jsonb,60,TRUE),
+		('realm_qingmu_valley',1000,1001,'Resource','ginseng','{}'::jsonb,600,TRUE),
+		('realm_qingmu_valley',1002,1001,'Resource','jade_stone','{}'::jsonb,600,TRUE)
+		ON CONFLICT (region_id,x,y) DO NOTHING`)
+	return err
 }
 
 // seedSystemPlayers seeds the two reserved system accounts used by the
@@ -573,7 +664,7 @@ func backfillLeaderboardSettings() error {
 // is not restored on later startups, so operators can safely retire it.
 func ensureAdmin() error {
 	var adminCount int
-	if err := schemaDB().QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
+	if err := schemaDB().QueryRow(`SELECT COUNT(*) FROM players WHERE LOWER(username) = 'admin'`).Scan(&adminCount); err != nil {
 		return nil
 	}
 	if adminCount == 0 {
@@ -1772,8 +1863,8 @@ func seedRegionsFromCSV(filename string) error {
 	col := func(name string) int { return colIndex(header, name) }
 	idIdx, nameIdx := col("id"), col("name")
 	descIdx, widthIdx, heightIdx, minRankIdx, maxRankIdx, activeIdx := col("description"), col("width"), col("height"), col("min_rank"), col("max_rank"), col("is_active")
-	parentIdx, typeIdx := col("parent_id"), col("zone_type")
-	minXIdx, minYIdx, maxXIdx, maxYIdx, entryXIdx, entryYIdx, poolIdx, safeXIdx, safeYIdx := col("min_x"), col("min_y"), col("max_x"), col("max_y"), col("entry_x"), col("entry_y"), col("pool_weights"), col("safe_zone_x"), col("safe_zone_y")
+	parentIdx, typeIdx, worldMapIdx := col("parent_id"), col("zone_type"), col("world_map_id")
+	minXIdx, minYIdx, maxXIdx, maxYIdx, entryXIdx, entryYIdx, poolIdx, safeXIdx, safeYIdx, rulesIdx := col("min_x"), col("min_y"), col("max_x"), col("max_y"), col("entry_x"), col("entry_y"), col("pool_weights"), col("safe_zone_x"), col("safe_zone_y"), col("rules")
 	if idIdx < 0 || nameIdx < 0 {
 		return fmt.Errorf("Region.csv missing required columns (id, name)")
 	}
@@ -1792,12 +1883,13 @@ func seedRegionsFromCSV(filename string) error {
 		return def
 	}
 	type regionRow struct {
-		id, name, desc, zoneType, poolWeights string
-		width, height, minRank, maxRank       int
-		active                                bool
-		parentID                              interface{}
-		minX, minY, maxX, maxY                int
-		entryX, entryY, safeX, safeY          int
+		id, name, desc, zoneType, poolWeights, worldMapID string
+		rules                                             any
+		width, height, minRank, maxRank                   int
+		active                                            bool
+		parentID                                          interface{}
+		minX, minY, maxX, maxY                            int
+		entryX, entryY, safeX, safeY                      int
 	}
 
 	var rowsToInsert []regionRow
@@ -1834,17 +1926,25 @@ func seedRegionsFromCSV(filename string) error {
 		if v := get(row, poolIdx); v != "" {
 			poolWeights = filterImmortalWildGus(v)
 		}
+		var rulesValue any
+		if rawRules := get(row, rulesIdx); rawRules != "" {
+			if !json.Valid([]byte(rawRules)) {
+				return fmt.Errorf("invalid rules JSON for region %s", id)
+			}
+			rulesValue = rawRules
+		}
 		var parentID interface{}
 		if p := get(row, parentIdx); p != "" {
 			parentID = p
 		}
 		rowsToInsert = append(rowsToInsert, regionRow{
 			id: id, name: get(row, nameIdx), desc: get(row, descIdx),
-			width: width, height: height, minRank: minRank, maxRank: maxRank,
+			worldMapID: get(row, worldMapIdx),
+			width:      width, height: height, minRank: minRank, maxRank: maxRank,
 			active: active, parentID: parentID, zoneType: zoneType,
 			minX: minX, minY: minY, maxX: maxX, maxY: maxY,
 			entryX: entryX, entryY: entryY, safeX: safeX, safeY: safeY,
-			poolWeights: poolWeights,
+			poolWeights: poolWeights, rules: rulesValue,
 		})
 	}
 
@@ -1852,17 +1952,29 @@ func seedRegionsFromCSV(filename string) error {
 	seeded := 0
 	for _, item := range rowsToInsert {
 		_, err = activeCSVImportDB().Exec(`
-			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,NOW())
+			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, rules, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,COALESCE($19::jsonb,'{}'::jsonb),NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
 			width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
 			is_active=EXCLUDED.is_active, zone_type=EXCLUDED.zone_type,
 			min_x=EXCLUDED.min_x, min_y=EXCLUDED.min_y, max_x=EXCLUDED.max_x, max_y=EXCLUDED.max_y,
-			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, safe_zone_x=EXCLUDED.safe_zone_x, safe_zone_y=EXCLUDED.safe_zone_y, pool_weights=EXCLUDED.pool_weights, updated_at=NOW()
+			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, safe_zone_x=EXCLUDED.safe_zone_x, safe_zone_y=EXCLUDED.safe_zone_y, pool_weights=EXCLUDED.pool_weights, rules=COALESCE($19::jsonb,regions.rules), updated_at=NOW()
 		`, item.id, item.name, item.desc, item.width, item.height, item.minRank, item.maxRank, item.active,
-			item.zoneType, item.minX, item.minY, item.maxX, item.maxY, item.entryX, item.entryY, item.safeX, item.safeY, item.poolWeights)
+			item.zoneType, item.minX, item.minY, item.maxX, item.maxY, item.entryX, item.entryY, item.safeX, item.safeY, item.poolWeights, item.rules)
 		if err != nil {
 			return fmt.Errorf("upsert region %s (pass 1): %w", item.id, err)
+		}
+		if item.worldMapID != "" {
+			var mapIsActive bool
+			if err := activeCSVImportDB().QueryRow(`SELECT COALESCE((SELECT is_active FROM world_maps WHERE id=$1), FALSE)`, item.worldMapID).Scan(&mapIsActive); err != nil {
+				return fmt.Errorf("validate map %s for region %s: %w", item.worldMapID, item.id, err)
+			}
+			if !mapIsActive {
+				return fmt.Errorf("map %s is inactive; cannot assign region %s until layer-scoped gameplay is enabled", item.worldMapID, item.id)
+			}
+		}
+		if _, err = activeCSVImportDB().Exec(`INSERT INTO region_world_maps (region_id, world_map_id) VALUES ($1, COALESCE(NULLIF($2,''), 'world_map')) ON CONFLICT (region_id) DO UPDATE SET world_map_id = CASE WHEN $2 <> '' THEN EXCLUDED.world_map_id ELSE region_world_maps.world_map_id END, updated_at=NOW()`, item.id, item.worldMapID); err != nil {
+			return fmt.Errorf("assign world map to region %s: %w", item.id, err)
 		}
 		seeded++
 	}
@@ -2213,7 +2325,7 @@ func seedMapCellsFromCSV(filename string) error {
 		_, err = activeCSVImportDB().Exec(`
 			INSERT INTO map_cells (region_id, x, y, cell_type, content_id, metadata, respawn_seconds, is_active)
 			VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
-			ON CONFLICT (x, y) DO UPDATE SET region_id=EXCLUDED.region_id, cell_type=EXCLUDED.cell_type,
+			ON CONFLICT (region_id, x, y) DO UPDATE SET cell_type=EXCLUDED.cell_type,
 			content_id=EXCLUDED.content_id, metadata=EXCLUDED.metadata, respawn_seconds=EXCLUDED.respawn_seconds,
 			is_active=EXCLUDED.is_active
 		`, get(row, regionIdx), x, y, cellType, get(row, contentIdx), meta, respawn, active)
@@ -3147,8 +3259,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"region": {
 		filename: "Region.csv",
-		columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
-		query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
+		columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights", "rules", "world_map_id"},
+		query:    `SELECT r.id, r.name, COALESCE(r.description,''), COALESCE(r.width,100), COALESCE(r.height,100), COALESCE(r.min_rank,1), COALESCE(r.max_rank,5), COALESCE(r.is_active,true), COALESCE(r.parent_id,''), COALESCE(r.zone_type,'KHU_VUC'), COALESCE(r.min_x,0), COALESCE(r.min_y,0), COALESCE(r.max_x,0), COALESCE(r.max_y,0), COALESCE(r.entry_x,0), COALESCE(r.entry_y,0), COALESCE(r.pool_weights::text,'{}'), COALESCE(r.rules::text,'{}'), COALESCE(rwm.world_map_id,'world_map') FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id=r.id ORDER BY r.id`,
 	},
 	"loot_table": {
 		filename: "LootTable.csv",

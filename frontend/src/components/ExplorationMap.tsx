@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { guSpecFor, useGameStore, Player } from "@/store/useGameStore";
-import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home, Gift, Skull, Package, Shield, X } from "lucide-react";
+import { guSpecFor, useGameStore, Player, Region } from "@/store/useGameStore";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home, Gift, Skull, Package, Shield, X, DoorOpen } from "lucide-react";
 
 import { LogConsole } from "./LogConsole";
+import { SharedSpatialRealmControls } from "./SharedSpatialRealmControls";
 import { GamePanel, GameButton } from "@/components/ui";
 import { usePolling } from "@/lib/usePolling";
 // UI migrated to shared components
@@ -37,6 +38,35 @@ const getBgGlow = (index: number) => {
     "from-rose-500/5 to-transparent"
   ];
   return glows[index % glows.length];
+};
+
+const MAIN_WORLD_REGION_IDS = new Set([
+  "dai_vuc_nam_cuong",
+  "dai_vuc_trung_chau",
+  "dai_vuc_bac_nguyen",
+  "dai_vuc_tay_mac",
+  "dai_vuc_dong_hai",
+]);
+
+const regionRestrictionSummary = (region?: Region): string[] => {
+  const rules = region?.effective_rules || region?.rules;
+  if (!rules) return [];
+  const summary: string[] = [];
+  if ((rules.rank?.min || 0) > 0) summary.push(`Rank tối thiểu ${rules.rank?.min}`);
+  if ((rules.rank?.max || 0) > 0) summary.push(`Rank tối đa ${rules.rank?.max}`);
+  if (rules.paths?.allow?.length) summary.push(`Chỉ Cổ đạo: ${rules.paths.allow.join(", ")}`);
+  if (rules.paths?.deny?.length) summary.push(`Cấm Cổ đạo: ${rules.paths.deny.join(", ")}`);
+  if ((rules.gu?.max_rank || 0) > 0) summary.push(`Cổ tối đa rank ${rules.gu?.max_rank}`);
+  if (rules.gu?.deny_ids?.length) summary.push(`Cấm ${rules.gu.deny_ids.length} loại Cổ`);
+  if (rules.items?.deny_ids?.length) summary.push(`Cấm ${rules.items.deny_ids.length} vật phẩm`);
+  const actionNames: Record<string, string> = {
+    pvp: "PvP", teleport: "dịch chuyển", gu_use: "dùng Cổ", item_use: "dùng vật phẩm",
+    combat: "giao chiến", monster_combat: "đánh quái", resource_gathering: "thu thập tài nguyên", gu_capture: "bắt Cổ",
+  };
+  if (rules.actions?.deny?.length) {
+    summary.push(`Cấm: ${rules.actions.deny.map((action) => actionNames[action] || action).join(", ")}`);
+  }
+  return summary;
 };
 
 export const ExplorationMap: React.FC<ExplorationMapProps> = ({
@@ -116,7 +146,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
   useEffect(() => {
     loadGrid();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.current_region, player.x, player.y, isExploringActiveRegion]);
   usePolling(loadGrid, 10000, isExploringActiveRegion);
 
@@ -195,6 +224,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   };
 
   const getEntityName = (type: string, content: string) => {
+    if (type === "EXIT_PORTAL" || type === "PORTAL_EXIT") return "Cổng trở về";
     if (type === "Monster" || type === "Boss") {
       return monsterDictionary[content]?.name || content.split(" ")[0];
     }
@@ -220,6 +250,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
         return <Sparkles className="w-5 h-5 text-amber-400 animate-bounce" />;
       case "PVP":
         return <User className="w-5 h-5 text-purple-400" />;
+      case "EXIT_PORTAL":
+      case "PORTAL_EXIT":
+        return <DoorOpen className="w-5 h-5 text-violet-400" />;
       default:
         return null;
     }
@@ -266,24 +299,27 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
             )}
           </div>
         </div>
-        {/* World Overview: 3x2 large zones (Đại Vực) */}
+        {/* World Overview: the five core regions; the two heavenly realms stay out of this selector. */}
         {(() => {
           const largeZones = regions
-            .filter((r) => r.zone_type === "KHU_VUC")
+            .filter((r) => r.zone_type === "NGU_VUC" && MAIN_WORLD_REGION_IDS.has(r.id))
             .sort((a, b) => (a.min_y || 0) - (b.min_y || 0) || (a.min_x || 0) - (b.min_x || 0));
-          const namedZones = regions.filter((r) => r.zone_type === "KHU_VUC");
+          const namedZones = regions.filter((r) => MAIN_WORLD_REGION_IDS.has(r.parent_id || "") && r.zone_type === "KHU_VUC");
           return (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100 font-serif">5 Đại Vực</h3>
+                <p className="mt-1 text-[10px] text-zinc-500">Chọn một khu vực bên trong đại vực để bắt đầu khám phá.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {largeZones.map((node, index) => {
-                  const isCurrentExploring = activeNode === node.id;
                   const children = namedZones.filter((n) => n.parent_id === node.id);
                   return (
                     <div
                       key={node.id}
-                      className={`border rounded-2xl p-4 flex flex-col justify-between h-60 transition-all bg-gradient-to-b ${getBgGlow(index)} to-zinc-950 relative overflow-hidden group ${
+                      className={`border rounded-2xl p-4 flex flex-col gap-4 min-h-60 transition-all bg-gradient-to-b ${getBgGlow(index)} to-zinc-950 relative overflow-hidden group ${
                         getColorClass(index)
-                      } ${!!player.active_combat ? "opacity-40 cursor-not-allowed" : ""}`}
+                      } ${!!player.active_combat ? "opacity-60" : ""}`}
                     >
                       <div className="space-y-2">
                         <div className="flex items-start justify-between">
@@ -299,38 +335,29 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           {node.description}
                         </div>
                         {children.length > 0 && (
-                          <div className="flex flex-wrap gap-1 pt-1">
-                            {children.map((c) => (
-                              <span key={c.id} className="text-[8px] font-mono text-zinc-500 bg-zinc-900/60 border border-zinc-800 px-1.5 py-0.5 rounded">
-                                {c.name}
-                              </span>
-                            ))}
+                          <div className="grid grid-cols-1 gap-1.5 pt-1">
+                            {children.map((c) => {
+                              const restrictions = regionRestrictionSummary(c);
+                              return (
+                                <div key={c.id}>
+                                  <button
+                                    type="button"
+                                    disabled={actionLoading || !!player.active_combat}
+                                    onClick={() => void handleNodeClick(c.id)}
+                                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-800/80 bg-zinc-950/50 px-2.5 py-2 text-left text-[10px] text-zinc-300 transition hover:border-emerald-500/40 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      {activeNode === c.id ? <Compass className="h-3 w-3 animate-spin text-amber-400" /> : <Footprints className="h-3 w-3 text-emerald-500" />}
+                                      {c.name}
+                                    </span>
+                                    <span className="shrink-0 text-[8px] text-zinc-600">Rank {c.min_rank}–{c.max_rank}</span>
+                                  </button>
+                                  {restrictions.length > 0 && <p className="px-2.5 pt-1 text-[9px] leading-relaxed text-amber-400/80">Cấm chế: {restrictions.join(" · ")}</p>}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
-                      </div>
-                      <div className="mt-4 pt-3 border-t border-zinc-900/60">
-                        <button
-                          type="button"
-                          disabled={actionLoading || !!player.active_combat}
-                          onClick={() => handleNodeClick(node.id)}
-                          className={`w-full py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                            !player.active_combat
-                              ? "bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 active:scale-[0.98]"
-                              : "bg-zinc-950 text-zinc-600 border border-zinc-900/80 cursor-not-allowed"
-                          }`}
-                        >
-                          {isCurrentExploring ? (
-                            <>
-                              <Compass className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                              <span>Đang di hành...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Footprints className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>Cất Bước Khám Phá</span>
-                            </>
-                          )}
-                        </button>
                       </div>
                     </div>
                   );
@@ -428,6 +455,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
             <span className="text-[10px] text-zinc-500 font-mono mt-1 block">
               Tọa độ Không Khiếu: ({player.x}, {player.y})
             </span>
+            {regionRestrictionSummary(regions.find((region) => region.id === player.current_region)).length > 0 && (
+              <span className="text-[9px] text-amber-400/80 mt-1 block">
+                Cấm chế: {regionRestrictionSummary(regions.find((region) => region.id === player.current_region)).join(" · ")}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -449,6 +481,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           )}
         </div>
       </div>
+
+      <SharedSpatialRealmControls enabled={isExploringActiveRegion} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Map Grid & Logs */}

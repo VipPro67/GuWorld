@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -157,7 +158,7 @@ func InvitePlayer(c *gin.Context) {
 
 	var targetPlayer models.Player
 	var targetPartyID sql.NullString
-	err = tx.QueryRow("SELECT id, username, party_id FROM players WHERE username = $1 FOR UPDATE", req.Username).Scan(&targetPlayer.ID, &targetPlayer.Username, &targetPartyID)
+	err = tx.QueryRow("SELECT id, username, party_id FROM players WHERE LOWER(username) = LOWER($1) FOR UPDATE", strings.TrimSpace(req.Username)).Scan(&targetPlayer.ID, &targetPlayer.Username, &targetPartyID)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi này"})
 		return
@@ -168,7 +169,9 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
-	nearby := worldPosIndex.Nearby(player.X, player.Y, PartyInviteRange, player.ID.String())
+	mapID := worldMapIDForRegion(player.CurrentRegion)
+	instanceID := mapInstanceIDForPlayer(player.ID.String())
+	nearby := worldPosIndex.NearbyInScope(player.X, player.Y, PartyInviteRange, player.ID.String(), mapID, instanceID)
 	targetFound := false
 	for _, n := range nearby {
 		if n.Username == req.Username {
@@ -391,6 +394,15 @@ func RespondToInvitation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đã có tổ đội rồi!"})
 		return
 	}
+	var playerMapInstance sql.NullString
+	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&playerMapInstance); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra bản đồ hiện tại"})
+		return
+	}
+	if playerMapInstance.Valid && playerMapInstance.String != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Hãy rời bí cảnh trước khi gia nhập tổ đội"})
+		return
+	}
 
 	var leaderID string
 	var membersRaw []byte
@@ -416,9 +428,36 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
-	var leaderRegion sql.NullString
+	var leaderRegion, leaderMapInstance sql.NullString
 	var leaderX, leaderY int
-	_ = tx.QueryRow("SELECT current_region, x, y FROM players WHERE id = $1", leaderID).Scan(&leaderRegion, &leaderX, &leaderY)
+	err = tx.QueryRow(`SELECT current_region,x,y,map_instance_id::text FROM players WHERE id=$1`, leaderID).
+		Scan(&leaderRegion, &leaderX, &leaderY, &leaderMapInstance)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra vị trí đội trưởng"})
+		return
+	}
+	if leaderMapInstance.Valid && leaderMapInstance.String != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đội trưởng đang ở bí cảnh; hãy gia nhập tổ đội trước khi vào bí cảnh"})
+		return
+	}
+	if leaderRegion.Valid {
+		if player.CurrentRegion != leaderRegion.String {
+			if err := checkRegionEntry(leaderRegion.String, player.Rank, player.GuInventory); err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Không thể tới khu vực của đội trưởng: " + err.Error()})
+				return
+			}
+		}
+		if player.CurrentRegion != leaderRegion.String || player.X != leaderX || player.Y != leaderY {
+			if err := checkRegionAction(player.CurrentRegion, "teleport"); err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+				return
+			}
+			if err := checkRegionAction(leaderRegion.String, "teleport"); err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+				return
+			}
+		}
+	}
 
 	_, err = tx.Exec("UPDATE players SET party_id = $1, current_region = $2, x = $3, y = $4 WHERE id = $5", partyID, leaderRegion, leaderX, leaderY, player.ID)
 	if err != nil {
@@ -484,13 +523,17 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 	if leader.PartyID == nil {
 		return nil
 	}
+	var leaderMapInstance sql.NullString
+	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, leader.ID).Scan(&leaderMapInstance); err != nil {
+		return nil
+	}
 	var isLeader bool
 	err := tx.QueryRow("SELECT (leader_id = $1) FROM parties WHERE id = $2", leader.ID, leader.PartyID).Scan(&isLeader)
 	if err != nil || !isLeader {
 		return nil
 	}
 
-	rows, err := tx.Query("SELECT id, username, COALESCE(avatar_url, ''), current_region, rank, sub_rank, statuses FROM players WHERE party_id = $1 AND id != $2", leader.PartyID, leader.ID)
+	rows, err := tx.Query("SELECT id, username, COALESCE(avatar_url, ''), current_region, rank, sub_rank, statuses, map_instance_id::text FROM players WHERE party_id = $1 AND id != $2", leader.PartyID, leader.ID)
 	if err != nil {
 		return nil
 	}
@@ -503,11 +546,12 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 		rank      int
 		subRank   int
 		statuses  models.StatusList
+		instance  sql.NullString
 	}
 	var members []memberLoc
 	for rows.Next() {
 		var m memberLoc
-		if err := rows.Scan(&m.id, &m.username, &m.avatarURL, &m.region, &m.rank, &m.subRank, &m.statuses); err == nil {
+		if err := rows.Scan(&m.id, &m.username, &m.avatarURL, &m.region, &m.rank, &m.subRank, &m.statuses, &m.instance); err == nil {
 			members = append(members, m)
 		}
 	}
@@ -515,6 +559,17 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 
 	var synced []SyncedPartyMember
 	for _, m := range members {
+		// Party following cannot move someone across the boundary into a
+		// restricted region or between the overworld and a spatial instance.
+		if leaderMapInstance.Valid != m.instance.Valid || (leaderMapInstance.Valid && leaderMapInstance.String != m.instance.String) {
+			continue
+		}
+		if m.region != leader.CurrentRegion {
+			inventory, err := db.LoadPlayerGus(tx, m.id.String(), false)
+			if err != nil || checkRegionEntry(leader.CurrentRegion, m.rank, inventory) != nil {
+				continue
+			}
+		}
 		if m.region != leader.CurrentRegion {
 			debuffPct, duration := GetRegionalWallDebuff(m.rank, m.subRank)
 			m.statuses.Add("regional_wall_suppression", "Giới Vực Bích", duration, debuffPct)

@@ -67,10 +67,13 @@ type NearbyCell struct {
 // (min_x/min_y/max_x/max_y). Used by the world map to prefetch the exact
 // visible area or a band ahead of the player. Bounded to prevent abuse.
 func GetCellsRect(c *gin.Context) {
-	if _, exists := middleware.GetPlayerID(c); !exists {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	EnsureWorldPosLoaded(playerID.String())
+	entry, hasScope := worldPosIndex.Get(playerID.String())
 
 	var minX, minY, maxX, maxY int
 	fmt.Sscanf(c.Query("min_x"), "%d", &minX)
@@ -107,11 +110,14 @@ func GetCellsRect(c *gin.Context) {
 	candidates := []NearbyCell{}
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
-			cell := ResolveCell(x, y)
+			regionID := DeriveRegionAtOnMap(x, y, entry.MapID)
+			if hasScope && entry.InstanceID != "" {
+				regionID = entry.Region
+			}
+			cell := ResolveCellInRegion(regionID, x, y)
 			if cell.Type == "Empty" {
 				continue
 			}
-			regionID := DeriveRegionAt(x, y)
 			candidates = append(candidates, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank, Region: regionID})
 		}
 	}
@@ -166,12 +172,16 @@ func GetNearbyPlayers(c *gin.Context) {
 	// coordinates are accepted for backward compatibility but never trusted to
 	// inspect an arbitrary part of the current region.
 	region := ""
+	mapID := "world_map"
+	instanceID := mapInstanceIDForPlayer(authID.String())
 	if entry, ok := worldPosIndex.Get(authID.String()); ok {
 		x, y, region = entry.X, entry.Y, entry.Region
+		mapID, instanceID = entry.MapID, entry.InstanceID
 	}
 	if region == "" {
 		if player, err := loadPlayerForStatus(db.DB, authID, false); err == nil {
 			x, y, region = player.X, player.Y, player.CurrentRegion
+			mapID = worldMapIDForRegion(player.CurrentRegion)
 			setWorldPosFromPlayer(&player)
 		}
 	}
@@ -188,9 +198,9 @@ func GetNearbyPlayers(c *gin.Context) {
 	// Fast path: serve from the in-memory position index. Fall back to SQL only
 	// while the index is still cold (e.g. very early startup before the first
 	// sync worker reconcile).
-	entries := worldPosIndex.Nearby(x, y, r, authID.String())
+	entries := worldPosIndex.NearbyInScope(x, y, r, authID.String(), mapID, instanceID)
 	if worldPosIndex.Len() == 0 {
-		entries = queryNearbyPlayersSQL(c, authID, x, y, r)
+		entries = queryNearbyPlayersSQL(c, authID, x, y, r, mapID, instanceID)
 	}
 
 	nearbyPlayers := make([]NearbyPlayer, 0, len(entries))
@@ -209,16 +219,19 @@ func GetNearbyPlayers(c *gin.Context) {
 
 // queryNearbyPlayersSQL is the legacy SQL path for nearby players, kept as a
 // cold-start fallback for the in-memory position index.
-func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int) []WorldPosEntry {
+func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int, mapID, instanceID string) []WorldPosEntry {
 	entries := []WorldPosEntry{}
 	rows, errQuery := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, '')
-		FROM players
-		WHERE id != $1
-		  AND (last_activity >= NOW() - INTERVAL '5 minutes' OR last_mana_update >= NOW() - INTERVAL '5 minutes')
-		  AND x >= $2 AND x <= $3
-		  AND y >= $4 AND y <= $5
-	`, authID, x-r, x+r, y-r, y+r)
+		SELECT p.id, p.username, COALESCE(p.avatar_url, ''), p.x, p.y, COALESCE(p.current_region, ''),
+		       COALESCE(rwm.world_map_id,'world_map'), COALESCE(p.map_instance_id::text,'')
+		FROM players p LEFT JOIN region_world_maps rwm ON rwm.region_id=p.current_region
+		WHERE p.id != $1
+		  AND (p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes')
+		  AND p.x >= $2 AND p.x <= $3
+		  AND p.y >= $4 AND p.y <= $5
+		  AND COALESCE(rwm.world_map_id,'world_map') = $6
+		  AND COALESCE(p.map_instance_id::text,'') = $7
+	`, authID, x-r, x+r, y-r, y+r, mapID, instanceID)
 	if errQuery != nil {
 		logger.S.Error("Failed to fetch nearby players:", errQuery)
 		return entries
@@ -226,7 +239,7 @@ func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int) []Worl
 	defer rows.Close()
 	for rows.Next() {
 		var e WorldPosEntry
-		if errScan := rows.Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region); errScan == nil {
+		if errScan := rows.Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region, &e.MapID, &e.InstanceID); errScan == nil {
 			e.TS = time.Now().UnixMilli()
 			entries = append(entries, e)
 		}

@@ -281,7 +281,7 @@ export const characterPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Hệ thống áp lực</h3>
           <ul className="list-disc list-inside text-xs text-[var(--text-secondary)] space-y-2 leading-relaxed">
-            <li>Mỗi lần click nút <strong>Trùng Kích Vách Khiếu</strong>, thanh áp lực tăng thêm <strong>+5</strong>.</li>
+            <li>Áp lực tăng theo lượng Chân Nguyên dùng để trùng kích: mỗi <strong>10 Chân Nguyên</strong> tăng <strong>1%</strong>, tối đa <strong>10% mỗi lần</strong> khi dùng 100 Chân Nguyên.</li>
             <li>Thanh áp lực tự động suy giảm theo thời gian thực: cứ <strong>mỗi 2 giờ đời thật</strong>, áp lực giảm đi <strong>phân nửa</strong>.</li>
             <li>Nếu áp lực vượt mốc <strong>80%</strong>, hiệu quả trùng kích chỉ còn <strong>25%</strong> so với bình thường.</li>
             <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: đạo hữu <strong>rớt 1 Tiểu cảnh giới (hoặc 1 Chuyển nếu đang ở Sơ Giai)</strong>, tiến độ vách khiếu về 0, áp lực giảm về 50%, và <strong>mất vĩnh viễn 5% Chân Nguyên tối đa</strong>!</li>

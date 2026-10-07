@@ -48,6 +48,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [guSortMode, setGuSortMode] = useState<"rank" | "path">("rank");
   const [showRecommendation, setShowRecommendation] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const autoStartEncounterRef = useRef<string | null>(null);
+  const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startSimulationRef = useRef<() => Promise<boolean>>(async () => false);
+  const actionLoadingRef = useRef(actionLoading);
+  actionLoadingRef.current = actionLoading;
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
@@ -141,7 +146,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     };
   }, [investigationLevel, enemy]);
 
-  const handleStartSimulation = async () => {
+  const handleStartSimulation = async (): Promise<boolean> => {
     const tribulationEventId = isPracticeMode ? undefined : player.active_combat?.tribulation_event_id;
     const loadout = {
       GuIds: selectedGuIds,
@@ -176,8 +181,40 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           }
         }
       }
+      return true;
     }
+    return false;
   };
+
+  startSimulationRef.current = handleStartSimulation;
+
+  useEffect(() => {
+    const encounterId = player.active_combat?.world_monster_encounter_id;
+    if (!encounterId || isPracticeMode || isPartyMemberNotLeader) return;
+
+    let cancelled = false;
+    const startWhenReady = async () => {
+      if (cancelled || autoStartEncounterRef.current === encounterId) return;
+      if (actionLoadingRef.current) {
+        autoStartTimerRef.current = setTimeout(startWhenReady, 5000);
+        return;
+      }
+      autoStartEncounterRef.current = encounterId;
+      addToast("Đạo hữu chuẩn bị quá lâu, trận chiến tự động bắt đầu theo đội hình hiện tại.", "info");
+      const started = await startSimulationRef.current();
+      if (!started && !cancelled) {
+        autoStartEncounterRef.current = null;
+        autoStartTimerRef.current = setTimeout(startWhenReady, 10000);
+      }
+    };
+
+    autoStartTimerRef.current = setTimeout(startWhenReady, 90_000);
+    return () => {
+      cancelled = true;
+      if (autoStartTimerRef.current) clearTimeout(autoStartTimerRef.current);
+      autoStartTimerRef.current = null;
+    };
+  }, [player.active_combat?.world_monster_encounter_id, isPracticeMode, isPartyMemberNotLeader, addToast]);
 
   const toggleGu = (id: string) => {
     if (selectedGuIds.includes(id)) {

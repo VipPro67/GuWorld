@@ -125,7 +125,7 @@ func GetPlayerProfile(c *gin.Context) {
 	query := `
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, p.current_region, p.x, p.y, p.party_id, ` + db.GuInventoryAggregate("p.id") + `, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised, COALESCE(p.race, ''), COALESCE(p.gender, ''), COALESCE(p.constitution, ''), p.statuses
 		FROM players p
-		WHERE p.username = $1
+		WHERE LOWER(p.username) = LOWER($1)
 	`
 	err = db.DB.QueryRowContext(c.Request.Context(), query, targetUsername).Scan(
 		&target.ID, &target.Username, &target.Rank, &target.SubRank,

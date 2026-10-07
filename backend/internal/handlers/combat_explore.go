@@ -70,8 +70,34 @@ func ExploreNode(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong chiến đấu! Hãy dứt điểm kẻ địch trước."})
 		return
 	}
+	destinationZone := ZoneByID(req.NodeID)
+	if destinationZone == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Khu vực du ngoạn không tồn tại."})
+		return
+	}
+	var mapInstanceID sql.NullString
+	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&mapInstanceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra bản đồ hiện tại"})
+		return
+	}
+	if mapInstanceID.Valid && mapInstanceID.String != "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Hãy rời bí cảnh bằng cổng thoát trước khi du ngoạn sang khu vực khác"})
+		return
+	}
 
 	if player.CurrentRegion != req.NodeID {
+		if err := checkRegionAction(player.CurrentRegion, "teleport"); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err := checkRegionAction(req.NodeID, "teleport"); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err := checkRegionEntry(req.NodeID, player.Rank, player.GuInventory); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		if errLimit := checkAndIncrementExploreLimit(tx, &player); errLimit != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": errLimit.Error()})
 			return
@@ -89,9 +115,7 @@ func ExploreNode(c *gin.Context) {
 	player.CurrentMana -= exploreEnergyCost
 
 	nodeName := "Khu Vực Bí Ẩn"
-	if zone := ZoneByID(req.NodeID); zone != nil {
-		nodeName = zone.Name
-	}
+	nodeName = destinationZone.Name
 
 	roll := rand.Intn(100)
 	// DISGUISE shrinks the random-monster window (70% threshold)

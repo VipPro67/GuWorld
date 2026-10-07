@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -12,12 +13,14 @@ import (
 
 // GetRegions fetches all active regions (zones) from the database with ETag caching
 func GetRegions(c *gin.Context) {
-	getCachedDictionaryPart(c, "explore_regions", &[]models.Region{}, func() interface{} {
+	getCachedDictionaryPart(c, "explore_regions_v2", &[]models.Region{}, func() interface{} {
 		query := `
 			SELECT id, name, description, width, height, min_rank, max_rank, is_active, created_at, updated_at,
 			       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
-			       COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0)
+			       COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0),
+			       COALESCE(rwm.world_map_id, 'world_map'), COALESCE(regions.rules::text,'{}')
 			FROM regions
+			LEFT JOIN region_world_maps rwm ON rwm.region_id = regions.id
 			WHERE is_active = TRUE
 			ORDER BY min_rank ASC, name ASC
 		`
@@ -31,13 +34,58 @@ func GetRegions(c *gin.Context) {
 		for rows.Next() {
 			var r models.Region
 			if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive, &r.CreatedAt, &r.UpdatedAt,
-				&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY); err != nil {
+				&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &r.WorldMapID, &r.Rules); err != nil {
 				continue
+			}
+			if effectiveRules, err := regionRulesFor(r.ID); err == nil {
+				if raw, err := json.Marshal(effectiveRules); err == nil {
+					r.EffectiveRules = raw
+				}
 			}
 			regions = append(regions, r)
 		}
 		return regions
 	})
+}
+
+// GetWorldMaps exposes the configured world layers. Inactive layers stay
+// visible to admin/development clients but cannot yet be entered by players.
+func GetWorldMaps(c *gin.Context) {
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id, name, description, map_type, width, height, min_rank, max_rank,
+		       COALESCE(rules::text, '{}'), is_active
+		FROM world_maps ORDER BY CASE id WHEN 'world_map' THEN 0 WHEN 'bai_thien' THEN 1 WHEN 'hac_thien' THEN 2 ELSE 3 END, id`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách tầng bản đồ"})
+		return
+	}
+	defer rows.Close()
+	type worldMap struct {
+		ID          string          `json:"id"`
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		MapType     string          `json:"map_type"`
+		Width       int             `json:"width"`
+		Height      int             `json:"height"`
+		MinRank     int             `json:"min_rank"`
+		MaxRank     int             `json:"max_rank"`
+		Rules       json.RawMessage `json:"rules"`
+		IsActive    bool            `json:"is_active"`
+	}
+	maps := make([]worldMap, 0)
+	for rows.Next() {
+		var item worldMap
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.MapType, &item.Width, &item.Height, &item.MinRank, &item.MaxRank, &item.Rules, &item.IsActive); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu tầng bản đồ"})
+			return
+		}
+		maps = append(maps, item)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách tầng bản đồ"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"maps": maps})
 }
 
 // GetWorld returns the shared world geometry for the frontend overview.

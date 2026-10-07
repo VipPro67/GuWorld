@@ -62,7 +62,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/player/recharge` |
 | POST | `/player/clear-stress` |
 | GET | `/player/profile/:username` |
-| PUT | `/player/profile/settings` | Cập nhật hồ sơ (bio, avatar, mật khẩu, ngụy trang). Khi đổi Đạo Hiệu (`username`): Rank 1-2 miễn phí; Rank 3-5 tốn Nguyên Thạch (5k/20k/100k); Rank 6-9 tốn Tiên Nguyên Thạch (100/500/2.5k/10k), tụt Đạo Ngân & Chân Ý Lưu Phái (-30%/-40%/-50%/-70%), tổn hại Tiên Khiếu và phát thông báo Thế Giới (không tụt tiểu cảnh giới). |
+| PUT | `/player/profile/settings` | Cập nhật hồ sơ (bio, avatar, mật khẩu, ngụy trang). Username không trùng nhau dù khác hoa/thường; nhập tên người chơi tại các tính năng được hỗ trợ cũng không phân biệt hoa/thường. Đổi tên khác biệt thực sự: Rank 1-2 miễn phí; Rank 3-5 tốn Nguyên Thạch (5k/20k/100k); Rank 6-9 tốn Tiên Nguyên Thạch (100/500/2.5k/10k), tụt Đạo Ngân & Chân Ý Lưu Phái (-30%/-40%/-50%/-70%), tổn hại Tiên Khiếu và phát thông báo Thế Giới (không tụt tiểu cảnh giới). |
 | GET | `/player/combat-settings` | Đọc `combat_settings` (auto-heal/mana + **thứ tự ưu tiên loại** `category_priorities` + **bộ cổ sử dụng** `gu_priorities` + `km_priorities`). |
 | PUT | `/player/combat-settings` | Lưu `combat_settings`. `category_priorities` = thứ tự ưu tiên loại kỹ năng (`shield`, `heal`, `damage`, `other`); `gu_priorities` = **bộ cổ mang theo** (danh sách `gu_id` theo thứ tự `priority`): dùng khi tấn công (ưu tiên hơn gợi ý UI) và khi bị tấn công; rỗng = dùng tất cả Cổ đang trang bị ACTIVE. |
 | GET | `/player/referrals` |
@@ -145,7 +145,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/explore/retreat/:id` | |
 | POST | `/explore/flee/:id` | Bỏ chạy khỏi trận đang chiến. **Mỏ & PvP: luôn thành công, không phạt.** Còn lại: 70% thành công (BOSS/Tribulation 40%). Thành công → trừ 20% Max HP nếu là PvE thường (có thể ngất + rơi đồ). Thất bại → địch phản công; trả `flee_success:false` kèm `defeat` / `victory` (địch tự chết → thắng tại chỗ + nhận loot + xoá địch khỏi map) và `logs`. |
 | GET | `/explore/grid` | Viewport 5×5 quanh player; trả `{x, y, vision_radius, cells, stats (chỉ movement + investigation), players_on_map, ground_drops, world_width, world_height}` — đã bỏ `teleport_arrays` (frontend không dùng) và phần stat dư thừa. |
-| GET | `/explore/regions` | Danh sách zone (id, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`). `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
+| GET | `/explore/regions` | Danh sách zone (id, `world_map_id`, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`, `rules`, `effective_rules`). `rules` là luật khai báo tại khu đó; `effective_rules` là luật sau khi kế thừa theo nhóm từ khu cha. Client dùng luật hiệu lực để hiển thị cấm chế; backend vẫn tự kiểm tra. Xem `docs/GAME_DATA.md` để biết schema. `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
+| GET | `/explore/maps` | Danh mục tầng bản đồ (`maps[]`: id, tên, kích thước, rank, rules, trạng thái). `bai_thien` và `hac_thien` hiện được cấu hình nhưng chưa mở cho người chơi cho tới khi luồng tọa độ/hiện diện được scope theo tầng. |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
 | GET | `/explore/objects` | Các ô persistent (map_cells): village/trạm nghỉ, boss, linh tài — cho bản đồ lớn. Trả `{region_id,x,y,cell_type,content_id,rank,respawn_seconds,cleared}`. |
 | GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh được cap 256) — dùng để prefetch vùng nhìn / dải phía trước hướng đi. Client cache theo chunk 64×64 và namespace khu vực; trạng thái cleared được đọc theo batch. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank,region_id}]`. |
@@ -165,7 +166,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/teleport/mine` | Lấy danh sách các Trận Pháp do bản thân hoặc Tông Môn sở hữu. |
 | POST | `/teleport/build` | Bố trí Trận Pháp mới tại toạ độ hiện tại. Body: `{"name","tier","direction_type","access_policy","fee_enabled","fee_currency","fee_amount"}`. |
 | GET | `/teleport/directory` | Lấy danh bạ các điểm truyền tống khả dụng từ Trận Pháp mà người chơi đang đứng (lọc cự ly, hướng kết nối, quyền riêng tư, phí). |
-| POST | `/teleport/travel` | Kích hoạt truyền tống đến trận pháp đích. Body: `{"target_array_id": "uuid"}`. Trừ phí (95% vào két sắt trận, 5% hao tán), giảm 1 độ bền, áp dụng debuff Giới Vực Bích nếu nhảy xuyên vực. |
+| POST | `/teleport/travel` | Kích hoạt truyền tống đến trận pháp đích. Body: `{"target_array_id": "uuid"}`. Kiểm tra cấm chế teleport và điều kiện rank/Cổ tại khu đích; không dùng được trong bí cảnh. Trừ phí (95% vào két sắt trận, 5% hao tán), giảm 1 độ bền, áp dụng debuff Giới Vực Bích nếu nhảy xuyên vực. |
 | POST | `/teleport/manage` | Thay đổi tên, hướng (hai chiều/1 chiều), quyền (`PUBLIC`/`SECT`/`PERSONAL`), bật/tắt phí và mức giá vé. |
 | POST | `/teleport/repair` | Tiêu hao Nguyên Thạch phục hồi độ bền trận pháp. Body: `{"array_id": "uuid", "amount": 10}`. |
 | POST | `/teleport/withdraw` | Rút số dư doanh thu từ Két Sắt (`vault_balance`) về túi đồ của chủ sở hữu. Body: `{"array_id": "uuid", "amount": 0}` (0 = rút tất cả). |
@@ -281,15 +282,26 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 
 | Method | Path |
 | --- | --- |
-| POST | `/chat/mail/send` | Gửi thư (tiêu hao 1 Nguyên Thạch, +1 Nhân Khí). Trả về `{ message }`; thông tin player đồng bộ qua WebSocket `player.updated`. |
+| POST | `/chat/mail/send` | Gửi tin riêng 1:1, tối đa 500 ký tự. Sender chịu 1 Nguyên Thạch/tin; tin đầu tiên giữa một cặp người chơi thu thêm 1 Nguyên Thạch mở kết nối. Kết nối dùng chung hai chiều, lưu lâu dài. |
 | GET | `/chat/mail/inbox` |
+| GET | `/chat/mail/conversations` | Danh sách 100 hội thoại gần nhất, tin cuối và số tin chưa đọc. |
+| GET | `/chat/mail/thread?username=...` | 50 tin gần nhất của cuộc trò chuyện, đánh dấu tin nhận được là đã đọc. |
 | POST | `/chat/bao-hoang/send` | Gửi tin nhắn chat. Trả về `{ message }`; thông tin player (Nguyên Thạch, Nhân Khí) đồng bộ qua WebSocket `player.updated`. |
-| GET | `/chat/bao-hoang/messages` |
+| GET | `/chat/bao-hoang/messages?channel=world\|general\|sect\|region` | `region` tự lấy khu vực và instance hiện tại từ player; `scope_only=1` chỉ trả khóa WebSocket hiện tại để đồng bộ đăng ký. Chat khu vực miễn phí và không nhận region do client chỉ định. |
+
 | POST | `/soul/refine` |
 | GET | `/instance/active` |
 | GET | `/instance/list` | Danh sách phó bản + `cooldown_remaining` (giây) của player |
 | POST | `/instance/enter` |
 | POST | `/instance/action` |
+| GET | `/instance/spatial` | Danh sách template `SPATIAL_REALM` và số người đang ở phiên chung |
+| GET | `/instance/spatial/active` | Bí cảnh bản đồ mà người chơi đang tham gia, nếu có |
+| POST | `/instance/spatial/enter` | Body `{ "template_id": "..." }`; tạo hoặc tham gia phiên chung, lưu điểm hồi quy riêng cho người vào |
+| POST | `/instance/spatial/exit` | Thoát tại ô cổng có `cell_type=EXIT_PORTAL`/`PORTAL_EXIT`, `content_id=EXIT_SPATIAL_REALM`, hoặc `metadata.action=EXIT_SPATIAL_REALM` |
+
+`POST /chat/bao-hoang/send` nhận `channel=region` để gửi miễn phí vào khu vực hiện tại. Lịch sử khu vực được cô lập theo `current_region` và `map_instance_id`; kênh cập nhật theo vị trí mới khi frontend đồng bộ khóa hiện tại. Mỗi lần tải chỉ trả tối đa 50 tin gần nhất.
+
+Bí cảnh bản đồ dùng `instance_templates.type=SPATIAL_REALM`, `spatial_region_id` trỏ tới region `SECRET_REALM`, và `duration_minutes`. Mỗi template chỉ có một phiên ACTIVE dùng chung. Khi hết giờ, worker đóng phiên, trả tất cả người tham gia về vị trí đã lưu và xóa ground drop trong region đó. Item effect `exit_spatial_realm` dùng chung đường thoát; chưa gắn vào Cổ Trùng cụ thể.
 
 ## Gacha (Cổ Từ / Mở Đá)
 
@@ -384,7 +396,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là
 | GET | `/admin/players/:id` | Chi tiết người chơi. Response bỏ `gu_inventory`/`materials_inventory`, trả `gu_count` + `item_count`. Kèm `race`, `gender`, `constitution`, `statuses` (array). |
 | GET | `/admin/players/:id/items` | Lazy-load item của người chơi từ `player_inventory_items`. Trả thêm các cổ phương đã mở khóa (`category=recipe`) từ `player_recipe_progress`. Params: `page`, `limit`, `q` (match item_id/item_name theo registry). |
 | GET | `/admin/players/:id/gus` | Lazy-load từ bảng `player_gu`. Params: `page`, `limit`, `q` (match gu_id/instance_id theo registry). |
-| PUT | `/admin/players/:id` | Sửa thông tin gameplay của người chơi. Body chỉ gửi field thay đổi. Trường tương thích `is_admin` là **read-only** và không còn được endpoint này xử lý; dùng endpoint roles riêng để thay đổi quyền. Hỗ trợ `race`, `gender`, `constitution` (string), `statuses` (array string hoặc array object `{id, expires_at?, source?, value?}`, ví dụ `["severely_wounded"]` — key phải tồn tại trong `status_dictionary`). |
+| PUT | `/admin/players/:id` | Sửa thông tin gameplay của người chơi. Body chỉ gửi field thay đổi. Username được kiểm tra trùng không phân biệt hoa/thường. Trường tương thích `is_admin` là **read-only** và không còn được endpoint này xử lý; dùng endpoint roles riêng để thay đổi quyền. Hỗ trợ `race`, `gender`, `constitution` (string), `statuses` (array string hoặc array object `{id, expires_at?, source?, value?}`, ví dụ `["severely_wounded"]` — key phải tồn tại trong `status_dictionary`). |
 | GET | `/admin/roles` | Danh mục role quản trị, sắp theo `level`: `{roles: [{key,name,description,level}]}`. |
 | GET | `/admin/players/:id/roles` | Role hiện tại của người chơi: `{player_id, roles: [...]}`. `is_admin` ở các API player cũ chỉ là projection read-only để tương thích. |
 | PUT | `/admin/players/:id/roles` | Thay toàn bộ role bằng body `{roles: ["admin", "super_admin"]}`. Thao tác và audit `{before,after}` nằm trong cùng transaction. Không được tự nâng quyền, cấp role cao hơn role cao nhất của actor (trừ super admin), sửa role cao hơn thẩm quyền, hoặc xóa super admin cuối cùng (`409`). |
@@ -468,6 +480,8 @@ WebSocket endpoint chính thức thay thế SSE, sử dụng Redis Pub/Sub đa p
 | `chat:world` | Hai chiều | Chat thế giới |
 | `chat:general` | Hai chiều | Chat Bảo Hoàng Thiên (yêu cầu Thông Thiên Cổ & Thần Niệm Cổ) |
 | `chat:sect` | Hai chiều | Chat tông môn |
+| `chat:region:<region_id>[:<map_instance_id>]` | Hai chiều | Chat khu vực miễn phí; server chỉ chấp nhận đăng ký đúng scope hiện tại của player. |
+| `chat:private:<player_id>` | Hai chiều | Thông báo tin nhắn 1:1 chỉ cho chủ player ID đó; server tự đăng ký và chặn subscribe ID người khác. |
 | `trade` | S→C | Trạng thái giao dịch realtime |
 | `world:pos` | S→C | Vị trí người chơi di chuyển trên bản đồ lớn; payload mang `region_id` và fan-out theo AOI cùng khu vực |
 | `world:cell` | S→C | Sự kiện Boss/tài nguyên bị tiêu diệt hoặc hồi sinh; payload mang `region_id`, client apply theo tọa độ global kể cả khi viewport cắt qua ranh giới khu vực |

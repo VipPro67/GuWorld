@@ -1419,8 +1419,9 @@ export const Aperture: React.FC<ApertureProps> = ({
                     required
                     className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-all font-mono"
                   />
+                  <p className="text-[9px] text-zinc-600">Đạo hiệu được so sánh không phân biệt chữ hoa/thường.</p>
                   {/* Notice / Warning box if name is being changed */}
-                  {settingsUsername.trim() !== "" && settingsUsername.trim() !== player.username && (() => {
+                  {settingsUsername.trim() !== "" && settingsUsername.trim().toLowerCase() !== player.username.toLowerCase() && (() => {
                     const renameCost = getRenameCost(player.rank);
                     const penalty = getImmortalPenaltyRates(player.rank);
                     return (

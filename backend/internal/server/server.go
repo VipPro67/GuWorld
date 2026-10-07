@@ -822,6 +822,8 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		{
 			chat.POST("/mail/send", middleware.RateLimitByPlayer(20, time.Minute), handlers.SendPrivateMail)
 			chat.GET("/mail/inbox", middleware.RateLimitByPlayer(30, time.Minute), handlers.GetInbox)
+			chat.GET("/mail/conversations", middleware.RateLimitByPlayer(60, time.Minute), handlers.GetPrivateConversations)
+			chat.GET("/mail/thread", middleware.RateLimitByPlayer(60, time.Minute), handlers.GetPrivateThread)
 			chat.POST("/bao-hoang/send", middleware.RateLimitByIP(30, time.Minute), handlers.SendBaoHoangChat)
 			chat.GET("/bao-hoang/messages", middleware.RateLimitByPlayer(60, time.Minute), handlers.GetBaoHoangMessages)
 		}
@@ -832,6 +834,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
 		api.GET("/explore/grid", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
+		api.GET("/explore/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
@@ -927,6 +930,10 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			instance.GET("/list", handlers.ListInstances)
 			instance.POST("/enter", handlers.EnterInstance)
 			instance.POST("/action", handlers.ActionInstance)
+			instance.GET("/spatial", handlers.ListSpatialRealms)
+			instance.GET("/spatial/active", handlers.GetActiveSpatialRealm)
+			instance.POST("/spatial/enter", handlers.EnterSpatialRealm)
+			instance.POST("/spatial/exit", handlers.ExitSpatialRealm)
 		}
 
 		// Sect — group: 40/min, per player: 25/min

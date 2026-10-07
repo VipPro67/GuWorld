@@ -4,6 +4,7 @@ export interface WorldMonster {
   instance_id: string;
   spawn_id: string;
   monster_template_id: string;
+  is_boss?: boolean;
   rank?: number;
   sub_rank?: number;
   region_id: string;

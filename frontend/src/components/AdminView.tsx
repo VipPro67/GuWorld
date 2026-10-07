@@ -644,10 +644,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [regions, setRegions] = useState<ApiResponseData[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(false);
   const [regionEdit, setRegionEdit] = useState<ApiResponseData | null>(null);
+  const [regionRulesDraft, setRegionRulesDraft] = useState("{}");
   const [regionSearch, setRegionSearch] = useState("");
   const [regionsPage, setRegionsPage] = useState(1);
   const [regionsTotal, setRegionsTotal] = useState(0);
   const [regionsTotalPages, setRegionsTotalPages] = useState(1);
+
+  const openRegionEditor = (region: ApiResponseData) => {
+    setRegionRulesDraft(JSON.stringify(region.rules || {}, null, 2));
+    setRegionEdit(region);
+  };
 
   const [mapCells, setMapCells] = useState<ApiResponseData[]>([]);
   const [mapCellsLoading, setMapCellsLoading] = useState(false);
@@ -3741,7 +3747,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <Globe className="w-4 h-4 text-amber-400" />Quản Lý Khu Vực
                 </h3>
                 {canAdminAction("updateRegion") && <button
-                  onClick={() => setRegionEdit({ id: "", name: "", description: "", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, safe_zone_x: null, safe_zone_y: null, parent_id: "", paths: [], pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })}
+                  onClick={() => openRegionEditor({ id: "", name: "", description: "", world_map_id: "world_map", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, safe_zone_x: null, safe_zone_y: null, parent_id: "", paths: [], rules: {}, pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />Thêm Khu Vực
@@ -3769,8 +3775,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               ) : (
                 <>
                   <AdminDataGrid rows={regions} loading={regionsLoading} showSearch={false} showPagination={false} sortable={false} rowKey={(region) => region.id} columns={[
-                      { key: "id", label: "ID", value: (region) => region.id, className: "font-mono text-zinc-400" }, { key: "name", label: "Tên", value: (region) => region.name, className: "font-semibold text-zinc-200" }, { key: "description", label: "Mô tả", value: (region) => region.description, className: "max-w-[150px] truncate text-zinc-400" }, { key: "zone_type", label: "Loại", value: (region) => region.zone_type, className: "text-amber-400" }, { key: "size", label: "Kích thước", value: (region) => `${region.width}x${region.height}` }, { key: "coordinates", label: "Tọa độ", value: (region) => `${region.min_x},${region.min_y},${region.max_x},${region.max_y}`, render: (region) => `(${region.min_x},${region.min_y}) → (${region.max_x},${region.max_y})` }, { key: "rank", label: "Cảnh giới", value: (region) => `${region.min_rank}-${region.max_rank}`, render: (region) => `C${region.min_rank} - C${region.max_rank}` },
-                    ]} onEdit={canAdminAction("updateRegion") ? (region) => setRegionEdit(structuredClone(region)) : undefined} onCopy={canAdminAction("updateRegion") ? (region) => setRegionEdit({ ...structuredClone(region), id: "", _isNew: true }) : undefined} onDelete={canAdminAction("deleteRegion") ? async (region) => { const endpoint = `${BACKEND_URL}/api/admin/regions/${region.id}`; const prepared = prepareAdminAction("deleteRegion", "xóa khu vực", new URL(endpoint).pathname); if (!prepared) return; const ok = await exec(endpoint, "DELETE", prepared); if (ok) fetchRegions(regionsPage, regionSearch); } : undefined} />
+                      { key: "id", label: "ID", value: (region) => region.id, className: "font-mono text-zinc-400" }, { key: "name", label: "Tên", value: (region) => region.name, className: "font-semibold text-zinc-200" }, { key: "world_map_id", label: "Tầng", value: (region) => region.world_map_id || "world_map", className: "text-cyan-300" }, { key: "description", label: "Mô tả", value: (region) => region.description, className: "max-w-[150px] truncate text-zinc-400" }, { key: "zone_type", label: "Loại", value: (region) => region.zone_type, className: "text-amber-400" }, { key: "size", label: "Kích thước", value: (region) => `${region.width}x${region.height}` }, { key: "coordinates", label: "Tọa độ", value: (region) => `${region.min_x},${region.min_y},${region.max_x},${region.max_y}`, render: (region) => `(${region.min_x},${region.min_y}) → (${region.max_x},${region.max_y})` }, { key: "rank", label: "Cảnh giới", value: (region) => `${region.min_rank}-${region.max_rank}`, render: (region) => `C${region.min_rank} - C${region.max_rank}` },
+                    ]} onEdit={canAdminAction("updateRegion") ? (region) => openRegionEditor(structuredClone(region)) : undefined} onCopy={canAdminAction("updateRegion") ? (region) => openRegionEditor({ ...structuredClone(region), id: "", _isNew: true }) : undefined} onDelete={canAdminAction("deleteRegion") ? async (region) => { const endpoint = `${BACKEND_URL}/api/admin/regions/${region.id}`; const prepared = prepareAdminAction("deleteRegion", "xóa khu vực", new URL(endpoint).pathname); if (!prepared) return; const ok = await exec(endpoint, "DELETE", prepared); if (ok) fetchRegions(regionsPage, regionSearch); } : undefined} />
                   <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
                     <div>Tổng số: <span className="text-zinc-300">{regionsTotal}</span> khu vực</div>
                     <div className="flex items-center gap-2">
@@ -5055,6 +5061,15 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label>
                 <textarea value={regionEdit.description || ""} onChange={e => setRegionEdit({...regionEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
               </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tầng bản đồ</label>
+                <select value={regionEdit.world_map_id || "world_map"} onChange={e => setRegionEdit({...regionEdit, world_map_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                  <option value="world_map">WorldMap (5 Đại Vực hiện tại)</option>
+                  <option value="bai_thien" disabled>Bạch Thiên (đang khóa)</option>
+                  <option value="hac_thien" disabled>Hắc Thiên (đang khóa)</option>
+                </select>
+                <p className="mt-1 text-[10px] text-amber-300/80">Gán tầng chỉ là cấu hình dữ liệu. Gameplay tầng 2/3 chưa mở cho đến khi vị trí, hiện diện và combat được phân tầng.</p>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Width</label>
@@ -5126,6 +5141,11 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Pool weights (JSON)</label>
                 <textarea value={typeof regionEdit.pool_weights === "string" ? regionEdit.pool_weights : JSON.stringify(regionEdit.pool_weights || {}, null, 2)} onChange={e => { try { setRegionEdit({...regionEdit, pool_weights: JSON.parse(e.target.value)}); } catch {} }} rows={5} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
               </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Cấm chế khu vực (JSON)</label>
+                <textarea value={regionRulesDraft} onChange={e => setRegionRulesDraft(e.target.value)} rows={9} spellCheck={false} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
+                <p className="mt-1 text-[10px] text-zinc-500">Nhóm không khai báo kế thừa từ khu cha; khai báo nhóm ở đây sẽ thay cả nhóm cha. Dùng nhóm rỗng để xóa luật kế thừa.</p>
+              </div>
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Đạo mạch khu vực (paths, cách nhau bằng dấu phẩy)</label><input value={(Array.isArray(regionEdit.paths) ? regionEdit.paths : []).join(", ")} onChange={e => setRegionEdit({...regionEdit, paths: e.target.value.split(",").map((path: string) => path.trim()).filter(Boolean)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2 mt-4">
@@ -5139,6 +5159,13 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <button onClick={async () => {
                 const isNew = !!regionEdit._isNew;
                 const { _isNew, ...body } = regionEdit;
+                try {
+                  body.rules = JSON.parse(regionRulesDraft);
+                  if (!body.rules || Array.isArray(body.rules) || typeof body.rules !== "object") throw new Error("Luật phải là JSON object.");
+                } catch {
+                  addToast("Cấm chế phải là một JSON object hợp lệ", "error");
+                  return;
+                }
                 if (!body.pool_weights) {
                   body.pool_weights = { cell_type_weights: {}, resources: [], wild_gus: [] };
                 }

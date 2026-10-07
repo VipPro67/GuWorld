@@ -25,7 +25,10 @@ type WorldPosEvent struct {
 	X         int    `json:"x"`
 	Y         int    `json:"y"`
 	Region    string `json:"region_id"`
+	MapID     string `json:"world_map_id"`
+	InstanceID string `json:"map_instance_id,omitempty"`
 	TS        int64  `json:"ts"`
+	ScopeResolved bool `json:"-"`
 }
 
 var worldPosHub = struct {
@@ -61,8 +64,15 @@ func unsubscribeWorldPos(playerID string, ch chan WorldPosEvent) {
 // resolution is always based on the freshest position) and fans the event out
 // to subscribers within interest radius via WebSocket.
 func broadcastWorldPos(payload WorldPosEvent) {
-	playerID, _ := uuid.Parse(payload.ID)
-	_ = playerID // suppress unused warning if not needed
+	EnsureWorldPosLoaded(payload.ID)
+	if payload.MapID == "" {
+		payload.MapID = worldMapIDForRegion(payload.Region)
+	}
+	if previous, ok := worldPosIndex.Get(payload.ID); ok {
+		if !payload.ScopeResolved && payload.InstanceID == "" && previous.InstanceID != "" && previous.MapID == payload.MapID {
+			payload.InstanceID = previous.InstanceID
+		}
+	}
 
 	worldPosIndex.Set(WorldPosEntry{
 		ID:        payload.ID,
@@ -71,10 +81,12 @@ func broadcastWorldPos(payload WorldPosEvent) {
 		X:         payload.X,
 		Y:         payload.Y,
 		Region:    payload.Region,
+		MapID:     payload.MapID,
+		InstanceID: payload.InstanceID,
 		TS:        payload.TS,
 	})
 
-	nearby := worldPosIndex.Nearby(payload.X, payload.Y, WorldPosInterestRadius, payload.ID)
+	nearby := worldPosIndex.NearbyInScope(payload.X, payload.Y, WorldPosInterestRadius, payload.ID, payload.MapID, payload.InstanceID)
 
 	if WorldPosBroadcaster != nil {
 		targets := make(map[uuid.UUID]struct{}, len(nearby))
@@ -101,10 +113,11 @@ func EnsureWorldPosLoaded(playerID string) {
 	var e WorldPosEntry
 	var ts time.Time
 	err := db.DB.QueryRow(`
-		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, ''), COALESCE(last_mana_update, NOW())
-		FROM players
-		WHERE id = $1
-	`, playerID).Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region, &ts)
+		SELECT p.id, p.username, COALESCE(p.avatar_url, ''), p.x, p.y, COALESCE(p.current_region, ''),
+		       COALESCE(rwm.world_map_id,'world_map'), COALESCE(p.map_instance_id::text,''), COALESCE(p.last_mana_update, NOW())
+		FROM players p LEFT JOIN region_world_maps rwm ON rwm.region_id=p.current_region
+		WHERE p.id = $1
+	`, playerID).Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region, &e.MapID, &e.InstanceID, &ts)
 	if err != nil {
 		return
 	}

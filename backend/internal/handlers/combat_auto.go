@@ -90,6 +90,15 @@ func AutoCombatStart(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không trong trạng thái chiến đấu."})
 		return
 	}
+	worldMonsterCombat := *player.ActiveCombat
+	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
 	isTribulation := player.ActiveCombat.TribulationEventID != ""
@@ -330,6 +339,7 @@ func AutoCombatStart(c *gin.Context) {
 	if alliesAlive {
 		winner = "Phe Ta"
 	}
+	completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, winner, player.ID.String())
 
 	// ── Save combat history (non-critical) ──
 	enemyName := ""

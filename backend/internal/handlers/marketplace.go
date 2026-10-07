@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -117,7 +118,7 @@ func CreateListing(c *gin.Context) {
 			return
 		}
 
-		err = tx.QueryRow(`SELECT id FROM players WHERE username = $1`, req.TargetBuyerUsername).Scan(&targetBuyerID)
+		err = tx.QueryRow(`SELECT id FROM players WHERE LOWER(username) = LOWER($1)`, strings.TrimSpace(req.TargetBuyerUsername)).Scan(&targetBuyerID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy người nhận chỉ định"})

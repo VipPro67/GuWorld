@@ -170,6 +170,13 @@ func getCachedDictionaryPart(c *gin.Context, key string, target interface{}, bui
 	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
 }
 
+func invalidateCachedDictionaryPart(key string) {
+	dictCacheMu.Lock()
+	delete(dictCache, key)
+	dictCacheMu.Unlock()
+	_ = cache.Delete(key)
+}
+
 // GetGuDictionary returns only the Gu catalog used by gameplay screens.
 func GetGuDictionary(c *gin.Context) {
 	getCachedDictionaryPart(c, "game_dictionary_gus", &[]models.GuDictionaryItem{}, func() interface{} {

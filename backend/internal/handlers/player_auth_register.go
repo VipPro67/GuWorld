@@ -244,8 +244,12 @@ func RegisterPlayer(c *gin.Context) {
 
 	// Verify username uniqueness inside tx
 	var usernameExists bool
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE username = $1)", req.Username).Scan(&usernameExists)
-	if err == nil && usernameExists {
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username) = LOWER($1))", req.Username).Scan(&usernameExists)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra đạo hiệu"})
+		return
+	}
+	if usernameExists {
 		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu này đã tồn tại trong Cổ Giới!"})
 		return
 	}
@@ -289,6 +293,10 @@ func RegisterPlayer(c *gin.Context) {
 		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 	)
 	if err != nil {
+		if isUsernameUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu này đã tồn tại (không phân biệt chữ hoa/thường)!"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
 		return
 	}

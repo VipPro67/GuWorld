@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -73,6 +74,14 @@ func UseItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong ItemRegistry"})
 		return
 	}
+	if err := checkRegionAction(player.CurrentRegion, "item_use"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkRegionItem(player.CurrentRegion, req.ItemID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	if item.Type != "Consumable" && item.Type != "SoulResource" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm này không thể sử dụng trực tiếp"})
@@ -82,7 +91,8 @@ func UseItem(c *gin.Context) {
 	if gamefx.IsDeadState(&player) {
 		hasLifespanBoost := item.HasEffect("lifespan_boost")
 		hasRaceChange := item.HasEffect("change_race")
-		if !hasLifespanBoost && !hasRaceChange {
+		hasSpatialExit := item.HasEffect("exit_spatial_realm")
+		if !hasLifespanBoost && !hasRaceChange && !hasSpatialExit {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết (hết thọ nguyên). Chỉ có thể sử dụng Thọ Nguyên Cổ để hồi sinh!"})
 			return
 		}
@@ -166,6 +176,9 @@ func UseItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	if item.HasEffect("exit_spatial_realm") {
+		syncSpatialPlayer(authID, player.CurrentRegion, player.X, player.Y, uuid.Nil)
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,
@@ -236,6 +249,14 @@ func UseItems(c *gin.Context) {
 		item, ok := models.ItemRegistry[itemID]
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s không tồn tại trong ItemRegistry", itemID)})
+			return
+		}
+		if err := checkRegionAction(player.CurrentRegion, "item_use"); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err := checkRegionItem(player.CurrentRegion, itemID); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -322,6 +343,12 @@ func UseItems(c *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
+	}
+	for _, usedID := range req.ItemIDs {
+		if item, ok := models.ItemRegistry[usedID]; ok && item.HasEffect("exit_spatial_realm") {
+			syncSpatialPlayer(authID, player.CurrentRegion, player.X, player.Y, uuid.Nil)
+			break
+		}
 	}
 
 	// Group/consolidate stats change and messages

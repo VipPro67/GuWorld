@@ -242,14 +242,28 @@ func GoogleCallback(c *gin.Context) {
 		if len(username) < 3 {
 			username = "cultivator_" + strings.ToLower(uuid.New().String()[:6])
 		} else if len(username) > 30 {
-			username = username[:30]
+			username = truncateUsernameBytes(username, 30)
 		}
 
-		// Check duplicate username and resolve
-		var exists bool
-		err = tx.QueryRowContext(c.Request.Context(), "SELECT EXISTS(SELECT 1 FROM players WHERE username = $1)", username).Scan(&exists)
-		if err == nil && exists {
-			username = fmt.Sprintf("%s_%d", username, rand.Intn(9000)+1000)
+		// Keep the provider's display name where available, adding a unique suffix
+		// when a name already exists regardless of letter casing.
+		baseUsername := username
+		for attempt := 0; ; attempt++ {
+			var exists bool
+			err = tx.QueryRowContext(c.Request.Context(), "SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username) = LOWER($1))", username).Scan(&exists)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra đạo hiệu"})
+				return
+			}
+			if !exists {
+				break
+			}
+			if attempt >= 20 {
+				c.JSON(http.StatusConflict, gin.H{"error": "Không thể tạo đạo hiệu duy nhất cho tài khoản Google"})
+				return
+			}
+			suffix := "_" + strings.ToLower(uuid.New().String()[:8])
+			username = truncateUsernameBytes(baseUsername, 30-len(suffix)) + suffix
 		}
 
 		var prod_env = os.Getenv("PROD_ENV") == "test"
@@ -342,6 +356,10 @@ func GoogleCallback(c *gin.Context) {
 			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 		)
 		if err != nil {
+			if isUsernameUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu vừa được đăng ký bởi người khác, vui lòng thử đăng nhập lại"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})
 			return
 		}

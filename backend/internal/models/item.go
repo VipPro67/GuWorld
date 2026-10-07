@@ -27,6 +27,7 @@ var itemBlockCodeToKey = map[string]string{
 	"CHANGE_RACE":         "change_race",
 	"LIFESPAN_BOOST":      "lifespan_boost",
 	"SOUL_BOOST":          "soul_boost",
+	"EXIT_SPATIAL_REALM":   "exit_spatial_realm",
 }
 
 // Scan implements the sql.Scanner interface for ItemEffects
@@ -134,7 +135,7 @@ var itemEffectCodes = map[string]bool{
 	"restore_hp": true, "restore_mana": true, "soul_boost": true, "remove_negative_status": true,
 	"lifespan_boost": true, "open_mine_chest": true, "heal_aperture": true,
 	"increase_human_qi": true, "random_constitution": true, "random_race": true,
-	"change_race": true, "hunger": true,
+	"change_race": true, "hunger": true, "exit_spatial_realm": true,
 }
 
 func CompileItemEffects(input ItemEffects) ([]ItemEffectCommand, error) {

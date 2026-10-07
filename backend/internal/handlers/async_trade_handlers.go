@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -162,7 +163,7 @@ func CreateTradeOffer(c *gin.Context) {
 	targetPlayerID := creator.ID // default: public offer (sentinel: targetPlayerID == creator.ID)
 	if req.TargetUsername != "" {
 		var tID uuid.UUID
-		err := tx.QueryRow(`SELECT id FROM players WHERE username = $1`, req.TargetUsername).Scan(&tID)
+		err := tx.QueryRow(`SELECT id FROM players WHERE LOWER(username) = LOWER($1)`, strings.TrimSpace(req.TargetUsername)).Scan(&tID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không tìm thấy đạo hữu %s để chỉ định trao đổi", req.TargetUsername)})
 			return

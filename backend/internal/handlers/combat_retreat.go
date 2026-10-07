@@ -123,8 +123,11 @@ func Retreat(c *gin.Context) {
 	logMsg := "Đạo hữu trở về an toàn từ hành trình."
 
 	_ = player.ActiveCombat != nil
+	var worldMonsterCombat *models.CombatState
 
 	if player.ActiveCombat != nil {
+		encounter := *player.ActiveCombat
+		worldMonsterCombat = &encounter
 		logMsg = fmt.Sprintf("Đạo hữu rút lui khỏi %s.", player.ActiveCombat.EnemyName)
 		player.ActiveCombat = nil
 	}
@@ -162,6 +165,7 @@ func Retreat(c *gin.Context) {
 		respondCombatTxErr(c, err, "Transaction commit failed")
 		return
 	}
+	completeWorldMonsterCombat(c.Request.Context(), worldMonsterCombat, "Phe Địch", player.ID.String())
 
 	ClearPendingPlayerQueues(player.ID.String())
 	_ = cache.Delete("player_snapshot:" + player.ID.String())
@@ -223,6 +227,7 @@ func Flee(c *gin.Context) {
 		})
 		return
 	}
+	worldMonsterCombat := *player.ActiveCombat
 
 	enemyName := player.ActiveCombat.EnemyName
 	var logMsg string
@@ -470,6 +475,7 @@ func Flee(c *gin.Context) {
 			ClearPendingPlayerQueues(player.ID.String())
 			_ = cache.Delete("player_snapshot:" + player.ID.String())
 			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
+			completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, "Phe Địch", player.ID.String())
 		} else {
 			PublishPlayerCombatDelta(player.ID, CombatEventStarted, player.ActiveCombat)
 		}
@@ -548,6 +554,7 @@ func Flee(c *gin.Context) {
 		respondCombatTxErr(c, err, "Transaction commit failed")
 		return
 	}
+	completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, "Phe Địch", player.ID.String())
 
 	ClearPendingPlayerQueues(player.ID.String())
 	_ = cache.Delete("player_snapshot:" + player.ID.String())

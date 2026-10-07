@@ -63,15 +63,46 @@ func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, t
 func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (string, bool, error) {
 	oldX := player.X
 	oldY := player.Y
+	mapID := worldMapIDForRegion(player.CurrentRegion)
+	var instanceID sql.NullString
+	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&instanceID); err != nil {
+		return "", false, err
+	}
+	if instanceID.Valid {
+		region := ZoneByID(player.CurrentRegion)
+		if region == nil || region.ZoneType != ZoneTypeSecret || !zoneContains(region, x, y) {
+			return "Ranh giới bí cảnh không cho phép di chuyển tới tọa độ này.", false, nil
+		}
+	}
 
+	destinationRegion := player.CurrentRegion
+	if !instanceID.Valid {
+		destinationRegion = DeriveRegionAtOnMap(x, y, mapID)
+	}
+	if destinationRegion != player.CurrentRegion {
+		if err := checkRegionEntry(destinationRegion, player.Rank, player.GuInventory); err != nil {
+			return err.Error(), false, nil
+		}
+	}
 	player.X = x
 	player.Y = y
-	player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+	player.CurrentRegion = destinationRegion
 	recordVisitedSubZone(player, SubZoneKey(player.X, player.Y))
 
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 	isCleared := isCellClearedRecently(player.CurrentRegion, player.X, player.Y, clearedCellCooldown)
-	cell := ResolveCell(player.X, player.Y)
+	cell := ResolveCellInRegion(player.CurrentRegion, player.X, player.Y)
+	if attackTargetID != "" {
+		if err := checkRegionAction(player.CurrentRegion, "pvp"); err != nil {
+			return err.Error(), false, nil
+		}
+		if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
+			return err.Error(), false, nil
+		}
+		if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
+			return err.Error(), false, nil
+		}
+	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
 	if debuffMsg := CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
 		logMsg += " " + debuffMsg
@@ -91,6 +122,9 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				FROM players p
 				WHERE p.id = $1 AND p.id != $2
 				  AND (p.last_activity >= NOW() - INTERVAL '5 minutes' OR p.last_mana_update >= NOW() - INTERVAL '5 minutes')
+				  AND p.map_instance_id IS NOT DISTINCT FROM (SELECT map_instance_id FROM players WHERE id=$2)
+				  AND COALESCE((SELECT world_map_id FROM region_world_maps WHERE region_id=p.current_region),'world_map') =
+				      COALESCE((SELECT world_map_id FROM region_world_maps WHERE region_id=(SELECT current_region FROM players WHERE id=$2)),'world_map')
 			`
 			var errTarget error
 			var matchedID uuid.UUID
@@ -117,6 +151,15 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				targetPlayer, errLoad = evaluateManaTxEquippedReadonly(tx, targetUUID)
 				if errLoad != nil {
 					return "Không thể tải thông tin đối thủ!", false, nil
+				}
+				if err := checkRegionAction(targetPlayer.CurrentRegion, "pvp"); err != nil {
+					return err.Error(), false, nil
+				}
+				if err := checkRegionAction(targetPlayer.CurrentRegion, "combat"); err != nil {
+					return err.Error(), false, nil
+				}
+				if err := checkRegionEquippedGus(targetPlayer.CurrentRegion, targetPlayer.GuInventory); err != nil {
+					return err.Error(), false, nil
 				}
 				// If attacker has PvP immunity, attacking someone breaks their immunity
 				if player.Statuses.Has("pvp_immunity") {
@@ -220,6 +263,10 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	} else if !pvpTriggered {
 		switch cell.Type {
 		case "Resource":
+			if err := checkRegionAction(player.CurrentRegion, "resource_gathering"); err != nil {
+				logMsg = err.Error()
+				break
+			}
 			itemName := cell.Content
 			if item, ok := models.ItemRegistry[cell.Content]; ok {
 				itemName = item.Name
@@ -246,6 +293,10 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Phát hiện 1x %s, nhưng Bách Bảo Nang đã đầy!", player.X, player.Y, itemName)
 			}
 		case "WildGu":
+			if err := checkRegionAction(player.CurrentRegion, "gu_capture"); err != nil {
+				logMsg = err.Error()
+				break
+			}
 			var guSpec models.GuDictionaryItem
 			var ok bool
 			if cell.Rank > 0 {
@@ -284,6 +335,15 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				logMsg = fmt.Sprintf("Đạo hữu phát hiện thấy Cổ trùng hoang dã %s, tiếc là Bách Bảo Nang đã đầy nên để nó trốn thoát!", guName)
 			}
 		case "Monster", "Boss":
+			if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
+				return err.Error(), false, nil
+			}
+			if err := checkRegionAction(player.CurrentRegion, "monster_combat"); err != nil {
+				return err.Error(), false, nil
+			}
+			if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
+				return err.Error(), false, nil
+			}
 			combatTriggered = true
 
 			mon, ok := models.MonsterRegistry[cell.Content]
@@ -410,7 +470,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					continue
 				}
 
-				adj := ResolveCell(adjX, adjY)
+				adj := ResolveCellInRegion(player.CurrentRegion, adjX, adjY)
 
 				rank := 1
 				if adj.Rank > 0 {
@@ -426,7 +486,9 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					ambushChance = 95
 				}
 
-				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < ambushChance {
+				combatDenied := checkRegionAction(player.CurrentRegion, "combat")
+				monsterCombatDenied := checkRegionAction(player.CurrentRegion, "monster_combat")
+				if (adj.Type == "Monster" || adj.Type == "Boss") && combatDenied == nil && monsterCombatDenied == nil && rand.Intn(100) < ambushChance {
 					combatTriggered = true
 
 					mon, ok := models.MonsterRegistry[adj.Content]

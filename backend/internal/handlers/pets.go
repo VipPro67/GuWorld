@@ -72,6 +72,19 @@ func FeedPet(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin người chơi"})
+		return
+	}
+	if err := checkRegionAction(player.CurrentRegion, "item_use"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkRegionItem(player.CurrentRegion, req.ItemID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	// Load pet
 	var petID, name, state string
@@ -129,12 +142,6 @@ func FeedPet(c *gin.Context) {
 	_, err = tx.Exec(`UPDATE non_player_actors SET hunger = $1, hunger_updated_at = NOW(), updated_at = NOW(), version = version + 1 WHERE id = $2`, newHunger, petID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pet hunger"})
-		return
-	}
-
-	player, err := evaluateManaTx(tx, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin người chơi"})
 		return
 	}
 

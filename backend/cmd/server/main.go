@@ -163,6 +163,7 @@ func main() {
 	handlers.StartTribulationWorker(ctx)
 	handlers.StartWorldIndexSyncWorker(ctx)
 	handlers.StartWorldMonsterWorker(ctx)
+	handlers.StartSpatialRealmExpiryWorker(ctx)
 	handlers.StartMineMonsterWorker(ctx)
 	handlers.StartMidnightMineWorker(ctx)
 	handlers.StartArenaSettlementWorker(ctx)

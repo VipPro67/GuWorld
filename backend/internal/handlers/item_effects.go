@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -33,6 +34,35 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"increase_human_qi":      increaseHumanQi,
 	"random_constitution":    randomConstitutionEffect,
 	"random_race":            randomRaceEffect,
+	"exit_spatial_realm":     exitSpatialRealmEffect,
+}
+
+func exitSpatialRealmEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {
+	var instanceID uuid.UUID
+	var region string
+	var x, y int
+	err := tx.QueryRow(`SELECT instance_id,return_region_id,return_x,return_y FROM shared_spatial_instance_members WHERE player_id=$1 AND exited_at IS NULL FOR UPDATE`, player.ID).
+		Scan(&instanceID, &region, &x, &y)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("đạo hữu không ở trong bí cảnh bản đồ")
+	}
+	if err != nil {
+		return "", fmt.Errorf("không thể tải phiên bí cảnh: %w", err)
+	}
+	result, err := tx.Exec(`UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,active_combat=NULL WHERE id=$4 AND map_instance_id=$5`, region, x, y, player.ID, instanceID)
+	if err != nil {
+		return "", err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil || updated != 1 {
+		return "", fmt.Errorf("trạng thái nhân vật không khớp phiên bí cảnh")
+	}
+	if _, err := tx.Exec(`UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason='GU_EFFECT' WHERE player_id=$1 AND instance_id=$2 AND exited_at IS NULL`, player.ID, instanceID); err != nil {
+		return "", err
+	}
+	player.CurrentRegion, player.X, player.Y = region, x, y
+	player.ActiveCombat = nil
+	return fmt.Sprintf("Đạo hữu sử dụng %s để thoát khỏi bí cảnh.", item.Name), nil
 }
 
 func randomConstitutionEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, _ float64) (string, error) {

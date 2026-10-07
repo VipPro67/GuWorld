@@ -1,5 +1,7 @@
 package db
 
+import "fmt"
+
 const playerGoogleIDIndexSchema = `
 	CREATE INDEX IF NOT EXISTS idx_players_google_id ON players (google_id)
 	WHERE google_id IS NOT NULL;`
@@ -29,6 +31,7 @@ func schemaPlayers() error {
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		current_region VARCHAR(50) NOT NULL DEFAULT 'hub_nam_cuong' REFERENCES regions(id),
+		map_instance_id UUID,
 		x INTEGER NOT NULL DEFAULT 50,
 		y INTEGER NOT NULL DEFAULT 50,
 		race VARCHAR(50) NOT NULL DEFAULT 'human' REFERENCES race_dictionary(key),
@@ -94,6 +97,19 @@ func schemaPlayers() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("players_username_case_insensitive_unique", `
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_players_username_lower_unique ON players (LOWER(username));`); err != nil {
+		return fmt.Errorf("cannot enforce case-insensitive username uniqueness; resolve existing usernames that differ only by letter case first: %w", err)
+	}
+	// Existing installations created players before spatial instances were
+	// introduced. Keep this additive so the world index can safely read the
+	// column during startup upgrades as well as on fresh databases.
+	if err := execSchema("players_map_instance_id", `ALTER TABLE players ADD COLUMN IF NOT EXISTS map_instance_id UUID;`); err != nil {
+		return err
+	}
+	if err := execSchema("players_map_instance_idx", `CREATE INDEX IF NOT EXISTS idx_players_map_instance_location ON players (map_instance_id, current_region, x, y);`); err != nil {
+		return err
+	}
 
 	// Player-row writes serialize on the row itself, so this counter is ordered
 	// by commit visibility for those writes.
@@ -139,6 +155,10 @@ func schemaPlayers() error {
 
 	if err := execSchema("players_region_xy_idx", `
 	CREATE INDEX IF NOT EXISTS idx_players_region_xy ON players (current_region, x, y);`); err != nil {
+		return err
+	}
+	if err := execSchema("players_map_instance_pos_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_map_instance_pos ON players (map_instance_id, current_region, x, y);`); err != nil {
 		return err
 	}
 	if err := execSchema("players_party_id_idx", `

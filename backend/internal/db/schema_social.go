@@ -11,9 +11,37 @@ func schemaSocial() error {
 		content TEXT NOT NULL,
 		is_read BOOLEAN NOT NULL DEFAULT FALSE,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		channel VARCHAR(50) NOT NULL DEFAULT 'private' CHECK (channel IN ('private','world','general','sect','system')),
-		sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE CASCADE
+		channel VARCHAR(50) NOT NULL DEFAULT 'private' CHECK (channel IN ('private','world','general','sect','system','region')),
+		sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE CASCADE,
+		chat_scope VARCHAR(120) NOT NULL DEFAULT ''
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("messages_chat_scope", `
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS chat_scope VARCHAR(120) NOT NULL DEFAULT '';
+	ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_channel_check;
+	ALTER TABLE messages ADD CONSTRAINT messages_channel_check CHECK (channel IN ('private','world','general','sect','system','region'));
+	CREATE INDEX IF NOT EXISTS idx_messages_region_chat ON messages (chat_scope, created_at DESC) WHERE channel = 'region';`); err != nil {
+		return err
+	}
+	if err := execSchema("private_chat_connections", `
+	CREATE TABLE IF NOT EXISTS private_chat_connections (
+		player_a UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		player_b UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (player_a, player_b),
+		CHECK (player_a < player_b)
+	);
+	INSERT INTO private_chat_connections (player_a, player_b)
+	SELECT DISTINCT LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id)
+	FROM messages
+	WHERE channel = 'private'
+	  AND sender_id <> receiver_id
+	  AND sender_id::text NOT IN ('00000000-0000-0000-0000-000000000000','11111111-1111-1111-1111-111111111111')
+	  AND receiver_id::text NOT IN ('00000000-0000-0000-0000-000000000000','11111111-1111-1111-1111-111111111111')
+	ON CONFLICT DO NOTHING;
+	CREATE INDEX IF NOT EXISTS idx_private_messages_sender_receiver_created ON messages (sender_id, receiver_id, created_at DESC) WHERE channel = 'private';
+	CREATE INDEX IF NOT EXISTS idx_private_messages_receiver_sender_created ON messages (receiver_id, sender_id, created_at DESC) WHERE channel = 'private';`); err != nil {
 		return err
 	}
 	if err := execSchema("messages_sender_idx", `

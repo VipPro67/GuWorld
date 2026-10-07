@@ -80,6 +80,14 @@ func UseGuOnMap(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cổ trùng không tồn tại trong từ điển."})
 		return
 	}
+	if err := checkRegionAction(player.CurrentRegion, "gu_use"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkRegionGu(player.CurrentRegion, specs.ID, specs.Rank, specs.Path); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	// Validate usability
 	if err := ValidateGuUsable(&player, targetGu, &specs, true); err != nil {
@@ -116,6 +124,19 @@ func UseGuOnMap(c *gin.Context) {
 
 	cost := gamefx.EnergyCost(&player, &specs)
 	if hasPortalCreate || hasRandomPortal {
+		if err := checkRegionAction(player.CurrentRegion, "teleport"); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		var inSpatialInstance bool
+		if err := tx.QueryRow(`SELECT map_instance_id IS NOT NULL FROM players WHERE id=$1`, player.ID).Scan(&inSpatialInstance); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra phiên bản đồ hiện tại"})
+			return
+		}
+		if inSpatialInstance {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Không thể dịch chuyển trong bí cảnh; hãy dùng cổng thoát"})
+			return
+		}
 		cost = GetPortalManaCost(&player, &specs)
 	}
 	logs := []string{}
@@ -137,9 +158,16 @@ func UseGuOnMap(c *gin.Context) {
 			oldX := player.X
 			oldY := player.Y
 			oldRegion := player.CurrentRegion
+			targetRegion := DeriveRegionAtOnMap(req.TargetX, req.TargetY, worldMapIDForRegion(player.CurrentRegion))
+			if targetRegion != oldRegion {
+				if err := checkRegionEntry(targetRegion, player.Rank, player.GuInventory); err != nil {
+					c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+					return
+				}
+			}
 			player.X = req.TargetX
 			player.Y = req.TargetY
-			player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+			player.CurrentRegion = targetRegion
 			teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian, đưa %s dịch chuyển từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 			if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
 				teleportMsg += " " + debuffMsg
@@ -163,9 +191,17 @@ func UseGuOnMap(c *gin.Context) {
 		oldX := player.X
 		oldY := player.Y
 		oldRegion := player.CurrentRegion
-		player.X = rand.Intn(WorldWidth)
-		player.Y = rand.Intn(WorldHeight)
-		player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+		targetX, targetY := rand.Intn(WorldWidth), rand.Intn(WorldHeight)
+		targetRegion := DeriveRegionAtOnMap(targetX, targetY, worldMapIDForRegion(player.CurrentRegion))
+		if targetRegion != oldRegion {
+			if err := checkRegionEntry(targetRegion, player.Rank, player.GuInventory); err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		player.X = targetX
+		player.Y = targetY
+		player.CurrentRegion = targetRegion
 		teleportMsg := fmt.Sprintf("🌀 Cổ trùng %s xé rách không gian hỗn loạn, đưa %s dịch chuyển ngẫu nhiên từ (%d, %d) [%s] đến (%d, %d) [%s].", specs.Name, player.Username, oldX, oldY, oldRegion, player.X, player.Y, player.CurrentRegion)
 		if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
 			teleportMsg += " " + debuffMsg
@@ -415,6 +451,11 @@ func UseGuOnMap(c *gin.Context) {
 			if region, x, y, procedural := proceduralMonsterCell(updated.SpawnID); procedural {
 				_ = cache.SetCellCleared(region, x, y, player.ID.String(), clearedCellCooldown)
 				_ = cache.BroadcastMonsterKilled(x, y, targetName, region)
+			} else if region, x, y, boss := mapCellBossSpawn(updated.SpawnID); boss {
+				if err := MarkPersistentCellCleared(tx, player.ID, region, x, y); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot clear defeated boss cell"})
+					return
+				}
 			}
 		} else {
 			logs = append(logs, fmt.Sprintf("⚡ %s gây %.0f sát thương lên %s (HP %.0f/%.0f).", specs.Name, damageDealt, targetName, targetHP, targetMaxHP))
@@ -465,4 +506,3 @@ func UseGuOnMap(c *gin.Context) {
 		"target_y":         req.TargetY,
 	})
 }
-

@@ -241,10 +241,11 @@ export const Registration: React.FC<RegistrationProps> = ({
                 }}
                 placeholder="Nhập đạo hiệu..."
                 className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-serif"
-                maxLength={50}
+                maxLength={30}
                 required
               />
             </div>
+            <p className="mt-1 text-[10px] text-zinc-500">3–30 ký tự. Đạo hiệu trùng nhau dù khác chữ hoa/thường đều không được dùng.</p>
           </div>
         )}
 

@@ -103,6 +103,9 @@ export interface CombatState {
   charge_points: number;
   target_player_id?: string;
   enemy_template_id?: string;
+  world_monster_region_id?: string;
+  world_monster_id?: string;
+  world_monster_encounter_id?: string;
   allies?: Combatant[];
   enemies?: Combatant[];
   enemy_type?: string;
@@ -1123,6 +1126,14 @@ export interface Region {
   max_y?: number;
   entry_x?: number;
   entry_y?: number;
+  rules?: {
+    rank?: { min?: number; max?: number };
+    paths?: { allow?: string[]; deny?: string[] };
+    gu?: { max_rank?: number; deny_ids?: string[] };
+    items?: { deny_ids?: string[] };
+    actions?: { deny?: string[] };
+  };
+  effective_rules?: Region["rules"];
 }
 
 export interface WorldConfig {

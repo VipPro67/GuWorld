@@ -51,16 +51,18 @@ func InitInstanceCache() error {
 			return fmt.Errorf("failed to scan instance template: %w", err)
 		}
 
-		list = append(list, InstanceListItem{
-			ID:            t.ID,
-			Name:          t.Name,
-			Type:          t.Type,
-			RequiredRank:  t.RequiredRank,
-			EntryItem:     t.EntryItem,
-			Description:   t.Description,
-			Rewards:       t.Rewards,
-			CooldownHours: t.CooldownHours,
-		})
+		if t.Type != "SPATIAL_REALM" {
+			list = append(list, InstanceListItem{
+				ID:            t.ID,
+				Name:          t.Name,
+				Type:          t.Type,
+				RequiredRank:  t.RequiredRank,
+				EntryItem:     t.EntryItem,
+				Description:   t.Description,
+				Rewards:       t.Rewards,
+				CooldownHours: t.CooldownHours,
+			})
+		}
 		tCopy := t
 		tmplMap[t.ID] = &tCopy
 	}
@@ -209,7 +211,7 @@ func GetActiveInstance(c *gin.Context) {
 		tplQuery := `
 			SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
 			FROM instance_templates
-			WHERE id = $1
+			WHERE id = $1 AND type <> 'SPATIAL_REALM'
 		`
 		err = db.DB.QueryRowContext(c.Request.Context(), tplQuery, session.InstanceID).Scan(
 			&template.ID, &template.Name, &template.Type, &template.RequiredRank,
@@ -263,6 +265,7 @@ func ListInstances(c *gin.Context) {
 		rows, err := db.DB.QueryContext(c.Request.Context(), `
 			SELECT id, name, type, required_rank, entry_item, description, rewards, cooldown_hours
 			FROM instance_templates
+			WHERE type <> 'SPATIAL_REALM'
 			ORDER BY required_rank ASC, id ASC
 		`)
 		if err != nil {
@@ -340,6 +343,10 @@ func EnterInstance(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if template, found := getCachedInstanceTemplate(req.InstanceID); found && template.Type == "SPATIAL_REALM" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí cảnh bản đồ dùng API spatial riêng"})
 		return
 	}
 
