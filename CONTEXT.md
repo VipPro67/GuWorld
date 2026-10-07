@@ -66,3 +66,23 @@ Cơ chế bảo hộ và kháng cự tự nhiên của mục tiêu cấp cao tr�
 
 ### Xác Suất Kích Hoạt Động (Dynamic Proc Chance)
 Tỉ lệ kích hoạt thực tế của một hiệu ứng trong chiến đấu, được suy ra từ Xác suất cơ bản (`BaseChance` theo phân loại độ mạnh của hiệu ứng), cộng dồn tăng tiến theo Rank Cổ trùng (`+delta * (GuRank - 1)`), và điều chỉnh sau cùng thông qua Áp Chế Cảnh Giới, Kháng Tính Tâm Thần (Mental Resistance) và Vận Số (Luck).
+
+## Universal Dao Conflict & Multi-Path Impurity (Vạn Đạo Tương Xung & Trừng Phạt Đa Tu)
+
+### Đa Tu / Tạp Tu (Multi-Path Impurity)
+Trạng thái Cổ Tiên tích lũy Đạo Ngân dàn trải trên nhiều lưu phái độc lập mà không đạt cảnh giới tương ứng hoặc không sở hữu thể chất đặc thù (như Chí Tôn Tiên Thai). Độ thuần khiết (`Purity`) sụt giảm và số lưu phái kích hoạt (`ActivePaths`) vượt ngưỡng an toàn sẽ kích hoạt hệ thống trừng phạt lũy tiến.
+
+### Vạn Đạo Tương Xung (Universal Dao Conflict)
+Cơ chế xung đột bản nguyên giữa các dòng quy tắc tự nhiên bên trong nhục thân và tiên khiếu Cổ Tiên. Xung đột tác động lên ba tầng chiến đấu: Suy giảm uy lực sát chiêu (Damage Penalty với sàn hạ sâu), Gia tăng hao tổn Tiên Nguyên (Mana Tax), và Nguy cơ phản phệ sát chiêu (Backfire / Instability gây nội thương, mất lượt).
+
+### Độ Thuần Khiết Đạo Ngân (Dao Mark Purity)
+Tỷ lệ giữa lượng Đạo Ngân của lưu phái chủ đạo so với tổng số Đạo Ngân trên toàn bộ cơ thể. Độ thuần khiết thấp kết hợp với số lượng phái ngoại lai sẽ nhân theo hàm lũy tiến trừng phạt hiệu năng toàn diện.
+
+### Vô Thượng Hóa Giải (Supreme Grandmaster Absolute Mitigation)
+Đặc quyền cảnh giới Vô Thượng Đại Tông Sư (Supreme Grandmaster - Level 4) đối với một lưu phái: triệt tiêu 100% xung đột nội tại mà các đạo ngân dị hệ gây ra cho lưu phái đó, biến mọi đạo ngân tạp nham thành công cụ phụ trợ hoặc loại bỏ hoàn toàn ma sát quy tắc.
+
+### Dị Biến Tiên Khiếu (Aperture Environmental Derangement)
+Tác động tiêu cực của tạp tu lên Tiên Khiếu: các đạo ngân xung khắc làm suy thoái sản lượng tài nguyên sinh thái và khiến tai kiếp định kỳ (Địa Tai, Thiên Kiếp) biến dị thành kiếp nạn lai tạp đa hệ hỗn loạn, gia tăng độ nguy hiểm khi độ kiếp.
+
+### Thanh Đạo Tẩy Thể (Dao Mark Cleansing / Expulsion)
+Cơ chế/vật phẩm cho phép Cổ Tiên chủ động phân giải, tẩy trừ hoặc dẫn lưu các đạo ngân tạp nham ra khỏi cơ thể để khôi phục độ thuần khiết và thoát khỏi trạng thái phản phệ.

@@ -116,6 +116,25 @@ func TestPausedAttackTransitionsBackToChase(t *testing.T) {
 	}
 }
 
+func TestIdleMonsterPersistsOnlyOnChangeOrHeartbeat(t *testing.T) {
+	stubSafeZoneLookup(t, func(string, int, int) bool { return false })
+	now := time.Now()
+	m := testMonster(now)
+	active := func(string) bool { return true }
+
+	// Nothing changed and the heartbeat has not elapsed: no CAS write.
+	idle, event := tickWorldMonster(m, nil, now.Add(time.Second), active)
+	if idle.Revision != m.Revision || event != "" {
+		t.Fatalf("idle tick wrote: revision %d->%d event %q", m.Revision, idle.Revision, event)
+	}
+
+	// Heartbeat elapsed: persist so Redis TTL/tuning stay fresh.
+	beat, _ := tickWorldMonster(m, nil, now.Add(worldMonsterHeartbeatInterval+time.Second), active)
+	if beat.Revision != m.Revision+1 {
+		t.Fatalf("heartbeat did not persist: revision %d", beat.Revision)
+	}
+}
+
 func testMonster(now time.Time) WorldMonster {
 	return WorldMonster{InstanceID: "m1", SpawnID: "s1", RegionID: "field", Rank: 5, X: 0, Y: 0, SpawnX: 0, SpawnY: 0, HP: 100, MaxHP: 100, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now, AggroRadius: 10, AttackRange: 1, LeashRadius: 15, Speed: 2}
 }
