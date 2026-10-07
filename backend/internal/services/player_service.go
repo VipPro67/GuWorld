@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -541,20 +542,28 @@ func searchSubstr(s, sub string) bool {
 
 // setFastFailTimeouts bounds lock waits inside an open transaction so one
 // contended row fails fast instead of queueing behind statement_timeout (15s).
-func setFastFailTimeouts(tx *sql.Tx) {
-	tryFastFail(tx)
+func setFastFailTimeouts(tx *sql.Tx) error {
+	return tryFastFail(tx)
 }
 
 // tryFastFail applies per-Tx timeouts, ignoring errors and panics from
-// minimal test doubles that only implement the queries they stub.
-func tryFastFail(tx *sql.Tx) {
+// minimal test doubles that only implement the queries they stub, but returning
+// real PostgreSQL connection/statement timeout errors so callers don't continue
+// on an aborted transaction block (25P02).
+func tryFastFail(tx *sql.Tx) error {
 	if tx == nil {
-		return
+		return nil
 	}
 	defer func() {
 		_ = recover()
 	}()
-	_, _ = tx.Exec(`SELECT set_config('lock_timeout', '2000', true), set_config('statement_timeout', '8000', true)`)
+	_, err := tx.Exec(`SELECT set_config('lock_timeout', '2000', true), set_config('statement_timeout', '8000', true)`)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && (pqErr.Code == "57014" || pqErr.Code == "55P03" || pqErr.Code == "08006" || pqErr.Code == "08001" || pqErr.Code == "25P02") {
+			return err
+		}
+	}
+	return nil
 }
 
 // ProjectAndPersistBestEffort serves polling reads without holding a write
@@ -594,7 +603,9 @@ func (s *PlayerService) ProjectAndPersistBestEffort(id uuid.UUID, equippedOnly b
 		return player, nil
 	}
 	defer tx.Rollback()
-	setFastFailTimeouts(tx)
+	if err := setFastFailTimeouts(tx); err != nil {
+		return player, nil
+	}
 	if equippedOnly {
 		_, err = s.EvaluateAndPersistManaEquipped(tx, id)
 	} else {
@@ -637,7 +648,9 @@ func (s *PlayerService) ProjectStatusEquipped(q QueryRower, id uuid.UUID) (model
 // EvaluateAndPersistMana is the authoritative status evaluator for mutation flows.
 // It loads with FOR UPDATE, projects time-variant fields, and persists changes.
 func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	setFastFailTimeouts(tx)
+	if err := setFastFailTimeouts(tx); err != nil {
+		return models.Player{}, err
+	}
 	if err := worker.EvaluatePlayerHungerTx(tx, id); err != nil {
 		return models.Player{}, fmt.Errorf("evaluate player hunger: %w", err)
 	}
@@ -725,7 +738,9 @@ func (s *PlayerService) evaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.P
 // shipping the full 12k+ inventory is unnecessary — the frontend fetches it
 // lazily via the dedicated inventory endpoint.
 func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	setFastFailTimeouts(tx)
+	if err := setFastFailTimeouts(tx); err != nil {
+		return models.Player{}, err
+	}
 	player, err := s.evaluateManaEquipped(tx, id)
 	if err != nil {
 		return player, err

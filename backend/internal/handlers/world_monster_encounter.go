@@ -110,18 +110,22 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 	if player.CombatSettings.SkipBattle {
 		winner, _, _, err = AutoResolveCombat(tx, &player)
 		if err != nil {
+			resetWorldMonsterAfterEncounter(ctx, current)
 			return err
 		}
 	} else {
 		combatJSON, err := json.Marshal(player.ActiveCombat)
 		if err != nil {
+			resetWorldMonsterAfterEncounter(ctx, current)
 			return err
 		}
 		if err := savePlayerMovement(tx, &player, string(combatJSON)); err != nil {
+			resetWorldMonsterAfterEncounter(ctx, current)
 			return err
 		}
 	}
 	if err := tx.Commit(); err != nil {
+		resetWorldMonsterAfterEncounter(ctx, current)
 		return err
 	}
 	if player.CombatSettings.SkipBattle {

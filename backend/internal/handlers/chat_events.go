@@ -116,6 +116,13 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 // currentRegionChatKey is derived from the player's persisted location so clients
 // cannot read or write another area's chat by selecting an arbitrary region.
 func currentRegionChatKey(ctx context.Context, playerID string) (string, error) {
+	if entry, ok := worldPosIndex.Get(playerID); ok && entry.Region != "" {
+		if entry.InstanceID != "" {
+			return entry.Region + ":" + entry.InstanceID, nil
+		}
+		return entry.Region, nil
+	}
+
 	var region string
 	var instanceID sql.NullString
 	err := db.DB.QueryRowContext(ctx, `SELECT current_region, map_instance_id::text FROM players WHERE id=$1`, playerID).Scan(&region, &instanceID)

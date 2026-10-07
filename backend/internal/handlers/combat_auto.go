@@ -171,6 +171,8 @@ func AutoCombatStart(c *gin.Context) {
 	_, alliesAlive, finalPlayerHP := combatOutcome(simState, player.ID.String())
 
 	itemsUsed, stonesSpent, _, usageLogs := applySimConsumption(tx, &player, simPlayer, isVirtual, simState.Turn)
+	// Refresh before snapshot so finalizeAutoCombatOutcome only diffs post-consumption changes (e.g. loot)
+	before = append(models.GuInventory(nil), player.GuInventory...)
 	logs = append(logs, usageLogs...)
 
 	// ── Grab final mana from sim ──
