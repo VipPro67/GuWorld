@@ -490,7 +490,7 @@ func GetTeleportDirectory(c *gin.Context) {
 		return
 	}
 
-	player, err := loadPlayerForStatus(db.DB, authID, false)
+	player, err := PlayerSvc.LoadEquipped(db.DB, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player data"})
 		return

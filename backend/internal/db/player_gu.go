@@ -203,8 +203,6 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 
 	n := len(gus)
 	ids := make([]string, n)
-	guIDs := make([]string, n)
-	ranks := make([]int, n)
 	hunger := make([]int, n)
 	states := make([]string, n)
 	equipped := make([]bool, n)
@@ -215,8 +213,6 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 
 	for i, gu := range gus {
 		ids[i] = gu.InstanceID
-		guIDs[i] = gu.GuID
-		ranks[i] = gu.Rank
 		hunger[i] = gu.Hunger
 		states[i] = gu.Status
 		equipped[i] = gu.Equipped
@@ -229,9 +225,6 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 	}
 
 	query := `UPDATE player_gu AS pg SET
-		gu_id = u.gu_id,
-		gu_rank = u.gu_rank,
-		rank = u.rank,
 		hunger = u.hunger,
 		state = u.state,
 		equipped = u.equipped,
@@ -242,21 +235,18 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 		updated_at = NOW()
 	FROM (
 		SELECT unnest($1::text[]) AS id,
-		       unnest($2::text[]) AS gu_id,
-		       unnest($3::int[]) AS gu_rank,
-		       unnest($4::int[]) AS rank,
-		       unnest($5::int[]) AS hunger,
-		       unnest($6::text[]) AS state,
-		       unnest($7::bool[]) AS equipped,
-		       unnest($8::bool[]) AS is_vital,
-		       unnest($9::float8[]) AS integration_time,
-		       NULLIF(unnest($10::text[]), '')::timestamptz AS equipped_at,
-		       unnest($11::float8[]) AS growth_hours
-	) AS u(id, gu_id, gu_rank, rank, hunger, state, equipped, is_vital, integration_time, equipped_at, growth_hours)
+		       unnest($2::int[]) AS hunger,
+		       unnest($3::text[]) AS state,
+		       unnest($4::bool[]) AS equipped,
+		       unnest($5::bool[]) AS is_vital,
+		       unnest($6::float8[]) AS integration_time,
+		       NULLIF(unnest($7::text[]), '')::timestamptz AS equipped_at,
+		       unnest($8::float8[]) AS growth_hours
+	) AS u(id, hunger, state, equipped, is_vital, integration_time, equipped_at, growth_hours)
 	WHERE pg.id = u.id`
 
 	_, err := tx.Exec(query,
-		pq.Array(ids), pq.Array(guIDs), pq.Array(ranks), pq.Array(ranks), pq.Array(hunger), pq.Array(states),
+		pq.Array(ids), pq.Array(hunger), pq.Array(states),
 		pq.Array(equipped), pq.Array(vital), pq.Array(intTimes), pq.Array(equippedAts), pq.Array(growths))
 	return err
 }

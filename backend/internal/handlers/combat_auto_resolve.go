@@ -128,6 +128,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	applyLoveGuPenalties(player, logs)
 
 	itemsUsed, stonesSpent, _, usageLogs := applySimConsumption(tx, player, simPlayer, isVirtual, simState.Turn)
+	// Refresh before snapshot so finalizeAutoCombatOutcome only diffs post-consumption changes (e.g. loot)
+	before = append(models.GuInventory(nil), player.GuInventory...)
 
 	var finalMana float64
 	for _, a := range simState.Allies {

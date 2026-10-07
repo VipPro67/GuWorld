@@ -1060,6 +1060,7 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 			if attemptEncounter && next.TargetID != "" {
 				if err := startWorldMonsterEncounter(ctx, next, next.TargetID); err != nil {
 					logger.S.Warnf("start world monster encounter %s -> %s: %v", next.InstanceID, next.TargetID, err)
+					resetWorldMonsterAfterEncounter(ctx, next)
 				}
 			}
 		}

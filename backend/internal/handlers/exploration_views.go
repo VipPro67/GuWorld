@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
@@ -179,10 +180,27 @@ func GetNearbyPlayers(c *gin.Context) {
 		mapID, instanceID = entry.MapID, entry.InstanceID
 	}
 	if region == "" {
-		if player, err := loadPlayerForStatus(db.DB, authID, false); err == nil {
-			x, y, region = player.X, player.Y, player.CurrentRegion
-			mapID = worldMapIDForRegion(player.CurrentRegion)
-			setWorldPosFromPlayer(&player)
+		var xLoc, yLoc int
+		var regLoc string
+		var mapInst sql.NullString
+		var uname, avatar string
+		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT x, y, COALESCE(current_region, ''), map_instance_id::text, username, COALESCE(avatar_url, '') FROM players WHERE id=$1`, authID).Scan(&xLoc, &yLoc, &regLoc, &mapInst, &uname, &avatar); err == nil {
+			x, y, region = xLoc, yLoc, regLoc
+			mapID = worldMapIDForRegion(regLoc)
+			if mapInst.Valid && mapInst.String != "" {
+				instanceID = mapInst.String
+			}
+			worldPosIndex.Set(WorldPosEntry{
+				ID:         authID.String(),
+				Username:   uname,
+				AvatarURL:  avatar,
+				X:          xLoc,
+				Y:          yLoc,
+				Region:     regLoc,
+				MapID:      mapID,
+				InstanceID: instanceID,
+				TS:         time.Now().UnixMilli(),
+			})
 		}
 	}
 	TouchPlayerActivity(authID)
