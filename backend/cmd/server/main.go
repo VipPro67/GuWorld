@@ -160,6 +160,7 @@ func main() {
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
 	worker.StartPetHungerWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartGrowthWorker(ctx, db.DB, 1*time.Hour)
+	worker.StartCombatHistoryCleanupWorker(ctx, db.DB, time.Minute)
 	handlers.StartTribulationWorker(ctx)
 	handlers.StartWorldIndexSyncWorker(ctx)
 	handlers.StartWorldMonsterWorker(ctx)
