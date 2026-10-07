@@ -151,16 +151,44 @@ func finishWorldMonsterEncounter(ctx context.Context, encounter WorldMonster, en
 		worldMonsterMetrics.kills.Add(1)
 		payload := map[string]any{"source_id": playerID, "hp": updated.HP, "max_hp": updated.MaxHP, "encounter_id": encounterID}
 		broadcastWorldCombat(updated, "monster_defeated", payload)
-		if region, x, y, procedural := proceduralMonsterCell(updated.SpawnID); procedural {
-			_ = cache.SetCellCleared(region, x, y, playerID, clearedCellCooldown)
-			if template, ok := models.MonsterRegistry[updated.MonsterTemplateID]; ok {
-				_ = cache.BroadcastMonsterKilled(x, y, template.Name, region)
-			}
-		}
+		clearDefeatedWorldMonsterCell(updated, playerID)
 		return
 	}
 	if result == cache.WorldMonsterAlreadyDefeated {
 		worldMonsterMetrics.preventedDoubleKills.Add(1)
+	}
+}
+
+// clearDefeatedWorldMonsterCell hides the static map-cell representation for
+// the same respawn window as the runtime monster. Without this, removing the
+// defeated runtime actor reveals the old static spawn and can trigger another
+// encounter before the actor's respawn timer expires.
+func clearDefeatedWorldMonsterCell(monster WorldMonster, playerID string) {
+	region, x, y, procedural := proceduralMonsterCell(monster.SpawnID)
+	if !procedural {
+		region, x, y, procedural = mapCellBossSpawn(monster.SpawnID)
+		if procedural {
+			// Boss map cells use persistent map-cell respawn state rather than the
+			// Redis cooldown used by generated and regular monster spawns.
+			if err := MarkPersistentCellCleared(nil, uuid.Nil, region, x, y); err != nil {
+				logger.S.Warnf("clear defeated world boss cell %s (%d,%d): %v", region, x, y, err)
+			}
+			return
+		}
+		region, x, y = monster.RegionID, int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY))
+	}
+
+	ttl := time.Duration(monster.RespawnSeconds) * time.Second
+	if ttl <= 0 {
+		ttl = clearedCellCooldown
+	}
+	if err := cache.SetCellCleared(region, x, y, playerID, ttl); err != nil {
+		logger.S.Warnf("clear defeated world monster cell %s (%d,%d): %v", region, x, y, err)
+	}
+	if template, ok := models.MonsterRegistry[monster.MonsterTemplateID]; ok {
+		if err := cache.BroadcastMonsterKilled(x, y, template.Name, region); err != nil {
+			logger.S.Warnf("broadcast defeated world monster cell %s (%d,%d): %v", region, x, y, err)
+		}
 	}
 }
 
