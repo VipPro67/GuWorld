@@ -85,8 +85,8 @@ func InspectLocalPlayer(c *gin.Context) {
 		targetQuery = "p.id = $1"
 		targetArg = req.TargetID
 	} else {
-		targetQuery = "p.username = $1"
-		targetArg = req.TargetUsername
+		targetQuery = "LOWER(p.username) = LOWER($1)"
+		targetArg = strings.TrimSpace(req.TargetUsername)
 	}
 
 	query := `
@@ -313,7 +313,7 @@ func ExecuteDivination(c *gin.Context) {
 	}
 
 	// Fetch target sect name for clue validation (server-side only)
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id::text FROM sect_members WHERE player_id = (SELECT id FROM players WHERE username = $1)`, req.TargetUsername).Scan(&req.TargetSectName)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id::text FROM sect_members WHERE player_id = (SELECT id FROM players WHERE LOWER(username) = LOWER($1))`, strings.TrimSpace(req.TargetUsername)).Scan(&req.TargetSectName)
 
 	// 1. Fetch Viewer (statuses needed for max HP on backfire)
 	var viewer models.Player
@@ -378,8 +378,8 @@ func ExecuteDivination(c *gin.Context) {
 		       p.current_region, p.x, p.y, `+db.GuInventoryAggregate("p.id")+`, p.path_masteries,
 		       p.is_disguised, p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, '')
 		FROM players p
-		WHERE p.username = $1
-	`, req.TargetUsername).Scan(
+		WHERE LOWER(p.username) = LOWER($1)
+	`, strings.TrimSpace(req.TargetUsername)).Scan(
 		&target.ID, &target.Username, &target.Rank, &target.SubRank, &target.CurrentMana, &target.MaxMana,
 		&target.HP, &target.BaseHP, &target.CurrentRegion, &target.X, &target.Y,
 		&target.GuInventory, &target.PathMasteries, &target.IsDisguised,

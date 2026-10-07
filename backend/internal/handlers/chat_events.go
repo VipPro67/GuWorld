@@ -43,6 +43,9 @@ func notifyNewChatMessage(channel string, sectID sql.NullString, message ChatIte
 }
 
 func chatChannelKey(channel string, sectID sql.NullString) string {
+	if channel == "region" && sectID.Valid {
+		return sectID.String
+	}
 	if channel == "sect" && sectID.Valid {
 		return fmt.Sprintf("sect:%s", sectID.String)
 	}
@@ -50,7 +53,7 @@ func chatChannelKey(channel string, sectID sql.NullString) string {
 }
 
 func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
-	if channel != "world" && channel != "general" && channel != "sect" {
+	if channel != "world" && channel != "general" && channel != "sect" && channel != "region" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Kênh chat không hợp lệ"})
 		return "", false
 	}
@@ -63,6 +66,14 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return "", false
+	}
+	if channel == "region" {
+		key, err := currentRegionChatKey(c.Request.Context(), playerID.String())
+		if err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Không xác định được khu vực chat hiện tại"})
+			return "", false
+		}
+		return chatChannelKey(channel, sql.NullString{String: key, Valid: true}), true
 	}
 
 	if channel == "general" {
@@ -102,6 +113,30 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 	return chatChannelKey(channel, sql.NullString{String: sectID, Valid: true}), true
 }
 
+// currentRegionChatKey is derived from the player's persisted location so clients
+// cannot read or write another area's chat by selecting an arbitrary region.
+func currentRegionChatKey(ctx context.Context, playerID string) (string, error) {
+	var region string
+	var instanceID sql.NullString
+	err := db.DB.QueryRowContext(ctx, `SELECT current_region, map_instance_id::text FROM players WHERE id=$1`, playerID).Scan(&region, &instanceID)
+	if err != nil {
+		return "", err
+	}
+	if region == "" {
+		return "", fmt.Errorf("player has no region")
+	}
+	if instanceID.Valid && instanceID.String != "" {
+		return region + ":" + instanceID.String, nil
+	}
+	return region, nil
+}
+
+// CurrentRegionChatScope exposes the authoritative chat scope to the WebSocket
+// layer for subscription authorization.
+func CurrentRegionChatScope(playerID string) (string, error) {
+	return currentRegionChatKey(context.Background(), playerID)
+}
+
 func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, error) {
 	return loadBaoHoangMessagesContext(context.Background(), channel, sectID)
 }
@@ -114,7 +149,15 @@ func loadBaoHoangMessagesContext(ctx context.Context, channel string, sectID sql
 	var rows *sql.Rows
 	var err error
 
-	if channel == "sect" {
+	if channel == "region" {
+		rows, err = db.DB.QueryContext(ctx, `
+			SELECT * FROM (
+				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
+				FROM messages m JOIN players p ON m.sender_id = p.id
+				WHERE m.channel = 'region' AND m.chat_scope = $1
+				ORDER BY m.created_at DESC LIMIT 50
+			) sub ORDER BY sub.created_at ASC`, sectID.String)
+	} else if channel == "sect" {
 		rows, err = db.DB.QueryContext(ctx, `
 			SELECT * FROM (
 				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel

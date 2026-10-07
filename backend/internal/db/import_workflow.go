@@ -78,7 +78,7 @@ var importDatasets = []importDataset{
 	{"loot_table", "LootTable.csv", "loot_tables", true, false, []string{"id"}},
 	{"monster", "Monster.csv", "monster_templates", true, false, []string{"id"}},
 	{"monster_spawn", "MonsterSpawn.csv", "monster_spawns", true, false, []string{"region_id", "monster_id", "x", "y"}},
-	{"map_cell", "MapCell.csv", "map_cells", true, false, []string{"x", "y"}},
+	{"map_cell", "MapCell.csv", "map_cells", true, false, []string{"region_id", "x", "y"}},
 	{"sect_mission", "SectMission.csv", "sect_missions", false, true, []string{"sect_id", "title"}},
 	{"quest", "Quest.csv", "quests", true, false, []string{"id"}},
 	{"dream_realm", "DreamRealm.csv", "instance_templates", true, false, []string{"id"}},
@@ -162,7 +162,7 @@ func validateImportCSV(dataset importDataset, content []byte) (int, []ImportVali
 	}
 	seen := map[string]int{}
 	issues := []ImportValidationIssue{}
-	jsonFields := map[string]bool{"effects": true, "food_types": true, "path": true, "required_gus": true, "required_materials": true, "pool_weights": true, "entries": true, "gu_inventory": true, "item_inventory": true, "dao_marks": true, "path_masteries": true, "metadata": true, "rewards": true, "map_data": true, "blocked_actions": true}
+	jsonFields := map[string]bool{"effects": true, "food_types": true, "path": true, "required_gus": true, "required_materials": true, "pool_weights": true, "rules": true, "entries": true, "gu_inventory": true, "item_inventory": true, "dao_marks": true, "path_masteries": true, "metadata": true, "rewards": true, "map_data": true, "blocked_actions": true}
 	rows := 0
 	for line := 2; ; line++ {
 		row, readErr := r.Read()
@@ -213,7 +213,12 @@ func validateImportCSV(dataset importDataset, content []byte) (int, []ImportVali
 }
 
 func snapshotImportTable(ctx context.Context, tx *sql.Tx, dataset importDataset) (map[string]map[string]interface{}, error) {
-	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT to_jsonb(t) FROM %s t", dataset.table))
+	query := fmt.Sprintf("SELECT to_jsonb(t) FROM %s t", dataset.table)
+	if dataset.key == "region" {
+		query = `SELECT to_jsonb(t) || jsonb_build_object('world_map_id', COALESCE(rwm.world_map_id,'world_map'))
+			FROM regions t LEFT JOIN region_world_maps rwm ON rwm.region_id=t.id`
+	}
+	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}

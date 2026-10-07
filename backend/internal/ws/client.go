@@ -124,6 +124,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	shub.Subscribe(client, ChannelName("world:combat"))
 	shub.Subscribe(client, ChannelName("world:cells:"+playerID.String()))
 	shub.Subscribe(client, ChannelName("chat:world"))
+	shub.Subscribe(client, ChannelName("chat:private:"+playerID.String()))
 	shub.Subscribe(client, ChannelName("death_arena"))
 	shub.Subscribe(client, ChannelName("catalog"))
 
@@ -228,7 +229,25 @@ func (c *Client) handleMessage(msg WSMessage) {
 				return
 			}
 		}
+		if strings.HasPrefix(sub.Channel, "chat:region:") {
+			requestedScope := strings.TrimPrefix(sub.Channel, "chat:")
+			currentScope, err := handlers.CurrentRegionChatScope(c.playerID.String())
+			if err != nil || requestedScope != "region:"+currentScope {
+				logger.S.Warnf("Rejected region chat subscription for %s to %s", c.playerID, requestedScope)
+				return
+			}
+		}
+		if strings.HasPrefix(sub.Channel, "chat:private:") && strings.TrimPrefix(sub.Channel, "chat:private:") != c.playerID.String() {
+			logger.S.Warnf("Rejected private chat subscription for %s to %s", c.playerID, sub.Channel)
+			return
+		}
 		c.shard.Subscribe(c, ChannelName(sub.Channel))
+	case "unsubscribe":
+		var sub SubscribeMsg
+		if err := json.Unmarshal(msg.Payload, &sub); err != nil || sub.Channel == "" {
+			return
+		}
+		c.shard.Unsubscribe(c, ChannelName(sub.Channel))
 	case "ping":
 		// handled by pong handler/ping loop, but if client sends application-level ping:
 		pong, _ := json.Marshal(WSMessage{Type: "pong"})

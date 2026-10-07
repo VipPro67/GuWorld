@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -56,4 +59,18 @@ func isValidUsername(username string) bool {
 		}
 	}
 	return true
+}
+
+func isUsernameUniqueViolation(err error) bool {
+	var pgErr *pq.Error
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" &&
+		(pgErr.Constraint == "idx_players_username_lower_unique" || pgErr.Constraint == "players_username_key")
+}
+
+func truncateUsernameBytes(username string, maxBytes int) string {
+	for len(username) > maxBytes {
+		_, size := utf8.DecodeLastRuneInString(username)
+		username = username[:len(username)-size]
+	}
+	return username
 }

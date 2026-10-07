@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ZonePools defines procedural content pools for a zone. All fields are
 // data-driven via the regions.pool_weights JSONB column.
@@ -15,6 +18,7 @@ type ZonePools struct {
 // 10000x10000 each) and KHU_VUC (named areas that live inside a NGU_VUC).
 // Coordinates are global world coordinates.
 type Region struct {
+	WorldMapID  string    `json:"world_map_id"`
 	SafeZoneX   *int      `json:"safe_zone_x,omitempty"`
 	SafeZoneY   *int      `json:"safe_zone_y,omitempty"`
 	ID          string    `json:"id"`
@@ -28,14 +32,16 @@ type Region struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
-	ParentID    string    `json:"parent_id,omitempty"`
-	ZoneType    string    `json:"zone_type"` // "HUB" | "SAFE_ZONE" | "BOSS_ZONE" | "SECRET_REALM" | "DUNGEON" | "PVP_ZONE" | "NGU_VUC" | "KHU_VUC"
-	MinX        int       `json:"min_x"`
-	MinY        int       `json:"min_y"`
-	MaxX        int       `json:"max_x"`
-	MaxY        int       `json:"max_y"`
-	EntryX      int       `json:"entry_x"`
-	EntryY      int       `json:"entry_y"`
-	PoolWeights ZonePools `json:"pool_weights"`
-	Paths       []string  `json:"paths"`
+	ParentID       string          `json:"parent_id,omitempty"`
+	ZoneType       string          `json:"zone_type"` // "HUB" | "SAFE_ZONE" | "BOSS_ZONE" | "SECRET_REALM" | "DUNGEON" | "PVP_ZONE" | "NGU_VUC" | "KHU_VUC"
+	MinX           int             `json:"min_x"`
+	MinY           int             `json:"min_y"`
+	MaxX           int             `json:"max_x"`
+	MaxY           int             `json:"max_y"`
+	EntryX         int             `json:"entry_x"`
+	EntryY         int             `json:"entry_y"`
+	PoolWeights    ZonePools       `json:"pool_weights"`
+	Paths          []string        `json:"paths"`
+	Rules          json.RawMessage `json:"rules"`
+	EffectiveRules json.RawMessage `json:"effective_rules,omitempty"`
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ func InitiateTrade(c *gin.Context) {
 
 	// Find receiver
 	var receiverID uuid.UUID
-	err = tx.QueryRow(`SELECT id FROM players WHERE username = $1`, req.ReceiverUsername).Scan(&receiverID)
+	err = tx.QueryRow(`SELECT id FROM players WHERE LOWER(username) = LOWER($1)`, strings.TrimSpace(req.ReceiverUsername)).Scan(&receiverID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy người nhận chỉ định"})

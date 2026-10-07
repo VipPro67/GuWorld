@@ -108,7 +108,10 @@ func BreakWall(c *gin.Context) {
 		player.WallProgress = 1.0
 	}
 	success := player.WallProgress >= 1.0
-	player.ApertureStress += 5.0 * (1.0 + gamefx.Get(&player).ApertureStressBonus)
+	// Aperture pressure scales with the primeval essence spent: 100 essence
+	// adds 10 pressure, while smaller investments add proportionally less.
+	stressGain := math.Min(10.0, req.ManaSpend/10.0)
+	player.ApertureStress += stressGain * (1.0 + gamefx.Get(&player).ApertureStressBonus)
 	player.LastCultivateTime = time.Now()
 
 	cracked := false

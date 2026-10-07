@@ -25,6 +25,12 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	if player.ActiveCombat == nil {
 		return "", nil, nil, fmt.Errorf("no active combat")
 	}
+	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
+		return "", nil, nil, err
+	}
+	if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
+		return "", nil, nil, err
+	}
 
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
 	isTribulation := player.ActiveCombat.TribulationEventID != ""

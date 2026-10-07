@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -17,7 +19,7 @@ import (
 
 type MailRequest struct {
 	ReceiverUsername string `json:"receiver_username" binding:"required"`
-	Content          string `json:"content" binding:"required"`
+	Content          string `json:"content" binding:"required,max=500"`
 }
 
 type MailItem struct {
@@ -41,6 +43,10 @@ func SendPrivateMail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Receiver and content are required"})
 		return
 	}
+	if err := ValidateChatMessage(authID.String(), req.Content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -59,35 +65,54 @@ func SendPrivateMail(c *gin.Context) {
 		return
 	}
 
-	// Rule: Sending messenger gu consumes 1 Primeval Stone
-	if player.PrimevalStones < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để sài Cổ trùng truyền tin (Cần 1 Nguyên Thạch)!"})
-		return
-	}
-
 	var receiverID uuid.UUID
-	err = tx.QueryRow("SELECT id FROM players WHERE username = $1", req.ReceiverUsername).Scan(&receiverID)
+	var receiverUsername string
+	err = tx.QueryRow("SELECT id, username FROM players WHERE LOWER(username) = LOWER($1)", strings.TrimSpace(req.ReceiverUsername)).Scan(&receiverID, &receiverUsername)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người nhận!"})
 		return
 	}
-
-	// Insert message
-	_, err = tx.Exec(`
-		INSERT INTO messages (sender_id, receiver_id, content) 
-		VALUES ($1, $2, $3)
-	`, player.ID, receiverID, req.Content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send message"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm người nhận"})
+		return
+	}
+	if receiverID == player.ID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể gửi tin nhắn cho chính mình"})
+		return
+	}
+	pairA, pairB := orderedPlayerPair(player.ID, receiverID)
+	connectionResult, connectionErr := tx.ExecContext(c.Request.Context(), `
+		INSERT INTO private_chat_connections (player_a, player_b) VALUES ($1,$2)
+		ON CONFLICT DO NOTHING
+	`, pairA, pairB)
+	if connectionErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở kết nối truyền tin"})
+		return
+	}
+	connectionRows, _ := connectionResult.RowsAffected()
+	firstMessage := connectionRows > 0
+	fee := int64(1) // each message costs one Primeval Stone
+	if firstMessage {
+		fee++ // first message between a pair also establishes a paid connection
+	}
+	res, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET primeval_stones=primeval_stones-$1 WHERE id=$2 AND primeval_stones >= $1`, fee, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ Nguyên Thạch"})
+		return
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Tin nhắn này cần %d đá.", fee)})
 		return
 	}
 
-	// Deduct stone and add human qi atomically
-	player.PrimevalStones -= 1
-	qiGained := 0.0
-	_, err = tx.Exec("UPDATE players SET primeval_stones = GREATEST(0, primeval_stones - 1) WHERE id = $1", player.ID)
+	var messageID uuid.UUID
+	err = tx.QueryRowContext(c.Request.Context(), `
+		INSERT INTO messages (sender_id, receiver_id, content)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`, player.ID, receiverID, req.Content).Scan(&messageID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct primeval stones"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send message"})
 		return
 	}
 
@@ -96,10 +121,138 @@ func SendPrivateMail(c *gin.Context) {
 		return
 	}
 
+	var sentAt time.Time
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT created_at FROM messages WHERE id=$1`, messageID).Scan(&sentAt); err != nil {
+		sentAt = time.Now()
+	}
+	item := ChatItem{ID: messageID.String(), SenderID: player.ID.String(), SenderUsername: player.Username, SenderAvatar: player.AvatarURL, Content: req.Content, Channel: "private", CreatedAt: sentAt}
+	event := gin.H{"message": item, "conversation_username": receiverUsername}
+	_ = cache.PublishEventQuick("chat:private:"+player.ID.String(), event)
+	_ = cache.PublishEventQuick("chat:private:"+receiverID.String(), gin.H{"message": item, "conversation_username": player.Username})
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
+	if firstMessage {
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Đã kết nối riêng với %s và gửi tin nhắn (phí kết nối 1 + phí tin 1 Nguyên Thạch).", receiverUsername), "connection_fee": 1, "message_fee": 1, "message_id": messageID})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Truyền tin thành công! Cổ trùng đã cất cánh bay đi. Nhân Khí +%.0f.", qiGained),
+		"message":        "Đã gửi tin nhắn riêng (phí 1 Nguyên Thạch).",
+		"connection_fee": 0,
+		"message_fee":    1,
+		"message_id":     messageID,
 	})
+}
+
+func orderedPlayerPair(a, b uuid.UUID) (uuid.UUID, uuid.UUID) {
+	if a.String() < b.String() {
+		return a, b
+	}
+	return b, a
+}
+
+type PrivateConversation struct {
+	PlayerID        string    `json:"player_id"`
+	Username        string    `json:"username"`
+	Avatar          string    `json:"avatar"`
+	LastMessage     string    `json:"last_message"`
+	LastMessageAt   time.Time `json:"last_message_at"`
+	UnreadCount     int       `json:"unread_count"`
+	LastMessageMine bool      `json:"last_message_mine"`
+}
+
+func GetPrivateConversations(c *gin.Context) {
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
+		WITH relevant AS (
+			SELECT m.*, CASE WHEN m.sender_id=$1 THEN m.receiver_id ELSE m.sender_id END AS other_id
+			FROM messages m
+			WHERE m.channel='private' AND (m.sender_id=$1 OR m.receiver_id=$1)
+			  AND m.sender_id::text NOT IN ('00000000-0000-0000-0000-000000000000','11111111-1111-1111-1111-111111111111')
+			  AND m.receiver_id::text NOT IN ('00000000-0000-0000-0000-000000000000','11111111-1111-1111-1111-111111111111')
+		), ranked AS (
+			SELECT r.*, ROW_NUMBER() OVER (PARTITION BY other_id ORDER BY created_at DESC, id DESC) AS rn,
+				COUNT(*) FILTER (WHERE receiver_id=$1 AND is_read=FALSE) OVER (PARTITION BY other_id) AS unread
+			FROM relevant r
+		)
+		SELECT p.id, p.username, COALESCE(p.avatar_url,''), ranked.content, ranked.created_at,
+			ranked.unread, (ranked.sender_id=$1)
+		FROM ranked JOIN players p ON p.id=ranked.other_id
+		WHERE ranked.rn=1 ORDER BY ranked.created_at DESC LIMIT 100
+	`, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách hội thoại"})
+		return
+	}
+	defer rows.Close()
+	conversations := make([]PrivateConversation, 0)
+	for rows.Next() {
+		var item PrivateConversation
+		if err := rows.Scan(&item.PlayerID, &item.Username, &item.Avatar, &item.LastMessage, &item.LastMessageAt, &item.UnreadCount, &item.LastMessageMine); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+			return
+		}
+		conversations = append(conversations, item)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"conversations": conversations})
+}
+
+func GetPrivateThread(c *gin.Context) {
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	username := c.Query("username")
+	var otherID uuid.UUID
+	var otherUsername, otherAvatar string
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT id,username,COALESCE(avatar_url,'') FROM players WHERE LOWER(username)=LOWER($1)`, strings.TrimSpace(username)).Scan(&otherID, &otherUsername, &otherAvatar)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
+		return
+	}
+	if err != nil || otherID == playerID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Người nhận không hợp lệ"})
+		return
+	}
+	globalUUID := "00000000-0000-0000-0000-000000000000"
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT * FROM (
+			SELECT m.id,m.sender_id,p.username,COALESCE(p.avatar_url,''),COALESCE(p.selected_title,''),m.content,m.channel,m.created_at
+			FROM messages m JOIN players p ON p.id=m.sender_id
+			WHERE m.channel='private' AND m.receiver_id <> $3
+			  AND ((m.sender_id=$1 AND m.receiver_id=$2) OR (m.sender_id=$2 AND m.receiver_id=$1))
+			ORDER BY m.created_at DESC LIMIT 50
+		) thread ORDER BY created_at ASC
+	`, playerID, otherID, globalUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải hội thoại"})
+		return
+	}
+	messages := make([]ChatItem, 0)
+	for rows.Next() {
+		var item ChatItem
+		if err := rows.Scan(&item.ID, &item.SenderID, &item.SenderUsername, &item.SenderAvatar, &item.SenderTitle, &item.Content, &item.Channel, &item.CreatedAt); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+			return
+		}
+		messages = append(messages, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
+		return
+	}
+	rows.Close()
+	_, _ = db.DB.ExecContext(c.Request.Context(), `UPDATE messages SET is_read=TRUE WHERE channel='private' AND sender_id=$1 AND receiver_id=$2 AND is_read=FALSE`, otherID, playerID)
+	c.JSON(http.StatusOK, gin.H{"username": otherUsername, "avatar": otherAvatar, "messages": messages})
 }
 
 func GetInbox(c *gin.Context) {
@@ -193,6 +346,7 @@ func SendBaoHoangChat(c *gin.Context) {
 	}
 
 	var fee int64
+	var chatScope string
 	switch req.Channel {
 	case "world":
 		fee = 10
@@ -206,6 +360,18 @@ func SendBaoHoangChat(c *gin.Context) {
 		}
 	case "sect":
 		fee = 0
+	case "region":
+		fee = 0
+		var region string
+		var instanceID sql.NullString
+		if err := tx.QueryRowContext(c.Request.Context(), `SELECT current_region, map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&region, &instanceID); err != nil || region == "" {
+			c.JSON(http.StatusConflict, gin.H{"error": "Không xác định được khu vực hiện tại để gửi chat"})
+			return
+		}
+		chatScope = region
+		if instanceID.Valid && instanceID.String != "" {
+			chatScope += ":" + instanceID.String
+		}
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Kênh chat không hợp lệ"})
 		return
@@ -233,10 +399,12 @@ func SendBaoHoangChat(c *gin.Context) {
 		sectID.Valid = true
 	}
 
-	_, err = tx.Exec(`
-		INSERT INTO messages (sender_id, receiver_id, content, channel, sect_id)
-		VALUES ($1, $2, $3, $4, $5)
-	`, player.ID, globalUUID, req.Content, req.Channel, sectID)
+	var insertedMessageID uuid.UUID
+	err = tx.QueryRow(`
+		INSERT INTO messages (sender_id, receiver_id, content, channel, sect_id, chat_scope)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`, player.ID, globalUUID, req.Content, req.Channel, sectID, chatScope).Scan(&insertedMessageID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send chat"})
 		fmt.Println("Error inserting chat message:", err)
@@ -274,18 +442,27 @@ func SendBaoHoangChat(c *gin.Context) {
 		SELECT id, sender_id, username, COALESCE(avatar_url, ''), COALESCE(selected_title, ''), content, channel, created_at
 		FROM messages m
 		JOIN players p ON m.sender_id = p.id
-		WHERE m.id = (SELECT id FROM messages ORDER BY created_at DESC LIMIT 1)
-		  AND m.channel = $1
-	`, req.Channel).Scan(
+		WHERE m.id = $1
+	`, insertedMessageID).Scan(
 		&newMsg.ID, &newMsg.SenderID, &newMsg.SenderUsername,
 		&newMsg.SenderAvatar, &newMsg.SenderTitle,
 		&newMsg.Content, &newMsg.Channel, &newMsg.CreatedAt,
 	)
 	if err == nil {
-		notifyNewChatMessage(req.Channel, sectID, newMsg)
+		if req.Channel == "region" {
+			_ = cache.PublishEventQuick("chat:region:"+chatScope, chatAppendPayload{Message: newMsg})
+		} else {
+			notifyNewChatMessage(req.Channel, sectID, newMsg)
+		}
 	} else {
 		// Fallback to full history on error
-		notifyBaoHoangMessages(req.Channel, sectID)
+		if req.Channel == "region" {
+			if messages, loadErr := loadBaoHoangMessagesContext(c.Request.Context(), "region", sql.NullString{String: chatScope, Valid: true}); loadErr == nil {
+				_ = cache.PublishEventQuick("chat:region:"+chatScope, chatEventPayload{Messages: messages})
+			}
+		} else {
+			notifyBaoHoangMessages(req.Channel, sectID)
+		}
 	}
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated)
 
@@ -308,6 +485,12 @@ func GetBaoHoangMessages(c *gin.Context) {
 	sectID := sql.NullString{}
 	if channel == "sect" {
 		sectID = sql.NullString{String: key[len("sect:"):], Valid: true}
+	} else if channel == "region" {
+		sectID = sql.NullString{String: key, Valid: true}
+		if c.Query("scope_only") == "1" {
+			c.JSON(http.StatusOK, gin.H{"channel_key": "chat:region:" + key})
+			return
+		}
 	}
 
 	messages, err := loadBaoHoangMessagesContext(c.Request.Context(), channel, sectID)
@@ -316,7 +499,11 @@ func GetBaoHoangMessages(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"messages": messages})
+	response := gin.H{"messages": messages}
+	if channel == "region" {
+		response["channel_key"] = "chat:region:" + key
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // SendSystemMessage broadcasts a system message from NPC "Hệ thống"

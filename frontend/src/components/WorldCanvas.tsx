@@ -175,7 +175,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       instanceId: monster.instance_id,
       x: monster.x,
       y: monster.y,
-      cellType: "Monster",
+      cellType: monster.is_boss ? "Boss" : "Monster",
       contentId: monster.monster_template_id,
       name: spec?.name || monster.monster_template_id,
       hp: monster.hp,
@@ -194,10 +194,13 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       DEFEATED: { color: 0x71717a, shape: "triangle" },
     } as const;
     const style = styles[monster.state];
-    if (style.shape === "ring") body.circle(0, 0, 0.46).stroke({ color: style.color, width: 0.14 });
-    else if (style.shape === "diamond") body.poly([0, -0.58, 0.58, 0, 0, 0.58, -0.58, 0]).fill(style.color).stroke({ color: 0x7f1d1d, width: 0.08 });
-    else if (style.shape === "arrow") body.poly([-0.48, -0.42, 0.58, 0, -0.48, 0.42, -0.18, 0]).fill(style.color).stroke({ color: 0x9a3412, width: 0.07 });
-    else body.poly([0, -0.55, 0.5, 0.42, -0.5, 0.42]).fill(style.color).stroke({ color: 0x991b1b, width: 0.07 });
+    const scale = monster.is_boss ? 1.45 : 1;
+    body.scale.set(scale);
+    const color = monster.is_boss ? 0xa855f7 : style.color;
+    if (style.shape === "ring") body.circle(0, 0, 0.46).stroke({ color, width: 0.14 });
+    else if (style.shape === "diamond") body.poly([0, -0.58, 0.58, 0, 0, 0.58, -0.58, 0]).fill(color).stroke({ color: 0x581c87, width: 0.08 });
+    else if (style.shape === "arrow") body.poly([-0.48, -0.42, 0.58, 0, -0.48, 0.42, -0.18, 0]).fill(color).stroke({ color: 0x581c87, width: 0.07 });
+    else body.poly([0, -0.55, 0.5, 0.42, -0.5, 0.42]).fill(color).stroke({ color: 0x581c87, width: 0.07 });
     hpBar.clear();
     const selected = useWorldStore.getState().selectedTarget?.instanceId === monster.instance_id;
     if (monster.hp < monster.max_hp || selected) {
@@ -385,10 +388,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const displayObjects = useMemo(() => {
     const byKey = new Map<string, WorldObject>();
     for (const obj of objects) {
+		if (obj.cell_type === "Boss" && legacyMonsterHasRuntimeReplacement(obj, useWorldStore.getState().monsters)) continue;
       byKey.set(`${obj.x},${obj.y}`, obj);
     }
     for (const cell of nearbyCells) {
       if (cell.cell_type !== "Boss" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray") continue;
+		if (cell.cell_type === "Boss" && legacyMonsterHasRuntimeReplacement(cell, useWorldStore.getState().monsters)) continue;
       const key = `${cell.x},${cell.y}`;
       if (!byKey.has(key)) {
         byKey.set(key, {
@@ -1034,6 +1039,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const isBoss = o.cell_type === "Boss";
         const isResource = o.cell_type === "Resource";
         const isTeleport = o.cell_type === "TeleportArray";
+        if (isBoss && legacyMonsterHasRuntimeReplacement(o, useWorldStore.getState().monsters)) continue;
         if (isResource && player && Math.hypot(o.x + 0.5 - px, o.y + 0.5 - py) > invR) continue;
 
         const g = new Graphics();
@@ -1425,6 +1431,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         batchWild.poly([c.x + 0.5, c.y + 0.1, c.x + 0.8, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.2, c.y + 0.5]);
         wildCount++;
       } else if (c.cell_type === "Boss") {
+        if (legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) continue;
         const boss = new Graphics();
         boss.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
         boss.fill({ color: 0xef4444 });

@@ -181,7 +181,8 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 
 ### Phó Bản — bảng `instance_templates`
 
-- `type` — `INHERITANCE_RIGHTEOUS`, `INHERITANCE_DEMONIC`, `DREAM_REALM` (Mộng Cảnh), `SECRET_REALM` (Bí Cảnh).
+- `type` — `INHERITANCE_RIGHTEOUS`, `INHERITANCE_DEMONIC`, `DREAM_REALM` (Mộng Cảnh theo stage), `SECRET_REALM` (dữ liệu stage cũ), `SPATIAL_REALM` (Bí Cảnh bản đồ thao tác).
+- Với `SPATIAL_REALM`, `spatial_region_id` phải trỏ tới region `SECRET_REALM` đang hoạt động; `duration_minutes` là thời lượng của phiên chung (mặc định 120 phút).
 - `cooldown_hours` — số giờ chờ trước khi vào lại phó bản (mặc định 24; `0` = không giới hạn). Cooldown tính từ session gần nhất của player cho instance đó.
 - `rewards` JSONB gồm `attainment` (Chân Ý → `players.path_masteries`), `dao_marks` (Đạo Ngân → `immortal_apertures.dao_marks`), `materials`, `primeval_stones`.
 - Seed (`SeedInstanceTemplates`): truyền thừa `dungeon_flower_wine`, **mộng cảnh data-driven từ `data/DreamRealm.csv`** (gồm `dream_realm_star_constellation` + **49 mộng cảnh** `dream_realm_<path>`, 1 cho mỗi lưu phái, thưởng +50 Chân Ý cho đúng path đó, vào bằng `dream_path_material`, cooldown 24h) và **3 bí cảnh** (`SECRET_REALM`, thưởng Đạo Ngân, cooldown 48h).
@@ -189,6 +190,24 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 - `player_instance_sessions` — session đang chạy; index bán phần `player_active_session_idx` đảm bảo 1 phó bản ACTIVE/player.
 
 **Cảnh giới là điều kiện thăng tiên rank:** để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, người chơi cần ≥ 1 lưu phái đạt Tông Sư (500)/Đại Tông Sư (2.500)/Vô Thượng (10.000). Kiểm tra trong `tribulation.go` `handleSuccess`.
+
+### Cấm chế theo khu vực — `regions.rules`
+
+`regions.rules` là JSONB luật dùng chung cho các khu WorldMap và region `SECRET_REALM` của bí cảnh. Luật được kế thừa theo từng nhóm (`rank`, `paths`, `gu`, `items`, `actions`): nhóm có khai báo ở khu con thay toàn bộ nhóm tương ứng ở khu cha; nhóm bị lược bỏ tiếp tục kế thừa. Ví dụ khu con chỉ khai báo `actions` sẽ nhận rank/path/Cổ/vật phẩm từ cha, nhưng thay trọn danh sách hành động bị cấm. Khai báo nhóm rỗng như `"actions": {}` sẽ xóa riêng nhóm đó khỏi luật kế thừa. `{}` kế thừa toàn bộ và giữ nguyên gameplay nếu không có luật ở cha.
+
+Ví dụ:
+
+```json
+{
+  "rank": {"min": 3, "max": 5},
+  "paths": {"allow": ["fire", "sword"], "deny": []},
+  "gu": {"max_rank": 5, "deny_ids": ["GU_EXAMPLE"]},
+  "items": {"deny_ids": ["escape_token"]},
+  "actions": {"deny": ["pvp", "teleport"]}
+}
+```
+
+`rank` kiểm tra lúc vào; `paths` / `gu` kiểm tra Cổ đang trang bị và Cổ sắp dùng/trang bị; `items` chặn vật phẩm bị cấm; `actions.deny` nhận `pvp`, `teleport`, `gu_use`, `item_use`, `combat`, `monster_combat`, `resource_gathering`, `gu_capture`. Trong một nhóm đã khai báo, mảng rỗng hoặc `max`/`max_rank` bằng `0` sẽ xóa giới hạn tương ứng kế thừa. API Admin kiểm tra cấu trúc và giá trị action; backend kiểm tra lại tại các endpoint gameplay, nên UI client không thể tự bỏ qua luật. API `/explore/regions` trả cả `rules` trực tiếp và `effective_rules` sau kế thừa để client hiển thị. Khi cập nhật rules qua Admin, zone registry và cache khu vực được nạp lại.
 
 ### Tiêu hao Chân Nguyên / Tiên Nguyên khi dùng Cổ
 
@@ -870,7 +889,9 @@ NPC `MINER` và `FARMER` tăng sản lượng node phù hợp; NPC `REFINER` tă
 
 ### Region / Bản đồ thế giới (World Map)
 
-Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (NGU_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (KHU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực. Ngoài `Southern_Border` (HUB mặc định), mỗi Đại Vực còn có **HUB khởi đầu riêng** (`hub_thuong_gia_thanh`, `hub_trung_chau`, `hub_bac_nguyen`, `hub_tay_mac`, `hub_dong_hai`). Khi hoàn tất onboarding (`complete-onboarding`), người chơi được đặt vào HUB tương ứng với vị trí đăng ký (xem `startingRegionHubs` trong `player.go`), không sinh quái trong HUB.
+`WorldMap` hiện tại giữ tọa độ liên tục 30.000 × 20.000, chia thành 5 Đại Vực có thể khám phá (`Nam Cương`, `Trung Châu`, `Bắc Nguyên`, `Tây Mạc`, `Đông Hải`). Bạch Thiên và Hắc Thiên được khai báo trong danh mục tầng nhưng đang khóa: vị trí, spawn, map cell, hiện diện và combat chưa được scope đồng bộ theo tầng nên không thể gán vùng vào đó để chơi. Mỗi Đại Vực chia số học thành tiểu vực 1.000 × 1.000. Ngoài `Southern_Border` (HUB mặc định), có HUB khởi đầu riêng (`hub_thuong_gia_thanh`, `hub_trung_chau`, `hub_bac_nguyen`, `hub_tay_mac`, `hub_dong_hai`). Khi hoàn tất onboarding (`complete-onboarding`), người chơi được đặt vào HUB theo vùng đăng ký (xem `startingRegionHubs` trong `player.go`), không sinh quái trong HUB.
+
+**`world_maps` và `region_world_maps`** là danh mục tầng và liên kết region với tầng. Ba bản ghi được seed: `world_map` (đang hoạt động), `bai_thien` và `hac_thien` (đang khóa). `Region.csv` export có thêm `world_map_id`; import chỉ nhận tầng đang hoạt động. API `/api/explore/maps` đọc danh mục này. Vị trí/hiện diện người chơi và các ô persistent đã được scope theo layer/instance; Bai Thiên, Hắc Thiên vẫn chưa mở do content/combat cần hoàn thiện.
 
 **Bảng `regions`** — các cột mới:
 
@@ -901,16 +922,18 @@ HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_
 
 Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLargeZoneAt` luôn trả `NGU_VUC` chứa điểm.
 
-**Bảng `map_cells`** — các ô **dùng chung toàn thế giới** (chỉ lưu boss + tài nguyên cấp cao + điểm an toàn). `UNIQUE(x, y)` toàn cầu. Cột mới: `last_cleared_at TIMESTAMPTZ`, `cleared_by UUID`. Khi giết boss / hái tài nguyên cao, `last_cleared_at` được set; ô sẽ trống cho tới khi hết `respawn_seconds`.
+**Bảng `map_cells`** — các ô persistent (boss, tài nguyên cấp cao, portal, điểm an toàn). Khóa vị trí là `UNIQUE(region_id, x, y)`, vì cùng tọa độ có thể có nội dung khác nhau ở từng tầng hoặc bí cảnh. Cột `last_cleared_at TIMESTAMPTZ`, `cleared_by UUID` theo dõi respawn; state clear được dùng chung trong cùng region.
 
 **Bảng `monster_spawns`** — giờ là **pool theo zone** (không còn ý nghĩa toạ độ cho loại Roaming/Random). `region_id` trỏ tới Đại Vực hoặc địa danh. Pool được cache trong bộ nhớ lúc start.
 
 **Phân lớp sinh nội dung**:
 - Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB.
 - Ô quái procedural trong AOI được materialize thành `WorldMonster` Redis với identity ổn định `procedural:<region>:<x>:<y>`; movement và combat sau đó được phát qua `world:combat`. Marker cell chỉ là fallback cho tới khi runtime replacement tại đúng tọa độ xuất hiện.
-- Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung.
+- Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung. Boss world map chạy thành actor Redis dùng chung, đuổi người chơi trong toàn bộ bounds của region đã gán và không vào `HUB`/`SAFE_ZONE`. Khi chuyển spawn trong `MapCell.csv`, giữ ô cũ dưới dạng `is_active=false` để lần import cập nhật/tắt record cũ; restart backend sau import để nạp ZoneRegistry.
 
-Import/Export qua Admin tab "Dữ liệu": bảng `region` (Region.csv), `map_cell` (MapCell.csv), `monster_spawn` (MonsterSpawn.csv). Sau khi import **restart backend** để nạp ZoneRegistry.
+Import/Export qua Admin tab "Dữ liệu": bảng `region` (Region.csv), `map_cell` (MapCell.csv), `monster_spawn` (MonsterSpawn.csv). Admin quản lý region cũng có thể xem tầng hiện gán. Sau khi import **restart backend** để nạp ZoneRegistry. Bí cảnh dạng bản đồ dùng một phiên toàn server cho mỗi template: `shared_spatial_instances` giữ lifecycle/expiry, `shared_spatial_instance_members` giữ người tham gia và điểm quay về từng người. `POST /api/instance/spatial/exit` chỉ hoạt động tại portal persistent (`EXIT_PORTAL`, `PORTAL_EXIT` hoặc metadata action `EXIT_SPATIAL_REALM`); item effect `exit_spatial_realm` dùng cùng dữ liệu điểm quay về.
+
+Backend tự tạo dữ liệu mẫu idempotent cho `spatial_realm_qingmu_valley` (Thanh Mộc Cốc) khi khởi động: vùng SECRET_REALM 20×20 tại tọa độ 1000–1019, điểm vào (1000,1000), cổng ra (1001,1000), dã trư, Nhân sâm và Ngọc Thạch. Bí cảnh dùng chung một phiên toàn server, mở khi người đầu tiên vào và hết hạn sau 60 phút. Các bản ghi chỉ được thêm nếu chưa tồn tại để giữ thay đổi của admin; Admin có thể quản lý vùng, map cells, monster spawn/dictionary và template như các dữ liệu khác. MapCell.csv dùng khóa `(region_id,x,y)` để các tầng/vùng có thể trùng tọa độ.
 
 ## Quy ước cập nhật dữ liệu
 

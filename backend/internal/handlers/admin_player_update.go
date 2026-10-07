@@ -103,7 +103,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 			return
 		}
 		var exists bool
-		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE username=$1 AND id<>$2)`, username, playerID).Scan(&exists); err != nil {
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username)=LOWER($1) AND id<>$2)`, username, playerID).Scan(&exists); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra tên đăng nhập"})
 			return
 		}
@@ -408,6 +408,10 @@ func AdminUpdatePlayer(c *gin.Context) {
 	}
 	args = append(args, playerID)
 	if _, err := tx.Exec(`UPDATE players SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(argIdx), args...); err != nil {
+		if isUsernameUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tên đăng nhập đã được sử dụng (không phân biệt chữ hoa/thường)"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin người chơi"})
 		return
 	}

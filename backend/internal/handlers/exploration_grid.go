@@ -55,6 +55,8 @@ func GetGrid(c *gin.Context) {
 	// The client only reads movement + investigation; skip shipping the rest
 	// of the stat block in every viewport fetch.
 	gridStats := gin.H{"movement": stats["movement"], "investigation": visionRadius}
+	mapID := worldMapIDForRegion(player.CurrentRegion)
+	mapInstanceID := mapInstanceIDForPlayer(player.ID.String())
 
 	// Cap the visual vision radius to 2 (corresponding to a 5x5 grid) to prevent UI breakage
 	visualVisionRadius := visionRadius
@@ -68,7 +70,7 @@ func GetGrid(c *gin.Context) {
 			cx := player.X + dx
 			cy := player.Y + dy
 			if cx >= 0 && cx < WorldWidth && cy >= 0 && cy < WorldHeight {
-				cell := ResolveCell(cx, cy)
+				cell := ResolveCellInRegion(player.CurrentRegion, cx, cy)
 				if isCellClearedRecently(player.CurrentRegion, cx, cy, clearedCellCooldown) {
 					cell = models.Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
 				}
@@ -89,9 +91,9 @@ func GetGrid(c *gin.Context) {
 
 	// Radius-based nearby players come from the in-memory position index
 	// (fast path). SQL fallback only while the index is cold.
-	entries := worldPosIndex.Nearby(player.X, player.Y, visualVisionRadius, player.ID.String())
+	entries := worldPosIndex.NearbyInScope(player.X, player.Y, visualVisionRadius, player.ID.String(), mapID, mapInstanceID)
 	if worldPosIndex.Len() == 0 {
-		entries = queryNearbyPlayersSQL(c, player.ID, player.X, player.Y, visualVisionRadius)
+		entries = queryNearbyPlayersSQL(c, player.ID, player.X, player.Y, visualVisionRadius, mapID, mapInstanceID)
 	}
 	for _, e := range entries {
 		seenIDs[e.ID] = true
@@ -101,11 +103,14 @@ func GetGrid(c *gin.Context) {
 	// Always include party members regardless of distance for position sync
 	if player.PartyID != nil {
 		partyRows, errParty := db.DB.Query(`
-			SELECT id, username, avatar_url, x, y
-			FROM players
-			WHERE party_id = $1
-			  AND id != $2
-		`, player.PartyID, player.ID)
+			SELECT p.id, p.username, COALESCE(p.avatar_url,''), p.x, p.y
+			FROM players p
+			LEFT JOIN region_world_maps rwm ON rwm.region_id = p.current_region
+			WHERE p.party_id = $1
+			  AND p.id != $2
+			  AND COALESCE(rwm.world_map_id,'world_map') = $3
+			  AND COALESCE(p.map_instance_id::text,'') = $4
+		`, player.PartyID, player.ID, mapID, mapInstanceID)
 		if errParty == nil {
 			defer partyRows.Close()
 			for partyRows.Next() {

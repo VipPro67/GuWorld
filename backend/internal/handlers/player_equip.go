@@ -148,6 +148,12 @@ func EquipGu(c *gin.Context) {
 
 	guName := targetGu.GuID
 	spec, specOk := models.GetGu(targetGu.GuID, targetGu.Rank)
+	if req.Equip && specOk {
+		if err := checkRegionGu(player.CurrentRegion, targetGu.GuID, targetGu.Rank, spec.Path); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+	}
 	if specOk {
 		guName = spec.Name
 	}

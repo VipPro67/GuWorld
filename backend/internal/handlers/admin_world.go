@@ -39,7 +39,16 @@ func validateAdminRegionInput(c *gin.Context, req *models.Region) bool {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Kích thước hoặc khoảng rank khu vực không hợp lệ"})
 		return false
 	}
-	if req.Paths == nil { req.Paths = []string{} }
+	if req.Paths == nil {
+		req.Paths = []string{}
+	}
+	if len(req.Rules) == 0 {
+		req.Rules = json.RawMessage(`{}`)
+	}
+	if err := validateRegionRules(req.Rules); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Luật khu vực không hợp lệ: " + err.Error()})
+		return false
+	}
 	return true
 }
 
@@ -63,9 +72,9 @@ func AdminListRegions(c *gin.Context) {
 	query := `SELECT id, name, COALESCE(description,''), width, height, min_rank, max_rank, is_active,
 	                 COALESCE(parent_id,''), zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y,
 	                 safe_zone_x, safe_zone_y,
-	                 COALESCE(pool_weights::text, '{}'), COALESCE(paths::text,'[]'),
-	                 COALESCE(created_at,NOW()), COALESCE(updated_at,NOW())
-	          FROM regions`
+	                 COALESCE(pool_weights::text, '{}'), COALESCE(paths::text,'[]'), COALESCE(rules::text,'{}'),
+	                 COALESCE(created_at,NOW()), COALESCE(updated_at,NOW()), COALESCE(rwm.world_map_id,'world_map')
+	          FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id = r.id`
 	countQuery := `SELECT COUNT(*) FROM regions`
 
 	var args []interface{}
@@ -108,9 +117,9 @@ func AdminListRegions(c *gin.Context) {
 		var parentID sql.NullString
 		var safeZoneX sql.NullInt64
 		var safeZoneY sql.NullInt64
-		var pathsRaw string
+		var pathsRaw, rulesRaw string
 		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive,
-			&parentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &safeZoneX, &safeZoneY, &poolRaw, &pathsRaw, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			&parentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &safeZoneX, &safeZoneY, &poolRaw, &pathsRaw, &rulesRaw, &r.CreatedAt, &r.UpdatedAt, &r.WorldMapID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Scan error"})
 			return
 		}
@@ -124,6 +133,7 @@ func AdminListRegions(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc paths của khu vực"})
 			return
 		}
+		r.Rules = json.RawMessage(rulesRaw)
 		if safeZoneX.Valid {
 			val := int(safeZoneX.Int64)
 			r.SafeZoneX = &val
@@ -134,7 +144,10 @@ func AdminListRegions(c *gin.Context) {
 		}
 		list = append(list, r)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách khu vực"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách khu vực"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":      list,
@@ -161,6 +174,14 @@ func AdminCreateRegion(c *gin.Context) {
 	if !validateAdminRegionInput(c, &req) {
 		return
 	}
+	if req.WorldMapID == "" {
+		req.WorldMapID = "world_map"
+	}
+	var validMap bool
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM world_maps WHERE id=$1 AND is_active=TRUE)`, req.WorldMapID).Scan(&validMap); err != nil || !validMap {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tầng bản đồ không tồn tại hoặc chưa được mở"})
+		return
+	}
 
 	poolWeightsBytes, err := json.Marshal(req.PoolWeights)
 	if err != nil {
@@ -168,7 +189,11 @@ func AdminCreateRegion(c *gin.Context) {
 		return
 	}
 	pathsBytes, err := json.Marshal(req.Paths)
-	if err != nil { c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu paths"}); return }
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu paths"})
+		return
+	}
+	rulesBytes := []byte(req.Rules)
 
 	var parentID interface{}
 	if req.ParentID != "" {
@@ -178,19 +203,38 @@ func AdminCreateRegion(c *gin.Context) {
 	}
 
 	query := `INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active,
-	                              parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, paths)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`
+	                              parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, paths, rules)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`
 
-	_, err = db.DB.ExecContext(c.Request.Context(), query,
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu tạo khu vực"})
+		return
+	}
+	_, err = tx.ExecContext(c.Request.Context(), query,
 		req.ID, req.Name, req.Description, req.Width, req.Height, req.MinRank, req.MaxRank, req.IsActive,
-		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, pathsBytes)
+		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, pathsBytes, rulesBytes)
 
 	if err != nil {
+		_ = tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo khu vực: " + err.Error()})
 		return
 	}
+	if _, err := tx.ExecContext(c.Request.Context(), `INSERT INTO region_world_maps (region_id, world_map_id) VALUES ($1,$2) ON CONFLICT (region_id) DO UPDATE SET world_map_id=EXCLUDED.world_map_id, updated_at=NOW()`, req.ID, req.WorldMapID); err != nil {
+		_ = tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể gán tầng bản đồ: " + err.Error()})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu khu vực: " + err.Error()})
+		return
+	}
 
-	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo khu vực nhưng không thể tải lại bản đồ: " + err.Error()}); return }
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo khu vực nhưng không thể tải lại bản đồ: " + err.Error()})
+		return
+	}
+	invalidateCachedDictionaryPart("explore_regions_v2")
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_region",
@@ -220,9 +264,22 @@ func AdminUpdateRegion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.ID != "" && req.ID != id { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID khu vực"}); return }
+	if req.ID != "" && req.ID != id {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID khu vực"})
+		return
+	}
 	req.ID = id
-	if !validateAdminRegionInput(c, &req) { return }
+	if !validateAdminRegionInput(c, &req) {
+		return
+	}
+	if req.WorldMapID == "" {
+		req.WorldMapID = "world_map"
+	}
+	var validMap bool
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM world_maps WHERE id=$1 AND is_active=TRUE)`, req.WorldMapID).Scan(&validMap); err != nil || !validMap {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tầng bản đồ không tồn tại hoặc chưa được mở"})
+		return
+	}
 
 	poolWeightsBytes, err := json.Marshal(req.PoolWeights)
 	if err != nil {
@@ -230,7 +287,11 @@ func AdminUpdateRegion(c *gin.Context) {
 		return
 	}
 	pathsBytes, err := json.Marshal(req.Paths)
-	if err != nil { c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu paths"}); return }
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Lỗi dữ liệu paths"})
+		return
+	}
+	rulesBytes := []byte(req.Rules)
 
 	var parentID interface{}
 	if req.ParentID != "" {
@@ -242,27 +303,51 @@ func AdminUpdateRegion(c *gin.Context) {
 	query := `UPDATE regions
 	          SET name = $1, description = $2, width = $3, height = $4, min_rank = $5, max_rank = $6,
 	              is_active = $7, parent_id = $8, zone_type = $9, min_x = $10, min_y = $11,
-	              max_x = $12, max_y = $13, entry_x = $14, entry_y = $15, safe_zone_x = $16, safe_zone_y = $17, pool_weights = $18, paths = $19, updated_at = NOW()
-	          WHERE id = $20`
+	              max_x = $12, max_y = $13, entry_x = $14, entry_y = $15, safe_zone_x = $16, safe_zone_y = $17, pool_weights = $18, paths = $19, rules = $20, updated_at = NOW()
+	          WHERE id = $21`
 
-	res, err := db.DB.ExecContext(c.Request.Context(), query,
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu cập nhật khu vực"})
+		return
+	}
+	res, err := tx.ExecContext(c.Request.Context(), query,
 		req.Name, req.Description, req.Width, req.Height, req.MinRank, req.MaxRank, req.IsActive,
-		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, pathsBytes, id)
+		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, pathsBytes, rulesBytes, id)
 
 	if err != nil {
+		_ = tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật khu vực: " + err.Error()})
 		return
 	}
 
 	rowsAffected, err := res.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận khu vực đã cập nhật"}); return }
+	if err != nil {
+		_ = tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận khu vực đã cập nhật"})
+		return
+	}
 	if rowsAffected == 0 {
+		_ = tx.Rollback()
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy khu vực"})
+		return
+	}
+	if _, err := tx.ExecContext(c.Request.Context(), `INSERT INTO region_world_maps (region_id, world_map_id) VALUES ($1,$2) ON CONFLICT (region_id) DO UPDATE SET world_map_id=EXCLUDED.world_map_id, updated_at=NOW()`, id, req.WorldMapID); err != nil {
+		_ = tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể gán tầng bản đồ: " + err.Error()})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu khu vực: " + err.Error()})
 		return
 	}
 
 	// Reload the registry
-	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu khu vực nhưng không thể tải lại bản đồ: " + err.Error()}); return }
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu khu vực nhưng không thể tải lại bản đồ: " + err.Error()})
+		return
+	}
+	invalidateCachedDictionaryPart("explore_regions_v2")
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_region",
@@ -295,14 +380,21 @@ func AdminDeleteRegion(c *gin.Context) {
 	}
 
 	rowsAffected, err := res.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận khu vực đã xóa"}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận khu vực đã xóa"})
+		return
+	}
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy khu vực"})
 		return
 	}
 
 	// Reload the registry
-	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa khu vực nhưng không thể tải lại bản đồ: " + err.Error()}); return }
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa khu vực nhưng không thể tải lại bản đồ: " + err.Error()})
+		return
+	}
+	invalidateCachedDictionaryPart("explore_regions_v2")
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_region",
@@ -408,11 +500,18 @@ func AdminListMapCells(c *gin.Context) {
 		if metaRaw != "" {
 			_ = json.Unmarshal([]byte(metaRaw), &cell.Metadata)
 		}
-		if lastClearedAt.Valid { cell.LastClearedAt = &lastClearedAt.Time }
-		if clearedBy.Valid { cell.ClearedBy = &clearedBy.String }
+		if lastClearedAt.Valid {
+			cell.LastClearedAt = &lastClearedAt.Time
+		}
+		if clearedBy.Valid {
+			cell.ClearedBy = &clearedBy.String
+		}
 		list = append(list, cell)
 	}
-	if err := rows.Err(); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách ô bản đồ"}); return }
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách ô bản đồ"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":      list,
@@ -440,7 +539,9 @@ func AdminCreateMapCell(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Region ID và Cell Type không được để trống"})
 		return
 	}
-	if req.Metadata == nil { req.Metadata = map[string]interface{}{} }
+	if req.Metadata == nil {
+		req.Metadata = map[string]interface{}{}
+	}
 
 	metaBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
@@ -463,7 +564,10 @@ func AdminCreateMapCell(c *gin.Context) {
 
 	req.ID = createdID
 
-	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo ô bản đồ nhưng không thể tải lại registry: " + err.Error()}); return }
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã tạo ô bản đồ nhưng không thể tải lại registry: " + err.Error()})
+		return
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_map_cell",
@@ -493,12 +597,17 @@ func AdminUpdateMapCell(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.ID != "" && req.ID != id { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID ô bản đồ"}); return }
+	if req.ID != "" && req.ID != id {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID ô bản đồ"})
+		return
+	}
 	if req.RegionID == "" || len(req.RegionID) > 50 || req.CellType == "" || len(req.CellType) > 50 || req.RespawnSeconds < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Region ID, Cell Type hoặc thời gian hồi không hợp lệ"})
 		return
 	}
-	if req.Metadata == nil { req.Metadata = map[string]interface{}{} }
+	if req.Metadata == nil {
+		req.Metadata = map[string]interface{}{}
+	}
 
 	metaBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
@@ -520,13 +629,19 @@ func AdminUpdateMapCell(c *gin.Context) {
 	}
 
 	rowsAffected, err := res.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận ô bản đồ đã cập nhật"}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận ô bản đồ đã cập nhật"})
+		return
+	}
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy ô bản đồ"})
 		return
 	}
 
-	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu ô bản đồ nhưng không thể tải lại registry: " + err.Error()}); return }
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã lưu ô bản đồ nhưng không thể tải lại registry: " + err.Error()})
+		return
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_map_cell",
@@ -559,13 +674,19 @@ func AdminDeleteMapCell(c *gin.Context) {
 	}
 
 	rowsAffected, err := res.RowsAffected()
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận ô bản đồ đã xóa"}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận ô bản đồ đã xóa"})
+		return
+	}
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy ô bản đồ"})
 		return
 	}
 
-	if err := LoadZoneRegistry(db.DB); err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa ô bản đồ nhưng không thể tải lại registry: " + err.Error()}); return }
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xóa ô bản đồ nhưng không thể tải lại registry: " + err.Error()})
+		return
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_map_cell",

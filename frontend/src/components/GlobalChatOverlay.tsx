@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { wsManager } from "@/lib/websocket";
 import { useGameStore } from "@/store/useGameStore";
 import {
   MessageSquare,
@@ -29,6 +30,8 @@ export const GlobalChatOverlay: React.FC = () => {
   const {
     player,
     baoHoangMessages,
+    privateConversations,
+    activePrivateUsername,
     achievements,
     sendBaoHoangChat,
     actionLoading,
@@ -44,9 +47,16 @@ export const GlobalChatOverlay: React.FC = () => {
     unreadChannels,
     subscribeAllBaoHoangMessages,
     fetchBaoHoangMessages,
+    subscribeRegionChat,
+    getCurrentRegionChatChannel,
+    fetchPrivateConversations,
+    fetchPrivateThread,
+    sendPrivateChat,
+    onPrivateChatEvent,
   } = useGameStore();
 
   const [chatInput, setChatInput] = useState("");
+  const [privateRecipient, setPrivateRecipient] = useState("");
   const [showTimeIds, setShowTimeIds] = useState<Record<string, boolean>>({});
   const [selectedUserMenu, setSelectedUserMenu] = useState<{ msgId: string; username: string } | null>(null);
 
@@ -75,6 +85,7 @@ export const GlobalChatOverlay: React.FC = () => {
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const regionChatSubscription = useRef<{ key: string; unsubscribe: () => void } | null>(null);
 
   const handleReply = (username: string) => {
     setChatInput((prev) => {
@@ -113,9 +124,42 @@ export const GlobalChatOverlay: React.FC = () => {
     subscribeAllBaoHoangMessages();
   }, [subscribeAllBaoHoangMessages]);
 
+  useEffect(() => {
+    let active = true;
+    const syncRegion = async () => {
+      const key = await getCurrentRegionChatChannel();
+      if (!active || !key || regionChatSubscription.current?.key === key) return;
+      regionChatSubscription.current?.unsubscribe();
+      regionChatSubscription.current = { key, unsubscribe: subscribeRegionChat(key) };
+      if (activeChannel === "region") void fetchBaoHoangMessages("region");
+    };
+    void syncRegion();
+    const timer = window.setInterval(syncRegion, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      regionChatSubscription.current?.unsubscribe();
+      regionChatSubscription.current = null;
+    };
+  }, [activeChannel, fetchBaoHoangMessages, getCurrentRegionChatChannel, subscribeRegionChat, player?.current_region]);
+
+  useEffect(() => {
+    if (!player?.id) return;
+    return wsManager.subscribe(`chat:private:${player.id}`, (payload: ApiResponseData) => onPrivateChatEvent(payload));
+  }, [player?.id, onPrivateChatEvent]);
+
   const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || actionLoading) return;
+    if (activeChannel === "private") {
+      if (!privateRecipient.trim()) {
+        addToast("Chọn hoặc nhập tên người nhận trước khi gửi.", "error");
+        return;
+      }
+      const success = await sendPrivateChat(privateRecipient, chatInput.trim());
+      if (success) setChatInput("");
+      return;
+    }
     const success = await sendBaoHoangChat(chatInput.trim(), activeChannel);
     if (success) {
       setChatInput("");
@@ -157,7 +201,7 @@ export const GlobalChatOverlay: React.FC = () => {
           <MessageSquare className="w-5 h-5" />
 
           {/* Red dot notification */}
-          {(unreadChannels.world || unreadChannels.general || unreadChannels.sect) && (
+          {(unreadChannels.world || unreadChannels.general || unreadChannels.sect || unreadChannels.region || unreadChannels.private) && (
             <span className="absolute top-0.5 right-0.5 flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
@@ -176,6 +220,8 @@ export const GlobalChatOverlay: React.FC = () => {
                 { id: "world", label: "Thế Giới" },
                 { id: "general", label: "Bảo Hoàng" },
                 { id: "sect", label: "Bang Hội" },
+                { id: "region", label: "Khu Vực" },
+                { id: "private", label: "Riêng" },
               ].map((ch) => {
                 const isSectActive = ch.id === "sect";
                 const isGeneralActive = ch.id === "general";
@@ -183,7 +229,7 @@ export const GlobalChatOverlay: React.FC = () => {
                   ? "Bang Hội"
                   : isGeneralActive
                   ? "Bảo Hoàng"
-                  : "Thế Giới";
+                  : ch.id === "region" ? "Khu Vực" : ch.id === "private" ? "Riêng" : "Thế Giới";
 
                 return (
                   <button
@@ -197,6 +243,16 @@ export const GlobalChatOverlay: React.FC = () => {
                           return;
                         }
                       }
+                      if (ch.id === "private") {
+                        setActiveChannel("private");
+                        void fetchPrivateConversations();
+                        if (privateRecipient || activePrivateUsername) {
+                          const username = privateRecipient || activePrivateUsername;
+                          setPrivateRecipient(username);
+                          void fetchPrivateThread(username);
+                        }
+                        return;
+                      }
                       setActiveChannel(ch.id as ApiResponseData);
                       subscribeAllBaoHoangMessages();
                       fetchBaoHoangMessages(ch.id);
@@ -209,7 +265,7 @@ export const GlobalChatOverlay: React.FC = () => {
                   >
                     <span>{label}</span>
                     {/* Channel specific red dot */}
-                    {unreadChannels[ch.id as "world" | "general" | "sect"] && (
+                    {unreadChannels[ch.id as "world" | "general" | "sect" | "region" | "private"] && (
                       <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                     )}
                   </button>
@@ -243,6 +299,41 @@ export const GlobalChatOverlay: React.FC = () => {
             </div>
           </div>
 
+          {activeChannel === "private" && (
+            <div className="flex flex-col gap-1.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2">
+              <div className="flex gap-2">
+                <input
+                  value={privateRecipient}
+                  onChange={(event) => setPrivateRecipient(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (privateRecipient.trim()) void fetchPrivateThread(privateRecipient.trim());
+                    }
+                  }}
+                  list="private-chat-players"
+                  placeholder="Tên người chơi để nhắn riêng"
+                  className="min-w-0 flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none"
+                />
+                <datalist id="private-chat-players">
+                  {privateConversations.map((conversation: ApiResponseData) => <option key={conversation.username} value={conversation.username} />)}
+                </datalist>
+                <button type="button" onClick={() => privateRecipient.trim() && void fetchPrivateThread(privateRecipient.trim())} className="rounded-lg bg-[var(--bg-surface)] px-2.5 text-xs text-[var(--text-primary)]">Mở</button>
+              </div>
+              <div className="flex gap-1 overflow-x-auto">
+                {privateConversations.map((conversation: ApiResponseData) => (
+                  <button key={conversation.username} type="button" onClick={() => {
+                    setPrivateRecipient(conversation.username);
+                    void fetchPrivateThread(conversation.username);
+                  }} className={`shrink-0 rounded-lg px-2 py-1 text-[10px] ${privateRecipient === conversation.username ? "bg-amber-700 text-white" : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"}`}>
+                    {conversation.username}{Number(conversation.unread_count) > 0 ? ` · ${conversation.unread_count}` : ""}
+                  </button>
+                ))}
+              </div>
+              <div className="text-[9px] text-[var(--text-muted)]">Phí người gửi: 1 Nguyên Thạch mỗi tin; tin đầu tiên giữa hai người thêm 1 Nguyên Thạch phí kết nối.</div>
+            </div>
+          )}
+
           {/* Message View Area */}
           <div
             ref={chatContainerRef}
@@ -261,6 +352,8 @@ export const GlobalChatOverlay: React.FC = () => {
                     ? "text-red-500 dark:text-red-400"
                     : msg.channel === "general"
                     ? "text-cyan-600 dark:text-cyan-400"
+                    : msg.channel === "region"
+                    ? "text-violet-600 dark:text-violet-400"
                     : "text-emerald-600 dark:text-emerald-400";
                 // Card container styles
                 const cardClass = isSystem
@@ -340,6 +433,17 @@ export const GlobalChatOverlay: React.FC = () => {
                           </button>
                           <button
                             onClick={() => {
+                              setPrivateRecipient(msg.sender_username);
+                              setActiveChannel("private");
+                              void fetchPrivateThread(msg.sender_username);
+                              setSelectedUserMenu(null);
+                            }}
+                            className="flex items-center gap-1 rounded bg-indigo-700/80 px-2 py-1 text-[10px] font-bold text-white hover:bg-indigo-600"
+                          >
+                            ✉ Nhắn riêng
+                          </button>
+                          <button
+                            onClick={() => {
                               handleReply(msg.sender_username);
                               setSelectedUserMenu(null);
                             }}
@@ -388,6 +492,10 @@ export const GlobalChatOverlay: React.FC = () => {
                   ? "Kênh Thế Giới (tốn 10 NT)..."
                   : activeChannel === "general"
                   ? "Bảo Hoàng Thiên..."
+                  : activeChannel === "private"
+                  ? `Nhắn riêng${privateRecipient ? ` cho ${privateRecipient}` : ""}...`
+                  : activeChannel === "region"
+                  ? "Khu vực hiện tại..."
                   : "Nội bộ Bang Hội..."
               }
               maxLength={500}

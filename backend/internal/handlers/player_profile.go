@@ -153,9 +153,13 @@ func UpdateProfileSettings(c *gin.Context) {
 	oldUsername := player.Username
 	renameSuccessMsg := "Cập nhật hồ sơ thành công!"
 
-	if username != player.Username {
+	if strings.EqualFold(username, player.Username) {
+		// Changing only capitalization is not a username change and must not
+		// consume the player's rename cost.
+		username = player.Username
+	} else {
 		var exists bool
-		err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE username = $1 AND id <> $2)`, username, player.ID).Scan(&exists)
+		err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) AND id <> $2)`, username, player.ID).Scan(&exists)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return

@@ -49,8 +49,10 @@ func StartWorldIndexSyncWorker(ctx context.Context) {
 // (matching the existing 15-minute active window) into a slice for Reconcile.
 func loadActiveWorldPositions() []WorldPosEntry {
 	rows, err := db.DB.Query(`
-		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, ''), last_mana_update
-		FROM players
+		SELECT p.id, p.username, COALESCE(p.avatar_url, ''), p.x, p.y, COALESCE(p.current_region, ''),
+		       COALESCE(rwm.world_map_id,'world_map'), COALESCE(p.map_instance_id::text,''), p.last_mana_update
+		FROM players p
+		LEFT JOIN region_world_maps rwm ON rwm.region_id=p.current_region
 		WHERE (last_activity >= NOW() - INTERVAL '5 minutes' OR last_mana_update >= NOW() - INTERVAL '5 minutes')
 	`)
 	if err != nil {
@@ -63,7 +65,7 @@ func loadActiveWorldPositions() []WorldPosEntry {
 	for rows.Next() {
 		var e WorldPosEntry
 		var ts time.Time
-		if err := rows.Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region, &ts); err != nil {
+		if err := rows.Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region, &e.MapID, &e.InstanceID, &ts); err != nil {
 			continue
 		}
 		e.TS = ts.UnixMilli()

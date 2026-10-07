@@ -79,8 +79,21 @@ func generateCellUncached(x, y int) models.Cell {
 	if !inWorld(x, y) {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Cổ Giới (World Edge)"}
 	}
+	return generateCellForZone(x, y, FindZoneAt(x, y))
+}
 
-	zone := FindZoneAt(x, y)
+func generateCellInRegion(regionID string, x, y int) models.Cell {
+	if !inWorld(x, y) {
+		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Bí Cảnh"}
+	}
+	zone := ZoneByID(regionID)
+	if zone == nil {
+		return generateCellUncached(x, y)
+	}
+	return generateCellForZone(x, y, zone)
+}
+
+func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 	if zone == nil || zone.ZoneType == ZoneTypeHub {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 	}
@@ -233,7 +246,14 @@ func randomNormalMonsterID(rng *rand.Rand) string {
 // resources, safe points) come from the in-memory map_cells index; everything
 // else is generated procedurally. No database access in the hot path.
 func ResolveCell(x, y int) models.Cell {
-	if pc, found, cleared := PersistentCellAt(x, y); found {
+	return ResolveCellInRegion(DeriveRegionAt(x, y), x, y)
+}
+
+// ResolveCellInRegion resolves shared resources and portals within a logical
+// region. Identical coordinates on separate layers/realms can hold distinct
+// persistent cells.
+func ResolveCellInRegion(regionID string, x, y int) models.Cell {
+	if pc, found, cleared := PersistentCellAt(regionID, x, y); found {
 		if cleared {
 			return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 		}
@@ -242,7 +262,7 @@ func ResolveCell(x, y int) models.Cell {
 		cell.Y = y
 		return cell
 	}
-	return GenerateCell(x, y)
+	return generateCellInRegion(regionID, x, y)
 }
 
 func isCellClearedRecently(regionID string, x, y int, cooldown time.Duration) bool {

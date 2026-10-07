@@ -170,6 +170,7 @@ func CaptureMonster(c *gin.Context) {
 		}
 
 		// Kết thúc combat
+		worldMonsterCombat := *player.ActiveCombat
 		enemyRank := player.ActiveCombat.EnemyRank
 		enemySubRank := player.ActiveCombat.EnemySubRank
 		enemyName := player.ActiveCombat.EnemyName
@@ -185,6 +186,7 @@ func CaptureMonster(c *gin.Context) {
 		}
 		if player.ActiveCombat != nil {
 			_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
+			markBossCleared(tx, &player)
 		}
 		_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
 
@@ -207,6 +209,7 @@ func CaptureMonster(c *gin.Context) {
 			respondCombatTxErr(c, errTx, "Transaction commit failed")
 			return
 		}
+		completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, "Phe Ta", player.ID.String())
 
 		respondActionGuOnly(c, http.StatusOK, player, gin.H{
 			"captured":       true,

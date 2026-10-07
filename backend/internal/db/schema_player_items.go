@@ -148,6 +148,23 @@ func schemaPlayerItems() error {
 	CREATE INDEX IF NOT EXISTS idx_player_instance_sessions_player ON player_instance_sessions (player_id);`); err != nil {
 		return err
 	}
+	if err := execSchema("shared_spatial_instance_members", `
+	CREATE TABLE IF NOT EXISTS shared_spatial_instance_members (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		instance_id UUID NOT NULL REFERENCES shared_spatial_instances(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		return_region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE RESTRICT,
+		return_x INTEGER NOT NULL,
+		return_y INTEGER NOT NULL,
+		joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		exited_at TIMESTAMPTZ,
+		exit_reason VARCHAR(30) NOT NULL DEFAULT ''
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_spatial_members_one_active_player ON shared_spatial_instance_members(player_id) WHERE exited_at IS NULL;
+	CREATE INDEX IF NOT EXISTS idx_shared_spatial_members_active_instance ON shared_spatial_instance_members(instance_id, player_id) WHERE exited_at IS NULL;
+	`); err != nil {
+		return err
+	}
 
 	return nil
 }

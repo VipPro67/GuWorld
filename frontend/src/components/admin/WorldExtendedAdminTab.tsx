@@ -161,7 +161,7 @@ export const WorldExtendedAdminTab: React.FC<{
                   ? { id: "", region_id: "", monster_id: "", x: 0, y: 0, spawn_mode: "normal", chance: 1.0, respawn_seconds: 300, min_rank: 1, max_rank: 9, is_boss_spawn: false, is_active: true }
                   : type === "quests"
                   ? { id: "", title: "", description: "", req_desc: "", message: "", rewards: [] }
-                  : { id: "", name: "", type: "normal", required_rank: 1, entry_item: "", description: "", rewards: {}, map_data: [], cooldown_hours: 24 }
+                  : { id: "", name: "", type: "normal", required_rank: 1, entry_item: "", description: "", rewards: {}, map_data: [], cooldown_hours: 24, spatial_region_id: "", duration_minutes: 120 }
               );
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition-colors cursor-pointer"
@@ -353,6 +353,11 @@ export const WorldExtendedAdminTab: React.FC<{
                     <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Loại</label><input value={editItem.type ?? "normal"} onChange={(e) => setEditItem({ ...editItem, type: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
                     <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Vật phẩm vào cửa</label><input value={editItem.entry_item ?? ""} onChange={(e) => setEditItem({ ...editItem, entry_item: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Region bản đồ (SPATIAL_REALM)</label><input value={editItem.spatial_region_id ?? ""} onChange={(e) => setEditItem({ ...editItem, spatial_region_id: e.target.value })} placeholder="ID region zone_type=SECRET_REALM" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                    <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Thời hạn phiên (phút)</label><input type="number" min={1} value={editItem.duration_minutes ?? 120} onChange={(e) => setEditItem({ ...editItem, duration_minutes: Number(e.target.value) })} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500">Chỉ loại SPATIAL_REALM dùng region và thời hạn này. Mộng Cảnh / bí cảnh stage hiện hữu giữ nguyên luồng cũ.</p>
                   <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Mô tả</label><textarea value={editItem.description ?? ""} onChange={(e) => setEditItem({ ...editItem, description: e.target.value })} rows={2} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 mt-1" /></div>
                   <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Phần thưởng (JSON)</label><textarea value={typeof editItem.rewards === "string" ? editItem.rewards : JSON.stringify(editItem.rewards ?? {}, null, 2)} onChange={(e) => setEditItem({ ...editItem, rewards: e.target.value })} rows={3} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 font-mono text-[11px] mt-1" /></div>
                   <div><label className="text-[11px] font-bold text-zinc-500 font-mono">Dữ liệu bản đồ (JSON)</label><textarea value={typeof editItem.map_data === "string" ? editItem.map_data : JSON.stringify(editItem.map_data ?? {}, null, 2)} onChange={(e) => setEditItem({ ...editItem, map_data: e.target.value })} rows={4} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 font-mono text-[11px] mt-1" /></div>

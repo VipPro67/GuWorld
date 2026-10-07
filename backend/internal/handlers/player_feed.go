@@ -223,6 +223,10 @@ func FeedGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	if err := checkRegionAction(player.CurrentRegion, "item_use"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	// 2. Find target Gu instance
 	guIndex := -1
@@ -279,6 +283,10 @@ func FeedGu(c *gin.Context) {
 
 		foodID := ""
 		if chosenFoodItem != "" {
+			if err := checkRegionItem(player.CurrentRegion, chosenFoodItem); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 			if !isFeedResource(chosenFoodItem) {
 				if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1); err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ thức ăn phù hợp để cho Cổ trùng ăn."})

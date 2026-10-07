@@ -4,6 +4,34 @@ package db
 // created before players so players.current_region can reference regions(id).
 
 func schemaWorld() error {
+	// World map catalogue is separate from regions so existing region CSVs and
+	// player location rows remain valid while maps are introduced incrementally.
+	if err := execSchema("world_maps", `
+	CREATE TABLE IF NOT EXISTS world_maps (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		map_type VARCHAR(20) NOT NULL DEFAULT 'WORLD' CHECK (map_type IN ('WORLD','INSTANCE')),
+		width INT NOT NULL DEFAULT 30000 CHECK (width > 0),
+		height INT NOT NULL DEFAULT 20000 CHECK (height > 0),
+		min_rank INT NOT NULL DEFAULT 1,
+		max_rank INT NOT NULL DEFAULT 9,
+		rules JSONB NOT NULL DEFAULT '{}',
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	INSERT INTO world_maps (id, name, description, map_type, width, height, min_rank, max_rank, is_active)
+	VALUES
+		('world_map', 'WorldMap', 'Năm đại vực của thế giới hiện tại.', 'WORLD', 30000, 20000, 1, 9, TRUE),
+		('bai_thien', 'Bạch Thiên', 'Tầng thế giới cấp cao; chưa mở chuyển tầng.', 'WORLD', 30000, 20000, 6, 9, FALSE),
+		('hac_thien', 'Hắc Thiên', 'Tầng thế giới cấp cao nhất; chưa mở chuyển tầng.', 'WORLD', 30000, 20000, 8, 9, FALSE)
+	ON CONFLICT (id) DO NOTHING;
+
+	`); err != nil {
+		return err
+	}
+
 	if err := execSchema("regions", `
 	CREATE TABLE IF NOT EXISTS regions (
 		id VARCHAR(50) PRIMARY KEY,
@@ -26,9 +54,25 @@ func schemaWorld() error {
 		entry_y INT NOT NULL DEFAULT 0,
 		pool_weights JSONB NOT NULL DEFAULT '{}',
 		paths JSONB NOT NULL DEFAULT '[]',
+		rules JSONB NOT NULL DEFAULT '{}',
 		safe_zone_x INT,
 		safe_zone_y INT
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("regions_rules", `ALTER TABLE regions ADD COLUMN IF NOT EXISTS rules JSONB NOT NULL DEFAULT '{}'::jsonb;`); err != nil {
+		return err
+	}
+	if err := execSchema("region_world_maps", `
+	CREATE TABLE IF NOT EXISTS region_world_maps (
+		region_id VARCHAR(50) PRIMARY KEY REFERENCES regions(id) ON DELETE CASCADE,
+		world_map_id VARCHAR(50) NOT NULL REFERENCES world_maps(id) ON DELETE RESTRICT,
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_region_world_maps_map ON region_world_maps (world_map_id, region_id);
+	INSERT INTO region_world_maps (region_id, world_map_id)
+	SELECT id, 'world_map' FROM regions ON CONFLICT (region_id) DO NOTHING;
+	`); err != nil {
 		return err
 	}
 
@@ -120,9 +164,14 @@ func schemaWorld() error {
 		respawn_seconds INT NOT NULL DEFAULT 300,
 		last_cleared_at TIMESTAMPTZ,
 		cleared_by UUID,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE,
-		UNIQUE (x, y)
+		is_active BOOLEAN NOT NULL DEFAULT TRUE
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("map_cells_region_coordinate_unique", `
+	ALTER TABLE map_cells DROP CONSTRAINT IF EXISTS map_cells_x_y_key;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_map_cells_region_coordinate_unique ON map_cells (region_id, x, y);
+	`); err != nil {
 		return err
 	}
 	if err := execSchema("map_cells_region_idx", `
@@ -152,8 +201,32 @@ func schemaWorld() error {
 		description TEXT NOT NULL,
 		rewards JSONB NOT NULL DEFAULT '{}',
 		map_data JSONB NOT NULL DEFAULT '[]',
-		cooldown_hours INTEGER NOT NULL DEFAULT 24
+		cooldown_hours INTEGER NOT NULL DEFAULT 24,
+		spatial_region_id VARCHAR(50) REFERENCES regions(id) ON DELETE SET NULL,
+		duration_minutes INTEGER NOT NULL DEFAULT 120
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("instance_templates_spatial_columns", `
+	ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS spatial_region_id VARCHAR(50) REFERENCES regions(id) ON DELETE SET NULL;
+	ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS duration_minutes INTEGER NOT NULL DEFAULT 120;
+	`); err != nil {
+		return err
+	}
+	if err := execSchema("shared_spatial_instances", `
+	CREATE TABLE IF NOT EXISTS shared_spatial_instances (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		template_id VARCHAR(50) NOT NULL REFERENCES instance_templates(id) ON DELETE CASCADE,
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','CLOSED')),
+		opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		expires_at TIMESTAMPTZ NOT NULL,
+		closed_at TIMESTAMPTZ,
+		close_reason VARCHAR(30) NOT NULL DEFAULT ''
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_spatial_instances_one_active ON shared_spatial_instances(template_id) WHERE status='ACTIVE';
+	CREATE INDEX IF NOT EXISTS idx_shared_spatial_instances_expiry ON shared_spatial_instances(expires_at) WHERE status='ACTIVE';
+	`); err != nil {
 		return err
 	}
 

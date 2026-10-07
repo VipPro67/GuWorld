@@ -286,6 +286,21 @@ func BuildTeleportArray(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thông tin nhân vật"})
 		return
 	}
+	if err := checkRegionAction(player.CurrentRegion, "teleport"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Spatial realms are a distinct shared map; teleport arrays must not provide
+	// a way to escape their timer, exit gate, or destination policy.
+	var mapInstanceID sql.NullString
+	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&mapInstanceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra bản đồ hiện tại"})
+		return
+	}
+	if mapInstanceID.Valid && mapInstanceID.String != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể dùng trận pháp dịch chuyển khi đang ở bí cảnh"})
+		return
+	}
 
 	// 1. Check player Rank requirement
 	if player.Rank < tpl.MinRank {
@@ -777,6 +792,55 @@ func TravelTeleport(c *gin.Context) {
 	}
 	if dSectID.Valid {
 		dest.SectID = &dSectID.String
+	}
+	if err := checkRegionAction(dest.RegionID, "teleport"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkRegionEntry(dest.RegionID, player.Rank, player.GuInventory); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if player.PartyID != nil {
+		var isPartyLeader bool
+		if err := tx.QueryRow(`SELECT leader_id = $1 FROM parties WHERE id = $2`, player.ID, player.PartyID).Scan(&isPartyLeader); err == nil && isPartyLeader {
+			members, err := tx.Query(`SELECT id::text, rank FROM players WHERE party_id=$1 AND id<>$2`, player.PartyID, player.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra điều kiện tổ đội"})
+				return
+			}
+			type partyEntry struct {
+				id   string
+				rank int
+			}
+			var partyMembers []partyEntry
+			for members.Next() {
+				var member partyEntry
+				if err := members.Scan(&member.id, &member.rank); err != nil {
+					_ = members.Close()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc điều kiện thành viên tổ đội"})
+					return
+				}
+				partyMembers = append(partyMembers, member)
+			}
+			if err := members.Err(); err != nil {
+				_ = members.Close()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc điều kiện thành viên tổ đội"})
+				return
+			}
+			_ = members.Close()
+			for _, member := range partyMembers {
+				inventory, err := db.LoadPlayerGus(tx, member.id, false)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra Cổ trùng của tổ đội"})
+					return
+				}
+				if err := checkRegionEntry(dest.RegionID, member.rank, inventory); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Thành viên tổ đội không đủ điều kiện tới khu đích: %v", err)})
+					return
+				}
+			}
+		}
 	}
 
 	// 3. Evaluate Link Validity

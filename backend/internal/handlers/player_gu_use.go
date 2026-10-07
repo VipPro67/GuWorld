@@ -72,6 +72,14 @@ func UseConsumableGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
 		return
 	}
+	if err := checkRegionAction(player.CurrentRegion, "gu_use"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkRegionGu(player.CurrentRegion, specs.ID, specs.Rank, specs.Path); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	if specs.Type != "Consumable" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không thuộc loại Tiêu Hao, không thể sử dụng trực tiếp!"})
@@ -268,6 +276,14 @@ func UseSupportGu(c *gin.Context) {
 	specs, found := models.GetGu(guID, guRank)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
+		return
+	}
+	if err := checkRegionAction(player.CurrentRegion, "gu_use"); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	if err := checkRegionGu(player.CurrentRegion, specs.ID, specs.Rank, specs.Path); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 

@@ -4,7 +4,9 @@ import { useEffect, useRef } from "react";
 // visible — hidden tabs produce no network traffic.
 export function usePolling(fn: () => void, intervalMs: number, active = true) {
   const saved = useRef(fn);
-  saved.current = fn;
+  useEffect(() => {
+    saved.current = fn;
+  }, [fn]);
   useEffect(() => {
     if (!active) return;
     const id = setInterval(() => {

@@ -322,13 +322,15 @@ type InstanceTemplateRow struct {
 	Rewards       json.RawMessage `json:"rewards"`
 	MapData       json.RawMessage `json:"map_data"`
 	CooldownHours int             `json:"cooldown_hours"`
+	SpatialRegionID string        `json:"spatial_region_id"`
+	DurationMinutes int           `json:"duration_minutes"`
 }
 
 func AdminListDungeons(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, COALESCE(name,''), COALESCE(type,'normal'), COALESCE(required_rank,1), COALESCE(entry_item,''), COALESCE(description,''), COALESCE(rewards,'{}'::jsonb), COALESCE(map_data,'[]'::jsonb), COALESCE(cooldown_hours,24) FROM instance_templates ORDER BY required_rank ASC, id ASC`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, COALESCE(name,''), COALESCE(type,'normal'), COALESCE(required_rank,1), COALESCE(entry_item,''), COALESCE(description,''), COALESCE(rewards,'{}'::jsonb), COALESCE(map_data,'[]'::jsonb), COALESCE(cooldown_hours,24), COALESCE(spatial_region_id,''), COALESCE(duration_minutes,120) FROM instance_templates ORDER BY required_rank ASC, id ASC`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -338,7 +340,7 @@ func AdminListDungeons(c *gin.Context) {
 	list := []InstanceTemplateRow{}
 	for rows.Next() {
 		var r InstanceTemplateRow
-		if err := rows.Scan(&r.ID, &r.Name, &r.Type, &r.RequiredRank, &r.EntryItem, &r.Description, &r.Rewards, &r.MapData, &r.CooldownHours); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Type, &r.RequiredRank, &r.EntryItem, &r.Description, &r.Rewards, &r.MapData, &r.CooldownHours, &r.SpatialRegionID, &r.DurationMinutes); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc đầy đủ phụ bản"})
 			return
 		}
@@ -358,10 +360,19 @@ func AdminCreateDungeon(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID và Tên phụ bản là bắt buộc"})
 		return
 	}
-	if req.Type == "" || req.RequiredRank < 1 || req.CooldownHours < 0 {
+	if req.Type == "" || req.RequiredRank < 1 || req.CooldownHours < 0 || req.DurationMinutes < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại, rank hoặc thời gian hồi phụ bản không hợp lệ"})
 		return
 	}
+	if strings.EqualFold(req.Type,"SPATIAL_REALM") && (req.SpatialRegionID == "" || req.DurationMinutes < 1) { c.JSON(http.StatusBadRequest,gin.H{"error":"Bí cảnh bản đồ cần vùng bản đồ và thời hạn lớn hơn 0"}); return }
+	if strings.EqualFold(req.Type,"SPATIAL_REALM") {
+		var valid bool
+		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM regions WHERE id=$1 AND is_active=TRUE AND UPPER(zone_type)='SECRET_REALM')`, req.SpatialRegionID).Scan(&valid); err != nil || !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Region bí cảnh phải tồn tại, đang hoạt động và có zone_type SECRET_REALM"})
+			return
+		}
+	}
+	if req.DurationMinutes == 0 { req.DurationMinutes = 120 }
 	if len(req.Rewards) == 0 {
 		req.Rewards = json.RawMessage(`{}`)
 	}
@@ -372,8 +383,8 @@ func AdminCreateDungeon(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu bản đồ phụ bản phải là mảng JSON"})
 		return
 	}
-	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		req.ID, req.Name, req.Type, req.RequiredRank, req.EntryItem, req.Description, req.Rewards, req.MapData, req.CooldownHours)
+	_, err := db.DB.ExecContext(c.Request.Context(), `INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours, spatial_region_id, duration_minutes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10,''), $11)`,
+		req.ID, req.Name, req.Type, req.RequiredRank, req.EntryItem, req.Description, req.Rewards, req.MapData, req.CooldownHours, req.SpatialRegionID, req.DurationMinutes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -395,10 +406,19 @@ func AdminUpdateDungeon(c *gin.Context) {
 		return
 	}
 	if req.ID != "" && req.ID != id { c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đổi ID phụ bản"}); return }
-	if req.Name == "" || req.Type == "" || req.RequiredRank < 1 || req.CooldownHours < 0 {
+	if req.Name == "" || req.Type == "" || req.RequiredRank < 1 || req.CooldownHours < 0 || req.DurationMinutes < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tên, loại, rank hoặc thời gian hồi phụ bản không hợp lệ"})
 		return
 	}
+	if strings.EqualFold(req.Type,"SPATIAL_REALM") && (req.SpatialRegionID == "" || req.DurationMinutes < 1) { c.JSON(http.StatusBadRequest,gin.H{"error":"Bí cảnh bản đồ cần vùng bản đồ và thời hạn lớn hơn 0"}); return }
+	if strings.EqualFold(req.Type,"SPATIAL_REALM") {
+		var valid bool
+		if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM regions WHERE id=$1 AND is_active=TRUE AND UPPER(zone_type)='SECRET_REALM')`, req.SpatialRegionID).Scan(&valid); err != nil || !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Region bí cảnh phải tồn tại, đang hoạt động và có zone_type SECRET_REALM"})
+			return
+		}
+	}
+	if req.DurationMinutes == 0 { req.DurationMinutes = 120 }
 	if len(req.Rewards) == 0 { req.Rewards = json.RawMessage(`{}`) }
 	if len(req.MapData) == 0 { req.MapData = json.RawMessage(`[]`) }
 	var rewards map[string]json.RawMessage
@@ -407,8 +427,8 @@ func AdminUpdateDungeon(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu bản đồ phụ bản phải là mảng JSON"})
 		return
 	}
-	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE instance_templates SET name=$1, type=$2, required_rank=$3, entry_item=$4, description=$5, rewards=$6, map_data=$7, cooldown_hours=$8 WHERE id=$9`,
-		req.Name, req.Type, req.RequiredRank, req.EntryItem, req.Description, req.Rewards, req.MapData, req.CooldownHours, id)
+	result, err := db.DB.ExecContext(c.Request.Context(), `UPDATE instance_templates SET name=$1, type=$2, required_rank=$3, entry_item=$4, description=$5, rewards=$6, map_data=$7, cooldown_hours=$8, spatial_region_id=NULLIF($9,''), duration_minutes=$10 WHERE id=$11`,
+		req.Name, req.Type, req.RequiredRank, req.EntryItem, req.Description, req.Rewards, req.MapData, req.CooldownHours, req.SpatialRegionID, req.DurationMinutes, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
