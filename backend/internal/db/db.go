@@ -128,8 +128,13 @@ func Connect() error {
 	dbname := getEnv("DB_NAME", "gu_db")
 	sslmode := getEnv("DB_SSLMODE", "disable")
 
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode)
+	// Fail fast when the database is unreachable. Without a dial timeout, lib/pq
+	// blocks for the OS TCP timeout (~2 min) on a failed connect, so a short
+	// network blip to RDS balloons into an exhausted pool and multi-minute hangs.
+	connectTimeout := getEnv("DB_CONNECT_TIMEOUT_SECONDS", "5")
+
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=%s",
+		host, port, user, password, dbname, sslmode, connectTimeout)
 
 	// Abort queries stuck on locks/deadlocks or left idle in transactions instead of hanging forever.
 	// Defaults: statement 15s, lock wait 10s, idle in transaction 15s. Override via env (ms).
@@ -149,16 +154,18 @@ func Connect() error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Keep the pool below the RDS max_connections ceiling (81 on the current
-	// instance) so we don't race other clients for the last slots. Requests
-	// queue in Go instead of failing on "too many clients".
-	maxOpen := 60
+	// The RDS instance is small (shared_buffers ~185MB); a large pool of
+	// concurrent queries saturates its CPU/IO and, during a DB blip, every
+	// checked-out connection hangs. Keep well under the max_connections ceiling
+	// (81) so bursts cannot peg the instance or exhaust its slots. Raise via env
+	// after upsizing the instance.
+	maxOpen := 30
 	if v := os.Getenv("DB_MAX_OPEN_CONNS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxOpen = n
 		}
 	}
-	maxIdle := 20
+	maxIdle := 10
 	if v := os.Getenv("DB_MAX_IDLE_CONNS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxIdle = n
@@ -169,8 +176,8 @@ func Connect() error {
 	}
 	DB.SetMaxOpenConns(maxOpen)
 	DB.SetMaxIdleConns(maxIdle)
-	DB.SetConnMaxLifetime(10 * time.Minute)
-	DB.SetConnMaxIdleTime(1 * time.Minute)
+	DB.SetConnMaxLifetime(5 * time.Minute)
+	DB.SetConnMaxIdleTime(30 * time.Second)
 
 	logger.S.Info("Successfully connected to the database")
 	return nil

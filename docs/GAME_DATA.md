@@ -392,6 +392,10 @@ Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** b�
 - Cổ đang trang bị/Bản Mệnh vẫn được mirror trong cột JSONB `players.equipped_gus` (danh sách `instance_id`) để các truy vấn nhẹ (status) không cần join.
 - API `GET /api/player/status/:id` chỉ trả Cổ đang trang bị/vital; toàn bộ túi Cổ lấy qua `GET /api/player/inventory/gus` (helper `db.GuInventoryAggregate` / `db.LoadPlayerGus`).
 - `monster_templates.gu_inventory` (JSON trong cột monster) **giữ nguyên**, không đổi.
+- Sát chiêu tự tạo được lưu riêng trong `player_killer_moves`: công thức gồm Cổ chính/phụ, tham chiếu instance Cổ, effect đã chọn và effect đã cân bằng, cùng độ thành thạo và trạng thái trang bị. Cổ có thể được dùng trong nhiều sát chiêu; mỗi lần kích hoạt, từng Cổ thành phần giảm 1 độ no.
+- Các Cổ thành phần được kiểm tra lại theo `player_gu.id`, `gu_id`, `gu_rank` và trạng thái sống khi trang bị/thi triển. Bán, hợp luyện hoặc làm chết Cổ khiến sát chiêu phụ thuộc vào instance đó tạm mất hiệu lực.
+- Cân bằng sát chiêu hiện dùng ngân sách theo rank Cổ chính, đóng góp giảm dần của Cổ phụ, tải effect theo loại/giá trị/phạm vi/thời lượng/xác suất, độ hòa hợp lưu phái và độ phức tạp. Effect được giảm tự động khi vượt ngân sách; `balance_version` định danh luật dùng lúc tạo.
+- Người chơi có thể lưu tối đa 12 sát chiêu và trang bị tối đa 4. `ON_ACTION` combat effects được thêm vào auto-combat khi sát chiêu trang bị; `ON_USE` hồi phục bản thân có thể kích hoạt ngoài combat.
 - Cột `players.temp_loot` đã bị **bỏ hẳn** (migration `ALTER TABLE players DROP COLUMN IF EXISTS temp_loot;`). Chiến lợi phẩm khám phá giờ vào thẳng túi thật (nguyên liệu → `player_inventory_items`, thạch → `players.primeval_stones`/`immortal_stones`, Cổ → `player_gu`).
 
 ### Cơ chế rơi đồ khi tử đạo & Thiên Đạo Tiêu Hủy (Death Penalty & Void Destruction)

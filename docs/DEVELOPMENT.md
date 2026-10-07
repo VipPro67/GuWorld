@@ -30,7 +30,8 @@ Các biến thường dùng:
 | `DB_MIGRATION_STATEMENT_TIMEOUT_MS`, `DB_MIGRATION_LOCK_TIMEOUT_MS` | Timeout riêng cho từng câu lệnh/lock của `InitSchema` lúc boot (backfill/consolidate trên bảng lớn); mặc định 300000/10000 ms. Request path vẫn giữ timeout chặt. |
 | `DB_MIGRATION_RETRY_ATTEMPTS`, `DB_MIGRATION_RETRY_DELAY_MS` | Số lần thử lại câu lệnh khởi tạo khi PostgreSQL trả lỗi lock/deadlock/serialization tạm thời và độ trễ ban đầu; mặc định 6 lần/1000 ms, giới hạn 20 lần/60000 ms và backoff tối đa 10 giây. |
 | `DB_MIGRATION_ADVISORY_LOCK_TIMEOUT_MS` | Thời gian tối đa chờ một instance GuWorld khác hoàn tất `InitSchema`; mặc định 120000 ms, tối đa 3600000 ms. |
-| `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS` | Giới hạn pool kết nối PostgreSQL. Mặc định 60/20, phải để dưới trần `max_connections` của RDS (hiện 81) để không tranh slot với client khác. |
+| `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS` | Giới hạn pool kết nối PostgreSQL. Mặc định 30/10 (RDS hiện rất nhỏ, `max_connections` 81); phải để dưới trần `max_connections` để không tranh slot với client khác. Nâng lên sau khi upsizing instance. |
+| `DB_CONNECT_TIMEOUT_SECONDS` | Timeout thiết lập kết nối lib/pq; mặc định 5 giây. Chặn việc RDS chập chờn làm treo dial ~2 phút và cạn pool. |
 | `CORS_ALLOWED_ORIGINS` | Danh sách origin frontend, mặc định `http://localhost:3000`. |
 | `JWT_SECRET` | Ký token/cookie auth. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Cấu hình SMTP (ví dụ: Brevo) để gửi mã OTP đăng ký. |

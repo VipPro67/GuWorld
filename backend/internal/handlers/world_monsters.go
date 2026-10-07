@@ -38,6 +38,10 @@ const (
 	worldMonsterSafetyTTL    = 5 * time.Minute
 	worldMonsterMoveEventGap = 400 * time.Millisecond
 	worldMonsterDefaultSpeed = 0.25
+	// Idle monsters only need their Redis value refreshed occasionally (TTL,
+	// retuned fields). Without a heartbeat every idle actor would issue a CAS +
+	// SET on every 250ms tick.
+	worldMonsterHeartbeatInterval = 5 * time.Second
 	// Monster AOI is deliberately independent from the 300-cell player
 	// position broadcast index. The client investigation radius is capped at
 	// 25 cells, so 32-cell buckets keep a view to at most 3x3 small buckets.
@@ -805,6 +809,7 @@ func tickWorldMonster(monster WorldMonster, candidates []WorldPosEntry, now time
 	if monster.State == MonsterStateDefeated {
 		return monster, ""
 	}
+	lastUpdateAt := monster.LastUpdateAt
 	dt := now.Sub(monster.LastUpdateAt).Seconds()
 	if dt < 0 {
 		dt = 0
@@ -851,8 +856,11 @@ func tickWorldMonster(monster WorldMonster, candidates []WorldPosEntry, now time
 		}
 	}
 	monster.LastUpdateAt = now
-	changed := oldState != monster.State || oldX != monster.X || oldY != monster.Y || len(monster.Statuses) != statusCount || dt > 0
-	if changed {
+	changed := oldState != monster.State || oldX != monster.X || oldY != monster.Y || len(monster.Statuses) != statusCount
+	// Persist on a real change, plus a slow heartbeat so TTL/tuning survive.
+	// The old `|| dt > 0` was always true and forced a CAS + SET for every
+	// monster on every tick, even when nothing moved.
+	if changed || now.Sub(lastUpdateAt) >= worldMonsterHeartbeatInterval {
 		monster.Revision++
 	}
 	if oldState != monster.State {

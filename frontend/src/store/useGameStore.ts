@@ -34,6 +34,7 @@ import { createMiscSlice, type MiscSlice } from "@/store/slices/miscSlice";
 import { createCombatSlice, type CombatSlice } from "@/store/slices/combatSlice";
 import { createTeleportSlice, type TeleportSlice } from "@/store/slices/teleportSlice";
 import { createScoutingSlice, type ScoutingSlice } from "@/store/slices/scoutingSlice";
+import { createKillerMovesSlice, type KillerMovesSlice } from "@/store/slices/killerMovesSlice";
 import { shouldApplyPlayerRevision } from "@/store/playerRevision";
 import { acquirePendingAction, releasePendingAction, type PendingActions } from "@/store/pendingActions";
 
@@ -1146,7 +1147,7 @@ export interface WorldConfig {
   hub_y: number;
 }
 
-interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice {
+interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice {
   player: Player | null;
   playerStateRevision: number | null;
   manaSnapshot: ManaSnapshot | null;
@@ -1709,6 +1710,7 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createCombatSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createTeleportSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createScoutingSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createKillerMovesSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   applyInventoryFromResponse,
   player: null,
   playerStateRevision: null,

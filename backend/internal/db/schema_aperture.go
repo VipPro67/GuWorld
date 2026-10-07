@@ -316,6 +316,13 @@ func schemaAperture() error {
 	CREATE INDEX IF NOT EXISTS idx_tribulation_events_aperture_status ON tribulation_events (aperture_id, status);`); err != nil {
 		return err
 	}
+	// The 15s/60s workers scan `WHERE status = 'ACTIVE'` directly, which the
+	// (player_id, status) and (aperture_id, status) indexes cannot serve. Without
+	// this, both seq-scan the ever-growing (never pruned) event log every tick.
+	if err := execSchema("tribulation_events_active_idx", `
+	CREATE INDEX IF NOT EXISTS idx_tribulation_events_active ON tribulation_events (status) WHERE status = 'ACTIVE';`); err != nil {
+		return err
+	}
 	if err := execSchema("tribulation_enemies_event_dead_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_enemies_event_dead ON tribulation_enemies (event_id, is_dead);`); err != nil {
 		return err

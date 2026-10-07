@@ -96,14 +96,67 @@ func csrfProtection(c *gin.Context) {
 
 const sessionCacheTTL = 5 * time.Minute
 
+// localSessionFallback is a bounded, process-local mirror of the Redis session
+// cache. When Redis is unavailable, cache.GetJSON misses on every authenticated
+// request and each one would run a PostgreSQL query for active_session_id —
+// enough to saturate the connection pool. This keeps that query off the hot
+// path without changing the 5-minute kick-propagation window.
+var (
+	localSessionMu       sync.Mutex
+	localSessionFallback = map[string]localSessionEntry{}
+)
+
+type localSessionEntry struct {
+	id      string
+	expires time.Time
+}
+
+// ponytail: crude bound — a full reset on overflow. Fine while the cache is
+// only a hot-path fallback; switch to an LRU if eviction churn matters.
+const localSessionFallbackMax = 100_000
+
+func getLocalSession(playerID string) (string, bool) {
+	localSessionMu.Lock()
+	defer localSessionMu.Unlock()
+	e, ok := localSessionFallback[playerID]
+	if !ok {
+		return "", false
+	}
+	if e.id == "" || time.Now().After(e.expires) {
+		delete(localSessionFallback, playerID)
+		return "", false
+	}
+	return e.id, true
+}
+
+func setLocalSession(playerID, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	localSessionMu.Lock()
+	defer localSessionMu.Unlock()
+	if len(localSessionFallback) >= localSessionFallbackMax {
+		localSessionFallback = map[string]localSessionEntry{}
+	}
+	localSessionFallback[playerID] = localSessionEntry{id: sessionID, expires: time.Now().Add(sessionCacheTTL)}
+}
+
+func deleteLocalSession(playerID string) {
+	localSessionMu.Lock()
+	defer localSessionMu.Unlock()
+	delete(localSessionFallback, playerID)
+}
+
 // InvalidateSessionCache clears the cached active_session_id for a player (called on logout/kick).
 func InvalidateSessionCache(playerID uuid.UUID) {
 	_ = cache.Delete("auth:session:" + playerID.String())
+	deleteLocalSession(playerID.String())
 }
 
 // SetSessionCache updates the cached active_session_id for a player (called on login).
 func SetSessionCache(playerID uuid.UUID, sessionID string) {
 	_ = cache.SetJSON("auth:session:"+playerID.String(), sessionID, sessionCacheTTL)
+	setLocalSession(playerID.String(), sessionID)
 }
 
 // AuthRequired is a Gin middleware that enforces authentication
@@ -160,26 +213,31 @@ func AuthRequired() gin.HandlerFunc {
 		var dbSessionID string
 		sessionCacheKey := "auth:session:" + playerID.String()
 		if errCache := cache.GetJSON(sessionCacheKey, &dbSessionID); errCache != nil || dbSessionID == "" {
-			err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&dbSessionID)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				stats := db.DB.Stats()
-				logger.L.Error("authentication_database_error",
-					zap.String("player_id", playerID.String()), zap.Error(err),
-					zap.Int("open_connections", stats.OpenConnections), zap.Int("in_use_connections", stats.InUse),
-					zap.Int("idle_connections", stats.Idle), zap.Int64("pool_wait_count", stats.WaitCount),
-					zap.Duration("pool_wait_duration", stats.WaitDuration))
-				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
-				c.Abort()
-				return
+			if cached, ok := getLocalSession(playerID.String()); ok {
+				dbSessionID = cached
+			} else {
+				err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&dbSessionID)
+				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+					stats := db.DB.Stats()
+					logger.L.Error("authentication_database_error",
+						zap.String("player_id", playerID.String()), zap.Error(err),
+						zap.Int("open_connections", stats.OpenConnections), zap.Int("in_use_connections", stats.InUse),
+						zap.Int("idle_connections", stats.Idle), zap.Int64("pool_wait_count", stats.WaitCount),
+						zap.Duration("pool_wait_duration", stats.WaitDuration))
+					c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication database unavailable"})
+					c.Abort()
+					return
+				}
+				if errors.Is(err, sql.ErrNoRows) {
+					// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
+					// Let's just return 401. The frontend interceptor will call logout().
+					c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
+					c.Abort()
+					return
+				}
+				_ = cache.SetJSON(sessionCacheKey, dbSessionID, sessionCacheTTL)
+				setLocalSession(playerID.String(), dbSessionID)
 			}
-			if errors.Is(err, sql.ErrNoRows) {
-				// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
-				// Let's just return 401. The frontend interceptor will call logout().
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
-				c.Abort()
-				return
-			}
-			_ = cache.SetJSON(sessionCacheKey, dbSessionID, sessionCacheTTL)
 		}
 
 		// Validate session_id matches the active session in database

@@ -860,6 +860,58 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		}
 	}
 
+	// Player-authored killer moves are precompiled from the saved component
+	// effect selections. Their exact Gu instances are checked against the
+	// player's current player_gu inventory by loadEquippedKillerMoves.
+	killerMoves, kmErr := loadEquippedKillerMoves(tx, player)
+	if kmErr != nil {
+		return nil, fmt.Errorf("failed to load killer moves: %w", kmErr)
+	}
+	for _, move := range killerMoves {
+		mainSpec, found := models.GetGu(move.MainGuID, move.MainGuRank)
+		if !found {
+			continue
+		}
+		mainSpec.Name = move.Name
+		mainSpec.Effects = models.GuEffects{Blocks: move.CompiledEffects}
+		mainSpec.BaseManaCost = 0
+		movePaths := make([]string, 0, len(move.Components))
+		seenPaths := make(map[string]bool)
+		for _, component := range move.Components {
+			if guSpec, ok := models.GetGu(component.GuID, component.Rank); ok {
+				for _, path := range guSpec.Path {
+					clean := gamefx.CleanPath(path)
+					if !seenPaths[clean] {
+						seenPaths[clean] = true
+						movePaths = append(movePaths, path)
+					}
+				}
+				mainSpec.BaseManaCost += guSpec.BaseManaCost
+			}
+		}
+		if len(movePaths) > 0 {
+			mainSpec.Path = movePaths
+		}
+		act, actionErr := buildSimActionFromGu(&actor, &mainSpec, "KILLER_MOVE")
+		if actionErr != nil {
+			continue
+		}
+		compiledEffects, compileErr := (gameplayeffects.Compiler{}).Compile(move.CompiledEffects)
+		if compileErr != nil {
+			logger.S.Warnf("Skipping invalid killer move %s effects: %v", move.ID, compileErr)
+			continue
+		}
+		act.CompiledOperations = compiledEffects.CompileCombatAction().Operations
+		act.SourceID = move.ID
+		act.KillerMoveID = move.ID
+		act.ComponentGuIDs = move.ComponentInstanceIDs()
+		currentMasteryLevel := gamefx.PathMasteryLevel(player.PathMasteries[gamefx.CleanPath(move.Path)])
+		act.SuccessChance = killerMoveAdjustedChance(move.SuccessChance, move.CreationPathMasteryLevel, currentMasteryLevel, move.MasteryXP)
+		act.Damage *= attackFactor
+		act.Defense *= defenseFactor
+		allActions = append(allActions, act)
+	}
+
 	// Basic attack fallback
 	allActions = append(allActions, simulator.SimAction{
 		ActionType: "BASIC_ATTACK",
@@ -1061,14 +1113,15 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		GuHunger: func() map[string]int {
 			gh := make(map[string]int)
 			for _, inst := range player.GuInventory {
-				if inst.Equipped && inst.Status == "ACTIVE" {
+				if inst.Status != "DEAD" {
 					gh[inst.InstanceID] = inst.Hunger
 				}
 			}
 			return gh
 		}(),
-		GuUsedCounts: make(map[string]int),
-		Mechanics:    combatantMechanics,
+		GuUsedCounts:         make(map[string]int),
+		KillerMoveUsedCounts: make(map[string]int),
+		Mechanics:            combatantMechanics,
 	}
 	simCombatant.StatProvenance = buildStatProvenance(player, playerStats, charFX.HealingReceivedBonus)
 

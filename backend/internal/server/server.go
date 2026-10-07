@@ -729,6 +729,22 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
 
+		// Player-created killer moves use Gu components from player_gu and are
+		// validated again at preview, save, equip, and combat activation.
+		killerMoves := api.Group("/killer-moves")
+		killerMoves.Use(middleware.AuthRequired())
+		killerMoves.Use(middleware.RequireOnboarded())
+		killerMoves.Use(middleware.RateLimitByPlayer(30, time.Minute))
+		{
+			killerMoves.GET("/options", handlers.GetKillerMoveOptions)
+			killerMoves.GET("", handlers.ListKillerMoves)
+			killerMoves.POST("/preview", handlers.PreviewKillerMove)
+			killerMoves.POST("", handlers.CreateKillerMove)
+			killerMoves.POST("/:id/equip", handlers.EquipKillerMove)
+			killerMoves.POST("/:id/use", handlers.UseKillerMove)
+			killerMoves.DELETE("/:id", handlers.DeleteKillerMove)
+		}
+
 		// Immortal Aperture — group: 30/min, per player: 20/min
 		aperture := api.Group("/immortal-aperture")
 		aperture.Use(middleware.AuthRequired())

@@ -130,6 +130,13 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/use-support` |
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |
+| GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và effect combat/ON_USE được phép kéo vào công thức. |
+| GET | `/killer-moves` | Danh sách sát chiêu đã lưu, độ thành thạo, trạng thái thiếu Cổ và số ô trang bị. |
+| POST | `/killer-moves/preview` | Tính thử công thức. Body: `{ "main_gu_instance_id", "component_instance_ids": [], "selected_effect_keys": [] }`. Trả ngân sách, hệ số effect, độ hòa hợp, chi phí và tỉ lệ thành công. |
+| POST | `/killer-moves` | Lưu sát chiêu. Body preview cộng `name`; giới hạn 12 sát chiêu lưu và 4 sát chiêu trang bị. |
+| POST | `/killer-moves/:id/equip` | Bật/tắt trang bị. Mỗi Cổ thành phần phải còn đúng instance/rank trong `player_gu`. |
+| POST | `/killer-moves/:id/use` | Dùng ngoài combat nếu công thức có effect hồi phục `ON_USE`; hao Chân Nguyên và mỗi Cổ thành phần giảm 1 độ no. |
+| DELETE | `/killer-moves/:id` | Xóa sát chiêu của người chơi hiện tại. |
 | POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). Target rank ≥ 6 trùng toàn server → **409** (kể cả race thua khi concurrent). |
 | POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
