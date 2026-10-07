@@ -182,6 +182,7 @@ import { authFetch } from "@/lib/auth";
 
 interface WorldStoreState {
   monsters: Record<string, WorldMonster>;
+  defeatedMonsterSpawns: Record<string, number>;
   hasMonsterSnapshot: boolean;
   monsterSnapshotRegion: string;
   seenCombatEvents: string[];
@@ -246,6 +247,7 @@ interface WorldStoreState {
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
   monsters: {},
+  defeatedMonsterSpawns: {},
   hasMonsterSnapshot: false,
   monsterSnapshotRegion: "",
   seenCombatEvents: [],
@@ -622,6 +624,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       ? {}
       : {
           monsters: {},
+          defeatedMonsterSpawns: {},
           hasMonsterSnapshot: false,
           monsterSnapshotRegion: requestedRegion,
           selectedTarget: null,
@@ -636,8 +639,16 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       set((s) => {
         if (requestID !== monsterSnapshotRequest || currentCellRegion() !== requestedRegion) return {};
         const monsters: Record<string, WorldMonster> = {};
+        const defeatedMonsterSpawns = { ...s.defeatedMonsterSpawns };
         for (const incoming of list) {
-          if (incoming.region_id !== requestedRegion) continue;
+          // The endpoint already applies the player's map, instance, AOI, and
+          // parent-region scope. Filtering to an exact region here discarded
+          // actors from shared parent regions even though their AI could still
+          // target this player.
+          const defeatedAt = defeatedMonsterSpawns[incoming.spawn_id];
+          const actorUpdatedAt = Date.parse(incoming.last_update_at);
+          if (defeatedAt && (!Number.isFinite(actorUpdatedAt) || actorUpdatedAt <= defeatedAt)) continue;
+          if (defeatedAt) delete defeatedMonsterSpawns[incoming.spawn_id];
           const current = s.monsters[incoming.instance_id];
           monsters[incoming.instance_id] = current && current.revision > incoming.revision ? current : incoming;
         }
@@ -654,6 +665,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         // authoritative defeated/despawned events should cancel an armed cast.
         return {
           monsters,
+          defeatedMonsterSpawns,
           hasMonsterSnapshot: true,
           monsterSnapshotRegion: requestedRegion,
           selectedTarget: s.selectedTarget,
@@ -670,7 +682,28 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   applyCombatEvent: (event) => {
     set((s) => {
       const reduced = reduceWorldCombatEvent(s, event);
-      return reduced === s ? {} : reduced;
+      if (reduced === s) return {};
+      if (event.event_type !== "monster_defeated") return reduced;
+      const entity = event.payload?.entity;
+      const spawnID = entity && typeof entity === "object" && "spawn_id" in entity && typeof entity.spawn_id === "string"
+        ? entity.spawn_id
+        : s.monsters[event.entity_id]?.spawn_id;
+      if (!spawnID) return reduced;
+      const defeatedAt = Date.parse(event.server_time);
+      const nextDefeatedAt = Number.isFinite(defeatedAt) ? defeatedAt : Date.now();
+      const defeatedMonsterSpawns = {
+        ...s.defeatedMonsterSpawns,
+        [spawnID]: Math.max(s.defeatedMonsterSpawns[spawnID] ?? 0, nextDefeatedAt),
+      };
+      const staleSpawnIDs = Object.entries(defeatedMonsterSpawns)
+        .sort((a, b) => a[1] - b[1])
+        .slice(0, Math.max(0, Object.keys(defeatedMonsterSpawns).length - 500))
+        .map(([id]) => id);
+      for (const id of staleSpawnIDs) delete defeatedMonsterSpawns[id];
+      return {
+        ...reduced,
+        defeatedMonsterSpawns,
+      };
     });
     const after = get();
     if ((event.event_type === "monster_spawned" || event.event_type === "monster_respawned") && !after.monsters[event.entity_id]) {
