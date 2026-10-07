@@ -891,8 +891,8 @@ func Simulate(state *CombatState) []CombatLog {
 
 		// transitions for the opposing side after each executed action.
 		// attacker lets the Bất Tử floor know whether Sát Khí is piercing; nil for
-	// self-inflicted or non-combat damage.
-	postActionChecks := func(opposing []*CombatantAuto, attacker *CombatantAuto) {
+		// self-inflicted or non-combat damage.
+		postActionChecks := func(opposing []*CombatantAuto, attacker *CombatantAuto) {
 			for _, tgt := range opposing {
 				if tgt.HP <= 0 && !tgt.IsDead {
 					// Catch-all for any HP write site that did not apply the Bất Tử
@@ -933,7 +933,7 @@ func Simulate(state *CombatState) []CombatLog {
 				return res
 			}
 
-			if actor.HasGuSeal && a.ActionType == "GU_SKILL" {
+			if actor.HasGuSeal && (a.ActionType == "GU_SKILL" || a.ActionType == "KILLER_MOVE") {
 				turnLogs = append(turnLogs, CombatLog{
 					Turn:      turn,
 					ActorId:   actor.ID,
@@ -1036,6 +1036,27 @@ func Simulate(state *CombatState) []CombatLog {
 					actor.GuUsedCounts[guKey]++
 				}
 			}
+			if a.ActionType == "KILLER_MOVE" && actor.Kind == "Player" && len(a.ComponentGuIDs) > 0 {
+				canCast := true
+				for _, guID := range a.ComponentGuIDs {
+					h, exists := actor.GuHunger[guID]
+					if !exists || h <= 0 {
+						canCast = false
+						break
+					}
+				}
+				if !canCast {
+					turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "KILLER_MOVE_UNAVAILABLE", Detail: fmt.Sprintf("%s không thể dùng [%s] vì thiếu Cổ thành phần hoặc Cổ đã kiệt sức!", actor.Name, a.Name)})
+					return res
+				}
+				if actor.GuUsedCounts == nil {
+					actor.GuUsedCounts = make(map[string]int)
+				}
+				for _, guID := range a.ComponentGuIDs {
+					actor.GuHunger[guID]--
+					actor.GuUsedCounts[guID]++
+				}
+			}
 
 			guRank := 1
 			if a.Rank > 0 {
@@ -1094,6 +1115,26 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				if a.ManaCost > 0 {
 					actor.Mana -= a.ManaCost
+				}
+			}
+
+			if a.ActionType == "KILLER_MOVE" {
+				chance := a.SuccessChance
+				if chance <= 0 || chance > 1 {
+					// Moves created by players always carry a server-computed
+					// chance. Preserve legacy/synthetic actions as guaranteed casts.
+					chance = 1
+				}
+				roll := rng.Float64()
+				if roll >= chance {
+					turnLogs = append(turnLogs, CombatLog{Turn: turn, ActorId: actor.ID, ActorName: actor.Name, Action: "KILLER_MOVE_FAILED", Detail: fmt.Sprintf("%s thôi động [%s] thất bại (%.0f%% / tỉ lệ %.0f%%); các Cổ thành phần vẫn hao độ no!", actor.Name, a.Name, roll*100, chance*100)})
+					return res
+				}
+				if actor.KillerMoveUsedCounts == nil {
+					actor.KillerMoveUsedCounts = make(map[string]int)
+				}
+				if a.KillerMoveID != "" {
+					actor.KillerMoveUsedCounts[a.KillerMoveID]++
 				}
 			}
 

@@ -5,6 +5,41 @@ package db
 // polymorphic (item ids + recipe key strings) so they have no FK.
 
 func schemaPlayerItems() error {
+	if err := execSchema("player_killer_moves", `
+	CREATE TABLE IF NOT EXISTS player_killer_moves (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		name VARCHAR(80) NOT NULL,
+		main_gu_instance_id VARCHAR(80) NOT NULL,
+		main_gu_id VARCHAR(50) NOT NULL,
+		main_gu_rank INTEGER NOT NULL DEFAULT 1,
+		components JSONB NOT NULL DEFAULT '[]'::jsonb,
+		selected_effects JSONB NOT NULL DEFAULT '[]'::jsonb,
+		compiled_effects JSONB NOT NULL DEFAULT '[]'::jsonb,
+		path VARCHAR(80) NOT NULL DEFAULT '',
+		creation_path_mastery_level INTEGER NOT NULL DEFAULT 0,
+		power_budget DOUBLE PRECISION NOT NULL DEFAULT 0,
+		power_load DOUBLE PRECISION NOT NULL DEFAULT 0,
+		harmony DOUBLE PRECISION NOT NULL DEFAULT 0,
+		complexity DOUBLE PRECISION NOT NULL DEFAULT 0,
+		success_chance DOUBLE PRECISION NOT NULL DEFAULT 0,
+		mastery_xp INTEGER NOT NULL DEFAULT 0,
+		is_equipped BOOLEAN NOT NULL DEFAULT false,
+		balance_version INTEGER NOT NULL DEFAULT 1,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_killer_moves_owner_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_killer_moves_owner ON player_killer_moves (player_id, created_at DESC);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_killer_moves_equipped_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_killer_moves_equipped ON player_killer_moves (player_id, is_equipped) WHERE is_equipped = true;`); err != nil {
+		return err
+	}
+
 	if err := execSchema("player_gu", `
 	CREATE TABLE IF NOT EXISTS player_gu (
 		id VARCHAR(80) PRIMARY KEY,

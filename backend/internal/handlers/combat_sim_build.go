@@ -430,9 +430,6 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 			hungerDeducted := false
 			for idx := range player.GuInventory {
 				g := &player.GuInventory[idx]
-				if !g.Equipped {
-					continue
-				}
 				count, used := simPlayer.GuUsedCounts[g.InstanceID]
 				if !used && g.GuID != "" {
 					count, used = simPlayer.GuUsedCounts[g.GuID]
@@ -448,6 +445,16 @@ func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator
 			if hungerDeducted && tx != nil {
 				if errSync := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); errSync != nil {
 					logger.S.Warnf("Failed to sync player Gu hunger after auto combat: %v", errSync)
+				}
+			}
+			if tx != nil {
+				for moveID, uses := range simPlayer.KillerMoveUsedCounts {
+					if uses <= 0 {
+						continue
+					}
+					if _, err := tx.Exec(`UPDATE player_killer_moves SET mastery_xp=LEAST(5000, mastery_xp+$1),updated_at=NOW() WHERE id=$2 AND player_id=$3`, uses, moveID, player.ID); err != nil {
+						logger.S.Warnf("Failed to update killer move mastery %s: %v", moveID, err)
+					}
 				}
 			}
 		}

@@ -118,6 +118,9 @@ type SimAction struct {
 	Name           string   // display name
 	SourceID       string   // GuID or KillerMoveID for tactic matching
 	InstanceID     string   // Gu instance ID (player_gu.id) when ActionType == "GU_SKILL"
+	KillerMoveID   string   // persisted player killer-move id for mastery tracking
+	ComponentGuIDs []string // Gu instances that lose hunger when this killer move is attempted
+	SuccessChance  float64  // 0..1; only used by KILLER_MOVE
 	Path           []string // dao paths used to compute the dao mark bonus in the engine
 	Rank           int      // rank of the Gu/Skill
 	Damage         float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
@@ -340,26 +343,26 @@ type CombatantAuto struct {
 	IsBound        bool // immobilize, loses turn (BIND)
 	IsReviveLocked bool // cannot be revived (REVIVE_LOCK)
 	// New GuWorld specific flags
-	IsEssenceLeaking     bool               // ESSENCE_LEAK drains Chân Nguyên each turn
-	HasGuSeal            bool               // GU_SEAL disables one equipped Gu's active effects
-	HasSoulWound         bool               // SOUL_WOUND true damage and CN cost increase
-	HasThoughtChaos      bool               // THOUGHT_CHAOS can cause KillerMove failure
-	HasDaoConflict       bool               // DAO_CONFLICT reduces heal/shield from allies
-	AccuracyPenalty      float64            // 0..1 miss chance (BLIND)
-	EvasionChance        float64            // 0..1 dodge chance from EVASION statuses (merged by max, cap EvasionChanceCap)
-	ImmuneDreamStatus    bool               // immune to dream-path statuses (FORGET_DREAM)
-	DamageTakenReduction float64            // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP)
+	IsEssenceLeaking     bool    // ESSENCE_LEAK drains Chân Nguyên each turn
+	HasGuSeal            bool    // GU_SEAL disables one equipped Gu's active effects
+	HasSoulWound         bool    // SOUL_WOUND true damage and CN cost increase
+	HasThoughtChaos      bool    // THOUGHT_CHAOS can cause KillerMove failure
+	HasDaoConflict       bool    // DAO_CONFLICT reduces heal/shield from allies
+	AccuracyPenalty      float64 // 0..1 miss chance (BLIND)
+	EvasionChance        float64 // 0..1 dodge chance from EVASION statuses (merged by max, cap EvasionChanceCap)
+	ImmuneDreamStatus    bool    // immune to dream-path statuses (FORGET_DREAM)
+	DamageTakenReduction float64 // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP)
 	// IsInvincible is Bất Hoại: takes no damage from any source, including the
 	// DoT and %MaxHP paths that bypass applyDamageToTarget. IsLastStand is Bất
 	// Tử: damage still lands but HP never reaches 0. Sát Khí (level > 10) pierces
 	// both.
-	IsInvincible         bool
-	IsLastStand          bool
-	CritRateBonus        float64            // extra crit chance (0..1) from Gu active effects
-	IgnoreDefenseFlat    float64            // flat defense ignored by attacker
-	IgnoreDefensePct     float64            // % defense ignored by attacker (0..1)
-	PendingDamageBuffs   map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on attack)
-	PendingShieldBuffs   map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on shield)
+	IsInvincible       bool
+	IsLastStand        bool
+	CritRateBonus      float64            // extra crit chance (0..1) from Gu active effects
+	IgnoreDefenseFlat  float64            // flat defense ignored by attacker
+	IgnoreDefensePct   float64            // % defense ignored by attacker (0..1)
+	PendingDamageBuffs map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on attack)
+	PendingShieldBuffs map[string]float64 // key: GuID/SourceID, value: multiplier (applied once per unique ID, consumed on shield)
 
 	// Auto-use settings
 	AutoHealHP      bool
@@ -377,9 +380,10 @@ type CombatantAuto struct {
 	ImmortalStones float64
 
 	// Tracking
-	ItemsUsedInBattle int
-	GuHunger          map[string]int // gu_id or instance_id -> hunger remaining in battle
-	GuUsedCounts      map[string]int // gu_id or instance_id -> times used in battle
+	ItemsUsedInBattle    int
+	GuHunger             map[string]int // gu_id or instance_id -> hunger remaining in battle
+	GuUsedCounts         map[string]int // gu_id or instance_id -> times used in battle
+	KillerMoveUsedCounts map[string]int // persisted killer-move id -> successful casts
 
 	// Custom state for special Gu effects (e.g. GU_POEM_IMMORTAL stacks)
 	CustomState map[string]int

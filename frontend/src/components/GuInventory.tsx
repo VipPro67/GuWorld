@@ -8,6 +8,7 @@ import { translateGuType, translateItemType, translatePath } from "@/lib/transla
 import { getPathColor as _getPathColor } from "@/lib/utils";
 import { GamePanel } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
+import { KillerMovesPanel } from "@/components/KillerMovesPanel";
 
 interface GuInventoryProps {
   player: Player;
@@ -112,7 +113,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [itemDetailOpen, setItemDetailOpen] = useState<Record<string, boolean>>({});
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
+  const [selectedTab, setSelectedTab] = useState<"gu" | "material" | "killer-moves">("gu");
   const [guSubTab, setGuSubTab] = useState<"equipped" | "rest">("equipped");
   const [selectedPath, setSelectedPath] = useState<string>("all");
   const [selectedRank, setSelectedRank] = useState<string>("all");
@@ -564,6 +565,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               }`}
           >
             Vật Phẩm
+          </button>
+          <button
+            onClick={() => setSelectedTab("killer-moves")}
+            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${selectedTab === "killer-moves"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+              }`}
+          >
+            Sát Chiêu
           </button>
         </div>
 
@@ -1535,6 +1545,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
           )}
         </div>
       )}
+      {selectedTab === "killer-moves" && <KillerMovesPanel />}
     </div>
   );
 };

@@ -354,6 +354,14 @@ Các lưu phái trong cùng một nhóm hoàn toàn tương thích **100% (Xung 
 
 Hiệu ứng chiến đấu đặc thù của Cổ trùng được lấy từ cột `effects` trong danh mục Cổ. ID của Cổ chỉ dùng để nhận diện, hiển thị, cấu hình thứ tự ra chiêu và tính tiêu hao; nó không tự kích hoạt một hiệu ứng ẩn. Vì vậy một Cổ mới có thể tái sử dụng mechanic hiện có chỉ bằng dữ liệu, còn mechanic mới phải được đăng ký và kiểm tra hợp lệ trước khi import.
 
+### Sáng tạo Sát Chiêu
+
+Trong Túi Đồ, mở tab **Sát Chiêu**, chọn một Cổ chính và thêm Cổ phụ tùy ý. Kéo các hiệu ứng được hỗ trợ từ Cổ thành phần vào công thức, xem trước uy lực sau cân bằng, độ hòa hợp và tỉ lệ thành công, rồi đặt tên và lưu. Người chơi lưu tối đa 12 công thức và trang bị tối đa 4 sát chiêu.
+
+Rank Cổ chính quyết định phần lớn ngân sách sức mạnh; Cổ phụ bổ sung ngân sách với mức giảm dần. Số lượng, phạm vi và độ phức tạp effect làm tăng tải công thức. Khi tải vượt ngân sách, hệ thống tự giảm giá trị effect và hiển thị kết quả trước khi lưu. Cấp lưu phái và độ thành thạo ảnh hưởng tỉ lệ thôi động; dùng thành công giúp tăng thành thạo sát chiêu.
+
+Sát chiêu đã trang bị tự tham gia auto-combat. Effect hồi phục `ON_USE` có thể được dùng ngoài combat bằng nút **Dùng**. Mỗi lần thử thi triển đều tốn Chân Nguyên và giảm 1 độ no của từng Cổ thành phần; thất bại không làm mất Cổ. Một instance Cổ có thể tham gia nhiều sát chiêu. Nếu instance đó rời `player_gu`, chết hoặc đổi thành Cổ/rank khác, những công thức tham chiếu nó sẽ tạm thời không dùng được.
+
 Mỗi Cổ instance có:
 
 - `instance_id`, `gu_id`.
