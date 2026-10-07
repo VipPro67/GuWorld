@@ -79,6 +79,9 @@ var zoneTypePriority = map[string]int{
 // LoadZoneRegistry loads regions (zones), persistent map cells and monster
 // spawn pools into memory. Called once at startup.
 func LoadZoneRegistry(db *sql.DB) error {
+	if db == nil {
+		return nil
+	}
 	newReg := &zoneRegistry{
 		byID:       make(map[string]*models.Region),
 		persistent: make(map[persistentCellKey]persistentCell),
@@ -237,6 +240,9 @@ func LoadZoneRegistry(db *sql.DB) error {
 // covers backends that started before CSV data was imported through the Admin
 // panel, so exploration does not hard-fail with a stale empty registry.
 func ensureZonesLoaded() {
+	if db.DB == nil {
+		return
+	}
 	zoneReg.mu.RLock()
 	loaded := len(zoneReg.zones) > 0
 	zoneReg.mu.RUnlock()

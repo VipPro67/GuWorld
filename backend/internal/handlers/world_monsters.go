@@ -519,17 +519,21 @@ func activeMonsterBuckets(players []WorldPosEntry, radius, limit int) []ActiveWo
 	buckets := make([]ActiveWorldBucket, 0, capacity)
 	seen := make(map[string]struct{}, capacity)
 	for _, player := range players {
+		mapID := player.MapID
+		if mapID == "" {
+			mapID = worldMapIDForRegion(player.Region)
+		}
 		minBX, minBY := monsterBucket(player.X-radius, player.Y-radius)
 		maxBX, maxBY := monsterBucket(player.X+radius, player.Y+radius)
 		for _, scopeRegion := range regionScopeIDs(player.Region) {
 			for bx := minBX; bx <= maxBX && len(buckets) < limit; bx++ {
 				for by := minBY; by <= maxBY && len(buckets) < limit; by++ {
-					key := fmt.Sprintf("%s:%s:%s:%d:%d", player.MapID, player.InstanceID, scopeRegion, bx, by)
+					key := fmt.Sprintf("%s:%s:%s:%d:%d", mapID, player.InstanceID, scopeRegion, bx, by)
 					if _, exists := seen[key]; exists {
 						continue
 					}
 					seen[key] = struct{}{}
-					buckets = append(buckets, ActiveWorldBucket{BX: bx, BY: by, X: player.X, Y: player.Y, Region: scopeRegion, MapID: player.MapID, InstanceID: player.InstanceID})
+					buckets = append(buckets, ActiveWorldBucket{BX: bx, BY: by, X: player.X, Y: player.Y, Region: scopeRegion, MapID: mapID, InstanceID: player.InstanceID})
 				}
 			}
 		}
@@ -925,7 +929,11 @@ func processWorldMonsterTick(ctx context.Context, now time.Time) {
 	deadline := time.Now().Add(worldMonsterTickBudget)
 	online := worldPosIndex.OnlineEntries(-1, func(entry WorldPosEntry) bool {
 		playerID, err := uuid.Parse(entry.ID)
-		if err != nil || entry.MapID != "world_map" || entry.InstanceID != "" || !isWSConnected(playerID) {
+		mapID := entry.MapID
+		if mapID == "" {
+			mapID = worldMapIDForRegion(entry.Region)
+		}
+		if err != nil || mapID != "world_map" || entry.InstanceID != "" || !isWSConnected(playerID) {
 			return false
 		}
 		return checkRegionAction(entry.Region, "combat") == nil && checkRegionAction(entry.Region, "monster_combat") == nil

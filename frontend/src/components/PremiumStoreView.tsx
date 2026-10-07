@@ -75,15 +75,16 @@ interface ShopPackage {
 }
 
 interface PremiumStoreViewProps {
+  // Legacy entry points still request the topup/packages tabs. Only "exchange"
+  // is currently enabled, so any requested tab renders exchange.
   defaultTab?: "topup" | "packages" | "exchange";
   successMode?: boolean;
 }
 
 export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
-  defaultTab = "packages",
   successMode = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<"topup" | "packages" | "exchange">(defaultTab);
+  const [activeTab, setActiveTab] = useState<"exchange">("exchange");
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
 
   // Topup State
@@ -150,7 +151,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
 
   useEffect(() => {
     if (!successMode || !orderCodeFromUrl) return;
-    setActiveTab("topup");
+    setActiveTab("exchange");
     const timer = window.setTimeout(() => {
       void refreshOrder(orderCodeFromUrl);
     }, 0);
@@ -264,8 +265,8 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       {/* Tabs Switcher */}
       <GameTabs
         items={[
-          { id: "packages", label: "Gói Tu Luyện", icon: <ShoppingBag className="h-4 w-4" />, disabled: false },
-          { id: "topup", label: "Nạp Tiên Ngọc", icon: <Gem className="h-4 w-4" />, disabled: true },
+          // { id: "packages", label: "Gói Tu Luyện", icon: <ShoppingBag className="h-4 w-4" />, disabled: false },
+          // { id: "topup", label: "Nạp Tiên Ngọc", icon: <Gem className="h-4 w-4" />, disabled: true },
           { id: "exchange", label: "Đổi Đá", icon: <ArrowLeftRight className="h-4 w-4" />, disabled: false },
         ]}
         activeId={activeTab}
@@ -283,7 +284,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       </GameTabs>
 
       {/* Tab 1: Gói Tu Luyện */}
-      {activeTab === "packages" && (
+      {/* {activeTab === "packages" && (
         <div className="space-y-6">
           {shopMessage && (
             <div className="rounded-2xl border border-violet-700/40 bg-violet-950/30 p-3 text-sm text-violet-100 font-mono">
@@ -355,7 +356,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       )}
 
       {/* Tab 2: Nạp Tiên Ngọc */}
-      {activeTab === "topup" && (
+      {/* {activeTab === "topup" && (
         <div className="space-y-6">
           <div className="rounded-2xl border border-amber-700/40 bg-amber-950/30 p-3 text-sm text-amber-200 font-mono">
             ⚠️ Chức năng nạp tiền hiện đang tạm ngưng bảo trì.

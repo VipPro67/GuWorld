@@ -101,9 +101,10 @@ func TestFindZoneAtPrecedence(t *testing.T) {
 	if z == nil || z.ID != "boss_test" {
 		t.Fatalf("expected BOSS_ZONE precedence, got %+v", z)
 	}
+	// SECRET_REALM bounds must never capture world positions; falls back to underlying zone.
 	z = FindZoneAt(7500, 7500)
-	if z == nil || z.ID != "secret_test" {
-		t.Fatalf("expected SECRET_REALM precedence, got %+v", z)
+	if z == nil || z.ID != "dai_vuc_test" {
+		t.Fatalf("expected large zone fallback since SECRET_REALM is excluded from world coordinates, got %+v", z)
 	}
 	z = FindZoneAt(3500, 7500)
 	if z == nil || z.ID != "dungeon_test" {
@@ -124,21 +125,22 @@ func TestFindZoneAtPriorityOrder(t *testing.T) {
 		{ID: "dai_vuc_test", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999},
 		{ID: "pvp_test", ZoneType: ZoneTypePvp, MinX: 1000, MinY: 1000, MaxX: 3000, MaxY: 3000},
 		{ID: "dungeon_test", ZoneType: ZoneTypeDungeon, MinX: 1500, MinY: 1500, MaxX: 2500, MaxY: 2500},
-		{ID: "secret_test", ZoneType: ZoneTypeSecret, MinX: 1700, MinY: 1700, MaxX: 2300, MaxY: 2300},
+		{ID: "boss_test", ZoneType: ZoneTypeBoss, MinX: 1700, MinY: 1700, MaxX: 2300, MaxY: 2300},
+		{ID: "secret_test", ZoneType: ZoneTypeSecret, MinX: 1800, MinY: 1800, MaxX: 2200, MaxY: 2200},
 	}
 	zoneReg.mu.Unlock()
 
-	// SECRET_REALM > DUNGEON > PVP_ZONE > NGU_VUC at the innermost point.
+	// SECRET_REALM is excluded from world lookup, so BOSS_ZONE > DUNGEON > PVP_ZONE > NGU_VUC at the innermost point.
 	z := FindZoneAt(2000, 2000)
-	if z == nil || z.ID != "secret_test" {
-		t.Fatalf("expected SECRET_REALM to win over DUNGEON/PVP/DAI, got %+v", z)
+	if z == nil || z.ID != "boss_test" {
+		t.Fatalf("expected BOSS_ZONE to win over DUNGEON/PVP/DAI, got %+v", z)
 	}
-	// DUNGEON > PVP_ZONE > NGU_VUC where SECRET_REALM does not cover.
+	// DUNGEON > PVP_ZONE > NGU_VUC where BOSS_ZONE does not cover.
 	z = FindZoneAt(1600, 1600)
 	if z == nil || z.ID != "dungeon_test" {
 		t.Fatalf("expected DUNGEON to win over PVP/DAI, got %+v", z)
 	}
-	// PVP_ZONE > NGU_VUC outside DUNGEON/SECRET.
+	// PVP_ZONE > NGU_VUC outside DUNGEON/BOSS.
 	z = FindZoneAt(1100, 1100)
 	if z == nil || z.ID != "pvp_test" {
 		t.Fatalf("expected PVP_ZONE to win over NGU_VUC, got %+v", z)

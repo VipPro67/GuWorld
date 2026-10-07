@@ -93,8 +93,15 @@ func (idx *positionIndex) bucketKey(x, y int, mapID, instanceID string) worldBuc
 	return worldBucketKey{mapID: mapID, instanceID: instanceID, bx: bx, by: by}
 }
 
+func normalizeWorldPosEntry(e *WorldPosEntry) {
+	if e.MapID == "" && e.InstanceID == "" {
+		e.MapID = worldMapIDForRegion(e.Region)
+	}
+}
+
 // Set upserts an entry, moving it between buckets if its position changed.
 func (idx *positionIndex) Set(e WorldPosEntry) {
+	normalizeWorldPosEntry(&e)
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 
@@ -204,6 +211,7 @@ func (idx *positionIndex) Reconcile(entries []WorldPosEntry) {
 
 	for i := range entries {
 		e := entries[i]
+		normalizeWorldPosEntry(&e)
 		byID[e.ID] = &e
 		key := idx.bucketKey(e.X, e.Y, e.MapID, e.InstanceID)
 		b := grid[key]

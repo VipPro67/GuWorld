@@ -9,13 +9,16 @@ import (
 
 // onboardedExemptPaths allow the onboarding endpoints themselves through.
 var onboardedExemptPaths = map[string]bool{
-	"/api/player/complete-tutorial":  true,
+	"/api/player/complete-tutorial":   true,
 	"/api/player/complete-onboarding": true,
 }
 
 // RequireOnboarded blocks POST/PUT/DELETE mutations until the authenticated
 // player has completed onboarding. GET/HEAD reads are always allowed so the
 // client can render lv0/Onboarding progress from /player/status and friends.
+//
+// ponytail: one indexed needs_onboarding lookup per mutating request. If this
+// shows up in profiles, cache the flag on the session (auth:session:<id>).
 func RequireOnboarded() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		switch c.Request.Method {

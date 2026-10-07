@@ -108,7 +108,7 @@ func TestMonsterMovedBroadcastContainsPostCASAuthoritativeState(t *testing.T) {
 func TestPausedAttackTransitionsBackToChase(t *testing.T) {
 	now := time.Now().UTC()
 	monster := testMonster(now.Add(-time.Second))
-	monster.State, monster.X, monster.LastSeenAt, monster.RegionID, monster.RespawnSeconds = MonsterStateAttack, 3.5, now.Add(-100*time.Millisecond), "field", 30
+	monster.State, monster.X, monster.LastSeenAt, monster.RegionID, monster.RespawnSeconds = MonsterStateAttack, 2.0, now.Add(-100*time.Millisecond), "field", 30
 	events := installMonsterTransitionTest(t, monster, now, true)
 	processWorldMonsterTick(context.Background(), now)
 	if len(*events) != 1 || (*events)[0].EventType != "monster_targeted" || (*events)[0].Payload["state"] != MonsterStateChase {
@@ -240,12 +240,12 @@ func TestWorldMonsterChasesWithoutContactAttacking(t *testing.T) {
 	}
 	c[0].X = 5
 	m, event = tickWorldMonster(m, c, now.Add(2500*time.Millisecond), active)
-	if m.State != MonsterStateChase || m.X != 4 || event != "" {
-		t.Fatalf("monster should wait in chase range without attacking: monster=%+v event=%s", m, event)
+	if m.State != MonsterStateAttack || m.X != 4 || event != "monster_encounter_started" {
+		t.Fatalf("monster should start encounter in attack range: monster=%+v event=%s", m, event)
 	}
 	c[0].X = 8
 	m, event = tickWorldMonster(m, c, now.Add(3*time.Second), active)
-	if m.State != MonsterStateChase {
+	if m.State != MonsterStateChase || event != "monster_targeted" {
 		t.Fatalf("want chase after target leaves range: %+v", m)
 	}
 }

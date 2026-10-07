@@ -417,6 +417,9 @@ func CompleteTutorial(c *gin.Context) {
 	if player.SubRank < 1 {
 		player.SubRank = 1
 	}
+	// The players trigger bumps state_revision by 1 on the UPDATE above; mirror
+	// it so the client's revision-gated merge accepts rank 0 -> 1 immediately.
+	player.StateRevision++
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "player.tutorial_complete",
 		RequestSummary: "lv0 complete -> rank 1", Success: true,
@@ -579,5 +582,8 @@ func CompleteOnboarding(c *gin.Context) {
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	setWorldPosFromPlayer(&player)
+	// Mirror the trigger's state_revision bump so the client applies the
+	// needs_onboarding=false transition immediately.
+	player.StateRevision++
 	c.JSON(http.StatusOK, gin.H{"player": player})
 }
