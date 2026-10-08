@@ -7,8 +7,6 @@ import { useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
-import { LevelZeroView } from "@/components/LevelZeroView";
-import { LobbyView } from "@/components/LobbyView";
 import { Sparkles, HelpCircle, X, Handshake } from "@/lib/icons";
 import Link from "next/link";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
@@ -40,6 +38,7 @@ const ImmortalApertureView = dynamic(() => import("@/components/ImmortalAperture
 const DungeonView = dynamic(() => import("@/components/DungeonView").then(m => m.DungeonView), { ssr: false });
 const PetPanel = dynamic(() => import("@/components/PetPanel").then(m => m.PetPanel), { ssr: false });
 const SectView = dynamic(() => import("@/components/SectView").then(m => m.SectView), { ssr: false });
+const PartyView = dynamic(() => import("@/components/PartyView").then(m => m.PartyView), { ssr: false });
 const WikiView = dynamic(() => import("@/components/WikiView").then(m => m.WikiView), { ssr: false });
 const CombatHistoryView = dynamic(() => import("@/components/CombatHistoryView").then(m => m.CombatHistoryView), { ssr: false });
 const FeedbackView = dynamic(() => import("@/components/FeedbackView").then(m => m.FeedbackView), { ssr: false });
@@ -289,7 +288,20 @@ export default function Home() {
     );
   }
 
-  const isWorldMapView = currentView === "world-map";
+  // The map is the persistent game surface. `dashboard` remains a compatible
+  // home route, but no longer replaces the world after login.
+  const isWorldMapView = Boolean(player && !player.needs_onboarding && !inCombat);
+
+  const viewTitles: Record<string, string> = {
+    "practice-room": "Phòng tu luyện", character: "Nhân vật", inventory: "Túi đồ", party: "Tổ đội",
+    refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
+    "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
+    arena: "Đấu trường", "death-arena": "Sinh tử đài", leaderboard: "Bảng xếp hạng",
+    gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân", mine: "Khai khoáng",
+    aperture: "Tiên khiếu", dungeon: "Bí cảnh", sect: "Tông môn", wiki: "Bách khoa",
+    "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
+    utilities: "Tiện ích",
+  };
 
   return (
     <div className={`min-h-screen ${isWorldMapView ? "h-screen h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0" : "flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8"} relative`}>
@@ -373,11 +385,38 @@ export default function Home() {
               onRetreat={fleeCombat}
             />
           </div>
-        ) : currentView === "dashboard" ? (
-          <div className="w-full">
-            <LobbyView />
-          </div>
-        ) : currentView === "practice-room" ? (
+        ) : (
+          <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
+            <div className="absolute inset-0 min-h-0">
+              <WorldPage />
+            </div>
+            {currentView !== "dashboard" && currentView !== "world-map" && (
+              <section
+                role="dialog"
+                aria-label={viewTitles[currentView] || "Chức năng"}
+                className={`absolute z-40 flex flex-col overflow-hidden border border-emerald-200/10 bg-[#09130ff2] text-[var(--text-primary)] shadow-[0_24px_80px_rgba(0,0,0,.55)] backdrop-blur-xl ${
+                  currentView === "practice-room"
+                    ? "inset-0"
+                    : "inset-x-0 bottom-0 top-[8dvh] rounded-t-3xl md:inset-y-3 md:left-auto md:right-3 md:top-3 md:w-[min(54vw,780px)] md:rounded-2xl"
+                }`}
+              >
+                {currentView !== "practice-room" && (
+                  <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/20 px-4 sm:px-5">
+                    <div className="min-w-0">
+                      <div className="truncate font-serif text-base font-semibold text-emerald-50">{viewTitles[currentView] || "Chức năng"}</div>
+                      <div className="hidden text-[10px] uppercase tracking-[.2em] text-emerald-200/45 sm:block">Cổ Giới · Bảng điều khiển</div>
+                    </div>
+                    <button
+                      onClick={() => setView("world-map")}
+                      aria-label="Đóng bảng điều khiển"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+                <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4 ${currentView === "practice-room" ? "p-0" : ""}`}>
+        {currentView === "practice-room" ? (
           <div className="w-full">
             <TrainingRoom onClose={() => setView("dashboard")} />
           </div>
@@ -409,10 +448,6 @@ export default function Home() {
               onDropGu={dropGu}
               onDropGus={dropGus}
             />
-          </div>
-        ) : currentView === "world-map" ? (
-          <div className="w-full h-full flex-1 min-h-0 flex flex-col">
-            <WorldPage />
           </div>
         ) : currentView === "refine" ? (
           <div className="w-full">
@@ -499,6 +534,10 @@ export default function Home() {
           <div className="w-full">
             <SectView />
           </div>
+        ) : currentView === "party" ? (
+          <div className="w-full">
+            <PartyView />
+          </div>
         ) : currentView === "wiki" ? (
           <div className="w-full">
             <WikiView />
@@ -520,7 +559,12 @@ export default function Home() {
             <UtilitiesView />
           </div>
         ) : (
-          <div className="text-center py-12 text-zinc-500 font-mono">Giao diện không khả dụng</div>
+          <div className="py-12 text-center font-mono text-zinc-500">Giao diện không khả dụng</div>
+        )}
+                </div>
+              </section>
+            )}
+          </div>
         )}
       </main>
 

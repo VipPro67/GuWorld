@@ -456,6 +456,11 @@ func UseGuOnMap(c *gin.Context) {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot clear defeated boss cell"})
 					return
 				}
+			} else {
+				// Database-backed world spawns can also overlap a static generated
+				// cell. Clear and broadcast that representation so it does not
+				// reappear as soon as the runtime actor is removed.
+				clearDefeatedWorldMonsterCell(updated, player.ID.String())
 			}
 		} else {
 			logs = append(logs, fmt.Sprintf("⚡ %s gây %.0f sát thương lên %s (HP %.0f/%.0f).", specs.Name, damageDealt, targetName, targetHP, targetMaxHP))
