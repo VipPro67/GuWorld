@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle } from "pixi.js";
+import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets, Circle, Rectangle } from "pixi.js";
 import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldMonster, type WorldObject } from "@/store/useWorldStore";
 import { legacyMonsterHasRuntimeReplacement, runtimeMonsterReplacementKey } from "@/store/worldMonsterReducer";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 
 const BG_COLOR = 0x1d1e2c;
+const COMMON_MONSTER_ATLAS_IDS = [
+  "monster_wandering", "monster_koi_fish", "monster_night_wolf", "monster_herb_rabbit",
+  "monster_flower_butterfly", "monster_wild_boar", "monster_cloud_dragon_beast", "monster_nine_heavens_primordial_emperor",
+  "monster_white_hair_wolf", "monster_desolate_luck_hound", "monster_fire_mouse", "monster_water_serpent",
+  "monster_sea_beast", "monster_ancient_nether_reaper", "monster_nether_sand_wraith", "monster_iron_bear",
+] as const;
 const CLEARED_CELL_EVENT_TYPES = new Set(["cleared", "cell_cleared", "world.cell.cleared", "monster_killed"]);
 const RESPAWNED_CELL_EVENT_TYPES = new Set(["respawn", "cell_respawned", "world.cell.respawn"]);
 
@@ -87,6 +93,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const [appReady, setAppReady] = useState(false);
 
   const stageRef = useRef<Container>(new Container());
+  const regionBackgroundsRef = useRef<Container>(new Container());
   const regionsContainerRef = useRef<Container>(new Container());
   const objectsContainerRef = useRef<Container>(new Container());
   const sectsContainerRef = useRef<Container>(new Container());
@@ -106,6 +113,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const playerAvatarRef = useRef<Sprite | null>(null);
   const defaultPlayerSpriteRef = useRef<Sprite | null>(null);
   const monsterIconTextureRef = useRef<Texture | null>(null);
+  const monsterTexturesByIdRef = useRef<Record<string, Texture>>({});
+  const regionBackgroundTexturesRef = useRef<Record<string, Texture>>({});
   const resourceIconTextureRef = useRef<Texture | null>(null);
   const fogDirtyRef = useRef(true);
   const scaleRef = useRef<number>(0.05);
@@ -235,7 +244,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       let marker = markers.get(monster.instance_id);
       if (!marker) {
         const group = new Container();
-        const sprite = monsterIconTextureRef.current ? new Sprite(monsterIconTextureRef.current) : null;
+        const texture = monsterTexturesByIdRef.current[monster.monster_template_id] || monsterIconTextureRef.current;
+        const sprite = texture ? new Sprite(texture) : null;
         if (sprite) {
           sprite.anchor.set(0.5, 0.72);
           sprite.width = monster.is_boss ? 1.7 : 1.25;
@@ -244,6 +254,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const body = new Graphics();
         if (sprite) group.addChild(sprite);
         group.addChild(body);
+        body.visible = !sprite;
         group.position.set(toX, toY);
         group.eventMode = "static";
         group.cursor = "pointer";
@@ -265,13 +276,19 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         markers.set(monster.instance_id, marker);
         container.addChild(group);
       } else {
-        if (!marker.sprite && monsterIconTextureRef.current) {
-          const sprite = new Sprite(monsterIconTextureRef.current);
+        const texture = monsterTexturesByIdRef.current[monster.monster_template_id] || monsterIconTextureRef.current;
+        if (texture && marker.sprite) {
+          marker.sprite.texture = texture;
+          marker.sprite.width = monster.is_boss ? 1.7 : 1.25;
+          marker.sprite.height = monster.is_boss ? 1.7 : 1.25;
+        } else if (texture && !marker.sprite) {
+          const sprite = new Sprite(texture);
           sprite.anchor.set(0.5, 0.72);
           sprite.width = monster.is_boss ? 1.7 : 1.25;
           sprite.height = monster.is_boss ? 1.7 : 1.25;
           marker.container.addChildAt(sprite, 0);
           marker.sprite = sprite;
+          marker.body.visible = false;
         }
         if (monster.revision > marker.revision) {
           marker.fromX = marker.container.position.x;
@@ -1068,6 +1085,33 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     });
   }, []);
 
+  const drawRegionBackgrounds = useCallback((regs: typeof regions) => {
+    const container = regionBackgroundsRef.current;
+    clearContainer(container);
+    const backgroundKeyByRegion: Record<string, string> = {
+      dai_vuc_nam_cuong: "southern-border",
+      dai_vuc_trung_chau: "central-continent",
+      dai_vuc_bac_nguyen: "northern-plains",
+      dai_vuc_tay_mac: "western-desert",
+      dai_vuc_dong_hai: "eastern-sea",
+      dai_vuc_hac_thien: "black-heaven",
+      dai_vuc_bach_thien: "white-heaven",
+    };
+    for (const region of regs) {
+      if (region.zone_type !== "NGU_VUC" || region.min_x === undefined || region.min_y === undefined
+        || region.max_x === undefined || region.max_y === undefined) continue;
+      const texture = regionBackgroundTexturesRef.current[backgroundKeyByRegion[region.id]];
+      if (!texture) continue;
+      const background = new Sprite(texture);
+      background.position.set(region.min_x, region.min_y);
+      background.width = region.max_x - region.min_x + 1;
+      background.height = region.max_y - region.min_y + 1;
+      background.alpha = 0.42;
+      background.eventMode = "none";
+      container.addChild(background);
+    }
+  }, []);
+
   const drawObjects = useCallback(
     (obs: WorldObject[]) => {
       const container = objectsContainerRef.current;
@@ -1463,8 +1507,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       if (c.cell_type === "Monster") {
         if (legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) continue;
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
-        if (monsterIconTextureRef.current) {
-          const sprite = new Sprite(monsterIconTextureRef.current);
+        const texture = monsterTexturesByIdRef.current[c.content] || monsterIconTextureRef.current;
+        if (texture) {
+          const sprite = new Sprite(texture);
           sprite.anchor.set(0.5, 0.72);
           sprite.position.set(c.x + 0.5, c.y + 0.5);
           sprite.width = 1.35;
@@ -1494,12 +1539,22 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         wildCount++;
       } else if (c.cell_type === "Boss") {
         if (legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) continue;
-        const boss = new Graphics();
-        boss.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
-        boss.fill({ color: 0xef4444 });
-        boss.stroke({ color: 0x7f1d1d, width: 0.1 });
-        boss.position.set(c.x + 0.5, c.y + 0.5);
-        container.addChild(boss);
+        const texture = monsterTexturesByIdRef.current[c.content] || monsterIconTextureRef.current;
+        if (texture) {
+          const sprite = new Sprite(texture);
+          sprite.anchor.set(0.5, 0.72);
+          sprite.position.set(c.x + 0.5, c.y + 0.5);
+          sprite.width = 1.8;
+          sprite.height = 1.8;
+          container.addChild(sprite);
+        } else {
+          const boss = new Graphics();
+          boss.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
+          boss.fill({ color: 0xef4444 });
+          boss.stroke({ color: 0x7f1d1d, width: 0.1 });
+          boss.position.set(c.x + 0.5, c.y + 0.5);
+          container.addChild(boss);
+        }
       }
     }
 
@@ -1948,6 +2003,20 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         bgSprite.texture = texture;
         bgSprite.tileScale.set(0.012, 0.012);
       }).catch((error) => console.warn("World terrain texture could not be loaded; using fallback.", error));
+      void Assets.load<Texture>("/assets/world/great-regions-atlas.png").then((atlas) => {
+        if (destroyed) return;
+        const keys = ["southern-border", "central-continent", "northern-plains", "western-desert", "eastern-sea", "black-heaven", "white-heaven"];
+        const panelWidth = atlas.source.width / keys.length;
+        for (const [index, key] of keys.entries()) {
+          const left = Math.floor(index * panelWidth);
+          const right = Math.floor((index + 1) * panelWidth);
+          regionBackgroundTexturesRef.current[key] = new Texture({
+            source: atlas.source,
+            frame: new Rectangle(left, 0, right - left, atlas.source.height),
+          });
+        }
+        drawRegionBackgrounds(useGameStore.getState().regions);
+      }).catch((error) => console.warn("Great-region terrain atlas could not be loaded; using fallback.", error));
       void Assets.load<Texture>("/assets/world/spirit-beast.webp").then((texture) => {
         if (destroyed) return;
         monsterIconTextureRef.current = texture;
@@ -1955,6 +2024,26 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         scheduleMonsterChunkSyncRef.current();
         syncRuntimeMonsters(useWorldStore.getState().monsters);
       }).catch((error) => console.warn("Monster sprite could not be loaded; using fallback.", error));
+      void Assets.load<Texture>("/assets/world/monster-atlas-common.png").then((atlas) => {
+        if (destroyed) return;
+        const cellWidth = atlas.source.width / 4;
+        const cellHeight = atlas.source.height / 4;
+        for (const [index, monsterId] of COMMON_MONSTER_ATLAS_IDS.entries()) {
+          const column = index % 4;
+          const row = Math.floor(index / 4);
+          const left = Math.floor(column * cellWidth);
+          const top = Math.floor(row * cellHeight);
+          const right = Math.floor((column + 1) * cellWidth);
+          const bottom = Math.floor((row + 1) * cellHeight);
+          monsterTexturesByIdRef.current[monsterId] = new Texture({
+            source: atlas.source,
+            frame: new Rectangle(left, top, right - left, bottom - top),
+          });
+        }
+        for (const rendered of monsterChunksRef.current.values()) rendered.px = Number.NaN;
+        scheduleMonsterChunkSyncRef.current();
+        syncRuntimeMonsters(useWorldStore.getState().monsters);
+      }).catch((error) => console.warn("Common monster sprite atlas could not be loaded; using fallback.", error));
       void Assets.load<Texture>("/assets/world/spirit-herb.webp").then((texture) => {
         if (destroyed) return;
         resourceIconTextureRef.current = texture;
@@ -1970,6 +2059,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       skillFxContainerRef.current.eventMode = "none";
       monsterLabelsContainerRef.current.eventMode = "none";
 
+      stageRef.current.addChild(regionBackgroundsRef.current);
       stageRef.current.addChild(regionsContainerRef.current);
       stageRef.current.addChild(fogRef.current);
       stageRef.current.addChild(objectsContainerRef.current);
@@ -2493,8 +2583,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
+    drawRegionBackgrounds(regions);
     drawRegions(regions);
-  }, [appReady, regions, drawRegions]);
+  }, [appReady, regions, drawRegionBackgrounds, drawRegions]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
