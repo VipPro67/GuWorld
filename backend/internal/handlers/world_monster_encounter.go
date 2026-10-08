@@ -145,22 +145,49 @@ func finishWorldMonsterEncounter(ctx context.Context, encounter WorldMonster, en
 	if encounterID == "" {
 		return
 	}
-	result, updated, err := cache.DefeatWorldMonster(ctx, encounter.RegionID, encounter.InstanceID, encounterID, time.Now().UTC(),
-		time.Duration(encounter.RespawnSeconds)*time.Second, monsterTTL(encounter.RespawnSeconds))
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	var result cache.WorldMonsterHitResult
+	var updated WorldMonster
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		result, updated, err = cache.DefeatWorldMonster(cleanupCtx, encounter.RegionID, encounter.InstanceID, encounterID, time.Now().UTC(),
+			time.Duration(encounter.RespawnSeconds)*time.Second, monsterTTL(encounter.RespawnSeconds))
+		if err == nil || cleanupCtx.Err() != nil || attempt == 2 {
+			break
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 100 * time.Millisecond)
+		select {
+		case <-cleanupCtx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 	if err != nil {
 		logger.S.Warnf("finish world monster encounter %s: %v", encounter.InstanceID, err)
 		return
 	}
 	if result == cache.WorldMonsterFirstKill {
 		worldMonsterMetrics.kills.Add(1)
-		payload := map[string]any{"source_id": playerID, "hp": updated.HP, "max_hp": updated.MaxHP, "encounter_id": encounterID}
-		broadcastWorldCombat(updated, "monster_defeated", payload)
-		clearDefeatedWorldMonsterCell(updated, playerID)
+	} else if result == cache.WorldMonsterAlreadyDefeated {
+		worldMonsterMetrics.preventedDoubleKills.Add(1)
+	} else {
 		return
 	}
-	if result == cache.WorldMonsterAlreadyDefeated {
-		worldMonsterMetrics.preventedDoubleKills.Add(1)
+	if updated.InstanceID == "" && result == cache.WorldMonsterAlreadyDefeated {
+		if latest, exists, getErr := cache.GetWorldMonster(cleanupCtx, encounter.RegionID, encounter.InstanceID); getErr == nil && exists {
+			updated = latest
+		}
 	}
+	if updated.InstanceID == "" {
+		return
+	}
+	// Also finish static-cell cleanup when a prior call changed Redis state but
+	// lost its response. DefeatWorldMonster then returns AlreadyDefeated.
+	payload := map[string]any{"source_id": playerID, "hp": updated.HP, "max_hp": updated.MaxHP, "encounter_id": encounterID}
+	broadcastWorldCombat(updated, "monster_defeated", payload)
+	clearDefeatedWorldMonsterCell(updated, playerID)
 }
 
 // clearDefeatedWorldMonsterCell hides the static map-cell representation for
@@ -200,14 +227,16 @@ func completeWorldMonsterCombat(ctx context.Context, state *models.CombatState, 
 	if state == nil || state.WorldMonsterRegionID == "" || state.WorldMonsterID == "" || state.WorldMonsterEncounterID == "" {
 		return
 	}
-	monster, exists, err := cache.GetWorldMonster(ctx, state.WorldMonsterRegionID, state.WorldMonsterID)
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	monster, exists, err := cache.GetWorldMonster(cleanupCtx, state.WorldMonsterRegionID, state.WorldMonsterID)
 	if err != nil || !exists {
 		return
 	}
 	if winner == "Phe Ta" {
-		finishWorldMonsterEncounter(ctx, monster, state.WorldMonsterEncounterID, playerID)
+		finishWorldMonsterEncounter(cleanupCtx, monster, state.WorldMonsterEncounterID, playerID)
 	} else {
-		resetWorldMonsterAfterEncounter(ctx, monster)
+		resetWorldMonsterAfterEncounter(cleanupCtx, monster)
 	}
 }
 

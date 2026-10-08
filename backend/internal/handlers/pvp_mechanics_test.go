@@ -8,10 +8,12 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-func TestResolveRespawnPosition_NoSectStaysInCurrentRegion(t *testing.T) {
+func TestResolveRespawnPosition_UsesNearestSafeHub(t *testing.T) {
 	zoneReg.mu.Lock()
 	zoneReg.zones = []models.Region{
 		{ID: "dai_vuc_nam_cuong", ZoneType: ZoneTypeLarge, MinX: 1000, MinY: 1000, MaxX: 5000, MaxY: 5000},
+		{ID: "hub_test", ZoneType: ZoneTypeHub, EntryX: 900, EntryY: 900},
+		{ID: "hub_far", ZoneType: ZoneTypeHub, EntryX: 15000, EntryY: 10000},
 	}
 	zoneReg.byID = make(map[string]*models.Region)
 	for i := range zoneReg.zones {
@@ -20,17 +22,16 @@ func TestResolveRespawnPosition_NoSectStaysInCurrentRegion(t *testing.T) {
 	zoneReg.mu.Unlock()
 
 	dummyID := uuid.New()
-	// Calling with nil tx should fallback to step 2 (current region random bounds)
 	respawnRegion, rx, ry := ResolveRespawnPosition(nil, dummyID, "dai_vuc_nam_cuong", 2000, 2000)
 
-	if respawnRegion != "dai_vuc_nam_cuong" {
-		t.Errorf("expected respawn region to stay dai_vuc_nam_cuong, got %s", respawnRegion)
+	if respawnRegion != "hub_test" {
+		t.Errorf("expected respawn in nearest safe hub, got %s", respawnRegion)
 	}
-	if rx < 1000 || rx > 5000 {
-		t.Errorf("expected rx in [1000, 5000], got %d", rx)
+	if rx != 900 {
+		t.Errorf("expected hub x coordinate 900, got %d", rx)
 	}
-	if ry < 1000 || ry > 5000 {
-		t.Errorf("expected ry in [1000, 5000], got %d", ry)
+	if ry != 900 {
+		t.Errorf("expected hub y coordinate 900, got %d", ry)
 	}
 }
 
