@@ -62,11 +62,16 @@ export function runtimeMonsterReplacementKey(monsters: Record<string, WorldMonst
 export interface WorldMonsterReducerState<TSelection extends MonsterSelection = MonsterSelection> {
   monsters: Record<string, WorldMonster>;
   seenCombatEvents: string[];
+  removedMonsterRevisions?: Record<string, number>;
   selectedTarget: TSelection | null;
   targetingGu: unknown | null;
 }
 
 const authoritativeStates = new Set<WorldMonsterState>(["IDLE", "CHASE", "ATTACK", "RETURN", "DEFEATED"]);
+// WebSocket deliveries can be delayed while a client reconnects. Retaining a
+// sizeable terminal-ID window prevents old movement events from resurrecting
+// recently defeated monsters during long play sessions.
+const MAX_REMOVED_MONSTER_TOMBSTONES = 10_000;
 
 function payloadMonster(event: WorldCombatEvent): WorldMonster | null {
   const entity = event.payload?.entity;
@@ -81,22 +86,33 @@ export function reduceWorldCombatEvent<TSelection extends MonsterSelection>(
   if (!event.event_id || state.seenCombatEvents.includes(event.event_id)) return state;
   const seenCombatEvents = [...state.seenCombatEvents, event.event_id].slice(-1000);
   const current = state.monsters[event.entity_id];
-  if (current && event.entity_revision <= current.revision) return { ...state, seenCombatEvents };
+  const removedMonsterRevisions = state.removedMonsterRevisions ?? {};
+  // Instance IDs are immutable. A late movement packet must never recreate a
+  // monster after its terminal event removed it from the live map.
+  if (Object.prototype.hasOwnProperty.call(removedMonsterRevisions, event.entity_id)) return { ...state, seenCombatEvents };
 
   const removed = event.event_type === "monster_defeated" || event.event_type === "monster_despawned";
   if (removed) {
-    if (!current) return { ...state, seenCombatEvents };
     const monsters = { ...state.monsters };
     delete monsters[event.entity_id];
+    const terminalRevisions = { ...removedMonsterRevisions, [event.entity_id]: event.entity_revision };
+    const expiredIds = Object.keys(terminalRevisions).slice(0, Math.max(0, Object.keys(terminalRevisions).length - MAX_REMOVED_MONSTER_TOMBSTONES));
+    for (const id of expiredIds) delete terminalRevisions[id];
     const selectedRemoved = state.selectedTarget?.instanceId === event.entity_id;
     return {
       ...state,
       monsters,
+      removedMonsterRevisions: terminalRevisions,
       seenCombatEvents,
       selectedTarget: selectedRemoved ? null : state.selectedTarget,
       targetingGu: selectedRemoved ? null : state.targetingGu,
     };
   }
+
+  // A terminal event always wins over delayed movement/damage packets. The
+  // server only emits it after its atomic defeated transition; WebSocket
+  // delivery order can still put an older packet after it (or vice versa).
+  if (current && event.entity_revision <= current.revision) return { ...state, seenCombatEvents };
 
   const fullEntity = payloadMonster(event);
   let base = current ?? fullEntity;

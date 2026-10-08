@@ -5,8 +5,11 @@ import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture,
 import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type NearbyPlayer, type WorldCombatEvent, type WorldMonster, type WorldObject } from "@/store/useWorldStore";
 import { legacyMonsterHasRuntimeReplacement, runtimeMonsterReplacementKey } from "@/store/worldMonsterReducer";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
+import { useUIStore } from "@/store/useUIStore";
 
 const BG_COLOR = 0x1d1e2c;
+const CLEARED_CELL_EVENT_TYPES = new Set(["cleared", "cell_cleared", "world.cell.cleared", "monster_killed"]);
+const RESPAWNED_CELL_EVENT_TYPES = new Set(["respawn", "cell_respawned", "world.cell.respawn"]);
 
 export interface MapLabelSettings {
   monster: boolean;
@@ -96,6 +99,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const monsterSnapshotCenterRef = useRef<{ region: string; x: number; y: number } | null>(null);
 
   const playerAvatarRef = useRef<Sprite | null>(null);
+  const defaultPlayerSpriteRef = useRef<Sprite | null>(null);
+  const monsterIconTextureRef = useRef<Texture | null>(null);
+  const resourceIconTextureRef = useRef<Texture | null>(null);
   const fogDirtyRef = useRef(true);
   const scaleRef = useRef<number>(0.05);
   const modeRef = useRef(mode);
@@ -115,7 +121,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const isFineMovementRef = useRef(false);
   const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
-  const monsterMarkersRef = useRef<Map<string, { container: Container; body: Graphics; hpBar: Graphics; monster: WorldMonster; renderX: number; renderY: number; fromX: number; fromY: number; toX: number; toY: number; receivedAt: number; serverTime: number; duration: number; revision: number; state: WorldMonster["state"]; active: boolean }>>(new Map());
+  const monsterMarkersRef = useRef<Map<string, { container: Container; body: Graphics; sprite: Sprite | null; hpBar: Graphics; monster: WorldMonster; renderX: number; renderY: number; fromX: number; fromY: number; toX: number; toY: number; receivedAt: number; serverTime: number; duration: number; revision: number; state: WorldMonster["state"]; active: boolean }>>(new Map());
   const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk; px: number; py: number; runtimeKey: string }>>(new Map());
   const monsterLabelRenderKeyRef = useRef("");
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
@@ -183,8 +189,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     });
   }, []);
 
-  const paintRuntimeMonster = useCallback((marker: { body: Graphics; hpBar: Graphics; monster: WorldMonster; state: WorldMonster["state"] }) => {
-    const { body, hpBar, monster } = marker;
+  const paintRuntimeMonster = useCallback((marker: { body: Graphics; sprite: Sprite | null; hpBar: Graphics; monster: WorldMonster; state: WorldMonster["state"] }) => {
+    const { body, sprite, hpBar, monster } = marker;
     body.clear();
     const styles = {
       IDLE: { color: 0xf87171, shape: "triangle" },
@@ -197,7 +203,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     const scale = monster.is_boss ? 1.45 : 1;
     body.scale.set(scale);
     const color = monster.is_boss ? 0xa855f7 : style.color;
-    if (style.shape === "ring") body.circle(0, 0, 0.46).stroke({ color, width: 0.14 });
+    if (sprite) {
+      sprite.alpha = monster.state === "RETURN" ? 0.58 : 1;
+      sprite.tint = monster.is_boss ? 0xe9d5ff : 0xffffff;
+      body.circle(0, 0, monster.is_boss ? 0.67 : 0.52).stroke({ color, width: monster.is_boss ? 0.1 : 0.07, alpha: 0.85 });
+    } else if (style.shape === "ring") body.circle(0, 0, 0.46).stroke({ color, width: 0.14 });
     else if (style.shape === "diamond") body.poly([0, -0.58, 0.58, 0, 0, 0.58, -0.58, 0]).fill(color).stroke({ color: 0x581c87, width: 0.08 });
     else if (style.shape === "arrow") body.poly([-0.48, -0.42, 0.58, 0, -0.48, 0.42, -0.18, 0]).fill(color).stroke({ color: 0x581c87, width: 0.07 });
     else body.poly([0, -0.55, 0.5, 0.42, -0.5, 0.42]).fill(color).stroke({ color: 0x581c87, width: 0.07 });
@@ -226,8 +236,15 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       let marker = markers.get(monster.instance_id);
       if (!marker) {
         const group = new Container();
+        const sprite = monsterIconTextureRef.current ? new Sprite(monsterIconTextureRef.current) : null;
+        if (sprite) {
+          sprite.anchor.set(0.5, 0.72);
+          sprite.width = monster.is_boss ? 1.7 : 1.25;
+          sprite.height = monster.is_boss ? 1.7 : 1.25;
+        }
         const body = new Graphics();
         const hpBar = new Graphics();
+        if (sprite) group.addChild(sprite);
         group.addChild(body, hpBar);
         group.position.set(toX, toY);
         group.eventMode = "static";
@@ -246,22 +263,32 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             store.targetingGu.mode === "monster" ? current.instance_id : undefined,
           );
         });
-        marker = { container: group, body, hpBar, monster, renderX: toX, renderY: toY, fromX: toX, fromY: toY, toX, toY, receivedAt: now, serverTime: Date.parse(monster.last_update_at), duration: 400, revision: monster.revision, state: monster.state, active: false };
+        marker = { container: group, body, sprite, hpBar, monster, renderX: toX, renderY: toY, fromX: toX, fromY: toY, toX, toY, receivedAt: now, serverTime: Date.parse(monster.last_update_at), duration: 400, revision: monster.revision, state: monster.state, active: false };
         markers.set(monster.instance_id, marker);
         container.addChild(group);
-      } else if (monster.revision > marker.revision) {
-        marker.fromX = marker.container.position.x;
-        marker.fromY = marker.container.position.y;
-        marker.toX = toX;
-        marker.toY = toY;
-        const nextServerTime = Date.parse(monster.last_update_at);
-        marker.duration = Number.isFinite(nextServerTime) && Number.isFinite(marker.serverTime)
-          ? Math.max(150, Math.min(800, nextServerTime - marker.serverTime))
-          : 400;
-        marker.receivedAt = now;
-        marker.serverTime = nextServerTime;
-        marker.revision = monster.revision;
-        marker.active = marker.fromX !== toX || marker.fromY !== toY;
+      } else {
+        if (!marker.sprite && monsterIconTextureRef.current) {
+          const sprite = new Sprite(monsterIconTextureRef.current);
+          sprite.anchor.set(0.5, 0.72);
+          sprite.width = monster.is_boss ? 1.7 : 1.25;
+          sprite.height = monster.is_boss ? 1.7 : 1.25;
+          marker.container.addChildAt(sprite, 0);
+          marker.sprite = sprite;
+        }
+        if (monster.revision > marker.revision) {
+          marker.fromX = marker.container.position.x;
+          marker.fromY = marker.container.position.y;
+          marker.toX = toX;
+          marker.toY = toY;
+          const nextServerTime = Date.parse(monster.last_update_at);
+          marker.duration = Number.isFinite(nextServerTime) && Number.isFinite(marker.serverTime)
+            ? Math.max(150, Math.min(800, nextServerTime - marker.serverTime))
+            : 400;
+          marker.receivedAt = now;
+          marker.serverTime = nextServerTime;
+          marker.revision = monster.revision;
+          marker.active = marker.fromX !== toX || marker.fromY !== toY;
+        }
       }
       marker.monster = monster;
       marker.state = monster.state;
@@ -907,6 +934,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       const key = e.key.toLowerCase();
       if (!["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright"].includes(key)) return;
+      const currentView = useUIStore.getState().currentView;
+      if (currentView !== "dashboard" && currentView !== "world-map") return;
 
       e.preventDefault();
       if (pressed.has(key)) return;
@@ -928,12 +957,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       applyDirection(false);
     };
     const handleJoystick = (e: Event) => {
+      const currentView = useUIStore.getState().currentView;
+      if (currentView !== "dashboard" && currentView !== "world-map") return;
       const detail = (e as CustomEvent<{ x?: number; y?: number; fine?: boolean }>).detail;
       joystickDirection = { x: Math.sign(detail?.x ?? 0), y: Math.sign(detail?.y ?? 0) };
       applyDirection(Boolean(detail?.fine));
     };
 
     const handleCustomMove = (e: Event) => {
+      const currentView = useUIStore.getState().currentView;
+      if (currentView !== "dashboard" && currentView !== "world-map") return;
       const detail = (e as CustomEvent<{ x?: number; y?: number }>).detail;
       if (detail && typeof detail.x === "number" && typeof detail.y === "number") {
         isFineMovementRef.current = false;
@@ -948,12 +981,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     window.addEventListener("blur", stopMovement);
     window.addEventListener("gu_world_direction", handleJoystick);
     window.addEventListener("gu_world_move", handleCustomMove);
+    const unsubscribeView = useUIStore.subscribe((state) => {
+      if (state.currentView !== "dashboard" && state.currentView !== "world-map") stopMovement();
+    });
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", stopMovement);
       window.removeEventListener("gu_world_direction", handleJoystick);
       window.removeEventListener("gu_world_move", handleCustomMove);
+      unsubscribeView();
     };
   }, [directionSegmentCells, performMove]);
 
@@ -1041,6 +1078,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const py = player?.y ?? 0;
 
       for (const o of obs) {
+        if (o.cleared) continue;
         const isBoss = o.cell_type === "Boss";
         const isResource = o.cell_type === "Resource";
         const isTeleport = o.cell_type === "TeleportArray";
@@ -1424,12 +1462,30 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       if (c.cell_type === "Monster") {
         if (legacyMonsterHasRuntimeReplacement(c, useWorldStore.getState().monsters)) continue;
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
-        batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
+        if (monsterIconTextureRef.current) {
+          const sprite = new Sprite(monsterIconTextureRef.current);
+          sprite.anchor.set(0.5, 0.72);
+          sprite.position.set(c.x + 0.5, c.y + 0.5);
+          sprite.width = 1.35;
+          sprite.height = 1.35;
+          container.addChild(sprite);
+        } else {
+          batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
+        }
         monsterCount++;
       } else if (c.cell_type === "Resource") {
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
-        batchResource.circle(c.x + 0.5, c.y + 0.6, 0.3);
-        batchResource.circle(c.x + 0.5, c.y + 0.4, 0.2);
+        if (resourceIconTextureRef.current) {
+          const sprite = new Sprite(resourceIconTextureRef.current);
+          sprite.anchor.set(0.5, 0.72);
+          sprite.position.set(c.x + 0.5, c.y + 0.5);
+          sprite.width = 1.25;
+          sprite.height = 1.25;
+          container.addChild(sprite);
+        } else {
+          batchResource.circle(c.x + 0.5, c.y + 0.6, 0.3);
+          batchResource.circle(c.x + 0.5, c.y + 0.4, 0.2);
+        }
         resourceCount++;
       } else if (c.cell_type === "WildGu") {
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
@@ -1647,6 +1703,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     g.fill({ color: 0x60a5fa, alpha: 0.3 });
 
     if (playerAvatarUrl) {
+      if (defaultPlayerSpriteRef.current) {
+        g.removeChild(defaultPlayerSpriteRef.current);
+        defaultPlayerSpriteRef.current.destroy({ texture: false, textureSource: false });
+        defaultPlayerSpriteRef.current = null;
+      }
       if (!playerAvatarRef.current) {
         const sprite = new Sprite();
         sprite.anchor.set(0.5);
@@ -1670,13 +1731,18 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       g.circle(0, 0, 0.4);
       g.stroke({ color: 0xffffff, width: 0.05 });
     } else {
-      // Character base
-      g.circle(0, 0, 0.3);
-      g.fill({ color: 0x3b82f6 });
-      g.stroke({ color: 0xffffff, width: 0.1 });
-      // Center point
-      g.circle(0, 0, 0.1);
-      g.fill({ color: 0xffffff });
+      if (!defaultPlayerSpriteRef.current) {
+        const sprite = new Sprite();
+        sprite.anchor.set(0.5, 0.88);
+        sprite.width = 1.05;
+        sprite.height = 1.45;
+        g.addChild(sprite);
+        defaultPlayerSpriteRef.current = sprite;
+        Assets.load<Texture>("/assets/world/cultivator.webp").then((texture) => {
+          if (defaultPlayerSpriteRef.current === sprite) sprite.texture = texture;
+        }).catch((error) => console.warn("Default cultivator sprite could not be loaded; using marker fallback.", error));
+      }
+      g.circle(0, 0, 0.43).stroke({ color: 0xffffff, width: 0.06, alpha: 0.9 });
     }
   }, [playerAvatarUrl]);
 
@@ -1858,6 +1924,25 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       });
       stageRef.current.addChild(bgSprite);
 
+      void Assets.load<Texture>("/assets/world/ground-moss.webp").then((texture) => {
+        if (destroyed) return;
+        bgSprite.texture = texture;
+        bgSprite.tileScale.set(0.012, 0.012);
+      }).catch((error) => console.warn("World terrain texture could not be loaded; using fallback.", error));
+      void Assets.load<Texture>("/assets/world/spirit-beast.webp").then((texture) => {
+        if (destroyed) return;
+        monsterIconTextureRef.current = texture;
+        for (const rendered of monsterChunksRef.current.values()) rendered.px = Number.NaN;
+        scheduleMonsterChunkSyncRef.current();
+        syncRuntimeMonsters(useWorldStore.getState().monsters);
+      }).catch((error) => console.warn("Monster sprite could not be loaded; using fallback.", error));
+      void Assets.load<Texture>("/assets/world/spirit-herb.webp").then((texture) => {
+        if (destroyed) return;
+        resourceIconTextureRef.current = texture;
+        for (const rendered of monsterChunksRef.current.values()) rendered.px = Number.NaN;
+        scheduleMonsterChunkSyncRef.current();
+      }).catch((error) => console.warn("Resource sprite could not be loaded; using fallback.", error));
+
       regionsContainerRef.current.eventMode = "none";
       fogRef.current.eventMode = "none";
       rangeRef.current.eventMode = "none";
@@ -1901,8 +1986,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           if (!m.active) continue;
           const duration = m.duration || 300;
           const t = Math.min((performance.now() - m.t0) / duration, 1);
-          const eased = 1 - Math.pow(1 - t, 3);
-          m.container.position.set(m.fromX + (m.toX - m.fromX) * eased, m.fromY + (m.toY - m.fromY) * eased);
+          m.container.position.set(m.fromX + (m.toX - m.fromX) * t, m.fromY + (m.toY - m.fromY) * t);
           if (t >= 1) {
             m.container.position.set(m.toX, m.toY);
             m.active = false;
@@ -1914,9 +1998,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             const elapsed = performance.now() - marker.receivedAt;
             const duration = marker.duration;
             const t = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - t, 3);
-            marker.renderX = marker.fromX + (marker.toX - marker.fromX) * eased;
-            marker.renderY = marker.fromY + (marker.toY - marker.fromY) * eased;
+            marker.renderX = marker.fromX + (marker.toX - marker.fromX) * t;
+            marker.renderY = marker.fromY + (marker.toY - marker.fromY) * t;
             marker.container.position.set(marker.renderX, marker.renderY);
             if (t >= 1) marker.active = false;
           }
@@ -2247,7 +2330,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const before = useWorldStore.getState();
       const current = before.monsters[event.entity_id];
       const informational = event.event_type === "action_resolved" || event.event_type === "entity_damaged";
-      const accepted = !before.seenCombatEvents.includes(event.event_id) && (!current || event.entity_revision > current.revision || (informational && event.entity_revision === current.revision));
+      const terminal = event.event_type === "monster_defeated" || event.event_type === "monster_despawned";
+      const wasRemoved = Object.prototype.hasOwnProperty.call(before.removedMonsterRevisions, event.entity_id);
+      const accepted = !before.seenCombatEvents.includes(event.event_id) && !wasRemoved
+        && (terminal || !current || event.entity_revision > current.revision || (informational && event.entity_revision === current.revision));
       before.applyCombatEvent(event);
       if (!accepted) return;
       if (event.event_type === "action_started") {
@@ -2285,12 +2371,19 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     const onWorldCell = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail || detail.x === undefined || detail.y === undefined) return;
+      const region = typeof detail.region_id === "string" ? detail.region_id : useGameStore.getState().player?.current_region || "";
       // Coordinates are global and a visible rectangle can cross a named-region
       // boundary, so apply cell deltas even when their derived region differs
       // from the player's current region.
-      // When a cell is cleared, invalidate it immediately from cache so markers disappear.
-      if (detail.type === "cell_cleared" || detail.type === "monster_killed") {
+      // Persistent map cells publish `cleared` / `respawn`; generated cells
+      // publish `cell_cleared` / `cell_respawned`. Accept both wire formats so
+      // static boss markers track the authoritative clear state immediately.
+      if (CLEARED_CELL_EVENT_TYPES.has(detail.type)) {
         invalidateCell(detail.x, detail.y);
+        useWorldStore.getState().setPersistentCellCleared(region, detail.x, detail.y, true);
+      } else if (RESPAWNED_CELL_EVENT_TYPES.has(detail.type)) {
+        useWorldStore.getState().setPersistentCellCleared(region, detail.x, detail.y, false);
+        void fetchCellsRect(detail.x, detail.y, detail.x, detail.y);
       }
       // Newer servers may include the replacement cell in the delta. Applying
       // it directly avoids a full nearby-cell and persistent-object refetch.

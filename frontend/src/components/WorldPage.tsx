@@ -6,7 +6,7 @@ import { useWorldStore } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import TeleportModal from "./TeleportModal";
 import type { TeleportArray } from "@/store/slices/teleportSlice";
-import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users } from "lucide-react";
+import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users, HelpCircle, Coins, ScrollText, MessageSquare, Settings } from "lucide-react";
 import { MovementJoystick } from "./MovementJoystick";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
@@ -165,16 +165,30 @@ export function WorldPage() {
     { id: "inventory", label: "Túi Đồ", icon: Briefcase, color: "text-cyan-400" },
     { id: "aperture", label: "Không Khiếu", icon: Flame, color: "text-rose-400" },
     { id: "refine", label: "Luyện Cổ", icon: Sparkles, color: "text-purple-400" },
+    { id: "practice-room", label: "Tu Luyện", icon: Zap, color: "text-violet-400" },
+    { id: "dungeon", label: "Bí Cảnh", icon: Compass, color: "text-indigo-400" },
     { id: "party", label: "Tổ Đội", icon: Users, color: "text-amber-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
-    { id: "market", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
+    { id: "auction", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
+    { id: "shop", label: "Thương Hội", icon: Gem, color: "text-sky-400" },
+    { id: "pets", label: "Dị Nhân", icon: Gift, color: "text-pink-400" },
+    { id: "arena", label: "Đấu Trường", icon: Swords, color: "text-red-400" },
+    { id: "death-arena", label: "Sinh Tử Đài", icon: Swords, color: "text-rose-400" },
+    { id: "leaderboard", label: "Xếp Hạng", icon: Trophy, color: "text-yellow-400" },
+    { id: "gacha", label: "Tiên Duyên", icon: Gift, color: "text-fuchsia-400" },
+    { id: "achievements", label: "Thành Tựu", icon: Trophy, color: "text-lime-400" },
+    { id: "mine", label: "Khai Khoáng", icon: Gem, color: "text-orange-400" },
+    { id: "premium-store", label: "Cửa Hàng", icon: Store, color: "text-sky-400" },
+    { id: "topup", label: "Nạp Tiên Ngọc", icon: Coins, color: "text-amber-300" },
+    { id: "feedback", label: "Góp Ý", icon: MessageSquare, color: "text-cyan-300" },
+    { id: "combat-history", label: "Chiến Sử", icon: Swords, color: "text-red-300" },
+    { id: "audit-logs", label: "Ký Sự Tu Hành", icon: ScrollText, color: "text-blue-300" },
+    { id: "utilities", label: "Tiện Ích", icon: Settings, color: "text-zinc-300" },
+    { id: "wiki", label: "Bách Khoa", icon: HelpCircle, color: "text-teal-400" },
     { id: "teleport", label: "Dịch Chuyển", icon: Compass, color: "text-cyan-400" },
-    // { id: "leaderboard", label: "Xếp Hạng", icon: Trophy, color: "text-yellow-400" },
-    // { id: "gacha", label: "Rút Thưởng", icon: Gift, color: "text-pink-400" },
-    // { id: "arena", label: "Đấu Trường", icon: Swords, color: "text-red-400" },
-    // { id: "premium_store", label: "Cửa Hàng", icon: Gem, color: "text-sky-400" },
-    // { id: "dungeon", label: "Bí Cảnh", icon: Compass, color: "text-indigo-400" },
   ];
+
+  const quickItems = menuItems.slice(0, 4);
 
   useEffect(() => {
     if (!regionsLoaded) fetchRegions();
@@ -223,6 +237,21 @@ export function WorldPage() {
 
       <TargetHud />
 
+      <div className="absolute left-2 top-2 z-30 flex flex-col gap-1.5 pointer-events-none">
+        {quickItems.map((item) => (
+          <button
+            key={item.id}
+            title={item.label}
+            aria-label={item.label}
+            onClick={() => setView(item.id)}
+            className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-950/75 text-zinc-200 shadow-lg backdrop-blur-md transition hover:border-emerald-300/30 hover:bg-zinc-900 sm:w-auto sm:justify-start sm:gap-2 sm:px-3"
+          >
+            <item.icon className={`h-4 w-4 ${item.color}`} />
+            <span className="hidden text-xs font-medium sm:inline">{item.label}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="absolute top-2 right-2 flex flex-col items-end gap-2 pointer-events-none z-30">
         <button
           onClick={() => setMenuOpen(!menuOpen)}
@@ -238,7 +267,8 @@ export function WorldPage() {
                 key={item.id}
                 onClick={() => {
                   setMenuOpen(false);
-                  setActiveModal(item.id);
+                  if (item.id === "teleport") setActiveModal("teleport");
+                  else setView(item.id);
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-all cursor-pointer ${
                   item.locked

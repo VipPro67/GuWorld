@@ -113,6 +113,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
+  const [materialFilter, setMaterialFilter] = useState<"all" | "consumable" | "material">("all");
   const [guSubTab, setGuSubTab] = useState<"equipped" | "rest">("equipped");
   const [selectedPath, setSelectedPath] = useState<string>("all");
   const [selectedRank, setSelectedRank] = useState<string>("all");
@@ -364,9 +365,17 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       .map((key) => ({ key, spec: itemDictionary[key], qty: materials[key] }));
   }, [itemDictionary, materials, searchTerm]);
 
-  const consumableMaterialRows = useMemo(() => {
-    return filteredMaterials.filter(({ spec }) => isConsumableItem(spec));
-  }, [filteredMaterials]);
+  const visibleMaterials = useMemo(() => filteredMaterials.filter(({ spec }) => {
+    if (materialFilter === "consumable") return isConsumableItem(spec);
+    if (materialFilter === "material") return !isConsumableItem(spec);
+    return true;
+  }), [filteredMaterials, materialFilter]);
+  const totalMaterialCount = useMemo(() => Object.values(materials).reduce((sum, qty) => sum + Math.max(0, Number(qty) || 0), 0), [materials]);
+  const equippedTotal = useMemo(() => guList.filter((gu) => gu.equipped).length, [guList]);
+  const hungryTotal = useMemo(() => guList.filter((gu) => {
+    const spec = guSpecFor(gu.gu_id, gu.rank);
+    return spec && gu.status !== "DEAD" && gu.status !== "SEALED" && gu.hunger < spec.max_hunger;
+  }).length, [guList]);
 
   // Dynamic filters calculation
   const allPaths = useMemo(() => {
@@ -533,37 +542,58 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const showGus = selectedTab === "gu";
 
   return (
-    <div className="glass-panel-gold rounded-3xl p-3 sm:p-6 w-full space-y-4 sm:space-y-6">
+    <div className="relative glass-panel-gold rounded-3xl p-3 sm:p-6 w-full space-y-4 sm:space-y-6 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
-          <h3 className="text-lg font-bold text-zinc-100 font-serif tracking-wide">
-            Bách Bảo Nang
-          </h3>
+      <div className="relative flex flex-col gap-3 border-b border-amber-900/30 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
+            <Sparkles className="w-5 h-5 text-amber-300" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-zinc-100 font-serif tracking-wide">Bách Bảo Nang</h3>
+              <span className="hidden sm:inline rounded-full border border-zinc-700/70 bg-zinc-950/60 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-zinc-500">Túi đồ</span>
+            </div>
+            <p className="text-[10px] text-zinc-500">Quản lý Cổ trùng, vật phẩm và tài nguyên</p>
+            {hungryTotal > 0 && <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-rose-900/50 bg-rose-950/30 px-2 py-0.5 text-[9px] font-semibold text-rose-300"><Wine className="h-3 w-3" />{hungryTotal} Cổ trùng cần cho ăn</span>}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-2">
+          <div className="rounded-xl border border-amber-900/30 bg-zinc-950/55 px-2.5 py-2 text-center sm:min-w-[86px]">
+            <div className="text-sm font-bold font-mono text-amber-300">{guList.length}</div>
+            <div className="text-[8px] uppercase tracking-wider text-zinc-500">Cổ trùng</div>
+          </div>
+          <div className="rounded-xl border border-emerald-900/30 bg-zinc-950/55 px-2.5 py-2 text-center sm:min-w-[86px]">
+            <div className="text-sm font-bold font-mono text-emerald-300">{equippedTotal}</div>
+            <div className="text-[8px] uppercase tracking-wider text-zinc-500">Xuất trận</div>
+          </div>
+          <div className="rounded-xl border border-sky-900/30 bg-zinc-950/55 px-2.5 py-2 text-center sm:min-w-[86px]">
+            <div className="text-sm font-bold font-mono text-sky-300">{totalMaterialCount}</div>
+            <div className="text-[8px] uppercase tracking-wider text-zinc-500">Vật phẩm</div>
+          </div>
         </div>
       </div>
 
       {/* Filter and Search controls */}
       <div className="space-y-3">
-        <div className="flex gap-2 bg-zinc-950/80 p-1.5 rounded-xl border border-zinc-900">
+        <div className="grid grid-cols-2 gap-2 bg-zinc-950/80 p-1.5 rounded-2xl border border-zinc-900">
           <button
             onClick={() => setSelectedTab("gu")}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${selectedTab === "gu"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+            className={`flex items-center justify-center gap-2 text-xs min-h-11 py-2 rounded-xl font-mono font-semibold transition-all ${selectedTab === "gu"
+                ? "bg-gradient-to-r from-amber-500/15 to-orange-500/5 text-amber-300 border border-amber-500/30 shadow-inner"
                 : "text-zinc-500 hover:text-zinc-300"
               }`}
           >
-            Cổ Trùng
+            <Flower2 className="h-4 w-4" /> Cổ Trùng <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px]">{guList.length}</span>
           </button>
           <button
             onClick={() => setSelectedTab("material")}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${selectedTab === "material"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+            className={`flex items-center justify-center gap-2 text-xs min-h-11 py-2 rounded-xl font-mono font-semibold transition-all ${selectedTab === "material"
+                ? "bg-gradient-to-r from-sky-500/15 to-cyan-500/5 text-sky-300 border border-sky-500/30 shadow-inner"
                 : "text-zinc-500 hover:text-zinc-300"
               }`}
           >
-            Vật Phẩm
+            <Gem className="h-4 w-4" /> Vật Phẩm <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px]">{totalMaterialCount}</span>
           </button>
         </div>
 
@@ -575,8 +605,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             placeholder="Tìm kiếm theo tên hoặc mô tả..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-200 placeholder-zinc-650 pl-10 pr-4 py-2.5 rounded-xl transition-colors font-mono"
+            className="w-full min-h-11 bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-200 placeholder-zinc-650 pl-10 pr-11 py-2.5 rounded-xl transition-colors font-mono"
           />
+          {searchTerm && <button type="button" onClick={() => setSearchTerm("")} aria-label="Xóa tìm kiếm" className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-white">×</button>}
         </div>
 
         {/* Dynamic Filters for Gu bugs */}
@@ -587,7 +618,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 <select
                   value={selectedPath}
                   onChange={(e) => setSelectedPath(e.target.value)}
-                  className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
+                  className="w-full min-h-11 bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
                   style={{
                     backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
                     backgroundRepeat: 'no-repeat',
@@ -605,7 +636,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 <select
                   value={selectedRank}
                   onChange={(e) => setSelectedRank(e.target.value)}
-                  className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
+                  className="w-full min-h-11 bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
                   style={{
                     backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
                     backgroundRepeat: 'no-repeat',
@@ -663,18 +694,38 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       {showMaterials && (
         <div className="space-y-2 text-left">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
-              Nguyên Liệu Sở Hữu
-            </span>
+            <div>
+              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest block font-bold">Kho vật phẩm</span>
+              <span className="text-[10px] text-zinc-600">{visibleMaterials.length} loại · {totalMaterialCount} món</span>
+            </div>
           </div>
-          {filteredMaterials.length === 0 ? (
-            <div className="text-[10px] text-zinc-600 italic">Hộp nguyên liệu trống.</div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span className="text-[10px] text-zinc-400">{visibleMaterials.length} loại · {totalMaterialCount} món</span>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-950/60 p-1">
+              {([["all", "Tất cả"], ["consumable", "Tiêu hao"], ["material", "Khác"]] as const).map(([filter, label]) => (
+                <button key={filter} type="button" onClick={() => setMaterialFilter(filter)} className={`min-h-9 rounded-lg px-2.5 text-[9px] font-mono font-semibold transition-colors ${materialFilter === filter ? "border border-sky-500/30 bg-sky-500/10 text-sky-300" : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {visibleMaterials.length === 0 ? (
+            <div className="flex min-h-36 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/35 px-4 text-center">
+              <Gem className="mb-2 h-6 w-6 text-zinc-700" />
+              <span className="text-xs font-semibold text-zinc-400">{filteredMaterials.length === 0 ? "Kho đồ đang trống" : "Không có vật phẩm trong mục này"}</span>
+              <span className="mt-1 text-[10px] text-zinc-600">Vật phẩm thu thập được sẽ xuất hiện tại đây.</span>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {filteredMaterials.map(({ key, spec, qty }) => {
-                const isConsumable = spec.item_type === "Consumable" || spec.type === "Consumable";
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
+              {visibleMaterials.map(({ key, spec, qty }) => {
+                const isConsumable = isConsumableItem(spec);
                 const isUsing = usingId === key;
                 const isDetailOpen = !!itemDetailOpen[key];
+                const itemImageStyle = spec.image_url ? { backgroundImage: `linear-gradient(180deg, rgba(9,9,11,.02), rgba(9,9,11,.5)), url("${spec.image_url.replace(/"/g, "")}")` } : undefined;
+                const rarity = spec.rarity || spec.rank || 1;
+                const rarityStyle = rarity >= 5 ? "border-fuchsia-500/40 from-fuchsia-950/60 to-violet-950/20" : rarity >= 4 ? "border-amber-500/35 from-amber-950/60 to-orange-950/20" : rarity >= 3 ? "border-sky-500/30 from-sky-950/50 to-cyan-950/10" : "border-zinc-800 from-zinc-900/80 to-zinc-950/70";
                 const itemRarityLabel = (r?: number) => {
                   if (!r) return "";
                   const labels = ["", "Phàm", "Linh", "Bảo", "Tiên", "Thánh"];
@@ -683,23 +734,33 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 return (
                   <div
                     key={key}
-                    className="flex flex-col bg-zinc-950/70 border border-zinc-900 rounded-xl overflow-hidden"
+                    className={`group flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-gradient-to-br shadow-[0_8px_22px_rgba(0,0,0,.18)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(0,0,0,.28)] ${rarityStyle}`}
                   >
-                    <div className="flex justify-between items-center px-3.5 py-2.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="text-left min-w-0">
-                          <div className="text-xs font-semibold text-zinc-200 truncate">{spec.name}</div>
-                          <div className="text-[9px] text-zinc-500 font-mono">x{qty} sở hữu</div>
+                    <button type="button" onClick={() => setItemDetailOpen(prev => ({ ...prev, [key]: !prev[key] }))} className="relative block w-full text-left" aria-expanded={isDetailOpen} aria-label={`${isDetailOpen ? "Ẩn" : "Xem"} thông tin ${spec.name}`}>
+                      <div className="relative aspect-[1.7/1] overflow-hidden border-b border-white/5 bg-zinc-950/60 bg-cover bg-center sm:aspect-[1.9/1]" style={itemImageStyle}>
+                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/10 to-transparent" />
+                        {!spec.image_url && <div className={`absolute inset-0 flex items-center justify-center ${isConsumable ? "text-emerald-300/75" : "text-sky-300/75"}`}>{isConsumable ? <Wine className="h-8 w-8 drop-shadow-lg sm:h-9 sm:w-9" /> : <Gem className="h-8 w-8 drop-shadow-lg sm:h-9 sm:w-9" />}</div>}
+                        <span className="absolute left-2 top-2 rounded-md border border-white/10 bg-black/50 px-1.5 py-1 text-[8px] font-bold uppercase tracking-wider text-zinc-200 backdrop-blur-sm">{rarity >= 5 ? "Thánh" : rarity >= 4 ? "Tiên" : rarity >= 3 ? "Bảo" : rarity >= 2 ? "Linh" : "Phàm"}</span>
+                        <span className="absolute right-2 top-2 rounded-lg border border-white/10 bg-black/65 px-2 py-1 text-[10px] font-bold text-white shadow-lg backdrop-blur-sm">×{qty}</span>
+                        <div className="absolute inset-x-2 bottom-2 flex min-w-0 items-end justify-between gap-1">
+                          <span className="line-clamp-2 text-[11px] font-bold leading-tight text-white drop-shadow sm:text-xs">{spec.name}</span>
+                          <span className="shrink-0 rounded-md border border-white/10 bg-black/45 p-1 text-zinc-300"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isDetailOpen ? "rotate-180" : ""}`} /></span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                    </button>
+                    <div className="flex flex-col gap-2 p-2 sm:p-2.5">
+                      <div className="flex min-h-8 items-start justify-between gap-2">
+                        <span className="line-clamp-2 text-[9px] leading-snug text-zinc-500">{spec.description || translateItemType(spec.item_type || spec.type)}</span>
+                        {isConsumable && <span className="shrink-0 rounded-md border border-emerald-900/40 bg-emerald-950/30 px-1.5 py-0.5 text-[8px] text-emerald-300">Dùng</span>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
                         {isConsumable && onUseItem && useMultipleItemId !== key && (
                           <button
                             onClick={() => handleUseItemClick(key)}
                             disabled={actionLoading || isUsing}
-                            className="text-[9px] py-1 px-2 bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 hover:bg-emerald-950/50 hover:border-emerald-800 rounded font-mono transition-all cursor-pointer font-bold"
+                            className="col-span-2 min-h-10 rounded-xl border border-emerald-700/40 bg-emerald-600/90 px-2 text-[10px] font-bold text-white shadow-[0_4px_14px_rgba(16,185,129,.13)] transition-colors hover:bg-emerald-500 disabled:opacity-50 sm:col-span-1"
                           >
-                            {isUsing ? "..." : "Sử Dụng"}
+                            {isUsing ? "Đang dùng…" : "Sử dụng"}
                           </button>
                         )}
                         {isConsumable && onUseItems && qty > 1 && useMultipleItemId !== key && (
@@ -709,19 +770,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               setUseMultipleItemId(key);
                               setUseMultipleItemQty(1);
                             }}
-                            className="text-[9px] py-1 px-2 bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50 hover:border-amber-800 rounded font-mono transition-all cursor-pointer font-bold"
+                            className="min-h-10 rounded-xl border border-amber-800/40 bg-amber-950/30 px-2 text-[9px] font-bold text-amber-300 transition-colors hover:bg-amber-900/40"
                           >
-                            ✨ Nhiều
+                            Dùng nhiều
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setItemDetailOpen(prev => ({...prev, [key]: !prev[key]}))}
-                          className="text-[9px] py-1 px-1.5 bg-zinc-950/50 text-zinc-400 border border-zinc-800 hover:bg-zinc-900 hover:text-zinc-300 rounded font-mono transition-all cursor-pointer"
-                          title="Xem chi tiết"
-                        >
-                          {isDetailOpen ? "▲" : "▼"}
-                        </button>
                       </div>
                     </div>
 
@@ -937,6 +990,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               }: typeof guGroups[number]) => {
                     const isExpanded = !!expandedGroups[groupKey];
                     const totalCount = instances.length;
+                    const guImageStyle = spec.image_url ? { backgroundImage: `linear-gradient(180deg, rgba(9,9,11,.02), rgba(9,9,11,.45)), url("${spec.image_url.replace(/"/g, "")}")` } : undefined;
 
                     // Food info
                     const preferredFoodId = spec.food_types[0] || "unknown";
@@ -1006,7 +1060,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       >
                         {/* Summary Header */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                          <div className="flex items-center gap-2.5 flex-wrap">
+                          <div className="flex min-w-0 items-center gap-2.5 flex-wrap">
                             {isBatchMode && eligibleGrpGus.length > 0 && (
                               <input
                                 type="checkbox"
@@ -1016,6 +1070,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 title="Chọn cả nhóm"
                               />
                             )}
+                            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-700/30 bg-gradient-to-br from-amber-950/80 to-zinc-950 bg-cover bg-center shadow-inner" style={guImageStyle}>
+                              {!spec.image_url && <Flower2 className="h-5 w-5 text-amber-300/80" />}
+                              {hasVital && <span className="absolute bottom-0.5 right-0.5 rounded-full bg-amber-500 p-0.5"><Sparkles className="h-2 w-2 text-zinc-950" /></span>}
+                            </div>
                             <h4 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
                               {spec.name}
                               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
