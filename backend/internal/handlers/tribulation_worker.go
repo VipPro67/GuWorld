@@ -98,6 +98,9 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 		nodeDmgPerHit = 8
 	case "CHAOS_CALAMITY":
 		nodeDmgPerHit = 16
+	case "CHAOTIC_TRIBULATION":
+		// Hybrid kiếp nạn dồn hỏa lực phá node (spec §5.2): x1.5 above CHAOS.
+		nodeDmgPerHit = 24
 	}
 
 	// Fetch living enemies

@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 func mapCellBossSpawn(spawnID string) (region string, x, y int, ok bool) {
@@ -107,8 +108,9 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 	}
 
 	var winner string
+	var pendingNotifications []notify.Notification
 	if player.CombatSettings.SkipBattle {
-		winner, _, _, err = AutoResolveCombat(tx, &player)
+		winner, _, _, pendingNotifications, err = AutoResolveCombat(tx, &player)
 		if err != nil {
 			resetWorldMonsterAfterEncounter(ctx, current)
 			return err
@@ -127,6 +129,9 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 	if err := tx.Commit(); err != nil {
 		resetWorldMonsterAfterEncounter(ctx, current)
 		return err
+	}
+	for _, notification := range pendingNotifications {
+		notify.Publish(notification)
 	}
 	if player.CombatSettings.SkipBattle {
 		if winner == "Phe Ta" {
@@ -170,17 +175,9 @@ func finishWorldMonsterEncounter(ctx context.Context, encounter WorldMonster, en
 	}
 	if result == cache.WorldMonsterFirstKill {
 		worldMonsterMetrics.kills.Add(1)
-	} else if result == cache.WorldMonsterAlreadyDefeated {
-		worldMonsterMetrics.preventedDoubleKills.Add(1)
-	} else {
-		return
-	}
-	if updated.InstanceID == "" && result == cache.WorldMonsterAlreadyDefeated {
-		if latest, exists, getErr := cache.GetWorldMonster(cleanupCtx, encounter.RegionID, encounter.InstanceID); getErr == nil && exists {
-			updated = latest
-		}
-	}
-	if updated.InstanceID == "" {
+		payload := map[string]any{"source_id": playerID, "hp": updated.HP, "max_hp": updated.MaxHP, "encounter_id": encounterID}
+		broadcastWorldCombat(updated, "monster_defeated", payload)
+		clearDefeatedWorldMonsterCell(updated, playerID)
 		return
 	}
 	// Also finish static-cell cleanup when a prior call changed Redis state but

@@ -52,6 +52,7 @@ export interface ApertureSlice {
   fetchAperture: (forceRefresh?: boolean) => Promise<void>;
   fetchDaoMarks: (forceRefresh?: boolean) => Promise<void>;
   fetchDaoNgan: (forceRefresh?: boolean) => Promise<void>;
+  cleanseDaoMarks: (path: string, marks: number) => Promise<boolean>;
   fetchApertureNodes: (forceRefresh?: boolean) => Promise<void>;
   fetchVariantHumans: () => Promise<void>;
   placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => Promise<boolean>;
@@ -223,6 +224,42 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     };
     fetchDaoNganPromise = executeFetch();
     return fetchDaoNganPromise;
+  },
+
+  cleanseDaoMarks: async (path: string, marks: number) => {
+    const { token, logout } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/cleanse-dao-marks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, marks }),
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thanh Đạo Tẩy Thể thất bại");
+      get().addToast(data.message || "Thanh Đạo Tẩy Thể thành công!", "success");
+      get().addLog(data.message || "Thanh Đạo Tẩy Thể thành công.");
+      get().applyInventoryFromResponse(data);
+      await get().fetchDaoMarks(true);
+      await get().fetchDaoNgan(true);
+      const pid = get().player?.id;
+      if (pid) {
+        await get().fetchPlayerStatus(pid, true);
+      }
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
   },
 
   fetchApertureNodes: async (forceRefresh = false) => {

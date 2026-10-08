@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -37,9 +36,15 @@ type CombatSummary struct {
 	LootCount        int     `json:"loot_count"`
 }
 
+// shouldRecordCombatHistory reports whether a finished fight is persisted to
+// combat_history: every PVP match counts, PVE only when the player side lost.
+func shouldRecordCombatHistory(enemyType, winner string) bool {
+	return enemyType == "PVP" || winner == "Phe Địch"
+}
+
 // SaveCombatHistory persists a completed combat result to the combat_history table.
 func SaveCombatHistory(playerID uuid.UUID, winner string, logs []interface{}, summary CombatSummary, combatants []interface{}, enemyName, enemyType, region string) {
-	if db.DB == nil || !strings.EqualFold(strings.TrimSpace(enemyType), "PVP") {
+	if db.DB == nil {
 		return
 	}
 
@@ -183,7 +188,7 @@ func ListCombatHistory(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(),
 		`SELECT id, player_id, winner, summary, enemy_name, enemy_type, region,
 		        COALESCE(jsonb_array_length(logs), 0), created_at
-		 FROM combat_history WHERE player_id = $1 AND UPPER(enemy_type) = 'PVP' ORDER BY created_at DESC LIMIT 20`,
+		 FROM combat_history WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`,
 		authID,
 	)
 	if err != nil {
@@ -221,7 +226,7 @@ func GetCombatHistory(c *gin.Context) {
 	var e CombatHistoryEntry
 	err := db.DB.QueryRowContext(c.Request.Context(),
 		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
-		 FROM combat_history WHERE id = $1 AND player_id = $2 AND UPPER(enemy_type) = 'PVP'`,
+		 FROM combat_history WHERE id = $1 AND player_id = $2`,
 		id, authID,
 	).Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Logs, &e.Summary, &e.Combatants, &e.EnemyName, &e.EnemyType, &e.Region, &e.CreatedAt)
 

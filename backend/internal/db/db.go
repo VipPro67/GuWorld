@@ -260,6 +260,7 @@ func InitSchema() error {
 		{"players", schemaPlayers},
 		{"admin_roles", schemaAdminRoles},
 		{"authorization", schemaAuthorization},
+		{"moderation", schemaModeration},
 		{"player_extras", schemaPlayerExtras},
 		{"sects", schemaSects},
 		{"player_items", schemaPlayerItems},

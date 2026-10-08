@@ -37,6 +37,10 @@ func SendPrivateMail(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	if muted, muteErr := playerChatMuted(db.DB, authID); muteErr == nil && muted {
+		c.JSON(http.StatusForbidden, gin.H{"error": chatMutedMessage})
+		return
+	}
 
 	var req MailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -311,6 +315,10 @@ func SendBaoHoangChat(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if muted, muteErr := playerChatMuted(db.DB, authID); muteErr == nil && muted {
+		c.JSON(http.StatusForbidden, gin.H{"error": chatMutedMessage})
 		return
 	}
 

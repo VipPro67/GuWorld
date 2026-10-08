@@ -164,6 +164,7 @@ export function getTribulationTypeName(type: string): string {
     case "GRAND_TRIBULATION": return "Hạo Kiếp";
     case "MYRIAD_TRIBULATION": return "Vạn Kiếp";
     case "CHAOS_CALAMITY": return "Hỗn Độn Đại Nạn";
+    case "CHAOTIC_TRIBULATION": return "Kiếp Nạn Hỗn Loạn";
     default: return type;
   }
 }
@@ -247,6 +248,7 @@ export const ImmortalApertureView: React.FC = () => {
     fetchAperture,
     fetchDaoMarks,
     fetchDaoNgan,
+    cleanseDaoMarks,
     fetchApertureNodes,
     fetchVariantHumans,
     fetchSettlements,
@@ -293,6 +295,9 @@ export const ImmortalApertureView: React.FC = () => {
   const [daoGroupFilter, setDaoGroupFilter] = useState<string>("ALL");
   const [daoSearch, setDaoSearch] = useState<string>("" );
   const [showDaoGuide, setShowDaoGuide] = useState<boolean>(false);
+  const [showCleanseModal, setShowCleanseModal] = useState<boolean>(false);
+  const [cleansePath, setCleansePath] = useState<string>("");
+  const [cleanseMarks, setCleanseMarks] = useState<number>(1000);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
   const [variantSubTab, setVariantSubTab] = useState<"overview" | "settlements" | "npcs" | "refine" | "ecosystem">("overview");
@@ -657,6 +662,23 @@ export const ImmortalApertureView: React.FC = () => {
   const totalVariantHumanPop = variantHumans.reduce((sum, v) => sum + v.population, 0);
   const foodNeeded = totalVariantHumanPop / 100.0;
   const foodSurplus = totalFoodProd >= foodNeeded;
+
+  // ── Thanh Đạo Tẩy Thể (spec §6) ──
+  const dominantPurity = daoNgan?.paths?.find((p) => p.path === daoNgan?.dominant_path)?.purity_pct ?? 0;
+  const purityTier = dominantPurity >= 70 ? "safe" : dominantPurity >= 50 ? "warn" : "danger";
+  const foreignDaoPaths = (daoNgan?.paths ?? []).filter(
+    (p) => p.path !== daoNgan?.dominant_path && p.amount > 0
+  );
+  const cleanseTarget = foreignDaoPaths.find((p) => p.path === cleansePath) || foreignDaoPaths[0] || null;
+  const cleanseAvailable = cleanseTarget?.amount ?? 0;
+  const cleanseEffective = Math.min(cleanseMarks, cleanseAvailable, 10000);
+  const cleanseStoneCost = Math.ceil(cleanseEffective / 100);
+  const cleanseRefund = Math.floor(cleanseEffective * 0.3);
+  const totalMarksNow = daoNgan?.total_marks ?? 0;
+  const dominantAmount = (daoNgan?.paths ?? []).find((p) => p.path === daoNgan?.dominant_path)?.amount ?? 0;
+  const purityAfter = (totalMarksNow - cleanseEffective) > 0
+    ? (dominantAmount / (totalMarksNow - cleanseEffective)) * 100
+    : 100;
 
 return (
     <GamePanel variant="default" className="w-full mx-auto space-y-6">
@@ -2320,7 +2342,120 @@ return (
                       {daoNgan?.paths?.find(p => p.path === daoNgan?.dominant_path)?.purity_pct.toFixed(1) ?? "0"}%
                     </span>
                   </div>
+                  <div className={`rounded-lg px-2.5 py-2 text-[11px] font-semibold border ${purityTier === "safe" ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-300" : purityTier === "warn" ? "bg-amber-950/40 border-amber-500/40 text-amber-300" : "bg-rose-950/40 border-rose-500/50 text-rose-300"}`}>
+                    {purityTier === "safe" && "🟢 Bản Nguyên Thuần Khiết (An Toàn) — Hệ số xung đột 1.0×, sinh thái tối ưu."}
+                    {purityTier === "warn" && "🟡 Quy Tắc Tiên Khiếu Nhiễu Loạn — Suy giảm sản lượng sinh thái, gia tăng hao phí Tiên Nguyên."}
+                    {purityTier === "danger" && "🔴 ⚠️ VẠN ĐẠO TƯƠNG XUNG NGUY CẤP — Sát chiêu nguy cơ gãy vụn (25%), phản phệ nội thương (30%), Kiếp Nạn Hỗn Loạn đe dọa phá hủy khiếu!"}
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (foreignDaoPaths.length > 0) {
+                        setCleansePath(foreignDaoPaths[0].path);
+                        setCleanseMarks(Math.min(foreignDaoPaths[0].amount, 10000));
+                        setShowCleanseModal(true);
+                      } else {
+                        addToast("Tiên Khiếu đã thuần khiết, không có Đạo Ngân ngoại hệ để tẩy.", "info");
+                      }
+                    }}
+                    className="w-full mt-1 px-3 py-2 bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 border border-purple-500/40 rounded-lg text-xs font-bold transition"
+                  >
+                    ✨ Thanh Đạo Tẩy Thể
+                  </button>
                 </div>
+
+                {/* Thanh Đạo Tẩy Thể Modal */}
+                {showCleanseModal && (
+                  <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-purple-700/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                        <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                          <Sparkles className="w-5 h-5 text-purple-400" />
+                          Thanh Đạo Tẩy Thể
+                        </h3>
+                        <button onClick={() => setShowCleanseModal(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+                      </div>
+
+                      <div className="space-y-4 text-xs">
+                        <div className="space-y-1.5">
+                          <label className="text-slate-300 font-bold">Lưu Phái Dị Chủng Cần Bóc Tách</label>
+                          <select
+                            value={cleanseTarget?.path ?? ""}
+                            onChange={(e) => {
+                              setCleansePath(e.target.value);
+                              const t = foreignDaoPaths.find((p) => p.path === e.target.value);
+                              setCleanseMarks(Math.min(t?.amount ?? 0, 10000));
+                            }}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-purple-500"
+                          >
+                            {foreignDaoPaths.map((p) => (
+                              <option key={p.path} value={p.path}>
+                                {translatePath(p.path)} — {p.amount.toLocaleString()} Đạo Ngân
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between">
+                            <label className="text-slate-300 font-bold">Số Đạo Ngân Bóc Tách</label>
+                            <span className="font-mono text-purple-300">{cleanseEffective.toLocaleString()} / {cleanseAvailable.toLocaleString()}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={Math.min(cleanseAvailable, 10000)}
+                            step={100}
+                            value={cleanseEffective}
+                            onChange={(e) => setCleanseMarks(Number(e.target.value))}
+                            className="w-full accent-purple-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
+                            <div className="text-[10px] text-slate-500 uppercase">Chi Phí</div>
+                            <div className="font-bold text-amber-300">{cleanseStoneCost.toLocaleString()} TNT</div>
+                          </div>
+                          <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
+                            <div className="text-[10px] text-slate-500 uppercase">Đạo Tài Thu Hồi</div>
+                            <div className="font-bold text-emerald-300">{cleanseRefund.toLocaleString()}</div>
+                          </div>
+                          <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
+                            <div className="text-[10px] text-slate-500 uppercase">Độ Thuần Khiết</div>
+                            <div className="font-bold text-purple-300">
+                              {dominantPurity.toFixed(1)}% → {purityAfter.toFixed(1)}%
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Tiêu hao <b>1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp</b>. Hoàn trả 30% giá trị dưới dạng Đạo Tài của lưu phái tương ứng.
+                          Bế quan hồi phục 12 giờ giữa mỗi lần đại tẩy thể. Tối đa 10.000 Đạo Ngân / lần.
+                        </p>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setShowCleanseModal(false)}
+                          className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-semibold transition"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          disabled={!cleanseTarget || cleanseEffective <= 0 || (player?.immortal_stones ?? 0) < cleanseStoneCost}
+                          onClick={async () => {
+                            if (!cleanseTarget) return;
+                            const ok = await cleanseDaoMarks(cleanseTarget.path, cleanseEffective);
+                            if (ok) setShowCleanseModal(false);
+                          }}
+                          className="flex-1 px-4 py-2.5 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition"
+                        >
+                          Xác Nhận Tẩy Thể
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Dao Body & Grace Threshold */}
                 <div className="p-4 bg-gradient-to-br from-cyan-950/40 to-slate-950/80 border border-cyan-500/30 rounded-xl space-y-2">

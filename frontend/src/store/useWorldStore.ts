@@ -40,6 +40,7 @@ type CellCacheState = {
   nearbyCells: NearbyCell[];
   nearbyWindow: { x: number; y: number; r: number } | null;
   cellRegion: string;
+  cellInvalidations: Record<string, number>;
 };
 
 export type CellChunk = {
@@ -49,11 +50,13 @@ export type CellChunk = {
 };
 
 export const CELL_CHUNK_SIZE = 64;
+const MAX_DEFEATED_MONSTER_SPAWN_TOMBSTONES = 10_000;
 const MAX_CELL_CHUNKS = 512;
 
 const currentCellRegion = () => useGameStore.getState().player?.current_region ?? "";
 let monsterSnapshotRequest = 0;
 let lastMonsterSnapshotAt = 0;
+let cellMutationVersion = 0;
 const MONSTER_SNAPSHOT_MIN_INTERVAL_MS = 5000;
 const chunkKey = (region: string, x: number, y: number) =>
   `${region}:${Math.floor(x / CELL_CHUNK_SIZE)},${Math.floor(y / CELL_CHUNK_SIZE)}`;
@@ -84,7 +87,7 @@ function mergeCellCache(
   s: CellCacheState,
   cells: NearbyCell[],
   version?: number,
-  coverage?: { minX: number; minY: number; maxX: number; maxY: number; region: string },
+  coverage?: { minX: number; minY: number; maxX: number; maxY: number; region: string; requestedVersion?: number },
 ): Partial<CellCacheState> {
   const region = coverage?.region ?? currentCellRegion();
   const chunks = s.cellRegion === region ? { ...s.cellChunks } : {};
@@ -113,6 +116,9 @@ function mergeCellCache(
     }
   }
   for (const c of cells) {
+    const invalidationKey = `${region}:${cellKey(c.x, c.y)}`;
+    if (coverage?.requestedVersion !== undefined
+      && (s.cellInvalidations[invalidationKey] ?? 0) > coverage.requestedVersion) continue;
     const key = chunkKey(region, c.x, c.y);
     let chunk = changed.get(key);
     if (!chunk) {
@@ -182,6 +188,7 @@ import { authFetch } from "@/lib/auth";
 
 interface WorldStoreState {
   monsters: Record<string, WorldMonster>;
+  removedMonsterRevisions: Record<string, number>;
   defeatedMonsterSpawns: Record<string, number>;
   hasMonsterSnapshot: boolean;
   monsterSnapshotRegion: string;
@@ -190,6 +197,7 @@ interface WorldStoreState {
   nearbyCells: NearbyCell[];
   cellChunks: Record<string, CellChunk>;
   cellRegion: string;
+  cellInvalidations: Record<string, number>;
   nearbyWindow: { x: number; y: number; r: number } | null;
   playerPositions: Record<string, NearbyPlayer & { ts: number }>;
   nearbyPlayers: NearbyPlayer[];
@@ -239,6 +247,7 @@ interface WorldStoreState {
   setInvestigationRange: (r: number) => void;
   setMoving: (v: boolean) => void;
   selectObject: (obj: WorldObject | null) => void;
+  setPersistentCellCleared: (region: string, x: number, y: number, cleared: boolean) => void;
   requestCenterCamera: () => void;
   setLivePosition: (x: number, y: number) => void;
   setCamera: (scale: number, x: number, y: number) => void;
@@ -247,6 +256,7 @@ interface WorldStoreState {
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
   monsters: {},
+  removedMonsterRevisions: {},
   defeatedMonsterSpawns: {},
   hasMonsterSnapshot: false,
   monsterSnapshotRegion: "",
@@ -255,6 +265,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   nearbyCells: [],
   cellChunks: {},
   cellRegion: "",
+  cellInvalidations: {},
   nearbyWindow: null,
   playerPositions: {},
   nearbyPlayers: [],
@@ -518,11 +529,25 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   setInvestigationRange: (r) => set({ investigationRange: Math.min(Math.max(r, 10), 25) }),
   setMoving: (v) => set({ isMoving: v }),
   selectObject: (obj) => set({ selectedObject: obj }),
+  setPersistentCellCleared: (region, x, y, cleared) => set((s) => {
+    let changed = false;
+    const hasExactRegionObject = s.objects.some((object) => object.x === x && object.y === y && object.region_id === region);
+    const objects = s.objects.map((object) => {
+      const regionMatches = !region || object.region_id === region || !hasExactRegionObject;
+      if (object.x !== x || object.y !== y || !regionMatches || object.cleared === cleared) return object;
+      changed = true;
+      return { ...object, cleared };
+    });
+    const selectedObject = cleared && s.selectedObject?.x === x && s.selectedObject?.y === y
+      && (!region || s.selectedObject.region_id === region || !hasExactRegionObject) ? null : s.selectedObject;
+    return changed || selectedObject !== s.selectedObject ? { objects, selectedObject } : {};
+  }),
   setLivePosition: (x, y) => set({ liveX: x, liveY: y }),
   setCamera: (scale, x, y) => set({ cameraScale: scale, cameraX: x, cameraY: y }),
 
   fetchCellsRect: async (minX, minY, maxX, maxY) => {
     const requestRegion = currentCellRegion();
+    const requestedVersion = cellMutationVersion;
     const rounded = {
       minX: Math.round(minX), minY: Math.round(minY), maxX: Math.round(maxX), maxY: Math.round(maxY),
     };
@@ -540,7 +565,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       }
       if (currentCellRegion() !== requestRegion) return false;
       const cells: NearbyCell[] = Array.isArray(data) ? data : [];
-      set((s) => mergeCellCache(s, cells, undefined, { ...rounded, region: requestRegion }));
+      set((s) => mergeCellCache(s, cells, undefined, { ...rounded, region: requestRegion, requestedVersion }));
       return true;
     } catch (err) {
       console.error("fetchCellsRect error:", err instanceof Error ? err.message : err);
@@ -565,13 +590,20 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   invalidateCell: (x, y) => {
     set((s) => {
       const region = currentCellRegion();
+      const invalidationVersion = ++cellMutationVersion;
+      const cellInvalidations = { ...s.cellInvalidations, [`${region}:${cellKey(x, y)}`]: invalidationVersion };
+      const staleInvalidations = Object.entries(cellInvalidations)
+        .sort((a, b) => a[1] - b[1])
+        .slice(0, Math.max(0, Object.keys(cellInvalidations).length - 1000))
+        .map(([key]) => key);
+      for (const key of staleInvalidations) delete cellInvalidations[key];
       const key = chunkKey(region, x, y);
       const oldChunk = s.cellChunks[key];
-      if (!oldChunk?.cells[cellKey(x, y)]) return {};
+      if (!oldChunk?.cells[cellKey(x, y)]) return { cellInvalidations };
       const cells = { ...oldChunk.cells };
       delete cells[cellKey(x, y)];
       const cellChunks = { ...s.cellChunks, [key]: { ...oldChunk, cells, touchedAt: Date.now() } };
-      return { cellChunks, nearbyCells: s.nearbyCells.filter((c) => c.x !== x || c.y !== y) };
+      return { cellInvalidations, cellChunks, nearbyCells: s.nearbyCells.filter((c) => c.x !== x || c.y !== y) };
     });
   },
 
@@ -641,6 +673,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         const monsters: Record<string, WorldMonster> = {};
         const defeatedMonsterSpawns = { ...s.defeatedMonsterSpawns };
         for (const incoming of list) {
+          if (Object.prototype.hasOwnProperty.call(s.removedMonsterRevisions, incoming.instance_id)) continue;
           // The endpoint already applies the player's map, instance, AOI, and
           // parent-region scope. Filtering to an exact region here discarded
           // actors from shared parent regions even though their AI could still
@@ -654,8 +687,10 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         }
         // Events received after this snapshot was taken win even when a
         // respawn changed the instance ID (per-instance revisions restart).
+        // Shared actors may belong to a parent region, so freshness is the
+        // relevant boundary; exact-region equality would snap them backwards.
         for (const current of Object.values(s.monsters)) {
-          if (current.region_id !== requestedRegion || !(Date.parse(current.last_update_at) > snapshotTime)) continue;
+          if (!(Date.parse(current.last_update_at) > snapshotTime)) continue;
           for (const [id, candidate] of Object.entries(monsters)) {
             if (candidate.spawn_id === current.spawn_id && id !== current.instance_id) delete monsters[id];
           }
@@ -697,7 +732,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       };
       const staleSpawnIDs = Object.entries(defeatedMonsterSpawns)
         .sort((a, b) => a[1] - b[1])
-        .slice(0, Math.max(0, Object.keys(defeatedMonsterSpawns).length - 500))
+        .slice(0, Math.max(0, Object.keys(defeatedMonsterSpawns).length - MAX_DEFEATED_MONSTER_SPAWN_TOMBSTONES))
         .map(([id]) => id);
       for (const id of staleSpawnIDs) delete defeatedMonsterSpawns[id];
       return {

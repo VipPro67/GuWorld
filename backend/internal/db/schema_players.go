@@ -93,7 +93,14 @@ func schemaPlayers() error {
 		death_arena_title VARCHAR(100) DEFAULT '',
 		active_concealment JSONB NOT NULL DEFAULT '{}'::jsonb,
 		last_sever_clues_at TIMESTAMPTZ DEFAULT NULL,
-		last_resonance_scan_at TIMESTAMPTZ DEFAULT NULL
+		last_resonance_scan_at TIMESTAMPTZ DEFAULT NULL,
+		is_banned BOOLEAN NOT NULL DEFAULT false,
+		ban_reason TEXT NOT NULL DEFAULT '',
+		banned_until TIMESTAMPTZ,
+		banned_by UUID REFERENCES players(id) ON DELETE SET NULL,
+		banned_at TIMESTAMPTZ,
+		is_chat_muted BOOLEAN NOT NULL DEFAULT false,
+		chat_muted_until TIMESTAMPTZ
 	);`); err != nil {
 		return err
 	}
@@ -108,6 +115,21 @@ func schemaPlayers() error {
 		return err
 	}
 	if err := execSchema("players_map_instance_idx", `CREATE INDEX IF NOT EXISTS idx_players_map_instance_location ON players (map_instance_id, current_region, x, y);`); err != nil {
+		return err
+	}
+
+	// Existing installations predate the moderation columns. Keep this additive
+	// so an in-place upgrade does not 503 every authenticated request, since
+	// AuthRequired selects the ban columns on session-cache miss.
+	if err := execSchema("players_moderation_columns", `
+	ALTER TABLE players
+		ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT false,
+		ADD COLUMN IF NOT EXISTS ban_reason TEXT NOT NULL DEFAULT '',
+		ADD COLUMN IF NOT EXISTS banned_until TIMESTAMPTZ,
+		ADD COLUMN IF NOT EXISTS banned_by UUID REFERENCES players(id) ON DELETE SET NULL,
+		ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ,
+		ADD COLUMN IF NOT EXISTS is_chat_muted BOOLEAN NOT NULL DEFAULT false,
+		ADD COLUMN IF NOT EXISTS chat_muted_until TIMESTAMPTZ;`); err != nil {
 		return err
 	}
 
@@ -212,6 +234,12 @@ func schemaPlayers() error {
 	// last_login_time) twice per login. No index existed -> seq-scan per login.
 	if err := execSchema("players_login_fp_time_idx", `
 	CREATE INDEX IF NOT EXISTS idx_players_login_fp_time ON players (last_login_fingerprint, last_login_time);`); err != nil {
+		return err
+	}
+
+	// Admin ban list/filter only ever looks at the small set of banned rows.
+	if err := execSchema("players_banned_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_banned ON players (banned_until) WHERE is_banned;`); err != nil {
 		return err
 	}
 

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nguyên Mẫu Hệ Thống: Vạn Đạo Tương Xung & Thanh Đạo Tẩy Thể (GuWorld)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #0d1117; color: #c9d1d9; font-family: system-ui, -apple-system, sans-serif; }
+    .card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; }
+    .badge-safe { background: rgba(35, 134, 54, 0.2); color: #3fb950; border: 1px solid #238636; }
+    .badge-warn { background: rgba(210, 153, 34, 0.2); color: #d29922; border: 1px solid #9e6a03; }
+    .badge-danger { background: rgba(248, 81, 73, 0.2); color: #f85149; border: 1px solid #da3633; }
+  </style>
+</head>
+<body class="p-6 max-w-6xl mx-auto">
+  <header class="mb-6 border-b border-gray-700 pb-4 flex justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-bold text-amber-400">☯️ Nguyên Mẫu: Vạn Đạo Tương Xung & Thanh Đạo Tẩy Thể</h1>
+      <p class="text-sm text-gray-400">GuWorld Combat & Immortal Aperture Ecology Simulator (Ticket #182 Prototype)</p>
+    </div>
+    <span class="px-3 py-1 text-xs font-semibold rounded-full bg-purple-900 text-purple-300 border border-purple-700">Prototype Active</span>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- CỘT 1: THIẾT LẬP TU VI & ĐẠO NGÂN -->
+    <div class="card p-5 space-y-4">
+      <h2 class="text-lg font-bold text-gray-200 border-b border-gray-700 pb-2">1. Cấu Hình Cổ Tiên</h2>
+      
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-1">Lưu Phái Chính (Primary Path)</label>
+        <select id="mainPath" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-amber-300 focus:outline-none">
+          <option value="fire">Hỏa Đạo (Fire)</option>
+          <option value="water">Thủy Đạo (Water)</option>
+          <option value="sword">Kiếm Đạo (Sword)</option>
+          <option value="soul">Hồn Đạo (Soul)</option>
+          <option value="wood">Mộc Đạo (Wood)</option>
+          <option value="strength">Lực Đạo (Strength)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-1">Cảnh Giới Chân Ý Phái Chính</label>
+        <select id="attainmentLevel" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-blue-300 focus:outline-none">
+          <option value="0">Phổ Thông (Level 0 - 0% Hóa Giải)</option>
+          <option value="1">Đại Sư (Level 1 - 10% Hóa Giải)</option>
+          <option value="2">Tông Sư (Level 2 - 25% Hóa Giải + Vạn Đạo Tương Thông)</option>
+          <option value="3">Đại Tông Sư (Level 3 - 45% Hóa Giải)</option>
+          <option value="4">Vô Thượng Đại Tông Sư (Level 4 - 100% Hóa Giải Tuyệt Đối)</option>
+        </select>
+      </div>
+
+      <div class="pt-2 border-t border-gray-700">
+        <div class="flex justify-between items-center mb-2">
+          <label class="text-xs font-bold text-gray-300">Phân Bổ Đạo Ngân Các Hệ</label>
+          <button id="btnPresetPure" class="text-xs text-emerald-400 hover:underline">Đơn Tu</button>
+          <button id="btnPresetDual" class="text-xs text-blue-400 hover:underline">Song Tu</button>
+          <button id="btnPresetChaos" class="text-xs text-red-400 hover:underline">Tạp Tu 10 Phái</button>
+        </div>
+        <div id="pathMarksList" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+          <!-- Render danh sách slider đạo ngân -->
+        </div>
+      </div>
+    </div>
+
+    <!-- CỘT 2: BẢNG PHÂN TÍCH XUNG ĐỘT REAL-TIME -->
+    <div class="card p-5 space-y-4">
+      <h2 class="text-lg font-bold text-gray-200 border-b border-gray-700 pb-2">2. Chỉ Số Xung Đột & Trừng Phạt</h2>
+
+      <!-- Card Tình Trạng -->
+      <div id="statusBadgeContainer" class="p-4 rounded-lg flex items-center justify-between">
+        <div>
+          <div class="text-xs text-gray-400 uppercase font-semibold">Tình Trạng Tiên Khiếu</div>
+          <div id="statusText" class="text-lg font-bold">Thần Thanh Khí Lãng</div>
+        </div>
+        <span id="purityPctBadge" class="text-2xl font-black">100%</span>
+      </div>
+
+      <!-- Chỉ số chi tiết -->
+      <div class="grid grid-cols-2 gap-3 text-xs">
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Số Phái Xung Đột (N_eff):</span>
+          <div id="valNeff" class="text-base font-bold text-amber-300">1.00</div>
+        </div>
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Hệ Số Phạt Đa Tu (F_Multi):</span>
+          <div id="valFMulti" class="text-base font-bold text-red-400">1.00x</div>
+        </div>
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Uy Lực Sát Chiêu (conflictMult):</span>
+          <div id="valConflictMult" class="text-base font-bold text-emerald-400">100.0%</div>
+          <span class="text-[10px] text-gray-500">Sàn tối thiểu: 8.0%</span>
+        </div>
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Tiên Nguyên Hao Phí (Mana Tax):</span>
+          <div id="valManaTax" class="text-base font-bold text-cyan-400">+0.0%</div>
+        </div>
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Tỉ Lệ Gãy Sát Chiêu (Fizzle):</span>
+          <div id="valFizzle" class="text-base font-bold text-purple-400">0.0%</div>
+        </div>
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Tỉ Lệ Phản Phệ Nội Thương:</span>
+          <div id="valBackfire" class="text-base font-bold text-rose-500">0.0%</div>
+        </div>
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Sản Lượng Sinh Thái (Ecology):</span>
+          <div id="valEcology" class="text-base font-bold text-emerald-300">100.0%</div>
+        </div>
+        <div class="bg-gray-900 p-3 rounded border border-gray-800">
+          <span class="text-gray-400">Kiếp Nạn Giáng Lâm:</span>
+          <div id="valTribulation" class="text-xs font-bold text-gray-300">Thuần Hỏa Kiếp</div>
+        </div>
+      </div>
+
+      <div class="p-3 bg-gray-900/60 rounded text-[11px] text-gray-400 border border-gray-800">
+        💡 <strong>Nhật Ký Chiến Đấu Giả Lập:</strong>
+        <p id="mockCombatLog" class="text-gray-300 italic mt-1 font-mono">
+          [Hiệp 1] Bạch Diệm Liêu Thiên giáng lâm, uy lực phát huy trọn vẹn 100%!
+        </p>
+      </div>
+    </div>
+
+    <!-- CỘT 3: TÍNH NĂNG THANH ĐẠO TẨY THỂ (CLEANSING) -->
+    <div class="card p-5 space-y-4">
+      <h2 class="text-lg font-bold text-amber-300 border-b border-gray-700 pb-2">3. Thanh Đạo Tẩy Thể</h2>
+      <p class="text-xs text-gray-400">
+        Vận dụng tiên trận và bí dược bóc tách các đạo ngân dị chủng ra khỏi nhục thân và tiên khiếu, khôi phục bản nguyên thuần khiết.
+      </p>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-1">Chọn Đạo Ngân Cần Tẩy Rửa</label>
+        <select id="cleanseTargetSelect" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-yellow-300 focus:outline-none">
+          <!-- Options populated dynamically -->
+        </select>
+      </div>
+
+      <div>
+        <div class="flex justify-between text-xs text-gray-400 mb-1">
+          <span>Số lượng đạo ngân tẩy:</span>
+          <span id="cleanseAmountLabel" class="text-amber-400 font-bold">1,000</span>
+        </div>
+        <input type="range" id="cleanseSlider" min="0" max="10000" step="500" value="1000" class="w-full">
+      </div>
+
+      <div class="bg-gray-900 p-3 rounded text-xs space-y-2 border border-gray-800">
+        <div class="flex justify-between">
+          <span class="text-gray-400">Chi phí Tiên Nguyên Thạch:</span>
+          <span id="cleanseCostStone" class="text-cyan-300 font-bold">100 Viên</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Thu hồi Đạo Tài (30% giá trị):</span>
+          <span id="cleanseRefundMaterial" class="text-emerald-400 font-bold">300 Đạo Tài</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Thời gian bế quan điều tức:</span>
+          <span class="text-gray-300">6 Giờ (Cooldown)</span>
+        </div>
+      </div>
+
+      <button id="btnExecuteCleanse" class="w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-bold rounded shadow text-sm transition">
+        ✨ Tiến Hành Bóc Tách & Tẩy Rửa
+      </button>
+
+      <div id="cleanseResultToast" class="hidden p-3 bg-emerald-900/50 border border-emerald-600 text-emerald-200 text-xs rounded">
+        Đã tẩy rửa thành công! Độ thuần khiết Tiên Khiếu tăng vọt.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Dữ liệu mẫu
+    const PATH_NAMES = {
+      fire: "Hỏa Đạo", water: "Thủy Đạo", wood: "Mộc Đạo", sword: "Kiếm Đạo",
+      soul: "Hồn Đạo", strength: "Lực Đạo", poison: "Độc Đạo", ice: "Băng Đạo",
+      light: "Quang Đạo", dark: "Ám Đạo"
+    };
+
+    const COMPATIBILITY = {
+      "fire:water": 0.55, "water:fire": 0.55,
+      "fire:wood": 0.95, "wood:fire": 0.95,
+      "fire:ice": 0.60, "ice:fire": 0.60,
+      "light:dark": 0.55, "dark:light": 0.55,
+      "sword:blade": 0.95, "strength:bone": 0.96,
+      "water:wood": 0.95, "wood:water": 0.95
+    };
+
+    function getComp(a, b) {
+      if (a === b) return 1.0;
+      const key = `${a}:${b}`;
+      if (COMPATIBILITY[key]) return COMPATIBILITY[key];
+      return 0.85; // Mặc định giữa các nhóm khác
+    }
+
+    let marks = {
+      fire: 25000, water: 0, wood: 0, sword: 0,
+      soul: 0, strength: 0, poison: 0, ice: 0, light: 0, dark: 0
+    };
+
+    function renderSliders() {
+      const container = document.getElementById('pathMarksList');
+      container.innerHTML = '';
+      const main = document.getElementById('mainPath').value;
+
+      for (const [p, val] of Object.entries(marks)) {
+        const row = document.createElement('div');
+        row.className = 'text-xs';
+        const isMain = p === main;
+        row.innerHTML = `
+          <div class="flex justify-between mb-1">
+            <span class="${isMain ? 'text-amber-400 font-bold' : 'text-gray-300'}">${PATH_NAMES[p] || p} ${isMain ? '(Chính)' : ''}</span>
+            <span class="font-mono text-gray-400" id="label_${p}">${val.toLocaleString()}</span>
+          </div>
+          <input type="range" min="0" max="50000" step="1000" value="${val}" class="w-full accent-amber-500" data-path="${p}">
+        `;
+        container.appendChild(row);
+      }
+
+      container.querySelectorAll('input[type="range"]').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const p = e.target.getAttribute('data-path');
+          marks[p] = parseInt(e.target.value, 10);
+          document.getElementById(`label_${p}`).innerText = marks[p].toLocaleString();
+          recalculate();
+          updateCleanseSelect();
+        });
+      });
+      updateCleanseSelect();
+    }
+
+    function updateCleanseSelect() {
+      const select = document.getElementById('cleanseTargetSelect');
+      const main = document.getElementById('mainPath').value;
+      select.innerHTML = '';
+      for (const [p, val] of Object.entries(marks)) {
+        if (p !== main && val > 0) {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.innerText = `${PATH_NAMES[p]} (${val.toLocaleString()} Đạo Ngân)`;
+          select.appendChild(opt);
+        }
+      }
+      if (select.children.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.innerText = 'Không có đạo ngân tạp để tẩy';
+        select.appendChild(opt);
+      }
+      updateCleanseSlider();
+    }
+
+    function updateCleanseSlider() {
+      const select = document.getElementById('cleanseTargetSelect');
+      const slider = document.getElementById('cleanseSlider');
+      const p = select.value;
+      if (!p || marks[p] <= 0) {
+        slider.max = 0;
+        slider.value = 0;
+      } else {
+        slider.max = marks[p];
+        slider.value = Math.min(slider.value, marks[p]) || Math.min(1000, marks[p]);
+      }
+      updateCleanseCosts();
+    }
+
+    function updateCleanseCosts() {
+      const slider = document.getElementById('cleanseSlider');
+      const amt = parseInt(slider.value, 10);
+      document.getElementById('cleanseAmountLabel').innerText = amt.toLocaleString();
+      document.getElementById('cleanseCostStone').innerText = `${Math.ceil(amt / 10)} Viên`;
+      document.getElementById('cleanseRefundMaterial').innerText = `${Math.floor(amt * 0.3)} Đạo Tài`;
+    }
+
+    function recalculate() {
+      const main = document.getElementById('mainPath').value;
+      const attLevel = parseInt(document.getElementById('attainmentLevel').value, 10);
+      
+      const totalMarks = Object.values(marks).reduce((a, b) => a + b, 0);
+      const mainMarks = marks[main] || 0;
+      const purity = totalMarks > 0 ? (mainMarks / totalMarks) : 1.0;
+
+      // Tính N_eff
+      const grace = Math.max(1000, totalMarks * 0.02);
+      let nEff = 1.0;
+      let rawConflict = 0.0;
+      const synergyDiscount = (attLevel >= 2) ? 0.50 : 1.0;
+
+      for (const [p, amt] of Object.entries(marks)) {
+        if (p === main || amt <= grace) continue;
+        const comp = getComp(main, p);
+        const friction = 2.0 * (1.0 - comp) * (comp >= 0.90 ? synergyDiscount : 1.0);
+        nEff += friction;
+        rawConflict += amt * (1.0 - comp);
+      }
+
+      // Realm Control
+      const realmControlMap = [0.0, 0.10, 0.25, 0.45, 1.00];
+      const realmControl = realmControlMap[attLevel];
+
+      // F_Multi
+      const fMulti = 1.0 + Math.pow(Math.max(0, nEff - 1.0), 1.3) * Math.pow(1.0 - purity, 2) * 4.0;
+      const effConflict = rawConflict * fMulti * (1.0 - realmControl);
+
+      const denominator = mainMarks + Math.max(1000, 0.1 * totalMarks);
+      const conflictRatio = effConflict / denominator;
+
+      let conflictMult = 1.0 / (1.0 + conflictRatio * 0.8 * 2.0);
+      if (conflictMult < 0.08) conflictMult = 0.08;
+      if (realmControl >= 1.0) conflictMult = 1.0;
+
+      // Mana Tax
+      const manaTax = (1.0 - conflictMult) * 1.5;
+
+      // Fizzle Rate
+      let fizzle = 0.0;
+      if (conflictMult < 0.70 && realmControl < 1.0) {
+        fizzle = Math.min(0.25, ((0.70 - conflictMult) / (0.70 - 0.08)) * 0.25);
+      }
+
+      // Backfire Rate
+      let backfire = 0.0;
+      if (conflictMult < 0.60 && realmControl < 1.0) {
+        backfire = Math.min(0.30, ((0.60 - conflictMult) / (0.60 - 0.08)) * 0.30);
+      }
+
+      // Ecology Factor
+      let eco = 1.0;
+      if (purity < 0.70) {
+        eco = Math.max(0.25, 1.0 - (0.70 - purity) * 1.25);
+      }
+
+      // Update UI
+      document.getElementById('purityPctBadge').innerText = `${(purity * 100).toFixed(1)}%`;
+      document.getElementById('valNeff').innerText = nEff.toFixed(2);
+      document.getElementById('valFMulti').innerText = `${fMulti.toFixed(2)}x`;
+      document.getElementById('valConflictMult').innerText = `${(conflictMult * 100).toFixed(1)}%`;
+      document.getElementById('valManaTax').innerText = `+${(manaTax * 100).toFixed(1)}%`;
+      document.getElementById('valFizzle').innerText = `${(fizzle * 100).toFixed(1)}%`;
+      document.getElementById('valBackfire').innerText = `${(backfire * 100).toFixed(1)}%`;
+      document.getElementById('valEcology').innerText = `${(eco * 100).toFixed(1)}%`;
+
+      // Badge style
+      const badgeContainer = document.getElementById('statusBadgeContainer');
+      const statusText = document.getElementById('statusText');
+      if (purity >= 0.85) {
+        badgeContainer.className = 'p-4 rounded-lg flex items-center justify-between badge-safe';
+        statusText.innerText = 'Bản Nguyên Thuần Khiết (An Toàn)';
+        document.getElementById('valTribulation').innerText = 'Thuần Hỏa Kiếp (Ổn Định)';
+        document.getElementById('mockCombatLog').innerText = '[Hiệp 1] Thôi động sát chiêu mượt mà, uy lực phát huy 100%!';
+      } else if (purity >= 0.60) {
+        badgeContainer.className = 'p-4 rounded-lg flex items-center justify-between badge-warn';
+        statusText.innerText = 'Quy Tắc Tiên Khiếu Nhiễu Loạn';
+        document.getElementById('valTribulation').innerText = 'Kiếp Nạn Có Dấu Hiệu Biến Dị';
+        document.getElementById('mockCombatLog').innerText = '[Hiệp 1] [Vạn Đạo Tương Xung] Tiên Nguyên tiêu hao tăng thêm!';
+      } else {
+        badgeContainer.className = 'p-4 rounded-lg flex items-center justify-between badge-danger';
+        statusText.innerText = 'Vạn Đạo Tương Xung Tột Độ';
+        document.getElementById('valTribulation').innerText = '⚠️ KIẾP NẠN HỖN LOẠN BIẾN DỊ';
+        document.getElementById('mockCombatLog').innerText = '[Hiệp 1] [Phản Phệ Nội Thương] Quy tắc dị hệ nổ tung! Tự mất 10% MaxHP, sát chiêu gãy vụn!';
+      }
+    }
+
+    // Presets
+    document.getElementById('btnPresetPure').onclick = () => {
+      marks = { fire: 30000, water: 0, wood: 0, sword: 0, soul: 0, strength: 0, poison: 0, ice: 0, light: 0, dark: 0 };
+      renderSliders();
+      recalculate();
+    };
+
+    document.getElementById('btnPresetDual').onclick = () => {
+      marks = { fire: 25000, water: 0, wood: 10000, sword: 0, soul: 0, strength: 0, poison: 0, ice: 0, light: 0, dark: 0 };
+      renderSliders();
+      recalculate();
+    };
+
+    document.getElementById('btnPresetChaos').onclick = () => {
+      marks = { fire: 5000, water: 5000, wood: 4000, sword: 4000, soul: 4000, strength: 4000, poison: 4000, ice: 4000, light: 4000, dark: 4000 };
+      renderSliders();
+      recalculate();
+    };
+
+    document.getElementById('mainPath').onchange = () => { renderSliders(); recalculate(); };
+    document.getElementById('attainmentLevel').onchange = () => { recalculate(); };
+    document.getElementById('cleanseTargetSelect').onchange = () => { updateCleanseSlider(); };
+    document.getElementById('cleanseSlider').oninput = () => { updateCleanseCosts(); };
+
+    document.getElementById('btnExecuteCleanse').onclick = () => {
+      const select = document.getElementById('cleanseTargetSelect');
+      const p = select.value;
+      const amt = parseInt(document.getElementById('cleanseSlider').value, 10);
+      if (p && marks[p] && amt > 0) {
+        marks[p] = Math.max(0, marks[p] - amt);
+        renderSliders();
+        recalculate();
+        const toast = document.getElementById('cleanseResultToast');
+        toast.innerText = `✨ Đã tẩy sạch ${amt.toLocaleString()} Đạo Ngân ${PATH_NAMES[p]}! Nhận lại ${Math.floor(amt * 0.3)} Đạo Tài.`;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3500);
+      }
+    };
+
+    renderSliders();
+    recalculate();
+  </script>
+</body>
+</html>

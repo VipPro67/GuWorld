@@ -109,7 +109,10 @@ func LoginPlayer(c *gin.Context) {
 
 	var targetPlayerID uuid.UUID
 	var passwordHash string
-	err := db.DB.QueryRow(`SELECT id, password_hash FROM players WHERE LOWER(email) = $1`, loginEmail).Scan(&targetPlayerID, &passwordHash)
+	var banned bool
+	var banReason string
+	var bannedUntil sql.NullTime
+	err := db.DB.QueryRow(`SELECT id, password_hash, is_banned, COALESCE(ban_reason, ''), banned_until FROM players WHERE LOWER(email) = $1`, loginEmail).Scan(&targetPlayerID, &passwordHash, &banned, &banReason, &bannedUntil)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
@@ -122,6 +125,15 @@ func LoginPlayer(c *gin.Context) {
 	// Verify hashed password before running heavy aggregation queries
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
+		return
+	}
+
+	if banIsActive(banned, bannedUntil) {
+		msg := banActiveMessage
+		if banReason != "" {
+			msg = "Tài khoản đã bị khóa. Lý do: " + banReason
+		}
+		c.JSON(http.StatusForbidden, gin.H{"error": msg})
 		return
 	}
 
@@ -164,6 +176,10 @@ func LoginPlayer(c *gin.Context) {
 			Success:        false,
 			ErrorMessage:   "Thiết bị đăng nhập quá nhiều tài khoản trong 24 giờ qua",
 		})
+
+		// Escalate to an automatic ban once the device grossly exceeds the
+		// shared-account limit (configurable via AUTO_BAN_FINGERPRINT_LIMIT).
+		autoBanForFingerprint(c.Request.Context(), player.ID, player.Username, fingerprint, c.ClientIP(), otherAccountsCount)
 
 		// Send real-time SSE notifications to the other active accounts from this fingerprint
 		rows, err := db.DB.Query(`

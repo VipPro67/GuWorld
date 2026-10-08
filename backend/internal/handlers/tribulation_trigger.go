@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -108,7 +109,8 @@ func CheckAndTriggerTribulations() error {
 	// Query stable apertures
 	rows, err := db.DB.Query(`
 		SELECT id, player_id, time_rate, area_size, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
-			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at, state
+			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at, state,
+			COALESCE(dao_marks, '{}'::jsonb)
 		FROM immortal_apertures
 		WHERE state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING')
 	`)
@@ -134,13 +136,14 @@ func CheckAndTriggerTribulations() error {
 		ChaosCalamityCount       int
 		TribulationPendingAt     sql.NullTime
 		State                    string
+		DaoMarks                 models.DaoMarksMap
 	}
 
 	apertures := []ApertureCheck{}
 	for rows.Next() {
 		var ap ApertureCheck
 		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.AreaSize, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.EssenceProductionPerYear,
-			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt, &ap.State); err == nil {
+			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt, &ap.State, &ap.DaoMarks); err == nil {
 			apertures = append(apertures, ap)
 		}
 	}
@@ -372,6 +375,10 @@ func CheckAndTriggerTribulations() error {
 
 			if yearsDiff > 0 {
 				addedEssence := float64(yearsDiff) * float64(ap.EssenceProductionPerYear)
+				// Dao purity suy giảm sản lượng Tiên Nguyên tự nhiên (spec §5.1).
+				if _, total, purity := gamefx.DaoPurity(ap.DaoMarks); total > 0 {
+					addedEssence *= gamefx.EcologyPurityFactor(purity)
+				}
 				manaUps = append(manaUps, manaUp{id: ap.PlayerID, val: addedEssence})
 
 				// Ecosystem & Conflicts Tick — read from pre-loaded nodes
@@ -565,6 +572,10 @@ func CheckAndTriggerTribulations() error {
 				`, newYearsPassed, ap.ID)
 
 				spawnType := calcNextType
+				// Dị Biến Tiên Khiếu → Kiếp Nạn Hỗn Loạn (spec §5.2).
+				if gamefx.IsChaoticTribulation(ap.DaoMarks, nil) {
+					spawnType = "CHAOTIC_TRIBULATION"
+				}
 				err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.EarthCalamityCount+ap.HeavenlyTribulationCount+ap.GrandTribulationCount+ap.MyriadTribulationCount+ap.ChaosCalamityCount+1, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
 				if err != nil {
 					logger.S.Errorf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
@@ -712,6 +723,51 @@ func CheckAndTriggerTribulations() error {
 	return nil
 }
 
+// chaoticHybridPath joins up to 3 highest-mark paths (dominant first) into a
+// comma-separated path list used to display and reward-split the hybrid tribulation (spec §5.2).
+func chaoticHybridPath(daoMarks models.DaoMarksMap, fallback string) string {
+	type pv struct {
+		p string
+		v int64
+	}
+	var ps []pv
+	for p, v := range daoMarks {
+		if v > 0 {
+			ps = append(ps, pv{p, v})
+		}
+	}
+	if len(ps) == 0 {
+		return fallback
+	}
+	sort.Slice(ps, func(i, j int) bool {
+		if ps[i].v != ps[j].v {
+			return ps[i].v > ps[j].v
+		}
+		return ps[i].p < ps[j].p
+	})
+	n := len(ps)
+	if n > 3 {
+		n = 3
+	}
+	parts := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		parts = append(parts, strings.TrimSuffix(strings.ToLower(ps[i].p), " path"))
+	}
+	return strings.Join(parts, ",")
+}
+
+// tribulationPathLabel renders a (possibly hybrid) comma-separated path list for display.
+func tribulationPathLabel(path string) string {
+	if !strings.Contains(path, ",") {
+		return strings.Title(path)
+	}
+	parts := strings.Split(path, ",")
+	for i, p := range parts {
+		parts[i] = strings.Title(strings.TrimSpace(p))
+	}
+	return strings.Join(parts, " + ")
+}
+
 func spawnTribulationEventWorker(apertureID string, playerID string, tribCount int, currentHP float64, newYearsPassed float64, tribulationType string, rewardMult float64) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -792,6 +848,14 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		daoBalancingMult = ratio
 	}
 
+	// Kiếp Nạn Hỗn Loạn: khuếch đại HP/Công quái theo độ tạp (spec §5.2).
+	calamityMult := 1.0
+	if tribulationType == "CHAOTIC_TRIBULATION" {
+		_, _, purity := gamefx.DaoPurity(daoMarks)
+		calamityMult = 1.0 + (1.0-purity)*0.75
+		path = chaoticHybridPath(daoMarks, path)
+	}
+
 	difficulty := 1 + tribCount
 	rewardMarks := models.CalculateTribulationReward(rank, tribulationType, difficulty)
 	if rewardMult <= 0 {
@@ -822,6 +886,8 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		bossTemplateID = "monster_myriad_tribulation_boss"
 	case "CHAOS_CALAMITY":
 		bossTemplateID = "monster_chaos_calamity_boss"
+	case "CHAOTIC_TRIBULATION":
+		bossTemplateID = "monster_chaos_calamity_boss"
 	default:
 		if rank >= 9 {
 			bossTemplateID = "monster_grand_calamity_boss"
@@ -851,14 +917,14 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	// Apply difficulty scaling
 	diffMultiplier := 1.0 + float64(difficulty)*0.2
 	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, bossRank, bossSubRank, boss.Type)
-	bossHP := scaledHP * diffMultiplier * daoBalancingMult
-	bossAtk := scaledAtk * diffMultiplier * daoBalancingMult
+	bossHP := scaledHP * diffMultiplier * daoBalancingMult * calamityMult
+	bossAtk := scaledAtk * diffMultiplier * daoBalancingMult * calamityMult
 	bossDef := scaledDef * diffMultiplier * daoBalancingMult
 
 	_, err = tx.Exec(`
 		INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead, rank, sub_rank)
 		VALUES ($1, $2, 'BOSS', $3, $4, $4, $5, $6, $7, $8, true, false, $9, $10)
-	`, eventID, fmt.Sprintf("%s (%s Path)", boss.Name, strings.Title(path)), path, bossHP, bossAtk, bossDef, rand.Intn(20), rand.Intn(20), bossRank, bossSubRank)
+	`, eventID, fmt.Sprintf("%s (%s Path)", boss.Name, tribulationPathLabel(path)), path, bossHP, bossAtk, bossDef, rand.Intn(20), rand.Intn(20), bossRank, bossSubRank)
 	if err != nil {
 		return err
 	}
@@ -882,8 +948,8 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	minionSubRank := 1
 	for i := 0; i < minionCount; i++ {
 		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, minionSubRank, minion.Type)
-		mHP := scaledHPm * diffMultiplier * daoBalancingMult
-		mAtk := scaledAtkm * diffMultiplier * daoBalancingMult
+		mHP := scaledHPm * diffMultiplier * daoBalancingMult * calamityMult
+		mAtk := scaledAtkm * diffMultiplier * daoBalancingMult * calamityMult
 		mDef := scaledDefm * diffMultiplier * daoBalancingMult
 
 		_, err = tx.Exec(`
@@ -919,6 +985,8 @@ func vitalGuPathChance(tribulationType string) float64 {
 	case "MYRIAD_TRIBULATION":
 		return 0.95
 	case "CHAOS_CALAMITY":
+		return 1.00
+	case "CHAOTIC_TRIBULATION":
 		return 1.00
 	default:
 		return 0

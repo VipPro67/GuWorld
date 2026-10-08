@@ -110,7 +110,7 @@ func AdminListPlayers(c *gin.Context) {
 		}
 	}
 
-	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan FROM players`
+	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan, is_banned FROM players`
 	if where != "" {
 		query += ` WHERE ` + where
 	}
@@ -134,9 +134,10 @@ func AdminListPlayers(c *gin.Context) {
 		var primevalStones float64
 		var currentMana, maxMana, hp, baseHP, immortalStones, wallProgress, humanQi, lifespan float64
 		var isAdmin bool
+		var isBanned bool
 		var createdAt time.Time
 
-		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan); err != nil {
+		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan, &isBanned); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
 			fmt.Println("Error scanning player row:", err)
 			return
@@ -154,6 +155,7 @@ func AdminListPlayers(c *gin.Context) {
 			"primeval_stones": primevalStones,
 			"immortal_stones": immortalStones,
 			"is_admin":        isAdmin,
+			"is_banned":       isBanned,
 			"created_at":      createdAt,
 			"current_region":  currentRegion,
 			"aptitude_type":   aptitudeType,
@@ -203,6 +205,11 @@ func AdminGetPlayerDetail(c *gin.Context) {
 	var selectedTitle, selectedFrame string
 	var thoughtRegenRate float64
 	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(selected_title,''), COALESCE(selected_frame,''), COALESCE(thought_regen_rate,0) FROM players WHERE id=$1`, playerID).Scan(&selectedTitle, &selectedFrame, &thoughtRegenRate)
+
+	var isBanned, isChatMuted bool
+	var banReason string
+	var bannedUntil, chatMutedUntil interface{}
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT is_banned, COALESCE(ban_reason,''), banned_until, is_chat_muted, chat_muted_until FROM players WHERE id=$1`, playerID).Scan(&isBanned, &banReason, &bannedUntil, &isChatMuted, &chatMutedUntil)
 
 	passiveStats := GetPassiveStats(&player)
 
@@ -289,6 +296,11 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"needs_onboarding":      player.NeedsOnboarding,
 		"gu_count":              guCount,
 		"item_count":            itemCount,
+		"is_banned":             isBanned,
+		"ban_reason":            banReason,
+		"banned_until":          bannedUntil,
+		"is_chat_muted":         isChatMuted,
+		"chat_muted_until":      chatMutedUntil,
 	})
 }
 

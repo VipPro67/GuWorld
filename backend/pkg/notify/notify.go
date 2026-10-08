@@ -113,6 +113,47 @@ func Send(q Querier, playerID uuid.UUID, ntype, title, content string) error {
 	return nil
 }
 
+// SendDeferred inserts a notification in a caller-owned transaction and
+// returns the event so the caller can publish it only after committing.
+func SendDeferred(tx *sql.Tx, playerID uuid.UUID, ntype, title, content string) (Notification, error) {
+	if tx == nil {
+		return Notification{}, sql.ErrConnDone
+	}
+	n := Notification{
+		ID: uuid.New().String(), PlayerID: playerID.String(), Type: ntype,
+		Title: title, Content: content, IsRead: false, CreatedAt: time.Now().UTC(),
+	}
+	const insertSQL = `INSERT INTO notifications (id, player_id, type, title, content, is_read, created_at)
+		 VALUES ($1, $2, $3, $4, $5, FALSE, $6)`
+	if _, err := tx.Exec("SAVEPOINT notify_send_deferred"); err != nil {
+		return Notification{}, err
+	}
+	if _, err := tx.Exec(insertSQL, n.ID, n.PlayerID, n.Type, n.Title, n.Content, n.CreatedAt); err != nil {
+		logger.S.Errorf("notify: deferred insert failed player=%s type=%s: %v", playerID, ntype, err)
+		if _, rollbackErr := tx.Exec("ROLLBACK TO SAVEPOINT notify_send_deferred"); rollbackErr != nil {
+			return Notification{}, rollbackErr
+		}
+		if _, releaseErr := tx.Exec("RELEASE SAVEPOINT notify_send_deferred"); releaseErr != nil {
+			return Notification{}, releaseErr
+		}
+		return Notification{}, err
+	}
+	if _, err := tx.Exec("RELEASE SAVEPOINT notify_send_deferred"); err != nil {
+		return Notification{}, err
+	}
+	return n, nil
+}
+
+// Publish sends a committed notification to the player's WebSocket channel.
+func Publish(n Notification) {
+	playerID, err := uuid.Parse(n.PlayerID)
+	if err != nil {
+		logger.S.Errorf("notify: cannot publish invalid player id %q: %v", n.PlayerID, err)
+		return
+	}
+	push(playerID, n)
+}
+
 // isRetryableDBError reports whether err is a transient PostgreSQL error that
 // is safe to retry: lock timeout (55P03) or deadlock detected (40P01).
 func isRetryableDBError(err error) bool {

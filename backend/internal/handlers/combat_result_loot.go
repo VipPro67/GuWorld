@@ -20,7 +20,7 @@ import (
 // and AutoResolveCombat (skip battle), using the AutoCombatStart semantics:
 // PVP drop record + loot-table roll + Gu-drop chance, with random per-item
 // winners when in a party and direct inventory grants when solo.
-func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *models.CombatState, partyMembers []uuid.UUID, isVirtual bool) (lootDetailLogs []string) {
+func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *models.CombatState, partyMembers []uuid.UUID, isVirtual bool) (lootDetailLogs []string, pendingNotifications []notify.Notification) {
 	if activeCombat != nil && activeCombat.EnemyType == "PVP" && !isVirtual {
 		if activeCombat.TargetPlayerID != "" && activeCombat.TargetPlayerID != "dummy" {
 			targetUUID, parseErr := uuid.Parse(activeCombat.TargetPlayerID)
@@ -48,11 +48,15 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 						if dropSummary != "" {
 							pvpMsg := fmt.Sprintf("Chiến thắng PVP vang dội! Rơi rớt từ bại binh: %s.", dropSummary)
 							lootDetailLogs = append(lootDetailLogs, pvpMsg)
-							notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg)
+							if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg); err == nil {
+								pendingNotifications = append(pendingNotifications, n)
+							}
 						} else {
 							pvpMsg := "Chiến thắng PVP vang dội! Bại binh không có tài sản rơi rớt."
 							lootDetailLogs = append(lootDetailLogs, pvpMsg)
-							notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg)
+							if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm PVP", pvpMsg); err == nil {
+								pendingNotifications = append(pendingNotifications, n)
+							}
 						}
 					} else {
 						_, _ = tx.Exec("UPDATE players SET hp = $1, active_combat = NULL WHERE id = $2", targetHP, targetUUID)
@@ -211,10 +215,12 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 				if len(lootParts) > 0 {
 					lootMsg := "Nhặt được: " + strings.Join(lootParts, ", ") + "."
 					lootDetailLogs = append(lootDetailLogs, lootMsg)
-					notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg)
+					if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg); err == nil {
+						pendingNotifications = append(pendingNotifications, n)
+					}
 				}
 			}
 		}
 	}
-	return lootDetailLogs
+	return lootDetailLogs, pendingNotifications
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // AutoCombatStartRequest payload for starting automated combat
@@ -163,6 +164,7 @@ func AutoCombatStart(c *gin.Context) {
 
 	// 4. Run Simulator
 	logs := simulator.Simulate(simState)
+	var pendingNotifications []notify.Notification
 
 	// Apply Love Gu (Chaos Gamble) penalties
 	applyLoveGuPenalties(&player, logs)
@@ -240,7 +242,8 @@ func AutoCombatStart(c *gin.Context) {
 				}
 			}
 
-			lootDetailLogs := applyCombatVictoryLoot(tx, &player, player.ActiveCombat, partyMembers, isVirtual)
+			lootDetailLogs, lootNotifications := applyCombatVictoryLoot(tx, &player, player.ActiveCombat, partyMembers, isVirtual)
+			pendingNotifications = append(pendingNotifications, lootNotifications...)
 
 			markBossCleared(tx, &player)
 
@@ -334,6 +337,9 @@ func AutoCombatStart(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat transaction"})
 		return
 	}
+	for _, notification := range pendingNotifications {
+		notify.Publish(notification)
+	}
 
 	setWorldPosFromPlayer(&player)
 
@@ -354,9 +360,15 @@ func AutoCombatStart(c *gin.Context) {
 	}
 	go func() {
 		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
+		if !shouldRecordCombatHistory(enemyType, winner) {
+			return
+		}
 		if enemyType == "PVP" {
 			attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
 			savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summary, combatantInfos, enemyName, player.Username, player.CurrentRegion)
+		} else {
+			// PVE defeats only: the replay the player wants to review afterwards.
+			SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, player.CurrentRegion)
 		}
 	}()
 	c.JSON(http.StatusOK, gin.H{
@@ -462,10 +474,13 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		simEnemy.LuckBonus = activeCombat.EnemyLuckBonus
 	}
 
+	// Dị Thú Đạo Thể (spec §1.4): bosses and wild monsters inherently possess
+	// Non-Conflicting Dao Marks so PVE combat is never self-nerfed by conflict.
+	simEnemy.HasNonConflictingDao = true
 	simEnemy.DaoProfile = gamefx.BuildDaoCombatProfile(
 		enemy.DaoMarks,
 		enemy.PathMasteries,
-		false,
+		true,
 		simEnemy.DaoBonus,
 	)
 

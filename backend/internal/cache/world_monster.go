@@ -343,7 +343,7 @@ func HitWorldMonster(ctx context.Context, regionID, instanceID, commandID string
 		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, key, updated, ttl)
-			pipe.Set(ctx, commandKey, outcome, ttl)
+			pipe.Set(ctx, commandKey, string(outcome), ttl)
 			return nil
 		})
 		return err

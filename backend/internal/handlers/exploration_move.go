@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // GetRegionalWallDebuff calculates the debuff percentage (negative float64) and duration
@@ -656,14 +657,16 @@ func MovePlayer(c *gin.Context) {
 	}
 
 	// Auto-resolve combat if skip_battle is enabled
+	var pendingNotifications []notify.Notification
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
-		winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
+		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during move: %v", err)
 			_ = tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
 			return
 		} else {
+			pendingNotifications = notifications
 			combatTriggered = false // Combat was auto-resolved
 			enemyName := "kẻ thù"
 			if e, ok := skipSummary["enemy_name"].(string); ok {
@@ -686,6 +689,9 @@ func MovePlayer(c *gin.Context) {
 				logger.S.Errorf("MovePlayer: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
 				return
+			}
+			for _, notification := range pendingNotifications {
+				notify.Publish(notification)
 			}
 			ClearPendingPlayerQueues(player.ID.String())
 			PublishPlayerCombatDelta(player.ID, CombatEventEnded, nil)
@@ -963,14 +969,16 @@ func MovePlayerPath(c *gin.Context) {
 	qiGained := 0.0
 
 	// Auto-resolve combat if skip_battle is enabled
+	var pendingNotifications []notify.Notification
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
-		winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
+		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during path move: %v", err)
 			_ = tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
 			return
 		} else {
+			pendingNotifications = notifications
 			combatTriggered = false // Combat was auto-resolved
 			enemyName := "kẻ thù"
 			if e, ok := skipSummary["enemy_name"].(string); ok {
@@ -995,6 +1003,9 @@ func MovePlayerPath(c *gin.Context) {
 				logger.S.Errorf("MovePlayerPath: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
 				return
+			}
+			for _, notification := range pendingNotifications {
+				notify.Publish(notification)
 			}
 			finalLog := strings.Join(eventLogs, "\n")
 			if qiGained > 0 {

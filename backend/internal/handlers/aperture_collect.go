@@ -320,6 +320,25 @@ func getPathDaoMultiplier(pathRaw string, nodeDaoMap map[string]int) float64 {
 	return 1.0 + float64(bestMarks)*0.0001
 }
 
+// nodeDaoPurity returns Dao purity (dominant / total) for an aperture's mark map.
+// Returns 0 for an empty map, which callers treat as "no penalty".
+func nodeDaoPurity(nodeDaoMap map[string]int) float64 {
+	var total, dominant int64
+	for _, v := range nodeDaoMap {
+		if v <= 0 {
+			continue
+		}
+		total += int64(v)
+		if int64(v) > dominant {
+			dominant = int64(v)
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return float64(dominant) / float64(total)
+}
+
 type apertureRewardContext struct {
 	nodeDaoMap          map[string]int
 	ignoresPathConflict bool
@@ -382,6 +401,15 @@ func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.Apert
 	conflictMultiplier := 1.0
 	if CheckNodeConflict(n, allNodes) && !ctx.ignoresPathConflict {
 		conflictMultiplier = 0.5
+	}
+
+	// 2b. Ecology purity factor (spec §5.1): tạp tu làm cạn kiệt linh khí/khoáng mạch.
+	// Chí Tôn Tiên Thai / path_conflict_reduction >= 100 miễn nhiễm suy thoái sinh thái.
+	ecologyMultiplier := 1.0
+	if !ctx.ignoresPathConflict {
+		if p := nodeDaoPurity(ctx.nodeDaoMap); p > 0 {
+			ecologyMultiplier = gamefx.EcologyPurityFactor(p)
+		}
 	}
 
 	// 3. Ecosystem multiplier
@@ -457,7 +485,7 @@ func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.Apert
 
 	baseReward := n.ProductionAmount * int64(multiples)
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
-	combinedMultiplier := (areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier * itemFoodPathMultiplier * nodeLevelMultiplier) / itemRankDivisor
+	combinedMultiplier := (areaMultiplier * daoMultiplier * conflictMultiplier * ecologyMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier * itemFoodPathMultiplier * nodeLevelMultiplier) / itemRankDivisor
 
 	totalReward := applyBulkReward(baseReward, combinedMultiplier, bulkMultiplier)
 	if n.ProductionType == "Material" && totalReward > 10000000 {

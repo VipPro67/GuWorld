@@ -266,6 +266,14 @@ func RegisterPlayer(c *gin.Context) {
 		return
 	}
 
+	if blocked, errBlock := deviceBlocked(tx, c.ClientIP(), strings.TrimSpace(req.Fingerprint)); errBlock != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra thiết bị"})
+		return
+	} else if blocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Thiết bị này đã bị chặn. Vui lòng liên hệ bộ phận hỗ trợ."})
+		return
+	}
+
 	// Generate unique referral code
 	refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
 
@@ -321,6 +329,8 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	// 3.5 Handle referral code logic
+	var referralBanTarget uuid.UUID
+	var referralBanCount int
 	trimmedRef := strings.TrimSpace(req.ReferralCode)
 	if trimmedRef != "" {
 		var referrerID uuid.UUID
@@ -343,6 +353,14 @@ func RegisterPlayer(c *gin.Context) {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record referral: " + err.Error()})
 					return
 				}
+
+				if isSuspicious {
+					var suspiciousCount int
+					if err := tx.QueryRow("SELECT COUNT(*) FROM referrals WHERE referrer_id = $1 AND is_suspicious", referrerID).Scan(&suspiciousCount); err == nil {
+						referralBanTarget = referrerID
+						referralBanCount = suspiciousCount
+					}
+				}
 			}
 		}
 	}
@@ -350,6 +368,10 @@ func RegisterPlayer(c *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player record: " + err.Error()})
 		return
+	}
+
+	if referralBanTarget != uuid.Nil {
+		autoBanForReferral(c.Request.Context(), referralBanTarget, referralBanCount)
 	}
 
 	// 4. Generate token
