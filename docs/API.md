@@ -293,9 +293,9 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/chat/mail/send` | Gửi tin riêng 1:1, tối đa 500 ký tự. Sender chịu 1 Nguyên Thạch/tin; tin đầu tiên giữa một cặp người chơi thu thêm 1 Nguyên Thạch mở kết nối. Kết nối dùng chung hai chiều, lưu lâu dài. |
 | GET | `/chat/mail/inbox` |
 | GET | `/chat/mail/conversations` | Danh sách 100 hội thoại gần nhất, tin cuối và số tin chưa đọc. |
-| GET | `/chat/mail/thread?username=...` | 50 tin gần nhất của cuộc trò chuyện, đánh dấu tin nhận được là đã đọc. |
+| GET | `/chat/mail/thread?username=...` | 50 tin gần nhất của cuộc trò chuyện, đánh dấu tin nhận được là đã đọc; mỗi tin có `sender_rank` để tô màu tên người gửi. |
 | POST | `/chat/bao-hoang/send` | Gửi tin nhắn chat. Trả về `{ message }`; thông tin player (Nguyên Thạch, Nhân Khí) đồng bộ qua WebSocket `player.updated`. |
-| GET | `/chat/bao-hoang/messages?channel=world\|general\|sect\|region` | `region` tự lấy khu vực và instance hiện tại từ player; `scope_only=1` chỉ trả khóa WebSocket hiện tại để đồng bộ đăng ký. Chat khu vực miễn phí và không nhận region do client chỉ định. |
+| GET | `/chat/bao-hoang/messages?channel=world\|general\|sect\|region` | Mỗi tin có `sender_rank` để giao diện tô màu tên theo rank. `region` tự lấy khu vực và instance hiện tại từ player; `scope_only=1` chỉ trả khóa WebSocket hiện tại để đồng bộ đăng ký. Chat khu vực miễn phí và không nhận region do client chỉ định. |
 
 | POST | `/soul/refine` |
 | GET | `/instance/active` |

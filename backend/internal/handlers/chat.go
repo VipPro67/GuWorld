@@ -125,7 +125,7 @@ func SendPrivateMail(c *gin.Context) {
 	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT created_at FROM messages WHERE id=$1`, messageID).Scan(&sentAt); err != nil {
 		sentAt = time.Now()
 	}
-	item := ChatItem{ID: messageID.String(), SenderID: player.ID.String(), SenderUsername: player.Username, SenderAvatar: player.AvatarURL, Content: req.Content, Channel: "private", CreatedAt: sentAt}
+	item := ChatItem{ID: messageID.String(), SenderID: player.ID.String(), SenderUsername: player.Username, SenderAvatar: player.AvatarURL, SenderRank: player.Rank, Content: req.Content, Channel: "private", CreatedAt: sentAt}
 	event := gin.H{"message": item, "conversation_username": receiverUsername}
 	_ = cache.PublishEventQuick("chat:private:"+player.ID.String(), event)
 	_ = cache.PublishEventQuick("chat:private:"+receiverID.String(), gin.H{"message": item, "conversation_username": player.Username})
@@ -224,7 +224,7 @@ func GetPrivateThread(c *gin.Context) {
 	globalUUID := "00000000-0000-0000-0000-000000000000"
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT * FROM (
-			SELECT m.id,m.sender_id,p.username,COALESCE(p.avatar_url,''),COALESCE(p.selected_title,''),m.content,m.channel,m.created_at
+			SELECT m.id,m.sender_id,p.username,COALESCE(p.avatar_url,''),COALESCE(p.selected_title,''),COALESCE(p.rank,0),m.content,m.channel,m.created_at
 			FROM messages m JOIN players p ON p.id=m.sender_id
 			WHERE m.channel='private' AND m.receiver_id <> $3
 			  AND ((m.sender_id=$1 AND m.receiver_id=$2) OR (m.sender_id=$2 AND m.receiver_id=$1))
@@ -238,7 +238,7 @@ func GetPrivateThread(c *gin.Context) {
 	messages := make([]ChatItem, 0)
 	for rows.Next() {
 		var item ChatItem
-		if err := rows.Scan(&item.ID, &item.SenderID, &item.SenderUsername, &item.SenderAvatar, &item.SenderTitle, &item.Content, &item.Channel, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.SenderID, &item.SenderUsername, &item.SenderAvatar, &item.SenderTitle, &item.SenderRank, &item.Content, &item.Channel, &item.CreatedAt); err != nil {
 			rows.Close()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc hội thoại"})
 			return
@@ -301,6 +301,7 @@ type ChatItem struct {
 	SenderUsername string    `json:"sender_username"`
 	SenderAvatar   string    `json:"sender_avatar"`
 	SenderTitle    string    `json:"sender_title"`
+	SenderRank     int       `json:"sender_rank"`
 	Content        string    `json:"content"`
 	Channel        string    `json:"channel"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -439,13 +440,13 @@ func SendBaoHoangChat(c *gin.Context) {
 	// Broadcast the new message efficiently (append-only)
 	var newMsg ChatItem
 	err = db.DB.QueryRow(`
-		SELECT id, sender_id, username, COALESCE(avatar_url, ''), COALESCE(selected_title, ''), content, channel, created_at
+		SELECT id, sender_id, username, COALESCE(avatar_url, ''), COALESCE(selected_title, ''), COALESCE(p.rank, 0), content, channel, created_at
 		FROM messages m
 		JOIN players p ON m.sender_id = p.id
 		WHERE m.id = $1
 	`, insertedMessageID).Scan(
 		&newMsg.ID, &newMsg.SenderID, &newMsg.SenderUsername,
-		&newMsg.SenderAvatar, &newMsg.SenderTitle,
+		&newMsg.SenderAvatar, &newMsg.SenderTitle, &newMsg.SenderRank,
 		&newMsg.Content, &newMsg.Channel, &newMsg.CreatedAt,
 	)
 	if err == nil {
