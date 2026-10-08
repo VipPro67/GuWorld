@@ -5,6 +5,7 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại, di
 ## 1. Tài khoản và nhân vật
 
 - Cổ sư đăng ký bằng username/email/password hoặc đăng nhập Google nếu cấu hình OAuth.
+- **Khóa tài khoản (`players.ban`)**: tài khoản bị khóa (có thời hạn hoặc vĩnh viễn) không thể đăng nhập và bị đẩy khỏi phiên đang chơi; đăng nhập trả về lý do khóa. Admin cũng có thể chỉ **hạn chế chat** (không gửi được chat Bảo Hoàng/private mail) hoặc chặn thiết bị. Hệ thống tự động khóa khi một thiết bị vượt ngưỡng nhiều tài khoản hoặc lạm dụng referral.
 - Hồ sơ hỗ trợ bio, avatar, đổi mật khẩu và cơ chế ngụy trang thông tin công khai.
 - **Đổi Đạo Hiệu (Hạn chế & Đại Đạo Phản Phệ)**:
   - **Nhất Chuyển & Nhị Chuyển (Rank 1 - 2)**: Tự do đổi tên miễn phí, không tốn tài nguyên hay chịu phản phệ.
@@ -293,21 +294,30 @@ Các lưu phái trong cùng một nhóm hoàn toàn tương thích **100% (Xung 
 
 #### 3. Công Thức Tính Xung Đột & Điều Hòa Cảnh Giới
 - **Ngưỡng An Toàn (Grace Threshold)**: Đạo ngân ngoại hệ $\le \max(1.000, 2\% \text{ tổng Đạo Ngân})$ hoàn toàn không gây xung đột.
+- **Mẫu Số Chuẩn Hóa Động**: Thay cho hằng số cố định, xung đột được chuẩn hóa theo quy mô Đạo Ngân thực tế:
+  $$\text{Denominator} = \text{Amount}(p) + \max(1.000, 0.1 \times \text{TotalMarks})$$
 - **Hiệu Quả Khuếch Đại Cảnh Giới (Attainment Efficiency)**: Cảnh giới Chân Ý giúp tăng cường uy lực Đạo Ngân đồng hệ:
   - Phàm Thai: $\times 1.00$
-  - Đại Sư (Master): $\times 1.10$ (+10% uy lực)
-  - Tông Sư (Grandmaster): $\times 1.20$ (+20% uy lực)
-  - Đại Tông Sư (Great Grandmaster): $\times 1.30$ (+30% uy lực)
-  - Vô Thượng (Supreme Grandmaster): $\times 1.45$ (+45% uy lực)
+  - Đại Sư (Master): $\times 1.05$
+  - Tông Sư (Grandmaster): $\times 1.12$
+  - Đại Tông Sư (Great Grandmaster): $\times 1.25$
+  - Vô Thượng (Supreme Grandmaster): $\times 1.45$
 - **Hệ Số Điều Hòa Cảnh Giới (Realm Control Mitigation)**: Giảm trực tiếp lượng xung đột từ Đạo ngân ngoại hệ:
-  - Đại Sư: Giảm **20%** xung đột
-  - Tông Sư: Giảm **40%** xung đột
-  - Đại Tông Sư: Giảm **60%** xung đột
-  - Vô Thượng Đại Tông Sư: Giảm **80%** xung đột
-- **Hệ số Xung Đột Khi Tấn Công (`DaoConflictMultiplier`)**: Nằm trong khoảng `[0.10, 1.00]`. Nếu không có Cảnh giới điều hòa, mang lượng lớn Đạo ngân xung đột có thể làm mất tới **90% sát thương**.
+  - Đại Sư: Giảm **10%** xung đột
+  - Tông Sư: Giảm **25%** xung đột
+  - Đại Tông Sư: Giảm **45%** xung đột
+  - Vô Thượng Đại Tông Sư: Giảm **100%** xung đột (hoá giải tuyệt đối khi ra chiêu thuộc chính lưu phái đó)
+- **Số Phái Bất Khả Dung Hiệu Dụng ($N_{\text{eff}}$)**: Đếm mềm theo ma trận tương thích thay vì số nguyên thô:
+  $$N_{\text{eff}} = 1.0 + \sum_{q \neq p,\ \text{amt}(q) > \text{grace}} 2.0 \times (1.0 - \text{Compatibility}(p,q)) \times \text{MasterySynergyDiscount}$$
+  (Tông Sư trở lên: cặp có tương thích $\ge 0.90$ giảm ma sát thêm 50%.)
+- **Hệ Số Phạt Đa Tu Lũy Tiến ($F_{\text{Multi}}$)**:
+  $$F_{\text{Multi}} = 1.0 + (N_{\text{eff}} - 1)^{1.3} \times (1.0 - P)^2 \times 4.0$$
+- **Hệ số Xung Đột Khi Tấn Công (`DaoConflictMultiplier`)**:
+  $$\text{conflictMult} = \max\left(0.08,\ \frac{1.0}{1.0 + \text{conflictRatio} \times 1.6}\right)$$
+  Nằm trong khoảng `[0.08, 1.00]`: tạp tu cực đoan có thể mất tới **92% sát thương**.
 - **Màng Phòng Thủ Đạo Ngân Tự Nhiên (`NaturalDaoResistance`)**: Khi bị đòn tấn công dị hệ nhắm vào, Đạo ngân trên người Cổ Tiên phòng thủ tạo ra màng kháng tự nhiên:
   $$\text{Resistance} = \frac{\text{DefenseConflictDao}}{\text{DefenseConflictDao} + 50.000} \times 30\% \quad (\text{Trần tối đa } 30\%)$$
-- **Đặc Tính Không Xung Đột (Non-Conflicting Body / Chí Tôn Tiên Thai)**: Bỏ qua 100% hình phạt xung đột khi tấn công (luôn gây 100% sát thương), đổi lại không có màng kháng tự nhiên khi phòng thủ.
+- **Đặc Tính Không Xung Đột (Non-Conflicting Body / Chí Tôn Tiên Thai)**: Bỏ qua 100% hình phạt xung đột khi tấn công (luôn gây 100% sát thương), đổi lại không có màng kháng tự nhiên khi phòng thủ. Boss và Hoang Thú cũng sở hữu **Dị Thú Đạo Thể** tương tự để cân bằng PVE.
 
 #### 4. Ví Dụ Tính Toán Chi Tiết (Step-by-Step)
 
@@ -349,6 +359,23 @@ Các lưu phái trong cùng một nhóm hoàn toàn tương thích **100% (Xung 
 1. **Chuyên Tu (Pure Focus)**: Dồn toàn lực vào 1 nhóm Đạo. Không lo xung đột, sát thương đồng hệ cực đại.
 2. **Song Tu / Phụ Tu (Dual Synergic)**: 1 phái Chính + 1 phái Phụ tương thích cao (như Lực + Biến Hóa, Hồn + Nô), nâng Chân Ý lên Tông Sư để xóa bỏ xung đột, công thủ toàn diện.
 3. **Đa Tu Toàn Năng (Omni Master)**: Luyện nhiều phái đối nghịch, bắt buộc phải cày Mộng Cảnh để đạt Đại Tông Sư / Vô Thượng ở các phái nhằm áp chế xung đột tối đa.
+
+#### 6. Trừng Phạt Đa Tu Trong Combat & Thanh Đạo Tẩy Thể
+Khi xung đột vượt ngưỡng, tạp tu không chỉ mất sát thương mà còn chịu thêm:
+- **Hao Phí Tiên Nguyên (Mana Tax)**: `ManaCost × (1.0 + (1.0 − conflictMult) × 1.5)`. Tạp tu cực đoan tốn tới **2.38×** Chân Nguyên.
+- **Thôi Động Thất Bại (Fizzle)**: khi `conflictMult < 0.70`, sát chiêu có thể tán loạn (tối đa **25%**) — vẫn mất Chân Nguyên nhưng 0 sát thương, 0 hiệu ứng.
+- **Phản Phệ Nội Thương (Backfire)**: khi `conflictMult < 0.60`, caster có thể tự nhận sát thương chuẩn xuyên giáp/khiên bằng `MaxHP × (8–12%)` (tối đa **30%**), đồng thời đòn đánh (nếu không gãy chiêu) bị giảm thêm 50%.
+
+**Suy Thoái Sinh Thái Tiên Khiếu**: Độ Thuần Khiết $P = \text{DominantMarks} / \text{TotalMarks}$. Khi $P < 0.70$, sản lượng mỏ tài nguyên và Tiên Nguyên tự nhiên giảm theo
+$$\text{EcologyPurityFactor} = \max\left(0.25,\ 1.0 - (0.70 - P) \times 1.25\right)$$
+(Chí Tôn Tiên Thai / Đạo Ngân Bất Tương Xung miễn nhiễm suy thoái này.)
+
+**Kiếp Nạn Hỗn Loạn (Chaotic Tribulation)**: kích hoạt khi $P < 0.60$ và $N_{\text{eff}} \ge 2.5$. Tai kiếp lai tạp 2–3 lưu phái, quái được khuếch đại `1.0 + (1.0 − P) × 0.75` HP/Công, phá node mạnh hơn, và thưởng Đạo Ngân rải đều theo các hệ thay vì dồn 70% phái chính — tạo **Vòng Xoáy Tha Hóa** nếu không chủ động thanh tẩy.
+
+**Thanh Đạo Tẩy Thể**: dùng Tiên Nguyên Thạch để bóc tách Đạo Ngân ngoại hệ, nâng cao Độ Thuần Khiết:
+- Chi phí: **1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp**.
+- Hoàn trả **30%** giá trị dưới dạng Đạo Tài của lưu phái tương ứng.
+- Bế quan hồi phục **12 giờ** giữa các lần, tối đa **10.000 Đạo Ngân/lần**. Không thể tẩy phái chủ đạo.
 
 ## 4. Cổ trùng và bọc đồ
 
@@ -1055,7 +1082,7 @@ Phong ấn thích hợp cho Cổ ít dùng nhưng quý; vẫn phải kiểm tra 
 
 ## 24. Lịch sử, replay và Ký Sự
 
-- **Lịch Sử Chiến Đấu** liệt kê trận gần đây, kết quả/đối thủ và cho mở báo cáo hoặc replay log chi tiết.
+- **Lịch Sử Chiến Đấu** liệt kê trận gần đây (PVP và các trận PVE thua), kết quả/đối thủ và cho mở báo cáo hoặc replay log chi tiết.
 - **Ký Sự Tu Hành** ghi các hành động quan trọng như tu luyện, luyện Cổ, giao dịch, chăm Cổ và thay đổi tài sản. Có tìm kiếm tự do, lọc loại hành động/trạng thái và phân trang.
 - Đây là hai nơi đầu tiên nên kiểm tra khi cần hiểu vì sao tài nguyên, Cổ hoặc kết quả trận đấu thay đổi.
 

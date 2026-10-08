@@ -187,6 +187,7 @@ interface PlayerRow {
   current_mana: number; max_mana: number; hp: number; base_hp: number;
   primeval_stones: number; immortal_stones: number;
   is_admin: boolean; created_at: string; current_region: string;
+  is_banned?: boolean;
   aptitude_type: string; wall_progress: number; human_qi: number;
   lifespan: number;
 }
@@ -262,6 +263,11 @@ interface PlayerDetail {
   fake_rank?: number; fake_sub_rank?: number; fake_vital_gu?: string;
   is_disguised?: boolean; needs_onboarding?: boolean; needs_soul_refine?: boolean;
   immortal_jade?: number;
+  is_banned?: boolean;
+  ban_reason?: string;
+  banned_until?: string | null;
+  is_chat_muted?: boolean;
+  chat_muted_until?: string | null;
   gu_count: number;
   item_count: number;
   growth_data?: GrowthData;
@@ -576,6 +582,13 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
   const [showStones, setShowStones] = useState(false);
   const [stonesPrimeval, setStonesPrimeval] = useState("");
   const [stonesImmortal, setStonesImmortal] = useState("");
+
+  const [showModeration, setShowModeration] = useState(false);
+  const [modReason, setModReason] = useState("");
+  const [modHours, setModHours] = useState("72");
+  const [modPermanent, setModPermanent] = useState(false);
+  const [modChatMute, setModChatMute] = useState(false);
+  const [modBlockDevice, setModBlockDevice] = useState(true);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
@@ -1473,6 +1486,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <Crown className="w-3.5 h-3.5 text-amber-400" />
               Vai trò
             </button>}
+            {canAdminAction("banPlayer") && <button onClick={() => setShowModeration(true)} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-red-900/60 text-xs text-red-300 hover:text-white hover:bg-red-950/40 transition-colors cursor-pointer disabled:opacity-50">
+              <Shield className="w-3.5 h-3.5 text-red-400" />
+              {detail?.is_banned ? "Đã khóa" : "Khóa / Hạn chế"}
+            </button>}
             <button onClick={() => { setSelectedId(null); setDetail(null); }} disabled={actionLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <X className="w-3.5 h-3.5" />
               Đóng
@@ -2328,6 +2345,58 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Lưu"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Moderation Modal */}
+        {showModeration && detail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+            <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-zinc-100 font-serif">Khóa / Hạn chế người chơi</h3>
+                <button onClick={() => setShowModeration(false)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+              </div>
+              <p className="text-xs text-zinc-500 font-mono">{detail.username} · {detail.id}</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Lý do (bắt buộc)</label>
+                  <textarea value={modReason} onChange={e => setModReason(e.target.value)} rows={2} placeholder="Vi phạm gì..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <label className="text-[11px] font-bold text-zinc-500 font-mono">Thời hạn (giờ)</label>
+                    <input type="number" min={1} value={modHours} disabled={modPermanent} onChange={e => setModHours(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 disabled:opacity-50" />
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-zinc-400 pb-2">
+                    <input type="checkbox" checked={modPermanent} onChange={e => setModPermanent(e.target.checked)} /> Vĩnh viễn
+                  </label>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+                  <input type="checkbox" checked={modChatMute} onChange={e => setModChatMute(e.target.checked)} /> Đồng thời hạn chế chat
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+                  <input type="checkbox" checked={modBlockDevice} onChange={e => setModBlockDevice(e.target.checked)} /> Chặn thiết bị (IP / fingerprint)
+                </label>
+              </div>
+              <div className="flex gap-2 flex-wrap justify-end">
+                {detail.is_banned && <button disabled={actionLoading || !modReason.trim()} onClick={async () => {
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/unban`, "PUT", { reason: modReason.trim(), confirmation_target: detail.id });
+                  if (ok) setShowModeration(false);
+                }} className="px-3 py-2 rounded-lg text-xs font-bold bg-emerald-700 hover:bg-emerald-600 text-zinc-100 cursor-pointer disabled:opacity-50">Mở khóa</button>}
+                {detail.is_chat_muted && <button disabled={actionLoading || !modReason.trim()} onClick={async () => {
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/chat-unmute`, "PUT", { reason: modReason.trim(), confirmation_target: detail.id });
+                  if (ok) setShowModeration(false);
+                }} className="px-3 py-2 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer disabled:opacity-50">Bỏ hạn chế chat</button>}
+                <button disabled={actionLoading || !modReason.trim()} onClick={async () => {
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/chat-mute`, "PUT", { reason: modReason.trim(), confirmation_target: detail.id, duration_hours: modPermanent ? 0 : Number(modHours) || 0, permanent: modPermanent });
+                  if (ok) setShowModeration(false);
+                }} className="px-3 py-2 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer disabled:opacity-50">Hạn chế chat</button>
+                <button disabled={actionLoading || !modReason.trim()} onClick={async () => {
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/ban`, "PUT", { reason: modReason.trim(), confirmation_target: detail.id, duration_hours: modPermanent ? 0 : Number(modHours) || 0, permanent: modPermanent, chat_mute: modChatMute, chat_mute_hours: modPermanent ? 0 : Number(modHours) || 0, block_device: modBlockDevice });
+                  if (ok) setShowModeration(false);
+                }} className="px-3 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white cursor-pointer disabled:opacity-50">Khóa tài khoản</button>
               </div>
             </div>
           </div>
@@ -3465,7 +3534,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     {players.map((p) => (
                       <tr key={p.id} onClick={() => setSelectedId(p.id)} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
                         <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate whitespace-nowrap" title={p.id}>{p.id.slice(0, 8)}...</td>
-                        <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{p.username}</td>
+                        <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{p.username}{p.is_banned && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950/80 border border-red-500/40 text-red-400">ĐÃ KHÓA</span>}</td>
                         <td className="px-3 py-2.5 text-zinc-400 whitespace-nowrap">{p.email}</td>
                         <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${rankColor(p.rank)}`}>{getRankName(p.rank, p.sub_rank)}</td>
                         <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{Math.round(p.hp)}/{Math.round(p.base_hp)}</td>

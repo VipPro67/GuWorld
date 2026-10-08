@@ -320,6 +320,11 @@ func GetTribulationTypesForRank(rank int) []TribTypeConfig {
 }
 
 func SanitizeTribulationTypeForRank(rank int, tribType string) string {
+	// Chaotic/Hybrid tribulation is a data-driven override (spec §5.2); it is not
+	// part of any rank's normal rotation but must survive sanitization.
+	if tribType == "CHAOTIC_TRIBULATION" {
+		return tribType
+	}
 	types := GetTribulationTypesForRank(rank)
 	if len(types) == 0 {
 		return "EARTH_CALAMITY"
@@ -462,6 +467,8 @@ func GetTribulationRankAndSubRank(_ int, tribType string) (rank int, subRank int
 		return 9, 4
 	case "CHAOS_CALAMITY":
 		return 10, 4
+	case "CHAOTIC_TRIBULATION":
+		return 10, 4
 	default:
 		return 6, 1
 	}
@@ -474,6 +481,11 @@ func CalculateTribulationReward(rank int, tribType string, difficulty int) int64
 		rank = 6
 	} else if rank > 10 {
 		rank = 10
+	}
+
+	// Chaotic/Hybrid tribulations reap the highest-tier reward of their rank.
+	if tribType == "CHAOTIC_TRIBULATION" {
+		tribType = "CHAOS_CALAMITY"
 	}
 
 	diff := int64(difficulty)

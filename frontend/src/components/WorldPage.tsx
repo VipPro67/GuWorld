@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useWorldStore } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
+import { useUIStore } from "@/store/useUIStore";
 import TeleportModal from "./TeleportModal";
 import type { TeleportArray } from "@/store/slices/teleportSlice";
-import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users, HelpCircle, Coins, ScrollText, MessageSquare, Settings } from "lucide-react";
+import { Menu, X, ChevronDown, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users, HelpCircle, Coins, ScrollText, MessageSquare, Settings } from "lucide-react";
 import { MovementJoystick } from "./MovementJoystick";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
@@ -50,6 +51,7 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
 export function WorldPage() {
+  const currentView = useUIStore((s) => s.currentView);
   const regions = useGameStore((s) => s.regions);
   const regionsLoaded = useGameStore((s) => s.regionsLoaded);
   const fetchRegions = useGameStore((s) => s.fetchRegions);
@@ -120,6 +122,7 @@ export function WorldPage() {
 
   const [mapMode, setMapMode] = useState<"select" | "drag">("select");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openMenuGroup, setOpenMenuGroup] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<string | null>(null);
   interface MapLabelSettings {
     monster: boolean;
@@ -158,6 +161,11 @@ export function WorldPage() {
     });
   };
   const setView = useGameStore((s) => s.setView);
+  const showWorldActions = currentView === "dashboard" || currentView === "world-map";
+
+  useEffect(() => {
+    if (!showWorldActions) setMenuOpen(false);
+  }, [showWorldActions]);
   const isImmortal = gamePlayer ? gamePlayer.rank >= 6 : false;
 
   const menuItems = [
@@ -188,7 +196,13 @@ export function WorldPage() {
     { id: "teleport", label: "Dịch Chuyển", icon: Compass, color: "text-cyan-400" },
   ];
 
-  const quickItems = menuItems.slice(0, 4);
+  const menuGroups = [
+    { id: "character", label: "Nhân vật", itemIds: ["character", "inventory", "aperture", "refine", "practice-room"] },
+    { id: "world", label: "Khám phá", itemIds: ["dungeon", "mine", "teleport", "party", "sect"] },
+    { id: "trade", label: "Giao dịch", itemIds: ["auction", "shop", "premium-store", "topup"] },
+    { id: "activities", label: "Hoạt động", itemIds: ["arena", "death-arena", "leaderboard", "gacha", "achievements", "pets"] },
+    { id: "other", label: "Khác", itemIds: ["feedback", "combat-history", "audit-logs", "utilities", "wiki"] },
+  ].map((group) => ({ ...group, items: menuItems.filter((item) => group.itemIds.includes(item.id)) }));
 
   useEffect(() => {
     if (!regionsLoaded) fetchRegions();
@@ -237,53 +251,77 @@ export function WorldPage() {
 
       <TargetHud />
 
-      <div className="absolute left-2 top-2 z-30 flex flex-col gap-1.5 pointer-events-none">
-        {quickItems.map((item) => (
-          <button
-            key={item.id}
-            title={item.label}
-            aria-label={item.label}
-            onClick={() => setView(item.id)}
-            className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-950/75 text-zinc-200 shadow-lg backdrop-blur-md transition hover:border-emerald-300/30 hover:bg-zinc-900 sm:w-auto sm:justify-start sm:gap-2 sm:px-3"
-          >
-            <item.icon className={`h-4 w-4 ${item.color}`} />
-            <span className="hidden text-xs font-medium sm:inline">{item.label}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="absolute top-2 right-2 flex flex-col items-end gap-2 pointer-events-none z-30">
+      {showWorldActions && <div className="absolute top-2 right-2 z-50">
         <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="w-10 h-10 flex items-center justify-center bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 text-zinc-300 shadow-lg pointer-events-auto hover:bg-zinc-800 transition-colors cursor-pointer"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-label={menuOpen ? "Đóng thao tác" : "Mở thao tác"}
+          aria-expanded={menuOpen}
+          className="flex h-11 items-center gap-2 rounded-xl border border-zinc-700/70 bg-zinc-950/90 px-3 text-sm font-medium text-zinc-200 shadow-lg backdrop-blur-md transition hover:border-emerald-400/40 hover:bg-zinc-900"
         >
-          {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          <span>Thao tác</span>
         </button>
+      </div>}
 
-        {menuOpen && (
-          <div className="flex flex-col gap-1.5 p-2 bg-zinc-900/95 backdrop-blur-md rounded-xl border border-zinc-700/50 shadow-2xl pointer-events-auto w-48 max-h-[calc(100dvh-6rem)] overflow-y-auto custom-scrollbar animate-fade-in-down origin-top-right">
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setMenuOpen(false);
-                  if (item.id === "teleport") setActiveModal("teleport");
-                  else setView(item.id);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-all cursor-pointer ${
-                  item.locked
-                    ? "opacity-50 cursor-not-allowed bg-zinc-800/30 text-zinc-500"
-                    : "hover:bg-zinc-800/80 text-zinc-300 hover:text-white"
-                }`}
-                disabled={item.locked}
-              >
-                <item.icon className={`w-4 h-4 ${item.locked ? 'text-zinc-600' : item.color}`} />
-                <span className="font-serif">{item.label}</span>
+      {showWorldActions && menuOpen && (
+          <button
+            aria-label="Đóng bảng thao tác"
+            onClick={() => setMenuOpen(false)}
+            className="absolute inset-0 z-30 cursor-default bg-black/25"
+          />
+      )}
+      {showWorldActions && <aside
+        aria-label="Bảng thao tác"
+        aria-hidden={!menuOpen}
+        className={`absolute inset-y-0 right-0 z-40 flex w-[min(88vw,360px)] flex-col border-l border-white/10 bg-zinc-950/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out ${menuOpen ? "translate-x-0" : "translate-x-full pointer-events-none"}`}
+      >
+            <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-4">
+              <div>
+                <h2 className="font-serif text-base font-semibold text-emerald-50">Thao tác</h2>
+                <p className="mt-0.5 text-[10px] uppercase tracking-[.18em] text-zinc-500">Chọn nhóm chức năng</p>
+              </div>
+              <button onClick={() => setMenuOpen(false)} aria-label="Đóng" className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/10 hover:text-white">
+                <X className="h-4 w-4" />
               </button>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 custom-scrollbar">
+              {menuGroups.map((group) => {
+                const isExpanded = openMenuGroup === group.id;
+                return (
+                  <section key={group.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+                    <button
+                      onClick={() => setOpenMenuGroup(isExpanded ? null : group.id)}
+                      aria-expanded={isExpanded}
+                      className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-medium text-zinc-200 transition hover:bg-white/[0.06]"
+                    >
+                      <span>{group.label}<span className="ml-2 text-xs text-zinc-500">{group.items.length}</span></span>
+                      <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                    </button>
+                    {isExpanded && (
+                      <div className="space-y-1 border-t border-white/10 p-2">
+                        {group.items.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              if (item.id === "teleport") setActiveModal("teleport");
+                              else setView(item.id);
+                            }}
+                            disabled={item.locked}
+                            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${item.locked ? "cursor-not-allowed opacity-40" : "text-zinc-300 hover:bg-white/[0.07] hover:text-white"}`}
+                          >
+                            <item.icon className={`h-4 w-4 ${item.locked ? "text-zinc-600" : item.color}`} />
+                            <span className="font-serif">{item.label}</span>
+                            {item.locked && <span className="ml-auto text-[10px] text-zinc-500">Chưa mở</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+      </aside>}
 
       {activeModal && (
         <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-2 sm:p-6 backdrop-blur-sm overflow-hidden pointer-events-auto">

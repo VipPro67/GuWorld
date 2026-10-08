@@ -73,6 +73,10 @@ export const ADMIN_ACTIONS = {
   flushRedis: { permission: "cache.flush", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: true },
 	deleteData: { permission: "data.delete", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
 	adjustPlayerResources: { permission: "players.resources.adjust", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+	banPlayer: { permission: "players.ban", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+	unbanPlayer: { permission: "players.ban", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+	mutePlayer: { permission: "players.ban", riskLevel: "high", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
+	unmutePlayer: { permission: "players.ban", riskLevel: "medium", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: false },
 	assignPlayerRoles: { permission: "admin_roles.assign", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: true },
 	mutatePayment: { permission: "billing.mutate", riskLevel: "destructive", confirmationRequired: true, reasonRequired: true, reauthenticationRequired: true },
 } as const satisfies Record<string, AdminActionPolicy>;

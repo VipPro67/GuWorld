@@ -11,6 +11,11 @@ const BG_COLOR = 0x1d1e2c;
 const CLEARED_CELL_EVENT_TYPES = new Set(["cleared", "cell_cleared", "world.cell.cleared", "monster_killed"]);
 const RESPAWNED_CELL_EVENT_TYPES = new Set(["respawn", "cell_respawned", "world.cell.respawn"]);
 
+function isTouchDevice() {
+  return typeof window !== "undefined"
+    && (window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768);
+}
+
 export interface MapLabelSettings {
   monster: boolean;
   bossNearby: boolean;
@@ -37,7 +42,7 @@ const CELL_AOI_DIAMETER = 254;
 // Must match MovePlayerPath's bounded server segment. Prediction only affects
 // presentation; every resulting position is still reconciled with the server.
 const MOVE_PATH_SEGMENT_CELLS = 5;
-const DIRECTION_SEGMENT_SECONDS = 0.4;
+const DIRECTION_SEGMENT_SECONDS = 0.8;
 
 function predictedSegmentEnd(x0: number, y0: number, x1: number, y1: number): { x: number; y: number } {
   let x = x0;
@@ -121,7 +126,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const isFineMovementRef = useRef(false);
   const confirmedPositionRef = useRef<{ x: number; y: number } | null>(null);
   const playerMarkersRef = useRef<Map<string, { container: Container; player: NearbyPlayer; fromX: number; fromY: number; toX: number; toY: number; t0: number; duration: number; active: boolean }>>(new Map());
-  const monsterMarkersRef = useRef<Map<string, { container: Container; body: Graphics; sprite: Sprite | null; hpBar: Graphics; monster: WorldMonster; renderX: number; renderY: number; fromX: number; fromY: number; toX: number; toY: number; receivedAt: number; serverTime: number; duration: number; revision: number; state: WorldMonster["state"]; active: boolean }>>(new Map());
+  const monsterMarkersRef = useRef<Map<string, { container: Container; body: Graphics; sprite: Sprite | null; monster: WorldMonster; renderX: number; renderY: number; fromX: number; fromY: number; toX: number; toY: number; receivedAt: number; serverTime: number; duration: number; revision: number; state: WorldMonster["state"]; active: boolean }>>(new Map());
   const monsterChunksRef = useRef<Map<string, { container: Container; source: CellChunk; px: number; py: number; runtimeKey: string }>>(new Map());
   const monsterLabelRenderKeyRef = useRef("");
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
@@ -189,8 +194,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     });
   }, []);
 
-  const paintRuntimeMonster = useCallback((marker: { body: Graphics; sprite: Sprite | null; hpBar: Graphics; monster: WorldMonster; state: WorldMonster["state"] }) => {
-    const { body, sprite, hpBar, monster } = marker;
+  const paintRuntimeMonster = useCallback((marker: { body: Graphics; sprite: Sprite | null; monster: WorldMonster; state: WorldMonster["state"] }) => {
+    const { body, sprite, monster } = marker;
     body.clear();
     const styles = {
       IDLE: { color: 0xf87171, shape: "triangle" },
@@ -211,12 +216,6 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     else if (style.shape === "diamond") body.poly([0, -0.58, 0.58, 0, 0, 0.58, -0.58, 0]).fill(color).stroke({ color: 0x581c87, width: 0.08 });
     else if (style.shape === "arrow") body.poly([-0.48, -0.42, 0.58, 0, -0.48, 0.42, -0.18, 0]).fill(color).stroke({ color: 0x581c87, width: 0.07 });
     else body.poly([0, -0.55, 0.5, 0.42, -0.5, 0.42]).fill(color).stroke({ color: 0x581c87, width: 0.07 });
-    hpBar.clear();
-    const selected = useWorldStore.getState().selectedTarget?.instanceId === monster.instance_id;
-    if (monster.hp < monster.max_hp || selected) {
-      hpBar.rect(-0.55, -0.78, 1.1, 0.13).fill(0x27272a);
-      hpBar.rect(-0.52, -0.75, 1.04 * Math.max(0, Math.min(1, monster.hp / Math.max(1, monster.max_hp))), 0.07).fill(monster.hp / Math.max(1, monster.max_hp) < 0.3 ? 0xef4444 : 0x22c55e);
-    }
   }, []);
 
   const syncRuntimeMonsters = useCallback((entities: Record<string, WorldMonster>) => {
@@ -243,9 +242,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           sprite.height = monster.is_boss ? 1.7 : 1.25;
         }
         const body = new Graphics();
-        const hpBar = new Graphics();
         if (sprite) group.addChild(sprite);
-        group.addChild(body, hpBar);
+        group.addChild(body);
         group.position.set(toX, toY);
         group.eventMode = "static";
         group.cursor = "pointer";
@@ -263,7 +261,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
             store.targetingGu.mode === "monster" ? current.instance_id : undefined,
           );
         });
-        marker = { container: group, body, sprite, hpBar, monster, renderX: toX, renderY: toY, fromX: toX, fromY: toY, toX, toY, receivedAt: now, serverTime: Date.parse(monster.last_update_at), duration: 400, revision: monster.revision, state: monster.state, active: false };
+        marker = { container: group, body, sprite, monster, renderX: toX, renderY: toY, fromX: toX, fromY: toY, toX, toY, receivedAt: now, serverTime: Date.parse(monster.last_update_at), duration: 400, revision: monster.revision, state: monster.state, active: false };
         markers.set(monster.instance_id, marker);
         container.addChild(group);
       } else {
@@ -739,6 +737,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           }
           return;
         }
+        // Touch movement is explicit through the joystick or the selected
+        // object's approach action; a second tap must not move the player.
+        if (isTouchDevice()) return;
         moveTargetRef.current = { x: obj.x, y: obj.y };
         performMove(obj.x, obj.y);
         return;
@@ -870,7 +871,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const px = gamePlayer?.x ?? 0;
       const py = gamePlayer?.y ?? 0;
       const dist = Math.hypot(tx - px, ty - py);
-      if (dist <= s.investigationRange) {
+      if (!isTouchDevice() && dist <= s.investigationRange) {
         moveTargetRef.current = { x: tx, y: ty };
         performMove(tx, ty);
       }
@@ -1574,6 +1575,24 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       label.name = "monster-label";
       container.addChild(label);
     }
+
+    const runtimeMonsters = Object.values(useWorldStore.getState().monsters)
+      .filter((monster) => monster.state !== "DEFEATED"
+        && monster.region_id === player.current_region
+        && Math.hypot(monster.x + 0.5 - player.x, monster.y + 0.5 - player.y) <= invR)
+      .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
+      .slice(0, 100);
+    for (const monster of runtimeMonsters) {
+      const monsterName = state.monsterDictionary[monster.monster_template_id]?.name || monster.monster_template_id;
+      const label = new Text({
+        text: `${monsterName}${monster.rank ? ` R${monster.rank}` : ""}`,
+        style: { fontSize: 11, fill: monster.is_boss ? 0xfca5a5 : 0xfecaca, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 2 } },
+      });
+      label.anchor.set(0.5, 1);
+      label.position.set(monster.x + 0.5, monster.y - 0.1);
+      label.name = "monster-label";
+      container.addChild(label);
+    }
   }, []);
 
   const syncMonsterChunks = useCallback((chunks: Record<string, CellChunk>, region: string, window: typeof nearbyWindow) => {
@@ -1660,7 +1679,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       }
       return objectId;
     });
-    const labelRenderKey = `${visibleChunkVersions.join("|")}:${runtimeKey}:${Number(settings.monster)}${Number(settings.bossNearby)}:${state.player?.x ?? 0},${state.player?.y ?? 0}:${useWorldStore.getState().investigationRange}:${dictionaryIds.join(",")}`;
+    const runtimeLabelsKey = Object.values(useWorldStore.getState().monsters)
+      .map((monster) => `${monster.instance_id}:${monster.x},${monster.y}:${monster.revision}:${monster.state}`)
+      .sort()
+      .join("|");
+    const labelRenderKey = `${visibleChunkVersions.join("|")}:${runtimeKey}:${runtimeLabelsKey}:${Number(settings.monster)}${Number(settings.bossNearby)}:${state.player?.x ?? 0},${state.player?.y ?? 0}:${useWorldStore.getState().investigationRange}:${dictionaryIds.join(",")}`;
     if (labelRenderKey !== monsterLabelRenderKeyRef.current) {
       monsterLabelRenderKeyRef.current = labelRenderKey;
       drawMonsterLabels(visibleCells);
@@ -1760,11 +1783,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     g.circle(gamePlayer.x + 0.5, gamePlayer.y + 0.5, invR);
     g.stroke({ color: 0xffffff, width: 0.5, alpha: 0.1 });
 
-    // Movement range box
-    const r = movementRange;
-    g.rect(gamePlayer.x - r, gamePlayer.y - r, r * 2 + 1, r * 2 + 1);
-    g.stroke({ color: 0x34d399, width: 0.1, alpha: 0.8 });
-  }, [gamePlayer, movementRange]);
+  }, [gamePlayer]);
 
   const clickHandlerRef = useRef(handleBackgroundClick);
   useEffect(() => {
@@ -2023,7 +2042,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           const labelRenderState = `${currentScale}|${Number(settings.monster)}${Number(settings.bossNearby)}${Number(settings.hub)}${Number(settings.khu_vuc)}${Number(settings.ngu_vuc)}`;
           if (labelRenderState === labelRenderStateRef.current) return;
           labelRenderStateRef.current = labelRenderState;
-          const showMonsters = settings.monster && currentScale >= 12;
+          const showMonsters = settings.monster && currentScale >= 8;
           const targetScale = 1.0 / currentScale; // 1:1 crisp scale
 
           for (const child of monsterLabelsContainerRef.current.children) {
@@ -2206,6 +2225,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   useEffect(() => {
     if (!appReady || !appRef.current) return;
     syncRuntimeMonsters(monsters);
+    scheduleMonsterChunkSyncRef.current();
   }, [appReady, monsters, selectedTarget?.instanceId, gamePlayer?.x, gamePlayer?.y, investigationRange, syncRuntimeMonsters]);
 
   useEffect(() => {

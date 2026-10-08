@@ -20,14 +20,14 @@ func AdminListCombatHistory(c *gin.Context) {
 	page, limit := adminPage(c, 25, 100)
 	search := strings.TrimSpace(c.Query("search"))
 	pattern := "%" + search + "%"
-	filter := `UPPER(h.enemy_type) = 'PVP' AND ($1 = '' OR h.id::text ILIKE $2 OR h.player_id::text ILIKE $2 OR p.username ILIKE $2 OR h.enemy_name ILIKE $2 OR h.region ILIKE $2 OR h.winner ILIKE $2)`
+	filter := `($1 = '' OR h.id::text ILIKE $2 OR h.player_id::text ILIKE $2 OR p.username ILIKE $2 OR h.enemy_name ILIKE $2 OR h.region ILIKE $2 OR h.winner ILIKE $2)`
 
 	var total int
 	if err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT COUNT(*) FROM combat_history h
 		LEFT JOIN players p ON p.id = h.player_id
 		WHERE `+filter, search, pattern).Scan(&total); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm lịch sử PVP"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm lịch sử chiến đấu"})
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
@@ -40,7 +40,7 @@ func AdminListCombatHistory(c *gin.Context) {
 		ORDER BY h.created_at DESC, h.id
 		LIMIT $3 OFFSET $4`, search, pattern, limit, (page-1)*limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lịch sử PVP"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lịch sử chiến đấu"})
 		return
 	}
 	defer rows.Close()
@@ -52,13 +52,13 @@ func AdminListCombatHistory(c *gin.Context) {
 		var logsCount int
 		var createdAt time.Time
 		if err := rows.Scan(&id, &playerID, &username, &winner, &summary, &enemyName, &enemyType, &region, &logsCount, &createdAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử PVP"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử chiến đấu"})
 			return
 		}
 		data = append(data, gin.H{"id": id, "player_id": playerID, "player_username": username, "winner": winner, "summary": json.RawMessage(summary), "enemy_name": enemyName, "enemy_type": enemyType, "region": region, "logs_count": logsCount, "created_at": createdAt})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử PVP"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc lịch sử chiến đấu"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": total, "page": page, "limit": limit})
@@ -81,13 +81,13 @@ func AdminGetCombatHistory(c *gin.Context) {
 		       h.combatants, h.enemy_name, h.enemy_type, h.region, h.created_at
 		FROM combat_history h
 		LEFT JOIN players p ON p.id = h.player_id
-		WHERE h.id = $1 AND UPPER(h.enemy_type) = 'PVP'`, id,
+		WHERE h.id = $1`, id,
 	).Scan(&playerID, &username, &winner, &logs, &summary, &combatants, &enemyName, &enemyType, &region, &createdAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy lịch sử PVP"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy lịch sử chiến đấu"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải chi tiết lịch sử PVP"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải chi tiết lịch sử chiến đấu"})
 		}
 		return
 	}

@@ -11,8 +11,6 @@ export function TargetHud() {
     return null;
   }
 
-  const hpPercent = Math.max(0, Math.min(100, (selectedTarget.hp / (selectedTarget.maxHp || 1)) * 100));
-
   const getTargetIcon = (cellType: string) => {
     switch (cellType) {
       case "Boss":
@@ -34,7 +32,7 @@ export function TargetHud() {
           {getTargetIcon(selectedTarget.cellType)}
         </div>
 
-        {/* Info & HP Bar */}
+        {/* Target info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="font-bold font-serif text-xs text-red-300 truncate">
@@ -47,16 +45,6 @@ export function TargetHud() {
             )}
           </div>
 
-          {/* HP Bar */}
-          <div className="relative w-full h-3.5 bg-zinc-900 rounded-md overflow-hidden border border-zinc-800">
-            <div
-              className="h-full bg-gradient-to-r from-red-700 to-red-500 transition-all duration-300"
-              style={{ width: `${hpPercent}%` }}
-            />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-bold text-white drop-shadow">
-              {Math.round(selectedTarget.hp).toLocaleString("vi-VN")} / {Math.round(selectedTarget.maxHp).toLocaleString("vi-VN")}
-            </span>
-          </div>
           {selectedTarget.instanceId && (
             <div className="mt-1 text-[9px] text-amber-300/80 font-serif">
               Bấm kỹ năng sát thương hoặc phím 1–5 để tung chiêu

@@ -71,6 +71,10 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodGet, "/players/:id/tracking-marks", "players.read", handlers.AdminListPlayerTrackingMarks, "", "", false, "", false, false, false},
 		{http.MethodGet, "/players/:id/achievements", "players.read", handlers.AdminListPlayerAchievements, "", "", false, "", false, false, false},
 		{http.MethodPut, "/players/:id", "players.update", handlers.AdminUpdatePlayer, "admin.update_player", "player", false, "", false, false, false},
+		{http.MethodPut, "/players/:id/ban", "players.ban", handlers.AdminBanPlayer, "admin.ban_player", "player", true, "id", false, false, true},
+		{http.MethodPut, "/players/:id/unban", "players.ban", handlers.AdminUnbanPlayer, "admin.unban_player", "player", true, "id", false, false, true},
+		{http.MethodPut, "/players/:id/chat-mute", "players.ban", handlers.AdminMutePlayer, "admin.mute_player", "player", true, "id", false, false, true},
+		{http.MethodPut, "/players/:id/chat-unmute", "players.ban", handlers.AdminUnmutePlayer, "admin.unmute_player", "player", true, "id", false, false, true},
 		// apertures
 		{http.MethodGet, "/apertures", "apertures.read", handlers.AdminListApertures, "", "", false, "", false, false, false},
 		{http.MethodGet, "/apertures/:id", "apertures.read", handlers.AdminGetApertureDetail, "", "", false, "", false, false, false},
@@ -761,6 +765,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			aperture.DELETE("/nodes/:id", handlers.DeleteApertureNode)
 			aperture.POST("/time-rate", handlers.SetApertureTimeRate)
 			aperture.POST("/labor", handlers.SetApertureLabor)
+			aperture.POST("/cleanse-dao-marks", handlers.CleanseDaoMarks)
 			aperture.POST("/nodes/:id/repair", handlers.RepairApertureNode)
 			aperture.POST("/nodes/:id/upgrade", handlers.UpgradeApertureNode)
 			aperture.GET("/variant-humans", handlers.GetApertureVariantHumans)

@@ -113,7 +113,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [itemDetailOpen, setItemDetailOpen] = useState<Record<string, boolean>>({});
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
+  const [selectedTab, setSelectedTab] = useState<"gu" | "material" | "killer-moves">("gu");
   const [materialFilter, setMaterialFilter] = useState<"all" | "consumable" | "material">("all");
   const [guSubTab, setGuSubTab] = useState<"equipped" | "rest">("equipped");
   const [selectedPath, setSelectedPath] = useState<string>("all");

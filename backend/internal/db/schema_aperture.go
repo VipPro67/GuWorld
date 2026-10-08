@@ -27,9 +27,17 @@ func schemaAperture() error {
 		chaos_calamity_count INTEGER NOT NULL DEFAULT 0,
 		state VARCHAR(30) NOT NULL DEFAULT 'STABLE',
 		dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}',
+		last_cleanse_at TIMESTAMP WITH TIME ZONE,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 	);`); err != nil {
+		return err
+	}
+
+	// Additive migration for databases created before Thanh Đạo Tẩy Thể.
+	if err := execSchema("immortal_apertures_last_cleanse_at", `
+		ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS last_cleanse_at TIMESTAMP WITH TIME ZONE;
+	`); err != nil {
 		return err
 	}
 

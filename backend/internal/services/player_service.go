@@ -279,15 +279,37 @@ func (s *PlayerService) setDefaults(player *models.Player) {
 }
 
 // applyApertureProjection returns immortal aperture time rate and essence production for Rank >= 6.
+// Essence production is scaled by the aperture's Dao purity (spec §5.1) unless
+// the character is immune via path_conflict_reduction >= 100.
 func (s *PlayerService) applyApertureProjection(q QueryRower, player *models.Player) (timeRate float64, essenceProd int) {
 	timeRate = 1.0
 	essenceProd = 10
 	if player.Rank < 6 {
 		return timeRate, essenceProd
 	}
-	_ = q.QueryRow(`SELECT time_rate, essence_production_per_year FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&timeRate, &essenceProd)
+	immune := false
+	_ = q.QueryRow(`
+		SELECT ia.time_rate, ia.essence_production_per_year, EXISTS(
+			SELECT 1 FROM player_gu pg
+			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.rank
+			WHERE pg.player_id = ia.player_id AND pg.equipped = true AND pg.state = 'ACTIVE'
+			AND COALESCE((gd.effects->'passive'->>'path_conflict_reduction')::numeric, 0) >= 100
+		)
+		FROM immortal_apertures ia WHERE ia.player_id = $1
+	`, player.ID).Scan(&timeRate, &essenceProd, &immune)
 	if timeRate <= 0 {
 		timeRate = 1.0
+	}
+	if !immune {
+		if _, total, purity := gamefx.DaoPurity(player.DaoMarks); total > 0 {
+			f := gamefx.EcologyPurityFactor(purity)
+			if f < 1.0 {
+				essenceProd = int(float64(essenceProd) * f)
+				if essenceProd < 1 {
+					essenceProd = 1
+				}
+			}
+		}
 	}
 	return timeRate, essenceProd
 }

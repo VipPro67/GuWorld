@@ -193,6 +193,14 @@ func GoogleCallback(c *gin.Context) {
 
 	_, _ = tx.ExecContext(c.Request.Context(), "SET LOCAL lock_timeout = '3000ms'")
 
+	if blocked, errBlock := deviceBlocked(tx, c.ClientIP(), fingerprint); errBlock != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra thiết bị"})
+		return
+	} else if blocked {
+		googleAuthErrorRedirect(c, "Thiết bị này đã bị chặn. Vui lòng liên hệ bộ phận hỗ trợ.")
+		return
+	}
+
 	var player models.Player
 	var hasPlayer bool
 	var existingPlayerID uuid.UUID
@@ -227,6 +235,15 @@ func GoogleCallback(c *gin.Context) {
 		player, err = PlayerSvc.ProjectStatusEquipped(tx, existingPlayerID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player: " + err.Error()})
+			return
+		}
+		if banned, reason, until, banErr := playerBanStatus(tx, player.ID); banErr == nil && banIsActive(banned, until) {
+			_ = tx.Rollback()
+			msg := banActiveMessage
+			if reason != "" {
+				msg = "Tài khoản đã bị khóa. Lý do: " + reason
+			}
+			googleAuthErrorRedirect(c, msg)
 			return
 		}
 	}
@@ -444,6 +461,10 @@ func GoogleCallback(c *gin.Context) {
 			ErrorMessage:   "Thiết bị đăng nhập quá nhiều tài khoản trong 24 giờ qua",
 		})
 
+		// Escalate to an automatic ban once the device grossly exceeds the
+		// shared-account limit (configurable via AUTO_BAN_FINGERPRINT_LIMIT).
+		autoBanForFingerprint(c.Request.Context(), player.ID, player.Username, fingerprint, c.ClientIP(), otherAccountsCount)
+
 		// Send real-time SSE notifications to the other active accounts from this fingerprint
 		rows, err := db.DB.Query(`
 			SELECT id FROM players
@@ -520,4 +541,17 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+}
+
+// googleAuthErrorRedirect returns the browser to the frontend with an error
+// message, matching the flow used for the OAuth callback's other failures.
+func googleAuthErrorRedirect(c *gin.Context, message string) {
+	frontendURL := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+	if strings.Contains(frontendURL, ",") {
+		frontendURL = strings.Split(frontendURL, ",")[0]
+	}
+	c.Redirect(http.StatusTemporaryRedirect, frontendURL+"?error="+url.QueryEscape(message))
 }

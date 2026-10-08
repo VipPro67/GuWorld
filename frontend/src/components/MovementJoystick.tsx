@@ -4,14 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const RADIUS = 40;
 const DEAD_ZONE = 0.22;
+const ACTIVATION_DISTANCE = 8;
 
-function emitDirection(x: number, y: number, fine: boolean = false) {
+type Point = { x: number; y: number };
+
+function emitDirection(x: number, y: number, fine = false) {
   window.dispatchEvent(new CustomEvent("gu_world_direction", { detail: { x, y, fine } }));
 }
 
 function quantizeDirection(x: number, y: number) {
-  const sector = Math.round(Math.atan2(y, x) / (Math.PI / 4));
-  const angle = sector * (Math.PI / 4);
+  const angle = Math.round(Math.atan2(y, x) / (Math.PI / 4)) * (Math.PI / 4);
   return {
     x: Math.abs(Math.cos(angle)) < 0.5 ? 0 : Math.sign(Math.cos(angle)),
     y: Math.abs(Math.sin(angle)) < 0.5 ? 0 : Math.sign(Math.sin(angle)),
@@ -19,13 +21,15 @@ function quantizeDirection(x: number, y: number) {
 }
 
 export function MovementJoystick() {
-  const baseRef = useRef<HTMLDivElement>(null);
   const activePointerRef = useRef<number | null>(null);
+  const originRef = useRef<Point | null>(null);
+  const movedRef = useRef(false);
   const emittedDirectionRef = useRef({ x: 0, y: 0 });
   const lastFineRef = useRef(false);
-  const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const [origin, setOrigin] = useState<Point | null>(null);
+  const [knob, setKnob] = useState<Point>({ x: 0, y: 0 });
 
-  const emitChangedDirection = useCallback((x: number, y: number, fine: boolean = false) => {
+  const emitChangedDirection = useCallback((x: number, y: number, fine = false) => {
     const next = x === 0 && y === 0 ? { x: 0, y: 0 } : quantizeDirection(x, y);
     if (next.x === emittedDirectionRef.current.x && next.y === emittedDirectionRef.current.y && lastFineRef.current === fine) return;
     emittedDirectionRef.current = next;
@@ -34,70 +38,79 @@ export function MovementJoystick() {
   }, []);
 
   const update = useCallback((clientX: number, clientY: number) => {
-    const rect = baseRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const rawX = clientX - (rect.left + rect.width / 2);
-    const rawY = clientY - (rect.top + rect.height / 2);
+    const start = originRef.current;
+    if (!start) return;
+    const rawX = clientX - start.x;
+    const rawY = clientY - start.y;
     const distance = Math.hypot(rawX, rawY);
+    if (distance >= ACTIVATION_DISTANCE) movedRef.current = true;
     const scale = distance > RADIUS ? RADIUS / distance : 1;
     const x = rawX * scale;
     const y = rawY * scale;
     setKnob({ x, y });
 
-    if (distance < RADIUS * DEAD_ZONE) {
-      emitChangedDirection(0, 0, false);
-    } else {
-      const fine = distance < RADIUS * 0.65;
-      emitChangedDirection(x, y, fine);
-    }
+    if (distance < RADIUS * DEAD_ZONE) emitChangedDirection(0, 0);
+    else emitChangedDirection(x, y, distance < RADIUS * 0.65);
   }, [emitChangedDirection]);
 
-  const release = useCallback((pointerId?: number) => {
-    if (pointerId !== undefined && activePointerRef.current !== null && activePointerRef.current !== pointerId) return;
+  const release = useCallback(() => {
     activePointerRef.current = null;
+    originRef.current = null;
+    setOrigin(null);
     setKnob({ x: 0, y: 0 });
-    emitChangedDirection(0, 0, false);
+    emitChangedDirection(0, 0);
   }, [emitChangedDirection]);
 
   useEffect(() => {
-    const handleGlobalPointerUp = (event: PointerEvent) => {
-      if (activePointerRef.current !== null && (event.pointerId === activePointerRef.current || event.pointerType === "touch")) {
-        release();
-      }
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" || !(event.target instanceof HTMLCanvasElement)) return;
+      if (activePointerRef.current !== null) return;
+
+      const point = { x: event.clientX, y: event.clientY };
+      activePointerRef.current = event.pointerId;
+      originRef.current = point;
+      movedRef.current = false;
+      setOrigin(point);
+      setKnob({ x: 0, y: 0 });
     };
-    window.addEventListener("pointerup", handleGlobalPointerUp);
-    window.addEventListener("pointercancel", handleGlobalPointerUp);
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (activePointerRef.current !== event.pointerId) return;
+      update(event.clientX, event.clientY);
+    };
+
+    const onPointerEnd = (event: PointerEvent) => {
+      if (activePointerRef.current === event.pointerId) release();
+    };
+
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("pointermove", onPointerMove, true);
+    window.addEventListener("pointerup", onPointerEnd, true);
+    window.addEventListener("pointercancel", onPointerEnd, true);
     return () => {
-      window.removeEventListener("pointerup", handleGlobalPointerUp);
-      window.removeEventListener("pointercancel", handleGlobalPointerUp);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("pointermove", onPointerMove, true);
+      window.removeEventListener("pointerup", onPointerEnd, true);
+      window.removeEventListener("pointercancel", onPointerEnd, true);
+      emitDirection(0, 0);
     };
-  }, [release]);
+  }, [release, update]);
+
+  if (!origin) return null;
 
   return (
-    <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-[calc(env(safe-area-inset-left)+1rem)] z-30 pointer-events-auto md:hidden">
-      <div
-        ref={baseRef}
-        role="application"
-        aria-label="Cần điều khiển di chuyển"
-        className="relative h-24 w-24 touch-none select-none rounded-full border border-white/20 bg-zinc-950/55 shadow-2xl backdrop-blur-sm"
-        onPointerDown={(event) => {
-          activePointerRef.current = event.pointerId;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          update(event.clientX, event.clientY);
-        }}
-        onPointerMove={(event) => {
-          if (activePointerRef.current === event.pointerId) update(event.clientX, event.clientY);
-        }}
-        onPointerUp={(event) => release(event.pointerId)}
-        onPointerCancel={(event) => release(event.pointerId)}
-        onLostPointerCapture={() => release()}
-      >
-        <span className="absolute left-1/2 top-1 -translate-x-1/2 text-xs text-white/35">▲</span>
-        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white/35">▼</span>
-        <span className="absolute left-1 top-1/2 -translate-y-1/2 text-xs text-white/35">◀</span>
-        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-xs text-white/35">▶</span>
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed z-30 h-24 w-24 -translate-x-1/2 -translate-y-1/2 md:hidden"
+      style={{ left: origin.x, top: origin.y }}
+    >
+      <div className={`relative h-full w-full rounded-full border border-white/30 bg-zinc-950/55 shadow-2xl backdrop-blur-sm transition-opacity ${movedRef.current ? "opacity-100" : "opacity-60"}`}>
+        <span className="absolute left-1/2 top-1 -translate-x-1/2 text-xs text-white/45">▲</span>
+        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white/45">▼</span>
+        <span className="absolute left-1 top-1/2 -translate-y-1/2 text-xs text-white/45">◀</span>
+        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-xs text-white/45">▶</span>
         <div
-          className="absolute left-1/2 top-1/2 h-11 w-11 -ml-[22px] -mt-[22px] rounded-full border border-emerald-300/60 bg-emerald-500/35 shadow-lg shadow-emerald-950/60"
+          className="absolute left-1/2 top-1/2 -ml-[22px] -mt-[22px] h-11 w-11 rounded-full border border-emerald-300/70 bg-emerald-500/45 shadow-lg shadow-emerald-950/60"
           style={{ transform: `translate3d(${knob.x}px, ${knob.y}px, 0)` }}
         />
       </div>

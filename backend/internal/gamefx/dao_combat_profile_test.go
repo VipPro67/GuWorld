@@ -97,8 +97,8 @@ func TestBuildDaoCombatProfile_DualPathWithMastery(t *testing.T) {
 	// 1. Level 0 (Ordinary)
 	profileL0 := BuildDaoCombatProfile(daoMarks, nil, false, nil)
 	_, _, conflictL0 := profileL0.GetOffensiveFactors("fire")
-	if conflictL0 >= 0.80 || conflictL0 <= 0.60 {
-		t.Errorf("expected conflictL0 around 0.735, got %f", conflictL0)
+	if conflictL0 >= 0.50 || conflictL0 <= 0.44 {
+		t.Errorf("expected conflictL0 around 0.471, got %f", conflictL0)
 	}
 
 	// 2. Level 3 (Great Grandmaster)
@@ -113,8 +113,8 @@ func TestBuildDaoCombatProfile_DualPathWithMastery(t *testing.T) {
 	if conflictL3 <= conflictL0 {
 		t.Errorf("expected higher conflict multiplier with mastery, got L3=%f <= L0=%f", conflictL3, conflictL0)
 	}
-	if conflictL3 < 0.80 || conflictL3 > 0.87 {
-		t.Errorf("expected conflictL3 around 0.835, got %f", conflictL3)
+	if conflictL3 < 0.59 || conflictL3 > 0.65 {
+		t.Errorf("expected conflictL3 around 0.618, got %f", conflictL3)
 	}
 }
 
@@ -192,6 +192,99 @@ func TestBuildDaoCombatProfile_KillPath(t *testing.T) {
 	daoAmp, realmEff, conflictMult := profile2.GetOffensiveFactors("Kill Path")
 	if daoAmp != 501.0 || realmEff != 1.25 || conflictMult != 1.0 {
 		t.Errorf("query Kill Path with canonical daoMarks: got amp=%f eff=%f conf=%f", daoAmp, realmEff, conflictMult)
+	}
+}
+
+func TestMultiPathConflictMath(t *testing.T) {
+	// RealmControlForLevel(4) must fully neutralise conflict.
+	if got := RealmControlForLevel(4); got != 1.00 {
+		t.Fatalf("RealmControlForLevel(4) = %v, want 1.00", got)
+	}
+
+	// F_Multi grows with irreconcilable paths and low purity.
+	if f := MultiPathFactor(1.0, 0.5); f != 1.0 {
+		t.Errorf("MultiPathFactor(1.0, .5) = %v, want 1.0", f)
+	}
+	if f := MultiPathFactor(1.9, 0.5); f < 1.85 || f > 1.89 {
+		t.Errorf("MultiPathFactor(1.9, .5) = %v, want ~1.872", f)
+	}
+
+	// Grace: a foreign path within the 2%% threshold contributes nothing.
+	pure := BuildDaoCombatProfile(map[string]int64{"fire": 100000, "water": 500}, nil, false, nil)
+	if _, _, c := pure.GetOffensiveFactors("fire"); c != 1.0 {
+		t.Errorf("grace threshold conflict = %v, want 1.0", c)
+	}
+
+	// A path whose realm control is 100%% casts without penalty.
+	master := BuildDaoCombatProfile(
+		map[string]int64{"fire": 50000, "water": 50000},
+		map[string]int{"fire": 100000000}, // level 4
+		false, nil,
+	)
+	if _, _, c := master.GetOffensiveFactors("fire"); c != 1.0 {
+		t.Errorf("Vô Thượng Đại Tông Sư conflict = %v, want 1.0", c)
+	}
+}
+
+func TestDaoConflictCastHelpers(t *testing.T) {
+	if got := ManaTaxMultiplier(1.0); got != 1.0 {
+		t.Errorf("ManaTaxMultiplier(1.0) = %v, want 1.0", got)
+	}
+	if got := ManaTaxMultiplier(0.5); got < 1.74 || got > 1.76 {
+		t.Errorf("ManaTaxMultiplier(0.5) = %v, want 1.75", got)
+	}
+	if got := CastFailureChance(0.70); got != 0.0 {
+		t.Errorf("CastFailureChance(0.70) = %v, want 0", got)
+	}
+	if got := CastFailureChance(0.08); got != 0.25 {
+		t.Errorf("CastFailureChance(0.08) = %v, want 0.25", got)
+	}
+	if got := BackfireChance(0.60); got != 0.0 {
+		t.Errorf("BackfireChance(0.60) = %v, want 0", got)
+	}
+	if got := BackfireChance(0.08); got != 0.30 {
+		t.Errorf("BackfireChance(0.08) = %v, want 0.30", got)
+	}
+}
+
+func TestEcologyPurityFactor(t *testing.T) {
+	cases := []struct {
+		purity, want float64
+	}{
+		{1.00, 1.00},
+		{0.70, 1.00},
+		{0.50, 0.75},
+		{0.30, 0.50},
+		{0.10, 0.25},
+		{0.00, 0.25},
+	}
+	for _, tt := range cases {
+		if got := EcologyPurityFactor(tt.purity); got != tt.want {
+			t.Errorf("EcologyPurityFactor(%v) = %v, want %v", tt.purity, got, tt.want)
+		}
+	}
+}
+
+func TestIsChaoticTribulation(t *testing.T) {
+	// Pure single path: never chaotic.
+	if IsChaoticTribulation(map[string]int64{"fire": 100000}, nil) {
+		t.Error("pure path should not be chaotic")
+	}
+	// Two irreconcilable paths with low purity: chaotic (P=0.5, N_eff=1.9 < 2.5).
+	two := map[string]int64{"fire": 50000, "water": 50000}
+	if IsChaoticTribulation(two, nil) {
+		t.Error("dual path (N_eff 1.9) should not reach the 2.5 chaotic threshold")
+	}
+	// Many conflicting paths: chaotic.
+	many := map[string]int64{
+		"fire": 10000, "water": 10000, "light": 10000, "dark": 10000, "wood": 10000, "poison": 10000,
+	}
+	if !IsChaoticTribulation(many, nil) {
+		t.Errorf("expected chaotic for tạp tu (P=%.2f, N_eff=%.2f)", 10000.0/60000.0, EffectivePathCount(many, nil))
+	}
+	// Empty marks: not chaotic.
+	if IsChaoticTribulation(nil, nil) {
+		t.Error("empty marks should not be chaotic")
 	}
 }
 

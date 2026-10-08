@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 func mapCellBossSpawn(spawnID string) (region string, x, y int, ok bool) {
@@ -107,8 +108,9 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 	}
 
 	var winner string
+	var pendingNotifications []notify.Notification
 	if player.CombatSettings.SkipBattle {
-		winner, _, _, err = AutoResolveCombat(tx, &player)
+		winner, _, _, pendingNotifications, err = AutoResolveCombat(tx, &player)
 		if err != nil {
 			resetWorldMonsterAfterEncounter(ctx, current)
 			return err
@@ -127,6 +129,9 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 	if err := tx.Commit(); err != nil {
 		resetWorldMonsterAfterEncounter(ctx, current)
 		return err
+	}
+	for _, notification := range pendingNotifications {
+		notify.Publish(notification)
 	}
 	if player.CombatSettings.SkipBattle {
 		if winner == "Phe Ta" {
@@ -202,39 +207,6 @@ func clearDefeatedWorldMonsterCell(monster WorldMonster, playerID string) {
 	}
 
 	ttl := monsterRespawnDelay(monster.RespawnSeconds)
-	if err := cache.SetCellCleared(region, x, y, playerID, ttl); err != nil {
-		logger.S.Warnf("clear defeated world monster cell %s (%d,%d): %v", region, x, y, err)
-	}
-	if template, ok := models.MonsterRegistry[monster.MonsterTemplateID]; ok {
-		if err := cache.BroadcastMonsterKilled(x, y, template.Name, region); err != nil {
-			logger.S.Warnf("broadcast defeated world monster cell %s (%d,%d): %v", region, x, y, err)
-		}
-	}
-}
-
-// clearDefeatedWorldMonsterCell hides the static map-cell representation for
-// the same respawn window as the runtime monster. Without this, removing the
-// defeated runtime actor reveals the old static spawn and can trigger another
-// encounter before the actor's respawn timer expires.
-func clearDefeatedWorldMonsterCell(monster WorldMonster, playerID string) {
-	region, x, y, procedural := proceduralMonsterCell(monster.SpawnID)
-	if !procedural {
-		region, x, y, procedural = mapCellBossSpawn(monster.SpawnID)
-		if procedural {
-			// Boss map cells use persistent map-cell respawn state rather than the
-			// Redis cooldown used by generated and regular monster spawns.
-			if err := MarkPersistentCellCleared(nil, uuid.Nil, region, x, y); err != nil {
-				logger.S.Warnf("clear defeated world boss cell %s (%d,%d): %v", region, x, y, err)
-			}
-			return
-		}
-		region, x, y = monster.RegionID, int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY))
-	}
-
-	ttl := time.Duration(monster.RespawnSeconds) * time.Second
-	if ttl <= 0 {
-		ttl = clearedCellCooldown
-	}
 	if err := cache.SetCellCleared(region, x, y, playerID, ttl); err != nil {
 		logger.S.Warnf("clear defeated world monster cell %s (%d,%d): %v", region, x, y, err)
 	}

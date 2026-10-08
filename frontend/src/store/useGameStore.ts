@@ -677,7 +677,7 @@ export interface TribulationEvent {
   id: string;
   aperture_id: string;
   player_id: string;
-  tribulation_type: 'EARTH_CALAMITY' | 'HEAVENLY_TRIBULATION' | 'GRAND_TRIBULATION' | 'MYRIAD_TRIBULATION' | 'CHAOS_CALAMITY';
+  tribulation_type: 'EARTH_CALAMITY' | 'HEAVENLY_TRIBULATION' | 'GRAND_TRIBULATION' | 'MYRIAD_TRIBULATION' | 'CHAOS_CALAMITY' | 'CHAOTIC_TRIBULATION';
   path: string;
   difficulty: number;
   status: 'ACTIVE' | 'SUCCESS' | 'FAILED';

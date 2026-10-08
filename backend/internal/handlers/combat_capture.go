@@ -223,8 +223,8 @@ func CaptureMonster(c *gin.Context) {
 		return
 	}
 
-	// Bắt thất bại — combat vẫn tiếp diễn. PVE capture attempts are not
-	// combat history; combat_history is reserved for PVP matches.
+	// Bắt thất bại — combat vẫn tiếp diễn. Capture attempts are not combat
+	// history; only completed defeats (PVE) and PVP matches are recorded.
 
 	if errTx := tx.Commit(); errTx != nil {
 		respondCombatTxErr(c, errTx, "Transaction commit failed")

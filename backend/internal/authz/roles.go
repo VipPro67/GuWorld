@@ -37,7 +37,7 @@ func BuiltinRoles() []BuiltinRole {
 			"race_dictionary.read", "race_dictionary.update", "race_dictionary.delete", "status_dictionary.read", "status_dictionary.update", "status_dictionary.delete",
 			"quests.read", "quests.update", "quests.delete", "images.update")},
 		{Key: "game_admin", Name: "Game Admin", Description: "Live game and world operations", Level: 70, Permissions: append(copyPermissions(dashboard),
-			"monitoring.read", "monitoring.reset", "players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "players.delete",
+			"monitoring.read", "monitoring.reset", "players.read", "players.update", "players.inventory.grant", "players.resources.adjust", "players.delete", "players.ban",
 			"apertures.read", "apertures.update", "apertures.delete", "gus.read", "sects.read", "sects.update", "sects.delete", "audit.read",
 			"regions.read", "regions.update", "regions.delete", "map_cells.read", "map_cells.update", "map_cells.delete",
 			"combat_history.read", "map_drops.read", "map_drops.update", "map_drops.delete", "arena_rankings.read", "arena_rankings.update",

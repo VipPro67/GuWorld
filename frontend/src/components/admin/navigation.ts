@@ -38,7 +38,7 @@ export const ADMIN_NAVIGATION: readonly AdminNavigationItem[] = [
   { key: "sects", label: "Tông môn", icon: Building2, route: "/admin/sects", permission: "sects.read", group: "game", order: 20 },
   { key: "apertures", label: "Tiên Khiếu", icon: Globe, route: "/admin/apertures", permission: "apertures.read", group: "game", order: 30 },
   { key: "gu_history", label: "Lịch Sử Tiên Cổ", icon: History, route: "/admin/gu_history", permission: "gus.read", group: "game", order: 40 },
-  { key: "combat_history", label: "Lịch sử PVP", icon: Swords, route: "/admin/combat_history", permission: "combat_history.read", group: "game", order: 45 },
+  { key: "combat_history", label: "Lịch sử chiến đấu", icon: Swords, route: "/admin/combat_history", permission: "combat_history.read", group: "game", order: 45 },
   { key: "map_drops", label: "Đồ rơi bản đồ", icon: MapPin, route: "/admin/map_drops", permission: "map_drops.read", group: "game", order: 46 },
   { key: "arena_rankings", label: "Xếp hạng đấu trường", icon: Swords, route: "/admin/arena_rankings", permission: "arena_rankings.read", group: "game", order: 47 },
   { key: "data", label: "Dữ liệu", icon: Database, route: "/admin/data", permission: "game_data.read", group: "content", order: 50 },

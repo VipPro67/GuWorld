@@ -411,6 +411,8 @@ func ResolveTribulation(c *gin.Context) {
 			ap.MyriadTribulationCount++
 		case "CHAOS_CALAMITY":
 			ap.ChaosCalamityCount++
+		case "CHAOTIC_TRIBULATION":
+			ap.ChaosCalamityCount++
 		}
 
 		// Recalculate next tribulation year based on rank & counters

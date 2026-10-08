@@ -141,8 +141,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Như `/combat/start`. |
-| GET | `/combat/history` | 20 trận PVP gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Mỗi người chơi tham chiến, gồm người khởi chiến, đồng minh là người chơi và đối thủ, có bản ghi riêng; PVE không được lưu và dữ liệu PVE cũ được worker xóa theo lô. |
-| GET | `/combat/history/:id` | Full một entry PVP: kèm `logs` và `combatants` JSONB để replay. |
+| GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng) và các trận PVE **thua**; PVE thắng không lưu. Bản ghi PVE cũ hơn 30 ngày bị worker xóa theo lô. |
+| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. |
 
 ## Exploration and combat
 
@@ -228,6 +228,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | DELETE | `/immortal-aperture/nodes/:id` |
 | POST | `/immortal-aperture/time-rate` |
 | POST | `/immortal-aperture/labor` |
+| POST | `/immortal-aperture/cleanse-dao-marks` | Thanh Đạo Tẩy Thể — bóc tách Đạo Ngân ngoại hệ (body `{path, marks}`), tiêu hao Tiên Nguyên Thạch, hoàn trả 30% Đạo Tài, cooldown 12 giờ. |
 | POST | `/immortal-aperture/nodes/:id/repair` |
 | POST | `/immortal-aperture/nodes/repair-all` |
 | POST | `/immortal-aperture/nodes/:id/upgrade` |
@@ -389,7 +390,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/admin/combat-history` | Phân trang và tìm kiếm lịch sử PVP; danh sách gọn, không tải logs lớn. |
+| GET | `/admin/combat-history` | Phân trang và tìm kiếm lịch sử chiến đấu (PVP và PVE thua); danh sách gọn, không tải logs lớn. |
 | GET | `/admin/combat-history/:id` | Chi tiết một bản ghi gồm summary, combatants và logs để replay. Chỉ đọc. |
 | GET | `/admin/map-drops` | Phân trang map drops, tìm kiếm và lọc còn hạn/đã hết hạn. |
 | PUT | `/admin/map-drops/:id` | Cập nhật vị trí, người chơi, loot JSON và thời hạn; được audit. |
@@ -416,6 +417,10 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là
 | GET | `/admin/players/:id/pets` | Lazy-load sủng vật của người chơi. Params: `page`, `limit`, `q` (search monster name/ID). |
 | DELETE | `/admin/players/:id/pets/:pet_id` | Xóa vĩnh viễn sủng vật. |
 | PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
+| PUT | `/admin/players/:id/ban` | Cần `players.ban`. Khóa tài khoản: body `{reason, duration_hours?, permanent?, chat_mute?, chat_mute_hours?, block_device?}`. `permanent=true` → khóa vĩnh viễn; ngược lại phải có `duration_hours > 0`. Đặt `is_banned`/`ban_reason`/`banned_until`, xoay `active_session_id` (kick phiên đang chạy), gửi notification `session.kicked`. `block_device=true` (mặc định frontend) chặn IP/fingerprint đăng nhập gần nhất. `chat_mute=true` hạn chế chat kèm theo. |
+| PUT | `/admin/players/:id/unban` | Cần `players.ban`. Mở khóa tài khoản (`is_banned=false`), đồng thời xóa device block khớp IP/fingerprint đăng nhập gần nhất. |
+| PUT | `/admin/players/:id/chat-mute` | Cần `players.ban`. Hạn chế gửi chat/mail: body `{reason, duration_hours?, permanent?}` → `is_chat_muted`/`chat_muted_until`. |
+| PUT | `/admin/players/:id/chat-unmute` | Cần `players.ban`. Bỏ hạn chế chat. |
 | GET | `/admin/audit-logs` | Audit log server-side (bao gồm `admin.update_player`), hỗ trợ `page`, `page_size`, `search`, allowlisted `sort`, `direction`, `action`, `entity_type`, `player_id`, `success`; trả total count. |
 
 ### Admin — nhóm quản trị còn lại
@@ -612,6 +617,7 @@ Các thao tác flush Redis, commit bulk import, xóa dữ liệu, điều chỉn
 | Commit toàn bộ / một dataset | `game_data.import_all` / `game_data.import` | `all` / key dataset | Không | Bắt buộc |
 | Xóa dữ liệu | `<domain>.delete` | đường dẫn API đầy đủ của target | Không | Không (client phải đọc kết quả trước khi retry) |
 | Đặt stones/tài nguyên player | `players.resources.adjust` | player ID | Không | Bắt buộc |
+| Khóa / mở khóa / hạn chế chat player | `players.ban` | player ID | Không | Không |
 | Thay role player | `admin_roles.assign` | player ID | Có | Bắt buộc |
 | Payment mutation tương lai | phải dùng `billing.mutate`, không dùng `billing.read` | order/transaction ID | Có | Bắt buộc |
 

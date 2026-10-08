@@ -320,22 +320,43 @@ func pathBonus(bonus map[string]float64, paths []string) float64 {
 	return maxB
 }
 
+// ensureDaoProfile lazily builds the combatant's DaoCombatProfile.
+func ensureDaoProfile(c *CombatantAuto) {
+	if c == nil || c.DaoProfile != nil {
+		return
+	}
+	var daoMarks map[string]int64
+	if c.DaoMarks != nil {
+		daoMarks = make(map[string]int64, len(c.DaoMarks))
+		for k, v := range c.DaoMarks {
+			daoMarks[k] = v
+		}
+	}
+	c.DaoProfile = gamefx.BuildDaoCombatProfile(daoMarks, c.PathMasteries, c.HasNonConflictingDao, c.DaoBonus)
+}
+
+// actionConflictMult returns the dao conflict multiplier for an action's path
+// (1.0 = no conflict). Non-conflicting characters always return 1.0.
+func actionConflictMult(c *CombatantAuto, paths []string) float64 {
+	if c == nil || c.HasNonConflictingDao {
+		return 1.0
+	}
+	ensureDaoProfile(c)
+	pathKey := "strength"
+	if len(paths) > 0 {
+		pathKey = paths[0]
+	}
+	_, _, conflictMult := c.DaoProfile.GetOffensiveFactors(pathKey)
+	return conflictMult
+}
+
 // actorDaoMultiplier returns the dao multiplier for an action's paths including
 // per-path bonuses, realm efficiency, and internal conflict from DaoProfile.
 func actorDaoMultiplier(c *CombatantAuto, paths []string) (float64, bool) {
 	if c == nil {
 		return 1.0, false
 	}
-	if c.DaoProfile == nil {
-		var daoMarks map[string]int64
-		if c.DaoMarks != nil {
-			daoMarks = make(map[string]int64, len(c.DaoMarks))
-			for k, v := range c.DaoMarks {
-				daoMarks[k] = v
-			}
-		}
-		c.DaoProfile = gamefx.BuildDaoCombatProfile(daoMarks, c.PathMasteries, c.HasNonConflictingDao, c.DaoBonus)
-	}
+	ensureDaoProfile(c)
 	pathKey := "strength"
 	if len(paths) > 0 {
 		pathKey = paths[0]
@@ -1102,19 +1123,77 @@ func Simulate(state *CombatState) []CombatLog {
 
 			actionStartIndex := len(turnLogs)
 
+			// ── Dao Conflict punishment (spec §3) ──
+			conflictMult := actionConflictMult(actor, a.Path)
+			conflictPenaltyMult := 1.0 // 0.5 when a non-fizzled backfire weakens the strike
+
 			if actor.Kind == "Player" || actor.Kind == "VariantNPC" {
-				if a.ManaCost > 0 && actor.Mana < a.ManaCost {
+				effectiveManaCost := a.ManaCost
+				if effectiveManaCost > 0 {
+					effectiveManaCost *= gamefx.ManaTaxMultiplier(conflictMult)
+				}
+				if effectiveManaCost > 0 && actor.Mana < effectiveManaCost {
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    "INSUFFICIENT_MANA",
-						Detail:    fmt.Sprintf("%s không đủ Chân Nguyên (cần %.0f, còn %.0f) để kích hoạt [%s]!", actor.Name, a.ManaCost, actor.Mana, a.Name),
+						Detail:    fmt.Sprintf("%s không đủ Chân Nguyên (cần %.0f, còn %.0f) để kích hoạt [%s]!", actor.Name, effectiveManaCost, actor.Mana, a.Name),
 					})
 					return res
 				}
-				if a.ManaCost > 0 {
-					actor.Mana -= a.ManaCost
+				if effectiveManaCost > 0 {
+					actor.Mana -= effectiveManaCost
+				}
+			}
+
+			// Cast Failure (fizzle): conflicting dao marks shred the technique.
+			if conflictMult < 0.70 && (a.ActionType == "GU_SKILL" || a.ActionType == "KILLER_MOVE") {
+				if chance := gamefx.CastFailureChance(conflictMult); chance > 0 && rng.Float64() < chance {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "DAO_CAST_FAILED",
+						Detail:    fmt.Sprintf("[Thôi Động Thất Bại] Đạo ngân dị chủng nhiễu loạn chân nguyên, sát chiêu [%s] tán loạn tiêu biến!", a.Name),
+					})
+					return res
+				}
+			}
+
+			// Backfire: violent dao conflict wounds the caster directly (true damage).
+			if conflictMult < 0.60 {
+				if chance := gamefx.BackfireChance(conflictMult); chance > 0 && rng.Float64() < chance {
+					satKhi := satKhiPiercesImmunity(actor)
+					if !isImmuneToDamage(actor, satKhi) {
+						bfDmg := actor.MaxHP * (0.08 + rng.Float64()*0.04)
+						actor.HP -= bfDmg
+						applyLastStandFloor(actor, satKhi)
+						if actor.HP < 0 {
+							actor.HP = 0
+						}
+						conflictPenaltyMult = 0.5
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "DAO_BACKFIRE",
+							Damage:    bfDmg,
+							Detail:    fmt.Sprintf("[Phản Phệ Nội Thương] Quy tắc dị hệ xung đột dữ dội! %s chịu %d sát thương nội thương do phản phệ!", actor.Name, int(bfDmg)),
+						})
+						if actor.HP <= 0 {
+							actor.IsDead = true
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "DIED",
+								Detail:    fmt.Sprintf("%s đã bạo thể vong mạng do phản phệ Đạo Ngân!", actor.Name),
+							})
+							res.abort = true
+							return res
+						}
+					}
 				}
 			}
 
@@ -1699,7 +1778,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 					totalHitDmg := 0.0
 					for h := 0; h < hitCount; h++ {
-						hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
+						hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
 						if h > 0 {
 							hitDmg *= 0.7
 						}
@@ -1739,7 +1818,7 @@ func Simulate(state *CombatState) []CombatLog {
 						critMultVal = 1.5
 					}
 
-					rawDmg := a.Damage * skillMult * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * critMultVal
+					rawDmg := a.Damage * skillMult * dmgMultiplier * daoMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * critMultVal
 
 					natResFinal := 0.0
 					if target.DaoProfile != nil && len(a.Path) > 0 {

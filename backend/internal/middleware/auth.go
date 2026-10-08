@@ -211,12 +211,14 @@ func AuthRequired() gin.HandlerFunc {
 
 		// Fast path: check Redis session cache to avoid a PostgreSQL roundtrip on every authenticated API call.
 		var dbSessionID string
+		var banned bool
+		var bannedUntil sql.NullTime
 		sessionCacheKey := "auth:session:" + playerID.String()
 		if errCache := cache.GetJSON(sessionCacheKey, &dbSessionID); errCache != nil || dbSessionID == "" {
 			if cached, ok := getLocalSession(playerID.String()); ok {
 				dbSessionID = cached
 			} else {
-				err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, '') FROM players WHERE id=$1", playerID).Scan(&dbSessionID)
+				err = db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(active_session_id, ''), is_banned, banned_until FROM players WHERE id=$1", playerID).Scan(&dbSessionID, &banned, &bannedUntil)
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
 					stats := db.DB.Stats()
 					logger.L.Error("authentication_database_error",
@@ -238,6 +240,16 @@ func AuthRequired() gin.HandlerFunc {
 				_ = cache.SetJSON(sessionCacheKey, dbSessionID, sessionCacheTTL)
 				setLocalSession(playerID.String(), dbSessionID)
 			}
+		}
+
+		// Bans always rotate active_session_id and invalidate the cache, so a
+		// banned token normally fails the session check below. Re-checking the
+		// flag on the DB path keeps the block authoritative even when a stale
+		// session id survives in cache.
+		if banned && (!bannedUntil.Valid || bannedUntil.Time.After(time.Now())) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Tài khoản đã bị khóa. Vui lòng liên hệ bộ phận hỗ trợ."})
+			c.Abort()
+			return
 		}
 
 		// Validate session_id matches the active session in database

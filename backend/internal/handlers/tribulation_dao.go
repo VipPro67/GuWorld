@@ -110,7 +110,35 @@ func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int64
 }
 
 func distributeDaoMarks(mainPath string, totalMarks int64) map[string]int64 {
+	// Chaotic/Hybrid tribulations store their constituent elements as a
+	// comma-joined path list and spread rewards evenly (spec §5.3).
+	if strings.Contains(mainPath, ",") {
+		return distributeEvenDaoMarks(strings.Split(mainPath, ","), totalMarks)
+	}
 	return distributeDaoMarksFromPaths(mainPath, totalMarks, models.AllGuPaths())
+}
+
+// distributeEvenDaoMarks splits totalMarks equally across the given paths,
+// skipping ineligible paths (e.g. heaven dao). No dominant-path bias.
+func distributeEvenDaoMarks(paths []string, totalMarks int64) map[string]int64 {
+	rewards := make(map[string]int64)
+	if totalMarks <= 0 {
+		return rewards
+	}
+	eligible := eligibleOrdinaryDaoMarkPaths(paths)
+	if len(eligible) == 0 {
+		return rewards
+	}
+	share := totalMarks / int64(len(eligible))
+	remainder := totalMarks - share*int64(len(eligible))
+	for i, p := range eligible {
+		amount := share
+		if i == 0 {
+			amount += remainder
+		}
+		rewards[p] = amount
+	}
+	return rewards
 }
 
 func distributeDaoMarksFromPaths(mainPath string, totalMarks int64, paths []string) map[string]int64 {

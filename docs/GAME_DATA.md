@@ -141,6 +141,25 @@ Authorization của dashboard và API quản trị được resolve từ các ro
 RBAC. Cột `players.is_admin` được giữ như projection tương thích cho client cũ,
 nhưng không phải nguồn quyết định hiển thị entry Admin ở Lobby.
 
+### Khóa / hạn chế người chơi — moderation
+
+Quyền `players.ban` (cấp cho `game_admin`; `super_admin` có wildcard `admin.*`)
+điều khiển ba cơ chế độc lập nhưng dùng chung một write path:
+
+- **Khóa tài khoản**: cột `players.is_banned`, `ban_reason`, `banned_until`
+  (NULL = vĩnh viễn), `banned_by`, `banned_at`. `AuthRequired` chặn mọi API khi
+  ban còn hiệu lực; login bị từ chối. Hết hạn tự hết (so `NOW()`, không cần cron).
+  Khi khóa, `active_session_id` được xoay để kick phiên đang chạy.
+- **Hạn chế chat**: `players.is_chat_muted`, `chat_muted_until`. Chặn gửi chat
+  Bảo Hoàng và private mail.
+- **Chặn thiết bị**: bảng `player_access_blocks` (`ip`, `fingerprint`,
+  `banned_until`, `reason`, `banned_by`). Kiểm tra lúc đăng nhập/đăng ký.
+
+**Auto-ban hệ thống** (đọc qua `os.Getenv`, 0 = tắt): `AUTO_BAN_FINGERPRINT_LIMIT`
+(mặc định 5 tài khoản/thiết bị/24h), `AUTO_BAN_REFERRAL_LIMIT` (mặc định 5
+referral đáng ngờ), `AUTO_BAN_DURATION_HOURS` (mặc định 72; ≤0 = vĩnh viễn),
+`AUTO_BAN_BLOCK_DEVICE` (mặc định true).
+
 ### Bảng `immortal_apertures` (Tiên Khiếu)
 
 Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade` được roll theo Nhân Khí lúc thăng tiên (LOW / MID / HIGH / EXTREME). Các cột chính:
@@ -152,6 +171,7 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 - `rank_start_year` — năm bắt đầu rank hiện tại (dùng làm mốc tính lịch giáng lâm tai kiếp)
 - `earth_calamity_count`, `heavenly_tribulation_count`, `grand_tribulation_count`, `myriad_tribulation_count`, `chaos_calamity_count` — bộ đếm kiếp nạn
 - `tribulation_pending_at` (TIMESTAMPTZ, NULL) — thời điểm tai kiếp bắt đầu bị "giữ" vì người chơi offline; dùng để tính phạt giảm thưởng Đạo Ngân (quá 24 giờ → còn 50%)
+- `last_cleanse_at` (TIMESTAMPTZ, NULL) — mốc Thanh Đạo Tẩy Thể gần nhất; cooldown 12 giờ giữa các lần bóc tách Đạo Ngân ngoại hệ
 - `state` — STABLE / TRIBULATION_PENDING / TRIBULATION_ACTIVE / DAMAGED / DESTROYED
 
 > **Hằng số thời gian nội bộ:** 1 năm ngoại giới = **36.000 giây (10 giờ) đời thật** khi `time_speed_multiplier = 1`; 1 năm nội bộ Tiên Khiếu = **36.000 giây đời thật ÷ (`time_rate` × `time_speed_multiplier`)**. Sản lượng nền của Tiên Khiếu là `essence_production_per_year` sau mỗi năm nội bộ, nên tốc độ nền mỗi giờ đời thật là `essence_production_per_year ÷ 10 × time_rate × time_speed_multiplier`; Cổ, thể chất, tuổi thọ và hiệu ứng khóa hồi phục vẫn được áp dụng sau đó. Kiếp nạn đầu tiên đến vào năm nội bộ thứ 10 → chờ khoảng `10 × 36.000 ÷ time_rate` giây đời thật (khoảng 2–10 giờ, tùy phẩm cấp Tiên Khiếu). Kiếp đang ACTIVE quá **6 giờ đời thật** (chỉ tính thời gian online) tự động kết toán thất bại.

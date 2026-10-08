@@ -7,6 +7,7 @@ import { useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { LevelZeroView } from "@/components/LevelZeroView";
 import { Sparkles, HelpCircle, X, Handshake } from "@/lib/icons";
 import Link from "next/link";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";

@@ -16,20 +16,22 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // AutoResolveCombat runs a combat simulation using the player's saved combat settings
 // and applies the results to the database. Used for "skip battle" feature.
 // Returns: winner ("Phe Ta" or "Phe Địch"), logs, summary info map, error.
-func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.CombatLog, map[string]interface{}, error) {
+func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.CombatLog, map[string]interface{}, []notify.Notification, error) {
+	var pendingNotifications []notify.Notification
 	if player.ActiveCombat == nil {
-		return "", nil, nil, fmt.Errorf("no active combat")
+		return "", nil, nil, nil, fmt.Errorf("no active combat")
 	}
 	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, nil, err
 	}
 	if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, nil, err
 	}
 
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
@@ -45,7 +47,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 
 	simState, err := buildSimCombatState(tx, player, &loadout, isVirtual)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
 	}
 	simPlayer := simState.Allies[0]
 
@@ -183,7 +185,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				}
 			}
 
-			lootDetailLogs := applyCombatVictoryLoot(tx, player, player.ActiveCombat, partyMembers, isVirtual)
+			lootDetailLogs, lootNotifications := applyCombatVictoryLoot(tx, player, player.ActiveCombat, partyMembers, isVirtual)
+			pendingNotifications = append(pendingNotifications, lootNotifications...)
 
 			markBossCleared(tx, player)
 
@@ -291,12 +294,12 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 
 	logs, err = finalizeAutoCombatOutcome(tx, player, simState, isVirtual, isTribulation, alliesAlive, updateQuery, args, finalPlayerHP, finalMana, before, logs)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to finalize combat outcome: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("failed to finalize combat outcome: %w", err)
 	}
 
 	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 3, $1) WHERE id = $2", MaxHumanQi, player.ID)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to update human_qi: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("failed to update human_qi: %w", err)
 	}
 
 	// Cổ mang PERSIST_STATUS_ON_HIT: đòn đánh trúng ở PvP thật thì defender
@@ -337,9 +340,15 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	}
 	go func() {
 		summaryStr := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
+		if !shouldRecordCombatHistory(enemyType, winner) {
+			return
+		}
 		if enemyType == "PVP" {
 			attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
 			savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, enemyName, player.Username, player.CurrentRegion)
+		} else {
+			// PVE defeats only: the replay the player wants to review afterwards.
+			SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summaryStr, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, player.CurrentRegion)
 		}
 	}()
 
@@ -349,7 +358,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	summary["allies"] = allySummary
 
 	player.ActiveCombat = nil
-	return winner, logs, summary, nil
+	return winner, logs, summary, pendingNotifications, nil
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
