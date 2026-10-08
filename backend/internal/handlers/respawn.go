@@ -3,7 +3,6 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,73 +10,9 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
-// SectRespawnChance is the probability that a sect member respawns at their sect base.
-// The remaining chance falls back to random coordinates in the current region.
-const SectRespawnChance = 0.50
-
-// ResolveRespawnPosition resolves the respawn location for a deceased player.
-// Priority:
-// 1. Player's sect base location (probabilistic: 50% chance if player belongs to a sect).
-// 2. Random valid coordinates within the player's current region (region stays unchanged).
-// 3. Fallback to NearestHub if region geometry is unavailable.
-func ResolveRespawnPosition(tx *sql.Tx, playerID uuid.UUID, currentRegion string, currentX, currentY int) (string, int, int) {
-	// 1. Check if player belongs to a sect with SectRespawnChance
-	if tx != nil && rand.Float64() < SectRespawnChance {
-		var sectRegion string
-		var sectX, sectY int
-		err := tx.QueryRow(`
-			SELECT s.region, s.map_x, s.map_y
-			FROM sect_members sm
-			JOIN sects s ON sm.sect_id = s.id
-			WHERE sm.player_id = $1
-		`, playerID).Scan(&sectRegion, &sectX, &sectY)
-
-		if err == nil && sectRegion != "" && sectX > 0 && sectY > 0 {
-			return sectRegion, sectX, sectY
-		}
-	}
-
-	// 2. Tán Tu / No Sect: Spawn randomly within the current region
-	if currentRegion != "" {
-		if z := ZoneByID(currentRegion); z != nil && z.MaxX > z.MinX && z.MaxY > z.MinY {
-			rx := z.MinX + rand.Intn(z.MaxX-z.MinX+1)
-			ry := z.MinY + rand.Intn(z.MaxY-z.MinY+1)
-			if rx < 0 {
-				rx = 0
-			}
-			if rx >= WorldWidth {
-				rx = WorldWidth - 1
-			}
-			if ry < 0 {
-				ry = 0
-			}
-			if ry >= WorldHeight {
-				ry = WorldHeight - 1
-			}
-			return currentRegion, rx, ry
-		}
-
-		// If current coordinates are inside world, jitter within +/- 50 cells
-		if inWorld(currentX, currentY) {
-			rx := currentX + rand.Intn(101) - 50
-			ry := currentY + rand.Intn(101) - 50
-			if rx < 0 {
-				rx = 0
-			}
-			if rx >= WorldWidth {
-				rx = WorldWidth - 1
-			}
-			if ry < 0 {
-				ry = 0
-			}
-			if ry >= WorldHeight {
-				ry = WorldHeight - 1
-			}
-			return currentRegion, rx, ry
-		}
-	}
-
-	// 3. Absolute fallback to nearest hub
+// ResolveRespawnPosition returns the nearest safe hub after death. The legacy
+// arguments remain because multiple defeat flows share this helper.
+func ResolveRespawnPosition(_ *sql.Tx, _ uuid.UUID, _ string, currentX, currentY int) (string, int, int) {
 	return NearestHub(currentX, currentY)
 }
 
