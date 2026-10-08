@@ -36,6 +36,7 @@ thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm prot
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |
 | POST | `/auth/login` | Rate limited. |
 | POST | `/auth/logout` | Public logout endpoint. |
+| POST | `/auth/claim-tab` | Authenticated gameplay tab claim; a newer gameplay tab replaces the previous one. Admin endpoints are exempt. |
 | GET | `/auth/me` | Current player, protected. |
 | GET | `/auth/google/login` | Google OAuth start, rate limited. |
 | GET | `/auth/google/callback` | Google OAuth callback, rate limited. |
@@ -142,7 +143,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/combat/start` | Trả `logs[]` trong đó mỗi entry sát thương có `breakdown` (công thức: `base_damage`, `skill_mult`, `dao_mult`, `buff_mult`, `crit_mult`, `path_bonus`, `target_def`, `natural_resist`, `path_resist`, `damage_reduction`, `shield_absorbed`, `hp_damage`, `final_damage`, `raw_damage`, `hit_count`, `reason`). Kể từ nay kèm provenance trạng thái: `attacker_attack` / `defender_defense` / `healer_healing` (`{stat, base_value, final_value, mods:[{key,name,pct}]}`) và các trường hồi máu `healing_base`, `healing_dao_bonus`, `healing_final`. |
 | POST | `/combat/practice` | Như `/combat/start`. |
 | GET | `/combat/history` | 20 trận gần nhất của người chơi, bản tinh gọn cho list: `{id, player_id, winner, summary, enemy_name, enemy_type, region, logs_count, created_at}` (không kèm JSONB `logs`/`combatants` — lấy chi tiết qua endpoint dưới). Gồm PVP (mỗi người chơi tham chiến có bản ghi riêng) và các trận PVE **thua**; PVE thắng không lưu. Bản ghi PVE cũ hơn 30 ngày bị worker xóa theo lô. |
-| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. |
+| GET | `/combat/history/:id` | Full một entry: kèm `logs` và `combatants` JSONB để replay. Log `TURN_END` có snapshot cuối lượt của hai phe (HP, Chân Nguyên, khiên, công/thủ/tốc độ và `statuses[]` gồm loại, giá trị, thời hạn còn lại); các trận lịch sử cũ không có snapshot giữa lượt vẫn đọc được. |
 
 ## Exploration and combat
 
@@ -391,7 +392,7 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là
 | Method | Path | Ghi chú |
 | --- | --- | --- |
 | GET | `/admin/combat-history` | Phân trang và tìm kiếm lịch sử chiến đấu (PVP và PVE thua); danh sách gọn, không tải logs lớn. |
-| GET | `/admin/combat-history/:id` | Chi tiết một bản ghi gồm summary, combatants và logs để replay. Chỉ đọc. |
+| GET | `/admin/combat-history/:id` | Chi tiết một bản ghi gồm summary, combatants và logs để replay, cùng snapshot cuối mỗi lượt cho trạng thái và chỉ số hai phe. Chỉ đọc. |
 | GET | `/admin/map-drops` | Phân trang map drops, tìm kiếm và lọc còn hạn/đã hết hạn. |
 | PUT | `/admin/map-drops/:id` | Cập nhật vị trí, người chơi, loot JSON và thời hạn; được audit. |
 | DELETE | `/admin/map-drops/:id` | Xóa drop với lý do và xác nhận target. |

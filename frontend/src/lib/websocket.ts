@@ -130,7 +130,9 @@ export class WebSocketManager {
           this.rejectPendingRequests(new WebSocketRequestError("Kết nối WebSocket đã đóng"));
         }
 
-        const wsUrl = `${this.url}?token=${encodeURIComponent(token)}`;
+        const tabId = typeof window !== "undefined" ? sessionStorage.getItem("gu_gameplay_tab_id") : null;
+        const query = `token=${encodeURIComponent(token)}${tabId ? `&tab_id=${encodeURIComponent(tabId)}` : ""}`;
+        const wsUrl = `${this.url}?${query}`;
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
@@ -428,3 +430,7 @@ export class WebSocketManager {
 }
 
 export const wsManager = new WebSocketManager();
+
+if (typeof window !== "undefined") {
+  window.addEventListener("game:tab-replaced", () => wsManager.disconnect());
+}

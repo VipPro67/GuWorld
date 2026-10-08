@@ -163,6 +163,7 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	// 4. Run Simulator
+	simState.CaptureTurnSnapshots = true
 	logs := simulator.Simulate(simState)
 	var pendingNotifications []notify.Notification
 

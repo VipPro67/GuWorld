@@ -421,7 +421,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		} else if allowedOriginsStr == "*" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Admin-Reason, X-Admin-Confirmation-Target, Idempotency-Key, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Admin-Reason, X-Admin-Confirmation-Target, Idempotency-Key, Authorization, X-Player-Tab-ID, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
@@ -487,6 +487,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			authGroup.POST("/register", middleware.RateLimitByIP(1, time.Minute), handlers.RegisterPlayer)
 			authGroup.POST("/login", middleware.RateLimitByIP(9, time.Minute), handlers.LoginPlayer)
 			authGroup.POST("/logout", handlers.LogoutPlayer)
+			authGroup.POST("/claim-tab", middleware.AuthRequired(), handlers.ClaimGameplayTab)
 			authGroup.GET("/me", middleware.AuthRequired(), handlers.GetCurrentPlayer)
 
 			// Google OAuth2

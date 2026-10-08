@@ -1199,8 +1199,6 @@ interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice
   reconciliationInFlight: boolean;
   subscribeTradeEvents: () => void;
   unsubscribeTradeEvents: () => void;
-  subscribeBaoHoangMessages: (channel: string) => void;
-  unsubscribeBaoHoangMessages: () => void;
   fetchDictionary: (forceFresh?: boolean) => Promise<void>;
 
   setShowChangelog: (v: boolean) => void;
@@ -2302,16 +2300,6 @@ export const useGameStore = create<GameState>((set, get) => {
   unsubscribeTradeEvents: () => {
     get().unsubscribeEvents();
   },
-
-  subscribeBaoHoangMessages: (channel) => {
-    get().subscribeEvents();
-    get().setActiveChannel(channel as ApiResponseData);
-  },
-
-  unsubscribeBaoHoangMessages: () => {
-    // Handled at main connection level
-  },
-
 
   simulateDeposit: async (stones) => {
     if (!get().beginAction("player:wallet")) return false;

@@ -100,6 +100,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - `sub_rank` gồm 4 bậc: Sơ giai, Trung giai, Cao giai, Đỉnh phong (chỉ dùng cho Chuyển 1-5).
 - Nhất Chuyển đến Ngũ Chuyển là phàm nhân; Lục Chuyển trở lên là Cổ Tiên.
 - Lục Chuyển trở lên **không có sub_rank**. Thay vào đó hiển thị tên `Lục Chuyển/Bát Chuyển/Cửu Chuyển Cổ Tiên/Cổ Tôn` kèm số lần vượt qua từng loại kiếp nạn (Địa Tai, Thiên Kiếp, Hạo Kiếp, Vạn Kiếp, Hỗn Độn Đại Nạn).
+- **Vĩnh Sinh (Rank 10)** — cảnh giới "Vĩnh Sinh", phẩm chất Mana **Hỗn Độn Tiên Nguyên**. Chỉ được gán thủ công (không có đường đột phá từ Cửu Chuyển). Hai tác dụng: **không còn tai kiếp** và **bất tử tuổi thọ** (thọ nguyên không giảm vì lão hóa, không vào Cõi Chết). Mọi hoạt động Tiên Khiếu khác — sản xuất Tiên Nguyên, hệ sinh thái, dân cư, gia tốc thời gian, hồi phục — vẫn diễn ra bình thường.
 
 ### Cảnh Giới Lưu Phái (Path Masteries)
 
@@ -144,6 +145,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - Bát Chuyển: Thiên Kiếp (10 năm), Hạo Kiếp (50 năm), Vạn Kiếp (100 năm)
   - Cửu Chuyển: Hạo Kiếp (10 năm), Vạn Kiếp (50 năm), Hỗn Độn Đại Nạn (100 năm)
 - **Tự động đột phá:** Khi vượt thành công đủ 3 lần kiếp nạn cấp cao nhất của Chuyển hiện tại (Rank 6: 3 Thiên Kiếp; Rank 7: 3 Hạo Kiếp; Rank 8: 3 Vạn Kiếp) và đạt cảnh giới lưu phái yêu cầu, Cổ Tiên tự động lên Chuyển kế tiếp.
+- **Vĩnh Sinh (Rank 10): không còn tai kiếp giáng xuống** — worker bỏ qua lên lịch kiếp cho cảnh giới này.
 - Nhiều kiểu kiếp nạn đến cùng lúc: ưu tiên sinh kiểu hiếm nhất, nhưng đếm tất cả các kiểu đang đến hạn.
 
 ## 3. Không khiếu, tiên khiếu và đạo ngân
@@ -1082,7 +1084,7 @@ Phong ấn thích hợp cho Cổ ít dùng nhưng quý; vẫn phải kiểm tra 
 
 ## 24. Lịch sử, replay và Ký Sự
 
-- **Lịch Sử Chiến Đấu** liệt kê trận gần đây (PVP và các trận PVE thua), kết quả/đối thủ và cho mở báo cáo hoặc replay log chi tiết.
+- **Lịch Sử Chiến Đấu** liệt kê trận gần đây (PVP và các trận PVE thua), kết quả/đối thủ và cho mở báo cáo hoặc replay log chi tiết. Mỗi lượt lưu lại HP, chân nguyên, khiên, công/thủ/tốc độ hiện tại và các trạng thái còn hiệu lực để tiện xem lại diễn biến.
 - **Ký Sự Tu Hành** ghi các hành động quan trọng như tu luyện, luyện Cổ, giao dịch, chăm Cổ và thay đổi tài sản. Có tìm kiếm tự do, lọc loại hành động/trạng thái và phân trang.
 - Đây là hai nơi đầu tiên nên kiểm tra khi cần hiểu vì sao tài nguyên, Cổ hoặc kết quả trận đấu thay đổi.
 

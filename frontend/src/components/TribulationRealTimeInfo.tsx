@@ -11,6 +11,7 @@ interface TribulationRealTimeInfoProps {
 
 export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, timeSpeedMultiplier = 1, isCompact }) => {
   const playerRace = useGameStore((state) => state.player?.race);
+  const playerRank = useGameStore((state) => state.player?.rank ?? 0);
   const [timeLeftText, setTimeLeftText] = useState<string>("");
   const [arrivalTimeText, setArrivalTimeText] = useState<string>("");
   const [isPassed, setIsPassed] = useState<boolean>(false);
@@ -19,6 +20,13 @@ export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = (
     const updateTime = () => {
       if (playerRace === "cuong_thi") {
         setTimeLeftText("Ngưng trệ (Tử Khiếu)");
+        setArrivalTimeText("Không giáng kiếp");
+        setIsPassed(false);
+        return;
+      }
+
+      if (playerRank >= 10) {
+        setTimeLeftText("Vĩnh Sinh (Bất diệt)");
         setArrivalTimeText("Không giáng kiếp");
         setIsPassed(false);
         return;
@@ -81,7 +89,7 @@ export const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = (
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [aperture.next_tribulation_at, aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier, playerRace]);
+  }, [aperture.next_tribulation_at, aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier, playerRace, playerRank]);
 
   if (isCompact) {
     return (

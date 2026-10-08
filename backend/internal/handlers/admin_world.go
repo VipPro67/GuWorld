@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type AdminMapCellResponse struct {
@@ -73,7 +74,7 @@ func AdminListRegions(c *gin.Context) {
 	                 COALESCE(parent_id,''), zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y,
 	                 safe_zone_x, safe_zone_y,
 	                 COALESCE(pool_weights::text, '{}'), COALESCE(paths::text,'[]'), COALESCE(rules::text,'{}'),
-	                 COALESCE(created_at,NOW()), COALESCE(updated_at,NOW()), COALESCE(rwm.world_map_id,'world_map')
+	                 COALESCE(r.created_at,NOW()), COALESCE(r.updated_at,NOW()), COALESCE(rwm.world_map_id,'world_map')
 	          FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id = r.id`
 	countQuery := `SELECT COUNT(*) FROM regions`
 
@@ -105,6 +106,7 @@ func AdminListRegions(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
+		logger.S.Errorf("admin regions: list query failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lấy danh sách khu vực"})
 		return
 	}

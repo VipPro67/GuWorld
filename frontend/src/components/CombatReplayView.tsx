@@ -63,6 +63,36 @@ export interface CombatLogEntry {
   trigger?: string;
   detail?: string;
   breakdown?: DamageBreakdown;
+  snapshot?: {
+    turn: number;
+    allies?: CombatantSnapshotEntry[];
+    enemies?: CombatantSnapshotEntry[];
+    aperture_hp?: number;
+    aperture_max_hp?: number;
+  };
+}
+
+interface CombatantSnapshotEntry {
+  id: string;
+  name: string;
+  hp: number;
+  max_hp: number;
+  mana: number;
+  max_mana: number;
+  shield: number;
+  damage: number;
+  defense: number;
+  speed: number;
+  statuses?: CombatStatusEntry[];
+}
+
+interface CombatStatusEntry {
+  id: string;
+  type: string;
+  tier?: number;
+  value?: number;
+  remaining_turns: number;
+  direct_hp?: boolean;
 }
 
 interface CombatantReplayInfo {
@@ -120,6 +150,7 @@ interface CombatantState {
   pathMasteries?: Record<string, number>;
   guInventory?: Array<{ gu_id?: string; guId?: string; rank: number; status?: string }>;
   avatarUrl?: string;
+  statuses: CombatStatusEntry[];
 }
 
 interface FloatingEvent {
@@ -175,6 +206,28 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
     case "ADVANCE": {
       const log = action.log;
       const next = { ...state.combatantStates };
+
+      if (log.snapshot) {
+        for (const [kind, snapshotCombatants] of [["ally", log.snapshot.allies], ["enemy", log.snapshot.enemies]] as const) {
+          for (const snapshot of snapshotCombatants || []) {
+            const current = next[snapshot.id];
+            if (!current) continue;
+            next[snapshot.id] = {
+              ...current,
+              kind,
+              hp: snapshot.hp,
+              maxHp: snapshot.max_hp,
+              mp: snapshot.mana,
+              maxMp: snapshot.max_mana,
+              shield: snapshot.shield,
+              damage: snapshot.damage,
+              defense: snapshot.defense,
+              speed: snapshot.speed,
+              statuses: snapshot.statuses || [],
+            };
+          }
+        }
+      }
 
       // Update combatant states
       if (log.actor_id && next[log.actor_id]) {
@@ -393,6 +446,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           pathMasteries: c.path_masteries,
           guInventory: (c.gu_inventory || c.guInventory) as CombatantState["guInventory"],
           avatarUrl: c.avatar_url,
+          statuses: [],
         };
       }
       return map;
@@ -426,6 +480,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               rank: Number(a.rank || 1),
               subRank: Number(a.sub_rank || 0),
               avatarUrl: (a.avatar_url as string) || undefined,
+              statuses: (Array.isArray(a.statuses) ? a.statuses : []) as CombatStatusEntry[],
             };
           });
         }
@@ -450,6 +505,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               rank: Number(e.rank || 1),
               subRank: Number(e.sub_rank || 0),
               avatarUrl: (e.avatar_url as string) || undefined,
+              statuses: (Array.isArray(e.statuses) ? e.statuses : []) as CombatStatusEntry[],
             };
           });
         }
@@ -483,6 +539,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           defense: 0,
           speed: 0,
           kindDetail: "",
+          statuses: [],
           rank: 0,
           subRank: 0,
         };
@@ -505,6 +562,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           defense: 0,
           speed: 0,
           kindDetail: "",
+          statuses: [],
           rank: 0,
           subRank: 0,
         };
@@ -771,6 +829,17 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 </div>
               )}
 
+              {c.statuses.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1" aria-label="Trạng thái hiện tại">
+                  {c.statuses.slice(0, 3).map((status, statusIndex) => (
+                    <span key={`${status.id}-${statusIndex}`} className={`max-w-full truncate rounded border px-1 py-0.5 text-[8px] ${status.type === "buff" ? "border-emerald-800/60 bg-emerald-950/40 text-emerald-300" : "border-rose-800/60 bg-rose-950/40 text-rose-300"}`} title={`${status.id} · còn ${status.remaining_turns} lượt`}>
+                      {status.id.replaceAll("_", " ")} · {status.remaining_turns}L
+                    </span>
+                  ))}
+                  {c.statuses.length > 3 && <span className="text-[8px] text-zinc-500">+{c.statuses.length - 3}</span>}
+                </div>
+              )}
+
               {/* Mana Bar */}
               {c.maxMp > 0 && (isAlly || (c.kindDetail && c.kindDetail.toLowerCase() === "player")) && (
                 <div>
@@ -910,6 +979,20 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             <div className="text-zinc-500">
               Vị trí: <span className="text-zinc-300 font-mono">({c.gridX},{c.gridY})</span>
             </div>
+
+            {c.statuses.length > 0 && <div className="border-t border-zinc-800 pt-2 mt-2">
+              <div className="mb-1 text-[10px] text-zinc-500">Trạng thái ở lượt {state.currentTurn}</div>
+              <div className="space-y-1">
+                {c.statuses.map((status, index) => <div key={`${status.id}-${index}`} className="flex items-center justify-between gap-2 text-[10px]">
+                  <span className={status.type === "buff" ? "text-emerald-300" : status.type === "dot" ? "text-amber-300" : "text-rose-300"}>
+                    {status.id.replaceAll("_", " ").toUpperCase()}{status.tier ? ` · T${status.tier}` : ""}
+                    {status.value ? ` · ${status.type === "dot" ? `${status.value} / lượt` : `GT ${status.value}`}` : ""}
+                    {status.direct_hp ? " · xuyên khiên" : ""}
+                  </span>
+                  <span className="shrink-0 text-zinc-500">còn {status.remaining_turns} lượt</span>
+                </div>)}
+              </div>
+            </div>}
 
             {/* Dao Marks */}
             {c.daoMarks && Object.keys(c.daoMarks).length > 0 && (
@@ -1336,6 +1419,12 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                   <div className="flex-1 h-px bg-zinc-800" />
                 </div>
               );
+            }
+
+            if (log.action === "TURN_END") {
+              return <div key={idx} className={`py-1 text-center text-[9px] ${idx === state.currentIndex ? "text-cyan-300" : "text-zinc-600"}`}>
+                Đã ghi nhận chỉ số và trạng thái cuối lượt {log.turn}
+              </div>;
             }
 
             if (isBattleBoundary) {

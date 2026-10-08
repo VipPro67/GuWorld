@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, RefreshCw, Search, Swords } from "lucide-react";
 import { authFetch } from "@/lib/auth";
+import { CombatReportView } from "@/components/CombatReportView";
+import type { CombatLogEntry } from "@/components/CombatReplayView";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const PAGE_SIZE = 25;
@@ -59,7 +61,6 @@ export const CombatHistoryAdminTab: React.FC<{
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const pretty = (value: unknown) => JSON.stringify(value ?? [], null, 2);
   const date = (value: unknown) => value ? new Date(String(value)).toLocaleString("vi-VN") : "—";
 
   return <section className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-4">
@@ -75,7 +76,16 @@ export const CombatHistoryAdminTab: React.FC<{
           const id = String(row.id);
           const detail = details[id];
           return <React.Fragment key={id}><tr className="hover:bg-zinc-900/70"><td className="px-3 py-3"><span className="text-zinc-200">{String(row.player_username || "(đã xóa người chơi)")}</span><span className="mt-0.5 block font-mono text-[9px] text-zinc-600">{String(row.player_id)}</span></td><td className="px-3 py-3 text-zinc-300">{String(row.enemy_name || "—")}<span className="mt-0.5 block text-[9px] uppercase text-zinc-600">{String(row.enemy_type || "")}</span></td><td className={`px-3 py-3 font-semibold ${row.winner === "Phe Ta" ? "text-emerald-400" : "text-red-400"}`}>{String(row.winner)}</td><td className="px-3 py-3 text-zinc-400">{String(row.region || "—")}</td><td className="px-3 py-3 text-zinc-400">{String(row.logs_count ?? 0)}</td><td className="px-3 py-3 text-zinc-500">{date(row.created_at)}</td><td className="px-3 py-3 text-right"><button type="button" onClick={() => void toggleDetails(id)} className="rounded px-2 py-1 text-amber-400 hover:bg-amber-500/10">{expanded === id ? "Đóng" : "Xem replay"}</button></td></tr>
-            {expanded === id && <tr><td colSpan={7} className="bg-zinc-950/70 p-3">{detailLoading === id ? <p className="text-xs text-zinc-500">Đang tải replay…</p> : detail ? <div className="grid gap-3 xl:grid-cols-3"><div className="space-y-2"><h3 className="text-xs font-bold text-zinc-300">Tóm tắt</h3><pre className="max-h-72 overflow-auto rounded-lg border border-zinc-800 bg-black/30 p-3 text-[10px] text-zinc-400">{pretty(detail.summary)}</pre><p className="break-all font-mono text-[9px] text-zinc-600">Trận {id} · tạo {date(detail.created_at)}</p></div><div className="space-y-2"><h3 className="text-xs font-bold text-zinc-300">Combatants</h3><pre className="max-h-72 overflow-auto rounded-lg border border-zinc-800 bg-black/30 p-3 text-[10px] text-zinc-400">{pretty(detail.combatants)}</pre></div><div className="space-y-2"><h3 className="text-xs font-bold text-zinc-300">Combat logs</h3><pre className="max-h-72 overflow-auto rounded-lg border border-zinc-800 bg-black/30 p-3 text-[10px] text-zinc-400">{pretty(detail.logs)}</pre></div></div> : null}</td></tr>}
+            {expanded === id && <tr><td colSpan={7} className="bg-zinc-950/70 p-3">{detailLoading === id ? <p className="text-xs text-zinc-500">Đang tải replay…</p> : detail ? <div className="space-y-2"><div className="flex items-center justify-between"><h3 className="text-xs font-bold text-zinc-300">Replay · {String(detail.player_username || row.player_username || "Người chơi")} vs {String(detail.enemy_name || row.enemy_name || "Kẻ địch")}</h3><span className="text-[10px] text-zinc-500">{date(detail.created_at || row.created_at)}</span></div><CombatReportView
+              logs={(Array.isArray(detail.logs) ? detail.logs : []) as CombatLogEntry[]}
+              combatants={(Array.isArray(detail.combatants) ? detail.combatants : []) as unknown as Parameters<typeof CombatReportView>[0]["combatants"]}
+              winner={String(detail.winner || row.winner || "Phe Địch")}
+              playerName={String(detail.player_username || row.player_username || "")}
+              teamAName={String(detail.player_username || row.player_username || "Phe Ta")}
+              teamBName={String(detail.enemy_name || row.enemy_name || detail.enemy_type || "Kẻ Địch")}
+              title={`Chiến Báo - vs ${String(detail.enemy_name || row.enemy_name || "Kẻ Địch")}`}
+              onBack={() => setExpanded(null)}
+            /></div> : <p className="text-xs text-zinc-500">Không có dữ liệu replay.</p>}</td></tr>}
           </React.Fragment>;
         })}
       </tbody>

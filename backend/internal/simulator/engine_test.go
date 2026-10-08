@@ -55,6 +55,32 @@ func TestBurnDoTApplies(t *testing.T) {
 	}
 }
 
+func TestTurnEndSnapshotRecordsCombatStatsAndStatuses(t *testing.T) {
+	ally := newTestCombatant("ally", "Player", 1000, 1)
+	ally.ActiveEffects = []Effect{{ID: "atk_up", Type: "buff", Tier: 2, Value: 15, Duration: 3}}
+	ally.ActiveDoT = []DoTEffect{{Type: "burn", Value: 12, Turns: 2, DirectHP: true}}
+	enemy := newTestCombatant("enemy", "Enemy", 1000, 1)
+
+	logs := Simulate(&CombatState{Seed: 15, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}, CaptureTurnSnapshots: true})
+	for _, log := range logs {
+		if log.Action != "TURN_END" {
+			continue
+		}
+		if log.Snapshot == nil || len(log.Snapshot.Allies) != 1 || len(log.Snapshot.Enemies) != 1 {
+			t.Fatal("TURN_END should include both sides in its battlefield snapshot")
+		}
+		allySnapshot := log.Snapshot.Allies[0]
+		if len(allySnapshot.Statuses) < 2 {
+			t.Fatalf("expected active buff and DoT in snapshot, got %+v", allySnapshot.Statuses)
+		}
+		if allySnapshot.Damage <= ally.BaseDmg || allySnapshot.Speed == 0 {
+			t.Fatalf("expected current effective combat stats in snapshot, got %+v", allySnapshot)
+		}
+		return
+	}
+	t.Fatal("expected at least one TURN_END snapshot")
+}
+
 // TestSleepSkipsTurnAndBreaksOnDamage verifies SLEEP skips turns and breaks on damage.
 func TestSleepSkipsTurn(t *testing.T) {
 	enemy := newTestCombatant("enemy", "Enemy", 1000, 50)

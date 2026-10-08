@@ -400,10 +400,11 @@ type CombatantAuto struct {
 
 // CombatState represents the mutable snapshot of the battlefield at any given moment.
 type CombatState struct {
-	Turn    int
-	Seed    int64
-	Allies  []*CombatantAuto
-	Enemies []*CombatantAuto
+	Turn                 int
+	Seed                 int64
+	Allies               []*CombatantAuto
+	Enemies              []*CombatantAuto
+	CaptureTurnSnapshots bool
 
 	// Boss specific tracking
 	BossPhase int // 0 = 100-70%, 1 = 70-30%, 2 = 30-0%
@@ -433,20 +434,31 @@ type CombatSnapshot struct {
 
 // CombatantSnapshot is a point-in-time snapshot of one combatant's stats.
 type CombatantSnapshot struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	Kind    string  `json:"kind"`
-	HP      float64 `json:"hp"`
-	MaxHP   float64 `json:"max_hp"`
-	Mana    float64 `json:"mana"`
-	MaxMana float64 `json:"max_mana"`
-	GridX   int     `json:"grid_x"`
-	GridY   int     `json:"grid_y"`
-	Shield  float64 `json:"shield"`
-	Damage  float64 `json:"damage"`
-	Defense float64 `json:"defense"`
-	Speed   float64 `json:"speed"`
-	IsDead  bool    `json:"is_dead"`
+	ID       string                 `json:"id"`
+	Name     string                 `json:"name"`
+	Kind     string                 `json:"kind"`
+	HP       float64                `json:"hp"`
+	MaxHP    float64                `json:"max_hp"`
+	Mana     float64                `json:"mana"`
+	MaxMana  float64                `json:"max_mana"`
+	GridX    int                    `json:"grid_x"`
+	GridY    int                    `json:"grid_y"`
+	Shield   float64                `json:"shield"`
+	Damage   float64                `json:"damage"`
+	Defense  float64                `json:"defense"`
+	Speed    float64                `json:"speed"`
+	IsDead   bool                   `json:"is_dead"`
+	Statuses []CombatStatusSnapshot `json:"statuses,omitempty"`
+}
+
+// CombatStatusSnapshot captures a status effect at a particular replay point.
+type CombatStatusSnapshot struct {
+	ID             string  `json:"id"`
+	Type           string  `json:"type"`
+	Tier           int     `json:"tier,omitempty"`
+	Value          float64 `json:"value,omitempty"`
+	RemainingTurns int     `json:"remaining_turns"`
+	DirectHP       bool    `json:"direct_hp,omitempty"`
 }
 
 // StatModSource attributes one status-effect stat modification for the
@@ -544,6 +556,8 @@ func (c *CombatantAuto) GetManaName() string {
 		return "Bạch Lệ Tiên Nguyên"
 	case 9:
 		return "Hoàng Hạnh Tiên Nguyên"
+	case 10:
+		return "Hỗn Độn Tiên Nguyên"
 	default:
 		return "chân nguyên"
 	}

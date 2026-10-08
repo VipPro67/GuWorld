@@ -251,6 +251,23 @@ func LogoutPlayer(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// ClaimGameplayTab replaces the current gameplay tab for this authenticated
+// player. Admin routes remain usable from other tabs.
+func ClaimGameplayTab(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid auth session"})
+		return
+	}
+	tabID := strings.TrimSpace(c.GetHeader("X-Player-Tab-ID"))
+	if tabID == "" || len(tabID) > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã tab không hợp lệ"})
+		return
+	}
+	middleware.ClaimActiveTab(playerID, tabID)
+	c.Status(http.StatusNoContent)
+}
+
 // adminAccessCacheTTL is how long we cache the admin access result per player.
 // Admin role changes are rare; 60s staleness is acceptable.
 const adminAccessCacheTTL = 60 * time.Second
