@@ -159,7 +159,7 @@ func loadBaoHoangMessagesContext(ctx context.Context, channel string, sectID sql
 	if channel == "region" {
 		rows, err = db.DB.QueryContext(ctx, `
 			SELECT * FROM (
-				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
+				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), COALESCE(p.rank, 0), m.content, m.created_at, m.channel
 				FROM messages m JOIN players p ON m.sender_id = p.id
 				WHERE m.channel = 'region' AND m.chat_scope = $1
 				ORDER BY m.created_at DESC LIMIT 50
@@ -167,7 +167,7 @@ func loadBaoHoangMessagesContext(ctx context.Context, channel string, sectID sql
 	} else if channel == "sect" {
 		rows, err = db.DB.QueryContext(ctx, `
 			SELECT * FROM (
-				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
+				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), COALESCE(p.rank, 0), m.content, m.created_at, m.channel
 				FROM messages m
 				JOIN players p ON m.sender_id = p.id
 				WHERE m.receiver_id = $1 AND m.channel = $2 AND m.sect_id = $3
@@ -179,7 +179,7 @@ func loadBaoHoangMessagesContext(ctx context.Context, channel string, sectID sql
 	} else {
 		rows, err = db.DB.QueryContext(ctx, `
 			SELECT * FROM (
-				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
+				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), COALESCE(p.rank, 0), m.content, m.created_at, m.channel
 				FROM messages m
 				JOIN players p ON m.sender_id = p.id
 				WHERE m.receiver_id = $1 AND m.channel = $2
@@ -197,7 +197,7 @@ func loadBaoHoangMessagesContext(ctx context.Context, channel string, sectID sql
 	messages := []ChatItem{}
 	for rows.Next() {
 		var m ChatItem
-		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.SenderAvatar, &m.SenderTitle, &m.Content, &m.CreatedAt, &m.Channel); errScan == nil {
+		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.SenderAvatar, &m.SenderTitle, &m.SenderRank, &m.Content, &m.CreatedAt, &m.Channel); errScan == nil {
 			messages = append(messages, m)
 		} else {
 			logger.S.Errorf("loadBaoHoangMessages scan error: %v", errScan)
