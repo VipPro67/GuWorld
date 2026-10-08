@@ -60,6 +60,11 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		return err
 	}
 
+	if models.IsVinhSinhRank(rank) {
+		// Vĩnh Sinh: bất diệt, không còn tai kiếp giáng xuống.
+		return nil
+	}
+
 	dummyP := models.Player{}
 	dummyP.Race = race
 	if gamefx.Get(&dummyP).Immortal {
@@ -309,15 +314,21 @@ func CheckAndTriggerTribulations() error {
 			// Look up player data from batch
 			currentLifespan := 100.0
 			playerRace := ""
+			playerRank := 0
 			if pd, ok := pMap[ap.PlayerID]; ok {
 				currentLifespan = pd.lifespan
 				timeSpeedMultiplier = pd.ts
 				playerRace = pd.race
+				playerRank = pd.rank
 			}
+			// Vĩnh Sinh (Rank 10): bất tử tuổi thọ + không còn tai kiếp,
+			// các hoạt động Tiên Khiếu khác vẫn diễn ra bình thường.
+			vinhSinh := models.IsVinhSinhRank(playerRank)
 
 			dummyP := models.Player{}
 			dummyP.Race = playerRace
 			dummyP.Lifespan = currentLifespan
+			dummyP.Rank = playerRank
 			isImmortal := gamefx.Get(&dummyP).Immortal
 
 			// A player in Cõi Chết has no aperture progression to run.
@@ -347,7 +358,7 @@ func CheckAndTriggerTribulations() error {
 					ap.AreaSize = newArea
 					_, _ = db.DB.Exec(`UPDATE immortal_apertures SET time_rate = $1, area_size = $2, updated_at = NOW() WHERE id = $3`, newRate, newArea, ap.ID)
 				}
-			} else {
+			} else if !vinhSinh {
 				if currentLifespan <= 0.0 {
 					continue
 				}
@@ -532,6 +543,20 @@ func CheckAndTriggerTribulations() error {
 						calcNextType = models.SanitizeTribulationTypeForRank(rank, scheduledType)
 					}
 				}
+			}
+
+			if vinhSinh {
+				// Vĩnh Sinh: không còn tai kiếp giáng xuống; mọi hoạt động khác giữ nguyên.
+				newState := ap.State
+				if newState == "TRIBULATION_PENDING" {
+					newState = "STABLE"
+				}
+				_, _ = db.DB.Exec(`
+					UPDATE immortal_apertures
+					SET internal_years_passed = $1, state = $2, tribulation_pending_at = NULL, updated_at = NOW()
+					WHERE id = $3
+				`, newYearsPassed, newState, ap.ID)
+				continue
 			}
 
 			if isImmortal {

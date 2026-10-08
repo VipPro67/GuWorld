@@ -15,7 +15,7 @@ import (
 func GetRegions(c *gin.Context) {
 	getCachedDictionaryPart(c, "explore_regions_v2", &[]models.Region{}, func() interface{} {
 		query := `
-			SELECT id, name, description, width, height, min_rank, max_rank, is_active, created_at, updated_at,
+			SELECT id, name, description, width, height, min_rank, max_rank, is_active, regions.created_at, regions.updated_at,
 			       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
 			       COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0),
 			       COALESCE(rwm.world_map_id, 'world_map'), COALESCE(regions.rules::text,'{}')

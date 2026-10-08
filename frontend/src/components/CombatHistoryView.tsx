@@ -83,37 +83,44 @@ export const CombatHistoryView: React.FC = () => {
           <p className="text-zinc-600 text-sm mt-1">Hãy tham gia chiến đấu để có dữ liệu xem lại.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {combatHistory.map((entry) => {
             const isVictory = entry.winner === "Phe Ta";
             const summary = entry.summary || {};
+            const opponent = entry.enemy_name || entry.enemy_type || "Kẻ địch";
             return (
-              <div
+              <button
                 key={entry.id}
                 onClick={() => handleSelectEntry(entry)}
-                className="bg-zinc-900/40 border border-zinc-800 hover:border-zinc-700 rounded-xl p-4 cursor-pointer transition-all hover:bg-zinc-900/60"
+                className="group w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50 text-left transition-all hover:border-amber-700/60 hover:bg-zinc-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isVictory ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-800' : 'bg-rose-900/50 text-rose-400 border border-rose-800'}`}>
+                <div className="relative flex h-32 items-center justify-around overflow-hidden bg-gradient-to-br from-zinc-800/80 via-zinc-900 to-rose-950/30 px-4">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.08),transparent_65%)]" />
+                  <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-cyan-500/30 bg-zinc-950/70 shadow-lg shadow-cyan-950/30">
+                    <img src={player?.avatar_url || "/assets/world/cultivator.webp"} alt={player?.username || "Nhân vật"} className="h-full w-full object-cover" />
+                    <span className="absolute bottom-0 inset-x-0 bg-zinc-950/75 py-0.5 text-center text-[9px] font-semibold text-zinc-200">{player?.username || "Bạn"}</span>
+                  </div>
+                  <span className="relative rounded-full border border-zinc-600 bg-zinc-950/80 px-2 py-1 text-[10px] font-black text-amber-300">VS</span>
+                  <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-rose-500/30 bg-zinc-950/70 shadow-lg shadow-rose-950/30">
+                    <img src="/assets/world/spirit-beast.webp" alt={opponent} className="h-full w-full object-cover" />
+                    <span className="absolute bottom-0 inset-x-0 truncate bg-zinc-950/75 px-1 py-0.5 text-center text-[9px] font-semibold text-zinc-200">{opponent}</span>
+                  </div>
+                </div>
+                <div className="p-3.5">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <span className={`rounded border px-2 py-0.5 text-[10px] font-bold ${isVictory ? 'bg-emerald-900/50 text-emerald-400 border-emerald-800' : 'bg-rose-900/50 text-rose-400 border-rose-800'}`}>
                       {isVictory ? 'THẮNG' : 'BẠI'}
                     </span>
-                    <span className="text-sm text-zinc-200 font-medium">
-                      {entry.enemy_name || entry.enemy_type || "Kẻ địch"}
-                    </span>
-                    <span className="text-[10px] text-zinc-600">{entry.enemy_type}</span>
+                    <span className="flex items-center gap-1 text-[10px] text-zinc-500"><Clock className="h-3 w-3" />{formatDate(entry.created_at)}</span>
                   </div>
-                  <span className="text-[10px] text-zinc-600 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {formatDate(entry.created_at)}
-                  </span>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] text-zinc-400">
+                    <span className="flex min-w-0 items-center gap-1"><MapPin className="h-3 w-3 shrink-0 text-zinc-500" /><span className="truncate">{entry.region || "Không rõ khu vực"}</span></span>
+                    <span className="flex items-center gap-1"><Heart className="h-3 w-3 shrink-0 text-rose-400" />HP còn: {summary.final_player_hp ?? "?"}</span>
+                    <span className="flex items-center gap-1"><Swords className="h-3 w-3 shrink-0 text-amber-400" />DMG: <Num value={summary.total_damage_dealt || 0} /></span>
+                    <span className="flex items-center gap-1"><Eye className="h-3 w-3 shrink-0 text-zinc-500" />{entry.logs_count ?? entry.logs?.length ?? 0} bước</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 text-[11px] text-zinc-500">
-                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {entry.region}</span>
-                  <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> HP còn: {summary.final_player_hp ?? "?"}</span>
-                  <span className="flex items-center gap-1"><Swords className="w-3 h-3" /> DMG: <Num value={summary.total_damage_dealt || 0} /></span>
-                  <span><Eye className="w-3 h-3 inline" /> {entry.logs_count ?? entry.logs?.length ?? 0} bước</span>
-                </div>
-              </div>
+              </button>
             );
           })}
         </div>

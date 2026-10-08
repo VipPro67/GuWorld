@@ -29,15 +29,15 @@ export const GamePage = forwardRef<HTMLDivElement, GamePageProps>(
       ref={ref}
       className={[
         "min-h-screen bg-bg-primary",
-        fullWidth ? "w-full px-4 sm:px-6 lg:px-8 py-6" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6",
+        fullWidth ? "w-full px-3 sm:px-4 lg:px-6 py-4" : "max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4",
         className,
       ].join(" ")}
       {...props}
     >
       {(title || action) && (
-        <header className="mb-6 sm:mb-8">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3 min-w-0">
+        <header className="mb-4 sm:mb-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0">
               {icon && (
                 <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-brand/10 flex items-center justify-center text-brand text-2xl">
                   {icon}
@@ -60,7 +60,7 @@ export const GamePage = forwardRef<HTMLDivElement, GamePageProps>(
           </div>
         </header>
       )}
-      <main className="space-y-6">{children}</main>
+      <main className="space-y-4">{children}</main>
     </div>
   )
 );
@@ -74,9 +74,9 @@ export const GamePageHeader = ({
   action,
   className = "",
 }: Omit<GamePageProps, "children" | "fullWidth">) => (
-  <header className={["mb-6 sm:mb-8", className].join(" ")}>
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-start gap-3 min-w-0">
+  <header className={["mb-4 sm:mb-5", className].join(" ")}>
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-2.5 min-w-0">
         {icon && (
           <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-brand/10 flex items-center justify-center text-brand text-2xl">
             {icon}
@@ -104,7 +104,7 @@ GamePageHeader.displayName = "GamePageHeader";
 
 export const GamePageContent = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className = "", children, ...props }, ref) => (
-    <main ref={ref} className={["space-y-6", className].join(" ")} {...props}>
+    <main ref={ref} className={["space-y-4", className].join(" ")} {...props}>
       {children}
     </main>
   )
@@ -115,7 +115,7 @@ GamePageContent.displayName = "GamePageContent";
 export const GamePageGrid = ({
   children,
   columns = { base: 1, sm: 2, lg: 3, xl: 4 },
-  gap = "md",
+  gap = "sm",
   className = "",
 }: {
   children: React.ReactNode;
@@ -154,10 +154,10 @@ export const GamePageSection = ({
   children,
   className = "",
 }: Omit<GamePageProps, "fullWidth"> & { children: React.ReactNode }) => (
-  <section className={["space-y-4", className].join(" ")}>
+  <section className={["space-y-3", className].join(" ")}>
     {(title || action) && (
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div className="flex items-start gap-3 min-w-0">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start gap-2.5 min-w-0">
           {icon && (
             <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center text-brand">
               {icon}
@@ -171,7 +171,7 @@ export const GamePageSection = ({
         {action && <div className="flex-shrink-0">{action}</div>}
       </div>
     )}
-    <div className="space-y-4">{children}</div>
+    <div className="space-y-3">{children}</div>
   </section>
 );
 

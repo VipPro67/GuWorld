@@ -374,7 +374,7 @@ export const LobbyView: React.FC = () => {
       "Thất Tiên",
       "Bát Tiên",
       "Cửu Tôn",
-      "Thập ???",
+      "Vĩnh Sinh",
     ];
     const rName = rankNames[rank - 1] || `${rank} Chuyển`;
     if (rank >= 6) {

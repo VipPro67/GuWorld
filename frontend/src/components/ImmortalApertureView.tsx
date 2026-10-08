@@ -175,6 +175,7 @@ export function getRankName(rank: number): string {
     case 7: return "Thất Chuyển";
     case 8: return "Bát Chuyển";
     case 9: return "Cửu Chuyển";
+    case 10: return "Vĩnh Sinh";
     default: return `${rank} Chuyển`;
   }
 }
@@ -337,6 +338,7 @@ export const ImmortalApertureView: React.FC = () => {
     7: "Hồng Tảo Tiên Nguyên",
     8: "Bạch Lệ Tiên Nguyên",
     9: "Hoàng Hạnh Tiên Nguyên",
+    10: "Hỗn Độn Tiên Nguyên",
   };
   const manaName = MANA_QUALITY_NAMES[rank] || "Tiên Nguyên";
 
@@ -884,7 +886,7 @@ return (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-400">Mốc tai kiếp kế tiếp</span>
                     <span className="text-rose-400 font-semibold">
-                      {player?.race === "cuong_thi" ? "Tử Khiếu (Ngưng trệ)" : `${Math.round(aperture.next_tribulation_year)} năm`}
+                      {player?.race === "cuong_thi" ? "Tử Khiếu (Ngưng trệ)" : (player?.rank ?? 0) >= 10 ? "Vĩnh Sinh (Bất diệt)" : `${Math.round(aperture.next_tribulation_year)} năm`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">

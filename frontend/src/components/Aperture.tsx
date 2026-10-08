@@ -64,6 +64,7 @@ const RANK_NAMES: Record<number, string> = {
   7: "Thất Chuyển",
   8: "Bát Chuyển",
   9: "Cửu Chuyển",
+  10: "Vĩnh Sinh",
 };
 
 const SUB_RANK_NAMES: Record<number, string> = {
@@ -125,6 +126,7 @@ const MANA_QUALITY: Record<number, string> = {
   7: "Hồng Tảo Tiên Nguyên",
   8: "Bạch Lệ Tiên Nguyên",
   9: "Hoàng Hạnh Tiên Nguyên",
+  10: "Hỗn Độn Tiên Nguyên",
 };
 
 const RANK_COLORS: Record<number, {
@@ -818,12 +820,15 @@ export const Aperture: React.FC<ApertureProps> = ({
                               displayName = `Tâm Đắc R${r} · ${stacks} tầng (+${stacks}% luyện R${r})`;
                             }
                             const statusEffects = statusDictionary?.[s.id]?.effects;
+                            const regionalWallPct = s.id === "regional_wall_suppression" ? Math.round(Math.abs(s.value ?? 0) * 100) : null;
                             return (
                               <div key={s.id} className="flex flex-col gap-1">
                                 <span className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold w-fit">
                                   {displayName}{statusRemainLabel(s.expires_at)}
                                 </span>
-                                {statusEffects && <EffectEnvelopeView effects={statusEffects} />}
+                                {regionalWallPct !== null ? (
+                                  <span className="text-[10px] text-rose-300/80">Công / Thủ / Tốc giảm {regionalWallPct}%</span>
+                                ) : statusEffects ? <EffectEnvelopeView effects={statusEffects} /> : null}
                               </div>
                             );
                           })}
@@ -2163,9 +2168,11 @@ function BlessedLandControls() {
                   <span>
                     {player.race === "cuong_thi"
                       ? "Chu kỳ Kiếp nạn (Tử Khiếu - Ngưng trệ)"
-                      : `Chu kỳ Kiếp nạn (${Math.floor(aperture.internal_years_passed)} / ${Math.round(aperture.next_tribulation_year)} năm)`}
+                      : player.rank >= 10
+                        ? "Vĩnh Sinh (Bất diệt - Không còn tai kiếp)"
+                        : `Chu kỳ Kiếp nạn (${Math.floor(aperture.internal_years_passed)} / ${Math.round(aperture.next_tribulation_year)} năm)`}
                   </span>
-                  <span>{player.race === "cuong_thi" ? "0%" : `${calculateTribulationProgress(aperture, player.race).toFixed(1)}%`}</span>
+                  <span>{player.race === "cuong_thi" || player.rank >= 10 ? "0%" : `${calculateTribulationProgress(aperture, player.race).toFixed(1)}%`}</span>
                 </div>
                 <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden border border-zinc-900">
                   <div

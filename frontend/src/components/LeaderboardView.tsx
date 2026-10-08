@@ -19,7 +19,7 @@ const getRankName = (rank: number, sub: number): string => {
   const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
   const rankNames = [
     "Nhất Chuyển", "Nhị Chuyển", "Tam Chuyển", "Tứ Chuyển",
-    "Ngũ Chuyển", "Lục Tiên", "Thất Tiên", "Bát Tiên", "Cửu Tôn",
+    "Ngũ Chuyển", "Lục Tiên", "Thất Tiên", "Bát Tiên", "Cửu Tôn", "Vĩnh Sinh",
   ];
   const rName = rankNames[rank - 1] || `${rank} Chuyển`;
   const sName = ranks[sub - 1] || `${sub} Giai`;

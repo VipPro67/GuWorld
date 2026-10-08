@@ -709,6 +709,10 @@ func IsDeadState(p *models.Player) bool {
 	if p == nil || p.Lifespan > 0 {
 		return false
 	}
+	// Vĩnh Sinh (Rank 10) is eternally alive: aging never depletes lifespan.
+	if models.IsVinhSinhRank(p.Rank) {
+		return false
+	}
 	dummyP := models.Player{}
 	dummyP.Race = p.Race
 	return !Get(&dummyP).Immortal

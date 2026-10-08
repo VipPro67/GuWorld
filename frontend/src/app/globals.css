@@ -117,12 +117,13 @@
 }
 
 html {
-  font-size: 22px; /* Increased base font size for better readability */
+  /* Keep rem-based typography and spacing at a compact desktop scale. */
+  font-size: 16px;
 }
 
 @media (max-width: 640px) {
   html {
-    font-size: 15px; /* Reduced base font size on mobile to make layout fit better */
+    font-size: 15px;
   }
 }
 

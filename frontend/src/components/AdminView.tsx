@@ -381,7 +381,7 @@ function formatStat(val: number): string {
 
 const rankNames = [
   "Nhất Chuyển", "Nhị Chuyển", "Tam Chuyển", "Tứ Chuyển",
-  "Ngũ Chuyển", "Lục Chuyển Cổ Tiên", "Thất Chuyển Cổ Tiên", "Bát Chuyển Cổ Tiên", "Cửu Chuyển Cổ Tôn",
+  "Ngũ Chuyển", "Lục Chuyển Cổ Tiên", "Thất Chuyển Cổ Tiên", "Bát Chuyển Cổ Tiên", "Cửu Chuyển Cổ Tôn", "Vĩnh Sinh",
 ];
 const rankSub = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
 
@@ -2664,7 +2664,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Tu vi (1-9)</label>
-                  <input type="number" min={1} max={9} value={editPlayerForm.rank || ""} onChange={e => setEditPlayerForm(f => ({ ...f, rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                  <input type="number" min={1} max={10} value={editPlayerForm.rank || ""} onChange={e => setEditPlayerForm(f => ({ ...f, rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Tiểu cảnh giới (1-4)</label>

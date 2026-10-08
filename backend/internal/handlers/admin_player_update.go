@@ -139,8 +139,8 @@ func AdminUpdatePlayer(c *gin.Context) {
 		rank := *req.Rank
 		if rank < 1 {
 			rank = 1
-		} else if rank > 9 {
-			rank = 9
+		} else if rank > 10 {
+			rank = 10
 		}
 		sets = append(sets, "rank=$"+strconv.Itoa(argIdx))
 		args = append(args, rank)

@@ -104,6 +104,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	}
 
 	// Run Simulator
+	simState.CaptureTurnSnapshots = true
 	logs := simulator.Simulate(simState)
 
 	// Log đội hình thực tế mang vào sim để skip mode nhìn thấy pet/NPC có load không.

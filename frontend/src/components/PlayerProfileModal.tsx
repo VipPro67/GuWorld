@@ -120,6 +120,7 @@ export const PlayerProfileModal: React.FC = () => {
       "Thất Tiên",
       "Bát Tiên",
       "Cửu Tôn",
+      "Vĩnh Sinh",
     ];
     const rName = rankNames[rankNum - 1] || `${rankNum} Chuyển`;
     if (rankNum >= 6) {
@@ -341,12 +342,15 @@ export const PlayerProfileModal: React.FC = () => {
                       displayName = `Tâm Đắc R${r} · ${stacks} tầng (+${stacks}% luyện R${r})`;
                     }
                     const statusEffects = statusDictionary?.[s.id]?.effects;
+                    const regionalWallPct = s.id === "regional_wall_suppression" ? Math.round(Math.abs(s.value ?? 0) * 100) : null;
                     return (
                       <div key={s.id} className="flex flex-col gap-1">
                         <span className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold w-fit">
                           {displayName}{statusRemainLabel(s.expires_at)}
                         </span>
-                        {statusEffects && <EffectEnvelopeView effects={statusEffects} />}
+                        {regionalWallPct !== null ? (
+                          <span className="text-[10px] text-rose-300/80">Công / Thủ / Tốc giảm {regionalWallPct}%</span>
+                        ) : statusEffects ? <EffectEnvelopeView effects={statusEffects} /> : null}
                       </div>
                     );
                   })}

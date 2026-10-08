@@ -2770,6 +2770,17 @@ func Simulate(state *CombatState) []CombatLog {
 			continue
 		}
 
+		if state.CaptureTurnSnapshots {
+			// Persist one full battlefield snapshot per turn for fights that may be
+			// written to combat history, without attaching state to every event.
+			logs = append(logs, CombatLog{
+				Turn:     turn,
+				Action:   "TURN_END",
+				Detail:   fmt.Sprintf("Kết thúc lượt %d.", turn),
+				Snapshot: buildSnapshot(state),
+			})
+		}
+
 		// ── Win/Loss check ──
 		alliesAlive := false
 		for _, a := range state.Allies {
@@ -2819,24 +2830,52 @@ func Simulate(state *CombatState) []CombatLog {
 func buildSnapshot(state *CombatState) *CombatSnapshot {
 	snap := &CombatSnapshot{Turn: state.Turn, ApertureHP: state.ApertureHP, ApertureMaxHP: state.ApertureMaxHP}
 	for _, a := range state.Allies {
+		damageMultiplier := snapshotMultiplier(a.DamageMultiplier)
+		defenseMultiplier := snapshotMultiplier(a.DefenseMultiplier)
 		snap.Allies = append(snap.Allies, CombatantSnapshot{
 			ID: a.ID, Name: a.Name, Kind: a.Kind,
 			HP: a.HP, MaxHP: a.MaxHP, Mana: a.Mana, MaxMana: a.MaxMana,
 			GridX: a.GridX, GridY: a.GridY, Shield: a.VirtualShield,
-			Damage: a.BaseDmg, Defense: a.BaseDef,
-			Speed: a.EffectiveSpeed, IsDead: a.IsDead,
+			Damage: a.BaseDmg * damageMultiplier, Defense: a.BaseDef * defenseMultiplier,
+			Speed: a.EffectiveSpeed, IsDead: a.IsDead, Statuses: snapshotStatuses(a),
 		})
 	}
 	for _, e := range state.Enemies {
+		damageMultiplier := snapshotMultiplier(e.DamageMultiplier)
+		defenseMultiplier := snapshotMultiplier(e.DefenseMultiplier)
 		snap.Enemies = append(snap.Enemies, CombatantSnapshot{
 			ID: e.ID, Name: e.Name, Kind: e.Kind,
 			HP: e.HP, MaxHP: e.MaxHP, Mana: e.Mana, MaxMana: e.MaxMana,
 			GridX: e.GridX, GridY: e.GridY, Shield: e.VirtualShield,
-			Damage: e.BaseDmg, Defense: e.BaseDef,
-			Speed: e.EffectiveSpeed, IsDead: e.IsDead,
+			Damage: e.BaseDmg * damageMultiplier, Defense: e.BaseDef * defenseMultiplier,
+			Speed: e.EffectiveSpeed, IsDead: e.IsDead, Statuses: snapshotStatuses(e),
 		})
 	}
 	return snap
+}
+
+func snapshotMultiplier(multiplier float64) float64 {
+	if multiplier == 0 {
+		return 1
+	}
+	return multiplier
+}
+
+func snapshotStatuses(c *CombatantAuto) []CombatStatusSnapshot {
+	statuses := make([]CombatStatusSnapshot, 0, len(c.ActiveEffects)+len(c.ActiveDoT))
+	for _, effect := range c.ActiveEffects {
+		statuses = append(statuses, CombatStatusSnapshot{
+			ID: effect.ID, Type: effect.Type, Tier: effect.Tier,
+			Value: float64(effect.Value), RemainingTurns: effect.Duration,
+		})
+	}
+	for _, effect := range c.ActiveDoT {
+		statuses = append(statuses, CombatStatusSnapshot{
+			ID: effect.Type, Type: "dot", Value: effect.Value,
+			RemainingTurns: effect.Turns, DirectHP: effect.DirectHP,
+		})
+	}
+	return statuses
 }
 
 func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int, shieldBypass bool, guaranteedHit bool, spillToAperture bool, rng *rand.Rand) float64 {

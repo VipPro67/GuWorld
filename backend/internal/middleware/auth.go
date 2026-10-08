@@ -95,6 +95,7 @@ func csrfProtection(c *gin.Context) {
 }
 
 const sessionCacheTTL = 5 * time.Minute
+const activeTabCacheTTL = 24 * time.Hour
 
 // localSessionFallback is a bounded, process-local mirror of the Redis session
 // cache. When Redis is unavailable, cache.GetJSON misses on every authenticated
@@ -157,6 +158,33 @@ func InvalidateSessionCache(playerID uuid.UUID) {
 func SetSessionCache(playerID uuid.UUID, sessionID string) {
 	_ = cache.SetJSON("auth:session:"+playerID.String(), sessionID, sessionCacheTTL)
 	setLocalSession(playerID.String(), sessionID)
+}
+
+var (
+	localActiveTabMu sync.Mutex
+	localActiveTabs  = map[string]string{}
+)
+
+// ClaimActiveTab makes this browser tab the account's only active gameplay tab.
+// Admin endpoints intentionally do not use this state.
+func ClaimActiveTab(playerID uuid.UUID, tabID string) {
+	key := "auth:tab:" + playerID.String()
+	_ = cache.SetJSON(key, tabID, activeTabCacheTTL)
+	localActiveTabMu.Lock()
+	localActiveTabs[playerID.String()] = tabID
+	localActiveTabMu.Unlock()
+}
+
+func activeTab(playerID uuid.UUID) string {
+	key := "auth:tab:" + playerID.String()
+	var tabID string
+	if err := cache.GetJSON(key, &tabID); err == nil && tabID != "" {
+		return tabID
+	}
+	localActiveTabMu.Lock()
+	tabID = localActiveTabs[playerID.String()]
+	localActiveTabMu.Unlock()
+	return tabID
 }
 
 // AuthRequired is a Gin middleware that enforces authentication
@@ -257,6 +285,30 @@ func AuthRequired() gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": SessionKickedError})
 			c.Abort()
 			return
+		}
+
+		// Admin pages may be open alongside the single gameplay tab. The claim
+		// endpoint is also exempt so a newly opened gameplay tab can replace it.
+		path := c.Request.URL.Path
+		if !strings.HasPrefix(path, "/api/admin/") && path != "/api/admin" && path != "/api/auth/claim-tab" {
+			tabID := c.GetHeader("X-Player-Tab-ID")
+			if tabID == "" {
+				tabID = c.Query("tab_id") // WebSocket/EventSource cannot set custom headers.
+			}
+			if tabID == "" {
+				c.JSON(http.StatusConflict, gin.H{"error": "Thiếu mã tab chơi. Vui lòng tải lại trang."})
+				c.Abort()
+				return
+			}
+			active := activeTab(playerID)
+			if active != "" && active != tabID {
+				c.JSON(http.StatusConflict, gin.H{"error": "Tab chơi này đã bị thay thế bởi tab mới."})
+				c.Abort()
+				return
+			}
+			if active == "" {
+				ClaimActiveTab(playerID, tabID)
+			}
 		}
 
 		// Store variables in context

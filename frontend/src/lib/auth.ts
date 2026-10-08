@@ -1,3 +1,5 @@
+import { BACKEND_URL } from "@/lib/config";
+
 /**
  * Shared authentication helpers for browser-side fetch.
  * Used by useGameStore, useWorldStore, and any future stores.
@@ -8,6 +10,53 @@ export const getCookie = (name: string): string | null => {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
+};
+
+const gameplayTabId = (): string => {
+  if (typeof window === "undefined") return "";
+  const key = "gu_gameplay_tab_id";
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(key, id);
+  }
+  if (!sessionStorage.getItem("gu_tab_replace_listener")) {
+    sessionStorage.setItem("gu_tab_replace_listener", "1");
+    window.addEventListener("storage", (event) => {
+      if (event.key !== "gu_active_gameplay_tab_id" || !event.newValue || event.newValue === id) return;
+      window.dispatchEvent(new CustomEvent("game:tab-replaced"));
+      if (!sessionStorage.getItem("gu_tab_replaced_notice")) {
+        sessionStorage.setItem("gu_tab_replaced_notice", "1");
+        window.alert("Phiên chơi này đã được thay thế bởi tab mới. Hãy đóng tab này.");
+      }
+    });
+  }
+  return id;
+};
+
+let claimedTabSession = "";
+const isAdminRequest = (input: RequestInfo | URL): boolean => {
+  try {
+    return new URL(String(input), window.location.origin).pathname.startsWith("/api/admin/");
+  } catch {
+    return false;
+  }
+};
+
+const ensureGameplayTabClaim = async (token: string, tabId: string): Promise<void> => {
+  const claimKey = `${token}:${tabId}`;
+  if (claimedTabSession === claimKey) return;
+  const response = await fetch(`${BACKEND_URL}/api/auth/claim-tab`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "X-Player-Tab-ID": tabId },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error || "Không thể mở phiên chơi ở tab này.");
+  }
+  claimedTabSession = claimKey;
+  localStorage.setItem("gu_active_gameplay_tab_id", tabId);
 };
 
 /** Build Authorization + CSRF headers from localStorage / cookies. */
@@ -52,6 +101,21 @@ export const authFetch = async (
     const token = localStorage.getItem("gu_auth_token");
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+      const url = new URL(String(input), window.location.origin);
+      const skipsGameplayTab = new Set([
+        "/api/auth/send-otp",
+        "/api/auth/register",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/claim-tab",
+        "/api/auth/google/login",
+        "/api/auth/google/callback",
+      ]).has(url.pathname);
+      if (!isAdminRequest(input) && !skipsGameplayTab) {
+        const tabId = gameplayTabId();
+        await ensureGameplayTabClaim(token, tabId);
+        headers["X-Player-Tab-ID"] = tabId;
+      }
     }
 	if (init.method === "DELETE" && String(input).includes("/api/admin/")) {
 	  const target = decodeURIComponent(new URL(String(input), window.location.origin).pathname);
@@ -73,6 +137,15 @@ export const authFetch = async (
     credentials: "include",
     signal,
   });
+  if (response.status === 409 && typeof window !== "undefined") {
+    const payload = await response.clone().json().catch(() => null) as { error?: string } | null;
+    if (payload?.error?.includes("bị thay thế bởi tab mới")) {
+      if (!sessionStorage.getItem("gu_tab_replaced_notice")) {
+        sessionStorage.setItem("gu_tab_replaced_notice", "1");
+        window.alert("Phiên chơi này đã được thay thế bởi tab mới. Hãy đóng tab này.");
+      }
+    }
+  }
   const requestURL = String(input);
   if (response.status === 403 && typeof window !== "undefined" && requestURL.includes("/api/admin/") && !requestURL.includes("/api/admin/me")) {
     const denied = await response.clone().json().catch(() => null) as { permission?: unknown } | null;
