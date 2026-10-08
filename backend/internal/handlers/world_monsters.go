@@ -349,7 +349,7 @@ func applyWorldMonsterAttack(ctx context.Context, monster WorldMonster, target w
 func applyWorldCounterattack(ctx context.Context, monster WorldMonster, target worldCombatPlayer, commandID string, now time.Time) (cache.WorldMonsterHitResult, WorldMonster, float64, error) {
 	damage := simulator.ResolveBaseDamage(math.Max(1, target.Attack), monster.BaseDefense)
 	outcome, updated, err := cache.HitWorldMonster(ctx, monster.RegionID, monster.InstanceID, commandID, monster.Revision, damage, now,
-		time.Duration(monster.RespawnSeconds)*time.Second, monsterTTL(monster.RespawnSeconds))
+		monsterRespawnDelay(monster.RespawnSeconds), monsterTTL(monster.RespawnSeconds))
 	return outcome, updated, damage, err
 }
 
@@ -361,10 +361,14 @@ type monsterSpawnRow struct {
 }
 
 func monsterTTL(respawnSeconds int) time.Duration {
+	return monsterRespawnDelay(respawnSeconds) + worldMonsterSafetyTTL
+}
+
+func monsterRespawnDelay(respawnSeconds int) time.Duration {
 	if respawnSeconds < 1 {
 		respawnSeconds = 300
 	}
-	return time.Duration(respawnSeconds)*time.Second + worldMonsterSafetyTTL
+	return time.Duration(respawnSeconds) * time.Second
 }
 
 func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time) (WorldMonster, bool, error) {

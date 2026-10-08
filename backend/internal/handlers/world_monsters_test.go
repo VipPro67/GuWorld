@@ -14,6 +14,18 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func TestMonsterRespawnDelayDefaultsForUnsetSpawnValue(t *testing.T) {
+	if got, want := monsterRespawnDelay(0), 300*time.Second; got != want {
+		t.Fatalf("monsterRespawnDelay(0) = %s, want %s", got, want)
+	}
+	if got, want := monsterRespawnDelay(-1), 300*time.Second; got != want {
+		t.Fatalf("monsterRespawnDelay(-1) = %s, want %s", got, want)
+	}
+	if got, want := monsterRespawnDelay(45), 45*time.Second; got != want {
+		t.Fatalf("monsterRespawnDelay(45) = %s, want %s", got, want)
+	}
+}
+
 // stubSafeZoneLookup removes the zone registry from the safe-zone check so these
 // tests never reach db.DB. Safe-zone behaviour has its own dedicated tests
 // (TestSelectMonsterTargetRejectsSafeZone) that stub the seam directly.

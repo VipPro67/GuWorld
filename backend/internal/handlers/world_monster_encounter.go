@@ -152,7 +152,7 @@ func finishWorldMonsterEncounter(ctx context.Context, encounter WorldMonster, en
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
 		result, updated, err = cache.DefeatWorldMonster(cleanupCtx, encounter.RegionID, encounter.InstanceID, encounterID, time.Now().UTC(),
-			time.Duration(encounter.RespawnSeconds)*time.Second, monsterTTL(encounter.RespawnSeconds))
+			monsterRespawnDelay(encounter.RespawnSeconds), monsterTTL(encounter.RespawnSeconds))
 		if err == nil || cleanupCtx.Err() != nil || attempt == 2 {
 			break
 		}
@@ -209,10 +209,7 @@ func clearDefeatedWorldMonsterCell(monster WorldMonster, playerID string) {
 		region, x, y = monster.RegionID, int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY))
 	}
 
-	ttl := time.Duration(monster.RespawnSeconds) * time.Second
-	if ttl <= 0 {
-		ttl = clearedCellCooldown
-	}
+	ttl := monsterRespawnDelay(monster.RespawnSeconds)
 	if err := cache.SetCellCleared(region, x, y, playerID, ttl); err != nil {
 		logger.S.Warnf("clear defeated world monster cell %s (%d,%d): %v", region, x, y, err)
 	}
