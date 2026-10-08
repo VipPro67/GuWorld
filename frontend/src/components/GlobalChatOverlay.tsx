@@ -11,6 +11,18 @@ import {
   CornerUpLeft,
 } from "lucide-react";
 
+const rankNameColors: Record<number, string> = {
+  1: "text-emerald-400",
+  2: "text-red-400",
+  3: "text-blue-400",
+  4: "text-amber-400",
+  5: "text-violet-400",
+  6: "text-cyan-400",
+  7: "text-pink-400",
+  8: "text-stone-400",
+  9: "text-yellow-400",
+};
+
 const formatRelativeTime = (createdAtStr: string): string => {
   if (!createdAtStr) return "";
   const date = new Date(createdAtStr);
@@ -347,14 +359,6 @@ export const GlobalChatOverlay: React.FC = () => {
               baoHoangMessages.map((msg, index) => {
                 const isMe = msg.sender_username === player?.username;
                 const isSystem = msg.sender_id === "11111111-1111-1111-1111-111111111111";
-                const labelColor =
-                  msg.channel === "world"
-                    ? "text-red-500 dark:text-red-400"
-                    : msg.channel === "general"
-                    ? "text-cyan-600 dark:text-cyan-400"
-                    : msg.channel === "region"
-                    ? "text-violet-600 dark:text-violet-400"
-                    : "text-emerald-600 dark:text-emerald-400";
                 // Card container styles
                 const cardClass = isSystem
                   ? "w-full bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 rounded-lg p-1.5 sm:p-2"
@@ -362,9 +366,7 @@ export const GlobalChatOverlay: React.FC = () => {
 
                 const nameColorClass = isSystem
                   ? "text-amber-700 dark:text-amber-400 font-bold"
-                  : isMe
-                  ? "text-sky-600 dark:text-sky-400 font-bold"
-                  : "text-zinc-500 dark:text-zinc-400 font-bold cursor-pointer hover:text-zinc-800 dark:hover:text-zinc-100 hover:underline decoration-dotted transition-colors";
+                  : `${rankNameColors[Number(msg.sender_rank)] || (isMe ? "text-sky-600 dark:text-sky-400" : "text-zinc-500 dark:text-zinc-400")} font-bold ${!isMe ? "cursor-pointer hover:brightness-125 hover:underline decoration-dotted transition-colors" : ""}`;
 
                 const contentColorClass = isSystem ? "text-amber-900 dark:text-amber-100/90" : "text-zinc-800 dark:text-zinc-200";
 
