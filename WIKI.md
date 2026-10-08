@@ -1156,6 +1156,6 @@ Sau mỗi lần suy diễn, bảng **điểm của chính đạo hữu** (Cổ /
 
 ## Quái thường trên World Map
 
-Quái thường nay là thực thể sống riêng biệt: mỗi lần sinh có ID, HP, vị trí và trạng thái riêng. Sát thương không chí mạng được giữ lại và đồng bộ cho người chơi gần đó. Quái có thể phát hiện, đuổi, vào tầm đánh và quay lại điểm sinh khi mất mục tiêu hoặc vượt dây cương; quái không chọn mục tiêu ở khu an toàn hay vùng khác. Sau khi bị hạ, quái sinh lại bằng instance ID mới sau thời gian hồi sinh của điểm spawn. Client chỉ dự đoán hiệu ứng hình ảnh; HP, tử vong và phần thưởng luôn do server quyết định.
+Quái thường nay là thực thể sống riêng biệt: mỗi lần sinh có ID, HP, vị trí và trạng thái riêng. Sát thương không chí mạng được giữ lại và đồng bộ cho người chơi gần đó. Quái có thể phát hiện, đuổi, vào tầm đánh và quay lại điểm sinh khi mất mục tiêu hoặc vượt dây cương; quái không chọn mục tiêu ở khu an toàn hay vùng khác. Sau khi bị hạ, quái sinh lại bằng instance ID mới sau thời gian hồi sinh của điểm spawn; nếu `respawn_seconds` nhỏ hơn 1, thời gian mặc định là 300 giây. Client chỉ dự đoán hiệu ứng hình ảnh; HP, tử vong và phần thưởng luôn do server quyết định.
 
 Người chơi bị hạ gục trong combat được hồi sinh tại HUB an toàn gần nhất thay vì xuất hiện ngẫu nhiên trong vùng quái. Sau khi phần thưởng combat đã lưu, máy chủ vẫn hoàn tất việc đánh dấu quái bị hạ với context riêng có timeout ngắn, kể cả khi kết nối HTTP của người chơi đã ngắt.
