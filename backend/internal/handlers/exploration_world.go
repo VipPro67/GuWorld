@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 
 // GetRegions fetches all active regions (zones) from the database with ETag caching
 func GetRegions(c *gin.Context) {
-	getCachedDictionaryPart(c, "explore_regions_v2", &[]models.Region{}, func() interface{} {
+	getCachedDictionaryPartWithError(c, "explore_regions_v2", &[]models.Region{}, func() (interface{}, error) {
 		query := `
 			SELECT id, name, description, width, height, min_rank, max_rank, is_active, regions.created_at, regions.updated_at,
 			       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
@@ -26,17 +27,19 @@ func GetRegions(c *gin.Context) {
 		`
 		rows, err := db.DB.QueryContext(c.Request.Context(), query)
 		if err != nil {
-			return []models.Region{}
+			return nil, fmt.Errorf("query active regions: %w", err)
 		}
 		defer rows.Close()
 
-		var regions []models.Region
+		regions := make([]models.Region, 0)
 		for rows.Next() {
 			var r models.Region
+			var rulesJSON string
 			if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive, &r.CreatedAt, &r.UpdatedAt,
-				&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &r.WorldMapID, &r.Rules); err != nil {
-				continue
+				&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &r.WorldMapID, &rulesJSON); err != nil {
+				return nil, fmt.Errorf("scan active region: %w", err)
 			}
+			r.Rules = json.RawMessage(rulesJSON)
 			if effectiveRules, err := regionRulesFor(r.ID); err == nil {
 				if raw, err := json.Marshal(effectiveRules); err == nil {
 					r.EffectiveRules = raw
@@ -44,7 +47,17 @@ func GetRegions(c *gin.Context) {
 			}
 			regions = append(regions, r)
 		}
-		return regions
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate active regions: %w", err)
+		}
+		return regions, nil
+	}, func(value interface{}) bool {
+		regions, ok := value.(*[]models.Region)
+		if ok {
+			return len(*regions) > 0
+		}
+		builtRegions, ok := value.([]models.Region)
+		return ok && len(builtRegions) > 0
 	})
 }
 

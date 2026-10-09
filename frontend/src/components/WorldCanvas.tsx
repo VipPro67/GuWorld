@@ -33,6 +33,7 @@ export interface MapLabelSettings {
 interface WorldCanvasProps {
   mode: "select" | "drag";
   labelSettings: MapLabelSettings;
+  performanceMode: "full" | "light" | "minimal";
 }
 
 const WORLD_W = 30000;
@@ -87,7 +88,7 @@ function clearContainer(container: Container) {
   }
 }
 
-export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
+export default function WorldCanvas({ mode, labelSettings, performanceMode }: WorldCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const [appReady, setAppReady] = useState(false);
@@ -119,6 +120,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const fogDirtyRef = useRef(true);
   const scaleRef = useRef<number>(0.05);
   const modeRef = useRef(mode);
+  const performanceModeRef = useRef(performanceMode);
   const labelSettingsRef = useRef(labelSettings);
   const labelRenderStateRef = useRef("");
 
@@ -491,6 +493,18 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       appRef.current.stage.cursor = mode === "drag" ? "grab" : "default";
     }
   }, [mode]);
+
+  useEffect(() => {
+    performanceModeRef.current = performanceMode;
+    if (appRef.current) {
+      const isMobile = window.matchMedia("(max-width: 639px)").matches;
+      appRef.current.ticker.maxFPS = performanceMode === "minimal"
+        ? (isMobile ? 20 : 30)
+        : performanceMode === "light"
+          ? (isMobile ? 24 : 45)
+          : (isMobile ? 30 : 60);
+    }
+  }, [performanceMode]);
 
   const centerOnPlayer = useCallback((app: Application, px: number, py: number, forceSync = true) => {
     const w = app.screen.width;
@@ -1979,7 +1993,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       appRef.current = app;
       // Keep animations smooth without forcing mobile GPUs to redraw this
       // very large scene at 60/120Hz.
-      app.ticker.maxFPS = isMobile ? 30 : 60;
+      app.ticker.maxFPS = performanceModeRef.current === "minimal"
+        ? (isMobile ? 20 : 30)
+        : performanceModeRef.current === "light"
+          ? (isMobile ? 24 : 45)
+          : (isMobile ? 30 : 60);
 
       stageRef.current = new Container();
       app.stage.addChild(stageRef.current);
@@ -2090,34 +2108,36 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
         // Interpolate remote player markers between server-reported positions
         // so movement reads smooth instead of teleporting.
-        const markers = playerMarkersRef.current;
-        for (const m of markers.values()) {
-          if (!m.active) continue;
-          const duration = m.duration || 300;
-          const t = Math.min((performance.now() - m.t0) / duration, 1);
-          m.container.position.set(m.fromX + (m.toX - m.fromX) * t, m.fromY + (m.toY - m.fromY) * t);
-          if (t >= 1) {
-            m.container.position.set(m.toX, m.toY);
-            m.active = false;
+        if (performanceModeRef.current !== "minimal") {
+          const markers = playerMarkersRef.current;
+          for (const m of markers.values()) {
+            if (!m.active) continue;
+            const duration = m.duration || 300;
+            const t = Math.min((performance.now() - m.t0) / duration, 1);
+            m.container.position.set(m.fromX + (m.toX - m.fromX) * t, m.fromY + (m.toY - m.fromY) * t);
+            if (t >= 1) {
+              m.container.position.set(m.toX, m.toY);
+              m.active = false;
+            }
           }
-        }
 
-        for (const marker of monsterMarkersRef.current.values()) {
-          if (marker.active) {
-            const elapsed = performance.now() - marker.receivedAt;
-            const duration = marker.duration;
-            const t = Math.min(elapsed / duration, 1);
-            marker.renderX = marker.fromX + (marker.toX - marker.fromX) * t;
-            marker.renderY = marker.fromY + (marker.toY - marker.fromY) * t;
-            marker.container.position.set(marker.renderX, marker.renderY);
-            if (t >= 1) marker.active = false;
+          for (const marker of monsterMarkersRef.current.values()) {
+            if (marker.active) {
+              const elapsed = performance.now() - marker.receivedAt;
+              const duration = marker.duration;
+              const t = Math.min(elapsed / duration, 1);
+              marker.renderX = marker.fromX + (marker.toX - marker.fromX) * t;
+              marker.renderY = marker.fromY + (marker.toY - marker.fromY) * t;
+              marker.container.position.set(marker.renderX, marker.renderY);
+              if (t >= 1) marker.active = false;
+            }
+            marker.body.scale.set(1);
+            if (marker.state !== "RETURN") marker.body.rotation = 0;
+            if (marker.state === "ATTACK") marker.body.scale.set(1 + Math.sin(performance.now() / 70) * 0.12);
+            else if (marker.state === "CHASE") marker.body.rotation = Math.sin(performance.now() / 120) * 0.12;
+            else if (marker.state === "RETURN") marker.body.rotation += 0.025;
+            else marker.body.scale.set(1 + Math.sin(performance.now() / 350) * 0.04);
           }
-          marker.body.scale.set(1);
-          if (marker.state !== "RETURN") marker.body.rotation = 0;
-          if (marker.state === "ATTACK") marker.body.scale.set(1 + Math.sin(performance.now() / 70) * 0.12);
-          else if (marker.state === "CHASE") marker.body.rotation = Math.sin(performance.now() / 120) * 0.12;
-          else if (marker.state === "RETURN") marker.body.rotation += 0.025;
-          else marker.body.scale.set(1 + Math.sin(performance.now() / 350) * 0.04);
         }
         const selectedInstance = useWorldStore.getState().selectedTarget?.instanceId;
         const selectedMarker = selectedInstance ? monsterMarkersRef.current.get(selectedInstance) : undefined;
@@ -2325,6 +2345,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !gamePlayer) return;
+    if (performanceMode === "minimal") return;
     const previous = monsterSnapshotCenterRef.current;
     const refreshDistance = Math.max(3, Math.floor(investigationRange / 2));
     const moved = !previous || previous.region !== gamePlayer.current_region || Math.hypot(previous.x - gamePlayer.x, previous.y - gamePlayer.y) >= refreshDistance;
@@ -2333,7 +2354,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     void useWorldStore.getState().fetchMonsterSnapshot(investigationRange).then((loaded) => {
       if (loaded) monsterSnapshotCenterRef.current = center;
     });
-  }, [appReady, gamePlayer, investigationRange]);
+  }, [appReady, gamePlayer, investigationRange, performanceMode]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
@@ -2364,15 +2385,19 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const player = useGameStore.getState().player;
       if (player) {
         fetchNearbyCells(player.x, player.y, useWorldStore.getState().investigationRange);
-        void useWorldStore.getState().fetchMonsterSnapshot(useWorldStore.getState().investigationRange);
+        if (performanceMode !== "minimal") {
+          void useWorldStore.getState().fetchMonsterSnapshot(useWorldStore.getState().investigationRange);
+        }
       }
     };
     const pollPlayers = () => {
+      if (performanceMode !== "full") return;
       const player = useGameStore.getState().player;
       if (player) fetchNearbyPlayers(player.x, player.y, useWorldStore.getState().investigationRange);
       pruneStalePlayers();
     };
     const prefetch = () => {
+      if (performanceMode !== "full") return;
       const store = useWorldStore.getState();
       const px = store.liveX;
       const py = store.liveY;
@@ -2493,7 +2518,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         useWorldStore.getState().setPersistentCellCleared(region, detail.x, detail.y, true);
       } else if (RESPAWNED_CELL_EVENT_TYPES.has(detail.type)) {
         useWorldStore.getState().setPersistentCellCleared(region, detail.x, detail.y, false);
-        void fetchCellsRect(detail.x, detail.y, detail.x, detail.y);
+        if (performanceMode === "full") void fetchCellsRect(detail.x, detail.y, detail.x, detail.y);
       }
       // Newer servers may include the replacement cell in the delta. Applying
       // it directly avoids a full nearby-cell and persistent-object refetch.
@@ -2509,8 +2534,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     };
 
     pollCells();
-    pollPlayers();
-    prefetch();
+    if (performanceMode === "full") {
+      pollPlayers();
+      prefetch();
+    }
     window.addEventListener("gu_world_pos", onWorldPos);
     window.addEventListener("gu_world_combat", onWorldCombat);
     window.addEventListener("gu_world_cell", onWorldCell);
@@ -2522,16 +2549,17 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const now = Date.now();
       // No network traffic from hidden tabs; WS events keep state fresh.
       if (document.visibilityState !== "visible") return;
-      // WebSocket tile commands make frequent cell polling redundant; keep 60s as fallback.
-      if (now - lastCellsPoll >= 60000) {
+      // Reduced modes keep the map interactive while backing off background refreshes.
+      const cellPollInterval = performanceMode === "minimal" ? 180000 : performanceMode === "light" ? 120000 : 60000;
+      if (now - lastCellsPoll >= cellPollInterval) {
         lastCellsPoll = now;
         pollCells();
       }
-      if (now - lastPlayersPoll >= 10000) {
+      if (performanceMode === "full" && now - lastPlayersPoll >= 10000) {
         lastPlayersPoll = now;
         pollPlayers();
       }
-      if (now - lastPrefetchPoll >= 3000) {
+      if (performanceMode === "full" && now - lastPrefetchPoll >= 3000) {
         lastPrefetchPoll = now;
         prefetch();
       }
@@ -2546,7 +2574,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     };
     // Read current coordinates inside each tick: position changes must not tear
     // down this effect and immediately launch another group of map requests.
-  }, [appReady, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, mergeWSCells, invalidateCell]);
+  }, [appReady, performanceMode, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, mergeWSCells, invalidateCell]);
 
   // Keep the live X/Y position in sync with the game player when idle or moved by party leader.
   useEffect(() => {
@@ -2562,7 +2590,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         const duration = Math.max(0.25, dist / Math.max(1, movementStat));
         animateMove(targetX, targetY, duration, () => {
           fetchNearbyCells(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
-          fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
+          if (performanceMode === "full") fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
         });
       } else {
         playerRef.current.position.set(targetX, targetY);
@@ -2571,10 +2599,10 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
           centerOnPlayer(appRef.current, targetX, targetY);
         }
         fetchNearbyCells(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
-        fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
+        if (performanceMode === "full") fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, useWorldStore.getState().investigationRange);
       }
     }
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, movementStat, animateMove, centerOnPlayer, setLivePosition, fetchNearbyCells, fetchNearbyPlayers]);
+  }, [appReady, performanceMode, gamePlayer?.x, gamePlayer?.y, movementStat, animateMove, centerOnPlayer, setLivePosition, fetchNearbyCells, fetchNearbyPlayers]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;

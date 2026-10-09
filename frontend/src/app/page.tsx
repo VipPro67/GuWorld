@@ -8,11 +8,9 @@ import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { LevelZeroView } from "@/components/LevelZeroView";
-import { Sparkles, HelpCircle, X, Handshake } from "@/lib/icons";
-import Link from "next/link";
+import { Sparkles, X, Handshake } from "@/lib/icons";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { NotificationBell } from "@/components/NotificationBell";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { MaintenanceView } from "@/components/MaintenanceView";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { DivinationModal } from "@/components/DivinationModal";
@@ -62,7 +60,6 @@ export default function Home() {
     fetchPlayerStatus,
     initializeSession,
     reconcilePlayer,
-    logout,
     feedGu,
     feedGuGroup,
     feedAllGu,
@@ -118,7 +115,6 @@ export default function Home() {
       state.fetchPlayerStatus,
       state.initializeSession,
       state.reconcilePlayer,
-      state.logout,
       state.feedGu,
       state.feedGuGroup,
       state.feedAllGu,
@@ -224,10 +220,6 @@ export default function Home() {
 
   }, [isPlayerReady]);
 
-  const handleLogout = () => {
-    logout();
-  };
-
   const isPartyMemberNotLeader = Boolean(player?.party_id) && party !== null && party.leader_id !== player?.id;
   // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay with logs
   const hasReplayLogs = Boolean(activeCombatReplay && activeCombatReplay.enemy && (activeCombatReplay.logs?.length ?? 0) > 0);
@@ -294,7 +286,7 @@ export default function Home() {
   const isWorldMapView = Boolean(player && !player.needs_onboarding && !inCombat);
 
   const viewTitles: Record<string, string> = {
-    "practice-room": "Phòng tu luyện", character: "Nhân vật", inventory: "Túi đồ", party: "Tổ đội",
+    "practice-room": "Phòng tập", cultivation: "Tu luyện", character: "Nhân vật", inventory: "Túi đồ", "inventory-gu": "Cổ trùng", party: "Tổ đội",
     refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
     "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
     arena: "Đấu trường", "death-arena": "Sinh tử đài", leaderboard: "Bảng xếp hạng",
@@ -307,7 +299,7 @@ export default function Home() {
   return (
     <div className={`min-h-screen ${isWorldMapView ? "h-screen h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0" : "flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8"} relative`}>
       {/* Top Header Navigation */}
-      <header className={`w-full ${isWorldMapView ? "max-w-none px-3 sm:px-6 py-2 border-b border-[var(--border-default)] shrink-0 mb-0" : "max-w-[1600px] px-2 sm:px-8 mx-auto pb-4 border-b border-[var(--border-default)] mb-4"} flex justify-between items-center`}>
+      {!isWorldMapView && <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto pb-4 border-b border-[var(--border-default)] mb-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <div
             onClick={() => {
@@ -328,32 +320,14 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2">
-          {player && !inCombat && currentView !== "wiki" && (
-            <Link
-              href="/wiki"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-serif transition-colors border border-[var(--border-default)] inline-flex items-center gap-1"
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>Wiki Game</span>
-            </Link>
-          )}
-
           {player && !inCombat && <NotificationBell />}
-
-          {player && !inCombat && (
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-serif transition-colors border border-[var(--border-default)] cursor-pointer"
-            >
-              Đăng Xuất
-            </button>
-          )}
-          <ClearCacheButton />
-          <ThemeToggle />
         </div>
-      </header>
+      </header>}
+      {isWorldMapView && player && !inCombat && (currentView === "dashboard" || currentView === "world-map") && (
+        <div className="absolute right-2 top-2 z-50">
+          <NotificationBell />
+        </div>
+      )}
 
       {/* Main Content Area */}
       <main className={`w-full ${isWorldMapView ? "flex-1 min-h-0 max-w-none px-0 mx-0 overflow-hidden flex flex-col" : "flex-grow flex items-start justify-center max-w-[1600px] px-2 sm:px-8 mx-auto"}`}>
@@ -398,7 +372,7 @@ export default function Home() {
                 className={`absolute z-40 flex flex-col overflow-hidden border border-emerald-200/10 bg-[#09130ff2] text-[var(--text-primary)] shadow-[0_24px_80px_rgba(0,0,0,.55)] backdrop-blur-xl ${
                   currentView === "practice-room"
                     ? "inset-0"
-                    : "inset-x-0 bottom-0 top-[8dvh] rounded-t-3xl md:inset-y-3 md:left-auto md:right-3 md:top-3 md:w-[min(54vw,780px)] md:rounded-2xl"
+                    : "inset-x-0 inset-y-0 md:inset-y-3 md:left-auto md:right-3 md:top-3 md:w-[min(54vw,780px)] md:rounded-2xl"
                 }`}
               >
                 {currentView !== "practice-room" && (
@@ -407,13 +381,16 @@ export default function Home() {
                       <div className="truncate font-serif text-base font-semibold text-emerald-50">{viewTitles[currentView] || "Chức năng"}</div>
                       <div className="hidden text-[10px] uppercase tracking-[.2em] text-emerald-200/45 sm:block">Cổ Giới · Bảng điều khiển</div>
                     </div>
-                    <button
-                      onClick={() => setView("world-map")}
-                      aria-label="Đóng bảng điều khiển"
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {player && !inCombat && <NotificationBell />}
+                      <button
+                        onClick={() => setView("world-map")}
+                        aria-label="Đóng bảng điều khiển"
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4 ${currentView === "practice-room" ? "p-0" : ""}`}>
@@ -421,17 +398,19 @@ export default function Home() {
           <div className="w-full">
             <TrainingRoom onClose={() => setView("dashboard")} />
           </div>
-        ) : currentView === "character" ? (
+        ) : currentView === "character" || currentView === "cultivation" ? (
           <div className="w-full">
               <Aperture
+                key={currentView}
                 player={player}
                 guDictionary={guDictionary}
               />
           </div>
-        ) : currentView === "inventory" ? (
+        ) : currentView === "inventory" || currentView === "inventory-gu" ? (
           <div className="w-full">
             <GuInventory
               player={player}
+              initialTab={currentView === "inventory-gu" ? "gu" : "material"}
               onFeed={feedGu}
               onFeedGroup={feedGuGroup}
               onFeedAll={feedAllGu}

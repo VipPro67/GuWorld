@@ -126,26 +126,59 @@ func InvalidateDictionaryMemoryCache() {
 }
 
 func getCachedDictionaryPart(c *gin.Context, key string, target interface{}, build func() interface{}) {
+	getCachedDictionaryPartWithError(c, key, target, func() (interface{}, error) {
+		return build(), nil
+	}, nil)
+}
+
+// getCachedDictionaryPartWithError validates cache values before serving them
+// and only caches successful builds. This is used for catalogs where an empty
+// result usually means the backing query failed or the cache was poisoned.
+func getCachedDictionaryPartWithError(c *gin.Context, key string, target interface{}, build func() (interface{}, error), valid func(interface{}) bool) {
 	dictCacheMu.RLock()
 	entry, found := dictCache[key]
 	dictCacheMu.RUnlock()
 
 	if found {
-		if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == entry.etag {
-			c.Status(http.StatusNotModified)
+		if err := json.Unmarshal(entry.rawJSON, target); err == nil && (valid == nil || valid(target)) {
+			if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && ifNoneMatch == entry.etag {
+				c.Status(http.StatusNotModified)
+				return
+			}
+			c.Header("ETag", entry.etag)
+			c.Header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+			c.Data(http.StatusOK, "application/json; charset=utf-8", entry.rawJSON)
 			return
 		}
-		c.Header("ETag", entry.etag)
-		c.Header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
-		c.Data(http.StatusOK, "application/json; charset=utf-8", entry.rawJSON)
-		return
+		dictCacheMu.Lock()
+		delete(dictCache, key)
+		dictCacheMu.Unlock()
+		_ = cache.Delete(key)
 	}
 
 	var raw []byte
+	loaded := false
 	if err := cache.GetJSON(key, target); err == nil {
-		raw, _ = json.Marshal(target)
-	} else {
-		val := build()
+		if valid == nil || valid(target) {
+			raw, _ = json.Marshal(target)
+			loaded = true
+		} else {
+			_ = cache.Delete(key)
+		}
+	}
+
+	if !loaded {
+		val, err := build()
+		if err != nil {
+			logger.S.Errorf("dictionary cache %s rebuild failed: %v", key, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách dữ liệu"})
+			return
+		}
+		if valid != nil && !valid(val) {
+			logger.S.Errorf("dictionary cache %s rebuild returned invalid data", key)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Dữ liệu hiện chưa sẵn sàng"})
+			return
+		}
 		_ = cache.SetJSON(key, val, 24*time.Hour)
 		raw, _ = json.Marshal(val)
 	}

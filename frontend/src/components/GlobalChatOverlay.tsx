@@ -198,33 +198,37 @@ export const GlobalChatOverlay: React.FC = () => {
     lg: "h-[560px] sm:h-[680px] md:h-[760px] lg:h-[860px]",
   }[chatHeight];
 
+  const chatPosition = "bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] right-3 sm:bottom-6 sm:right-6";
+
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <>
       {/* Toggle Button */}
       {!chatOpen && (
-        <button
-          onClick={() => {
-            setChatOpen(true);
-            subscribeAllBaoHoangMessages();
-            fetchBaoHoangMessages(activeChannel);
-          }}
-          className="w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 border relative bg-gradient-to-br from-emerald-600 to-teal-700 border-emerald-500/30 text-white hover:scale-105 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 cursor-pointer"
-        >
-          <MessageSquare className="w-5 h-5" />
+        <div className={`fixed ${chatPosition} z-[70]`}>
+          <button
+            onClick={() => {
+              setChatOpen(true);
+              subscribeAllBaoHoangMessages();
+              fetchBaoHoangMessages(activeChannel);
+            }}
+            className="w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 border relative bg-gradient-to-br from-emerald-600 to-teal-700 border-emerald-500/30 text-white hover:scale-105 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 cursor-pointer"
+          >
+            <MessageSquare className="w-5 h-5" />
 
-          {/* Red dot notification */}
-          {(unreadChannels.world || unreadChannels.general || unreadChannels.sect || unreadChannels.region || unreadChannels.private) && (
-            <span className="absolute top-0.5 right-0.5 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
-          )}
-        </button>
+            {/* Red dot notification */}
+            {(unreadChannels.world || unreadChannels.general || unreadChannels.sect || unreadChannels.region || unreadChannels.private) && (
+              <span className="absolute top-0.5 right-0.5 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+            )}
+          </button>
+        </div>
       )}
 
       {/* Chat Overlay Panel */}
       {chatOpen && (
-        <div className={`absolute bottom-0 right-0 ${widthClasses} ${heightClasses} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
+        <div className={`fixed ${chatPosition} ${widthClasses} ${heightClasses} z-[70] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-6rem)] sm:max-h-[calc(100vh-6rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
           {/* Channel Tabs */}
           <div className="flex items-center justify-between">
             <div className="flex gap-1.5 border-b border-[var(--border-default)] pb-2">
@@ -304,6 +308,7 @@ export const GlobalChatOverlay: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setChatOpen(false)}
+                aria-label="Đóng chat"
                 className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
               >
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -517,6 +522,6 @@ export const GlobalChatOverlay: React.FC = () => {
           </form>
         </div>
       )}
-    </div>
+    </>
   );
 };

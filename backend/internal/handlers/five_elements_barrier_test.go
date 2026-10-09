@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ func TestFiveElementsDivineBarrierArray(t *testing.T) {
 
 	colIdx := func(name string) int {
 		for i, h := range header {
-			if h == name {
+			if strings.TrimPrefix(strings.TrimSpace(h), "\uFEFF") == name {
 				return i
 			}
 		}

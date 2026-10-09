@@ -52,17 +52,17 @@ type DaoNganPathDetail struct {
 
 // DaoNganResult is the full đạo ngân calculation response.
 type DaoNganResult struct {
-	TotalDaoNgan             float64             `json:"total_dao_ngan"`          // composite đạo ngân score
-	TotalMarks               int64               `json:"total_marks"`             // sum of all dao marks
-	UniquePathCount          int                 `json:"unique_path_count"`       // number of paths with marks
-	AverageMultiplier        float64             `json:"average_multiplier"`      // mean multiplier across paths
-	MaxMultiplier            float64             `json:"max_multiplier"`          // highest single-path multiplier
-	MaxPath                  string              `json:"max_path"`                // path with highest multiplier
-	DominantPath             string              `json:"dominant_path"`           // path with most dao marks
-	GraceThreshold           int64               `json:"grace_threshold"`         // safe foreign mark threshold
-	HasNonConflictingDao     bool                `json:"has_non_conflicting_dao"` // non-conflicting dao marks trait
+	TotalDaoNgan            float64             `json:"total_dao_ngan"`          // composite đạo ngân score
+	TotalMarks              int64               `json:"total_marks"`             // sum of all dao marks
+	UniquePathCount         int                 `json:"unique_path_count"`       // number of paths with marks
+	AverageMultiplier       float64             `json:"average_multiplier"`      // mean multiplier across paths
+	MaxMultiplier           float64             `json:"max_multiplier"`          // highest single-path multiplier
+	MaxPath                 string              `json:"max_path"`                // path with highest multiplier
+	DominantPath            string              `json:"dominant_path"`           // path with most dao marks
+	GraceThreshold          int64               `json:"grace_threshold"`         // safe foreign mark threshold
+	HasNonConflictingDao    bool                `json:"has_non_conflicting_dao"` // non-conflicting dao marks trait
 	DaoConflictReductionPct float64             `json:"dao_conflict_reduction_pct"`
-	Paths                   []DaoNganPathDetail `json:"paths"`                   // per-path breakdown
+	Paths                   []DaoNganPathDetail `json:"paths"` // per-path breakdown
 }
 
 // CalculateDaoNganDetailed computes the composite "đạo ngân" (dao silver) score
@@ -116,7 +116,7 @@ func CalculateDaoNganDetailedWithReduction(
 
 	for clean, amount := range aggregatedMarks {
 		mod, ok := profile.Paths[clean]
-		baseMult := gamefx.DaoAmplification(amount) + bonus[clean]
+		baseMult := gamefx.DaoAmplification(amount) + daoBonus[clean]
 		effectiveMult := baseMult
 		if ok {
 			baseMult = mod.DaoAmplification

@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -34,7 +35,7 @@ func TestGuKillEnergyPersistentStatusOnHit(t *testing.T) {
 
 	colIdx := func(name string) int {
 		for i, h := range header {
-			if h == name {
+			if strings.TrimPrefix(strings.TrimSpace(h), "\uFEFF") == name {
 				return i
 			}
 		}
