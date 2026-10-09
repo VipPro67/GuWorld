@@ -282,6 +282,9 @@ func TestIsChaoticTribulation(t *testing.T) {
 	if !IsChaoticTribulation(many, nil) {
 		t.Errorf("expected chaotic for tạp tu (P=%.2f, N_eff=%.2f)", 10000.0/60000.0, EffectivePathCount(many, nil))
 	}
+	if got := BuildDaoCombatProfile(many, nil, false, nil).DominantPath; got != "dark" {
+		t.Errorf("equal Dao Mark totals should choose the lexicographically first path, got %q", got)
+	}
 	// Empty marks: not chaotic.
 	if IsChaoticTribulation(nil, nil) {
 		t.Error("empty marks should not be chaotic")
