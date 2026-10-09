@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -528,9 +527,14 @@ func SetVitalGu(c *gin.Context) {
 
 	backlashMessage := ""
 	if hadVital {
-		// Backlash: apply severely_wounded status for 1 hour
-		player.Statuses.Add("severely_wounded", "set_vital_gu", 1*time.Hour, 0)
-		backlashMessage = " Đạo hữu bị phản phệ rơi vào trạng thái Trọng Thương do thay đổi Bản Mệnh Cổ!"
+		// Changing a bonded Gu meets the same rank-scaled suppression as the
+		// Five Regions wall. Higher realms suffer a stronger and longer backlash.
+		debuffPct, duration := gamefx.RegionalWallDebuff(player.Rank, player.SubRank)
+		player.Statuses.Add("severely_wounded", "set_vital_gu", duration, debuffPct)
+		backlashMessage = fmt.Sprintf(
+			" Đạo hữu bị phản phệ Trọng Thương do thay đổi Bản Mệnh Cổ: Rank %d.%d chịu áp chế %.0f%% công/thủ/tốc và tỉ lệ luyện cổ trong %.0f giờ; hồi phục nhận giảm 50%%.",
+			player.Rank, player.SubRank, -debuffPct*100, duration.Hours(),
+		)
 	}
 
 	// Update is_vital flags; vital Gu is always ACTIVE and equipped
