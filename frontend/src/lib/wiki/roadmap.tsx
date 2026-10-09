@@ -115,7 +115,7 @@ export const roadmapPages: WikiPage[] = [
                   <strong>Cơ Chế Xung Đột Đạo Ngân (Dao Mark Conflict):</strong> Phân chia 49 Lưu phái thành 10 Nhóm Đạo (Dao Groups). Đạo ngân ngoại hệ không tương thích sẽ tạo ra Xung Đột làm suy giảm sát thương nếu Cảnh giới Lưu phái chưa đủ cao.
                 </li>
                 <li>
-                  <strong>Hệ Thống Điều Hòa Cảnh Giới:</strong> Cảnh giới Chân Ý (Đại Sư &rarr; Vô Thượng Đại Tông Sư) giúp giảm từ 20% đến 80% xung đột, đồng thời tăng 10% &rarr; 45% uy lực khuếch đại Đạo Ngân.
+                  <strong>Hệ Thống Điều Hòa Cảnh Giới:</strong> Chân Ý được tính riêng theo lưu phái đang thi triển, điều hòa xung đột từ 10% ở Đại Sư đến 100% ở Vô Thượng Đại Tông Sư. Đạo Ngân ngoại hệ vẫn có thể gây phản phệ khi dùng một phái chưa đủ Chân Ý.
                 </li>
                 <li>
                   <strong>Phòng Thủ Đạo Ngân Tự Nhiên (Natural Dao Resistance):</strong> Đạo ngân của Cổ Tiên tạo màng kháng tự nhiên (lên tới 30%) trước các đòn đánh không tương thích của đối thủ.

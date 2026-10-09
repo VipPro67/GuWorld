@@ -214,7 +214,7 @@ export const gameplayPages: WikiPage[] = [
                 <tr><td className="p-3 font-bold text-violet-400">dmgMultiplier</td><td className="p-3">Buff/debuff tạm thời (Kiếm Long +50%, weaken -20%...)</td></tr>
                 <tr><td className="p-3 font-bold text-red-400">netDmg</td><td className="p-3">hitDmg &minus; targetDef; floor = 1 (không bao giờ dưới 1)</td></tr>
                 <tr><td className="p-3 font-bold text-orange-400">targetDef</td><td className="p-3">BaseDef &times; DefenseMultiplier &minus; ignore_defense</td></tr>
-                <tr><td className="p-3 font-bold text-blue-400">daoConflictMult</td><td className="p-3">Hệ số suy giảm do xung đột Đạo Ngân (0.10 &rarr; 1.00)</td></tr>
+                <tr><td className="p-3 font-bold text-blue-400">daoConflictMult</td><td className="p-3">Hệ số Đạo Ngân sau xung đột của lưu phái đang dùng (0.08 &rarr; 1.00); xung đột nặng có thể tăng phí Chân Nguyên hoặc gây tán loạn/phản phệ</td></tr>
                 <tr><td className="p-3 font-bold text-purple-400">naturalResistance</td><td className="p-3">Kháng Đạo Ngân tự nhiên từ Cổ Tiên phòng thủ (cap 30%)</td></tr>
                 <tr><td className="p-3 font-bold text-pink-400">LifeStealPct</td><td className="p-3">Tỉ lệ hồi HP từ sát thương gây ra (heal = totalDmg &times; LifeStealPct)</td></tr>
                 <tr><td className="p-3 font-bold text-green-400">critRateBonus</td><td className="p-3">Tỉ lệ chí mạng; nếu roll thành công &rarr; damage &times; 1.5</td></tr>
