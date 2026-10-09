@@ -36,14 +36,14 @@ export const guidePages: WikiPage[] = [
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2 text-xs">
               <h4 className="font-bold text-indigo-300">Đạo Ngân & Xung Đột Quy Tắc (Dao Marks & Conflict)</h4>
               <p className="text-[var(--text-muted)] leading-relaxed">
-                Vết khắc của quy luật tự nhiên tích lũy trên cơ thể Cổ Tiên gồm 49 lưu phái thuộc 10 nhóm Đạo. Mỗi điểm Đạo Ngân tăng uy lực cho chiêu thức đồng hệ. Tuy nhiên, đạo ngân của các phái không tương thích sẽ tạo ra <strong>Xung Đột Đạo Ngân</strong>, trừ khi Cổ Tiên nâng cao <strong>Cảnh Giới Chân Ý</strong> để điều hòa.
+                Đạo Ngân của lưu phái đang dùng làm tăng uy lực chiêu thức cùng hệ. Đạo Ngân ngoại hệ có thể gây <strong>Xung Đột Đạo Ngân</strong>; mức phạt được tính theo từng hành động và Chân Ý của chính lưu phái đó. Đánh thường mặc định tính là Strength (Lực Đạo), không tự đổi hệ theo Cổ đang trang bị. Xem trang <strong>Xung Đột Đạo Ngân &amp; Phản Phệ</strong> để biết ví dụ và cách tránh bạo thể.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2 text-xs">
               <h4 className="font-bold text-indigo-300">Cảnh Giới Lưu Phái (Attainment / Chân Ý)</h4>
               <p className="text-[var(--text-muted)] leading-relaxed">
-                Độ hiểu biết về quy luật thế giới. Chia làm 5 cảnh giới: <strong>Phàm Thai (Ordinary)</strong> ➔ <strong>Đại Sư (Master)</strong> ➔ <strong>Tông Sư (Grandmaster)</strong> ➔ <strong>Đại Tông Sư (Great Grandmaster)</strong> ➔ <strong>Vô Thượng Đại Tông Sư (Supreme Grandmaster)</strong>. Cảnh giới càng cao, sát chiêu lưu phái đó càng uy lực, tỉ lệ luyện Cổ thành công càng lớn và khả năng áp chế xung đột đạo ngân càng mạnh mẽ (giảm tới 80% xung đột).
+                Độ hiểu biết về quy luật thế giới. Chia làm 5 cảnh giới: <strong>Phàm Thai (Ordinary)</strong> ➔ <strong>Đại Sư (Master)</strong> ➔ <strong>Tông Sư (Grandmaster)</strong> ➔ <strong>Đại Tông Sư (Great Grandmaster)</strong> ➔ <strong>Vô Thượng Đại Tông Sư (Supreme Grandmaster)</strong>. Chân Ý của một lưu phái điều hòa xung đột cho hành động dùng đúng lưu phái đó: từ 10% ở Đại Sư đến 100% ở Vô Thượng. Nó không tự bảo vệ các lưu phái khác.
               </p>
             </div>
 

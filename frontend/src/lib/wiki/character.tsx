@@ -404,37 +404,37 @@ export const characterPages: WikiPage[] = [
           <div className="space-y-3">
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs">
               <h4 className="font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>1. Chuẩn Đại Sư / Đại Sư (100 Chân Ý)</span>
+                <span>1. Đại Sư (10.000 điểm Chân Ý trong lưu phái)</span>
               </h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Trực giác siêu nhạy bén. Giảm <strong>20% xung đột Đạo Ngân</strong> ngoại hệ và tăng <strong>+10% hiệu suất khuếch đại Đạo Ngân</strong> cho lưu phái này.
+                Trực giác nhạy bén. Chân Ý Đại Sư điều hòa <strong>10% xung đột Đạo Ngân</strong> khi dùng đúng lưu phái này.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs">
               <h4 className="font-bold text-indigo-300 flex items-center gap-2">
-                <span>2. Chuẩn Tông Sư / Tông Sư (1.000 Chân Ý)</span>
+                <span>2. Tông Sư (100.000 điểm Chân Ý trong lưu phái)</span>
               </h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Đạt khả năng &quot;Loại suy&quot; (Thấu triệt tương sinh tương khắc). Giảm <strong>40% xung đột Đạo Ngân</strong> và tăng <strong>+20% hiệu suất khuếch đại</strong>. Điều kiện bắt buộc để đột phá Thất Chuyển.
+                Đạt khả năng loại suy quy luật. Chân Ý Tông Sư điều hòa <strong>25% xung đột</strong> khi dùng đúng lưu phái này.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs">
               <h4 className="font-bold text-yellow-500 flex items-center gap-2">
-                <span>3. Chuẩn Đại Tông Sư / Đại Tông Sư (10.000 Chân Ý)</span>
+                <span>3. Đại Tông Sư (1.000.000 điểm Chân Ý trong lưu phái)</span>
               </h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Cộng hưởng hoàn hảo với Đạo ngân của thiên nhiên. Tự nhiên hóa Đạo Ngân, giảm <strong>60% xung đột</strong> và tăng <strong>+30% hiệu suất khuếch đại</strong>. Điều kiện bắt buộc để đột phá Bát Chuyển.
+                Cộng hưởng sâu với quy luật tự nhiên. Chân Ý Đại Tông Sư điều hòa <strong>45% xung đột</strong> khi dùng đúng lưu phái này.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs">
               <h4 className="font-bold text-red-400 flex items-center gap-2">
-                <span>4. Vô Thượng Đại Tông Sư (100.000 Chân Ý)</span>
+                <span>4. Vô Thượng Đại Tông Sư (10.000.000 điểm Chân Ý trong lưu phái)</span>
               </h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Cảnh giới chí cao vô thượng. Áp chế tối đa <strong>80% xung đột</strong>, đẩy hiệu suất khuếch đại lên cực hạn <strong>+45%</strong>, mở khóa năng lực Thôn tính Tiên khiếu đồng hệ. Điều kiện bước vào Cửu Chuyển Tôn Giả.
+                Cảnh giới chí cao vô thượng. Chân Ý Vô Thượng điều hòa <strong>100% xung đột</strong> khi hành động dùng đúng lưu phái đã đạt cảnh giới này; không áp dụng sang lưu phái khác.
               </p>
             </div>
           </div>
@@ -474,7 +474,7 @@ export const characterPages: WikiPage[] = [
             </table>
           </div>
           <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 text-xs leading-relaxed text-indigo-300">
-            👉 Xem chi tiết ma trận 10 nhóm Đạo, cơ chế triệt tiêu xung đột và màng kháng tự nhiên tại trang <Link href="/wiki/gameplay-dao-conflict" className="text-amber-400 font-bold underline">Xung Đột Đạo Ngân & Cân Bằng Lưu Phái</Link>.
+            👉 Xem công thức xung đột theo từng hành động, mức hao Chân Nguyên và các ví dụ phản phệ tại trang <Link href="/wiki/gameplay-dao-conflict" className="text-amber-400 font-bold underline">Xung Đột Đạo Ngân & Phản Phệ Trong Chiến Đấu</Link>.
           </div>
         </div>
       </div>

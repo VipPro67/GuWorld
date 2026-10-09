@@ -84,7 +84,7 @@ export const combatPages: WikiPage[] = [
             </p>
 
             <p className="text-[var(--text-muted)]">
-              • <span className="text-rose-400">daoConflictMult</span>: Hệ số suy giảm do Xung Đột Đạo Ngân ngoại hệ (0.10 &rarr; 1.00, giảm tối đa 80% xung đột nhờ Chân Ý)
+              • <span className="text-rose-400">daoConflictMult</span>: Hệ số xung đột của lưu phái hành động (0.08 &rarr; 1.00). Chân Ý được xét riêng theo đúng lưu phái đang dùng; Vô Thượng điều hòa 100% xung đột cục bộ.
             </p>
           </div>
 
@@ -93,9 +93,9 @@ export const combatPages: WikiPage[] = [
             <div className="text-[var(--text-secondary)] space-y-1 font-mono text-[11px]">
               <div>• Gu: damage_flat = 500, damage_mult = 1.5, Buff: Kiếm Long = 1.5</div>
               <div>• Đạo Ngân: 3.000 điểm Kiếm Đạo &rarr; daoAmp = 31.0, Tông Sư (Eff = 1.12) &rarr; <span className="text-amber-400">daoMult = 34.6</span></div>
-              <div>• Xung đột ngoại hệ: mang 5.000 Đạo Ngân Trận Đạo (comp = 0.85 &rarr; xung đột 15%), Tông Sư giảm 40% xung đột &rarr; <span className="text-rose-400">daoConflictMult = 0.985</span></div>
+              <div>• Xung đột còn phụ thuộc ngưỡng dung nạp, độ tương thích, tổng các phái ngoại hệ và Chân Ý của lưu phái đang dùng.</div>
               <div className="bg-black/40 rounded-lg p-2 text-emerald-400 font-bold mt-1">
-                hitDmg = 500 &times; 1.5 &times; 1.5 &times; 34.6 &times; 0.985 = 38.341 sát thương!
+                Đạo Ngân Hỏa không khuếch đại đòn Kiếm; nó chỉ có thể gây xung đột nếu vượt ngưỡng.
               </div>
             </div>
           </div>
