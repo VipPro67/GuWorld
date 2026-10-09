@@ -11,6 +11,29 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+// CombineDaoConflictReduction stacks separate Gu bonuses with diminishing
+// returns. Ordinary Gu effects have a soft ceiling below full immunity;
+// permanent body traits provide complete immunity.
+func CombineDaoConflictReduction(current, bonus float64) float64 {
+	if current < 0 {
+		current = 0
+	}
+	if current > 90 {
+		current = 90
+	}
+	if bonus < 0 {
+		bonus = 0
+	}
+	if bonus > 90 {
+		bonus = 90
+	}
+	combined := 100 - (100-current)*(1-bonus/100)
+	if combined > 90 {
+		return 90
+	}
+	return combined
+}
+
 // Effects aggregates the gameplay modifiers granted by a player's
 // race (chủng tộc), constitution (thể chất) and active statuses (trạng thái).
 type Effects struct {
@@ -66,6 +89,7 @@ type Effects struct {
 	ApertureStressBonus float64 `json:"aperture_stress_bonus"`
 	// NonConflictingDaoMarks indicates whether character has the non-conflicting dao marks trait.
 	NonConflictingDaoMarks bool `json:"non_conflicting_dao_marks,omitempty"`
+	DaoConflictReductionPct float64 `json:"dao_conflict_reduction_pct,omitempty"`
 	// Immortal indicates if the character's lifespan never decreases.
 	Immortal bool `json:"immortal"`
 	// DisableHPRegen disables HP regeneration.
@@ -227,6 +251,12 @@ func (e Effects) ToBlocks() []any {
 	if e.NonConflictingDaoMarks {
 		addBlock("NON_CONFLICTING_DAO_MARKS", "NON_CONFLICTING_DAO_MARKS", true)
 	}
+	if e.DaoConflictReductionPct > 0 {
+		blocks = append(blocks, map[string]any{
+			"id": "DAO_CONFLICT_REDUCTION", "trigger": "ALWAYS_ON", "target": target{Selector: "SELF"},
+			"operations": []any{map[string]any{"op": "STAT_MOD", "stat": "PATH_CONFLICT_REDUCTION", "sub_type": "ADD_FLAT", "value": e.DaoConflictReductionPct}},
+		})
+	}
 	if e.Immortal {
 		addBlock("IMMORTAL", "IMMORTAL", true)
 	}
@@ -340,6 +370,8 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 					e.DaoMarkGainBonus += asFloat(val)
 				case "APERTURE_STRESS":
 					e.ApertureStressBonus += asFloat(val)
+				case "PATH_CONFLICT_REDUCTION":
+					e.DaoConflictReductionPct = CombineDaoConflictReduction(e.DaoConflictReductionPct, asFloat(val))
 				case "TENACITY":
 					e.Tenacity += asFloat(val)
 				case "CC_RESIST":
@@ -513,6 +545,10 @@ func Get(p *models.Player) Effects {
 	if def, ok := effectiveConstitutions()[p.Constitution]; ok {
 		addEffects(&fx, def.Effects)
 	}
+	if p.BodyMods.Has(models.BodyModSovereignImmortal) {
+		fx.NonConflictingDaoMarks = true
+		fx.DaoConflictReductionPct = 100
+	}
 
 	// Gu passive effects (equipped ACTIVE only, best rank per GuID).
 	// Generic source for tenacity / cc_resist — no per-Gu-ID branching.
@@ -541,7 +577,7 @@ func Get(p *models.Player) Effects {
 		addEffects(&fx, Effects{
 			Tenacity:               models.GuStatValue(spec, "TENACITY"),
 			CCResist:               models.GuStatValue(spec, "CC_RESIST"),
-			NonConflictingDaoMarks: models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION") >= 100,
+			DaoConflictReductionPct: models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION"),
 		})
 	}
 

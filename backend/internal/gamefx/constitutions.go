@@ -142,8 +142,11 @@ func addEffects(dst *Effects, src Effects) {
 	dst.CCResist += src.CCResist
 	dst.SoulRegenBonus += src.SoulRegenBonus
 	dst.ApertureStressBonus += src.ApertureStressBonus
-	if src.NonConflictingDaoMarks {
+	if dst.NonConflictingDaoMarks || src.NonConflictingDaoMarks {
 		dst.NonConflictingDaoMarks = true
+		dst.DaoConflictReductionPct = 100
+	} else {
+		dst.DaoConflictReductionPct = CombineDaoConflictReduction(dst.DaoConflictReductionPct, src.DaoConflictReductionPct)
 	}
 	if src.Immortal {
 		dst.Immortal = true

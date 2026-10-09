@@ -301,6 +301,7 @@ type CombatantAuto struct {
 	SoulDefenseBonus     float64                  // percentage reduction of soul damage taken
 	LuckBonus            float64                  // flat increase of luck stat
 	HasNonConflictingDao bool                     // true if character possesses non-conflicting dao marks trait
+	DaoConflictReductionPct float64                // diminishing-return reduction from equipped Gu
 	DaoProfile           *gamefx.DaoCombatProfile // precomputed O(1) dao conflict and natural defense profile
 
 	// StatProvenance maps stat key ("attack"/"defense"/"speed"/

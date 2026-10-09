@@ -429,6 +429,7 @@ type DaoCombatProfile struct {
 	TotalDaoMarks        int64                          `json:"total_dao_marks"`
 	GraceThreshold       int64                          `json:"grace_threshold"`
 	HasNonConflictingDao bool                           `json:"has_non_conflicting_dao"`
+	ConflictReductionPct float64                        `json:"conflict_reduction_pct"`
 	DominantPath         string                         `json:"dominant_path"`
 	Paths                map[string]PathCombatModifiers `json:"paths"`
 }
@@ -441,6 +442,27 @@ func BuildDaoCombatProfile(
 	hasNonConflictingDao bool,
 	daoBonus map[string]float64,
 ) *DaoCombatProfile {
+	return BuildDaoCombatProfileWithReduction(daoMarks, pathMasteries, hasNonConflictingDao, 0, daoBonus)
+}
+
+// BuildDaoCombatProfileWithReduction builds a combat profile that applies a
+// diminishing-return reduction to internal Dao conflict. hasNonConflictingDao
+// is reserved for permanent body traits and also disables natural defense.
+func BuildDaoCombatProfileWithReduction(
+	daoMarks map[string]int64,
+	pathMasteries map[string]int,
+	hasNonConflictingDao bool,
+	conflictReductionPct float64,
+	daoBonus map[string]float64,
+) *DaoCombatProfile {
+	if hasNonConflictingDao {
+		// Permanent body traits are the only source of complete immunity.
+		conflictReductionPct = 100
+	} else if conflictReductionPct < 0 {
+		conflictReductionPct = 0
+	} else if conflictReductionPct > 90 {
+		conflictReductionPct = 90
+	}
 	var totalMarks int64
 	var maxMarks int64
 	var dominantPath string
@@ -477,6 +499,7 @@ func BuildDaoCombatProfile(
 		TotalDaoMarks:        totalMarks,
 		GraceThreshold:       graceThreshold,
 		HasNonConflictingDao: hasNonConflictingDao,
+		ConflictReductionPct: conflictReductionPct,
 		DominantPath:         dominantPath,
 		Paths:                make(map[string]PathCombatModifiers, len(CanonicalPaths)),
 	}
@@ -503,7 +526,7 @@ func BuildDaoCombatProfile(
 		}
 		nEff := effectivePathCount(p, activeForeign, lvl)
 		fMulti := MultiPathFactor(nEff, purity)
-		effConflict := rawConflict * fMulti * (1.0 - realmCtrl)
+		effConflict := rawConflict * fMulti * (1.0 - realmCtrl) * (1.0 - conflictReductionPct/100.0)
 		denominator := float64(amt) + math.Max(1000.0, 0.1*float64(totalMarks))
 		conflictRatio := 0.0
 		if denominator > 0 {

@@ -112,24 +112,11 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		if len(guSpec.Path) > 0 {
 			pathKey = guSpec.Path[0]
 		}
-		hasNonConf := actor.HasNonConflictingDao
-		if !hasNonConf {
-			for _, g := range actor.GuInventory {
-				if !g.Equipped || g.Status != "ACTIVE" {
-					continue
-				}
-				spec, ok := models.GetGu(g.GuID, g.Rank)
-				if ok {
-					// Block v2 only: PATH_CONFLICT_REDUCTION comes from compiled
-					// STAT_MOD, never the legacy Passive flat field.
-					if models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION") >= 100 {
-						hasNonConf = true
-						break
-					}
-				}
-			}
+		conflictReductionPct := actor.DaoConflictReductionPct
+		if conflictReductionPct == 0 && !actor.HasNonConflictingDao {
+			conflictReductionPct = combatantDaoConflictReduction(actor.GuInventory)
 		}
-		profile := gamefx.BuildDaoCombatProfile(actor.DaoMarks, actor.PathMasteries, hasNonConf, daoBonus)
+		profile := gamefx.BuildDaoCombatProfileWithReduction(actor.DaoMarks, actor.PathMasteries, actor.HasNonConflictingDao, conflictReductionPct, daoBonus)
 		daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
 		daoMultiplier = (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
 		masteryMultiplier = 1.0 // integrated in DaoCombatProfile
@@ -154,9 +141,32 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	return effectiveDamage, effectiveDefense, cost, nil
 }
 
+// combatantDaoConflictReduction projects equipped Gu effects for combatants
+// assembled outside the full player-stat pipeline (for example map actions).
+func combatantDaoConflictReduction(inventory models.GuInventory) float64 {
+	bestRank := make(map[string]int)
+	for _, gu := range inventory {
+		if gu.Equipped && gu.Status == "ACTIVE" && gu.Rank > bestRank[gu.GuID] {
+			bestRank[gu.GuID] = gu.Rank
+		}
+	}
+	reduction := 0.0
+	for guID, rank := range bestRank {
+		spec, ok := models.GetGu(guID, rank)
+		if !ok {
+			continue
+		}
+		reduction = gamefx.CombineDaoConflictReduction(reduction, models.GuStatValue(spec, "PATH_CONFLICT_REDUCTION"))
+	}
+	return reduction
+}
+
 func CalculateGuEffect(player *models.Player, guSpec *models.GuDictionaryItem) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
 	actor := models.CombatantFromPlayer(player, CalculatePlayerStats(player))
-	dmg, def, cost, err := CalculateGuEffectForCombatant(&actor, guSpec, true, gamefx.Get(player).DaoNganBonus, gamefx.Get(player).PathDamageBonus)
+	charFX := gamefx.Get(player)
+	actor.HasNonConflictingDao = charFX.NonConflictingDaoMarks
+	actor.DaoConflictReductionPct = charFX.DaoConflictReductionPct
+	dmg, def, cost, err := CalculateGuEffectForCombatant(&actor, guSpec, true, charFX.DaoNganBonus, charFX.PathDamageBonus)
 	player.HP = actor.HP
 	return dmg, def, cost, err
 }
