@@ -277,96 +277,84 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 
 Đạo Ngân là vết khắc cô đọng của quy luật tự nhiên tích lũy trên thân thể và Tiên Khiếu của Cổ Tiên qua **49 lưu phái** (tích lũy từ Độ Kiếp, Thăng Tiên, Nuốt Tiên Khiếu hoặc Luyện Cổ). Riêng Đạo Ngân Thiên Đạo không thể nhận từ Thăng Tiên hay Độ Kiếp thông thường và cần một cơ chế riêng biệt.
 
-#### 1. Bảng Phân Loại 10 Nhóm Đạo (Dao Groups)
-Các lưu phái trong cùng một nhóm hoàn toàn tương thích **100% (Xung đột = 0.0)**:
-- **ELEMENTAL (Nguyên Tố)**: Hỏa, Thủy, Băng, Phong, Lôi, Thổ, Vân, Ám, Quang, Nguyệt, Nhật, Tinh.
-- **SPACE_TIME (Thời Không)**: Vũ (Không gian), Trụ (Thời gian), Hư (Hư vô).
-- **RULE_ORDER (Quy Tắc & Hạn Chế)**: Luật, Giới (Giới hạn), Phong (Phong ấn), Trận.
-- **KINETIC_WEAPON (Vũ Khí & Động Năng)**: Kiếm, Đao, Binh, Thanh (Âm thanh), Chấn (Chấn động).
-- **BODY_LIFE (Sinh Mệnh & Thể Phách)**: Lực, Biến Hóa, Cốt, Cương (Thân thể/Cương thi).
-- **SOUL_MIND (Linh Hồn & Tâm Thức)**: Hồn, Trí, Nô (Nô dịch), Mộng, Mị (Mị hoặc), Ảo, Tình (Tình cảm).
-- **INFORMATION_STEALTH (Ẩn Thao & Tình Báo)**: Tín (Tin tức), Ẩn (Tàng hình), Huyễn (Biến ảo), Đạo (Trộm cắp).
-- **ORGANIC_CORRUPTION (Ăn Mòn & Huyết Độc)**: Huyết, Độc, Mộc, Thực (Ăn nuốt).
-- **CRAFT_ALCHEMY (Chế Tác & Vật Chất)**: Luyện, Đan, Kim (Kim loại).
-- **HEAVEN_HUMAN (Chí Cao Vận Mệnh)**: Thiên, Nhân, Vận, Họa (Tai họa/Vẽ), Hạn (Hạn hán).
+#### 1. Nhóm Đạo Và Độ Tương Thích
 
-#### 2. Cặp Tương Khắc & Bổ Trợ Đặc Thù (Pair Overrides)
-- **Tương Khắc Cực Đoan (Xung đột = 1.0 - 1.2)**: Hỏa $\leftrightarrow$ Thủy/Băng; Quang $\leftrightarrow$ Ám; Độc $\leftrightarrow$ Mộc; Kiếm/Đao $\leftrightarrow$ Trận; Trí $\leftrightarrow$ Tình.
-- **Cộng Hưởng Bổ Trợ (Xung đột = 0.2 - 0.3)**: Lực $\leftrightarrow$ Biến Hóa; Hồn $\leftrightarrow$ Nô; Hư $\leftrightarrow$ Ẩn; Luyện $\leftrightarrow$ Lực/Hỏa; Vận $\leftrightarrow$ Thiên/Nhân.
+Mỗi lưu phái được chuẩn hóa thành một khóa để tính toán. Các nhóm của hệ thống hiện tại:
 
-#### 3. Công Thức Tính Xung Đột & Điều Hòa Cảnh Giới
-- **Ngưỡng An Toàn (Grace Threshold)**: Đạo ngân ngoại hệ $\le \max(1.000, 2\% \text{ tổng Đạo Ngân})$ hoàn toàn không gây xung đột.
-- **Mẫu Số Chuẩn Hóa Động**: Thay cho hằng số cố định, xung đột được chuẩn hóa theo quy mô Đạo Ngân thực tế:
-  $$\text{Denominator} = \text{Amount}(p) + \max(1.000, 0.1 \times \text{TotalMarks})$$
-- **Hiệu Quả Khuếch Đại Cảnh Giới (Attainment Efficiency)**: Cảnh giới Chân Ý giúp tăng cường uy lực Đạo Ngân đồng hệ:
-  - Phàm Thai: $\times 1.00$
-  - Đại Sư (Master): $\times 1.05$
-  - Tông Sư (Grandmaster): $\times 1.12$
-  - Đại Tông Sư (Great Grandmaster): $\times 1.25$
-  - Vô Thượng (Supreme Grandmaster): $\times 1.45$
-- **Hệ Số Điều Hòa Cảnh Giới (Realm Control Mitigation)**: Giảm trực tiếp lượng xung đột từ Đạo ngân ngoại hệ:
-  - Đại Sư: Giảm **10%** xung đột
-  - Tông Sư: Giảm **25%** xung đột
-  - Đại Tông Sư: Giảm **45%** xung đột
-  - Vô Thượng Đại Tông Sư: Giảm **100%** xung đột (hoá giải tuyệt đối khi ra chiêu thuộc chính lưu phái đó)
-- **Số Phái Bất Khả Dung Hiệu Dụng ($N_{\text{eff}}$)**: Đếm mềm theo ma trận tương thích thay vì số nguyên thô:
-  $$N_{\text{eff}} = 1.0 + \sum_{q \neq p,\ \text{amt}(q) > \text{grace}} 2.0 \times (1.0 - \text{Compatibility}(p,q)) \times \text{MasterySynergyDiscount}$$
-  (Tông Sư trở lên: cặp có tương thích $\ge 0.90$ giảm ma sát thêm 50%.)
-- **Hệ Số Phạt Đa Tu Lũy Tiến ($F_{\text{Multi}}$)**:
-  $$F_{\text{Multi}} = 1.0 + (N_{\text{eff}} - 1)^{1.3} \times (1.0 - P)^2 \times 4.0$$
-- **Hệ số Xung Đột Khi Tấn Công (`DaoConflictMultiplier`)**:
-  $$\text{conflictMult} = \max\left(0.08,\ \frac{1.0}{1.0 + \text{conflictRatio} \times 1.6}\right)$$
-  Nằm trong khoảng `[0.08, 1.00]`: tạp tu cực đoan có thể mất tới **92% sát thương**.
-- **Màng Phòng Thủ Đạo Ngân Tự Nhiên (`NaturalDaoResistance`)**: Khi bị đòn tấn công dị hệ nhắm vào, Đạo ngân trên người Cổ Tiên phòng thủ tạo ra màng kháng tự nhiên:
-  $$\text{Resistance} = \frac{\text{DefenseConflictDao}}{\text{DefenseConflictDao} + 50.000} \times 30\% \quad (\text{Trần tối đa } 30\%)$$
-- **Đặc Tính Không Xung Đột (Non-Conflicting Body / Chí Tôn Tiên Thai)**: Bỏ qua 100% hình phạt xung đột khi tấn công (luôn gây 100% sát thương), đổi lại không có màng kháng tự nhiên khi phòng thủ. Boss và Hoang Thú cũng sở hữu **Dị Thú Đạo Thể** tương tự để cân bằng PVE.
+- **ELEMENTAL**: Kim, Mộc, Thủy, Hỏa, Thổ, Phong, Lôi, Băng, Vân, Quang, Ám, Tinh, Âm Thanh.
+- **SPACE_TIME**: Không Gian, Thời Gian.
+- **RULE_ORDER**: Quy Tắc, Cấm Chế, Trận; Phá Hoại cũng được xếp vào nhóm này.
+- **KINETIC_WEAPON**: Kiếm, Đao, Binh Khí, Sát Đạo.
+- **BODY_LIFE**: Lực, Cốt, Biến Hóa, Thực Đạo.
+- **SOUL_MIND**: Hồn, Trí, Tình, Nô, Mộng.
+- **INFORMATION_STEALTH**: Thông Tin, Vận, Thâu Đạo, Huyễn, Hội Họa; Điều Tra cũng được xếp vào nhóm này.
+- **ORGANIC_CORRUPTION**: Huyết, Độc; Tử Đạo cũng được xếp vào nhóm này.
+- **CRAFT_ALCHEMY**: Luyện, Đan; Sáng Tạo cũng được xếp vào nhóm này.
+- **HEAVEN_HUMAN**: Thiên, Nhân, Khí.
 
-#### 4. Ví Dụ Tính Toán Chi Tiết (Step-by-Step)
+Cùng đúng một lưu phái có độ tương thích **1,00**. Hai lưu phái khác nhau không mặc định tương thích hoàn toàn, kể cả khi cùng nhóm. Ma trận nhóm hiện cho độ tương thích khoảng **0,80–0,96** trong cùng nhóm; cặp khác nhóm dùng giá trị riêng trong ma trận. Lưu phái chưa có trong ma trận dùng giá trị dự phòng **0,85**.
 
-- **Ví dụ 1: Khuếch Đại Đạo Ngân & Hiệu Suất Cảnh Giới (Attainment Efficiency)**
-  - Cổ Tiên Hỏa Đạo có $2.000$ Đạo Ngân Hỏa $\rightarrow \text{daoAmp} = 1.0 + 2000 / 100.0 = 21.0$ ($+2.000\%$).
-  - Phàm Thai ($\text{Eff} = 1.00$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.00 = \mathbf{21.0\times}$.
-  - Đại Sư ($\text{Eff} = 1.05$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.05 = \mathbf{22.0\times}$ ($+100\%$ bonus Chân Ý).
-  - Tông Sư ($\text{Eff} = 1.12$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.12 = \mathbf{23.4\times}$.
-  - Vô Thượng ($\text{Eff} = 1.45$): $\text{totalDaoMult} = 1.0 + (21.0 - 1.0) \times 1.45 = \mathbf{30.0\times}$!
+Một số cặp có độ tương thích ghi đè:
 
-- **Ví dụ 2: Xung Đột Đạo Ngân & Khả Năng Hóa Giải Của Cảnh Giới (Attainment Control)**
-  - Cổ Tiên Hỏa Đạo có $10.000$ Đạo Ngân Hỏa, nhưng tích lũy $20.000$ Đạo Ngân Thủy ($\text{compatibility} = 0.55 \rightarrow \text{xung đột} = 0.45$).
-  - $\text{rawConflict} = 20.000 \times 0.45 = 9.000$.
-  - *Trường hợp A: Phàm Thai ($\text{RealmControl} = 0\%$)*:
-    - $\text{effConflict} = 9.000 \times (1.0 - 0.0) = 9.000$.
-    - $\text{conflictRatio} = 9.000 / (10.000 + 50.000) = 0.15$.
-    - $\text{conflictMult} = 1.0 / (1.0 + 0.15 \times 1.6) = \mathbf{0.806}$ ($\rightarrow$ **Mất 19.4% sát thương** do xung đột Thủy Hỏa!).
-  - *Trường hợp B: Vô Thượng Đại Tông Sư ($\text{RealmControl} = 80\%$)*:
-    - $\text{effConflict} = 9.000 \times (1.0 - 0.80) = 1.800$.
-    - $\text{conflictRatio} = 1.800 / 60.000 = 0.03$.
-    - $\text{conflictMult} = 1.0 / (1.0 + 0.03 \times 1.6) = \mathbf{0.954}$ ($\rightarrow$ **Chỉ giảm 4.6% sát thương**, Chân Ý hóa giải 76% tổn thất!).
+| Cặp lưu phái | Tương thích | Phần xung đột (1 − tương thích) |
+| --- | ---: | ---: |
+| Hỏa – Thủy | 0,55 | 0,45 |
+| Hỏa – Băng | 0,60 | 0,40 |
+| Quang – Ám | 0,55 | 0,45 |
+| Độc – Thực Đạo | 0,60 | 0,40 |
+| Không Gian – Thời Gian | 0,97 | 0,03 |
+| Trí – Thông Tin | 0,98 | 0,02 |
+| Lực – Cốt | 0,96 | 0,04 |
+| Kiếm – Đao | 0,95 | 0,05 |
+| Luyện – Đan | 0,97 | 0,03 |
 
-- **Ví dụ 3: Màng Phòng Thủ Đạo Ngân Tự Nhiên (Natural Dao Resistance)**
-  - Cổ Tiên Thủy Đạo sở hữu $100.000$ Đạo Ngân Thủy bị tấn công bởi sát chiêu Hỏa Đạo ($\text{compatibility} = 0.55 \rightarrow \text{xung đột thủ} = 0.45$).
-  - $\text{defConflict} = 100.000 \times 0.45 = 45.000$.
-  - $\text{Resistance} = 0.30 \times [45.000 / (45.000 + 50.000)] = 0.30 \times (45.000 / 95.000) = \mathbf{14.21\%}$.
-  - $\rightarrow$ Đòn đánh Lửa của đối phương tự động bị triệt tiêu $14.21\%$ sát thương ngay khi chạm vào lớp màng Thủy Đạo tự nhiên.
+#### 2. Cách Tính Xung Đột Cho Một Hành Động
 
-- **Ví dụ 4: Tính Sát Thương Thực Tế Toàn Diện (A $\rightarrow$ Z)**
-  - **Bên Công**: Sát thương gốc = $1.000$, DamageMult = $2.0$, Buff = $1.2$. Có $5.000$ Đạo Ngân Lực Đạo ($\text{daoAmp} = 51.0$), Tông Sư Lực Đạo ($\text{Eff} = 1.12, \text{Ctrl} = 25\%$), mang $10.000$ Đạo Ngân Hồn Đạo ngoại hệ ($\text{comp} = 0.88 \rightarrow \text{xung đột} = 0.12$).
-    - $\text{totalDaoMult} = 1.0 + (51.0 - 1.0) \times 1.12 = 57.0$.
-    - $\text{effConflict} = (10.000 \times 0.12) \times (1.0 - 0.25) = 900$.
-    - $\text{conflictRatio} = 900 / (5.000 + 50.000) = 0.01636 \rightarrow \text{conflictMult} = 0.974$.
-    - $\text{hitDmg} = 1.000 \times 2.0 \times 1.2 \times 57.0 \times 0.974 = \mathbf{133.243}$ sát thương.
-  - **Bên Thủ**: Phòng thủ $\text{BaseDef} = 2.000$, Màng kháng tự nhiên $\text{Resistance} = 10\%$.
-    - $\text{netDmg} = (133.243 - 2.000) \times (1.0 - 0.10) = 131.243 \times 0.90 = \mathbf{118.118}$ Sinh Lực mất thực tế!
+Hệ thống tính riêng theo lưu phái của từng hành động:
 
-#### 5. Ba Hướng Xây Dựng Nhân Vật (Build Paths)
-1. **Chuyên Tu (Pure Focus)**: Dồn toàn lực vào 1 nhóm Đạo. Không lo xung đột, sát thương đồng hệ cực đại.
-2. **Song Tu / Phụ Tu (Dual Synergic)**: 1 phái Chính + 1 phái Phụ tương thích cao (như Lực + Biến Hóa, Hồn + Nô), nâng Chân Ý lên Tông Sư để xóa bỏ xung đột, công thủ toàn diện.
-3. **Đa Tu Toàn Năng (Omni Master)**: Luyện nhiều phái đối nghịch, bắt buộc phải cày Mộng Cảnh để đạt Đại Tông Sư / Vô Thượng ở các phái nhằm áp chế xung đột tối đa.
+1. **Chọn lưu phái thi triển**: lấy lưu phái đầu tiên được gắn với kỹ năng/Cổ. Nếu hành động không khai báo lưu phái, mặc định là **Strength (Lực Đạo)**. Vì vậy đánh thường thường tính theo Strength; mang Cổ Thủy không tự biến đòn đánh thường thành đòn Thủy.
+2. **Tính ngưỡng bỏ qua**: cộng toàn bộ Đạo Ngân dương thành Tổng. Ngưỡng bằng max(1.000, 2% × Tổng). Đạo Ngân ngoại hệ chỉ được đưa vào tính xung đột khi **lớn hơn** ngưỡng; bằng ngưỡng vẫn được bỏ qua.
+3. **Tính xung đột thô**: với mỗi phái ngoại hệ đang hoạt động, cộng Đạo Ngân ngoại hệ × (1 − độ tương thích với phái thi triển).
+4. **Tính số phái hiệu dụng**: mỗi phái ngoại hệ đóng góp 2 × (1 − độ tương thích). Khi Chân Ý của phái thi triển đạt Tông Sư trở lên, ma sát của cặp tương thích từ 0,90 trở lên giảm một nửa.
+5. **Phạt đa tu**: nhiều phái ít tương thích làm xung đột tăng theo F_multi = 1 + (N_eff − 1)^1,3 × (1 − P)^2 × 4, trong đó P = Đạo Ngân của phái thi triển / Tổng Đạo Ngân. Đây là độ thuần của **phái đang dùng**, không phải phần trăm Đạo Ngân chủ đạo hiển thị trên hồ sơ.
+6. **Điều hòa bằng Chân Ý**: dùng cảnh giới riêng của lưu phái đang thi triển:
 
-#### 6. Trừng Phạt Đa Tu Trong Combat & Thanh Đạo Tẩy Thể
-Khi xung đột vượt ngưỡng, tạp tu không chỉ mất sát thương mà còn chịu thêm:
-- **Hao Phí Tiên Nguyên (Mana Tax)**: `ManaCost × (1.0 + (1.0 − conflictMult) × 1.5)`. Tạp tu cực đoan tốn tới **2.38×** Chân Nguyên.
-- **Thôi Động Thất Bại (Fizzle)**: khi `conflictMult < 0.70`, sát chiêu có thể tán loạn (tối đa **25%**) — vẫn mất Chân Nguyên nhưng 0 sát thương, 0 hiệu ứng.
-- **Phản Phệ Nội Thương (Backfire)**: khi `conflictMult < 0.60`, caster có thể tự nhận sát thương chuẩn xuyên giáp/khiên bằng `MaxHP × (8–12%)` (tối đa **30%**), đồng thời đòn đánh (nếu không gãy chiêu) bị giảm thêm 50%.
+| Chân Ý của phái đang dùng | Mốc điểm | Giảm xung đột |
+| --- | ---: | ---: |
+| Phàm Thai | 0 | 0% |
+| Đại Sư | 10.000 | 10% |
+| Tông Sư | 100.000 | 25% |
+| Đại Tông Sư | 1.000.000 | 45% |
+| Vô Thượng Đại Tông Sư | 10.000.000 | 100% |
+
+7. **Chuẩn hóa và tính hệ số**:
+   - Xung Đột Hiệu Dụng = Xung Đột Thô × F_multi × (1 − mức điều hòa)
+   - Mẫu Số = Đạo Ngân của phái đang dùng + max(1.000, 10% × Tổng)
+   - conflictRatio = Xung Đột Hiệu Dụng / Mẫu Số
+   - M = max(0,08, 1 / (1 + conflictRatio × 1,6))
+
+Hệ số M nằm trong [0,08; 1,00]. Nó nhân vào hệ số Đạo Ngân của đòn: DaoMult = (1 + (DaoAmplification − 1) × RealmEfficiency) × M. Khuếch đại riêng của một phái là 1 + Đạo Ngân phái đó / 100; Đạo Ngân Hỏa không khuếch đại đòn Thủy hay Strength, nhưng có thể gây xung đột với chúng.
+
+#### 3. Hậu Quả Trong Combat
+
+- **Tốn mana hơn** nếu hành động có mana cost: ManaCost × [1 + (1 − M) × 1,5]. Ở mức xung đột nặng nhất (M = 0,08), mana tốn tối đa **2,38 lần**.
+- **Kỹ năng tán loạn**: chỉ kỹ năng Cổ (GU_SKILL) và sát chiêu (KILLER_MOVE) bị kiểm tra khi M < 0,70. Xác suất = min(25%, (0,70 − M) / (0,70 − 0,08) × 25%), tối đa **25%** tại M = 0,08. Mana đã trừ trước khi gieo; nếu kỹ năng tán loạn thì lượt đó dừng và không kiểm tra phản phệ.
+- **Phản phệ nội thương**: khi M < 0,60, xác suất = min(30%, (0,60 − M) / (0,60 − 0,08) × 30%), tối đa **30%** tại M = 0,08. Kiểm tra này không giới hạn ở kỹ năng Cổ: đánh thường Strength cũng có thể phản phệ nếu hệ số Strength thấp đủ mức.
+- **HP mất khi phản phệ**: trừ trực tiếp **8–12% HP tối đa**, không qua phòng thủ hoặc khiên ảo. Đòn đánh phát sinh phản phệ còn bị giảm thêm 50% sát thương.
+- **Bạo thể vong mạng**: không có một lần gieo xác suất chết riêng. Nhân vật chết nếu HP còn 0 sau khi trừ máu phản phệ. Một lần phản phệ thường không giết người đang đầy máu, nhưng có thể kết liễu người đã yếu; nhiều lần phản phệ làm nguy cơ cộng dồn. Bất Hoại chặn được sát thương; Bất Tử giữ tối thiểu 1 HP, trừ khi Sát Khí đủ điều kiện xuyên miễn nhiễm.
+- **Kháng Đạo Ngân tự nhiên khi phòng thủ**: khi nhận đòn từ phái p, hệ thống cộng Đạo Ngân phòng thủ theo `DefConflict = Σ(ĐạoNgân_q × (1 − TươngThích(p,q)))`, rồi tính `Kháng = 0,30 × DefConflict / (DefConflict + 50.000)`. Kháng tăng dần và tiến gần tối đa 30%; Cổ miễn xung đột cũng bỏ qua lớp kháng này. Cơ chế phòng thủ này riêng với phản phệ tự trừ HP của người ra đòn.
+- **Miễn xung đột**: Cổ đang ACTIVE và trang bị có PATH_CONFLICT_REDUCTION từ 100 trở lên miễn hình phạt này. Chân Ý Vô Thượng hóa giải xung đột khi hành động dùng đúng lưu phái đã đạt cảnh giới đó.
+
+#### 4. Ví Dụ Cụ Thể
+
+Các ví dụ giả định không có bonus khác, Chân Ý của phái đang dùng là Phàm Thai, và nhân vật không có Cổ miễn xung đột.
+
+- **Hỏa 1.000, Thủy 0, dùng kỹ năng Thủy**: Tổng là 1.000, ngưỡng cũng là 1.000. Hỏa bằng ngưỡng nên bị bỏ qua (lượng ngoại hệ phải lớn hơn ngưỡng mới tính). M = 1,00: không tăng mana, không tán loạn, không phản phệ. Vì không có Đạo Ngân Thủy, đòn Thủy cũng không được khuếch đại bởi Đạo Ngân Thủy (DaoAmplification = 1,00); sát thương nền và bonus khác của Cổ vẫn áp dụng.
+- **Hỏa 1.001, Thủy 0, dùng kỹ năng Thủy**: Hỏa vừa vượt ngưỡng. Với tương thích Hỏa–Thủy 0,55, M ≈ 0,236. Mana tốn khoảng **2,15 lần**; kỹ năng có **18,7%** nguy cơ tán loạn. Nếu qua bước tán loạn, lần kiểm tra phản phệ có khoảng **21,0%** xác suất; nếu phản phệ xảy ra thì mất 8–12% HP tối đa. Có bước nhảy rõ khi vượt ngưỡng 1.000.
+- **Hỏa 1.000, Strength 0, đánh thường**: hành động không gắn phái được tính là Strength. Hỏa vẫn bằng ngưỡng nên M = 1,00, không phản phệ. Cổ Thủy đang mang không đổi phái của đòn đánh thường.
+- **Hỏa 1.001, Strength 0, đánh thường Strength**: Hỏa vừa vượt ngưỡng, nhưng Strength–Hỏa chỉ xung đột 0,15 cho mỗi Đạo Ngân do tương thích 0,85. M ≈ 0,694; không bị tán loạn vì đây là đánh thường, và cũng chưa phản phệ vì M vẫn trên 0,60.
+- **Hỏa 2.000, Strength 0, đánh thường Strength**: Hỏa đã hoạt động. Strength–Hỏa có tương thích mặc định 0,85 nên xung đột nhẹ hơn Hỏa–Thủy. Với các giả định trên, M ≈ 0,532. Đánh thường không bị kiểm tra tán loạn, nhưng có khoảng **4,0%** xác suất phản phệ mỗi đòn. Nếu hành động có mana cost thì mana tốn khoảng **1,70 lần**.
+- **Hỏa 2.000, Strength 0, Chân Ý Strength Vô Thượng**: điều hòa 100% xung đột cục bộ nên đòn Strength có M = 1,00. Điều này không miễn xung đột cho kỹ năng Thủy nếu Chân Ý Thủy chưa đạt Vô Thượng.
 
 **Suy Thoái Sinh Thái Tiên Khiếu**: Độ Thuần Khiết $P = \text{DominantMarks} / \text{TotalMarks}$. Khi $P < 0.70$, sản lượng mỏ tài nguyên và Tiên Nguyên tự nhiên giảm theo
 $$\text{EcologyPurityFactor} = \max\left(0.25,\ 1.0 - (0.70 - P) \times 1.25\right)$$
