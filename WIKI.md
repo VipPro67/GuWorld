@@ -57,7 +57,7 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 
 | Trạng thái | Hiệu ứng | Thời hạn |
 | --- | --- | --- |
-| Trọng Thương (`severely_wounded`) | **-20%** tấn công, phòng thủ, tốc độ; **-50%** hồi phục nhận; không thể thám hiểm | 60 phút (hoặc đến khi được chữa trị) |
+| Trọng Thương (`severely_wounded`) | Khi đổi Bản Mệnh Cổ: công/thủ/tốc và tỉ lệ luyện cổ cùng giảm theo rank/subrank như Áp Chế Giới Vực (10–90%); hồi phục nhận giảm **50%**; không thể thám hiểm | 5–40 giờ theo rank |
 | Trúng Độc (`poisoned`) | **-10%** tấn công, **-10%** tốc độ | 30 phút |
 | Kiệt Sức (`exhausted`) | **-30%** tốc độ, **-50%** hiệu suất tu luyện; không thể tu luyện | 10 phút |
 | Phúc Trạch (`blessed`) | **+5** may mắn, **+10%** hiệu suất tu luyện | 60 phút |
@@ -406,6 +406,7 @@ Cổ sư có thể:
 - Ngoài vật liệu, một số Cổ đặc thù ăn trực tiếp tài nguyên của chủ nhân: Huyết Thọ Cổ dùng 10 Máu, Nhiếp Tâm Cổ dùng 10 Niệm Lực, Khấp Thương Cổ dùng 10 Linh Hồn và Thâu Mệnh Tiên Cổ dùng 1 Tuổi Thọ cho mỗi khẩu phần 100 Độ No. Chi phí này cố định ở mọi Chuyển; hệ thống không cho Máu, Linh Hồn hoặc Tuổi Thọ bị ăn xuống 0.
 - Trang bị/tháo Cổ.
 - Đặt Cổ bản mệnh.
+- Đổi Bản Mệnh Cổ khi đã có một Cổ khác sẽ gây phản phệ Trọng Thương. Mức giảm công/thủ/tốc và tỉ lệ luyện cổ cùng thời hạn tăng theo rank/subrank như Áp Chế Giới Vực: rank 1 bắt đầu ở 10% trong 5 giờ, rank 9 có thể tới 90% trong 40 giờ. Hồi phục nhận giảm 50% trong thời gian này.
 - Chuyển trạng thái active/sleeping.
 - Dùng Cổ tiêu hao hoặc Cổ hỗ trợ.
 - Vứt bỏ Cổ.
@@ -467,7 +468,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - **Điều kiện kích hoạt:** Chỉ bị ảnh hưởng khi **Luyện Tiên Cổ (Rank 6 trở lên)** hoặc **Luyện Cổ có Rank $\ge$ Rank Cảnh Giới của bản thân**. Luyện Cổ bậc thấp hơn bản thân ("cổ cùi") không làm tổn hao tâm thần và không làm dính mệt mỏi.
 - **[Tâm Thần Mệt Mỏi] (`refine_fatigue`):** Nhận được sau khi Luyện Cổ thỏa điều kiện trên. Giảm **50%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **10 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực).
 - **[Luyện Cổ Phản Phệ] (`refine_backfire`):** Xuất hiện khi người chơi **vẫn cố gắng Luyện Cổ** trong lúc đang bị `refine_fatigue` (tự động leo thang) hoặc khi Luyện Cổ bị **Cháy Nổ (Backfire)**. Giảm **95%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **20 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực). Tiếp tục luyện khi đang bị Phản Phệ sẽ gia hạn thêm 20 phút.
-- **[Tâm Đắc Luyện Cổ] (`refine_insight_1..9`):** Pity theo từng rank. Mỗi lần luyện rank R thất bại (kể cả unique-fail) tích 1 tầng `refine_insight_R` (`+1%/tầng`, không giới hạn, vĩnh viễn). Bonus chỉ cộng khi luyện đúng rank đó (chịu Immortal Penalty như các bonus dương khác). Luyện thành công rank R thì reset tầng rank đó về 0.
+- **[Tâm Đắc Luyện Cổ] (`refine_insight_1..9`):** Pity theo từng rank. Chỉ lần hợp luyện có nguyên liệu khớp công thức và Cổ mục tiêu chưa tồn tại mới đủ điều kiện tăng pity khi thất bại (`+1%/tầng`, không giới hạn, vĩnh viễn). Sai nguyên liệu hoặc Tiên Cổ mục tiêu đã tồn tại thì không tăng tầng, và tầng pity không được cộng vào tỉ lệ của lần thử đó. Luyện thành công hợp lệ rank R thì reset tầng rank đó về 0; bonus chỉ áp dụng cho đúng rank (chịu Immortal Penalty như các bonus dương khác).
 
 ## 7. Sát chiêu
 
