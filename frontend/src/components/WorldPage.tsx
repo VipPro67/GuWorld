@@ -7,8 +7,14 @@ import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
 import TeleportModal from "./TeleportModal";
 import type { TeleportArray } from "@/store/slices/teleportSlice";
-import { Menu, X, ChevronDown, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users, HelpCircle, Coins, ScrollText, MessageSquare, Settings } from "lucide-react";
+import { X, User, Briefcase, Flower2, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users, HelpCircle, Coins, ScrollText, MessageSquare, Settings, Map, Landmark, Eye, Terminal } from "lucide-react";
+import { ClearCacheButton } from "./ClearCacheModal";
+import { ThemeToggle } from "./ThemeToggle";
+import { WorldAtlasModal } from "./WorldAtlasModal";
 import { MovementJoystick } from "./MovementJoystick";
+import { LogConsole } from "./LogConsole";
+import { DirectActionHotbar, type HotbarAction } from "./DirectActionHotbar";
+import { dispatchHotbarAction } from "@/lib/action-hotbar";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
   ssr: false,
@@ -31,7 +37,6 @@ const PremiumStoreView = dynamic(() => import("./PremiumStoreView").then(m => m.
 const DungeonView = dynamic(() => import("./DungeonView").then(m => m.DungeonView), { ssr: false });
 const ImmortalApertureView = dynamic(() => import("./ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
 const PartyView = dynamic(() => import("./PartyView").then(m => m.PartyView), { ssr: false });
-const GuQuickBar = dynamic(() => import("./GuQuickBar").then(m => m.GuQuickBar), { ssr: false });
 const TargetHud = dynamic(() => import("./TargetHud").then(m => m.TargetHud), { ssr: false });
 const TeleportBuildModal = dynamic(() => import("./Teleport/TeleportBuildModal").then(m => m.TeleportBuildModal), { ssr: false });
 const TeleportDirectoryModal = dynamic(() => import("./Teleport/TeleportDirectoryModal").then(m => m.TeleportDirectoryModal), { ssr: false });
@@ -50,12 +55,23 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 
+type MapPerformanceMode = "full" | "light" | "minimal" | "off";
+const MAP_PERFORMANCE_STORAGE_KEY = "gu_world_map_performance_mode";
+const MAP_PERFORMANCE_OPTIONS: { id: MapPerformanceMode; label: string; description: string }[] = [
+  { id: "full", label: "Đầy đủ", description: "Bản đồ, quái và người chơi cập nhật như hiện tại." },
+  { id: "light", label: "Giảm nhẹ", description: "Giảm cập nhật người chơi và tải trước khu vực." },
+  { id: "minimal", label: "Giảm nhiều", description: "Giữ bản đồ để di chuyển, giảm mạnh cập nhật dữ liệu nền." },
+  { id: "off", label: "Tắt bản đồ", description: "Không dựng bản đồ và không gọi API nền của bản đồ." },
+];
+
 export function WorldPage() {
   const currentView = useUIStore((s) => s.currentView);
   const regions = useGameStore((s) => s.regions);
   const regionsLoaded = useGameStore((s) => s.regionsLoaded);
   const fetchRegions = useGameStore((s) => s.fetchRegions);
   const gamePlayer = useGameStore((s) => s.player);
+  const logs = useGameStore((s) => s.logs);
+  const openDivinationModal = useGameStore((s) => s.openDivinationModal);
   const error = useWorldStore((s) => s.error);
   const loading = useWorldStore((s) => s.loading);
   const selectedObject = useWorldStore((s) => s.selectedObject);
@@ -120,10 +136,15 @@ export function WorldPage() {
   const fetchMyTeleportArrays = useGameStore((s) => s.fetchMyTeleportArrays);
   const [managingTeleportArray, setManagingTeleportArray] = useState<TeleportArray | null>(null);
 
-  const [mapMode, setMapMode] = useState<"select" | "drag">("select");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [openMenuGroup, setOpenMenuGroup] = useState<string | null>(null);
+  const [showActivityLog, setShowActivityLog] = useState(false);
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [showGeneralSettings, setShowGeneralSettings] = useState(false);
+  const [showWorldAtlas, setShowWorldAtlas] = useState(false);
+  const [mapPerformanceMode, setMapPerformanceMode] = useState<MapPerformanceMode>(() => {
+    if (typeof window === "undefined") return "full";
+    const saved = localStorage.getItem(MAP_PERFORMANCE_STORAGE_KEY);
+    return saved === "light" || saved === "minimal" || saved === "off" ? saved : "full";
+  });
   interface MapLabelSettings {
     monster: boolean;
     bossNearby: boolean;
@@ -151,8 +172,6 @@ export function WorldPage() {
     return { monster: false, bossNearby: false, hub: true, khu_vuc: true, ngu_vuc: true };
   });
 
-  const [showLabelMenu, setShowLabelMenu] = useState(false);
-
   const updateLabelSetting = (key: keyof MapLabelSettings, val: boolean) => {
     setLabelSettings((prev) => {
       const next = { ...prev, [key]: val };
@@ -160,20 +179,31 @@ export function WorldPage() {
       return next;
     });
   };
+  const updateMapPerformanceMode = (mode: MapPerformanceMode) => {
+    setMapPerformanceMode(mode);
+    localStorage.setItem(MAP_PERFORMANCE_STORAGE_KEY, mode);
+  };
   const setView = useGameStore((s) => s.setView);
+  const logout = useGameStore((s) => s.logout);
   const showWorldActions = currentView === "dashboard" || currentView === "world-map";
 
   useEffect(() => {
-    if (!showWorldActions) setMenuOpen(false);
+    if (!showWorldActions) {
+      setShowActivityLog(false);
+      setShowGeneralSettings(false);
+      setShowWorldAtlas(false);
+    }
   }, [showWorldActions]);
   const isImmortal = gamePlayer ? gamePlayer.rank >= 6 : false;
 
   const menuItems = [
     { id: "character", label: "Nhân Vật", icon: User, color: "text-emerald-400" },
     { id: "inventory", label: "Túi Đồ", icon: Briefcase, color: "text-cyan-400" },
+    { id: "inventory-gu", label: "Cổ Trùng", icon: Flower2, color: "text-purple-400" },
     { id: "aperture", label: "Không Khiếu", icon: Flame, color: "text-rose-400" },
     { id: "refine", label: "Luyện Cổ", icon: Sparkles, color: "text-purple-400" },
-    { id: "practice-room", label: "Tu Luyện", icon: Zap, color: "text-violet-400" },
+    { id: "cultivation", label: "Tu Luyện", icon: Zap, color: "text-violet-400" },
+    { id: "practice-room", label: "Phòng Tập", icon: Swords, color: "text-indigo-400" },
     { id: "dungeon", label: "Bí Cảnh", icon: Compass, color: "text-indigo-400" },
     { id: "party", label: "Tổ Đội", icon: Users, color: "text-amber-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
@@ -191,40 +221,67 @@ export function WorldPage() {
     { id: "feedback", label: "Góp Ý", icon: MessageSquare, color: "text-cyan-300" },
     { id: "combat-history", label: "Chiến Sử", icon: Swords, color: "text-red-300" },
     { id: "audit-logs", label: "Ký Sự Tu Hành", icon: ScrollText, color: "text-blue-300" },
+    { id: "general-settings", label: "Cài Đặt Chung", icon: Settings, color: "text-zinc-300" },
     { id: "utilities", label: "Tiện Ích", icon: Settings, color: "text-zinc-300" },
     { id: "wiki", label: "Bách Khoa", icon: HelpCircle, color: "text-teal-400" },
     { id: "teleport", label: "Dịch Chuyển", icon: Compass, color: "text-cyan-400" },
+    { id: "world-atlas", label: "Bản Đồ Thế Giới", icon: Map, color: "text-emerald-400" },
+    { id: "teleport-directory", label: "Danh Bạ Truyền Tống Trận", icon: Compass, color: "text-cyan-300" },
+    { id: "teleport-build", label: "Bố Trí Truyền Tống Trận", icon: Landmark, color: "text-blue-300" },
+    { id: "divination", label: "Thiên Cơ Các", icon: Eye, color: "text-purple-300" },
+    { id: "activity-log", label: "Nhật Ký Hành Động", icon: Terminal, color: "text-emerald-300" },
   ];
 
   const menuGroups = [
-    { id: "character", label: "Nhân vật", itemIds: ["character", "inventory", "aperture", "refine", "practice-room"] },
-    { id: "world", label: "Khám phá", itemIds: ["dungeon", "mine", "teleport", "party", "sect"] },
-    { id: "trade", label: "Giao dịch", itemIds: ["auction", "shop", "premium-store", "topup"] },
-    { id: "activities", label: "Hoạt động", itemIds: ["arena", "death-arena", "leaderboard", "gacha", "achievements", "pets"] },
-    { id: "other", label: "Khác", itemIds: ["feedback", "combat-history", "audit-logs", "utilities", "wiki"] },
+    { id: "character", label: "Nhân vật", icon: User, itemIds: ["character", "inventory", "inventory-gu", "aperture", "refine", "cultivation", "practice-room"] },
+    { id: "world", label: "Khám phá", icon: Compass, itemIds: ["dungeon", "mine", "teleport", "party", "sect", "world-atlas", "teleport-directory", "teleport-build", "divination"] },
+    { id: "trade", label: "Giao dịch", icon: Store, itemIds: ["auction", "shop", "premium-store", "topup"] },
+    { id: "activities", label: "Hoạt động", icon: Swords, itemIds: ["arena", "death-arena", "leaderboard", "gacha", "achievements", "pets"] },
+    { id: "other", label: "Khác", icon: Settings, itemIds: ["feedback", "combat-history", "audit-logs", "activity-log", "general-settings", "utilities", "wiki"] },
   ].map((group) => ({ ...group, items: menuItems.filter((item) => group.itemIds.includes(item.id)) }));
 
+  const hotbarActions: HotbarAction[] = menuItems.map((item) => ({
+    ...item,
+    group: menuGroups.find((group) => group.itemIds.includes(item.id))?.label ?? "Khác",
+  }));
+
+  const openHotbarAction = (actionId: string) => {
+    dispatchHotbarAction(actionId, {
+      setView,
+      openGeneralSettings: () => setShowGeneralSettings(true),
+      openTeleport: () => setActiveModal("teleport"),
+      openWorldAtlas: () => setShowWorldAtlas(true),
+      openTeleportDirectory: () => setActiveModal("teleport_directory"),
+      openTeleportBuild: () => setActiveModal("teleport_build"),
+      openDivination: openDivinationModal,
+      openActivityLog: () => setShowActivityLog(true),
+    });
+  };
+
   useEffect(() => {
-    if (!regionsLoaded) fetchRegions();
+    if (mapPerformanceMode !== "off" && !regionsLoaded) fetchRegions();
     fetchPartyStatus();
     fetchPartyInvitations();
-    fetchGroundDrops();
-    fetchSectsMap();
-    fetchMyTeleportArrays();
     fetchMySectStatus();
-  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap, fetchMyTeleportArrays, fetchMySectStatus]);
+    if (mapPerformanceMode !== "off") {
+      fetchGroundDrops();
+      fetchSectsMap();
+      fetchMyTeleportArrays();
+    }
+  }, [mapPerformanceMode, regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap, fetchMyTeleportArrays, fetchMySectStatus]);
 
   const setInvestigationRange = useWorldStore((s) => s.setInvestigationRange);
 
   // Movement and Investigation ranges come from the same stats as the grid viewport.
   useEffect(() => {
+    if (mapPerformanceMode === "off") return;
     fetchGrid().then((data) => {
       if (data?.stats) {
         if (data.stats.movement) setMovementRange(data.stats.movement);
         if (data.stats.investigation) setInvestigationRange(data.stats.investigation);
       }
     });
-  }, [fetchGrid, setMovementRange, setInvestigationRange]);
+  }, [mapPerformanceMode, fetchGrid, setMovementRange, setInvestigationRange]);
 
   const currentZone = gamePlayer?.current_region
     ? regions.find((r) => r.id === gamePlayer.current_region)
@@ -246,82 +303,37 @@ export function WorldPage() {
       )}
 
       <div className="w-full h-full flex-1 min-h-0 relative">
-        <WorldCanvas mode={mapMode} labelSettings={labelSettings} />
+        {mapPerformanceMode === "off" ? (
+          <div className="flex h-full items-center justify-center bg-zinc-950/80 px-6 text-center">
+            <div className="max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-xl">
+              <Map className="mx-auto mb-3 h-7 w-7 text-amber-300" />
+              <p className="font-serif text-sm text-zinc-200">Bản đồ đang tắt</p>
+              <p className="mt-1 text-xs text-zinc-500">Bật lại trong Cài Đặt Chung. Các chức năng khác vẫn dùng được qua thanh thao tác.</p>
+            </div>
+          </div>
+        ) : (
+          <WorldCanvas mode="select" labelSettings={labelSettings} performanceMode={mapPerformanceMode} />
+        )}
       </div>
 
-      <TargetHud />
+      {mapPerformanceMode !== "off" && <TargetHud />}
 
-      {showWorldActions && <div className="absolute top-2 right-2 z-50">
-        <button
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-label={menuOpen ? "Đóng thao tác" : "Mở thao tác"}
-          aria-expanded={menuOpen}
-          className="flex h-11 items-center gap-2 rounded-xl border border-zinc-700/70 bg-zinc-950/90 px-3 text-sm font-medium text-zinc-200 shadow-lg backdrop-blur-md transition hover:border-emerald-400/40 hover:bg-zinc-900"
-        >
-          {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-          <span>Thao tác</span>
-        </button>
-      </div>}
-
-      {showWorldActions && menuOpen && (
-          <button
-            aria-label="Đóng bảng thao tác"
-            onClick={() => setMenuOpen(false)}
-            className="absolute inset-0 z-30 cursor-default bg-black/25"
-          />
+      {showWorldActions && (
+        <div className="absolute right-2 top-1/2 z-[60] -translate-y-1/2 pointer-events-auto sm:bottom-24 sm:left-1/2 sm:right-auto sm:top-auto sm:-translate-x-1/2 sm:translate-y-0">
+          <DirectActionHotbar actions={hotbarActions} onAction={openHotbarAction} />
+        </div>
       )}
-      {showWorldActions && <aside
-        aria-label="Bảng thao tác"
-        aria-hidden={!menuOpen}
-        className={`absolute inset-y-0 right-0 z-40 flex w-[min(88vw,360px)] flex-col border-l border-white/10 bg-zinc-950/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out ${menuOpen ? "translate-x-0" : "translate-x-full pointer-events-none"}`}
-      >
-            <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-4">
-              <div>
-                <h2 className="font-serif text-base font-semibold text-emerald-50">Thao tác</h2>
-                <p className="mt-0.5 text-[10px] uppercase tracking-[.18em] text-zinc-500">Chọn nhóm chức năng</p>
-              </div>
-              <button onClick={() => setMenuOpen(false)} aria-label="Đóng" className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-zinc-400 transition hover:bg-white/10 hover:text-white">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 custom-scrollbar">
-              {menuGroups.map((group) => {
-                const isExpanded = openMenuGroup === group.id;
-                return (
-                  <section key={group.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
-                    <button
-                      onClick={() => setOpenMenuGroup(isExpanded ? null : group.id)}
-                      aria-expanded={isExpanded}
-                      className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-medium text-zinc-200 transition hover:bg-white/[0.06]"
-                    >
-                      <span>{group.label}<span className="ml-2 text-xs text-zinc-500">{group.items.length}</span></span>
-                      <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                    </button>
-                    {isExpanded && (
-                      <div className="space-y-1 border-t border-white/10 p-2">
-                        {group.items.map((item) => (
-                          <button
-                            key={item.id}
-                            onClick={() => {
-                              setMenuOpen(false);
-                              if (item.id === "teleport") setActiveModal("teleport");
-                              else setView(item.id);
-                            }}
-                            disabled={item.locked}
-                            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${item.locked ? "cursor-not-allowed opacity-40" : "text-zinc-300 hover:bg-white/[0.07] hover:text-white"}`}
-                          >
-                            <item.icon className={`h-4 w-4 ${item.locked ? "text-zinc-600" : item.color}`} />
-                            <span className="font-serif">{item.label}</span>
-                            {item.locked && <span className="ml-auto text-[10px] text-zinc-500">Chưa mở</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                );
-              })}
-            </div>
-      </aside>}
+
+      {showActivityLog && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm" onClick={() => setShowActivityLog(false)}>
+          <div className="relative w-full max-w-xl" onClick={(event) => event.stopPropagation()}>
+            <button onClick={() => setShowActivityLog(false)} aria-label="Đóng nhật ký" className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-zinc-950 text-zinc-400 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+            <LogConsole logs={logs} />
+          </div>
+        </div>
+      )}
 
       {activeModal && (
         <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-2 sm:p-6 backdrop-blur-sm overflow-hidden pointer-events-auto">
@@ -409,7 +421,7 @@ export function WorldPage() {
                   onSuccess={() => {
                     setActiveModal(null);
                     fetchMyTeleportArrays();
-                    fetchGrid();
+                    if (mapPerformanceMode !== "off") fetchGrid();
                   }}
                 />
               )}
@@ -431,168 +443,172 @@ export function WorldPage() {
           onClose={() => setManagingTeleportArray(null)}
           onUpdated={() => {
             fetchMyTeleportArrays();
-            fetchGrid();
+            if (mapPerformanceMode !== "off") fetchGrid();
           }}
         />
       )}
 
-      <div className="absolute top-2 left-2 flex flex-col gap-2 pointer-events-none z-10">
+      <div className="absolute top-2 left-2 flex flex-col gap-1.5 pointer-events-none z-10">
         {gamePlayer && (
-          <div className="px-3 py-1.5 flex flex-col items-center bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 text-xs text-zinc-300 font-serif shadow-lg pointer-events-auto">
-            <div className="w-full flex flex-col gap-1 my-1">
-              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Máu: ${Math.round(gamePlayer.hp)}`}>
+          <div className="px-0.5 py-0.5 flex flex-col items-start text-xs text-zinc-200 font-serif pointer-events-auto">
+            <div className="w-28 flex flex-col gap-0.5">
+              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Máu: ${Math.round(gamePlayer.hp)}`}>
                 <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${Math.min(100, (gamePlayer.hp / (gamePlayer.base_hp || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
                   {Math.round(gamePlayer.hp).toLocaleString('vi-VN')}
                 </span>
               </div>
-              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Chân Nguyên: ${Math.floor(gamePlayer.current_mana)}`}>
+              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Chân Nguyên: ${Math.floor(gamePlayer.current_mana)}`}>
                 <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.current_mana / (gamePlayer.max_mana || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
                   {Math.floor(gamePlayer.current_mana).toLocaleString('vi-VN')}
                 </span>
               </div>
-              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Linh Hồn: ${Math.round(gamePlayer.soul_hp)}`}>
+              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Linh Hồn: ${Math.round(gamePlayer.soul_hp)}`}>
                 <div className="h-full bg-purple-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.soul_hp / (gamePlayer.max_soul || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
                   {Math.round(gamePlayer.soul_hp).toLocaleString('vi-VN')}
                 </span>
               </div>
-              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Tinh Thần: ${Math.round(gamePlayer.current_thought)}`}>
+              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Tinh Thần: ${Math.round(gamePlayer.current_thought)}`}>
                 <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.current_thought / (gamePlayer.max_thought || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
                   {Math.round(gamePlayer.current_thought).toLocaleString('vi-VN')}
                 </span>
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center mt-1">
-              <div className="text-emerald-400 font-bold text-sm flex items-center gap-1.5">
+            <div className="flex flex-col items-start justify-center mt-1">
+              <div className="max-w-40 truncate text-emerald-300 font-bold text-xs drop-shadow-md" title={currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}>
                 <span>{currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}</span>
               </div>
-              <div className="mt-1">
+              <div className="mt-0.5">
                 {currentZone?.zone_type === "HUB" || currentZone?.zone_type === "SAFE_ZONE" ? (
-                  <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-md bg-emerald-950/90 text-emerald-400 border border-emerald-500/40 shadow-sm" title="Vùng An Toàn: Nghiêm cấm đồ sát / Không thể PvP">
-                    🛡️ Vùng An Toàn (Cấm PvP)
+                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-emerald-950/85 text-emerald-300 shadow-sm" title="Vùng An Toàn: Nghiêm cấm đồ sát / Không thể PvP">
+                    🛡️ An toàn
                   </span>
                 ) : currentZone?.zone_type === "PVP_ZONE" ? (
-                  <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-md bg-red-950/90 text-red-400 border border-red-500/40 animate-pulse shadow-sm" title="Vùng PvP Nguy Hiểm: Tự do đồ sát, nguy cơ rơi đồ cao!">
-                    ⚔️ Vùng PvP (Tự Do Đồ Sát)
+                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-red-950/85 text-red-300 shadow-sm" title="Vùng PvP Nguy Hiểm: Tự do đồ sát, nguy cơ rơi đồ cao!">
+                    ⚔️ PvP nguy hiểm
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-md bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-sm" title="Vùng Dã Ngoại: Cho phép giao tranh PvP">
-                    ⚠️ Vùng Dã Ngoại (PvP Mở)
+                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-amber-950/85 text-amber-200 shadow-sm" title="Vùng Dã Ngoại: Cho phép giao tranh PvP">
+                    ⚠️ PvP mở
                   </span>
                 )}
               </div>
             </div>
-            <div className="text-[10px] text-zinc-400 font-mono mt-1 text-center">
+            <div className="text-[9px] text-zinc-200 font-mono mt-0.5 drop-shadow-md">
               X:{Math.round(liveX || gamePlayer.x)} Y:{Math.round(liveY || gamePlayer.y)}
             </div>
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5 p-1.5 bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 shadow-lg pointer-events-auto w-fit">
-          <button
-            onClick={() => setMapMode(mapMode === "select" ? "drag" : "select")}
-            title={mapMode === "select" ? "Chế độ: Tương tác bản đồ" : "Chế độ: Kéo bản đồ"}
-            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-              mapMode === "select"
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-inner"
-                : "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-inner"
-            }`}
-          >
-            <span className="text-lg">{mapMode === "select" ? "👆" : "🖐️"}</span>
-          </button>
-          <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
-          <button
-            onClick={() => useWorldStore.getState().requestCenterCamera()}
-            title="Về vị trí"
-            className="w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer text-sky-400 hover:text-sky-300 border border-transparent hover:bg-sky-500/10"
-          >
-            <span className="text-lg">📍</span>
-          </button>
-          <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
-          <button
-            onClick={() => setActiveModal("teleport_directory")}
-            title="Danh Bạ Truyền Tống Trận"
-            className="w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer text-cyan-400 hover:text-cyan-300 border border-transparent hover:bg-cyan-500/10"
-          >
-            <span className="text-lg">🌀</span>
-          </button>
-          <button
-            onClick={() => setActiveModal("teleport_build")}
-            title="Bố Trí Truyền Tống Trận"
-            className="w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer text-blue-400 hover:text-blue-300 border border-transparent hover:bg-blue-500/10"
-          >
-            <span className="text-lg">🏛️</span>
-          </button>
-          <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
-          <div className="relative">
-            <button
-              onClick={() => setShowLabelMenu(!showLabelMenu)}
-              title="Cài đặt hiển thị nhãn"
-              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-                showLabelMenu || Object.values(labelSettings).some(Boolean)
-                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-inner"
-                  : "text-zinc-400 hover:text-zinc-200 border border-transparent hover:bg-zinc-800/50"
-              }`}
-            >
-              <span className="text-lg">🏷️</span>
-            </button>
-            {showLabelMenu && (
-              <div className="absolute left-11 top-0 ml-1.5 p-3 bg-zinc-950/95 backdrop-blur-md rounded-xl border border-zinc-800 shadow-2xl z-50 w-48 flex flex-col gap-2 pointer-events-auto select-none">
-                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 font-serif">Hiển thị nhãn</div>
-                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={labelSettings.monster}
-                    onChange={(e) => updateLabelSetting("monster", e.target.checked)}
-                    className="accent-purple-500 cursor-pointer"
-                  />
-                  <span className="font-serif">Quái & Cổ trùng</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={labelSettings.bossNearby}
-                    onChange={(e) => updateLabelSetting("bossNearby", e.target.checked)}
-                    className="accent-red-500 cursor-pointer"
-                  />
-                  <span className="font-serif">Boss lân cận</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={labelSettings.hub}
-                    onChange={(e) => updateLabelSetting("hub", e.target.checked)}
-                    className="accent-purple-500 cursor-pointer"
-                  />
-                  <span className="font-serif">Điểm tập trung (Hub)</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={labelSettings.khu_vuc}
-                    onChange={(e) => updateLabelSetting("khu_vuc", e.target.checked)}
-                    className="accent-purple-500 cursor-pointer"
-                  />
-                  <span className="font-serif">Khu vực</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={labelSettings.ngu_vuc}
-                    onChange={(e) => updateLabelSetting("ngu_vuc", e.target.checked)}
-                    className="accent-purple-500 cursor-pointer"
-                  />
-                  <span className="font-serif">Ngự vực</span>
-                </label>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
-      {selectedObject && (
+
+      {showWorldAtlas && gamePlayer && (
+        <WorldAtlasModal
+          regions={regions}
+          currentRegionId={gamePlayer.current_region}
+          x={liveX || gamePlayer.x}
+          y={liveY || gamePlayer.y}
+          onClose={() => setShowWorldAtlas(false)}
+        />
+      )}
+
+      {showGeneralSettings && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowGeneralSettings(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="general-settings-title"
+            className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-950 p-4 text-zinc-100 shadow-2xl"
+          >
+            <div className="mb-4 flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div>
+                <h2 id="general-settings-title" className="font-serif text-base font-semibold">Cài Đặt Chung</h2>
+                <p className="mt-0.5 text-[11px] text-zinc-500">Giao diện, bản đồ và tài khoản</p>
+              </div>
+              <button
+                onClick={() => setShowGeneralSettings(false)}
+                aria-label="Đóng cài đặt"
+                className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <h3 className="mb-2 text-xs font-semibold text-zinc-200">Giao diện</h3>
+                <div className="flex items-center justify-between gap-3 text-xs text-zinc-400">
+                  <span>Chế độ sáng / tối</span>
+                  <ThemeToggle />
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <h3 className="mb-2 text-xs font-semibold text-zinc-200">Hiển thị trên bản đồ</h3>
+                <div className="mb-3 space-y-1.5">
+                  <label htmlFor="map-performance-mode" className="text-xs text-zinc-300">Mức hiển thị bản đồ</label>
+                  <select
+                    id="map-performance-mode"
+                    value={mapPerformanceMode}
+                    onChange={(event) => updateMapPerformanceMode(event.target.value as MapPerformanceMode)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-purple-500"
+                  >
+                    {MAP_PERFORMANCE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                  <p className="text-[11px] leading-relaxed text-zinc-500">
+                    {MAP_PERFORMANCE_OPTIONS.find((option) => option.id === mapPerformanceMode)?.description}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {([
+                    ["monster", "Quái & Cổ trùng"],
+                    ["bossNearby", "Boss lân cận"],
+                    ["hub", "Điểm tập trung (Hub)"],
+                    ["khu_vuc", "Khu vực"],
+                    ["ngu_vuc", "Ngự vực"],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300 hover:text-white">
+                      <input
+                        type="checkbox"
+                        checked={labelSettings[key]}
+                        onChange={(event) => updateLabelSetting(key, event.target.checked)}
+                        className="accent-purple-500"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <h3 className="mb-2 text-xs font-semibold text-zinc-200">Tài khoản & hỗ trợ</h3>
+                <div className="flex flex-wrap gap-2">
+                  <a href="/wiki" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-white/10 px-3 py-2 text-xs text-emerald-300 hover:bg-white/[0.06]">
+                    Wiki Game
+                  </a>
+                  <ClearCacheButton showLabel />
+                  <button
+                    onClick={() => logout()}
+                    className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/20"
+                  >
+                    Đăng xuất
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {mapPerformanceMode !== "off" && selectedObject && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-auto animate-fade-in z-20 max-w-[calc(100vw-2rem)]">
           <div className={`relative w-72 max-w-full px-4 py-4 rounded-2xl border ${cfg.borderColor} ${cfg.bgColor} backdrop-blur-md shadow-2xl max-h-[calc(100dvh-10rem)] overflow-y-auto custom-scrollbar`}>
             <button
@@ -991,8 +1007,7 @@ onClick={() => {
         </div>
       )}
 
-      <MovementJoystick />
-      <GuQuickBar />
+      {mapPerformanceMode !== "off" && <MovementJoystick />}
     </div>
   );
 }

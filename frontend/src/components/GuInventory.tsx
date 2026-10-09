@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock, BookOpen, Copy, Check } from "lucide-react";
-import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
+import { translateGuType, translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
 import { GamePanel } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
@@ -12,6 +12,7 @@ import { KillerMovesPanel } from "@/components/KillerMovesPanel";
 
 interface GuInventoryProps {
   player: Player;
+  initialTab?: "gu" | "material";
   onFeed: (guInstanceId: string) => Promise<void>;
   onFeedGroup?: (guId: string, rank?: number) => Promise<void>;
   onFeedAll?: (scope?: "all" | "equipped" | "rest" | "unequipped") => Promise<void>;
@@ -71,6 +72,7 @@ const FormatKey = (key: string): string => {
 
 export const GuInventory: React.FC<GuInventoryProps> = ({
   player,
+  initialTab = "gu",
   onFeed,
   onFeedGroup,
   onFeedAll,
@@ -110,14 +112,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [settingVitalId, setSettingVitalId] = useState<string | null>(null);
   const [droppingId, setDroppingId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState<Record<string, boolean>>({});
-  const [itemDetailOpen, setItemDetailOpen] = useState<Record<string, boolean>>({});
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTab, setSelectedTab] = useState<"gu" | "material" | "killer-moves">("gu");
+  const [selectedTab, setSelectedTab] = useState<"gu" | "material" | "killer-moves">(initialTab);
   const [materialFilter, setMaterialFilter] = useState<"all" | "consumable" | "material">("all");
+  const [materialPath, setMaterialPath] = useState("all");
+  const [materialRank, setMaterialRank] = useState("all");
   const [guSubTab, setGuSubTab] = useState<"equipped" | "rest">("equipped");
   const [selectedPath, setSelectedPath] = useState<string>("all");
   const [selectedRank, setSelectedRank] = useState<string>("all");
+
+  useEffect(() => {
+    setSelectedTab(initialTab);
+  }, [initialTab]);
 
   // Reset batch selection when switching subtab
   const handleSubTabChange = (tab: "equipped" | "rest") => {
@@ -348,29 +355,34 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     return isEligibleForDrop(gu);
   };
 
-  // Filter materials (only those with qty > 0 and matching searchTerm)
-  const filteredMaterials = useMemo(() => {
+  // Keep material search focused on names; item details are available in the wiki.
+  const ownedMaterials = useMemo(() => {
     return Object.keys(itemDictionary)
       .filter((key) => {
         const qty = materials[key] || 0;
-        if (qty <= 0) return false;
-
-        const spec = itemDictionary[key];
-        if (!spec) return false;
-        const matchesSearch =
-          spec.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          spec.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (spec.item_type && spec.item_type.toLowerCase().includes(searchTerm.toLowerCase()));
-        return matchesSearch;
+        return qty > 0 && Boolean(itemDictionary[key]);
       })
       .map((key) => ({ key, spec: itemDictionary[key], qty: materials[key] }));
-  }, [itemDictionary, materials, searchTerm]);
+  }, [itemDictionary, materials]);
 
+  const filteredMaterials = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return ownedMaterials.filter(({ spec }) => spec.name.toLowerCase().includes(normalizedSearch));
+  }, [ownedMaterials, searchTerm]);
+
+  const allMaterialPaths = useMemo(() => Array.from(new Set(
+    ownedMaterials.map(({ spec }) => spec.path).filter((path): path is string => Boolean(path))
+  )).sort((a, b) => a.localeCompare(b)), [ownedMaterials]);
+  const allMaterialRanks = useMemo(() => Array.from(new Set(
+    ownedMaterials.map(({ spec }) => spec.rank || spec.rarity || 1)
+  )).sort((a, b) => a - b), [ownedMaterials]);
   const visibleMaterials = useMemo(() => filteredMaterials.filter(({ spec }) => {
-    if (materialFilter === "consumable") return isConsumableItem(spec);
-    if (materialFilter === "material") return !isConsumableItem(spec);
+    if (materialFilter === "consumable" && !isConsumableItem(spec)) return false;
+    if (materialFilter === "material" && isConsumableItem(spec)) return false;
+    if (materialPath !== "all" && spec.path !== materialPath) return false;
+    if (materialRank !== "all" && (spec.rank || spec.rarity || 1) !== Number(materialRank)) return false;
     return true;
-  }), [filteredMaterials, materialFilter]);
+  }), [filteredMaterials, materialFilter, materialPath, materialRank]);
   const totalMaterialCount = useMemo(() => Object.values(materials).reduce((sum, qty) => sum + Math.max(0, Number(qty) || 0), 0), [materials]);
   const equippedTotal = useMemo(() => guList.filter((gu) => gu.equipped).length, [guList]);
   const hungryTotal = useMemo(() => guList.filter((gu) => {
@@ -612,7 +624,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
           <Search className="w-4 h-4 text-zinc-650 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Tìm kiếm theo tên hoặc mô tả..."
+            placeholder={selectedTab === "material" ? "Tìm vật phẩm theo tên..." : "Tìm kiếm theo tên hoặc mô tả..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full min-h-11 bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-200 placeholder-zinc-650 pl-10 pr-11 py-2.5 rounded-xl transition-colors font-mono"
@@ -710,8 +722,25 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <span className="text-[10px] text-zinc-400">{visibleMaterials.length} loại · {totalMaterialCount} món</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={materialPath}
+                onChange={(e) => setMaterialPath(e.target.value)}
+                aria-label="Lọc vật phẩm theo lưu phái"
+                className="min-h-9 rounded-lg border border-zinc-800 bg-zinc-950/70 px-2.5 text-[10px] font-mono text-zinc-300 outline-none focus:border-sky-500/50"
+              >
+                <option value="all">Mọi Lưu Phái</option>
+                {allMaterialPaths.map(path => <option key={path} value={path}>{translatePath(path)}</option>)}
+              </select>
+              <select
+                value={materialRank}
+                onChange={(e) => setMaterialRank(e.target.value)}
+                aria-label="Lọc vật phẩm theo rank"
+                className="min-h-9 rounded-lg border border-zinc-800 bg-zinc-950/70 px-2.5 text-[10px] font-mono text-zinc-300 outline-none focus:border-sky-500/50"
+              >
+                <option value="all">Tất cả rank</option>
+                {allMaterialRanks.map(rank => <option key={rank} value={rank}>Rank {rank}</option>)}
+              </select>
             </div>
             <div className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-950/60 p-1">
               {([["all", "Tất cả"], ["consumable", "Tiêu hao"], ["material", "Khác"]] as const).map(([filter, label]) => (
@@ -728,83 +757,66 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               <span className="mt-1 text-[10px] text-zinc-600">Vật phẩm thu thập được sẽ xuất hiện tại đây.</span>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 items-start gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
               {visibleMaterials.map(({ key, spec, qty }) => {
                 const isConsumable = isConsumableItem(spec);
                 const isUsing = usingId === key;
-                const isDetailOpen = !!itemDetailOpen[key];
-                const itemImageStyle = spec.image_url ? { backgroundImage: `linear-gradient(180deg, rgba(9,9,11,.02), rgba(9,9,11,.5)), url("${spec.image_url.replace(/"/g, "")}")` } : undefined;
-                const rarity = spec.rarity || spec.rank || 1;
-                const rarityStyle = rarity >= 5 ? "border-fuchsia-500/40 from-fuchsia-950/60 to-violet-950/20" : rarity >= 4 ? "border-amber-500/35 from-amber-950/60 to-orange-950/20" : rarity >= 3 ? "border-sky-500/30 from-sky-950/50 to-cyan-950/10" : "border-zinc-800 from-zinc-900/80 to-zinc-950/70";
-                const itemRarityLabel = (r?: number) => {
-                  if (!r) return "";
-                  const labels = ["", "Phàm", "Linh", "Bảo", "Tiên", "Thánh"];
-                  return labels[r] || `Cấp ${r}`;
-                };
+                const rarity = spec.rank || spec.rarity || 1;
+                const rarityStyle = rarity >= 5 ? "border-fuchsia-500/40 bg-fuchsia-950/20 text-fuchsia-200" : rarity >= 4 ? "border-amber-500/35 bg-amber-950/20 text-amber-200" : rarity >= 3 ? "border-sky-500/35 bg-sky-950/20 text-sky-200" : rarity >= 2 ? "border-emerald-500/30 bg-emerald-950/20 text-emerald-200" : "border-zinc-700 bg-zinc-900/60 text-zinc-200";
                 return (
                   <div
                     key={key}
-                    className={`group flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-gradient-to-br shadow-[0_8px_22px_rgba(0,0,0,.18)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(0,0,0,.28)] ${rarityStyle}`}
+                    className={`group flex min-w-0 flex-col overflow-hidden rounded-xl border transition-colors ${rarityStyle}`}
                   >
-                    <button type="button" onClick={() => setItemDetailOpen(prev => ({ ...prev, [key]: !prev[key] }))} className="relative block w-full text-left" aria-expanded={isDetailOpen} aria-label={`${isDetailOpen ? "Ẩn" : "Xem"} thông tin ${spec.name}`}>
-                      <div className="relative aspect-[1.7/1] overflow-hidden border-b border-white/5 bg-zinc-950/60 bg-cover bg-center sm:aspect-[1.9/1]" style={itemImageStyle}>
-                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/10 to-transparent" />
-                        {!spec.image_url && <div className={`absolute inset-0 flex items-center justify-center ${isConsumable ? "text-emerald-300/75" : "text-sky-300/75"}`}>{isConsumable ? <Wine className="h-8 w-8 drop-shadow-lg sm:h-9 sm:w-9" /> : <Gem className="h-8 w-8 drop-shadow-lg sm:h-9 sm:w-9" />}</div>}
-                        <span className="absolute left-2 top-2 rounded-md border border-white/10 bg-black/50 px-1.5 py-1 text-[8px] font-bold uppercase tracking-wider text-zinc-200 backdrop-blur-sm">{rarity >= 5 ? "Thánh" : rarity >= 4 ? "Tiên" : rarity >= 3 ? "Bảo" : rarity >= 2 ? "Linh" : "Phàm"}</span>
-                        <span className="absolute right-2 top-2 rounded-lg border border-white/10 bg-black/65 px-2 py-1 text-[10px] font-bold text-white shadow-lg backdrop-blur-sm">×{qty}</span>
-                        <div className="absolute inset-x-2 bottom-2 flex min-w-0 items-end justify-between gap-1">
-                          <span className="line-clamp-2 text-[11px] font-bold leading-tight text-white drop-shadow sm:text-xs">{spec.name}</span>
-                          <span className="shrink-0 rounded-md border border-white/10 bg-black/45 p-1 text-zinc-300"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isDetailOpen ? "rotate-180" : ""}`} /></span>
-                        </div>
-                      </div>
-                    </button>
-                    <div className="flex flex-col gap-2 p-2 sm:p-2.5">
-                      <div className="flex min-h-8 items-start justify-between gap-2">
-                        <span className="line-clamp-2 text-[9px] leading-snug text-zinc-500">{spec.description || translateItemType(spec.item_type || spec.type)}</span>
-                        {isConsumable && <span className="shrink-0 rounded-md border border-emerald-900/40 bg-emerald-950/30 px-1.5 py-0.5 text-[8px] text-emerald-300">Dùng</span>}
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {isConsumable && onUseItem && useMultipleItemId !== key && (
+                    <div className="flex min-h-11 w-full items-start justify-between gap-2 px-3 py-2 text-left">
+                      <span className="min-w-0 flex-1 whitespace-normal break-words text-[11px] font-semibold leading-snug">{spec.name}</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-md bg-black/20 px-1.5 py-0.5 text-[10px] font-bold">×{qty}</span>
+                      </span>
+                    </div>
+                    {isConsumable && useMultipleItemId !== key && (onUseItem || (onUseItems && qty > 1)) && (
+                      <div className="grid grid-cols-2 gap-1.5 px-2 pb-2">
+                        {onUseItem && (
                           <button
+                            type="button"
                             onClick={() => handleUseItemClick(key)}
                             disabled={actionLoading || isUsing}
-                            className="col-span-2 min-h-10 rounded-xl border border-emerald-700/40 bg-emerald-600/90 px-2 text-[10px] font-bold text-white shadow-[0_4px_14px_rgba(16,185,129,.13)] transition-colors hover:bg-emerald-500 disabled:opacity-50 sm:col-span-1"
+                            className={`min-h-9 rounded-lg border border-emerald-700/40 bg-emerald-600/90 px-2 text-[10px] font-bold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 ${qty === 1 ? "col-span-2" : ""}`}
                           >
-                            {isUsing ? "Đang dùng…" : "Sử dụng"}
+                            {isUsing ? "Đang dùng…" : "Dùng"}
                           </button>
                         )}
-                        {isConsumable && onUseItems && qty > 1 && useMultipleItemId !== key && (
+                        {onUseItems && qty > 1 && (
                           <button
                             type="button"
                             onClick={() => {
                               setUseMultipleItemId(key);
                               setUseMultipleItemQty(1);
                             }}
-                            className="min-h-10 rounded-xl border border-amber-800/40 bg-amber-950/30 px-2 text-[9px] font-bold text-amber-300 transition-colors hover:bg-amber-900/40"
+                            className="min-h-9 rounded-lg border border-amber-800/40 bg-amber-950/30 px-2 text-[9px] font-bold text-amber-300 transition-colors hover:bg-amber-900/40"
                           >
                             Dùng nhiều
                           </button>
                         )}
                       </div>
-                    </div>
-
+                    )}
                     {/* Quantity picker for multi-use */}
                     {useMultipleItemId === key && (
-                      <div className="flex items-center gap-2 px-3.5 py-2 border-t border-emerald-900/30 bg-emerald-950/10">
-                        <span className="text-[10px] text-emerald-400 font-mono font-bold whitespace-nowrap">Số lượng:</span>
+                      <div className="flex flex-wrap items-center gap-1.5 border-t border-emerald-900/30 bg-emerald-950/10 p-2">
+                        <span className="text-[9px] text-emerald-400 font-mono font-bold whitespace-nowrap">SL</span>
                         <input
                           type="number"
                           min={1}
                           max={Math.min(qty, 100)}
                           value={useMultipleItemQty}
                           onChange={(e) => setUseMultipleItemQty(Math.max(1, Math.min(qty, 100, parseInt(e.target.value) || 1)))}
-                          className="w-16 bg-zinc-950 border border-emerald-900/50 text-emerald-300 text-xs font-mono text-center py-1 rounded-lg outline-none focus:border-emerald-500/60"
+                          className="w-12 bg-zinc-950 border border-emerald-900/50 text-emerald-300 text-xs font-mono text-center py-1 rounded-lg outline-none focus:border-emerald-500/60"
                         />
                         <span className="text-[9px] text-zinc-500 font-mono">/ {qty}</span>
                         <button
                           type="button"
                           onClick={() => setUseMultipleItemQty(Math.min(qty, 100))}
-                          className="text-[9px] py-0.5 px-1.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                          className="text-[9px] py-1 px-1.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
                         >
                           Tất cả
                         </button>
@@ -812,7 +824,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                           type="button"
                           onClick={handleUseMultipleItem}
                           disabled={actionLoading}
-                          className="text-[9px] font-bold py-1 px-2.5 bg-emerald-600 text-white hover:bg-emerald-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                          className="text-[9px] font-bold py-1 px-2 bg-emerald-600 text-white hover:bg-emerald-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(16,185,129,0.2)]"
                         >
                           Xác nhận
                         </button>
@@ -826,64 +838,6 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       </div>
                     )}
 
-                    {isDetailOpen && (
-                      <div className="px-3.5 pb-3 pt-0 border-t border-zinc-900/60 grid grid-cols-2 gap-2 text-[10px]">
-                        {spec.rank && spec.rank > 0 && (
-                          <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                            <span className="text-zinc-600 font-mono block mb-0.5">Cấp</span>
-                            <span className="text-zinc-300">{itemRarityLabel(spec.rank) || spec.rank}</span>
-                          </div>
-                        )}
-                        {spec.path && (
-                          <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                            <span className="text-zinc-600 font-mono block mb-0.5">Đường</span>
-                            <div className="flex flex-wrap gap-1">
-                              {Array.isArray(spec.path) ? (
-                                spec.path.map(p => (
-                                  <span key={p} className={getPathColor(p)}>{translatePath(p)}</span>
-                                ))
-                              ) : (
-                                <span className={getPathColor(spec.path as string)}>{translatePath(spec.path as string)}</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        {spec.rarity && spec.rarity > 0 && (
-                          <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                            <span className="text-zinc-600 font-mono block mb-0.5">Độ hiếm</span>
-                            <span className="text-zinc-300">{spec.rarity}</span>
-                          </div>
-                        )}
-                        <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                          <span className="text-zinc-600 font-mono block mb-0.5">Loại</span>
-                          <span className="text-zinc-300">{translateItemType(spec.item_type || spec.type)}</span>
-                        </div>
-                        {spec.effects && Object.keys(spec.effects).length > 0 && (
-                          <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                            <span className="text-zinc-600 font-mono block mb-0.5">Hiệu Ứng</span>
-                            <EffectEnvelopeView effects={spec.effects} />
-                          </div>
-                        )}
-                        {spec.tags && spec.tags.length > 0 && (
-                          <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                            <span className="text-zinc-600 font-mono block mb-0.5">Tags</span>
-                            <div className="flex flex-wrap gap-1">
-                              {spec.tags.map(tag => (
-                                <span key={tag} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 text-zinc-400 text-[9px]">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {spec.description && (
-                          <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                            <span className="text-zinc-600 font-mono block mb-0.5">Mô Tả</span>
-                            <span className="text-zinc-400 italic">{spec.description}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -1000,6 +954,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               }: typeof guGroups[number]) => {
                     const isExpanded = !!expandedGroups[groupKey];
                     const totalCount = instances.length;
+                    const singleGu = totalCount === 1 ? instances[0] : undefined;
                     const guImageStyle = spec.image_url ? { backgroundImage: `linear-gradient(180deg, rgba(9,9,11,.02), rgba(9,9,11,.45)), url("${spec.image_url.replace(/"/g, "")}")` } : undefined;
 
                     // Food info
@@ -1028,11 +983,17 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       (availableFood > 0 || canFeedWithResource);
                     const isCurrentlyFeedingGroup = feedingGroupGuId === groupKey;
 
-                    // Build dynamic styling based on group attributes
-                    let cardStyle = "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800";
-                    if (hasVital) {
-                      cardStyle = "border-amber-400/60 bg-amber-950/5 shadow-[0_0_15px_rgba(245,158,11,0.1)] hover:border-amber-500/80";
-                    }
+                    // Color each Gu card by rank, while keeping the vital Gu highlight.
+                    const rankStyle = spec.rank >= 5
+                      ? { card: "border-fuchsia-500/35 bg-fuchsia-950/15 hover:border-fuchsia-400/60", text: "text-fuchsia-200", icon: "border-fuchsia-500/30 bg-fuchsia-950/40 text-fuchsia-300" }
+                      : spec.rank >= 4
+                        ? { card: "border-amber-500/30 bg-amber-950/10 hover:border-amber-400/55", text: "text-amber-200", icon: "border-amber-500/30 bg-amber-950/35 text-amber-300" }
+                        : spec.rank >= 3
+                          ? { card: "border-sky-500/30 bg-sky-950/10 hover:border-sky-400/55", text: "text-sky-200", icon: "border-sky-500/30 bg-sky-950/35 text-sky-300" }
+                          : spec.rank >= 2
+                            ? { card: "border-emerald-500/30 bg-emerald-950/10 hover:border-emerald-400/55", text: "text-emerald-200", icon: "border-emerald-500/30 bg-emerald-950/35 text-emerald-300" }
+                            : { card: "border-zinc-800 bg-zinc-950/60 hover:border-zinc-700", text: "text-zinc-200", icon: "border-zinc-700 bg-zinc-900 text-zinc-400" };
+                    const cardStyle = `${rankStyle.card} ${hasVital ? "shadow-[0_0_15px_rgba(245,158,11,0.1)] ring-1 ring-amber-400/25" : ""}`;
 
                     // Tóm tắt trạng thái
                     const statusTextParts: string[] = [];
@@ -1080,11 +1041,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 title="Chọn cả nhóm"
                               />
                             )}
-                            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-700/30 bg-gradient-to-br from-amber-950/80 to-zinc-950 bg-cover bg-center shadow-inner" style={guImageStyle}>
-                              {!spec.image_url && <Flower2 className="h-5 w-5 text-amber-300/80" />}
+                            <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-cover bg-center shadow-inner ${rankStyle.icon}`} style={guImageStyle}>
+                              {!spec.image_url && <Flower2 className="h-5 w-5" />}
                               {hasVital && <span className="absolute bottom-0.5 right-0.5 rounded-full bg-amber-500 p-0.5"><Sparkles className="h-2 w-2 text-zinc-950" /></span>}
                             </div>
-                            <h4 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
+                            <h4 className={`text-sm font-bold ${rankStyle.text} font-serif flex items-center gap-2`}>
                               {spec.name}
                               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
                                 x{totalCount}
@@ -1209,16 +1170,117 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               </button>
                             )}
 
-                            <button
-                              type="button"
-                              onClick={() => toggleGroupExpand(groupKey)}
-                              className="text-[9px] py-1.5 px-3 bg-zinc-900 hover:bg-zinc-850 text-zinc-350 hover:text-zinc-150 border border-zinc-800 rounded-xl font-mono transition-all flex items-center gap-1 cursor-pointer"
-                            >
-                              <span>{isExpanded ? "Thu gọn" : "Chi tiết"}</span>
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                            </button>
+                            {singleGu && (() => {
+                              const status = singleGu.status || "ACTIVE";
+                              const isDead = status === "DEAD";
+                              const canAct = !isDead && status !== "SEALED";
+                              return (
+                                <>
+                                  {spec.gu_type !== "Consumable" && canAct && onEquipToggle && (
+                                    <button
+                                      type="button"
+                                      disabled={actionLoading || equippingId === singleGu.instance_id}
+                                      onClick={() => handleEquipClick(singleGu.instance_id, !singleGu.equipped)}
+                                      className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-indigo-950/30 text-indigo-300 border border-indigo-900/40 hover:bg-indigo-950/50 font-mono disabled:opacity-50"
+                                    >
+                                      {equippingId === singleGu.instance_id ? "..." : singleGu.equipped ? "Tháo" : "Trang Bị"}
+                                    </button>
+                                  )}
+                                  {spec.gu_type === "Consumable" && onUseGu && (
+                                    <button
+                                      type="button"
+                                      disabled={actionLoading || usingGuId === singleGu.instance_id}
+                                      onClick={() => handleUseGu(singleGu.instance_id)}
+                                      className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/30 text-amber-300 border border-amber-900/40 hover:bg-amber-950/50 font-mono disabled:opacity-50"
+                                    >
+                                      {usingGuId === singleGu.instance_id ? "..." : "Sử Dụng"}
+                                    </button>
+                                  )}
+                                  {onSetVital && !isDead && !singleGu.is_vital && spec.gu_type !== "Consumable" && (
+                                    <button
+                                      type="button"
+                                      disabled={actionLoading || settingVitalId === singleGu.instance_id || singleGu.rank > player.rank}
+                                      onClick={() => handleSetVital(singleGu.instance_id, spec.name)}
+                                      title={singleGu.rank > player.rank ? `Yêu cầu tu vi Rank ${singleGu.rank} (Hiện tại: Rank ${player.rank})` : ""}
+                                      className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/30 text-amber-300 border border-amber-900/40 hover:bg-amber-950/50 font-mono disabled:opacity-50"
+                                    >
+                                      {settingVitalId === singleGu.instance_id ? "..." : "Đặt Bản Mệnh"}
+                                    </button>
+                                  )}
+                                  {onDropGu && !singleGu.is_vital && !singleGu.equipped && !isBatchMode && (
+                                    <button
+                                      type="button"
+                                      disabled={actionLoading || droppingId === singleGu.instance_id}
+                                      onClick={async () => {
+                                        if (!await useGameStore.getState().showConfirm("Xác nhận phóng sinh (thả) Cổ trùng này? Hành động này không thể hoàn tác.")) return;
+                                        setDroppingId(singleGu.instance_id);
+                                        try {
+                                          await onDropGu(singleGu.instance_id);
+                                        } finally {
+                                          setDroppingId(null);
+                                        }
+                                      }}
+                                      className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-rose-950/30 text-rose-300 border border-rose-900/40 hover:bg-rose-950/50 font-mono disabled:opacity-50"
+                                    >
+                                      {droppingId === singleGu.instance_id ? "..." : "Thả"}
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
+
+                            {singleGu && (
+                              <button
+                                type="button"
+                                onClick={() => setDetailOpen(prev => ({ ...prev, [singleGu.instance_id]: !prev[singleGu.instance_id] }))}
+                                aria-expanded={!!detailOpen[singleGu.instance_id]}
+                                className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-zinc-950/50 text-zinc-300 border border-zinc-800 hover:bg-zinc-900 font-mono"
+                              >
+                                <span className="inline-flex items-center gap-1"><BookOpen className="h-3 w-3" />{detailOpen[singleGu.instance_id] ? "Ẩn thông tin" : "Thông tin"}</span>
+                              </button>
+                            )}
+
+                            {totalCount > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleGroupExpand(groupKey)}
+                                className="text-[9px] py-1.5 px-3 bg-zinc-900 hover:bg-zinc-850 text-zinc-350 hover:text-zinc-150 border border-zinc-800 rounded-xl font-mono transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>{isExpanded ? "Thu gọn" : "Chi tiết"}</span>
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
                           </div>
                         </div>
+
+                        {singleGu && detailOpen[singleGu.instance_id] && (
+                          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-zinc-800/70 pt-3 text-[10px] sm:grid-cols-3">
+                            <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 p-2">
+                              <span className="mb-1 block font-mono text-zinc-600">Loại Cổ</span>
+                              <span className="text-zinc-300">{translateGuType(spec.gu_type)}</span>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 p-2">
+                              <span className="mb-1 block font-mono text-zinc-600">Thức Ăn</span>
+                              <span className="text-zinc-300">{preferredFoodName}</span>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 p-2">
+                              <span className="mb-1 block font-mono text-zinc-600">Đói mỗi 3 giờ</span>
+                              <span className="text-zinc-300">{spec.hunger_rate}/h</span>
+                            </div>
+                            {spec.effects && Object.keys(spec.effects).length > 0 && (
+                              <div className="col-span-2 rounded-lg border border-zinc-800/70 bg-zinc-950/40 p-2 sm:col-span-3">
+                                <span className="mb-1 block font-mono text-zinc-600">Hiệu Ứng</span>
+                                <EffectEnvelopeView effects={spec.effects} />
+                              </div>
+                            )}
+                            <Link
+                              href={`/wiki/gu/${spec.id}`}
+                              className="col-span-2 flex items-center justify-center gap-1.5 rounded-lg border border-zinc-800/70 bg-zinc-900/40 p-2 font-mono text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 sm:col-span-3"
+                            >
+                              <BookOpen className="h-3.5 w-3.5" /> Xem chi tiết trên Wiki
+                            </Link>
+                          </div>
+                        )}
 
                         {/* Quantity picker for multi-use Gu group */}
                         {useMultipleGuGroupKey === groupKey && (() => {
@@ -1262,7 +1324,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         })()}
 
                         {/* Expanded detail list */}
-                        {isExpanded && (
+                        {totalCount > 1 && isExpanded && (
                           <div className="mt-4 pt-3 border-t border-zinc-900/80 animate-fade-in space-y-2">
                             {instances.map((gu) => {
                               const status = gu.status || "ACTIVE";

@@ -133,7 +133,7 @@ export const NotificationBell: React.FC = () => {
       </button>
 
       {open && (
-        <div className="fixed top-[56px] left-4 right-4 sm:absolute sm:top-auto sm:left-auto sm:right-0 sm:w-[380px] max-h-[75vh] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl shadow-2xl z-50">
+        <div className="absolute right-0 top-full z-[70] mt-2 flex max-h-[70dvh] w-[calc(100vw-2rem)] max-w-[380px] flex-col rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-2xl">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)]">
             <span className="text-sm font-semibold text-[var(--text-primary)]">Thông báo</span>
             <button
