@@ -909,7 +909,11 @@ func TravelTeleport(c *gin.Context) {
 			player.X = newZone.EntryX
 			player.Y = newZone.EntryY
 		}
-		if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, dest.X, dest.Y); debuffMsg != "" {
+		debuffMsg := CheckAndApplyRegionalWallDebuffBetween(&player, oldRegion, dest.RegionID)
+		if debuffMsg == "" && (largeZoneForRegion(oldRegion) == nil || largeZoneForRegion(dest.RegionID) == nil) {
+			debuffMsg = CheckAndApplyRegionalWallDebuff(&player, oldX, oldY, dest.X, dest.Y)
+		}
+		if debuffMsg != "" {
 			logMsg := fmt.Sprintf("🌀 Không gian vặn xoắn! Đạo hữu vừa truyền tống từ [%s] (%d, %d) [%s] đến [%s] (%d, %d) [%s].", source.Name, source.X, source.Y, source.RegionID, dest.Name, player.X, player.Y, dest.RegionID)
 			logMsg += " " + debuffMsg
 			_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3, primeval_stones = $4, immortal_stones = $5, statuses = $6 WHERE id = $7`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses, player.ID)

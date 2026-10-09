@@ -132,7 +132,7 @@ func Retreat(c *gin.Context) {
 		player.ActiveCombat = nil
 	}
 
-	player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
+	player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, player.CurrentRegion, player.X, player.Y)
 
 	qiGained := AddHumanQi(&player, 2.0)
 
@@ -422,7 +422,7 @@ func Flee(c *gin.Context) {
 				player.HP = 1.0
 				player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, authID, deathRegion, deathX, deathY)
 
-				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng.")
+				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng. "+RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y))
 
 				// Death penalty applies to real PvE exploration and normal PvP only.
 				// Mine and arena (virtual) defeats never drop items/stones.
@@ -526,6 +526,7 @@ func Flee(c *gin.Context) {
 			} else {
 				logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã được đưa về nơi an dưỡng.", enemyName)
 			}
+			logMsg += " " + RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y)
 		} else {
 			logMsg = fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s. Chịu thương tổn %.0f HP.", enemyName, damage)
 		}

@@ -34,8 +34,30 @@ func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, t
 	if player == nil || (fromX == 0 && fromY == 0) {
 		return ""
 	}
-	oldZone := FindLargeZoneAt(fromX, fromY)
-	newZone := FindLargeZoneAt(toX, toY)
+	return applyRegionalWallDebuff(player, FindLargeZoneAt(fromX, fromY), FindLargeZoneAt(toX, toY))
+}
+
+// CheckAndApplyRegionalWallDebuffBetween resolves the containing large zones
+// from region ancestry. Use it when callers know both region IDs: stacked maps
+// can reuse coordinates, so coordinate-only lookup may miss or misidentify a
+// transition between world-map layers.
+func CheckAndApplyRegionalWallDebuffBetween(player *models.Player, fromRegion, toRegion string) string {
+	if player == nil || fromRegion == "" || toRegion == "" || fromRegion == toRegion {
+		return ""
+	}
+	return applyRegionalWallDebuff(player, largeZoneForRegion(fromRegion), largeZoneForRegion(toRegion))
+}
+
+func largeZoneForRegion(regionID string) *models.Region {
+	for _, ancestorID := range regionScopeIDs(regionID) {
+		if zone := ZoneByID(ancestorID); zone != nil && zone.ZoneType == ZoneTypeLarge {
+			return zone
+		}
+	}
+	return nil
+}
+
+func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Region) string {
 	if oldZone == nil || newZone == nil {
 		return ""
 	}
@@ -61,9 +83,16 @@ func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, t
 
 // returns the log message plus whether a fight was started. attackTargetID is
 // only used to explicitly attack another player standing on the destination.
-func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (string, bool, error) {
+func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (returnedMessage string, startedCombat bool, returnedErr error) {
+	regionWarning := ""
+	defer func() {
+		if regionWarning != "" {
+			returnedMessage += " " + regionWarning
+		}
+	}()
 	oldX := player.X
 	oldY := player.Y
+	oldRegion := player.CurrentRegion
 	mapID := worldMapIDForRegion(player.CurrentRegion)
 	var instanceID sql.NullString
 	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&instanceID); err != nil {
@@ -105,8 +134,11 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 		}
 	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
-	if debuffMsg := CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y); debuffMsg != "" {
-		logMsg += " " + debuffMsg
+	oldLargeZone, newLargeZone := largeZoneForRegion(oldRegion), largeZoneForRegion(destinationRegion)
+	if oldLargeZone != nil && newLargeZone != nil {
+		regionWarning = applyRegionalWallDebuff(player, oldLargeZone, newLargeZone)
+	} else {
+		regionWarning = CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y)
 	}
 	combatTriggered := false
 	pvpTriggered := false
@@ -655,6 +687,10 @@ func MovePlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
 		return
 	}
+	regionWarning := ""
+	if warningAt := strings.Index(logMsg, "⚠️"); warningAt >= 0 {
+		regionWarning = logMsg[warningAt:]
+	}
 
 	// Auto-resolve combat if skip_battle is enabled
 	var pendingNotifications []notify.Notification
@@ -677,6 +713,9 @@ func MovePlayer(c *gin.Context) {
 			} else {
 				logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
 			}
+			if regionWarning != "" {
+				logMsg += " " + regionWarning
+			}
 			if skipSummary != nil {
 				if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
 					logMsg += " " + strings.Join(loot, " ")
@@ -684,6 +723,11 @@ func MovePlayer(c *gin.Context) {
 				if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
 					logMsg += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
 				}
+			}
+			if _, err := tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5`, player.CurrentRegion, player.X, player.Y, player.Statuses, player.ID); err != nil {
+				logger.S.Errorf("MovePlayer: failed to persist moved region after auto-combat for player=%s: %v", player.ID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu khu vực sau khi tự động chiến đấu"})
+				return
 			}
 			if err := tx.Commit(); err != nil {
 				logger.S.Errorf("MovePlayer: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)

@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,10 +11,36 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
-// ResolveRespawnPosition returns the nearest safe hub after death. The legacy
-// arguments remain because multiple defeat flows share this helper.
-func ResolveRespawnPosition(_ *sql.Tx, _ uuid.UUID, _ string, currentX, currentY int) (string, int, int) {
-	return NearestHub(currentX, currentY)
+// ResolveRespawnPosition chooses a same-map HUB first, then a SAFE_ZONE, then a
+// random point inside the KHU_VUC containing the death position. It never moves
+// the player to another map layer.
+func ResolveRespawnPosition(_ *sql.Tx, _ uuid.UUID, currentRegion string, currentX, currentY int) (string, int, int) {
+	mapID := worldMapIDForRegion(currentRegion)
+	if region, x, y, found := NearestRespawnPointOnMap(currentX, currentY, mapID); found {
+		return region, x, y
+	}
+	if region, x, y, found := RandomRespawnPointInKhuVuc(currentRegion, currentX, currentY, mapID); found {
+		return region, x, y
+	}
+	// Do not strand the player on another map if no same-layer KHU_VUC exists.
+	return currentRegion, currentX, currentY
+}
+
+func RespawnLocationMessage(fromRegion, toRegion string, x, y int) string {
+	name := toRegion
+	if zone := ZoneByID(toRegion); zone != nil && zone.Name != "" {
+		name = zone.Name
+	}
+	message := fmt.Sprintf("Hồi sinh tại %s (%d, %d).", name, x, y)
+	mapID := worldMapIDForRegion(fromRegion)
+	if _, _, _, found := NearestRespawnPointOnMap(x, y, mapID); !found {
+		if zone := ZoneByID(toRegion); zone != nil && zone.ZoneType == ZoneTypeNamed {
+			message += " Không có HUB hoặc SAFE zone trên tầng này; đạo hữu được hồi sinh ngẫu nhiên trong KHU_VUC."
+		} else {
+			message += " Không tìm thấy HUB, SAFE zone hoặc KHU_VUC hợp lệ trên tầng này; đạo hữu hồi sinh tại vị trí tử vong."
+		}
+	}
+	return message
 }
 
 // GrantPvpImmunity grants the pvp_immunity status to a player upon respawning.
