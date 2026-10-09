@@ -128,6 +128,7 @@ const UNIQUE_NAMES: Record<string, string> = {
   SUPPRESS_PRIORITY: "Cấm Tuyệt Tiên Thủ",
   GROWTH_DURATION_HOURS: "Thời Gian Trưởng Thành Cổ",
   IMMUNE_PATH_STATUS: "Miễn Nhiễm Trạng Thái Lưu Phái",
+  SOVEREIGN_BODY_TRANSFORM: "Cải Tạo Tiên Thể Chí Tôn",
 };
 
 export const formatTarget = formatEffectTarget;
@@ -170,7 +171,10 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
       const statName = STAT_NAMES[op.stat?.toUpperCase() || ""] || op.stat || "Chỉ số";
       const isMult = op.sub_type === "MULTIPLY_PERCENT";
       const val = op.value ?? 0;
-      const text = isMult
+      const isPathConflictReduction = op.stat?.toUpperCase() === "PATH_CONFLICT_REDUCTION";
+      const text = isPathConflictReduction
+        ? `${val >= 0 ? "+" : ""}${val}% ${statName}`
+        : isMult
         ? `${val >= 0 ? "+" : ""}${Math.round(val * 100)}% ${statName}`
         : `${val >= 0 ? "+" : ""}${val} ${statName}`;
       return { text, color: val >= 0 ? "text-amber-300" : "text-rose-400", icon: "📊" };

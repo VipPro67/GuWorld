@@ -85,6 +85,7 @@ type Combatant struct {
 	GuInventory    GuInventory       `json:"gu_inventory"`
 	DaoMarks       DaoMarksMap       `json:"dao_marks"`
 	PathMasteries  map[string]int    `json:"path_masteries"`
+	BodyMods       BodyModsList      `json:"body_mods,omitempty"`
 	AIProfile      string            `json:"ai_profile"`
 	LootTableID    string            `json:"loot_table_id"`
 	StatusEffects  []StatusEffect    `json:"status_effects"`
@@ -99,11 +100,11 @@ type Combatant struct {
 	AvatarURL      string            `json:"avatar_url,omitempty"`
 	FullyGrown     []FullyGrownInfo  `json:"fully_grown,omitempty"`
 	CombatSettings *AutoCombatConfig `json:"combat_settings,omitempty"`
-	// HasNonConflictingDao mirrors the character's "non-conflicting dao marks"
-	// trait (Chí Tôn body or Gu passive with path_conflict_reduction >= 100).
+	// HasNonConflictingDao mirrors a permanent non-conflicting body trait.
 	// When true, offensive conflict penalty is removed and natural defensive
 	// resistance is zeroed out in DaoCombatProfile.
-	HasNonConflictingDao bool `json:"has_non_conflicting_dao,omitempty"`
+	HasNonConflictingDao     bool    `json:"has_non_conflicting_dao,omitempty"`
+	DaoConflictReductionPct float64 `json:"dao_conflict_reduction_pct,omitempty"`
 }
 
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {
@@ -566,6 +567,8 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 		GuInventory:    player.GuInventory,
 		DaoMarks:       player.DaoMarks,
 		PathMasteries:  player.PathMasteries,
+		BodyMods:       player.BodyMods,
+		HasNonConflictingDao: player.BodyMods.Has(BodyModSovereignImmortal),
 		StatusEffects:  []StatusEffect{}, // Will be populated in combat loop
 		SoulHP:         float64(player.SoulHP),
 		MaxSoulHP:      float64(player.MaxSoul),

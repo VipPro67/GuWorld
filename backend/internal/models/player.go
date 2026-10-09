@@ -65,6 +65,18 @@ type PathMasteriesMap map[string]int
 // BodyModsList represents passive body modifications
 type BodyModsList []string
 
+const BodyModSovereignImmortal = "sovereign_immortal_body"
+
+// Has reports whether the player has a permanent body modification.
+func (b BodyModsList) Has(id string) bool {
+	for _, mod := range b {
+		if mod == id {
+			return true
+		}
+	}
+	return false
+}
+
 // StatusInstance is a single active player status (trạng thái). ExpiresAt is
 // nil for permanent statuses; Source records where it came from ("admin",
 // "combat", "tribulation", ...); Value carries an optional intensity.

@@ -1104,11 +1104,13 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		ImmuneDreamStatus:    immuneDream,
 		SoulDefenseBonus:     charFX.SoulDefenseBonus,
 		LuckBonus:            charFX.LuckBonus,
-		HasNonConflictingDao: charFX.NonConflictingDaoMarks,
-		DaoProfile: gamefx.BuildDaoCombatProfile(
+		HasNonConflictingDao:     charFX.NonConflictingDaoMarks,
+		DaoConflictReductionPct: charFX.DaoConflictReductionPct,
+		DaoProfile:              gamefx.BuildDaoCombatProfileWithReduction(
 			player.DaoMarks,
 			player.PathMasteries,
 			charFX.NonConflictingDaoMarks,
+			charFX.DaoConflictReductionPct,
 			charFX.DaoNganBonus,
 		),
 		Actions:            allActions,

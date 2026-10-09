@@ -69,7 +69,7 @@ func buildFieldDefinitions() map[string]map[string]Definition {
 	add("passive", DispositionSupported, "refinement", "success_rate_bonus", "refine_mana_tier", "soul_refinement")
 	add("passive", DispositionSupported, "inventory", "storage_capacity")
 	add("passive", DispositionSupported, "time", "time_speed_multiplier")
-	add("passive", DispositionKnownBug, "effect-runtime-v2", "path_conflict_reduction")
+	add("passive", DispositionSupported, "player-stats", "path_conflict_reduction")
 	add("passive", DispositionMigrate, "effect-runtime-v2", "damage_mult", "stat_base_luck", "dao_mark_multiplier", "kill_path_damage_buff", "luck_flat", "storage_slots", "kill_path_dao_marks_mult")
 	add("passive", DispositionMetadata, "content", "description")
 
@@ -118,7 +118,7 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 			result[key] = MechanicDefinition{Trigger: trigger, ActionCode: action, Disposition: disposition, Owner: owner}
 		}
 	}
-	add("ON_CONSUME", DispositionSupported, "gu-consume", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "DEDUCTION_INSTANT_FINISH")
+	add("ON_CONSUME", DispositionSupported, "gu-consume", "SOVEREIGN_BODY_TRANSFORM", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "DEDUCTION_INSTANT_FINISH")
 	add("ALWAYS_ON", DispositionSupported, "deduction", "DEDUCTION_INSTANT_FINISH")
 	add("ON_TICK", DispositionSupported, "resource-regen", "MANA_REGEN_TICK", "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK")
 	add("ON_TICK", DispositionSupported, "hunger-worker", "GENERATE_STONES_TICK", "GENERATE_IMMORTAL_STONES_TICK")

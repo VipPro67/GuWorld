@@ -150,7 +150,7 @@ const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "st
     { key: "storage_capacity", label: "Storage (Dung lượng chứa)", type: "number" },
     { key: "investigation", label: "Investigation (Khảo sát/Điều tra)", type: "number" },
     { key: "hearing", label: "Hearing (Thính giác)", type: "number" },
-    { key: "path_conflict_reduction", label: "Path Conflict Reduct (Giảm xung đột hệ)", type: "number" },
+    { key: "path_conflict_reduction", label: "Path Conflict Reduction (%)", type: "number" },
     { key: "damage_multiplier_on_hit", label: "Damage Mult On Hit (Hệ số ST khi đánh)", type: "number" },
     { key: "refine_mana_tier", label: "Refine Mana Tier", type: "number" },
     { key: "cleansing_power", label: "Cleansing Power", type: "number" },
@@ -1994,7 +1994,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                       damage_multiplier: "Sát Thương Khi Mất Máu",
                       refine_mana_tier: "Tinh Luyện",
                       cleansing_power: "Tẩy Trừ",
-                      path_conflict_reduction: "Giảm Xung Đột",
+                      path_conflict_reduction: "Giảm Xung Đột (%)",
                     };
 
                     const details = (ps?.details || []).filter((d) => d.total !== 0);

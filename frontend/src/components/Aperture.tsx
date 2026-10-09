@@ -911,7 +911,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                   investigation: "Trinh Sát", hearing: "Thính Giác",
                   mana_regen_mult: "Hồi Pháp", damage_multiplier_on_hit: "Sát Thương Khi Mất Máu",
                   refine_mana_tier: "Tinh Luyện", cleansing_power: "Tẩy Trừ",
-                  path_conflict_reduction: "Giảm Xung Đột",
+                  path_conflict_reduction: "Giảm Xung Đột (%)",
                 };
                 const details = passiveStats.details.filter(d => d.total !== 0);
                 if (details.length === 0) return <div className="text-xs text-zinc-500 italic py-2">Không có chỉ số bị động nào.</div>;
