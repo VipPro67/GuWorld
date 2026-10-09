@@ -187,6 +187,20 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
+	// Tiên cổ là duy nhất: xác định trước khi tính tỉ lệ để pity không giúp
+	// tăng tỉ lệ cho một lần luyện chắc chắn thất bại vì Cổ đã tồn tại.
+	isUniqueImmortalFail := false
+	if recipe.TargetRank >= 6 {
+		exists, err := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
+		if err != nil {
+			logger.S.Errorf("RefineGu: CheckImmortalGuExists error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra Cổ duy nhất"})
+			return
+		}
+		isUniqueImmortalFail = exists
+	}
+	pityEligible := !guRequirementsNotMet && !isUniqueImmortalFail
+
 	// 7. Consume resources (Stones, Mana, Materials & Gus)
 	player.CurrentMana -= manaCost
 	player.PrimevalStones -= recipe.PrimevalStonesCost
@@ -285,7 +299,10 @@ func RefineGu(c *gin.Context) {
 	// Per-rank pity: fail rank R stacks only buff rank R (+1%/stack, no cap).
 	// Success on that rank resets its stacks to 0 (handled after outcome).
 	insightStacks := refineInsightStacks(&player, recipe.TargetRank)
-	insightBonus := float64(insightStacks) * RefineInsightBonusPerStack
+	insightBonus := 0.0
+	if pityEligible {
+		insightBonus = float64(insightStacks) * RefineInsightBonusPerStack
+	}
 
 	// Apply Immortal Penalty to flat bonuses for Rank 6+
 	immortalPenalty := gamefx.RefinementImmortalPenalty(recipe.TargetRank)
@@ -346,24 +363,11 @@ func RefineGu(c *gin.Context) {
 	var newGuInstance models.GuInstance
 	var statusMsg string
 	var statusStr string
-	var isUniqueImmortalFail bool
 
-	// Tiên cổ duy nhất check
-	if recipe.TargetRank >= 6 {
-		exists, err := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
-		if err != nil {
-			logger.S.Errorf("RefineGu: CheckImmortalGuExists error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra Cổ duy nhất"})
-			return
-		}
-		if exists {
-			isUniqueImmortalFail = true
-			// Tiên cổ duy nhất đã tồn tại: không thể luyện thành công,
-			// và cũng không bị phản phệ (backfire) vì thất bại này có nguyên nhân khách quan.
-			if outcome != OutcomeFailNormal {
-				outcome = OutcomeFailNormal
-			}
-		}
+	// Tiên cổ duy nhất đã tồn tại: không thể luyện thành công,
+	// và cũng không bị phản phệ (backfire) vì thất bại này có nguyên nhân khách quan.
+	if isUniqueImmortalFail && outcome != OutcomeFailNormal {
+		outcome = OutcomeFailNormal
 	}
 
 	// Consume Materials based on outcome
@@ -566,22 +570,22 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	// Per-rank pity (Tâm Đắc): mọi fail +1 stack (+1% cho đúng rank, không cap),
-	// success rank đó reset về 0. Kể cả unique-fail (vẫn tốn nguyên liệu/mana).
+	// Per-rank pity chỉ đổi sau lần thử có công thức nguyên liệu đúng và mục tiêu
+	// chưa tồn tại: thất bại +1 tầng; thành công reset tầng của rank đó.
 	insightKey := gamefx.RefineInsightKey(recipe.TargetRank)
-	if outcome == OutcomeSuccess {
+	if outcome == OutcomeSuccess && pityEligible {
 		if refineInsightStacks(&player, recipe.TargetRank) > 0 || player.Statuses.Has(insightKey) {
 			player.Statuses.Remove(insightKey)
 			statusMsg += " [Tâm Đắc viên mãn]: Luyện thành công, pity rank này reset về 0."
 		}
-	} else {
+	} else if outcome != OutcomeSuccess && pityEligible {
 		newStacks := insightStacks + 1
 		player.Statuses.Add(insightKey, "refine", 0, float64(newStacks))
-		if isUniqueImmortalFail {
-			statusMsg += fmt.Sprintf(" [Tâm Đắc R%d]: Tích %d tầng (+%d%% tỉ lệ luyện R%d). Tiên cổ đã tồn tại nên lần này vẫn fail, tầng pity giữ cho lần sau.", recipe.TargetRank, newStacks, newStacks, recipe.TargetRank)
-		} else {
-			statusMsg += fmt.Sprintf(" [Tâm Đắc R%d]: Tích %d tầng (+%d%% tỉ lệ luyện R%d, không giới hạn).", recipe.TargetRank, newStacks, newStacks, recipe.TargetRank)
-		}
+		statusMsg += fmt.Sprintf(" [Tâm Đắc R%d]: Tích %d tầng (+%d%% tỉ lệ luyện R%d, không giới hạn).", recipe.TargetRank, newStacks, newStacks, recipe.TargetRank)
+	} else if isUniqueImmortalFail {
+		statusMsg += " [Tâm Đắc]: Tiên cổ cùng bậc đã tồn tại; lần này không tăng tầng Tâm Đắc."
+	} else if guRequirementsNotMet {
+		statusMsg += " [Tâm Đắc]: Cổ nguyên liệu không khớp công thức; lần này không tăng tầng Tâm Đắc."
 	}
 
 	statusesRaw, err := player.Statuses.Value()

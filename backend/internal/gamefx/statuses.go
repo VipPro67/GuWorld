@@ -51,10 +51,11 @@ func defaultStatuses() []StatusDef {
 			Effects: Effects{
 				StatMods:             map[string]float64{"attack": -0.20, "defense": -0.20, "speed": -0.20},
 				HealingReceivedBonus: -0.50,
+				RefineBonus:          -0.20,
 			},
 			DefaultDurationMinutes: 60,
 			BlockedActions:         []string{ActionExplore},
-			Description:            "Thân trúng trọng thương, công thủ tốc đều giảm mạnh.",
+			Description:            "Thân trúng trọng thương, công thủ tốc và tỉ lệ luyện cổ đều suy giảm theo cường độ phản phệ.",
 		},
 		{
 			Key:  "poisoned",
@@ -243,7 +244,8 @@ func RefineInsightKey(rank int) string {
 // EffectsForValue returns the status effects adjusted for the instance's
 // severity Value. A negative Value (rank-scaled suppression statuses store
 // their intensity there, e.g. regional_wall_suppression) replaces every
-// stat_mod percentage with the Value itself.
+// stat_mod percentage with the Value itself. For rank-scaled severe wounds,
+// the same intensity also scales the Refinement penalty.
 func (def StatusDef) EffectsForValue(value float64) Effects {
 	eff := def.Effects
 	if value < 0 && len(eff.StatMods) > 0 {
@@ -252,6 +254,9 @@ func (def StatusDef) EffectsForValue(value float64) Effects {
 			mods[k] = value
 		}
 		eff.StatMods = mods
+	}
+	if value < 0 && def.Key == "severely_wounded" {
+		eff.RefineBonus = value
 	}
 	return eff
 }

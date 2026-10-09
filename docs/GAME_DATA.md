@@ -292,14 +292,14 @@ Danh sách hiện tại (7 trạng thái):
 
 | Key | Tên Việt | Effect | Thời hạn | Chặn |
 | --- | --- | --- | --- | --- |
-| `severely_wounded` | Trọng Thương | -20% attack/defense/speed, -50% hồi phục nhận | Vĩnh viễn | `explore` |
+| `severely_wounded` | Trọng Thương | Mặc định -20% attack/defense/speed, -20% tỉ lệ Luyện Cổ và -50% hồi phục nhận; khi đổi Bản Mệnh Cổ, áp chế attack/defense/speed và tỉ lệ Luyện Cổ cùng bằng `RegionalWallDebuff(rank, sub_rank)` (10–90%) | Khi đổi Bản Mệnh Cổ: 5–40 giờ theo rank | `explore` |
 | `poisoned` | Trúng Độc | -10% attack, -10% speed | 30 phút | — |
 | `exhausted` | Kiệt Sức | -30% speed, -50% hiệu suất tu luyện | 10 phút | `cultivate` |
 | `blessed` | Phúc Trạch | +5 may mắn, +10% hiệu suất tu luyện | 60 phút | — |
 | `death_penalty` | Hình Phạt Tử Vong | -50% attack/defense/speed | 30 phút | — |
 | `refine_fatigue` | Tâm Thần Mệt Mỏi | -50% tỉ lệ Luyện Cổ | 10 phút | — |
 | `refine_backfire` | Luyện Cổ Phản Phệ | -95% tỉ lệ Luyện Cổ | 20 phút | — |
-| `refine_insight_1..9` | Luyện Cổ Tâm Đắc R1..R9 | +1%/tầng cho đúng rank đó, không cap (Value = số tầng) | Vĩnh viễn (reset về 0 khi luyện thành công rank đó) | — |
+| `refine_insight_1..9` | Luyện Cổ Tâm Đắc R1..R9 | +1%/tầng cho đúng rank đó, không cap (Value = số tầng); chỉ hợp luyện đúng nguyên liệu khi Cổ mục tiêu chưa tồn tại mới được cộng/dùng pity | Vĩnh viễn (reset về 0 khi hợp luyện hợp lệ thành công rank đó) | — |
 | `sinh_khi_tan` | Sinh Khí Tàn | Tầng I -10%, II -25%, III -35%, IV -50%, V -99% attack/defense/speed (Value âm ghi đè stat_mods) | 300 phút, refresh mỗi hit | — |
 
 Sinh Khí Tàn do **Sát Sinh Khí Cổ** (`GU_KILL_ENERGY`, rank 9 Sát Đạo) gây ra: đánh trúng ở PvP thật thì defender persistent +1 tầng (tối đa V, tầng V vẫn ăn hit refresh, không miễn nhiễm). Công thức luyện: `GU_KILL_HEAVEN_DAO` rank 8 + `heaven_qi_rank8/9`, `kill_path_material`, `primordial_kill_origin_stone` (vật liệu Hỗn Độn trong spec gốc chưa tồn tại dưới dạng item nên tạm thay bằng tiên tài Sát Đạo hiện có). Cơ chế **data-driven trên Cổ**: `Gu.csv` block `ON_HIT` + `UNIQUE PERSIST_STATUS_ON_HIT` (`params.status_key=sinh_khi_tan, pvp_only=true`); engine gắn `CombatLog.SourceGuID/HitLanded` (khiên hấp thụ hết vẫn tính hit, né/mù/miễn nhiễm không tính); hook post-combat `handlers.maybeGrantPersistentHitStatuses` (dùng chung `AutoCombatStart` + `AutoResolveCombat`) grant theo spec, Cổ mới chỉ cần thêm block tương tự. Helper: `gamefx.SinhKhiTanTierFromValue/ValueForTier/TierName`, `handlers.GrantSinhKhiTanHit`, `models.GuPersistentHitStatus`, `handlers.CleanseSinhKhiTanOneTier` (thanh tẩy tụt 1 tầng, hết tầng I thì xóa).
