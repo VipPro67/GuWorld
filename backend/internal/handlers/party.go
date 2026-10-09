@@ -465,8 +465,13 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
+	regionalWarning := ""
 	if leaderRegion.Valid && player.CurrentRegion != leaderRegion.String {
-		if debuffMsg := CheckAndApplyRegionalWallDebuff(&player, player.X, player.Y, leaderX, leaderY); debuffMsg != "" {
+		regionalWarning = CheckAndApplyRegionalWallDebuffBetween(&player, player.CurrentRegion, leaderRegion.String)
+		if regionalWarning == "" && (largeZoneForRegion(player.CurrentRegion) == nil || largeZoneForRegion(leaderRegion.String) == nil) {
+			regionalWarning = CheckAndApplyRegionalWallDebuff(&player, player.X, player.Y, leaderX, leaderY)
+		}
+		if regionalWarning != "" {
 			_, _ = tx.Exec("UPDATE players SET statuses = $1 WHERE id = $2", player.Statuses, player.ID)
 		}
 	}
@@ -484,8 +489,12 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
+	message := "Đã chấp nhận lời mời tham gia tổ đội! Nhân Khí +2."
+	if regionalWarning != "" {
+		message += " " + regionalWarning
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Đã chấp nhận lời mời tham gia tổ đội! Nhân Khí +2.",
+		"message": message,
 		"party": gin.H{
 			"id":        partyID.String(),
 			"leader_id": leaderID,

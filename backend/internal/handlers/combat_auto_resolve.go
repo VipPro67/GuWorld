@@ -249,14 +249,15 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 
 					// Apply death drop (may drop items)
 					dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
+					playerMsg := "Đại bại trong chiến tranh Tông Môn. " + RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y)
 					if dropSummary != "" {
-						playerMsg := fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
-						logs = append(logs, simulator.CombatLog{
-							Turn:   simState.Turn,
-							Action: "BATTLE_END",
-							Detail: playerMsg,
-						})
+						playerMsg += fmt.Sprintf(" Rơi rớt mất: %s.", dropSummary)
 					}
+					logs = append(logs, simulator.CombatLog{
+						Turn:   simState.Turn,
+						Action: "BATTLE_END",
+						Detail: playerMsg,
+					})
 
 					// Update player position in DB
 					_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3 WHERE id = $4`,

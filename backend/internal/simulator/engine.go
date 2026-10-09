@@ -350,6 +350,34 @@ func actionConflictMult(c *CombatantAuto, paths []string) float64 {
 	return conflictMult
 }
 
+func daoBackfireExplanation(c *CombatantAuto, action *SimAction, conflictMult, chance, damage float64) string {
+	if c == nil || action == nil {
+		return ""
+	}
+	ensureDaoProfile(c)
+	castPath := "strength"
+	if len(action.Path) > 0 {
+		castPath = gamefx.CleanPath(action.Path[0])
+	}
+	dominantPath := c.DaoProfile.DominantPath
+	dominantPurity := 0.0
+	if dominantPath != "" {
+		if dominant, ok := c.DaoProfile.Paths[dominantPath]; ok {
+			dominantPurity = dominant.Purity * 100
+		}
+	}
+	name := action.Name
+	if name == "" {
+		name = "kỹ năng"
+	}
+	dominantSummary := "không có Đạo Ngân chủ đạo"
+	if dominantPath != "" {
+		dominantSummary = fmt.Sprintf("Đạo Ngân chủ đạo [%s], chiếm %.1f%%", dominantPath, dominantPurity)
+	}
+	return fmt.Sprintf("Kỹ năng [%s] thuộc lưu phái [%s] xung đột với %s; hệ số xung đột %.3f, xác suất phản phệ %.1f%%. Phản phệ gây %.0f sát thương (%.1f%% HP tối đa). Độ tinh thuần của Đạo Ngân chủ đạo không bảo đảm an toàn cho kỹ năng khác lưu phái.",
+		name, castPath, dominantSummary, conflictMult, chance*100, damage, 100*damage/math.Max(1, c.MaxHP))
+}
+
 // actorDaoMultiplier returns the dao multiplier for an action's paths including
 // per-path bonuses, realm efficiency, and internal conflict from DaoProfile.
 func actorDaoMultiplier(c *CombatantAuto, paths []string) (float64, bool) {
@@ -1173,13 +1201,14 @@ func Simulate(state *CombatState) []CombatLog {
 							actor.HP = 0
 						}
 						conflictPenaltyMult = 0.5
+						backfireReason := daoBackfireExplanation(actor, a, conflictMult, chance, bfDmg)
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "DAO_BACKFIRE",
 							Damage:    bfDmg,
-							Detail:    fmt.Sprintf("[Phản Phệ Nội Thương] Quy tắc dị hệ xung đột dữ dội! %s chịu %d sát thương nội thương do phản phệ!", actor.Name, int(bfDmg)),
+							Detail:    fmt.Sprintf("[Phản Phệ Nội Thương] %s chịu %d sát thương nội thương. %s", actor.Name, int(bfDmg), backfireReason),
 						})
 						if actor.HP <= 0 {
 							actor.IsDead = true
@@ -1188,7 +1217,7 @@ func Simulate(state *CombatState) []CombatLog {
 								ActorId:   actor.ID,
 								ActorName: actor.Name,
 								Action:    "DIED",
-								Detail:    fmt.Sprintf("%s đã bạo thể vong mạng do phản phệ Đạo Ngân!", actor.Name),
+								Detail:    fmt.Sprintf("%s đã bạo thể vong mạng do phản phệ Đạo Ngân. Lý do: %s HP còn %.0f/%.0f.", actor.Name, backfireReason, math.Max(0, actor.HP), actor.MaxHP),
 							})
 							res.abort = true
 							return res

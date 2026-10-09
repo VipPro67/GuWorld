@@ -49,6 +49,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 	}
 	deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
 	isPVP := player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP"
+	didRespawn := false
 	var winnerID *uuid.UUID
 
 	if isTribulation {
@@ -67,6 +68,7 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		}
 		dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
 		player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
+		didRespawn = true
 		if dropSummary != "" {
 			defeatMsg = fmt.Sprintf("Công kích Tông Môn thất bại! Đạo hữu trọng thương và rơi rớt mất: %s.", dropSummary)
 		}
@@ -82,10 +84,14 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 		}
 		dropSummary := applyDeathDrop(tx, player, winnerID, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY, KillerName: killerName})
 		player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
+		didRespawn = true
 		setWorldPosFromPlayer(player)
 		if dropSummary != "" {
 			defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
 		}
+	}
+	if didRespawn {
+		defeatMsg += " " + RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y)
 	}
 
 	for _, ally := range player.ActiveCombat.Allies {
