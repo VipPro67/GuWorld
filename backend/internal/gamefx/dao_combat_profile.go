@@ -378,16 +378,18 @@ func EffectivePathCount(marks map[string]int64, levels map[string]int) float64 {
 	}
 	active := make(map[string]int64)
 	dominant := ""
-	var maxAmt int64
 	for k, v := range marks {
 		if v <= 0 {
 			continue
 		}
 		clean := CleanPath(k)
 		active[clean] += v
-		if active[clean] > maxAmt {
-			maxAmt = active[clean]
-			dominant = clean
+	}
+	var maxAmt int64
+	for path, amount := range active {
+		if amount > maxAmt || (amount == maxAmt && (dominant == "" || path < dominant)) {
+			maxAmt = amount
+			dominant = path
 		}
 	}
 	for k, v := range active {
@@ -475,9 +477,11 @@ func BuildDaoCombatProfileWithReduction(
 		clean := CleanPath(p)
 		cleanDaoMarks[clean] += amt
 		totalMarks += amt
-		if cleanDaoMarks[clean] > maxMarks {
-			maxMarks = cleanDaoMarks[clean]
-			dominantPath = clean
+	}
+	for path, amount := range cleanDaoMarks {
+		if amount > maxMarks || (amount == maxMarks && (dominantPath == "" || path < dominantPath)) {
+			maxMarks = amount
+			dominantPath = path
 		}
 	}
 
