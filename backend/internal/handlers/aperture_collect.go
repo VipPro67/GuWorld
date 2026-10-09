@@ -341,7 +341,7 @@ func nodeDaoPurity(nodeDaoMap map[string]int) float64 {
 
 type apertureRewardContext struct {
 	nodeDaoMap          map[string]int
-	ignoresPathConflict bool
+	daoConflictReductionPct float64
 	overgrazing         bool
 	herbivores          int
 	starvationHerb      bool
@@ -366,12 +366,20 @@ func loadApertureRewardContext(tx *sql.Tx, playerID uuid.UUID, apertureID any, a
 		_ = json.Unmarshal(nodeDaoJSON, &ctx.nodeDaoMap)
 	}
 
-	_ = tx.QueryRow(`SELECT EXISTS (
-		SELECT 1 FROM player_gu pg
-		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.rank
-		WHERE pg.player_id = $1 AND pg.equipped = true AND pg.state = 'ACTIVE'
-		AND COALESCE((gd.effects->'passive'->>'path_conflict_reduction')::numeric, 0) >= 100
-	)`, playerID).Scan(&ctx.ignoresPathConflict)
+	var bodyMods models.BodyModsList
+	var guInventory models.GuInventory
+	var race, constitution string
+	if err := tx.QueryRow(`
+		SELECT COALESCE(p.body_mods, '[]'::jsonb), COALESCE(p.race, 'human'), COALESCE(p.constitution, ''), `+db.GuInventoryAggregate("p.id")+`
+		FROM players p WHERE p.id = $1
+	`, playerID).Scan(&bodyMods, &race, &constitution, &guInventory); err == nil {
+		player := &models.Player{
+			CharacterState: models.CharacterState{Race: race, Constitution: constitution},
+			BodyState:      models.BodyState{BodyMods: bodyMods},
+			GuInventory:   guInventory,
+		}
+		ctx.daoConflictReductionPct = gamefx.Get(player).DaoConflictReductionPct
+	}
 
 	_, ctx.herbivores, _, ctx.overgrazing, ctx.starvationHerb, ctx.starvationCarn = EvaluateEcosystem(allNodes)
 
@@ -399,17 +407,19 @@ func computeApertureNodeRewardWithCtx(ctx *apertureRewardContext, n models.Apert
 
 	// 2. Conflict multiplier
 	conflictMultiplier := 1.0
-	if CheckNodeConflict(n, allNodes) && !ctx.ignoresPathConflict {
-		conflictMultiplier = 0.5
+	if CheckNodeConflict(n, allNodes) {
+		conflictPenalty := 0.5 * (1.0 - ctx.daoConflictReductionPct/100.0)
+		conflictMultiplier = 1.0 - conflictPenalty
 	}
 
 	// 2b. Ecology purity factor (spec §5.1): tạp tu làm cạn kiệt linh khí/khoáng mạch.
-	// Chí Tôn Tiên Thai / path_conflict_reduction >= 100 miễn nhiễm suy thoái sinh thái.
+	// Dao conflict reduction also attenuates Dao-mark purity loss; the permanent
+	// sovereign body sets this to 100%, while ordinary Gu reductions stay below 100%.
 	ecologyMultiplier := 1.0
-	if !ctx.ignoresPathConflict {
-		if p := nodeDaoPurity(ctx.nodeDaoMap); p > 0 {
-			ecologyMultiplier = gamefx.EcologyPurityFactor(p)
-		}
+	if p := nodeDaoPurity(ctx.nodeDaoMap); p > 0 {
+		purityMultiplier := gamefx.EcologyPurityFactor(p)
+		ecologyPenalty := (1.0 - purityMultiplier) * (1.0 - ctx.daoConflictReductionPct/100.0)
+		ecologyMultiplier = 1.0 - ecologyPenalty
 	}
 
 	// 3. Ecosystem multiplier

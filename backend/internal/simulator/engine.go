@@ -332,7 +332,7 @@ func ensureDaoProfile(c *CombatantAuto) {
 			daoMarks[k] = v
 		}
 	}
-	c.DaoProfile = gamefx.BuildDaoCombatProfile(daoMarks, c.PathMasteries, c.HasNonConflictingDao, c.DaoBonus)
+	c.DaoProfile = gamefx.BuildDaoCombatProfileWithReduction(daoMarks, c.PathMasteries, c.HasNonConflictingDao, c.DaoConflictReductionPct, c.DaoBonus)
 }
 
 // actionConflictMult returns the dao conflict multiplier for an action's path
@@ -462,6 +462,7 @@ func cloneCombatant(c *CombatantAuto) *CombatantAuto {
 		clone.CustomState = make(map[string]int)
 	}
 	clone.HasNonConflictingDao = c.HasNonConflictingDao
+	clone.DaoConflictReductionPct = c.DaoConflictReductionPct
 	clone.DaoProfile = c.DaoProfile
 	return &clone
 }

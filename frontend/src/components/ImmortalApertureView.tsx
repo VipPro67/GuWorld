@@ -2468,10 +2468,12 @@ return (
                   <div className="text-sm font-bold">
                     {daoNgan?.has_non_conflicting_dao ? (
                       <span className="text-cyan-300 flex items-center gap-1.5">
-                        ✨ Vô Xung Đột (Chí Tôn)
+                        ✨ Tiên Thể Chí Tôn — miễn xung đột 100%
                       </span>
                     ) : (
-                      <span className="text-slate-300">Đạo Thể Tương Khắc Bình Thường</span>
+                      <span className="text-slate-300">
+                        Giảm xung đột từ Cổ: {(daoNgan?.dao_conflict_reduction_pct ?? 0).toFixed(1)}%
+                      </span>
                     )}
                   </div>
                   <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">

@@ -52,16 +52,17 @@ type DaoNganPathDetail struct {
 
 // DaoNganResult is the full đạo ngân calculation response.
 type DaoNganResult struct {
-	TotalDaoNgan         float64             `json:"total_dao_ngan"`          // composite đạo ngân score
-	TotalMarks           int64               `json:"total_marks"`             // sum of all dao marks
-	UniquePathCount      int                 `json:"unique_path_count"`       // number of paths with marks
-	AverageMultiplier    float64             `json:"average_multiplier"`      // mean multiplier across paths
-	MaxMultiplier        float64             `json:"max_multiplier"`          // highest single-path multiplier
-	MaxPath              string              `json:"max_path"`                // path with highest multiplier
-	DominantPath         string              `json:"dominant_path"`           // path with most dao marks
-	GraceThreshold       int64               `json:"grace_threshold"`         // safe foreign mark threshold
-	HasNonConflictingDao bool                `json:"has_non_conflicting_dao"` // non-conflicting dao marks trait
-	Paths                []DaoNganPathDetail `json:"paths"`                   // per-path breakdown
+	TotalDaoNgan             float64             `json:"total_dao_ngan"`          // composite đạo ngân score
+	TotalMarks               int64               `json:"total_marks"`             // sum of all dao marks
+	UniquePathCount          int                 `json:"unique_path_count"`       // number of paths with marks
+	AverageMultiplier        float64             `json:"average_multiplier"`      // mean multiplier across paths
+	MaxMultiplier            float64             `json:"max_multiplier"`          // highest single-path multiplier
+	MaxPath                  string              `json:"max_path"`                // path with highest multiplier
+	DominantPath             string              `json:"dominant_path"`           // path with most dao marks
+	GraceThreshold           int64               `json:"grace_threshold"`         // safe foreign mark threshold
+	HasNonConflictingDao     bool                `json:"has_non_conflicting_dao"` // non-conflicting dao marks trait
+	DaoConflictReductionPct float64             `json:"dao_conflict_reduction_pct"`
+	Paths                   []DaoNganPathDetail `json:"paths"`                   // per-path breakdown
 }
 
 // CalculateDaoNganDetailed computes the composite "đạo ngân" (dao silver) score
@@ -72,23 +73,31 @@ func CalculateDaoNganDetailed(
 	hasNonConflicting bool,
 	daoBonus ...map[string]float64,
 ) DaoNganResult {
-	result := DaoNganResult{
-		Paths: make([]DaoNganPathDetail, 0),
-	}
-
-	if daoMarks == nil {
-		return result
-	}
-
 	bonus := map[string]float64{}
 	if len(daoBonus) > 0 {
 		bonus = daoBonus[0]
 	}
+	return CalculateDaoNganDetailedWithReduction(daoMarks, pathMasteries, hasNonConflicting, 0, bonus)
+}
 
-	profile := gamefx.BuildDaoCombatProfile(daoMarks, pathMasteries, hasNonConflicting, bonus)
+func CalculateDaoNganDetailedWithReduction(
+	daoMarks models.DaoMarksMap,
+	pathMasteries map[string]int,
+	hasNonConflicting bool,
+	conflictReductionPct float64,
+	daoBonus map[string]float64,
+) DaoNganResult {
+	result := DaoNganResult{
+		Paths: make([]DaoNganPathDetail, 0),
+	}
+	if daoMarks == nil {
+		return result
+	}
+	profile := gamefx.BuildDaoCombatProfileWithReduction(daoMarks, pathMasteries, hasNonConflicting, conflictReductionPct, daoBonus)
 	result.DominantPath = profile.DominantPath
 	result.GraceThreshold = profile.GraceThreshold
 	result.HasNonConflictingDao = profile.HasNonConflictingDao
+	result.DaoConflictReductionPct = profile.ConflictReductionPct
 
 	var totalPower float64
 	var totalMarks int64
@@ -193,12 +202,17 @@ func GetDaoNganHandler(c *gin.Context) {
 		_ = json.Unmarshal(daoJSON, &daoMap)
 	}
 
-	var constitution string
-	var race string
+	var constitution, race string
 	var pathMasteriesJSON []byte
-	_ = db.DB.QueryRowContext(c.Request.Context(),
-		`SELECT COALESCE(constitution, ''), COALESCE(race, 'human'), COALESCE(path_masteries, '{}'::jsonb) FROM players WHERE id = $1`, playerID,
-	).Scan(&constitution, &race, &pathMasteriesJSON)
+	var bodyMods models.BodyModsList
+	var guInventory models.GuInventory
+	err = db.DB.QueryRowContext(c.Request.Context(),
+		`SELECT COALESCE(p.constitution, ''), COALESCE(p.race, 'human'), COALESCE(p.path_masteries, '{}'::jsonb), COALESCE(p.body_mods, '[]'::jsonb), `+db.GuInventoryAggregate("p.id")+` FROM players p WHERE p.id = $1`, playerID,
+	).Scan(&constitution, &race, &pathMasteriesJSON, &bodyMods, &guInventory)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Dao effects"})
+		return
+	}
 
 	pathMasteries := make(models.PathMasteriesMap)
 	if len(pathMasteriesJSON) > 0 {
@@ -210,10 +224,12 @@ func GetDaoNganHandler(c *gin.Context) {
 			Constitution: constitution,
 			Race:         race,
 		},
+		BodyState: models.BodyState{BodyMods: bodyMods},
 	}
 	playerModel.PathMasteries = pathMasteries
+	playerModel.GuInventory = guInventory
 	charFX := gamefx.Get(playerModel)
 
-	result := CalculateDaoNganDetailed(daoMap, pathMasteries, charFX.NonConflictingDaoMarks, charFX.DaoNganBonus)
+	result := CalculateDaoNganDetailedWithReduction(daoMap, pathMasteries, charFX.NonConflictingDaoMarks, charFX.DaoConflictReductionPct, charFX.DaoNganBonus)
 	c.JSON(http.StatusOK, result)
 }

@@ -279,35 +279,30 @@ func (s *PlayerService) setDefaults(player *models.Player) {
 }
 
 // applyApertureProjection returns immortal aperture time rate and essence production for Rank >= 6.
-// Essence production is scaled by the aperture's Dao purity (spec §5.1) unless
-// the character is immune via path_conflict_reduction >= 100.
+// Equipped Gu reductions attenuate the Dao purity penalty, while a permanent
+// sovereign body mod removes that penalty entirely.
 func (s *PlayerService) applyApertureProjection(q QueryRower, player *models.Player) (timeRate float64, essenceProd int) {
 	timeRate = 1.0
 	essenceProd = 10
 	if player.Rank < 6 {
 		return timeRate, essenceProd
 	}
-	immune := false
 	_ = q.QueryRow(`
-		SELECT ia.time_rate, ia.essence_production_per_year, EXISTS(
-			SELECT 1 FROM player_gu pg
-			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.rank
-			WHERE pg.player_id = ia.player_id AND pg.equipped = true AND pg.state = 'ACTIVE'
-			AND COALESCE((gd.effects->'passive'->>'path_conflict_reduction')::numeric, 0) >= 100
-		)
+		SELECT ia.time_rate, ia.essence_production_per_year
 		FROM immortal_apertures ia WHERE ia.player_id = $1
-	`, player.ID).Scan(&timeRate, &essenceProd, &immune)
+	`, player.ID).Scan(&timeRate, &essenceProd)
 	if timeRate <= 0 {
 		timeRate = 1.0
 	}
-	if !immune {
-		if _, total, purity := gamefx.DaoPurity(player.DaoMarks); total > 0 {
-			f := gamefx.EcologyPurityFactor(purity)
-			if f < 1.0 {
-				essenceProd = int(float64(essenceProd) * f)
-				if essenceProd < 1 {
-					essenceProd = 1
-				}
+	if _, total, purity := gamefx.DaoPurity(player.DaoMarks); total > 0 {
+		reductionPct := gamefx.Get(player).DaoConflictReductionPct
+		purityMultiplier := gamefx.EcologyPurityFactor(purity)
+		effectivePenalty := (1.0 - purityMultiplier) * (1.0 - reductionPct/100.0)
+		purityMultiplier = 1.0 - effectivePenalty
+		if purityMultiplier < 1.0 {
+			essenceProd = int(float64(essenceProd) * purityMultiplier)
+			if essenceProd < 1 {
+				essenceProd = 1
 			}
 		}
 	}

@@ -380,6 +380,12 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 	}
 	actionCode := mechanic.ActionCode
 	switch actionCode {
+	case "SOVEREIGN_BODY_TRANSFORM":
+		if player.BodyMods.Has(models.BodyModSovereignImmortal) {
+			return "", fmt.Errorf("Thân thể đã được cải tạo thành Tiên Thể Chí Tôn")
+		}
+		player.BodyMods = append(player.BodyMods, models.BodyModSovereignImmortal)
+		return "Tiên Thai Chí Tôn hòa tan vào thân thể! Đạo hữu đã vĩnh viễn thành tựu Tiên Thể Chí Tôn, miễn nhiễm xung đột Đạo Ngân.", nil
 	case "INCREASE_APTITUDE":
 		val, _ := params["value"].(float64)
 		value := int(val)
