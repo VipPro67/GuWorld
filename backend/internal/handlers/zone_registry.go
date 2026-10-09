@@ -395,8 +395,20 @@ func isRegionWithinScope(parentRegion, candidateRegion string) bool {
 }
 
 func worldMapIDForRegion(regionID string) string {
-	if region := ZoneByID(regionID); region != nil && region.WorldMapID != "" {
-		return region.WorldMapID
+	seen := make(map[string]struct{}, 4)
+	for current := regionID; current != ""; {
+		if _, exists := seen[current]; exists {
+			break
+		}
+		seen[current] = struct{}{}
+		region := ZoneByID(current)
+		if region == nil {
+			break
+		}
+		if region.WorldMapID != "" {
+			return region.WorldMapID
+		}
+		current = region.ParentID
 	}
 	return "world_map"
 }
@@ -411,11 +423,132 @@ func hubEntryPoint() (int, int) {
 
 // NearestHub returns the region ID and entry coordinates of the closest HUB zone.
 func NearestHub(x, y int) (string, int, int) {
+	return nearestHubOnMap(x, y, "")
+}
+
+// NearestHubOnMap keeps respawns on the player's current world map layer when
+// that layer has a HUB. Coordinates are reused between layers, so comparing
+// every HUB globally can otherwise choose a hub on another map.
+func NearestHubOnMap(x, y int, mapID string) (string, int, int) {
+	return nearestHubOnMap(x, y, mapID)
+}
+
+// NearestRespawnPointOnMap prefers a HUB on the given map, then falls back to
+// the nearest SAFE_ZONE on that same map. It never returns a point from another
+// map layer.
+func NearestRespawnPointOnMap(x, y int, mapID string) (string, int, int, bool) {
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+
+	var bestHub, bestSafe *models.Region
+	var hubDist, safeDist float64 = -1, -1
+	for i := range zoneReg.zones {
+		z := &zoneReg.zones[i]
+		if z.ZoneType != ZoneTypeHub && z.ZoneType != ZoneTypeSafe {
+			continue
+		}
+		if z.EntryX == 0 || z.EntryY == 0 {
+			continue
+		}
+		if mapID != "" && zoneWorldMapIDLocked(z) != mapID {
+			continue
+		}
+		dx := float64(z.EntryX - x)
+		dy := float64(z.EntryY - y)
+		dist := dx*dx + dy*dy
+		if z.ZoneType == ZoneTypeHub {
+			if hubDist < 0 || dist < hubDist {
+				bestHub, hubDist = z, dist
+			}
+		} else if safeDist < 0 || dist < safeDist {
+			bestSafe, safeDist = z, dist
+		}
+	}
+	if bestHub != nil && bestHub.EntryX != 0 && bestHub.EntryY != 0 {
+		return bestHub.ID, bestHub.EntryX, bestHub.EntryY, true
+	}
+	if bestSafe != nil && bestSafe.EntryX != 0 && bestSafe.EntryY != 0 {
+		return bestSafe.ID, bestSafe.EntryX, bestSafe.EntryY, true
+	}
+	return "", 0, 0, false
+}
+
+// RandomRespawnPointInKhuVuc returns a random coordinate inside the KHU_VUC
+// containing the death position. It is scoped to the same map layer.
+func RandomRespawnPointInKhuVuc(currentRegion string, x, y int, mapID string) (string, int, int, bool) {
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+
+	var khuVuc *models.Region
+	seen := make(map[string]struct{}, 4)
+	for current := currentRegion; current != ""; {
+		if _, exists := seen[current]; exists {
+			break
+		}
+		seen[current] = struct{}{}
+		zone := zoneReg.byID[current]
+		if zone == nil {
+			break
+		}
+		if zone.ZoneType == ZoneTypeNamed && zoneContains(zone, x, y) && (mapID == "" || zoneWorldMapIDLocked(zone) == mapID) {
+			khuVuc = zone
+			break
+		}
+		current = zone.ParentID
+	}
+	if khuVuc == nil {
+		for i := range zoneReg.zones {
+			zone := &zoneReg.zones[i]
+			if zone.ZoneType == ZoneTypeNamed && zoneContains(zone, x, y) && (mapID == "" || zoneWorldMapIDLocked(zone) == mapID) {
+				khuVuc = zone
+				break
+			}
+		}
+	}
+	if khuVuc == nil || khuVuc.MaxX < khuVuc.MinX || khuVuc.MaxY < khuVuc.MinY {
+		return "", 0, 0, false
+	}
+	return khuVuc.ID,
+		khuVuc.MinX + rand.Intn(khuVuc.MaxX-khuVuc.MinX+1),
+		khuVuc.MinY + rand.Intn(khuVuc.MaxY-khuVuc.MinY+1), true
+}
+
+func zoneWorldMapIDLocked(zone *models.Region) string {
+	if zone == nil {
+		return ""
+	}
+	if zone.WorldMapID != "" {
+		return zone.WorldMapID
+	}
+	seen := make(map[string]struct{}, 4)
+	for parentID := zone.ParentID; parentID != ""; {
+		if _, exists := seen[parentID]; exists {
+			break
+		}
+		seen[parentID] = struct{}{}
+		parent := zoneReg.byID[parentID]
+		if parent == nil {
+			break
+		}
+		if parent.WorldMapID != "" {
+			return parent.WorldMapID
+		}
+		if parent.ParentID == parentID {
+			break
+		}
+		parentID = parent.ParentID
+	}
+	return "world_map"
+}
+
+func nearestHubOnMap(x, y int, mapID string) (string, int, int) {
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
 
 	var bestHub *models.Region
 	var minDist float64 = -1
+	var bestAnyHub *models.Region
+	var minAnyDist float64 = -1
 
 	for i := range zoneReg.zones {
 		z := &zoneReg.zones[i]
@@ -423,15 +556,29 @@ func NearestHub(x, y int) (string, int, int) {
 			dx := float64(z.EntryX - x)
 			dy := float64(z.EntryY - y)
 			dist := dx*dx + dy*dy
+			if minAnyDist < 0 || dist < minAnyDist {
+				minAnyDist = dist
+				bestAnyHub = z
+			}
+			hubMapID := zoneWorldMapIDLocked(z)
+			if mapID != "" && hubMapID != mapID {
+				continue
+			}
 			if minDist < 0 || dist < minDist {
 				minDist = dist
 				bestHub = z
 			}
 		}
 	}
+	if bestHub == nil && mapID == "" {
+		bestHub = bestAnyHub
+	}
 
 	if bestHub != nil && bestHub.EntryX != 0 && bestHub.EntryY != 0 {
 		return bestHub.ID, bestHub.EntryX, bestHub.EntryY
+	}
+	if mapID != "" {
+		return "", 0, 0
 	}
 	return HubRegionID, HubEntryPoint.X, HubEntryPoint.Y
 }

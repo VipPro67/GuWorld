@@ -2339,15 +2339,15 @@ return (
                     )}
                   </div>
                   <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                    <span>Độ Tinh Thuần:</span>
+                    <span>Tỷ trọng Đạo Ngân chủ đạo:</span>
                     <span className="font-bold text-purple-300">
                       {daoNgan?.paths?.find(p => p.path === daoNgan?.dominant_path)?.purity_pct.toFixed(1) ?? "0"}%
                     </span>
                   </div>
-                  <div className={`rounded-lg px-2.5 py-2 text-[11px] font-semibold border ${purityTier === "safe" ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-300" : purityTier === "warn" ? "bg-amber-950/40 border-amber-500/40 text-amber-300" : "bg-rose-950/40 border-rose-500/50 text-rose-300"}`}>
-                    {purityTier === "safe" && "🟢 Bản Nguyên Thuần Khiết (An Toàn) — Hệ số xung đột 1.0×, sinh thái tối ưu."}
-                    {purityTier === "warn" && "🟡 Quy Tắc Tiên Khiếu Nhiễu Loạn — Suy giảm sản lượng sinh thái, gia tăng hao phí Tiên Nguyên."}
-                    {purityTier === "danger" && "🔴 ⚠️ VẠN ĐẠO TƯƠNG XUNG NGUY CẤP — Sát chiêu nguy cơ gãy vụn (25%), phản phệ nội thương (30%), Kiếp Nạn Hỗn Loạn đe dọa phá hủy khiếu!"}
+                  <div className={`rounded-lg px-2.5 py-2 text-[11px] font-semibold border ${purityTier === "safe" ? "bg-blue-950/40 border-blue-500/40 text-blue-300" : purityTier === "warn" ? "bg-amber-950/40 border-amber-500/40 text-amber-300" : "bg-rose-950/40 border-rose-500/50 text-rose-300"}`}>
+                    {purityTier === "safe" && "🔹 Đạo Ngân tập trung ở lưu phái chủ đạo. Tỷ lệ này không bảo đảm an toàn cho kỹ năng thuộc lưu phái khác; xung đột được tính riêng theo từng kỹ năng."}
+                    {purityTier === "warn" && "🟡 Đạo Ngân bắt đầu phân tán. Mức xung đột và hao phí Chân Nguyên phụ thuộc lưu phái của kỹ năng được sử dụng."}
+                    {purityTier === "danger" && "🔴 Đạo Ngân phân tán mạnh. Kỹ năng có thể thất bại hoặc phản phệ nếu lưu phái thi triển xung đột; xem log chiến đấu để biết lưu phái và hệ số cụ thể."}
                   </div>
                   <button
                     onClick={() => {
