@@ -25,6 +25,7 @@ interface GuInventoryProps {
   onUpdateStatus?: (instanceId: string, status: string) => Promise<void>;
   onSetVital?: (instanceId: string) => Promise<void>;
   onUseGu?: (instanceId: string) => Promise<void>;
+  onUseSupportGu?: (instanceId: string) => Promise<void>;
   onDropGu?: (instanceId: string) => Promise<boolean>;
   onDropGus?: (instanceIds: string[]) => Promise<boolean>;
   onUseItems?: (itemIds: string[]) => Promise<boolean>;
@@ -86,6 +87,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   onUpdateStatus,
   onSetVital,
   onUseGu,
+  onUseSupportGu,
   onUseGus,
   onDropGu,
   onDropGus,
@@ -208,6 +210,16 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     setUsingGuId(instanceId);
     try {
       await onUseGu(instanceId);
+    } finally {
+      setUsingGuId(null);
+    }
+  };
+
+  const handleUseSupportGu = async (instanceId: string) => {
+    if (!onUseSupportGu) return;
+    setUsingGuId(instanceId);
+    try {
+      await onUseSupportGu(instanceId);
     } finally {
       setUsingGuId(null);
     }
@@ -1126,6 +1138,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
                           {/* Group actions */}
                           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end flex-wrap">
+                            {spec.gu_type === "Support" && onUseSupportGu && totalCount > 1 && (
+                              <button
+                                type="button"
+                                disabled={actionLoading || !instances.some((gu) => gu.status !== "DEAD" && gu.status !== "SEALED" && gu.hunger > 0)}
+                                onClick={() => {
+                                  const usableGu = instances.find((gu) => gu.status !== "DEAD" && gu.status !== "SEALED" && gu.hunger > 0);
+                                  if (usableGu) void handleUseSupportGu(usableGu.instance_id);
+                                }}
+                                className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-emerald-950/30 text-emerald-300 border border-emerald-900/40 hover:bg-emerald-950/50 font-mono disabled:opacity-50"
+                              >
+                                Dùng ngoài combat
+                              </button>
+                            )}
                             {(spec.gu_type !== "Consumable" || (spec.max_hunger && spec.max_hunger > 0)) && onFeedGroup && (
                               <button
                                 type="button"
@@ -1194,6 +1219,16 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/30 text-amber-300 border border-amber-900/40 hover:bg-amber-950/50 font-mono disabled:opacity-50"
                                     >
                                       {usingGuId === singleGu.instance_id ? "..." : "Sử Dụng"}
+                                    </button>
+                                  )}
+                                  {spec.gu_type === "Support" && onUseSupportGu && (
+                                    <button
+                                      type="button"
+                                      disabled={actionLoading || !canAct || usingGuId === singleGu.instance_id}
+                                      onClick={() => handleUseSupportGu(singleGu.instance_id)}
+                                      className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-emerald-950/30 text-emerald-300 border border-emerald-900/40 hover:bg-emerald-950/50 font-mono disabled:opacity-50"
+                                    >
+                                      {usingGuId === singleGu.instance_id ? "..." : "Dùng ngoài combat"}
                                     </button>
                                   )}
                                   {onSetVital && !isDead && !singleGu.is_vital && spec.gu_type !== "Consumable" && (

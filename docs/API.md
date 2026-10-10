@@ -128,7 +128,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/inventory/status` | Cập nhật trạng thái Cổ trùng (`ACTIVE`, `SLEEPING`, `SEALED`). Khi phong ấn (`SEALED`), tiêu hao `sealing_stone` theo scale Rank Cổ (`max(1, rank)` đá). |
 | POST | `/inventory/set-vital` |
 | POST | `/inventory/use-gu` |
-| POST | `/inventory/use-support` |
+| POST | `/inventory/use-support` | Dùng Cổ Hỗ Trợ ngoài combat; xử lý `ON_USE` và hồi HP từ `active.heal_flat`. Body: `{ "gu_instance_id": "..." }`. |
 | POST | `/inventory/drop` |
 | POST | `/inventory/drop-batch` |
 | GET | `/killer-moves/options` | Cổ người chơi trong `player_gu` và effect combat/ON_USE được phép kéo vào công thức. |

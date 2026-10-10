@@ -104,6 +104,7 @@ export function WorldPage() {
   const updateGuStatus = useGameStore((s) => s.updateGuStatus);
   const setVitalGu = useGameStore((s) => s.setVitalGu);
   const useGu = useGameStore((s) => s.useGu);
+  const useSupportGu = useGameStore((s) => s.useSupportGu);
   const useGus = useGameStore((s) => s.useGus);
   const dropGu = useGameStore((s) => s.dropGu);
   const dropGus = useGameStore((s) => s.dropGus);
@@ -391,6 +392,7 @@ export function WorldPage() {
                   onUpdateStatus={updateGuStatus}
                   onSetVital={setVitalGu}
                   onUseGu={useGu}
+                  onUseSupportGu={useSupportGu}
                   onUseGus={useGus}
                   onDropGu={dropGu}
                   onDropGus={dropGus}

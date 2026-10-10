@@ -82,6 +82,7 @@ export default function Home() {
     useItems,
     setVitalGu,
     useGu,
+    useSupportGu,
     useGus,
     dropGu,
     dropGus,
@@ -430,6 +431,7 @@ export default function Home() {
               onUpdateStatus={updateGuStatus}
               onSetVital={setVitalGu}
               onUseGu={useGu}
+              onUseSupportGu={useSupportGu}
               onUseGus={useGus}
               onDropGu={dropGu}
               onDropGus={dropGus}

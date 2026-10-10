@@ -30,6 +30,7 @@ export interface InventorySlice {
   updateGuStatus: (instanceId: string, status: string) => Promise<void>;
   setVitalGu: (instanceId: string) => Promise<void>;
   useGu: (instanceId: string) => Promise<void>;
+  useSupportGu: (instanceId: string) => Promise<void>;
   useGus: (instanceIds: string[]) => Promise<boolean>;
   useItem: (itemId: string) => Promise<void>;
   useItems: (itemIds: string[]) => Promise<boolean>;
@@ -530,6 +531,40 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       const err = caught instanceof Error ? caught : new Error(String(caught));
       set({ error: err.message });
       get().addLog(`Lỗi sử dụng Cổ trùng: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      get().endAction("player:inventory");
+    }
+  },
+
+  useSupportGu: async (instanceId) => {
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return;
+
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/use-support`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_instance_id: instanceId }),
+      });
+
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Sử dụng Cổ Hỗ Trợ thất bại.");
+
+      get().applyInventoryFromResponse(data);
+      const successMsg = data.message || "Sử dụng Cổ Hỗ Trợ thành công!";
+      get().addLog(successMsg);
+      get().addToast(successMsg, "success");
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addLog(`Sử dụng Cổ Hỗ Trợ thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
       get().endAction("player:inventory");
