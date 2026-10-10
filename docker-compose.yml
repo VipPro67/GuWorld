@@ -1,4 +1,23 @@
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: guworld-db
+    restart: always
+    environment:
+      POSTGRES_USER: gu_admin
+      POSTGRES_PASSWORD: cKsQD[ER&.z=1Xe$,+9KaH+#0vmen^~h
+      POSTGRES_DB: gu_db
+      TZ: Asia/Ho_Chi_Minh
+    command: ["postgres", "-c", "timezone=Asia/Ho_Chi_Minh"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gu_admin -d gu_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   redis:
     image: redis:7-alpine
     container_name: guworld-redis
@@ -64,5 +83,6 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:
   caddy_data:
   caddy_config:
