@@ -696,7 +696,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         throw new Error(data.error || "Di chuyển thất bại.");
       }
 
-      get().applyInventoryFromResponse(data);
+      get().applyInventoryFromResponse(data.player || data);
       get().addLog(data.log || "Di chuyển thành công.");
 
       // Handle skip battle result
@@ -786,6 +786,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       }
 
       const msg = data.message || "Thu thập chiến lợi phẩm thành công!";
+      get().applyInventoryFromResponse(data);
       get().addToast(msg, "success");
 
       // Immediately remove the looted drop from state so map UI updates instantly

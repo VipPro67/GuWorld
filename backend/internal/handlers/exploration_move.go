@@ -878,37 +878,39 @@ func lineCells(x0, y0, x1, y1 int) [][2]int {
 // MovePathPlayerUpdate is a lightweight player snapshot for movement responses,
 // avoiding sending huge inventories, recipes, and quest histories on high-frequency moves.
 type MovePathPlayerUpdate struct {
-	ID              uuid.UUID           `json:"id"`
-	X               int                 `json:"x"`
-	Y               int                 `json:"y"`
-	CurrentRegion   string              `json:"current_region"`
-	HP              float64             `json:"hp"`
-	BaseHP          float64             `json:"base_hp"`
-	CurrentMana     float64             `json:"current_mana"`
-	MaxMana         float64             `json:"max_mana"`
-	HumanQi         float64             `json:"human_qi"`
-	PrimevalStones  float64             `json:"primeval_stones"`
-	ImmortalStones  float64             `json:"immortal_stones"`
-	VisitedSubzones []string            `json:"visited_subzones,omitempty"`
-	ActiveCombat    *models.CombatState `json:"active_combat"`
-	GuInventory     models.GuInventory  `json:"gu_inventory,omitempty"`
+	ID                 uuid.UUID                 `json:"id"`
+	X                  int                       `json:"x"`
+	Y                  int                       `json:"y"`
+	CurrentRegion      string                    `json:"current_region"`
+	HP                 float64                   `json:"hp"`
+	BaseHP             float64                   `json:"base_hp"`
+	CurrentMana        float64                   `json:"current_mana"`
+	MaxMana            float64                   `json:"max_mana"`
+	HumanQi            float64                   `json:"human_qi"`
+	PrimevalStones     float64                   `json:"primeval_stones"`
+	ImmortalStones     float64                   `json:"immortal_stones"`
+	MaterialsInventory models.MaterialsInventory `json:"materials_inventory,omitempty"`
+	VisitedSubzones    []string                  `json:"visited_subzones,omitempty"`
+	ActiveCombat       *models.CombatState       `json:"active_combat"`
+	GuInventory        models.GuInventory        `json:"gu_inventory,omitempty"`
 }
 
 func buildMovePathPlayerUpdate(player *models.Player, beforeGus models.GuInventory) MovePathPlayerUpdate {
 	update := MovePathPlayerUpdate{
-		ID:              player.ID,
-		X:               player.X,
-		Y:               player.Y,
-		CurrentRegion:   player.CurrentRegion,
-		HP:              player.HP,
-		BaseHP:          gamefx.EffectiveMaxHP(player),
-		CurrentMana:     player.CurrentMana,
-		MaxMana:         gamefx.EffectiveMaxMana(player),
-		HumanQi:         player.HumanQi,
-		PrimevalStones:  player.PrimevalStones,
-		ImmortalStones:  player.ImmortalStones,
-		VisitedSubzones: player.VisitedSubZones,
-		ActiveCombat:    player.ActiveCombat,
+		ID:                 player.ID,
+		X:                  player.X,
+		Y:                  player.Y,
+		CurrentRegion:      player.CurrentRegion,
+		HP:                 player.HP,
+		BaseHP:             gamefx.EffectiveMaxHP(player),
+		CurrentMana:        player.CurrentMana,
+		MaxMana:            gamefx.EffectiveMaxMana(player),
+		HumanQi:            player.HumanQi,
+		PrimevalStones:     player.PrimevalStones,
+		ImmortalStones:     player.ImmortalStones,
+		MaterialsInventory: player.MaterialsInventory,
+		VisitedSubzones:    player.VisitedSubZones,
+		ActiveCombat:       player.ActiveCombat,
 	}
 	if len(player.GuInventory) != len(beforeGus) {
 		update.GuInventory = player.GuInventory

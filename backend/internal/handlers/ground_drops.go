@@ -373,7 +373,10 @@ func LootGroundDrop(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Thu thập thành công chiến lợi phẩm của %s: %s", loserName, summaryMsg),
-		"looted":  logs,
+		"message":             fmt.Sprintf("Thu thập thành công chiến lợi phẩm của %s: %s", loserName, summaryMsg),
+		"looted":              logs,
+		"materials_inventory": loadMaterialsInventory(player.ID.String()),
+		"primeval_stones":     player.PrimevalStones,
+		"immortal_stones":     player.ImmortalStones,
 	})
 }

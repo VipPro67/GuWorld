@@ -21,6 +21,11 @@ func schemaDictionaries() error {
 	);`); err != nil {
 		return err
 	}
+	// Catalog metadata belongs to the CSV/effect envelope, not dictionary rows.
+	// Remove columns left by older database schemas so imports work on upgrades.
+	if err := execSchema("item_dictionary", `ALTER TABLE item_dictionary DROP COLUMN IF EXISTS schema_version, DROP COLUMN IF EXISTS catalog_revision, DROP COLUMN IF EXISTS content_hash;`); err != nil {
+		return err
+	}
 
 	if err := execSchema("gu_dictionary", `
 	CREATE TABLE IF NOT EXISTS gu_dictionary (
@@ -50,6 +55,9 @@ func schemaDictionaries() error {
 	// Older databases may still have the retired authoring flag. Immortality is
 	// derived from rank (rank >= 6), so remove the redundant column on startup.
 	if err := execSchema("gu_dictionary", `ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS is_immortal;`); err != nil {
+		return err
+	}
+	if err := execSchema("gu_dictionary", `ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS schema_version, DROP COLUMN IF EXISTS catalog_revision, DROP COLUMN IF EXISTS content_hash;`); err != nil {
 		return err
 	}
 	if err := execSchema("constitution_dictionary", `
