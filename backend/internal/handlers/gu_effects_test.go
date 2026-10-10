@@ -347,10 +347,43 @@ func TestSoulRegenTickAndMigrateAliases(t *testing.T) {
 			t.Errorf("%s/%s: unexpected error: %v", tc.trigger, tc.code, err)
 		}
 	}
+}
 
-	// Unknown codes still fail loudly.
-	if _, err := run(newPlayer(), "ON_CONSUME", "MAN_BEAST_BURIAL", `{}`); err == nil {
-		t.Error("MAN_BEAST_BURIAL should still be unsupported")
+func TestManBeastBurialBreakthrough(t *testing.T) {
+	makePlayer := func(rank, subRank int) *models.Player {
+		return &models.Player{CultivationState: models.CultivationState{Rank: rank, SubRank: subRank, WallProgress: 1}}
+	}
+	apply := func(p *models.Player, specRank, instanceRank int) error {
+		spec := models.GuDictionaryItem{ID: "GU_MAN_BEAST_LIFE_BURIAL", Name: "Nhân Thú Táng Sinh Cổ", Rank: specRank}
+		gu := models.GuInstance{GuID: spec.ID, Rank: instanceRank}
+		_, err := handleActionCode(p, spec, gu, models.SpecialMechanic{ActionCode: "MAN_BEAST_BURIAL"})
+		return err
+	}
+
+	for rank := 1; rank <= 4; rank++ {
+		p := makePlayer(rank, 4)
+		if err := apply(p, rank, rank); err != nil {
+			t.Fatalf("rank %d: unexpected error: %v", rank, err)
+		}
+		if p.Rank != rank+1 || p.SubRank != 1 || p.WallProgress != 0 {
+			t.Errorf("rank %d breakthrough = rank %d sub %d wall %.1f, want rank %d sub 1 wall 0", rank, p.Rank, p.SubRank, p.WallProgress, rank+1)
+		}
+	}
+
+	for _, tc := range []struct {
+		name                            string
+		rank, subRank, specRank, guRank int
+	}{
+		{name: "not peak", rank: 2, subRank: 3, specRank: 2, guRank: 2},
+		{name: "rank too high", rank: 5, subRank: 4, specRank: 5, guRank: 5},
+		{name: "dictionary rank mismatch", rank: 2, subRank: 4, specRank: 3, guRank: 2},
+		{name: "instance rank mismatch", rank: 2, subRank: 4, specRank: 2, guRank: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := apply(makePlayer(tc.rank, tc.subRank), tc.specRank, tc.guRank); err == nil {
+				t.Fatal("expected eligibility error")
+			}
+		})
 	}
 }
 

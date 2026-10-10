@@ -465,6 +465,20 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		player.SubRank++
 		stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
 		return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, models.GetRankName(player.Rank), stageNames[player.SubRank]), nil
+	case "MAN_BEAST_BURIAL":
+		if player.Rank < 1 || player.Rank > 4 {
+			return "", fmt.Errorf("%s chỉ có thể dùng ở Rank 1–4", spec.Name)
+		}
+		if spec.Rank != player.Rank || gu.Rank != player.Rank {
+			return "", fmt.Errorf("Rank Cổ trùng phải trùng với Rank bản thân (%d)", player.Rank)
+		}
+		if player.SubRank != 4 {
+			return "", fmt.Errorf("%s chỉ có thể dùng khi đạt Đỉnh Phong", spec.Name)
+		}
+		player.Rank++
+		player.SubRank = 1
+		player.WallProgress = 0
+		return fmt.Sprintf("%s cưỡng ép đột phá! Tu vi nâng lên %s Sơ Giai.", spec.Name, models.GetRankName(player.Rank)), nil
 	case "APERTURE_PETRIFICATION", "STONE_APERTURE":
 		player.SubRank = 4
 		player.MaxMana -= 15

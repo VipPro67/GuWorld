@@ -124,6 +124,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 ### Thăng Tiên và Độ Kiếp
 
 - Ngũ Chuyển Đỉnh phong (Chuyển 5, SubRank 4) có thể thăng tiên khi Nhân Khí đạt từ 100.000 trở lên.
+- Nhân Thú Táng Sinh Cổ (`MAN_BEAST_BURIAL`) cho phép người chơi Rank 1–4 ở Đỉnh Phong cưỡng ép lên Rank kế tiếp Sơ Giai; rank Cổ phải bằng rank người dùng.
 - **Tỉ lệ thành công phụ thuộc vào Tư chất và Nhân Khí:**
   - **Tỉ lệ gốc (`baseChance`):** Giáp: `20%`, Ất/Bính/Đinh: `5%` (tính từ `GetBreakthroughChance(6, Aptitude)` với phạt Rank 6 là 80%).
   - **Bonus Nhân Khí:** Mỗi 100.000 Nhân Khí cộng thêm `+20%` tỉ lệ (`qiBonus = (NhânKhí / 100.000) * 20%`).
