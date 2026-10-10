@@ -404,6 +404,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		act.CompiledOperations = compiled.CompileCombatAction().Operations
 	}
 	act.Mechanics = append(act.Mechanics, combatMechanicsForSpec(*spec, true)...)
+	resolveSummonMonsterStats(&act)
 	if statusKey, pvpOnly, hasPersistent := models.GuPersistentHitStatus(*spec); hasPersistent {
 		act.PersistentStatusKey = statusKey
 		act.PersistentPvPOnly = pvpOnly
@@ -794,6 +795,33 @@ func computeGlobalAllStatsBuff(selectedGuIDs []string, resolveSpec func(string) 
 		total = 0.5
 	}
 	return total
+}
+
+// resolveSummonMonsterStats injects the monster template stats referenced by a
+// SUMMON_MONSTER mechanic into the compiled mechanic values, so the simulator
+// never needs the monster registry. Unknown template ids are dropped with a
+// warning instead of spawning an empty minion.
+func resolveSummonMonsterStats(act *simulator.SimAction) {
+	for i := range act.Mechanics {
+		m := &act.Mechanics[i]
+		if m.Trigger != "ON_CAST" || m.ActionCode != "SUMMON_MONSTER" {
+			continue
+		}
+		id, _ := m.Values["monster_id"].(string)
+		tpl, ok := models.MonsterRegistry[id]
+		if !ok || tpl.MaxHP <= 0 {
+			logger.S.Warnf("SUMMON_MONSTER: unknown monster template %q", id)
+			act.Mechanics = append(act.Mechanics[:i], act.Mechanics[i+1:]...)
+			return
+		}
+		if m.Values == nil {
+			m.Values = map[string]any{}
+		}
+		m.Values["hp"] = tpl.MaxHP
+		m.Values["damage"] = tpl.BaseAttack
+		m.Values["defense"] = tpl.BaseDefense
+		m.Values["name"] = tpl.Name
+	}
 }
 
 // combatMechanicsForSpec is the migration adapter. Registry-loaded definitions

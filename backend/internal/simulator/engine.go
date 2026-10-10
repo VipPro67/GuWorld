@@ -57,6 +57,32 @@ func mechanicBool(mechanics []CombatMechanic, trigger, actionCode, key string, f
 	return fallback
 }
 
+// hasMinion reports whether the combatant already has a summon on the field, so
+// a repeated cast of the same Gu does not stack minions every turn.
+func hasMinion(state *CombatState, actorID string) bool {
+	prefix := actorID + "_summon_"
+	for _, side := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+		for _, c := range side {
+			if c.Kind == "Minion" && strings.HasPrefix(c.ID, prefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// summonGrid maps the authored position param onto the combat grid.
+func summonGrid(position string) (int, int) {
+	switch position {
+	case "mid":
+		return 2, 2
+	case "back":
+		return 3, 2
+	default:
+		return 1, 2 // frontline
+	}
+}
+
 // lifespanByRank approximates an enemy's thọ nguyên from its rank. Players use
 // their tracked Lifespan; monsters have none, so this is the calibration knob
 // for ON_BATTLE_START/SEIZE_INITIATIVE. Tune here, not per-Gu.
@@ -682,6 +708,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 	var logs []CombatLog
 	rebornUses := make(map[string]int)
+	summonCount := 0 // unique suffix for SUMMON_MONSTER minions
 	initialState := cloneCombatState(state)
 
 	startSnap := buildSnapshot(state)
@@ -1563,6 +1590,57 @@ func Simulate(state *CombatState) []CombatLog {
 					Action:    "SUMMONED",
 					Detail:    fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP),
 				})
+			}
+			// SUMMON_MONSTER: data-driven summon. The combat builder injects the
+			// monster template stats (hp/damage/defense/name) resolved from
+			// MonsterRegistry; the engine scales them by the rank of the summoning
+			// Gu. Clamps keep a summon from out-scaling its caster.
+			// ponytail: fixed clamps (2x caster HP, 3x caster damage) - tune these
+			// multipliers if summons should hit harder or tankier.
+			if hasMechanic(a.Mechanics, "ON_CAST", "SUMMON_MONSTER") && !hasMinion(state, actor.ID) {
+				rankFactor := gamefx.RankScale(a.Rank)
+				hpScale := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "hp_scale", 1)
+				damageScale := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "damage_scale", 1)
+				hp := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "hp", 0) * hpScale * rankFactor
+				damage := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "damage", 0) * damageScale * rankFactor
+				defense := mechanicFloat(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "defense", 0) * damageScale * rankFactor
+				if hp > actor.MaxHP*2.0 {
+					hp = actor.MaxHP * 2.0
+				}
+				if hp <= 0 {
+					hp = actor.MaxHP * 0.5
+				}
+				if damage > actor.BaseDmg*3.0 {
+					damage = actor.BaseDmg * 3.0
+				}
+				name := mechanicString(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "name", "Triệu hồi vật")
+				gridX, gridY := summonGrid(mechanicString(a.Mechanics, "ON_CAST", "SUMMON_MONSTER", "position", "frontline"))
+				minion := &CombatantAuto{
+					ID:      fmt.Sprintf("%s_summon_%d", actor.ID, summonCount),
+					Name:    name + " (Triệu hồi)",
+					Kind:    "Minion",
+					Rank:    a.Rank,
+					GridX:   gridX,
+					GridY:   gridY,
+					MaxHP:   hp,
+					HP:      hp,
+					BaseDmg: damage,
+					BaseDef: defense,
+					Speed:   actor.Speed,
+				}
+				if isAlly {
+					state.Allies = append(state.Allies, minion)
+				} else {
+					state.Enemies = append(state.Enemies, minion)
+				}
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "SUMMONED",
+					Detail:    fmt.Sprintf("%s triệu hồi %s (%.0f HP, %.0f công) lên chiến trường!", actor.Name, name, hp, damage),
+				})
+				summonCount++
 			}
 
 			if hasMechanic(a.Mechanics, "ON_CAST", "FULL_SOUL_HEAL") {
