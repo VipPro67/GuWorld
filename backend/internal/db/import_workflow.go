@@ -179,7 +179,19 @@ func validateImportCSV(dataset importDataset, content []byte) (int, []ImportVali
 		parts := make([]string, len(indexes))
 		valid := true
 		for i, idx := range indexes {
+			optionalSpawnCoordinate := false
+			if dataset.key == "monster_spawn" && (dataset.keyColumns[i] == "x" || dataset.keyColumns[i] == "y") {
+				modeIdx := colIndex(header, "spawn_mode")
+				mode := ""
+				if modeIdx >= 0 && modeIdx < len(row) {
+					mode = strings.TrimSpace(row[modeIdx])
+				}
+				optionalSpawnCoordinate = !strings.EqualFold(mode, "Fixed")
+			}
 			if idx >= len(row) || strings.TrimSpace(row[idx]) == "" {
+				if optionalSpawnCoordinate {
+					continue
+				}
 				issues = append(issues, ImportValidationIssue{Dataset: dataset.key, Row: line, Field: dataset.keyColumns[i], Code: "missing_key", Message: "Khóa dòng không được để trống", Severity: "error"})
 				valid = false
 				continue

@@ -143,6 +143,8 @@ và session, không chứa role hoặc permission.
 
 Không ghi số dòng cố định trong tài liệu vì dataset thay đổi thường xuyên. Các helper tìm file ở `data/` trước rồi mới thử đường dẫn legacy. Chỉ sửa CSV chưa làm đổi dictionary trong DB: phải import dataset tương ứng. Workflow Admin luôn parse/validate và dry-run trước, hiển thị row count/diff (`inserts`, `updates`, `unchanged`) rồi mới cho xác nhận commit transaction. Preflight có lỗi nghiêm trọng không ghi database. Sau commit server tự reload registry/invalidate cache; UI sẽ cảnh báo rõ nếu dataset hoặc lỗi reload vẫn yêu cầu restart. Với hai file package đọc trực tiếp, cần chờ cache 24 giờ hoặc xóa cache/restart để thấy thay đổi ngay.
 
+`python3 scripts/adjust_game_prices.py` chuẩn hóa `Item.csv.base_price` và `Gu.csv.base_price` theo bảng giá rank trong `backend/pkg/pricing/pricing.go`, để mọi món cùng rank có cùng giá. Có thể scale phí recipe riêng bằng `--recipe-primeval 1.2` và/hoặc `--recipe-immortal 0.8`; hệ số này giữ nguyên chênh lệch giữa từng recipe. Lệnh mặc định chỉ xem trước; thêm `--apply` để ghi CSV. Sau đó import các dataset tương ứng trong Admin để cập nhật database.
+
 ## Registry runtime
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.
@@ -993,7 +995,7 @@ Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLarg
 
 **Bảng `map_cells`** — các ô persistent (boss, tài nguyên cấp cao, portal, điểm an toàn). Khóa vị trí là `UNIQUE(region_id, x, y)`, vì cùng tọa độ có thể có nội dung khác nhau ở từng tầng hoặc bí cảnh. Cột `last_cleared_at TIMESTAMPTZ`, `cleared_by UUID` theo dõi respawn; state clear được dùng chung trong cùng region.
 
-**Bảng `monster_spawns`** — giờ là **pool theo zone** (không còn ý nghĩa toạ độ cho loại Roaming/Random). `region_id` trỏ tới Đại Vực hoặc địa danh. Pool được cache trong bộ nhớ lúc start. Quái procedural sinh thành bãi ổn định theo vùng: tâm bãi và loài quái được chọn bằng seed, mật độ cao nhất gần tâm rồi giảm dần ra rìa; ngoài bãi vẫn có một lượng nhỏ quái đi lẻ. Mỗi bãi có 10% cơ hội có một Elite ở tâm nếu pool của zone có template `Elite`; Elite phát hiện trong 8 ô, đuổi tối đa 18 ô quanh bãi và không ra ngoài vùng. Bãi không sinh trong `HUB`/`SAFE_ZONE`.
+**Bảng `monster_spawns`** — giờ là **pool theo zone** (không còn ý nghĩa toạ độ cho loại Roaming/Random). `region_id` trỏ tới Đại Vực hoặc địa danh. Pool được cache trong bộ nhớ lúc start. `x`/`y` chỉ bắt buộc cho `spawn_mode=Fixed`; các mode theo zone như `Roaming`, `Random` và `Patrol` có thể để trống. Quái procedural sinh thành bãi ổn định theo vùng: tâm bãi và loài quái được chọn bằng seed, mật độ cao nhất gần tâm rồi giảm dần ra rìa; ngoài bãi vẫn có một lượng nhỏ quái đi lẻ. Mỗi bãi có 10% cơ hội có một Elite ở tâm nếu pool của zone có template `Elite`; Elite phát hiện trong 8 ô, đuổi tối đa 18 ô quanh bãi và không ra ngoài vùng. Bãi không sinh trong `HUB`/`SAFE_ZONE`.
 
 **Phân lớp sinh nội dung**:
 - Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB. Tâm bãi quái dùng lưới seed riêng theo zone; cả vị trí, loài, cấp và roll Elite của bãi ổn định giữa người chơi và lần khởi động.
