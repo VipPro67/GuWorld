@@ -70,9 +70,6 @@ func schemaWorld() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("regions_rules", `ALTER TABLE regions ADD COLUMN IF NOT EXISTS rules JSONB NOT NULL DEFAULT '{}'::jsonb;`); err != nil {
-		return err
-	}
 	if err := execSchema("region_world_maps", `
 	CREATE TABLE IF NOT EXISTS region_world_maps (
 		region_id VARCHAR(50) PRIMARY KEY REFERENCES regions(id) ON DELETE CASCADE,
@@ -217,12 +214,6 @@ func schemaWorld() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("instance_templates_spatial_columns", `
-	ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS spatial_region_id VARCHAR(50) REFERENCES regions(id) ON DELETE SET NULL;
-	ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS duration_minutes INTEGER NOT NULL DEFAULT 120;
-	`); err != nil {
-		return err
-	}
 	if err := execSchema("shared_spatial_instances", `
 	CREATE TABLE IF NOT EXISTS shared_spatial_instances (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -240,6 +231,11 @@ func schemaWorld() error {
 		return err
 	}
 
+	return nil
+}
+
+// Ground drops reference players, so create them after schemaPlayers.
+func schemaMapGroundDrops() error {
 	if err := execSchema("map_ground_drops", `
 	CREATE TABLE IF NOT EXISTS map_ground_drops (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -17,10 +17,7 @@ func schemaSocial() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("messages_chat_scope", `
-	ALTER TABLE messages ADD COLUMN IF NOT EXISTS chat_scope VARCHAR(120) NOT NULL DEFAULT '';
-	ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_channel_check;
-	ALTER TABLE messages ADD CONSTRAINT messages_channel_check CHECK (channel IN ('private','world','general','sect','system','region'));
+	if err := execSchema("messages_region_chat_idx", `
 	CREATE INDEX IF NOT EXISTS idx_messages_region_chat ON messages (chat_scope, created_at DESC) WHERE channel = 'region';`); err != nil {
 		return err
 	}

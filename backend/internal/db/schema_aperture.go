@@ -34,13 +34,6 @@ func schemaAperture() error {
 		return err
 	}
 
-	// Additive migration for databases created before Thanh Đạo Tẩy Thể.
-	if err := execSchema("immortal_apertures_last_cleanse_at", `
-		ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS last_cleanse_at TIMESTAMP WITH TIME ZONE;
-	`); err != nil {
-		return err
-	}
-
 	// player_dao_path was an obsolete duplicate store. Preserve any legacy-only
 	// path values as a fallback, while canonical immortal_apertures values win,
 	// then remove the duplicate table so new writes have one source of truth.

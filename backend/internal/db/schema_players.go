@@ -108,28 +108,7 @@ func schemaPlayers() error {
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_players_username_lower_unique ON players (LOWER(username));`); err != nil {
 		return fmt.Errorf("cannot enforce case-insensitive username uniqueness; resolve existing usernames that differ only by letter case first: %w", err)
 	}
-	// Existing installations created players before spatial instances were
-	// introduced. Keep this additive so the world index can safely read the
-	// column during startup upgrades as well as on fresh databases.
-	if err := execSchema("players_map_instance_id", `ALTER TABLE players ADD COLUMN IF NOT EXISTS map_instance_id UUID;`); err != nil {
-		return err
-	}
 	if err := execSchema("players_map_instance_idx", `CREATE INDEX IF NOT EXISTS idx_players_map_instance_location ON players (map_instance_id, current_region, x, y);`); err != nil {
-		return err
-	}
-
-	// Existing installations predate the moderation columns. Keep this additive
-	// so an in-place upgrade does not 503 every authenticated request, since
-	// AuthRequired selects the ban columns on session-cache miss.
-	if err := execSchema("players_moderation_columns", `
-	ALTER TABLE players
-		ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT false,
-		ADD COLUMN IF NOT EXISTS ban_reason TEXT NOT NULL DEFAULT '',
-		ADD COLUMN IF NOT EXISTS banned_until TIMESTAMPTZ,
-		ADD COLUMN IF NOT EXISTS banned_by UUID REFERENCES players(id) ON DELETE SET NULL,
-		ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ,
-		ADD COLUMN IF NOT EXISTS is_chat_muted BOOLEAN NOT NULL DEFAULT false,
-		ADD COLUMN IF NOT EXISTS chat_muted_until TIMESTAMPTZ;`); err != nil {
 		return err
 	}
 
