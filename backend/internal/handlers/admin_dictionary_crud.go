@@ -26,7 +26,7 @@ func AdminListGuItems(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, rank, path, gu_type,
 		base_mana_cost, effects, food_types, hunger_rate, max_hunger,
 		COALESCE(description,''), COALESCE(target_type,'SINGLE'), COALESCE(rarity,0),
-		COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles,'[]'::jsonb),
+		COALESCE(primary_role,''), COALESCE(combat_roles,'[]'::jsonb),
 		COALESCE(combat_tags,'[]'::jsonb), COALESCE(support_tags,'[]'::jsonb), COALESCE(base_price,0),
 		COALESCE(image_url,'')
 		FROM gu_dictionary ORDER BY name`)
@@ -50,7 +50,6 @@ func AdminListGuItems(c *gin.Context) {
 		Description  string          `json:"description"`
 		TargetType   string          `json:"target_type"`
 		Rarity       int             `json:"rarity"`
-		IsImmortal   bool            `json:"is_immortal"`
 		PrimaryRole  string          `json:"primary_role"`
 		CombatRoles  json.RawMessage `json:"combat_roles"`
 		CombatTags   json.RawMessage `json:"combat_tags"`
@@ -64,7 +63,7 @@ func AdminListGuItems(c *gin.Context) {
 		var r GuRow
 		if err := rows.Scan(&r.ID, &r.Name, &r.Rank, &r.Path, &r.GuType,
 			&r.BaseManaCost, &r.Effects, &r.FoodTypes, &r.HungerRate, &r.MaxHunger,
-			&r.Description, &r.TargetType, &r.Rarity, &r.IsImmortal, &r.PrimaryRole,
+			&r.Description, &r.TargetType, &r.Rarity, &r.PrimaryRole,
 			&r.CombatRoles, &r.CombatTags, &r.SupportTags, &r.BasePrice, &r.ImageURL); err != nil {
 			continue
 		}
@@ -87,7 +86,6 @@ type AdminGuInput struct {
 	Description  string          `json:"description"`
 	TargetType   string          `json:"target_type"`
 	Rarity       int             `json:"rarity"`
-	IsImmortal   bool            `json:"is_immortal"`
 	PrimaryRole  string          `json:"primary_role"`
 	CombatRoles  []string        `json:"combat_roles"`
 	CombatTags   []string        `json:"combat_tags"`
@@ -181,9 +179,9 @@ func AdminCreateGuItem(c *gin.Context) {
 		return
 	}
 
-	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,is_immortal,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
 		req.ID, req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
-		req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.IsImmortal, req.PrimaryRole,
+		req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.PrimaryRole,
 		marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
@@ -300,9 +298,6 @@ func AdminUpdateGuItem(c *gin.Context) {
 			args = append(args, req.PrimaryRole)
 			idx++
 		}
-		sets = append(sets, "is_immortal=$"+strconv.Itoa(idx))
-		args = append(args, req.IsImmortal)
-		idx++
 		if req.BasePrice > 0 || true {
 			sets = append(sets, "base_price=$"+strconv.Itoa(idx))
 			args = append(args, req.BasePrice)
@@ -340,9 +335,9 @@ func AdminUpdateGuItem(c *gin.Context) {
 		if req.TargetType == "" {
 			req.TargetType = "SINGLE"
 		}
-		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,is_immortal=$13,primary_role=$14,combat_roles=$15,combat_tags=$16,support_tags=$17,base_price=$18,image_url=$19 WHERE id=$20 AND rank=$21`,
+		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,primary_role=$13,combat_roles=$14,combat_tags=$15,support_tags=$16,base_price=$17,image_url=$18 WHERE id=$19 AND rank=$20`,
 			req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
-			req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.IsImmortal, req.PrimaryRole,
+			req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.PrimaryRole,
 			marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, guID, oldRank)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})

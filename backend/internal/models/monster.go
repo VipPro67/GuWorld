@@ -38,7 +38,6 @@ type GuPoolEntry struct {
 	MinCount    int     `json:"min_count"`
 	MaxCount    int     `json:"max_count"`
 	IsWorldBoss bool    `json:"is_world_boss"`
-	IsImmortal  bool    `json:"is_immortal"`
 }
 
 type LootEntry struct {
@@ -340,12 +339,12 @@ func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks DaoM
 
 		for _, ranks := range GuRegistry {
 			for guRank, gu := range ranks {
-				if guRank > monsterRank || (gu.IsImmortal && monsterRank < 6) {
+				if guRank > monsterRank || (guRank >= 6 && monsterRank < 6) {
 					continue
 				}
 
 				// Check if this Immortal Gu already exists anywhere in the world
-				isImmortalGu := gu.IsImmortal || guRank >= 6
+				isImmortalGu := guRank >= 6
 				if isImmortalGu && ImmortalGuChecker != nil {
 					if ImmortalGuChecker(gu.ID, guRank) {
 						continue // Already exists in the world -> skip!
@@ -405,7 +404,7 @@ func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks DaoM
 					gu := pool[idx]
 
 					// Limit: At most 1 same-rank Immortal Gu per monster (guRank == monsterRank && Rank >= 6)
-					isSameRankImmortal := (gu.IsImmortal || gu.Rank >= 6) && gu.Rank == monsterRank
+					isSameRankImmortal := gu.Rank >= 6 && gu.Rank == monsterRank
 					if isSameRankImmortal && immortalCount >= 1 {
 						continue
 					}

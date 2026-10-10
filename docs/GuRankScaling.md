@@ -15,7 +15,7 @@ Bảng gốc do người chơi/thiết kế cung cấp (tương ứng 9 rank):
 | Chi phí năng lượng `E` (Tiên) | `100^(rank-5)` | — | — | — | — | — | 10 | 10 | 10 | 10|
 | Giá base | theo bảng | 200 | 500 | 1.200 | 2.500 | 5.000 | 200\* | 500\* | 1.200\* | 2.500\* |
 
-Ngưỡng Tiên cổ: `immortalRankThreshold = 6` (rank ≥ 6 phải là Tiên Cổ, `is_immortal = true`).
+Ngưỡng Tiên cổ: `immortalRankThreshold = 6` (rank ≥ 6 là Tiên Cổ; trạng thái được suy ra từ rank).
 
 \* **Rank 6–9 tính bằng Tiên Nguyên Thạch (immortal stones)** — xem `pkg/pricing.StoneTierByRank`; rank 1–5 tính bằng Nguyên Thạch (primeval stones). Đồng bộ ở `pkg/pricing/pricing.go`, `Gu.csv`/`Item.csv` (`base_price`) và mảng cứng frontend (`CaravanShop.tsx`, `SectView.tsx`).
 
@@ -62,7 +62,7 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 4. Nếu mô tả **hồi máu / chữa trị** → điền `active.heal_flat`.
 5. Passive chỉ số (`stat_base_*`) dùng khi cổ trùng "ban sức mạnh nền" / nuôi cổ / hóa thân (vd Biến Hóa Cổ, phân thân).
 6. Giữ nguyên `role`, `combat_roles`, `combat_tags`, `support_tags`, `description`, `base_mana_cost` trừ khi có yêu cầu riêng.
-7. Rank ≥ 6 phải gắn `is_immortal = true`.
+7. Rank ≥ 6 tự động được tính là Tiên Cổ.
 
 ## 5. Kiểm chứng
 

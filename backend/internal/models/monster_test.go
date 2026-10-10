@@ -53,7 +53,6 @@ func TestBuildCombatStateFromMonster_RankFilteringAndGuAssignment(t *testing.T) 
 				ID:         "fire_gu_passive_2",
 				Name:       "Bão Hỏa Cổ",
 				Rank:       6,
-				IsImmortal: true,
 				Path:       []string{"fire"},
 				Type:       "PASSIVE",
 				Effects: GuEffects{

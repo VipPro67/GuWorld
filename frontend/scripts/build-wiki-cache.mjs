@@ -100,7 +100,6 @@ function buildWikiData() {
       description: r[guCol("description")] || "",
       target_type: r[guCol("target_type")] || "SINGLE",
       rarity: parseInt(r[guCol("rarity")]) || 0,
-      is_immortal: (r[guCol("is_immortal")] || "").toLowerCase() === "true",
       primary_role: r[guCol("primary_role")] || "",
       combat_roles: safeJSON(r[guCol("combat_roles")], []),
       combat_tags: safeJSON(r[guCol("combat_tags")], []),

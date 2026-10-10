@@ -51,6 +51,7 @@ type DatasetInfo struct {
 var knownDatasetCacheBehaviors = map[string]bool{
 	"none": true, "dictionary": true, "recipe_catalog": true,
 	"shop_catalog": true, "arena_shop": true, "quests": true,
+	"world_monsters": true,
 }
 
 var knownDatasetRegistryReloads = map[string]bool{

@@ -1183,7 +1183,7 @@ export default function WikiClientView({
                               <span className="text-[10px] text-[var(--text-muted)] font-mono">
                                 {gu.gu_type}
                               </span>
-                              {gu.is_immortal && (
+                              {gu.rank >= 6 && (
                                 <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-500/30 rounded">
                                   Tiên Cổ
                                 </span>

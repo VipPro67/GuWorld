@@ -76,7 +76,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 					guSpec, _ := models.GetGuAny(eg.GuID)
 					dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(activeCombat))
 					if rand.Float64()*100.0 < dropChance {
-						isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
+						isImmortal := guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
 						if isImmortal {
 							exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
 							if err == nil && exists {

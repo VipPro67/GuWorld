@@ -593,8 +593,8 @@ export const DivinationModal: React.FC = () => {
                         </div>
                         <div className="rounded bg-neutral-900/80 p-2.5">
                           <span className="text-neutral-400">Phẩm Bậc:</span>{" "}
-                          <span className={`font-semibold ${gReport.is_immortal ? "text-purple-400" : "text-amber-300"}`}>
-                            {gReport.is_immortal ? `Lục Tiên+ (${gReport.rank} Chuyển)` : `${gReport.rank} Chuyển`}
+                          <span className={`font-semibold ${gReport.rank >= 6 ? "text-purple-400" : "text-amber-300"}`}>
+                            {gReport.rank >= 6 ? `Lục Tiên+ (${gReport.rank} Chuyển)` : `${gReport.rank} Chuyển`}
                           </span>
                         </div>
                         <div className="rounded bg-neutral-900/80 p-2.5">

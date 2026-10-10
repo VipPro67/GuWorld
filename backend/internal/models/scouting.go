@@ -191,7 +191,6 @@ type DivineGuReport struct {
 	GuName          string               `json:"gu_name"`
 	Rank            int                  `json:"rank"`
 	Path            string               `json:"path"`
-	IsImmortal      bool                 `json:"is_immortal"`
 	IsRefined       bool                 `json:"is_refined"`
 	WorldCount      int                  `json:"world_count"`
 	PlayerCount     int                  `json:"player_count"`

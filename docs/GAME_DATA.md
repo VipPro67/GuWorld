@@ -559,7 +559,8 @@ Các trường quan trọng trong dictionary:
 - `hunger_rate`, `food_types`, `max_hunger`. **Quy ước `hunger_rate`:** cổ có `food_types` không rỗng → `6` nếu `effects.passive` không rỗng, ngược lại `3`; cổ không có thức ăn → `0` (không đói). `max_hunger` mặc định `rank × 100`.
   - `food_types` hỗ trợ các pseudo-food trừ trực tiếp tài nguyên người chơi: `primeval_stone` (`2^rank`), `immortal_stone` (`rank`), `blood` (10 HP), `thought` (10 Niệm Lực), `soul` (10 Linh Hồn) và `lifespan` (1 Tuổi Thọ) cho mỗi khẩu phần 100 Độ No. Bốn chi phí sinh mệnh/tinh thần là cố định, không scale theo rank; HP, Linh Hồn và Tuổi Thọ luôn chừa lại ít nhất 1 điểm.
 - `target_type`: `SINGLE`, `ROW`, `COLUMN`, `ALL`, v.v.
-- `rarity`, `is_immortal`, `primary_role`, `combat_roles`, `combat_tags`, `support_tags`.
+- `rarity`, `primary_role`, `combat_roles`, `combat_tags`, `support_tags`.
+  - Gu rank ≥ 6 mặc định là Tiên Cổ; trạng thái được suy ra từ `rank`, không lưu thành cột riêng.
   - **`rarity` là số nguyên 0–9** (`0` = chưa đặt, fallback theo rank). Dùng để cho Cổ phàm (rank < 6) độ hiếm cao: drop weight tính theo **`max(rank, rarity)`** (`handlers/effectiveDropLevel`), nối vào gacha, rương, và ô WildGu trên map. Item (`item_dictionary`) cũng có cột `rarity` cùng quy tắc. Giá trị cũ dạng chữ/boolean trong CSV đã được dọn về rỗng.
 - `base_price`: hỗ trợ tối đa 3 chữ số thập phân (đơn vị nhỏ nhất `0.001`); **fallback đồng đều theo rank** — 200, 500, 1.200, 2.500, 5.000, 100.000, 250.000, 600.000, 1.500.000 cho rank 1–9 (nhảy mạnh ở Tiên Cổ rank ≥ 6). Fallback trong `pkg/pricing/pricing.go`.
 - **Phân phối thức ăn:** mọi item trong `food_types` của cổ rank <6 (72 item) được thêm vào (1) loot của quái **Normal/Elite** theo dải rank spawn, (2) `pool_weights.resources` của vùng non-HUB theo dải rank vùng, (3) `vault_materials` khởi đầu của 4 tông (qty 100, khớp dải rank vùng tông). Boss/Tribulation không rơi thêm thức ăn.

@@ -1527,7 +1527,6 @@ func ExecuteDivineGu(c *gin.Context) {
 		GuName:          targetGu.Name,
 		Rank:            targetGu.Rank,
 		Path:            strings.Join(targetGu.Path, ", "),
-		IsImmortal:      isImmortal,
 		IsRefined:       isRefined,
 		WorldCount:      totalWorldCount,
 		PlayerCount:     playerCount,

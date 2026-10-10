@@ -105,7 +105,6 @@ export interface DivineGuReport {
   gu_name: string;
   rank: number;
   path: string;
-  is_immortal: boolean;
   is_refined: boolean;
   world_count: number;
   player_count?: number;

@@ -37,7 +37,6 @@ func schemaDictionaries() error {
 		description TEXT,
 		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE',
 		rarity INTEGER NOT NULL DEFAULT 0,
-		is_immortal BOOLEAN DEFAULT false,
 		primary_role VARCHAR(80),
 		combat_roles JSONB DEFAULT '[]',
 		combat_tags JSONB DEFAULT '[]',
@@ -46,6 +45,11 @@ func schemaDictionaries() error {
 		image_url TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (id, rank)
 	);`); err != nil {
+		return err
+	}
+	// Older databases may still have the retired authoring flag. Immortality is
+	// derived from rank (rank >= 6), so remove the redundant column on startup.
+	if err := execSchema("gu_dictionary", `ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS is_immortal;`); err != nil {
 		return err
 	}
 	if err := execSchema("constitution_dictionary", `

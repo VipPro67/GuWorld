@@ -134,7 +134,7 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 		})
 
 		// Broadcast ONLY AFTER SUCCESSFUL ADDITION TO PLAYER INVENTORY IN DB
-		isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(guID)
+		isImmortal := guSpec.Rank >= 6 || models.HasImmortalRank(guID)
 		if isImmortal {
 			BroadcastImmortalGuLoot(player.ID, player.Username, bossName, guID, guSpec.Rank)
 		}

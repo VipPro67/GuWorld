@@ -152,7 +152,7 @@ function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<
               <span className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
                 {gu.gu_type}
               </span>
-              {gu.is_immortal && (
+              {gu.rank >= 6 && (
                 <span className="px-2 py-0.5 rounded-md bg-amber-950/40 text-[11px] text-amber-400 font-mono border border-amber-500/30">
                   Tiên Cổ
                 </span>
@@ -281,7 +281,7 @@ function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<
               genre: "GameItem",
               keywords: gu.combat_tags.join(", "),
               version: gu.rank,
-              creativeWorkStatus: gu.is_immortal ? "Immortal" : "Mortal",
+              creativeWorkStatus: gu.rank >= 6 ? "Immortal" : "Mortal",
             }),
           }}
         />

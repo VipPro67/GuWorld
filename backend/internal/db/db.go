@@ -1073,7 +1073,6 @@ func seedGusFromCSV(filename string) error {
 	manaCostIdx := col("base_mana_cost")
 	effectsIdx := col("effects")
 	rarityIdx := col("rarity")
-	isImmortalIdx := col("is_immortal")
 	primaryRoleIdx := col("primary_role")
 	combatRolesIdx := col("combat_roles")
 	combatTagsIdx := col("combat_tags")
@@ -1159,7 +1158,6 @@ func seedGusFromCSV(filename string) error {
 		manaCostStr := get(row, manaCostIdx)
 		effectsRaw := seen[key].normalizedEffects
 		rarity := parseRarity(get(row, rarityIdx))
-		isImmortalRaw := strings.ToLower(get(row, isImmortalIdx))
 		primaryRole := get(row, primaryRoleIdx)
 		combatRolesRaw := get(row, combatRolesIdx)
 		combatTagsRaw := get(row, combatTagsIdx)
@@ -1200,7 +1198,6 @@ func seedGusFromCSV(filename string) error {
 		combatRolesJSON := safeJSONArray(combatRolesRaw, "[]", fmt.Sprintf("%s combat_roles", id))
 		combatTagsJSON := safeJSONArray(combatTagsRaw, "[]", fmt.Sprintf("%s combat_tags", id))
 		supportTagsJSON := safeJSONArray(supportTagsRaw, "[]", fmt.Sprintf("%s support_tags", id))
-		isImmortal := isImmortalRaw == "true" || isImmortalRaw == "1" || isImmortalRaw == "yes"
 
 		var effEnvelope map[string]map[string]interface{}
 		_ = json.Unmarshal([]byte(effectsRaw), &effEnvelope)
@@ -1230,17 +1227,17 @@ func seedGusFromCSV(filename string) error {
 		}
 
 		_, err := activeCSVImportDB().Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url)
-			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19, $20)
+			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url)
+			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18, $19)
 			ON CONFLICT (id, rank) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
 			    base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
 			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
-			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, is_immortal=EXCLUDED.is_immortal, primary_role=EXCLUDED.primary_role,
+			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, primary_role=EXCLUDED.primary_role,
 			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
 			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END,
 			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END
-		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, isImmortal, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
+		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
 		if err != nil {
 			logger.S.Warnf("upsert gu %s failed: %v", id, err)
 			continue
@@ -3425,8 +3422,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"gu": {
 		filename: "Gu.csv",
-		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+		columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "target_type", "rarity", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+		query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'[]'), COALESCE(target_type,'SINGLE'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 	},
 	"constitution": {
 		filename: "Constitution.csv",

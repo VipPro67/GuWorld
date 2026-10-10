@@ -381,7 +381,6 @@ type GuDictionaryItem struct {
 	MaxHunger    int       `json:"max_hunger"`
 	Description  string    `json:"description"`
 	Rarity       int       `json:"rarity"`
-	IsImmortal   bool      `json:"is_immortal"`
 	PrimaryRole  string    `json:"primary_role"`
 	CombatRoles  []string  `json:"combat_roles"`
 	CombatTags   []string  `json:"combat_tags"`
@@ -1125,7 +1124,7 @@ func HasImmortalRank(id string) bool {
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), is_immortal, primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
+		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -1140,13 +1139,12 @@ func LoadGuRegistry(db *sql.DB) error {
 		var item GuDictionaryItem
 		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw []byte
 		var targetTypeRaw []byte
-		var isImmortalRaw bool
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &pathRaw,
 			&item.Type, &item.BaseManaCost,
 			&item.Effects, &foodTypesRaw, &item.HungerRate,
 			&item.MaxHunger, &item.Description,
-			&targetTypeRaw, &item.Rarity, &isImmortalRaw,
+			&targetTypeRaw, &item.Rarity,
 			&item.PrimaryRole,
 			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
 			&item.ImageURL,
@@ -1162,8 +1160,6 @@ func LoadGuRegistry(db *sql.DB) error {
 		_ = json.Unmarshal(combatRolesRaw, &item.CombatRoles)
 		_ = json.Unmarshal(combatTagsRaw, &item.CombatTags)
 		_ = json.Unmarshal(supportTagsRaw, &item.SupportTags)
-
-		item.IsImmortal = isImmortalRaw
 
 		if _, ok := newRegistry[item.ID]; !ok {
 			newRegistry[item.ID] = make(map[int]GuDictionaryItem)
