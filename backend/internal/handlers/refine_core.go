@@ -13,7 +13,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -155,19 +154,6 @@ func GetRecipes(c *gin.Context) {
 		logger.S.Error(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player recipes"})
 		return
-	}
-
-	// If empty, initialize with defaults
-	if len(recipeProgresses) == 0 {
-		defaults := []services.RecipeProgress{
-			{PlayerID: playerID.String(), RecipeID: "recipe_GU_MOON_RAIMENT_2_1", CompletionRate: 100.0, IsUnlocked: true},
-			{PlayerID: playerID.String(), RecipeID: "recipe_GU_WHITE_JADE_2_1", CompletionRate: 100.0, IsUnlocked: true},
-			{PlayerID: playerID.String(), RecipeID: "recipe_GU_FOUR_FLAVORS_LIQUOR_2_1", CompletionRate: 100.0, IsUnlocked: true},
-		}
-		for i := range defaults {
-			RecipeSvc.Upsert(nil, &defaults[i])
-		}
-		recipeProgresses = defaults
 	}
 
 	// Create map for lookup

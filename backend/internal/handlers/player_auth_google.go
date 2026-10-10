@@ -18,7 +18,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -399,11 +398,6 @@ func GoogleCallback(c *gin.Context) {
 		InventorySvc.AddItem(tx, player.ID.String(), "moon_orchid_petal", "materials", 5)
 		InventorySvc.AddItem(tx, player.ID.String(), "green_bamboo_wine", "materials", 2)
 		InventorySvc.AddItem(tx, player.ID.String(), "jade_stone", "materials", 1)
-		// Seed starter recipes
-		RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_moon_raiment", CompletionRate: 100, IsUnlocked: true})
-		RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_white_jade", CompletionRate: 50, IsUnlocked: true})
-		RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30, IsUnlocked: true})
-
 		// Handle referral code logic
 		if referralCode != "" {
 			var referrerID uuid.UUID
