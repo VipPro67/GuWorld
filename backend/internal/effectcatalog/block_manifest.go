@@ -156,7 +156,7 @@ func init() {
 	register("ON_USE", "world", "RECORD_MESSAGE")
 	register("ON_TURN_START", "combat", "POEM_INTENT")
 	register("ON_BATTLE_START", "combat", "SEIZE_INITIATIVE", "SAT_KHI_GUARANTEE", "PERM_STEAL_GU", "TEMP_STEAL_GU", "SUPPRESS_PRIORITY")
-	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE")
+	register("ON_CAST", "combat", "SUMMON_WOLF_FRONTLINE", "FULL_SOUL_HEAL", "SWORD_DRAGON_TRANSFORM", "BORROW_PAST_POWER", "UNRAVEL_RIDDLE", "CHAOS_GAMBLE", "SUMMON_MONSTER")
 	register("ON_HIT", "combat", "BYPASS_SHIELD")
 	NativeHooks["GUARANTEED_HIT"] = NativeHook{
 		Triggers: values("ON_ACTION", "ON_HIT", "COMBAT_PASSIVE"),
@@ -215,6 +215,17 @@ func init() {
 	hook := NativeHooks["CAPTURE_BONUS"]
 	hook.Params = valueSchema
 	NativeHooks["CAPTURE_BONUS"] = hook
+	// SUMMON_MONSTER: authored params stay minimal (monster id + author scale);
+	// the combat builder injects the template stats (hp/damage/defense/name)
+	// resolved from MonsterRegistry into the compiled values.
+	hook = NativeHooks["SUMMON_MONSTER"]
+	hook.Params = map[string]ParamSpec{
+		"monster_id":   {Type: "string", Required: true},
+		"hp_scale":     number(false, 0.05, 2),
+		"damage_scale": number(false, 0.05, 2),
+		"position":     {Type: "string", Enum: values("frontline", "mid", "back")},
+	}
+	NativeHooks["SUMMON_MONSTER"] = hook
 	hook = NativeHooks["SEIZE_INITIATIVE"]
 	hook.Params = map[string]ParamSpec{"lifespan_ratio": {Type: "number", Required: true}}
 	NativeHooks["SEIZE_INITIATIVE"] = hook
