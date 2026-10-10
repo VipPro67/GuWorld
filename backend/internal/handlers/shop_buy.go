@@ -121,6 +121,28 @@ func BuyShopItem(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Hàng này hôm nay đã hết, hãy quay lại vào ngày mai!"})
 			return
 		}
+	} else if selectedItem.Stock >= 0 {
+		// Configured items use caravan_shop_items.stock; -1 means unlimited.
+		// Prefer the pinned rank and fall back to the legacy auto-rank row.
+		res, err := tx.Exec(`
+			UPDATE caravan_shop_items
+			SET stock = stock - $3
+			WHERE (id, rank) = (
+				SELECT id, rank FROM caravan_shop_items
+				WHERE id = $1 AND rank IN ($2, 0)
+				ORDER BY CASE WHEN rank = $2 THEN 0 ELSE 1 END
+				LIMIT 1
+			)
+			AND stock >= $3
+		`, selectedItem.ID, req.Rank, req.Quantity)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tồn kho."})
+			return
+		}
+		if affected, _ := res.RowsAffected(); affected == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Hàng này đã hết hoặc không đủ số lượng trong kho."})
+			return
+		}
 	}
 
 	// 4. Validate Funds
@@ -234,6 +256,7 @@ func BuyShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	invalidateShopCatalogCache()
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,

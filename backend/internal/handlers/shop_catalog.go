@@ -21,9 +21,9 @@ type ShopItem struct {
 	Type        string  `json:"type"` // "Gu", "Material", "Recipe" or "Consumable"
 	Price       float64 `json:"price"`
 	Rank        int     `json:"rank"`
-	Currency    string  `json:"currency"` // "primeval" (rank < 6) | "immortal" (rank >= 6)
-	Stock       int     `json:"stock"`    // -1 for unlimited
-	IsAuto      bool    `json:"-"`        // true when sourced from the virtual random pool (daily stock enforced)
+	Currency    string  `json:"currency"`          // "primeval" (rank < 6) | "immortal" (rank >= 6)
+	Stock       int     `json:"stock"`             // -1 for unlimited
+	IsAuto      bool    `json:"is_auto,omitempty"` // true when sourced from the virtual random pool (daily stock enforced)
 }
 
 // shopCatalogRankExpr resolves a single rank for a polymorphic shop item:
@@ -322,6 +322,13 @@ func findCaravanShopItem(itemID string, rank int) (*ShopItem, error) {
 		for _, item := range cachedItems {
 			if item.ID == itemID && (rank == 0 || item.Rank == rank) {
 				cp := item
+				if !cp.IsAuto {
+					var configured bool
+					_ = db.DB.QueryRow(`SELECT EXISTS (
+						SELECT 1 FROM caravan_shop_items WHERE id = $1 AND rank IN ($2, 0)
+					)`, itemID, item.Rank).Scan(&configured)
+					cp.IsAuto = !configured
+				}
 				return &cp, nil
 			}
 		}

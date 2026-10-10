@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, guSpecFor } from "@/store/useGameStore";
 import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
@@ -73,24 +73,21 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
-  // Fetch shop items on mount
-  useEffect(() => {
-    const fetchShopList = async () => {
-      setFetchingList(true);
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/shop/list`);
-        if (response.ok) {
-          const data = await response.json();
-          setShopItems(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch shop list:", err);
-      } finally {
-        setFetchingList(false);
-      }
-    };
-    fetchShopList();
+  const loadShopItems = useCallback(async () => {
+    setFetchingList(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/shop/list`);
+      if (response.ok) setShopItems(await response.json());
+    } catch (err) {
+      console.error("Failed to fetch shop list:", err);
+    } finally {
+      setFetchingList(false);
+    }
   }, [BACKEND_URL]);
+
+  useEffect(() => {
+    void loadShopItems();
+  }, [loadShopItems]);
 
   // Reset filters when changing tab or mode
   useEffect(() => {
@@ -227,6 +224,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
     const success = await onBuy(selectedBuyItem.id, buyQuantity, selectedBuyItem.rank ?? 0);
     if (success) {
+      await loadShopItems();
       setSuccessMessage("Giao dịch thành công! Đã thêm vào túi đồ.");
       setTimeout(() => {
         setSelectedBuyItem(null);
