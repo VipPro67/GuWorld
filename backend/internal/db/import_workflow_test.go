@@ -1,9 +1,49 @@
 package db
 
 import (
+	"database/sql"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type failingCSVImportExecutor struct{ err error }
+
+func (e failingCSVImportExecutor) Exec(string, ...interface{}) (sql.Result, error) {
+	return nil, e.err
+}
+
+func (failingCSVImportExecutor) Query(string, ...interface{}) (*sql.Rows, error) {
+	return nil, errors.New("unexpected query")
+}
+
+func (failingCSVImportExecutor) QueryRow(string, ...interface{}) *sql.Row { return nil }
+
+func TestSeedGusFromCSVReturnsUpsertError(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "Gu.csv")
+	if err := os.WriteFile(filename, []byte("id,name,rank,effects\ngu_test,Test Gu,1,[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	wantErr := errors.New("database constraint rejected Gu")
+	csvImportState.Lock()
+	defer csvImportState.Unlock()
+	previousExecutor := csvImportState.executor
+	previousOverride := csvImportState.override
+	csvImportState.executor = failingCSVImportExecutor{err: wantErr}
+	csvImportState.override = nil
+	defer func() {
+		csvImportState.executor = previousExecutor
+		csvImportState.override = previousOverride
+	}()
+
+	err := seedGusFromCSV(filename)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("seedGusFromCSV() error = %v, want wrapped upsert error %v", err, wantErr)
+	}
+}
 
 func TestValidateImportCSVRejectsDuplicateAndBlankKeys(t *testing.T) {
 	dataset, ok := findImportDataset("item")

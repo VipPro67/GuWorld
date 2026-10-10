@@ -1240,8 +1240,7 @@ func seedGusFromCSV(filename string) error {
 			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END
 		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
 		if err != nil {
-			logger.S.Warnf("upsert gu %s failed: %v", id, err)
-			continue
+			return fmt.Errorf("upsert gu %s rank %s: %w", id, rankStr, err)
 		}
 	}
 	logger.S.Infof("Gu dictionary seeded from %s (%d unique entries)", filename, len(order))
