@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -14,6 +15,20 @@ import (
 )
 
 const clearedCellCooldown = 15 * time.Minute
+
+const (
+	monsterCampSpacing     = 48
+	monsterCampRadius      = 6
+	monsterCampEliteChance = 0.10
+)
+
+type proceduralMonsterCamp struct {
+	spawn    models.MonsterSpawn
+	elite    models.MonsterSpawn
+	hasElite bool
+	x, y     int
+	distance int
+}
 
 func GetCellSeed(x, y int, zoneKey string) int64 {
 	h := sha256.New()
@@ -100,10 +115,19 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 	zoneID := zone.ID
 	seed := GetCellSeed(x, y, zoneID)
 	rng := rand.New(rand.NewSource(seed))
+	camp, hasCamp := findProceduralMonsterCamp(x, y, zone)
+	if hasCamp && camp.hasElite && x == camp.x && y == camp.y {
+		return models.Cell{X: x, Y: y, Type: "Monster", Content: camp.elite.MonsterID,
+			Rank: camp.elite.MinRank, SubRank: rng.Intn(5) + 1}
+	}
+	if hasCamp && rng.Float64() < monsterCampSpawnChance(camp.distance) {
+		return models.Cell{X: x, Y: y, Type: "Monster", Content: camp.spawn.MonsterID,
+			Rank: camp.spawn.MinRank, SubRank: rng.Intn(5) + 1}
+	}
 
 	weights := zone.PoolWeights.CellWeights
 	if len(weights) == 0 {
-		weights = map[string]int{"Monster": 8, "Resource": 4, "WildGu": 1, "Empty": 87}
+		weights = map[string]int{"Monster": 2, "Resource": 4, "WildGu": 1, "Empty": 87}
 	} else {
 		// Override to forcibly reduce density if DB has high values
 		newW := make(map[string]int)
@@ -112,6 +136,14 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 				newW[k] = v * 4
 			} else {
 				newW[k] = v / 2
+				if k == "Monster" {
+					// Keep a few wanderers outside authored-looking camps, while
+					// making most ordinary spawns read as a group on the map.
+					newW[k] /= 3
+					if newW[k] == 0 && v > 0 {
+						newW[k] = 1
+					}
+				}
 			}
 		}
 		if newW["Empty"] == 0 {
@@ -223,6 +255,94 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 		return models.Cell{X: x, Y: y, Type: "WildGu", Content: guID, Rank: rank}
 	default:
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
+	}
+}
+
+// findProceduralMonsterCamp returns the nearest stable camp affecting a cell.
+// Camp centers, monster type, and rank derive from region and coarse-grid seeds,
+// so the same terrain resolves identically for every player and backend restart.
+func findProceduralMonsterCamp(x, y int, zone *models.Region) (proceduralMonsterCamp, bool) {
+	if zone == nil || zone.ZoneType == ZoneTypeHub || zone.ZoneType == ZoneTypeSafe || IsSafeZone(zone.ID, x, y) {
+		return proceduralMonsterCamp{}, false
+	}
+	gridX, gridY := x/monsterCampSpacing, y/monsterCampSpacing
+	best := proceduralMonsterCamp{distance: monsterCampRadius + 1}
+	found := false
+	for gy := gridY - 1; gy <= gridY+1; gy++ {
+		for gx := gridX - 1; gx <= gridX+1; gx++ {
+			seed := GetCellSeed(gx, gy, zone.ID+":monster-camp")
+			rng := rand.New(rand.NewSource(seed))
+			cx := gx*monsterCampSpacing + 8 + rng.Intn(monsterCampSpacing-16)
+			cy := gy*monsterCampSpacing + 8 + rng.Intn(monsterCampSpacing-16)
+			if !inWorld(cx, cy) {
+				continue
+			}
+			distance := int(math.Hypot(float64(x-cx), float64(y-cy)))
+			if distance > monsterCampRadius || (found && distance >= best.distance) {
+				continue
+			}
+			centerZone := FindZoneAt(cx, cy)
+			if centerZone == nil || centerZone.ID != zone.ID {
+				continue
+			}
+			spawn, ok := pickMonsterFromPool(zone.ID, rng, false)
+			monsterID := ""
+			minRank, maxRank := zone.MinRank, zone.MaxRank
+			if ok {
+				monsterID, minRank, maxRank = spawn.MonsterID, spawn.MinRank, spawn.MaxRank
+			}
+			if monsterID == "" {
+				monsterID = randomNormalMonsterID(rng)
+			}
+			if minRank < 1 {
+				minRank = zone.MinRank
+			}
+			if minRank < 1 {
+				minRank = 1
+			}
+			if maxRank < minRank {
+				maxRank = minRank
+			}
+			rank := minRank
+			if maxRank > minRank {
+				rank += rng.Intn(maxRank - minRank + 1)
+			}
+			best = proceduralMonsterCamp{spawn: models.MonsterSpawn{MonsterID: monsterID, MinRank: rank}, x: cx, y: cy, distance: distance}
+			eliteRNG := rand.New(rand.NewSource(GetCellSeed(gx, gy, zone.ID+":monster-camp:elite")))
+			if eliteRNG.Float64() < monsterCampEliteChance {
+				if eliteSpawn, foundElite := pickMonsterFromPoolOfType(zone.ID, eliteRNG, "Elite"); foundElite {
+					eliteMinRank, eliteMaxRank := eliteSpawn.MinRank, eliteSpawn.MaxRank
+					if eliteMinRank < 1 {
+						eliteMinRank = minRank
+					}
+					if eliteMinRank < 1 {
+						eliteMinRank = 1
+					}
+					if eliteMaxRank < eliteMinRank {
+						eliteMaxRank = eliteMinRank
+					}
+					eliteRank := eliteMinRank
+					if eliteMaxRank > eliteMinRank {
+						eliteRank += eliteRNG.Intn(eliteMaxRank - eliteMinRank + 1)
+					}
+					best.elite = models.MonsterSpawn{MonsterID: eliteSpawn.MonsterID, MinRank: eliteRank}
+					best.hasElite = true
+				}
+			}
+			found = true
+		}
+	}
+	return best, found
+}
+
+func monsterCampSpawnChance(distance int) float64 {
+	switch {
+	case distance <= 2:
+		return 0.8
+	case distance <= 4:
+		return 0.55
+	default:
+		return 0.3
 	}
 }
 

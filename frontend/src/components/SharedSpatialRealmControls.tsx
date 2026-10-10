@@ -12,6 +12,9 @@ interface SpatialRealm {
   description: string;
   required_rank: number;
   region_id: string;
+  entry_region_id: string;
+  entry_x: number;
+  entry_y: number;
   duration_minutes: number;
   instance_id?: string;
   opened_at?: string;
@@ -19,8 +22,9 @@ interface SpatialRealm {
   player_count: number;
 }
 
-export function SharedSpatialRealmControls({ enabled }: { enabled: boolean }) {
+export function SharedSpatialRealmControls({ enabled, currentRegion, x, y }: { enabled: boolean; currentRegion: string; x: number; y: number }) {
   const token = useGameStore((state) => state.token);
+  const regions = useGameStore((state) => state.regions);
   const logout = useGameStore((state) => state.logout);
   const refreshPlayerSummary = useGameStore((state) => state.refreshPlayerSummary);
   const addToast = useGameStore((state) => state.addToast);
@@ -135,27 +139,32 @@ export function SharedSpatialRealmControls({ enabled }: { enabled: boolean }) {
         </div>
       ) : (
         <div className="grid gap-2 md:grid-cols-2">
-          {realms.map((realm) => (
-            <article key={realm.template_id} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h4 className="truncate text-xs font-bold text-zinc-100">{realm.name}</h4>
-                  <p className="mt-1 line-clamp-2 text-[10px] text-zinc-400">{realm.description}</p>
-                  <div className="mt-2 flex gap-3 text-[10px] text-zinc-500">
-                    <span>Rank {realm.required_rank}+</span>
-                    <span>{realm.duration_minutes} phút</span>
-                    {realm.instance_id && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{realm.player_count} đang ở</span>}
+          {realms.map((realm) => {
+            const atGate = currentRegion === realm.entry_region_id && x === realm.entry_x && y === realm.entry_y;
+            const entryRegionName = regions.find((region) => region.id === realm.entry_region_id)?.name || realm.entry_region_id;
+            return (
+              <article key={realm.template_id} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="truncate text-xs font-bold text-zinc-100">{realm.name}</h4>
+                    <p className="mt-1 line-clamp-2 text-[10px] text-zinc-400">{realm.description}</p>
+                    <p className="mt-1 text-[10px] text-violet-300">Cổng tại {entryRegionName} · ({realm.entry_x}, {realm.entry_y})</p>
+                    <div className="mt-2 flex gap-3 text-[10px] text-zinc-500">
+                      <span>Rank {realm.required_rank}+</span>
+                      <span>{realm.duration_minutes} phút</span>
+                      {realm.instance_id && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{realm.player_count} đang ở</span>}
+                    </div>
                   </div>
+                  <button type="button" onClick={() => void enter(realm.template_id)} disabled={busy || !atGate} className="shrink-0 rounded-lg bg-violet-700 px-3 py-2 text-[10px] font-bold text-white hover:bg-violet-600 disabled:opacity-50">
+                    {atGate ? (realm.instance_id ? "Tham gia" : "Tiến vào") : "Đến cổng"}
+                  </button>
                 </div>
-                <button type="button" onClick={() => void enter(realm.template_id)} disabled={busy} className="shrink-0 rounded-lg bg-violet-700 px-3 py-2 text-[10px] font-bold text-white hover:bg-violet-600 disabled:opacity-50">
-                  {realm.instance_id ? "Tham gia" : "Tiến vào"}
-                </button>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
-      <p className="text-[10px] text-zinc-500">Người chơi cùng bí cảnh sẽ gặp nhau trong một bản đồ. Có thể rời bằng Cổ Trùng thoát hoặc đến cổng ra.</p>
+      <p className="text-[10px] text-zinc-500">Cần đi tới đúng cổng được đánh dấu trên bản đồ thế giới mới vào được. Người chơi cùng bí cảnh sẽ gặp nhau trong một bản đồ; có thể rời bằng Cổ Trùng thoát hoặc đến cổng ra.</p>
     </section>
   );
 }

@@ -166,6 +166,28 @@ func TestWorldMonsterAggroProfileScalesWithRankAndStaysLocal(t *testing.T) {
 	}
 }
 
+func TestEliteWorldMonsterUsesCampHunterProfile(t *testing.T) {
+	const templateID = "monster_test_elite_hunter"
+	previous, existed := models.MonsterRegistry[templateID]
+	models.MonsterRegistry[templateID] = models.MonsterTemplate{ID: templateID, Type: "Elite"}
+	t.Cleanup(func() {
+		if existed {
+			models.MonsterRegistry[templateID] = previous
+		} else {
+			delete(models.MonsterRegistry, templateID)
+		}
+	})
+
+	monster := WorldMonster{MonsterTemplateID: templateID, RegionID: "elite_profile_test", Rank: 3}
+	applyWorldMonsterTuning(context.Background(), &monster)
+	if monster.AggroRadius != worldMonsterEliteAggro || monster.LeashRadius != worldMonsterEliteLeash || monster.Speed != worldMonsterEliteSpeed {
+		t.Fatalf("elite hunter profile = aggro %v, leash %v, speed %v", monster.AggroRadius, monster.LeashRadius, monster.Speed)
+	}
+	if monster.PatrolMinX != 0 || monster.PatrolMinY != 0 || monster.PatrolMaxX != WorldWidth-1 || monster.PatrolMaxY != WorldHeight-1 {
+		t.Fatalf("elite should be bounded to the owning region: %+v", monster)
+	}
+}
+
 func TestApplyWorldMonsterTuningUpgradesLegacyCachedMonster(t *testing.T) {
 	previous := resolveWorldMonsterCell
 	resolveWorldMonsterCell = func(int, int) models.Cell { return models.Cell{Content: "wolf", Rank: 7, SubRank: 2} }

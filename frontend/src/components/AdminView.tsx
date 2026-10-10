@@ -183,7 +183,7 @@ const getEffectFieldType = (cat: string, key: string): "string" | "number" | "bo
 };
 
 interface PlayerRow {
-  id: string; username: string; email: string; rank: number; sub_rank: number;
+  id: string; username: string; rank: number; sub_rank: number;
   current_mana: number; max_mana: number; hp: number; base_hp: number;
   primeval_stones: number; immortal_stones: number;
   is_admin: boolean; created_at: string; current_region: string;
@@ -247,7 +247,7 @@ interface GrowthData {
 }
 
 interface PlayerDetail {
-  id: string; username: string; email: string; rank: number; sub_rank: number;
+  id: string; username: string; rank: number; sub_rank: number;
   aptitude_type: string; aptitude_percent: number; aptitude_grade: string;
   current_mana: number; max_mana: number; primeval_stones: number;
   immortal_stones: number; hp: number; base_hp: number;
@@ -1430,7 +1430,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 {detail ? detail.username : "Đang tải..."}
               </h1>
               {detail && (
-                <p className="text-xs text-zinc-500 font-mono">{detail.id} • {detail.email}</p>
+                <p className="text-xs text-zinc-500 font-mono">{detail.id}</p>
               )}
             </div>
           </div>
@@ -1442,7 +1442,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               {canAdminAction("updatePlayer") && <button onClick={() => {
               if (detail) {
                 setEditPlayerForm({
-                  username: detail.username || "", email: detail.email || "",
+                  username: detail.username || "",
                   rank: String(detail.rank), sub_rank: String(detail.sub_rank),
                   aptitude_type: detail.aptitude_type || "", aptitude_percent: String(detail.aptitude_percent ?? ""),
                   aptitude_grade: detail.aptitude_grade || "", current_mana: String(detail.current_mana ?? ""),
@@ -2655,10 +2655,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <input type="text" value={editPlayerForm.username || ""} onChange={e => setEditPlayerForm(f => ({ ...f, username: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Email</label>
-                  <input type="email" value={editPlayerForm.email || ""} onChange={e => setEditPlayerForm(f => ({ ...f, email: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
-                </div>
-                <div className="col-span-2">
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Path mastery (JSON)</label>
                   <textarea value={editPlayerForm.path_masteries || "{}"} onChange={e => setEditPlayerForm(f => ({ ...f, path_masteries: e.target.value }))} rows={3} placeholder={'{"fire": 100, "sword": 50}'} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 font-mono mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
@@ -2845,7 +2841,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     if (String(cur) !== String(next)) body[field] = next;
                   };
                   set("username", detail.username, editPlayerForm.username);
-                  set("email", detail.email, editPlayerForm.email);
                   set("rank", detail.rank, num(editPlayerForm.rank));
                   set("sub_rank", detail.sub_rank, num(editPlayerForm.sub_rank));
                   set("aptitude_type", detail.aptitude_type || "", editPlayerForm.aptitude_type);
@@ -3519,7 +3514,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ID</th>
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tên</th>
-                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Email</th>
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Tu vi</th>
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Sinh lực</th>
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Chân nguyên</th>
@@ -3535,7 +3529,6 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                       <tr key={p.id} onClick={() => setSelectedId(p.id)} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors cursor-pointer">
                         <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate whitespace-nowrap" title={p.id}>{p.id.slice(0, 8)}...</td>
                         <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{p.username}{p.is_banned && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950/80 border border-red-500/40 text-red-400">ĐÃ KHÓA</span>}</td>
-                        <td className="px-3 py-2.5 text-zinc-400 whitespace-nowrap">{p.email}</td>
                         <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${rankColor(p.rank)}`}>{getRankName(p.rank, p.sub_rank)}</td>
                         <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{Math.round(p.hp)}/{Math.round(p.base_hp)}</td>
                         <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{Math.round(p.current_mana)}/{Math.round(p.max_mana)}</td>

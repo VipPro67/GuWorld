@@ -229,6 +229,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
   const getEntityName = (type: string, content: string) => {
     if (type === "EXIT_PORTAL" || type === "PORTAL_EXIT") return "Cổng trở về";
+    if (type === "ENTRY_PORTAL") {
+      const realmName = content.replace(/^spatial_realm_/, "").replace(/_/g, " ");
+      return `Cổng vào bí cảnh: ${realmName}`;
+    }
     if (type === "Monster" || type === "Boss") {
       return monsterDictionary[content]?.name || content.split(" ")[0];
     }
@@ -257,6 +261,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
       case "EXIT_PORTAL":
       case "PORTAL_EXIT":
         return <DoorOpen className="w-5 h-5 text-violet-400" />;
+      case "ENTRY_PORTAL":
+        return <DoorOpen className="w-5 h-5 text-amber-300" />;
       default:
         return null;
     }
@@ -486,7 +492,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
         </div>
       </div>
 
-      <SharedSpatialRealmControls enabled={isExploringActiveRegion} />
+      <SharedSpatialRealmControls enabled={isExploringActiveRegion} currentRegion={player.current_region} x={player.x} y={player.y} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Map Grid & Logs */}

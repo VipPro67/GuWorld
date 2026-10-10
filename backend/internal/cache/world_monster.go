@@ -78,6 +78,60 @@ func worldMonsterBucketKey(regionID string, bx, by int) string {
 
 func worldBossSetKey(regionID string) string { return "world:monsters:bosses:" + regionID }
 
+// PurgeWorldMonstersForRegions removes active runtime actors and their spawn
+// pointers after a map-layout migration changes persisted spawn coordinates.
+func PurgeWorldMonstersForRegions(ctx context.Context, regionIDs ...string) error {
+	if Client == nil {
+		return nil
+	}
+	for _, regionID := range regionIDs {
+		var actorKeys, bucketKeys, spawnKeys []string
+		var cursor uint64
+		for {
+			keys, next, err := Client.Scan(ctx, cursor, "world:monster:"+regionID+":*", 128).Result()
+			if err != nil {
+				return err
+			}
+			actorKeys = append(actorKeys, keys...)
+			cursor = next
+			if cursor == 0 {
+				break
+			}
+		}
+		for _, key := range actorKeys {
+			raw, err := Client.Get(ctx, key).Bytes()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			var actor WorldMonster
+			if err == nil && json.Unmarshal(raw, &actor) == nil && actor.SpawnID != "" {
+				spawnKeys = append(spawnKeys, worldMonsterSpawnKey(actor.SpawnID))
+			}
+		}
+		cursor = 0
+		for {
+			keys, next, err := Client.Scan(ctx, cursor, "world:monsters:aoi:"+regionID+":*", 128).Result()
+			if err != nil {
+				return err
+			}
+			bucketKeys = append(bucketKeys, keys...)
+			cursor = next
+			if cursor == 0 {
+				break
+			}
+		}
+		keys := append(actorKeys, bucketKeys...)
+		keys = append(keys, spawnKeys...)
+		keys = append(keys, worldBossSetKey(regionID))
+		if len(keys) > 0 {
+			if err := Client.Del(ctx, keys...).Err(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 const materializeWorldMonsterScript = `
 	local existing = redis.call('GET', KEYS[1])
 	if existing then

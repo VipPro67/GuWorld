@@ -1977,8 +1977,8 @@ func seedRegionsFromCSV(filename string) error {
 			if err := activeCSVImportDB().QueryRow(`SELECT COALESCE((SELECT is_active FROM world_maps WHERE id=$1), FALSE)`, item.worldMapID).Scan(&mapIsActive); err != nil {
 				return fmt.Errorf("validate map %s for region %s: %w", item.worldMapID, item.id, err)
 			}
-			if !mapIsActive {
-				return fmt.Errorf("map %s is inactive; cannot assign region %s until layer-scoped gameplay is enabled", item.worldMapID, item.id)
+			if !mapIsActive && item.active {
+				return fmt.Errorf("map %s is inactive; region %s must stay inactive until the layer is opened", item.worldMapID, item.id)
 			}
 		}
 		if _, err = activeCSVImportDB().Exec(`INSERT INTO region_world_maps (region_id, world_map_id) VALUES ($1, COALESCE(NULLIF($2,''), 'world_map')) ON CONFLICT (region_id) DO UPDATE SET world_map_id = CASE WHEN $2 <> '' THEN EXCLUDED.world_map_id ELSE region_world_maps.world_map_id END, updated_at=NOW()`, item.id, item.worldMapID); err != nil {
@@ -1996,8 +1996,201 @@ func seedRegionsFromCSV(filename string) error {
 			}
 		}
 	}
+	if err := migrateFiveDomainWorldMapLayout(); err != nil {
+		return fmt.Errorf("migrate five-domain world-map layout: %w", err)
+	}
+	if err := seedHacBaiSpatialRealms(); err != nil {
+		return fmt.Errorf("seed Hắc/Bạch Thiên shared spatial realms: %w", err)
+	}
 
 	logger.S.Infof("Regions seeded from %s (%d seeded)", filename, seeded)
+	return nil
+}
+
+// migrateFiveDomainWorldMapLayout moves existing Đông Hải data into the
+// expanded eastern half of the world map exactly once. Region.csv remains the
+// source of truth for geometry; this migration carries persisted positions and
+// fixed content along with the regions.
+func migrateFiveDomainWorldMapLayout() error {
+	const migrationID = "world_map_five_domains_layout_v1"
+	var applied bool
+	if err := activeCSVImportDB().QueryRow(`SELECT EXISTS(SELECT 1 FROM world_map_layout_migrations WHERE id=$1)`, migrationID).Scan(&applied); err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+	queries := []string{
+		`UPDATE players SET x=x+5000
+		 WHERE map_instance_id IS NULL
+		   AND current_region IN (SELECT id FROM regions WHERE (id='dai_vuc_dong_hai' OR parent_id='dai_vuc_dong_hai') AND id<>'ngoai_vuc_tang_nhat')`,
+		`UPDATE shared_spatial_instance_members SET return_x=return_x+5000
+		 WHERE return_region_id IN (SELECT id FROM regions WHERE (id='dai_vuc_dong_hai' OR parent_id='dai_vuc_dong_hai') AND id<>'ngoai_vuc_tang_nhat')`,
+		`UPDATE map_cells SET x=x+5000
+		 WHERE region_id IN (SELECT id FROM regions WHERE (id='dai_vuc_dong_hai' OR parent_id='dai_vuc_dong_hai') AND id<>'ngoai_vuc_tang_nhat')`,
+		`UPDATE monster_spawns SET x=x+5000
+		 WHERE x IS NOT NULL
+		   AND region_id IN (SELECT id FROM regions WHERE (id='dai_vuc_dong_hai' OR parent_id='dai_vuc_dong_hai') AND id<>'ngoai_vuc_tang_nhat')`,
+		`UPDATE shared_spatial_instance_members SET return_region_id=CASE
+		   WHEN return_y < 13300 AND return_x > 25000 THEN 'bach_sa_quan'
+		   WHEN return_y < 13300 AND return_x >= 21600 THEN 'shadow_glimpse_trench'
+		   WHEN return_y < 13300 AND return_x >= 18300 THEN 'ngoc_ho_dao'
+		   WHEN return_y < 13300 THEN 'tan_thu_coc_dong_hai'
+		   WHEN return_y < 16600 AND return_x > 25000 THEN 'long_mon_hai_vuc'
+		   WHEN return_y < 16600 AND return_x >= 21600 THEN 'thao_thiet_hai_khau'
+		   WHEN return_y < 16600 AND return_x >= 18300 THEN 'long_ngu_dao'
+		   WHEN return_y < 16600 THEN 'binh_kinh_hai'
+		   WHEN return_x > 25000 THEN 'van_luu_tinh_hai'
+		   WHEN return_x >= 21600 THEN 'van_sam_hai_vuc'
+		   WHEN return_x >= 18300 THEN 'khi_hai_vuc'
+		   ELSE 'turbulent_current_sea' END
+		 WHERE return_region_id='ngoai_vuc_tang_nhat'`,
+		`UPDATE players SET current_region=CASE
+		   WHEN y < 13300 AND x > 25000 THEN 'bach_sa_quan'
+		   WHEN y < 13300 AND x >= 21600 THEN 'shadow_glimpse_trench'
+		   WHEN y < 13300 AND x >= 18300 THEN 'ngoc_ho_dao'
+		   WHEN y < 13300 THEN 'tan_thu_coc_dong_hai'
+		   WHEN y < 16600 AND x > 25000 THEN 'long_mon_hai_vuc'
+		   WHEN y < 16600 AND x >= 21600 THEN 'thao_thiet_hai_khau'
+		   WHEN y < 16600 AND x >= 18300 THEN 'long_ngu_dao'
+		   WHEN y < 16600 THEN 'binh_kinh_hai'
+		   WHEN x > 25000 THEN 'van_luu_tinh_hai'
+		   WHEN x >= 21600 THEN 'van_sam_hai_vuc'
+		   WHEN x >= 18300 THEN 'khi_hai_vuc'
+		   ELSE 'turbulent_current_sea' END
+		 WHERE current_region='ngoai_vuc_tang_nhat' AND map_instance_id IS NULL`,
+		`UPDATE map_cells SET is_active=FALSE
+		 WHERE region_id='ngoai_vuc_tang_nhat' AND UPPER(cell_type)='ENTRY_PORTAL'`,
+		`UPDATE regions SET is_active=FALSE WHERE id='ngoai_vuc_tang_nhat'`,
+	}
+	for _, query := range queries {
+		if _, err := activeCSVImportDB().Exec(query); err != nil {
+			return err
+		}
+	}
+	if _, err := activeCSVImportDB().Exec(`INSERT INTO world_map_layout_migrations(id) VALUES($1) ON CONFLICT(id) DO NOTHING`, migrationID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// seedHacBaiSpatialRealms registers the former Hắc/Bạch Thiên child zones as
+// server-wide shared map instances. Region geometry is data-driven in
+// Region.csv; this seed supplies the SPATIAL_REALM templates and exit portals
+// that Region.csv cannot represent. Fixed world entry portals are seeded in
+// active tier-one regions and validated by the enter endpoint.
+func seedHacBaiSpatialRealms() error {
+	// Bạch Thiên used world-space Y coordinates above the current map height.
+	// Normalize old persisted content once; already-normalized rows fall below
+	// this predicate on subsequent imports.
+	for _, query := range []string{
+		`UPDATE map_cells SET y=y-20000 WHERE region_id IN ('nguyen_lien_hoa_gioi','thai_co_van_cung','thien_dinh_di_tich','bach_quang_thien_cung') AND y>=20000`,
+		`UPDATE monster_spawns SET y=y-20000 WHERE region_id IN ('nguyen_lien_hoa_gioi','thai_co_van_cung','thien_dinh_di_tich','bach_quang_thien_cung') AND y>=20000`,
+	} {
+		if _, err := activeCSVImportDB().Exec(query); err != nil {
+			return err
+		}
+	}
+	gateLocations := map[string]struct {
+		regionID string
+		x, y     int
+	}{
+		"dang_hon_son":          {"shadow_glimpse_trench", 22500, 11650},
+		"mong_canh_uyen_gioi":   {"bach_sa_quan", 27500, 11650},
+		"tu_vuc_u_minh":         {"thao_thiet_hai_khau", 22500, 14950},
+		"nghich_luu_ha":         {"long_mon_hai_vuc", 27500, 14950},
+		"quang_am_chi_ha":       {"van_sam_hai_vuc", 22500, 18300},
+		"sinh_tu_mon":           {"van_luu_tinh_hai", 27500, 18300},
+		"nguyen_lien_hoa_gioi":  {"luyen_co_dong", 12000, 4000},
+		"thai_co_van_cung":      {"linh_nhi_ho", 17500, 2500},
+		"thien_dinh_di_tich":    {"thien_de_son", 12500, 7500},
+		"bach_quang_thien_cung": {"lac_thien_coc", 17500, 7500},
+	}
+	rows, err := activeCSVImportDB().Query(`
+		SELECT id, name, min_rank, entry_x, entry_y, max_x, max_y
+		FROM regions
+		WHERE is_active=TRUE AND UPPER(zone_type)='SECRET_REALM'
+		  AND parent_id IN ('dai_vuc_bach_thien','dai_vuc_hac_thien')
+		ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	type realmSeed struct {
+		regionID, name                   string
+		rank, entryX, entryY, maxX, maxY int
+	}
+	var realms []realmSeed
+	for rows.Next() {
+		var item realmSeed
+		if err := rows.Scan(&item.regionID, &item.name, &item.rank, &item.entryX, &item.entryY, &item.maxX, &item.maxY); err != nil {
+			rows.Close()
+			return err
+		}
+		realms = append(realms, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, item := range realms {
+		templateID := "spatial_realm_" + item.regionID
+		if _, err := activeCSVImportDB().Exec(`
+			INSERT INTO instance_templates
+				(id,name,type,required_rank,entry_item,description,rewards,map_data,cooldown_hours,spatial_region_id,duration_minutes)
+			VALUES ($1,$2,'SPATIAL_REALM',$3,'NONE',$4,'{}'::jsonb,'[]'::jsonb,0,$5,120)
+			ON CONFLICT (id) DO NOTHING`, templateID, "Bí Cảnh: "+item.name, item.rank,
+			"Bản đồ bí cảnh dùng chung toàn server. Người chơi cùng phiên sẽ gặp nhau tại đây.", item.regionID); err != nil {
+			return fmt.Errorf("upsert spatial realm template %s: %w", templateID, err)
+		}
+		exitX := item.entryX + 1
+		if exitX > item.maxX {
+			exitX = item.entryX - 1
+		}
+		if item.entryX < 0 || item.entryX > item.maxX || item.entryY < 0 || item.entryY > item.maxY || exitX < 0 {
+			return fmt.Errorf("invalid entry/exit coordinates for spatial realm %s", item.regionID)
+		}
+		gate, ok := gateLocations[item.regionID]
+		if !ok {
+			return fmt.Errorf("missing fixed world entrance for spatial realm %s", item.regionID)
+		}
+		var gateRegionValid bool
+		if err := activeCSVImportDB().QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM regions r
+				JOIN region_world_maps rwm ON rwm.region_id=r.id
+				WHERE r.id=$1 AND r.is_active=TRUE AND rwm.world_map_id='world_map'
+				  AND UPPER(r.zone_type) <> 'SECRET_REALM'
+				  AND $2 BETWEEN r.min_x AND r.max_x AND $3 BETWEEN r.min_y AND r.max_y
+			)`, gate.regionID, gate.x, gate.y).Scan(&gateRegionValid); err != nil {
+			return fmt.Errorf("validate world entrance for spatial realm %s: %w", item.regionID, err)
+		}
+		if !gateRegionValid {
+			return fmt.Errorf("fixed world entrance for spatial realm %s is outside active tier-one region %s", item.regionID, gate.regionID)
+		}
+		if _, err := activeCSVImportDB().Exec(`
+			INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
+			VALUES($1,$2,$3,'ENTRY_PORTAL',$4,jsonb_build_object('action','ENTER_SPATIAL_REALM','template_id',$4,'label',$5),0,TRUE)
+			ON CONFLICT(region_id,x,y) DO NOTHING`,
+			gate.regionID, gate.x, gate.y, templateID, "Cổng vào: "+item.name); err != nil {
+			return fmt.Errorf("seed fixed world entrance for spatial realm %s: %w", item.regionID, err)
+		}
+		var gateExists bool
+		if err := activeCSVImportDB().QueryRow(`SELECT EXISTS(SELECT 1 FROM map_cells WHERE region_id=$1 AND x=$2 AND y=$3 AND is_active=TRUE AND UPPER(cell_type)='ENTRY_PORTAL' AND content_id=$4)`, gate.regionID, gate.x, gate.y, templateID).Scan(&gateExists); err != nil {
+			return fmt.Errorf("verify fixed world entrance for spatial realm %s: %w", item.regionID, err)
+		}
+		if !gateExists {
+			return fmt.Errorf("fixed entrance coordinate %s (%d,%d) is already occupied", gate.regionID, gate.x, gate.y)
+		}
+		if _, err := activeCSVImportDB().Exec(`
+			INSERT INTO map_cells(region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active)
+			VALUES($1,$2,$3,'EXIT_PORTAL','EXIT_SPATIAL_REALM','{"action":"EXIT_SPATIAL_REALM","label":"Cổng trở về"}'::jsonb,0,TRUE)
+			ON CONFLICT(region_id,x,y) DO NOTHING`, item.regionID, exitX, item.entryY); err != nil {
+			return fmt.Errorf("seed exit portal for spatial realm %s: %w", item.regionID, err)
+		}
+	}
 	return nil
 }
 

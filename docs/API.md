@@ -304,14 +304,14 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/instance/list` | Danh sách phó bản + `cooldown_remaining` (giây) của player |
 | POST | `/instance/enter` |
 | POST | `/instance/action` |
-| GET | `/instance/spatial` | Danh sách template `SPATIAL_REALM` và số người đang ở phiên chung |
+| GET | `/instance/spatial` | Danh sách template `SPATIAL_REALM`, số người đang ở phiên chung và cổng cố định (`entry_region_id`, `entry_x`, `entry_y`) |
 | GET | `/instance/spatial/active` | Bí cảnh bản đồ mà người chơi đang tham gia, nếu có |
-| POST | `/instance/spatial/enter` | Body `{ "template_id": "..." }`; tạo hoặc tham gia phiên chung, lưu điểm hồi quy riêng cho người vào |
+| POST | `/instance/spatial/enter` | Body `{ "template_id": "..." }`; chỉ tạo hoặc tham gia phiên chung khi player đứng tại đúng `ENTRY_PORTAL` của template, lưu điểm hồi quy riêng cho người vào |
 | POST | `/instance/spatial/exit` | Thoát tại ô cổng có `cell_type=EXIT_PORTAL`/`PORTAL_EXIT`, `content_id=EXIT_SPATIAL_REALM`, hoặc `metadata.action=EXIT_SPATIAL_REALM` |
 
 `POST /chat/bao-hoang/send` nhận `channel=region` để gửi miễn phí vào khu vực hiện tại. Lịch sử khu vực được cô lập theo `current_region` và `map_instance_id`; kênh cập nhật theo vị trí mới khi frontend đồng bộ khóa hiện tại. Mỗi lần tải chỉ trả tối đa 50 tin gần nhất.
 
-Bí cảnh bản đồ dùng `instance_templates.type=SPATIAL_REALM`, `spatial_region_id` trỏ tới region `SECRET_REALM`, và `duration_minutes`. Mỗi template chỉ có một phiên ACTIVE dùng chung. Khi hết giờ, worker đóng phiên, trả tất cả người tham gia về vị trí đã lưu và xóa ground drop trong region đó. Item effect `exit_spatial_realm` dùng chung đường thoát; chưa gắn vào Cổ Trùng cụ thể.
+Bí cảnh bản đồ dùng `instance_templates.type=SPATIAL_REALM`, `spatial_region_id` trỏ tới region `SECRET_REALM`, và `duration_minutes`. Mỗi template chỉ có một phiên ACTIVE dùng chung. Người chơi phải đứng đúng ô `ENTRY_PORTAL` được gắn với template; kiểm tra này nằm ở backend. Khi hết giờ, worker đóng phiên, trả tất cả người tham gia về vị trí đã lưu và xóa ground drop trong region đó. Item effect `exit_spatial_realm` dùng chung đường thoát; chưa gắn vào Cổ Trùng cụ thể.
 
 ## Gacha (Cổ Từ / Mở Đá)
 
@@ -401,9 +401,9 @@ Danh sách `roles`, `effective_permissions`, catalog và thứ tự resource là
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/admin/players` | List người chơi server-side với `page`, `page_size` (`limit` vẫn được chấp nhận), `search`, `search_by=all|id|username|email|item|gu`, `sort`, `direction`; sort chỉ nhận allowlist. Khi `search_by=all` auto-detect UUID. Response gồm `data`, `total`, `page`, `page_size`. |
+| GET | `/admin/players` | List người chơi server-side với `page`, `page_size` (`limit` vẫn được chấp nhận), `search`, `search_by=all|id|username|email|item|gu`, `sort`, `direction`; sort chỉ nhận allowlist. Khi `search_by=all` auto-detect UUID. Response gồm `data`, `total`, `page`, `page_size`. **Không trả về `email`** (dữ liệu nhạy cảm); tìm kiếm/filter theo email vẫn hoạt động. |
 | GET | `/admin/players/online` | List người chơi online. |
-| GET | `/admin/players/:id` | Chi tiết người chơi. Response bỏ `gu_inventory`/`materials_inventory`, trả `gu_count` + `item_count`. Kèm `race`, `gender`, `constitution`, `statuses` (array). |
+| GET | `/admin/players/:id` | Chi tiết người chơi. Response bỏ `gu_inventory`/`materials_inventory`, trả `gu_count` + `item_count`. Kèm `race`, `gender`, `constitution`, `statuses` (array). **Không trả về `email`** (dữ liệu nhạy cảm); PUT vẫn nhận `email` để sửa. |
 | GET | `/admin/players/:id/items` | Lazy-load item của người chơi từ `player_inventory_items`. Trả thêm các cổ phương đã mở khóa (`category=recipe`) từ `player_recipe_progress`. Params: `page`, `limit`, `q` (match item_id/item_name theo registry). |
 | GET | `/admin/players/:id/gus` | Lazy-load từ bảng `player_gu`. Params: `page`, `limit`, `q` (match gu_id/instance_id theo registry). |
 | PUT | `/admin/players/:id` | Sửa thông tin gameplay của người chơi. Body chỉ gửi field thay đổi. Username được kiểm tra trùng không phân biệt hoa/thường. Trường tương thích `is_admin` là **read-only** và không còn được endpoint này xử lý; dùng endpoint roles riêng để thay đổi quyền. Hỗ trợ `race`, `gender`, `constitution` (string), `statuses` (array string hoặc array object `{id, expires_at?, source?, value?}`, ví dụ `["severely_wounded"]` — key phải tồn tại trong `status_dictionary`). |

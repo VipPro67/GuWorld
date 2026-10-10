@@ -439,7 +439,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       byKey.set(`${obj.x},${obj.y}`, obj);
     }
     for (const cell of nearbyCells) {
-      if (cell.cell_type !== "Boss" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray") continue;
+      if (cell.cell_type !== "Boss" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village" && cell.cell_type !== "TeleportArray" && cell.cell_type !== "ENTRY_PORTAL") continue;
 		if (cell.cell_type === "Boss" && legacyMonsterHasRuntimeReplacement(cell, useWorldStore.getState().monsters)) continue;
       const key = `${cell.x},${cell.y}`;
       if (!byKey.has(key)) {
@@ -1139,11 +1139,12 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         const isBoss = o.cell_type === "Boss";
         const isResource = o.cell_type === "Resource";
         const isTeleport = o.cell_type === "TeleportArray";
+        const isEntryPortal = o.cell_type === "ENTRY_PORTAL";
         if (isBoss && legacyMonsterHasRuntimeReplacement(o, useWorldStore.getState().monsters)) continue;
         if (isResource && player && Math.hypot(o.x + 0.5 - px, o.y + 0.5 - py) > invR) continue;
 
         const g = new Graphics();
-        const size = isBoss ? 0.8 : isTeleport ? 0.75 : 0.6;
+        const size = isBoss ? 0.8 : isTeleport || isEntryPortal ? 0.75 : 0.6;
         if (isBoss) {
           // Boss: Star/Diamond shape with glowing aura
           g.circle(0, 0, size + 0.2);
@@ -1163,6 +1164,17 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           g.fill({ color: 0x10b981 }); // Lighter top
           g.circle(-0.15, -0.3, size * 0.3);
           g.fill({ color: 0x34d399 }); // Highlight
+        } else if (isEntryPortal) {
+          // Fixed entrance to a server-wide spatial realm.
+          g.circle(0, 0, size + 0.25);
+          g.fill({ color: 0xf59e0b, alpha: 0.2 });
+          g.ellipse(0, 0, size * 0.55, size * 0.8);
+          g.fill({ color: 0x451a03, alpha: 0.95 });
+          g.stroke({ color: 0xfbbf24, width: 0.12 });
+          g.ellipse(0, 0, size * 0.28, size * 0.55);
+          g.stroke({ color: 0xfef3c7, width: 0.08, alpha: 0.9 });
+          g.circle(0, size * 0.6, size * 0.1);
+          g.fill({ color: 0xfde68a });
         } else if (isTeleport) {
           // Teleport Array: Glowing cyan rune circle and magic vortex
           g.circle(0, 0, size + 0.25);
@@ -1194,7 +1206,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         });
         container.addChild(g);
 
-        const labelColor = isBoss ? 0xfecaca : isTeleport ? 0x67e8f9 : 0xffffff;
+        const labelColor = isBoss ? 0xfecaca : isEntryPortal ? 0xfcd34d : isTeleport ? 0x67e8f9 : 0xffffff;
         let text = o.content_id;
         if (isBoss || o.cell_type === "Monster") {
           text = monsterDictionary[o.content_id]?.name || text;
@@ -1204,6 +1216,8 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           text = guSpecFor(o.content_id, o.rank)?.name || text;
         } else if (isTeleport) {
           text = `🌀 ${o.content_id || "Trận Pháp"}`;
+        } else if (isEntryPortal) {
+          text = `🚪 ${o.content_id.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`;
         }
 
         const showBossLabel = isBoss && !!labelSettingsRef.current.bossNearby && !!player && Math.hypot(o.x - px, o.y - py) <= invR;

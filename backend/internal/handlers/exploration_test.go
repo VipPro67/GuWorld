@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -29,6 +30,93 @@ func TestLineCellsVertical(t *testing.T) {
 		if cells[i] != c {
 			t.Fatalf("cell[%d] = %v, want %v", i, cells[i], c)
 		}
+	}
+}
+
+func TestProceduralMonsterCampsAreStableAndDenseNearCenter(t *testing.T) {
+	zoneReg.mu.Lock()
+	previousZones, previousPools, previousByID := zoneReg.zones, zoneReg.spawnPools, zoneReg.byID
+	zoneReg.zones = []models.Region{{ID: "camp_test", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999, MinRank: 1, MaxRank: 4}}
+	zoneReg.byID = map[string]*models.Region{"camp_test": &zoneReg.zones[0]}
+	zoneReg.spawnPools = map[string][]models.MonsterSpawn{
+		"camp_test": {
+			{RegionID: "camp_test", MonsterID: "monster_test_pack", Chance: 1, MinRank: 2, MaxRank: 3},
+			{RegionID: "camp_test", MonsterID: "monster_test_elite", Chance: 1, MinRank: 4, MaxRank: 5},
+		},
+	}
+	zoneReg.mu.Unlock()
+	previousNormal, hadNormal := models.MonsterRegistry["monster_test_pack"]
+	previousElite, hadElite := models.MonsterRegistry["monster_test_elite"]
+	models.MonsterRegistry["monster_test_pack"] = models.MonsterTemplate{ID: "monster_test_pack", Type: "Normal"}
+	models.MonsterRegistry["monster_test_elite"] = models.MonsterTemplate{ID: "monster_test_elite", Type: "Elite"}
+	t.Cleanup(func() {
+		zoneReg.mu.Lock()
+		zoneReg.zones, zoneReg.spawnPools, zoneReg.byID = previousZones, previousPools, previousByID
+		zoneReg.mu.Unlock()
+		if hadNormal {
+			models.MonsterRegistry["monster_test_pack"] = previousNormal
+		} else {
+			delete(models.MonsterRegistry, "monster_test_pack")
+		}
+		if hadElite {
+			models.MonsterRegistry["monster_test_elite"] = previousElite
+		} else {
+			delete(models.MonsterRegistry, "monster_test_elite")
+		}
+	})
+
+	var center proceduralMonsterCamp
+	found := false
+	for gy := 2; gy < 14 && !found; gy++ {
+		for gx := 2; gx < 14; gx++ {
+			rng := rand.New(rand.NewSource(GetCellSeed(gx, gy, "camp_test:monster-camp")))
+			cx := gx*monsterCampSpacing + 8 + rng.Intn(monsterCampSpacing-16)
+			cy := gy*monsterCampSpacing + 8 + rng.Intn(monsterCampSpacing-16)
+			camp, ok := findProceduralMonsterCamp(cx, cy, ZoneByID("camp_test"))
+			if ok && camp.distance == 0 && camp.hasElite {
+				center, found = camp, true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected a deterministic elite camp in the sample area")
+	}
+	if center.elite.MonsterID != "monster_test_elite" || center.elite.MinRank < 4 || center.elite.MinRank > 5 {
+		t.Fatalf("elite camp spawn should use the region elite pool: %+v", center.elite)
+	}
+	got, ok := findProceduralMonsterCamp(center.x, center.y, ZoneByID("camp_test"))
+	if !ok || got.x != center.x || got.y != center.y || got.spawn.MonsterID != center.spawn.MonsterID || got.spawn.MinRank != center.spawn.MinRank || !got.hasElite || got.elite.MonsterID != center.elite.MonsterID {
+		t.Fatalf("camp center changed across resolutions: first=%+v second=%+v", center, got)
+	}
+	neighbor, ok := findProceduralMonsterCamp(center.x+1, center.y, ZoneByID("camp_test"))
+	if !ok || neighbor.distance != 1 || neighbor.spawn.MonsterID != center.spawn.MonsterID || neighbor.spawn.MinRank != center.spawn.MinRank || !neighbor.hasElite || neighbor.elite.MonsterID != center.elite.MonsterID {
+		t.Fatalf("cells within a camp should share its monster and rank: center=%+v neighbor=%+v", center, neighbor)
+	}
+	monstersInCamp := 0
+	for y := center.y - monsterCampRadius; y <= center.y+monsterCampRadius; y++ {
+		for x := center.x - monsterCampRadius; x <= center.x+monsterCampRadius; x++ {
+			cell := generateCellForZone(x, y, ZoneByID("camp_test"))
+			if cell.Type == "Monster" {
+				wantID := center.spawn.MonsterID
+				if x == center.x && y == center.y {
+					wantID = center.elite.MonsterID
+				}
+				if cell.Content != wantID {
+					t.Fatalf("camp cell (%d,%d) has unexpected monster %q", x, y, cell.Content)
+				}
+				monstersInCamp++
+			}
+		}
+	}
+	if monstersInCamp < 12 {
+		t.Fatalf("camp generated only %d monster cells around its center", monstersInCamp)
+	}
+	if monsterCampSpawnChance(0) <= monsterCampSpawnChance(monsterCampRadius) {
+		t.Fatal("monster spawn chance should taper toward the camp edge")
+	}
+	if monsterCampEliteChance != 0.10 {
+		t.Fatalf("elite spawn chance = %v, want 10%%", monsterCampEliteChance)
 	}
 }
 

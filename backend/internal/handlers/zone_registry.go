@@ -766,6 +766,12 @@ func pickMonsterFromPool(regionID string, rng *rand.Rand, wantBoss bool) (models
 		if s.IsBossSpawn != wantBoss {
 			continue
 		}
+		if !wantBoss {
+			if template, ok := models.MonsterRegistry[s.MonsterID]; ok && strings.EqualFold(template.Type, "Elite") {
+				// Elites are camp leaders, not part of the ambient procedural pool.
+				continue
+			}
+		}
 		if wantBoss && s.IsBossSpawn && s.X != nil && s.Y != nil {
 			// Fixed-position bosses are shared persistent cells; skip them here.
 			continue
@@ -781,6 +787,39 @@ func pickMonsterFromPool(regionID string, rng *rand.Rand, wantBoss bool) (models
 		roll -= s.Chance
 		if roll <= 0 {
 			return s, true
+		}
+	}
+	return candidates[len(candidates)-1], true
+}
+
+// pickMonsterFromPoolOfType selects a non-boss monster of the requested
+// template type from a region's spawn pool, weighted by its configured chance.
+func pickMonsterFromPoolOfType(regionID string, rng *rand.Rand, monsterType string) (models.MonsterSpawn, bool) {
+	zoneReg.mu.RLock()
+	pool := append([]models.MonsterSpawn(nil), zoneReg.spawnPools[regionID]...)
+	zoneReg.mu.RUnlock()
+
+	var candidates []models.MonsterSpawn
+	totalWeight := 0.0
+	for _, spawn := range pool {
+		if spawn.IsBossSpawn || spawn.Chance <= 0 {
+			continue
+		}
+		template, ok := models.MonsterRegistry[spawn.MonsterID]
+		if !ok || !strings.EqualFold(template.Type, monsterType) {
+			continue
+		}
+		candidates = append(candidates, spawn)
+		totalWeight += spawn.Chance
+	}
+	if len(candidates) == 0 || totalWeight <= 0 {
+		return models.MonsterSpawn{}, false
+	}
+	roll := rng.Float64() * totalWeight
+	for _, candidate := range candidates {
+		roll -= candidate.Chance
+		if roll <= 0 {
+			return candidate, true
 		}
 	}
 	return candidates[len(candidates)-1], true

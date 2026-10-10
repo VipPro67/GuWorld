@@ -180,8 +180,8 @@ func AdminCreateRegion(c *gin.Context) {
 		req.WorldMapID = "world_map"
 	}
 	var validMap bool
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM world_maps WHERE id=$1 AND is_active=TRUE)`, req.WorldMapID).Scan(&validMap); err != nil || !validMap {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tầng bản đồ không tồn tại hoặc chưa được mở"})
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM world_maps WHERE id=$1 AND (is_active=TRUE OR $2=FALSE))`, req.WorldMapID, req.IsActive).Scan(&validMap); err != nil || !validMap {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tầng bản đồ không tồn tại hoặc khu vực cần được để inactive khi tầng chưa mở"})
 		return
 	}
 
@@ -278,8 +278,8 @@ func AdminUpdateRegion(c *gin.Context) {
 		req.WorldMapID = "world_map"
 	}
 	var validMap bool
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM world_maps WHERE id=$1 AND is_active=TRUE)`, req.WorldMapID).Scan(&validMap); err != nil || !validMap {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tầng bản đồ không tồn tại hoặc chưa được mở"})
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM world_maps WHERE id=$1 AND (is_active=TRUE OR $2=FALSE))`, req.WorldMapID, req.IsActive).Scan(&validMap); err != nil || !validMap {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tầng bản đồ không tồn tại hoặc khu vực cần được để inactive khi tầng chưa mở"})
 		return
 	}
 

@@ -48,47 +48,47 @@ van_duc_dong,6560,12440,Resource,sonic_vibration_stone,{},600,true
 luu_sa_hai,6560,16440,Resource,earth_spirit_mud,{},600,true
 lac_thien_coc,11940,1940,Resource,glory_of_the_immemorial_light,{},600,true
 luyen_co_dong,11940,6440,Resource,earth_abyss_stone,{},600,true
-shadow_glimpse_trench,11940,11940,Resource,deep_sea_pearl,{},600,true
-binh_kinh_hai,11940,16440,Resource,mirror_water_crystal,{},600,true
+shadow_glimpse_trench,16940,11940,Resource,deep_sea_pearl,{},600,true
+binh_kinh_hai,16940,16440,Resource,mirror_water_crystal,{},600,true
 lac_thien_coc,12000,2000,SafePoint,,300,0,true
 lac_thien_coc,12000,2100,Resource,sword_spirit_grass,{},600,true
 luyen_co_dong,12000,6500,SafePoint,,{},300,true
 luyen_co_dong,12000,6600,Resource,deep_ground_silk,{},600,true
-shadow_glimpse_trench,12000,12000,SafePoint,,300,0,true
-shadow_glimpse_trench,12000,12100,Resource,dark_coral_blood,{},600,true
-binh_kinh_hai,12000,16500,SafePoint,,300,0,true
-binh_kinh_hai,12000,16600,Resource,clear_reflection_glass,{},600,true
+shadow_glimpse_trench,17000,12000,SafePoint,,300,0,true
+shadow_glimpse_trench,17000,12100,Resource,dark_coral_blood,{},600,true
+binh_kinh_hai,17000,16500,SafePoint,,300,0,true
+binh_kinh_hai,17000,16600,Resource,clear_reflection_glass,{},600,true
 lac_thien_coc,18300,8300,Boss,monster_sword_intent_golem,"{""rank"": 7}",900,true
 luyen_co_dong,12050,6550,Boss,monster_earth_trench_centipede,"{""rank"": 8}",1200,true
-shadow_glimpse_trench,18300,11650,Boss,monster_shadow_glimpse_boss,"{""rank"": 5}",600,true
+shadow_glimpse_trench,23300,11650,Boss,monster_shadow_glimpse_boss,"{""rank"": 5}",600,true
 lac_thien_coc,12060,1940,Resource,hundred_year_lifespan_gu,{},600,true
 luyen_co_dong,12060,6440,Resource,subterranean_fire_lava,{},600,true
-shadow_glimpse_trench,12060,11940,Resource,abyssal_black_stone,{},600,true
-binh_kinh_hai,12060,16440,Resource,wisdom_pearl,{},600,true
-long_ngu_dao,14440,11940,Resource,gold_dragonfish_scale,{},600,true
-long_ngu_dao,14950,14950,Boss,monster_east_sea_dragonfish,"{""rank"": 5}",300,true
-long_ngu_dao,14500,12010,SafePoint,,300,0,true
-long_ngu_dao,14500,12100,Resource,water_defense_shell,{},600,true
-long_ngu_dao,14560,11940,Resource,dragon_scale_soil,{},600,true
+shadow_glimpse_trench,17060,11940,Resource,abyssal_black_stone,{},600,true
+binh_kinh_hai,17060,16440,Resource,wisdom_pearl,{},600,true
+long_ngu_dao,19440,11940,Resource,gold_dragonfish_scale,{},600,true
+long_ngu_dao,19950,14950,Boss,monster_east_sea_dragonfish,"{""rank"": 5}",300,true
+long_ngu_dao,19500,12010,SafePoint,,300,0,true
+long_ngu_dao,19500,12100,Resource,water_defense_shell,{},600,true
+long_ngu_dao,19560,11940,Resource,dragon_scale_soil,{},600,true
 dai_vuc_trung_chau,15300,5300,Boss,monster_earth_calamity_boss,"{""rank"": 6}",600,true
 thien_de_son,16440,2440,Resource,cloud_ladder_wood,{},600,true
 bat_bai_coc,16440,6440,Resource,golden_crow_meteor,{},600,true
-turbulent_current_sea,16440,12440,Resource,immortal_apertures_shards,{},600,true
-khi_hai_vuc,16440,16440,Resource,primordial_qi_bead,{},600,true
+turbulent_current_sea,21440,12440,Resource,immortal_apertures_shards,{},600,true
+khi_hai_vuc,21440,16440,Resource,primordial_qi_bead,{},600,true
 thien_de_son,16500,2500,SafePoint,,300,0,true
 thien_de_son,16500,2600,Resource,heaven_well_water,{},600,true
 bat_bai_coc,16500,6500,SafePoint,,300,0,true
 bat_bai_coc,16500,6600,Resource,pure_water_drop,{},600,true
-turbulent_current_sea,16500,12500,SafePoint,,300,0,true
-turbulent_current_sea,16500,12600,Resource,snake_tongue,{},600,true
-khi_hai_vuc,16500,16500,SafePoint,,300,0,true
-khi_hai_vuc,16500,16600,Resource,heaven_earth_qi_fruit,{},600,true
-turbulent_current_sea,11650,18300,Boss,monster_tide_dragon,"{""rank"": 8}",1200,true
-khi_hai_vuc,14950,18300,Boss,monster_primordial_qi_dragon,"{""rank"": 8}",1200,true
+turbulent_current_sea,21500,12500,SafePoint,,300,0,true
+turbulent_current_sea,21500,12600,Resource,snake_tongue,{},600,true
+khi_hai_vuc,21500,16500,SafePoint,,300,0,true
+khi_hai_vuc,21500,16600,Resource,heaven_earth_qi_fruit,{},600,true
+turbulent_current_sea,16650,18300,Boss,monster_tide_dragon,"{""rank"": 8}",1200,true
+khi_hai_vuc,19950,18300,Boss,monster_primordial_qi_dragon,"{""rank"": 8}",1200,true
 thien_de_son,16560,2440,Resource,star_fragment,{},600,true
 bat_bai_coc,16560,6440,Resource,refine_flame_crystal,{},600,true
-turbulent_current_sea,16560,12440,Resource,time_sand,{},600,true
-khi_hai_vuc,16560,16440,Resource,heavenly_crystal,{},600,true
+turbulent_current_sea,21560,12440,Resource,time_sand,{},600,true
+khi_hai_vuc,21560,16440,Resource,heavenly_crystal,{},600,true
 hu_tien_phuc_dia,18440,4440,Resource,deer_god_fruit,{},600,true
 hu_tien_phuc_dia,18500,4500,SafePoint,,300,0,true
 hu_tien_phuc_dia,18500,4600,Resource,amount_love_flower,{},600,true
@@ -141,10 +141,10 @@ three_kings_mountain,6550,2550,Boss,monster_three_kings_boss,"{""rank"": 5}",300
 am_luu_cu_hac,6550,6550,Boss,monster_dark_swamp_python,"{""rank"": 6}",300,false
 van_duc_dong,6550,12550,Boss,monster_vampire_bat_king,"{""rank"": 5}",300,false
 lac_thien_coc,12050,2050,Boss,monster_sword_intent_golem,"{""rank"": 7}",300,false
-shadow_glimpse_trench,12050,12050,Boss,monster_shadow_glimpse_boss,"{""rank"": 5}",300,false
-long_ngu_dao,14500,12000,Boss,monster_east_sea_dragonfish,"{""rank"": 5}",300,false
-turbulent_current_sea,16550,12550,Boss,monster_tide_dragon,"{""rank"": 8}",300,false
-khi_hai_vuc,16550,16550,Boss,monster_primordial_qi_dragon,"{""rank"": 8}",300,false
+shadow_glimpse_trench,17050,12050,Boss,monster_shadow_glimpse_boss,"{""rank"": 5}",300,false
+long_ngu_dao,19500,12000,Boss,monster_east_sea_dragonfish,"{""rank"": 5}",300,false
+turbulent_current_sea,21550,12550,Boss,monster_tide_dragon,"{""rank"": 8}",300,false
+khi_hai_vuc,21550,16550,Boss,monster_primordial_qi_dragon,"{""rank"": 8}",300,false
 gu_luan_slope,22050,2050,Boss,monster_boar_king,"{""rank"": 4}",300,false
 quang_am_chi_ha,22050,12050,Boss,monster_year_beast_tiger,"{""rank"": 9}",300,false
 nghich_luu_ha,22050,16550,Boss,monster_reverse_flow_spirit,"{""rank"": 9}",300,false

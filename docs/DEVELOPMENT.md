@@ -9,6 +9,39 @@ when both `-write` and a non-source `-output` path are supplied. See
 candidates remain closed until runtime shadow evidence is bound to the selected
 snapshot and catalog revision in the machine-readable report.
 
+## CSV authoring tools (`gudata`)
+
+`go run ./cmd/gudata <subcommand>` operates directly on `backend/data/*.csv`.
+Every subcommand is dry-run by default; mutating runs require `-write` and a
+distinct `-output` path (never overwrites source). Reports are JSON on stdout.
+
+| Subcommand | Purpose |
+| --- | --- |
+| `check-effects` | Validate `Gu.csv` (full catalog + Block-v2 + unclassified-key) and `Item.csv` (Block-v2). Exits non-zero on errors. |
+| `balance` | Score each Gu's flat combat power vs its rank peers (median band ± `tol`) and flag outliers. `-write` scales the flagged Gu's `DAMAGE`/`SHIELD`/`HEAL`/`DIRECT_HP` FLAT values toward the band edge. Tune via `-config` (`balance.tol`, `min_score_frac`, `weights`). |
+| `match-food` | Flag `food_types` entries that reference missing items/Gu, and count low-nutrition food. `-write` remaps dangling references to a path/rank-matched Food. |
+| `gen-recipe` | Generate missing refinement recipe rows (unit = `(id, rank)`). Success rate, costs, material quantity (`material_qty`, `material_qty_scale`) and required-Gu quantity (`required_gu_qty`, `required_gu_rank_delta`, `required_gu` map) are config-driven via `-config`. |
+
+Example config (optional, `{}` falls back to defaults):
+
+```json
+{
+  "balance": { "tol": 0.25, "min_score_frac": 0.01 },
+  "recipe":  { "material_qty": 10, "material_qty_scale": 1.0, "required_gu_qty": 1 }
+}
+```
+
+```bash
+go run ./cmd/gudata check-effects -data data
+go run ./cmd/gudata balance -data data
+go run ./cmd/gudata balance -data data -config data/gudata.json -write -output /tmp/Gu.bal.csv
+go run ./cmd/gudata match-food -data data
+go run ./cmd/gudata gen-recipe -data data -write -output /tmp/Recipe.gen.csv
+```
+
+After writing a candidate CSV, import it through the Admin panel ("Dữ liệu") —
+the tool never touches the database.
+
 ## Prerequisites
 
 - Go theo `backend/go.mod`.

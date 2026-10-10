@@ -69,7 +69,8 @@ func cleanupInvalidEquipped(player *models.Player) []models.GuInstance {
 			continue
 		}
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if ok && spec.Type != "Consumable" && gamefx.CanEquipGu(player.Rank, spec.Rank) {
+		isOverRankPassive := ok && strings.EqualFold(spec.Type, "PASSIVE") && gu.Rank > player.Rank
+		if ok && spec.Type != "Consumable" && gamefx.CanEquipGu(player.Rank, spec.Rank) && !isOverRankPassive {
 			continue
 		}
 		gu.Equipped = false
@@ -127,6 +128,16 @@ func EquipGu(c *gin.Context) {
 		return
 	}
 
+	spec, specOk := models.GetGu(targetGu.GuID, targetGu.Rank)
+	if req.Equip && targetGu.Rank > player.Rank && (targetGu.IsVital || (specOk && strings.EqualFold(spec.Type, "PASSIVE"))) {
+		guKind := "Cổ trùng bị động"
+		if targetGu.IsVital {
+			guKind = "Bản Mệnh Cổ"
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể trang bị %s Rank %d vì vượt quá tu vi hiện tại (Rank %d).", guKind, targetGu.Rank, player.Rank)})
+		return
+	}
+
 	// Vital Gu is always equipped and active — cannot be unequipped
 	if targetGu.IsVital && !req.Equip {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bản Mệnh Cổ luôn luôn được trang bị, không thể tháo ra."})
@@ -147,7 +158,6 @@ func EquipGu(c *gin.Context) {
 	}
 
 	guName := targetGu.GuID
-	spec, specOk := models.GetGu(targetGu.GuID, targetGu.Rank)
 	if req.Equip && specOk {
 		if err := checkRegionGu(player.CurrentRegion, targetGu.GuID, targetGu.Rank, spec.Path); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})

@@ -110,7 +110,8 @@ func AdminListPlayers(c *gin.Context) {
 		}
 	}
 
-	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan, is_banned FROM players`
+	// email is intentionally not selected: it is sensitive and must not be exposed to admins.
+	query := `SELECT id, username, rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan, is_banned FROM players`
 	if where != "" {
 		query += ` WHERE ` + where
 	}
@@ -129,7 +130,7 @@ func AdminListPlayers(c *gin.Context) {
 	players := []gin.H{}
 	for rows.Next() {
 		var id uuid.UUID
-		var username, email, currentRegion, aptitudeType string
+		var username, currentRegion, aptitudeType string
 		var rank, subRank int
 		var primevalStones float64
 		var currentMana, maxMana, hp, baseHP, immortalStones, wallProgress, humanQi, lifespan float64
@@ -137,7 +138,7 @@ func AdminListPlayers(c *gin.Context) {
 		var isBanned bool
 		var createdAt time.Time
 
-		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan, &isBanned); err != nil {
+		if err := rows.Scan(&id, &username, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan, &isBanned); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
 			fmt.Println("Error scanning player row:", err)
 			return
@@ -145,7 +146,6 @@ func AdminListPlayers(c *gin.Context) {
 		players = append(players, gin.H{
 			"id":              id,
 			"username":        username,
-			"email":           email,
 			"rank":            rank,
 			"sub_rank":        subRank,
 			"current_mana":    currentMana,
@@ -246,7 +246,6 @@ func AdminGetPlayerDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"id":                    player.ID,
 		"username":              player.Username,
-		"email":                 player.Email,
 		"rank":                  player.Rank,
 		"sub_rank":              player.SubRank,
 		"aptitude_type":         player.AptitudeType,

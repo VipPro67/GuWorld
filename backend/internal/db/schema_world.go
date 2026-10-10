@@ -4,6 +4,14 @@ package db
 // created before players so players.current_region can reference regions(id).
 
 func schemaWorld() error {
+	if err := execSchema("world_map_layout_migrations", `
+	CREATE TABLE IF NOT EXISTS world_map_layout_migrations (
+		id VARCHAR(100) PRIMARY KEY,
+		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+
 	// World map catalogue is separate from regions so existing region CSVs and
 	// player location rows remain valid while maps are introduced incrementally.
 	if err := execSchema("world_maps", `
@@ -24,9 +32,11 @@ func schemaWorld() error {
 	INSERT INTO world_maps (id, name, description, map_type, width, height, min_rank, max_rank, is_active)
 	VALUES
 		('world_map', 'WorldMap', 'Năm đại vực của thế giới hiện tại.', 'WORLD', 30000, 20000, 1, 9, TRUE),
-		('bai_thien', 'Bạch Thiên', 'Tầng thế giới cấp cao; chưa mở chuyển tầng.', 'WORLD', 30000, 20000, 6, 9, FALSE),
-		('hac_thien', 'Hắc Thiên', 'Tầng thế giới cấp cao nhất; chưa mở chuyển tầng.', 'WORLD', 30000, 20000, 8, 9, FALSE)
+		('bai_thien', 'Bạch Thiên · Tầng 2', 'Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 6, 9, FALSE),
+		('hac_thien', 'Hắc Thiên · Tầng 3', 'Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 8, 9, FALSE)
 	ON CONFLICT (id) DO NOTHING;
+	UPDATE world_maps SET name='Bạch Thiên · Tầng 2', description='Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='bai_thien';
+	UPDATE world_maps SET name='Hắc Thiên · Tầng 3', description='Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='hac_thien';
 
 	`); err != nil {
 		return err

@@ -19,6 +19,9 @@ type spatialRealm struct {
 	Description     string    `json:"description"`
 	RequiredRank    int       `json:"required_rank"`
 	RegionID        string    `json:"region_id"`
+	EntryRegionID   string    `json:"entry_region_id"`
+	EntryX          int       `json:"entry_x"`
+	EntryY          int       `json:"entry_y"`
 	DurationMinutes int       `json:"duration_minutes"`
 	InstanceID      string    `json:"instance_id,omitempty"`
 	OpenedAt        time.Time `json:"opened_at,omitempty"`
@@ -31,9 +34,11 @@ type spatialRealm struct {
 func ListSpatialRealms(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT t.id, t.name, t.description, t.required_rank, t.spatial_region_id,
+		       COALESCE(gate.region_id,''), COALESCE(gate.x,0), COALESCE(gate.y,0),
 		       t.duration_minutes, COALESCE(s.id::text,''), s.opened_at, s.expires_at,
 	       (SELECT COUNT(*) FROM shared_spatial_instance_members m WHERE m.instance_id=s.id AND m.exited_at IS NULL)
 		FROM instance_templates t
+		LEFT JOIN map_cells gate ON gate.cell_type='ENTRY_PORTAL' AND gate.content_id=t.id AND gate.is_active=TRUE
 		LEFT JOIN shared_spatial_instances s ON s.template_id=t.id AND s.status='ACTIVE' AND s.expires_at>NOW()
 		WHERE t.type='SPATIAL_REALM' AND t.spatial_region_id IS NOT NULL
 		ORDER BY t.required_rank, t.id`)
@@ -47,7 +52,7 @@ func ListSpatialRealms(c *gin.Context) {
 		var item spatialRealm
 		var opened, expires sql.NullTime
 		if err := rows.Scan(&item.TemplateID, &item.Name, &item.Description, &item.RequiredRank, &item.RegionID,
-			&item.DurationMinutes, &item.InstanceID, &opened, &expires, &item.PlayerCount); err != nil {
+			&item.EntryRegionID, &item.EntryX, &item.EntryY, &item.DurationMinutes, &item.InstanceID, &opened, &expires, &item.PlayerCount); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc danh sách bí cảnh"})
 			return
 		}
@@ -158,6 +163,21 @@ func EnterSpatialRealm(c *gin.Context) {
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải cấu hình bí cảnh"})
+		return
+	}
+	var atEntryPortal bool
+	if err := tx.QueryRowContext(c.Request.Context(), `
+		SELECT EXISTS(
+			SELECT 1 FROM map_cells
+			WHERE region_id=$1 AND x=$2 AND y=$3 AND is_active=TRUE
+			  AND UPPER(cell_type)='ENTRY_PORTAL' AND content_id=$4
+			  AND UPPER(COALESCE(metadata->>'action',''))='ENTER_SPATIAL_REALM'
+		)`, oldRegion, oldX, oldY, req.TemplateID).Scan(&atEntryPortal); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra cổng vào bí cảnh"})
+		return
+	}
+	if !atEntryPortal {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần đến đúng cổng trên bản đồ thế giới để vào bí cảnh"})
 		return
 	}
 	// Keep the character's rank separate from the template requirement.

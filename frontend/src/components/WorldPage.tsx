@@ -54,6 +54,7 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; 
   GroundDrop:    { icon: "🎁",  label: "Chiến Lợi Phẩm",  color: "text-amber-300",   borderColor: "border-amber-500/40",   bgColor: "bg-amber-950/70" },
   Sect:          { icon: "🏯",  label: "Tông Môn",         color: "text-yellow-300",  borderColor: "border-yellow-500/50",  bgColor: "bg-yellow-950/70" },
   TeleportArray: { icon: "🌀",  label: "Truyền Tống Trận", color: "text-cyan-300",    borderColor: "border-cyan-500/50",    bgColor: "bg-cyan-950/70" },
+  ENTRY_PORTAL:  { icon: "🚪",  label: "Cổng Bí Cảnh",      color: "text-amber-300",   borderColor: "border-amber-500/50",   bgColor: "bg-amber-950/70" },
 };
 const DEFAULT_CONFIG = { icon: "📌", label: "Địa Điểm", color: "text-zinc-300", borderColor: "border-zinc-500/30", bgColor: "bg-zinc-800/60" };
 

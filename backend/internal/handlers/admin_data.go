@@ -249,6 +249,15 @@ func applyDatasetRuntimeBehavior(datasets []db.Dataset) {
 	if caches["quests"] {
 		cache.Delete("game_quests_list")
 	}
+	if caches["world_monsters"] {
+		if err := cache.PurgeWorldMonstersForRegions(cache.Ctx,
+			"dai_vuc_dong_hai", "hub_dong_hai", "tan_thu_coc_dong_hai", "ngoc_ho_dao",
+			"shadow_glimpse_trench", "binh_kinh_hai", "long_ngu_dao", "thao_thiet_hai_khau",
+			"turbulent_current_sea", "khi_hai_vuc", "van_sam_hai_vuc", "bach_sa_quan",
+			"long_mon_hai_vuc", "van_luu_tinh_hai"); err != nil {
+			logger.S.Warnf("failed to purge world-monster cache after region import: %v", err)
+		}
+	}
 }
 
 // AdminImportData seeds all dictionary tables from CSV files.
