@@ -6,14 +6,9 @@ import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type N
 import { legacyMonsterHasRuntimeReplacement, runtimeMonsterReplacementKey } from "@/store/worldMonsterReducer";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
+import { MONSTER_ATLAS_MANIFEST } from "./monsterAtlasManifest";
 
 const BG_COLOR = 0x1d1e2c;
-const COMMON_MONSTER_ATLAS_IDS = [
-  "monster_wandering", "monster_koi_fish", "monster_night_wolf", "monster_herb_rabbit",
-  "monster_flower_butterfly", "monster_wild_boar", "monster_cloud_dragon_beast", "monster_nine_heavens_primordial_emperor",
-  "monster_white_hair_wolf", "monster_desolate_luck_hound", "monster_fire_mouse", "monster_water_serpent",
-  "monster_sea_beast", "monster_ancient_nether_reaper", "monster_nether_sand_wraith", "monster_iron_bear",
-] as const;
 const CLEARED_CELL_EVENT_TYPES = new Set(["cleared", "cell_cleared", "world.cell.cleared", "monster_killed"]);
 const RESPAWNED_CELL_EVENT_TYPES = new Set(["respawn", "cell_respawned", "world.cell.respawn"]);
 
@@ -2083,26 +2078,29 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         scheduleMonsterChunkSyncRef.current();
         syncRuntimeMonsters(useWorldStore.getState().monsters);
       }).catch((error) => console.warn("Monster sprite could not be loaded; using fallback.", error));
-      void Assets.load<Texture>("/assets/world/monster-atlas-common.png").then((atlas) => {
-        if (destroyed) return;
-        const cellWidth = atlas.source.width / 4;
-        const cellHeight = atlas.source.height / 4;
-        for (const [index, monsterId] of COMMON_MONSTER_ATLAS_IDS.entries()) {
-          const column = index % 4;
-          const row = Math.floor(index / 4);
-          const left = Math.floor(column * cellWidth);
-          const top = Math.floor(row * cellHeight);
-          const right = Math.floor((column + 1) * cellWidth);
-          const bottom = Math.floor((row + 1) * cellHeight);
-          monsterTexturesByIdRef.current[monsterId] = new Texture({
-            source: atlas.source,
-            frame: new Rectangle(left, top, right - left, bottom - top),
-          });
-        }
-        for (const rendered of monsterChunksRef.current.values()) rendered.px = Number.NaN;
-        scheduleMonsterChunkSyncRef.current();
-        syncRuntimeMonsters(useWorldStore.getState().monsters);
-      }).catch((error) => console.warn("Common monster sprite atlas could not be loaded; using fallback.", error));
+      for (const { src, columns, ids } of MONSTER_ATLAS_MANIFEST) {
+        void Assets.load<Texture>(src).then((atlas) => {
+          if (destroyed) return;
+          const rows = Math.ceil(ids.length / columns);
+          const cellWidth = atlas.source.width / columns;
+          const cellHeight = atlas.source.height / rows;
+          for (const [index, monsterId] of ids.entries()) {
+            const column = index % columns;
+            const row = Math.floor(index / columns);
+            const left = Math.floor(column * cellWidth);
+            const top = Math.floor(row * cellHeight);
+            const right = Math.floor((column + 1) * cellWidth);
+            const bottom = Math.floor((row + 1) * cellHeight);
+            monsterTexturesByIdRef.current[monsterId] = new Texture({
+              source: atlas.source,
+              frame: new Rectangle(left, top, right - left, bottom - top),
+            });
+          }
+          for (const rendered of monsterChunksRef.current.values()) rendered.px = Number.NaN;
+          scheduleMonsterChunkSyncRef.current();
+          syncRuntimeMonsters(useWorldStore.getState().monsters);
+        }).catch((error) => console.warn(`Monster sprite atlas could not be loaded (${src}); using fallback.`, error));
+      }
       void Assets.load<Texture>("/assets/world/spirit-herb.webp").then((texture) => {
         if (destroyed) return;
         resourceIconTextureRef.current = texture;

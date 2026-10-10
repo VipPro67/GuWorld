@@ -9,6 +9,7 @@ const BACKEND_DATA_DIR = path.resolve(__dirname, "../../backend/data");
 const OUTPUT_FILE = path.resolve(__dirname, "../src/data/wiki-cache.json");
 
 function parseCSV(content) {
+  content = content.replace(/^\uFEFF/, "");
   const rows = [];
   let currentRow = [];
   let currentVal = "";

@@ -5,38 +5,9 @@ import { Gem, ShoppingBag, QrCode, RefreshCw, ShieldCheck, Gift, Lock, ArrowLeft
 import { PremiumWallet, WalletBalance } from "./PremiumWallet";
 import { useGameStore } from "@/store/useGameStore";
 import { GamePanel, GameTabs, GameButton, GameCard } from "@/components/ui";
+import { authFetch } from "@/lib/auth";
 // UI migrated to shared components
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[2]) : null;
-}
-
-function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const csrfToken = getCookie("gu_csrf_token");
-  const headers: Record<string, string> = {};
-  if (init.headers) {
-    if (Array.isArray(init.headers)) {
-      for (const [k, v] of init.headers) headers[k] = v;
-    } else if (init.headers instanceof Headers) {
-      init.headers.forEach((v, k) => { headers[k] = v; });
-    } else {
-      Object.assign(headers, init.headers);
-    }
-  }
-  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
-    headers["X-CSRF-Token"] = csrfToken;
-  }
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("gu_auth_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-  return fetch(input, { ...init, headers, credentials: "include" });
-}
 
 interface TopupPackage {
   id: string;
@@ -256,7 +227,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
             🏛️ Cát Bảo Các
           </h2>
           <p className="mt-1 text-xs text-zinc-400 font-mono">
-            Tiên nhân bảo các — Nạp Tiên Ngọc và đổi các gói phúc lợi trợ lực tu hành.
+            Tiên nhân bảo các — Đổi Nguyên Thạch và Tiên Nguyên Thạch theo tỷ giá.
           </p>
         </div>
         <PremiumWallet compact onLoaded={setWallet} refreshKey={walletRefreshKey} />
@@ -621,7 +592,8 @@ const ExchangePanel: React.FC<ExchangePanelProps> = ({
             >
               <Maximize2 className="h-3.5 w-3.5" /> MAX
             </button>
-</div>
+          </div>
+        </div>
 
       <div className="flex items-center justify-center text-zinc-600">
           <ArrowLeftRight className="h-4 w-4" />
@@ -649,5 +621,4 @@ const ExchangePanel: React.FC<ExchangePanelProps> = ({
       {isExchanging ? "Đang đổi..." : !canExchange ? blockReason || "Nhập số lượng" : "Xác nhận đổi"}
     </button>
   </div>
-</div>
 );
