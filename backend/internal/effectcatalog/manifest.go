@@ -133,10 +133,6 @@ func buildMechanicDefinitions() map[string]MechanicDefinition {
 	add("ON_ACTION", DispositionSupported, "combat", "GUARANTEED_HIT")
 	add("BEFORE_HIT", DispositionSupported, "combat", "FIRST_TURN_EVADE")
 	add("PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT")
-	// COMBAT_PASSIVE is the canonical alias for the PASSIVE trigger. New data
-	// should use it; PASSIVE is retained so existing Gu rows keep validating.
-	// Both mean the same ON_EVENT timing (see timing.go), never the passive
-	// section (ALWAYS_ON character stats).
 	add("COMBAT_PASSIVE", DispositionSupported, "combat", "DOUBLE_DAMAGE_DEALT", "REVERSE_CALAMITY", "GUARANTEED_HIT")
 	add("CAPABILITY", DispositionSupported, "world", "MARKETPLACE_ACCESS", "REMOTE_TRADE", "CHAT_CONNECT", "CHAT_PERCEIVE", "IGNORE_MOVEMENT_RANGE", "LOOT_PREVIEW", "DISGUISE", "CHANGE_FORM_DISGUISE", "PERFECT_DISGUISE", "ARENA_IDENTITY_MASK", "DEDUCTION_INSTANT_FINISH")
 	return result
