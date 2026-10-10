@@ -8,7 +8,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // filterGuLoadout restricts a combatant's Gu inventory to their saved combat
@@ -107,21 +106,14 @@ func GetCombatSettings(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTxEquipped(tx, authID)
-	if err != nil {
+	var settings models.AutoCombatConfig
+	if err := db.DB.QueryRowContext(c.Request.Context(),
+		`SELECT combat_settings FROM players WHERE id = $1`, authID,
+	).Scan(&settings); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
 		return
 	}
 
-	settings := player.CombatSettings
-	logger.S.Infof("Retrieved combat settings for player %d: %+v", authID, settings)
 	c.JSON(http.StatusOK, gin.H{"combat_settings": settings})
 }
 

@@ -78,6 +78,69 @@ func worldMonsterBucketKey(regionID string, bx, by int) string {
 
 func worldBossSetKey(regionID string) string { return "world:monsters:bosses:" + regionID }
 
+const materializeWorldMonsterScript = `
+	local existing = redis.call('GET', KEYS[1])
+	if existing then
+		local actor = redis.call('GET', ARGV[4] .. existing)
+		if actor then
+			if ARGV[5] == '1' then redis.call('SADD', KEYS[4], existing); redis.call('PEXPIRE', KEYS[4], ARGV[3]) end
+			return {0, actor}
+		end
+		redis.call('DEL', KEYS[1])
+	end
+	redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[3])
+	redis.call('SET', KEYS[2], ARGV[2], 'PX', ARGV[3])
+	redis.call('SADD', KEYS[3], ARGV[1])
+	redis.call('PEXPIRE', KEYS[3], ARGV[3])
+	if ARGV[5] == '1' then redis.call('SADD', KEYS[4], ARGV[1]); redis.call('PEXPIRE', KEYS[4], ARGV[3]) end
+	return {1, ARGV[1]}
+`
+
+type WorldMonsterMaterialization struct {
+	Monster          WorldMonster
+	BucketX, BucketY int
+	TTL              time.Duration
+}
+
+type WorldMonsterMaterializationResult struct {
+	Monster WorldMonster
+	Created bool
+	Err     error
+}
+
+func materializeWorldMonsterArgs(request WorldMonsterMaterialization) ([]string, []interface{}, error) {
+	monster := request.Monster
+	data, err := json.Marshal(monster)
+	if err != nil {
+		return nil, nil, err
+	}
+	keys := []string{worldMonsterSpawnKey(monster.SpawnID), worldMonsterKey(monster.RegionID, monster.InstanceID), worldMonsterBucketKey(monster.RegionID, request.BucketX, request.BucketY), worldBossSetKey(monster.RegionID)}
+	args := []interface{}{monster.InstanceID, data, request.TTL.Milliseconds(), "world:monster:" + monster.RegionID + ":", boolInt(monster.IsBoss)}
+	return keys, args, nil
+}
+
+func decodeMaterializedWorldMonster(candidate WorldMonster, result []interface{}) (WorldMonster, bool, error) {
+	if len(result) != 2 {
+		return WorldMonster{}, false, fmt.Errorf("unexpected world monster materialize result length: %d", len(result))
+	}
+	created, ok := result[0].(int64)
+	if !ok {
+		return WorldMonster{}, false, fmt.Errorf("unexpected world monster materialize status type: %T", result[0])
+	}
+	if created == 1 {
+		return candidate, true, nil
+	}
+	raw, ok := result[1].(string)
+	if !ok {
+		return WorldMonster{}, false, fmt.Errorf("unexpected world monster actor type: %T", result[1])
+	}
+	var existing WorldMonster
+	if err := json.Unmarshal([]byte(raw), &existing); err != nil {
+		return WorldMonster{}, false, err
+	}
+	return existing, false, nil
+}
+
 // MaterializeWorldMonster installs one instance for a stable spawn identity.
 // SETNX on the spawn pointer means concurrent AOI snapshots converge on the
 // same instance rather than manufacturing duplicates.
@@ -85,36 +148,56 @@ func MaterializeWorldMonster(ctx context.Context, monster WorldMonster, bucketX,
 	if Client == nil {
 		return WorldMonster{}, false, errors.New("redis unavailable")
 	}
-	data, err := json.Marshal(monster)
+	keys, args, err := materializeWorldMonsterArgs(WorldMonsterMaterialization{Monster: monster, BucketX: bucketX, BucketY: bucketY, TTL: ttl})
 	if err != nil {
 		return WorldMonster{}, false, err
 	}
-	keys := []string{worldMonsterSpawnKey(monster.SpawnID), worldMonsterKey(monster.RegionID, monster.InstanceID), worldMonsterBucketKey(monster.RegionID, bucketX, bucketY), worldBossSetKey(monster.RegionID)}
-	result, err := Client.Eval(ctx, `
-		local existing = redis.call('GET', KEYS[1])
-		if existing then
-			if redis.call('EXISTS', ARGV[4] .. existing) == 1 then
-				if ARGV[5] == '1' then redis.call('SADD', KEYS[4], existing); redis.call('PEXPIRE', KEYS[4], ARGV[3]) end
-				return {0, existing}
-			end
-			redis.call('DEL', KEYS[1])
-		end
-		redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[3])
-		redis.call('SET', KEYS[2], ARGV[2], 'PX', ARGV[3])
-		redis.call('SADD', KEYS[3], ARGV[1])
-		redis.call('PEXPIRE', KEYS[3], ARGV[3])
-		if ARGV[5] == '1' then redis.call('SADD', KEYS[4], ARGV[1]); redis.call('PEXPIRE', KEYS[4], ARGV[3]) end
-		return {1, ARGV[1]}
-	`, keys, monster.InstanceID, data, ttl.Milliseconds(), "world:monster:"+monster.RegionID+":", boolInt(monster.IsBoss)).Slice()
+	result, err := Client.Eval(ctx, materializeWorldMonsterScript, keys, args...).Slice()
 	if err != nil {
 		return WorldMonster{}, false, err
 	}
-	created := result[0].(int64) == 1
-	instanceID, _ := result[1].(string)
-	if created {
-		return monster, true, nil
+	return decodeMaterializedWorldMonster(monster, result)
+}
+
+// MaterializeWorldMonsters uses one network batch for independent spawn scripts.
+// Each EVAL remains atomic, and results retain the input order for callers.
+func MaterializeWorldMonsters(ctx context.Context, requests []WorldMonsterMaterialization) []WorldMonsterMaterializationResult {
+	results := make([]WorldMonsterMaterializationResult, len(requests))
+	if len(requests) == 0 {
+		return results
 	}
-	return GetWorldMonster(ctx, monster.RegionID, instanceID)
+	if Client == nil {
+		for i := range results {
+			results[i].Err = errors.New("redis unavailable")
+		}
+		return results
+	}
+	const maxBatchSize = 64
+	for start := 0; start < len(requests); start += maxBatchSize {
+		end := min(start+maxBatchSize, len(requests))
+		pipe := Client.Pipeline()
+		commands := make([]*redis.Cmd, end-start)
+		for i := start; i < end; i++ {
+			keys, args, err := materializeWorldMonsterArgs(requests[i])
+			if err != nil {
+				results[i].Err = err
+				continue
+			}
+			commands[i-start] = pipe.Eval(ctx, materializeWorldMonsterScript, keys, args...)
+		}
+		_, _ = pipe.Exec(ctx)
+		for i, cmd := range commands {
+			if cmd == nil {
+				continue
+			}
+			result, err := cmd.Slice()
+			if err == nil {
+				results[start+i].Monster, results[start+i].Created, err = decodeMaterializedWorldMonster(requests[start+i].Monster, result)
+			}
+			results[start+i].Err = err
+		}
+	}
+	return results
 }
 
 func boolInt(value bool) int {
@@ -127,54 +210,78 @@ func boolInt(value bool) int {
 // WorldBossesInRegion lists region-wide actors independently from their local
 // AOI bucket; bosses need this view to pursue players across their full zone.
 func WorldBossesInRegion(ctx context.Context, regionID string) ([]WorldMonster, error) {
-	if Client == nil {
-		return nil, errors.New("redis unavailable")
-	}
-	key := worldBossSetKey(regionID)
-	ids, err := Client.SMembers(ctx, key).Result()
-	if err != nil || len(ids) == 0 {
+	members, stale, err := loadWorldBossSet(ctx, regionID)
+	if err != nil {
 		return nil, err
 	}
-	out := make([]WorldMonster, 0, len(ids))
-	stale := make([]interface{}, 0)
-	for _, id := range ids {
-		monster, exists, getErr := GetWorldMonster(ctx, regionID, id)
-		if getErr != nil {
-			return nil, getErr
-		}
-		if !exists {
-			stale = append(stale, id)
-			continue
-		}
-		out = append(out, monster)
-	}
 	if len(stale) > 0 {
-		_ = Client.SRem(ctx, key, stale...).Err()
+		_ = Client.SRem(ctx, worldBossSetKey(regionID), stale...).Err()
+	}
+	out := make([]WorldMonster, 0, len(members))
+	for _, member := range members {
+		out = append(out, member.monster)
 	}
 	return out, nil
+}
+
+type worldBossSetMember struct {
+	id      string
+	monster WorldMonster
+}
+
+// loadWorldBossSet reads all actor values in one MGET after resolving the set.
+// The worker calls this every tick, so individual GETs would scale network
+// round trips with the number of bosses in each active region.
+func loadWorldBossSet(ctx context.Context, regionID string) ([]worldBossSetMember, []interface{}, error) {
+	if Client == nil {
+		return nil, nil, errors.New("redis unavailable")
+	}
+	ids, err := Client.SMembers(ctx, worldBossSetKey(regionID)).Result()
+	if err != nil || len(ids) == 0 {
+		return nil, nil, err
+	}
+	keys := make([]string, len(ids))
+	for i, id := range ids {
+		keys[i] = worldMonsterKey(regionID, id)
+	}
+	values, err := Client.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+	members := make([]worldBossSetMember, 0, len(ids))
+	stale := make([]interface{}, 0)
+	for i, value := range values {
+		if value == nil {
+			stale = append(stale, ids[i])
+			continue
+		}
+		raw, ok := value.(string)
+		if !ok {
+			return nil, nil, fmt.Errorf("unexpected world boss value type for %s", ids[i])
+		}
+		var monster WorldMonster
+		if err := json.Unmarshal([]byte(raw), &monster); err != nil {
+			return nil, nil, err
+		}
+		members = append(members, worldBossSetMember{id: ids[i], monster: monster})
+	}
+	return members, stale, nil
 }
 
 // PruneWorldBosses removes runtime boss actors whose static map-cell spawn was
 // removed or disabled. This keeps imported map-cell edits from leaving stale
 // Redis actors active after the registry data changes.
 func PruneWorldBosses(ctx context.Context, regionID string, keepSpawnIDs map[string]struct{}) error {
-	if Client == nil {
-		return errors.New("redis unavailable")
-	}
 	setKey := worldBossSetKey(regionID)
-	ids, err := Client.SMembers(ctx, setKey).Result()
+	members, stale, err := loadWorldBossSet(ctx, regionID)
 	if err != nil {
 		return err
 	}
-	for _, id := range ids {
-		monster, exists, getErr := GetWorldMonster(ctx, regionID, id)
-		if getErr != nil {
-			return getErr
-		}
-		if !exists {
-			_ = Client.SRem(ctx, setKey, id).Err()
-			continue
-		}
+	if len(stale) > 0 {
+		_ = Client.SRem(ctx, setKey, stale...).Err()
+	}
+	for _, member := range members {
+		id, monster := member.id, member.monster
 		if _, keep := keepSpawnIDs[monster.SpawnID]; keep {
 			continue
 		}

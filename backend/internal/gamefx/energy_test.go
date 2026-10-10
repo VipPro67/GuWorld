@@ -57,6 +57,65 @@ func TestEnergyCostMortal(t *testing.T) {
 	}
 }
 
+func TestSubRankManaFactor(t *testing.T) {
+	cases := []struct {
+		subRank int
+		want    float64
+	}{
+		{0, 1},     // uninitialized -> unchanged
+		{1, 1},     // same sub as Gu -> unchanged
+		{2, 0.5},   // 1 sub-rank gap -> half
+		{3, 0.25},  // 2 sub-rank gap -> quarter
+		{4, 0.125}, // 3 sub-rank gap -> eighth
+		{-1, 1},    // invalid -> unchanged
+	}
+	for _, c := range cases {
+		if got := SubRankManaFactor(c.subRank); got != c.want {
+			t.Errorf("SubRankManaFactor(%d) = %v, want %v", c.subRank, got, c.want)
+		}
+	}
+}
+
+func TestEnergyCostMortalSubRank(t *testing.T) {
+	maxMana := 1000.0
+	gu := &models.GuDictionaryItem{Rank: 3, BaseManaCost: 10} // 10% MaxMana -> 100 base
+
+	// Same rank: each sub-rank above 1 halves the cost.
+	subCosts := map[int]float64{1: 100, 2: 50, 3: 25, 4: 12.5}
+	for sub, want := range subCosts {
+		player := &models.Player{}
+		player.Rank = 3
+		player.SubRank = sub
+		player.MaxMana = maxMana
+		if got := EnergyCost(player, gu); got != want {
+			t.Errorf("mortal rank 3 sub %d cost = %v, want %v", sub, got, want)
+		}
+	}
+
+	// Different rank: sub-rank must NOT apply, rank ladder only.
+	higher := &models.Player{}
+	higher.Rank = 4
+	higher.SubRank = 4
+	higher.MaxMana = maxMana
+	if got := EnergyCost(higher, gu); got != 10 {
+		t.Errorf("mortal player rank 4 sub 4 vs gu rank 3 cost = %v, want 10 (÷10, no sub-rank)", got)
+	}
+	lower := &models.Player{}
+	lower.Rank = 1
+	lower.SubRank = 4
+	lower.MaxMana = maxMana
+	if got := EnergyCost(lower, gu); got != 500 {
+		t.Errorf("mortal player rank 1 sub 4 vs gu rank 3 cost = %v, want 500 (x5, no sub-rank)", got)
+	}
+
+	// Combatant path mirrors the player path.
+	actor := &models.Combatant{Rank: 2, SubRank: 4, MaxMana: 500}
+	cgu := &models.GuDictionaryItem{Rank: 2, BaseManaCost: 10} // 10% of 500 -> 50
+	if got := EnergyCostForCombatant(actor, cgu); got != 6.25 {
+		t.Errorf("combatant rank 2 sub 4 cost = %v, want 6.25 (50÷8)", got)
+	}
+}
+
 func TestHigherRankManaMultiplier(t *testing.T) {
 	cases := []struct {
 		guRank, userRank int

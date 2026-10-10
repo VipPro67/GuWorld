@@ -280,7 +280,7 @@ export const combatPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Cơ Chế Giao Trân & Đáp Trả</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Các Cổ trong lượt tấn công được kích hoạt <strong>lần lượt từng chiêu</strong> ("đánh trả từng phát"). Sau mỗi đòn đánh ra, mục tiêu chủ sẽ lập tức <strong>đáp trả ngay một đòn</strong> vào đạo hữu. Tốc độ quyết định ai giao trân trước, hai bên luân phiên từng phát. Dùng vật phẩm hay tụ lực không bị đáp trả.
+            Trong auto-combat, hiệu ứng hỗ trợ được resolve trước; mỗi nhân vật dùng hành động gây sát thương đầu tiên trong lượt, hoặc đánh thường nếu không có hành động phù hợp. Thứ tự lượt phụ thuộc tốc độ. Đòn đánh không tự kích hoạt một đòn phản công tức thời từ mục tiêu.
           </p>
         </div>
 

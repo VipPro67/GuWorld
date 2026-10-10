@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -25,9 +26,16 @@ func GetGrid(c *gin.Context) {
 		return
 	}
 
-	// Lock-free projection for viewport polls. Persist throttled in a short
-	// Tx; viewport generation itself must not hold the players row lock.
-	player, err := PlayerSvc.ProjectAndPersistBestEffort(authID, false)
+	statsOnly := c.Query("stats_only") == "true"
+	var player models.Player
+	var err error
+	if statsOnly {
+		// Range-only UI reads do not need to persist mana or acquire a write lock.
+		player, err = PlayerSvc.ProjectStatusEquipped(db.DB, authID)
+	} else {
+		// Full grid reads persist mana only through the existing throttled path.
+		player, err = PlayerSvc.ProjectAndPersistBestEffort(authID, false)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
@@ -55,28 +63,59 @@ func GetGrid(c *gin.Context) {
 	// The client only reads movement + investigation; skip shipping the rest
 	// of the stat block in every viewport fetch.
 	gridStats := gin.H{"movement": stats["movement"], "investigation": visionRadius}
-	mapID := worldMapIDForRegion(player.CurrentRegion)
-	mapInstanceID := mapInstanceIDForPlayer(player.ID.String())
-
-	// Cap the visual vision radius to 2 (corresponding to a 5x5 grid) to prevent UI breakage
 	visualVisionRadius := visionRadius
 	if visualVisionRadius > 2 {
 		visualVisionRadius = 2
 	}
+	if statsOnly {
+		c.JSON(http.StatusOK, gin.H{
+			"x":             player.X,
+			"y":             player.Y,
+			"vision_radius": visualVisionRadius,
+			"stats":         gridStats,
+			"world_width":   WorldWidth,
+			"world_height":  WorldHeight,
+		})
+		return
+	}
 
-	cells := []models.Cell{}
+	mapID := worldMapIDForRegion(player.CurrentRegion)
+	mapInstanceID := mapInstanceIDForPlayer(player.ID.String())
+
+	cellCoords := make([]cache.CellCoordKey, 0, (2*visualVisionRadius+1)*(2*visualVisionRadius+1))
 	for dx := -visualVisionRadius; dx <= visualVisionRadius; dx++ {
 		for dy := -visualVisionRadius; dy <= visualVisionRadius; dy++ {
 			cx := player.X + dx
 			cy := player.Y + dy
 			if cx >= 0 && cx < WorldWidth && cy >= 0 && cy < WorldHeight {
-				cell := ResolveCellInRegion(player.CurrentRegion, cx, cy)
-				if isCellClearedRecently(player.CurrentRegion, cx, cy, clearedCellCooldown) {
-					cell = models.Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
-				}
-				cells = append(cells, cell)
+				cellCoords = append(cellCoords, cache.CellCoordKey{RegionID: player.CurrentRegion, X: cx, Y: cy})
 			}
 		}
+	}
+	clearedCells, errCleared := cache.GetClearedCells(cellCoords)
+	if errCleared != nil {
+		logger.S.Errorf("Failed to batch-read cleared map cells: %v", errCleared)
+		// Preserve the old per-cell fallback behavior if Redis cannot serve MGET.
+		clearedCells = make(map[cache.CellCoordKey]cache.MapCellState)
+		for _, coord := range cellCoords {
+			cleared, clearedBy, err := cache.IsCellCleared(coord.RegionID, coord.X, coord.Y)
+			if err != nil {
+				logger.S.Errorf("Failed to check Redis cell state for (%d,%d) in region %s: %v", coord.X, coord.Y, coord.RegionID, err)
+				continue
+			}
+			if cleared {
+				clearedCells[coord] = cache.MapCellState{ClearedBy: clearedBy}
+			}
+		}
+	}
+
+	cells := make([]models.Cell, 0, len(cellCoords))
+	for _, coord := range cellCoords {
+		cell := ResolveCellInRegion(coord.RegionID, coord.X, coord.Y)
+		if _, isCleared := clearedCells[coord]; isCleared {
+			cell = models.Cell{X: coord.X, Y: coord.Y, Type: "Empty", Content: ""}
+		}
+		cells = append(cells, cell)
 	}
 
 	type NearbyPlayer struct {
@@ -210,21 +249,23 @@ func GetGrid(c *gin.Context) {
 }
 
 // HasExplorationInventorySpace checks bag capacity of the real inventory.
-func HasExplorationInventorySpace(player *models.Player, incomingCount int) bool {
-	stats := CalculatePlayerStats(player)
+func HasExplorationInventorySpace(player *models.Player, incomingCount int, territory SectTerritoryInfo) bool {
+	stats := calculatePlayerStatsWithTerritory(player, territory)
 	maxSlots := int(stats["storage"])
 	if player.Rank >= 6 {
 		maxSlots = 999
 	}
 
-	currentSize := len(player.GuInventory)
-	invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
-	seen := map[string]bool{}
-	for _, inv := range invItems {
-		if !seen[inv.ItemID] {
-			seen[inv.ItemID] = true
-			currentSize++
+	currentSize := len(player.GuInventory) + len(player.MaterialsInventory)
+	if player.MaterialsInventory == nil && InventorySvc != nil {
+		// loadRow normally supplies the aggregated map already. Keep the old
+		// fallback for callers whose player snapshot could not load inventory.
+		invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
+		seen := make(map[string]struct{}, len(invItems))
+		for _, inv := range invItems {
+			seen[inv.ItemID] = struct{}{}
 		}
+		currentSize += len(seen)
 	}
 
 	return (currentSize + incomingCount) <= maxSlots

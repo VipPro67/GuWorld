@@ -6,6 +6,13 @@ import { LatestRequestGate } from "@/lib/player-reconciliation";
 
 let fetchGuInventoryPromise: Promise<void> | null = null;
 const guInventoryRequests = new LatestRequestGate();
+let groundDropRequestRevision = 0;
+
+export interface GroundDropViewport {
+  x: number;
+  y: number;
+  radius: number;
+}
 
 export interface InventorySlice {
   guInventoryLoaded: boolean;
@@ -27,9 +34,9 @@ export interface InventorySlice {
   useItem: (itemId: string) => Promise<void>;
   useItems: (itemIds: string[]) => Promise<boolean>;
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
-  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: ApiResponseData[]; stats: ApiResponseData; players_on_map?: ApiResponseData[]; world_width?: number; world_height?: number } | null>;
+  fetchGrid: (statsOnly?: boolean) => Promise<{ x: number; y: number; vision_radius: number; cells?: ApiResponseData[]; stats: ApiResponseData; players_on_map?: ApiResponseData[]; ground_drops?: ApiResponseData[]; world_width?: number; world_height?: number } | null>;
   groundDrops: GroundDrop[];
-  fetchGroundDrops: () => Promise<void>;
+  fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
 }
 
@@ -719,12 +726,13 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     }
   },
 
-  fetchGrid: async () => {
+  fetchGrid: async (statsOnly = false) => {
     const { token, logout } = get();
     if (!token) return null;
 
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/explore/grid`, {
+      const query = statsOnly ? "?stats_only=true" : "";
+      const response = await authFetch(`${BACKEND_URL}/api/explore/grid${query}`, {
         headers: {
         },
       });
@@ -739,9 +747,6 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       }
 
       const data = await response.json();
-      if (data.ground_drops) {
-        set({ groundDrops: data.ground_drops });
-      }
       return data;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
@@ -751,12 +756,18 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     }
   },
 
-  fetchGroundDrops: async () => {
+  fetchGroundDrops: async (viewport) => {
+    const requestRevision = ++groundDropRequestRevision;
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/world/drops`);
+      const query = viewport
+        ? `?x=${Math.floor(viewport.x)}&y=${Math.floor(viewport.y)}&radius=${Math.max(0, Math.floor(viewport.radius))}`
+        : "";
+      const response = await authFetch(`${BACKEND_URL}/api/world/drops${query}`);
       if (response.ok) {
         const data = await response.json();
-        set({ groundDrops: data.drops || [] });
+        if (requestRevision === groundDropRequestRevision) {
+          set({ groundDrops: data.drops || [] });
+        }
       }
     } catch (e) {
       console.error("fetchGroundDrops error:", e);
@@ -791,7 +802,6 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         }
       } catch (e) {}
 
-      await get().fetchGroundDrops();
       if (get().player?.id) {
         await get().fetchPlayerStatus(get().player!.id);
       }

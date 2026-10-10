@@ -443,7 +443,7 @@ export const characterPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Đạo Ngân (Dao Marks)</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Đạo Ngân là vết khắc quy luật tự nhiên tích lũy trên cơ thể và Tiên Khiếu qua <strong>49 lưu phái</strong> (chia thành 10 Nhóm Đạo). Mỗi điểm Đạo Ngân gia tăng sát thương và phòng ngự cho Cổ/Kỹ năng thuộc lưu phái đó.
+            Đạo Ngân là vết khắc quy luật tự nhiên tích lũy trên cơ thể và Tiên Khiếu qua <strong>49 lưu phái</strong> (chia thành 10 Nhóm Đạo). Đạo Ngân cùng phái khuếch đại hành động dùng lưu phái đó; Đạo Ngân ngoại phái có thể gây xung đột. Hệ thống tính riêng hiệu quả tấn công và kháng phòng thủ, có xét Chân Ý cùng các effect liên quan.
           </p>
           <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
             <table className="w-full text-left text-xs font-mono">

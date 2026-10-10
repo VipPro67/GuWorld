@@ -62,8 +62,8 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 | Kiệt Sức (`exhausted`) | **-30%** tốc độ, **-50%** hiệu suất tu luyện; không thể tu luyện | 10 phút |
 | Phúc Trạch (`blessed`) | **+5** may mắn, **+10%** hiệu suất tu luyện | 60 phút |
 | Hình Phạt Tử Vong (`death_penalty`) | **-50%** tấn công, phòng thủ, tốc độ | 30 phút |
-| Tâm Thần Mệt Mỏi (`refine_fatigue`) | **-25%** tỉ lệ Luyện Cổ thành công (khi Luyện Tiên Cổ hoặc Cổ $\ge$ Rank bản thân) | 10 phút |
-| Luyện Cổ Phản Phệ (`refine_backfire`) | **-50%** tỉ lệ Luyện Cổ thành công (khi cố luyện lúc mệt mỏi hoặc bị nổ lò) | 20 phút |
+| Tâm Thần Mệt Mỏi (`refine_fatigue`) | **-50%** tỉ lệ Luyện Cổ thành công | 10 phút |
+| Luyện Cổ Phản Phệ (`refine_backfire`) | **-95%** tỉ lệ Luyện Cổ thành công | 20 phút |
 | Sinh Khí Tàn (`sinh_khi_tan`) | Trúng Sát Sinh Khí Cổ: tầng I **-10%**, II **-25%**, III **-35%**, IV **-50%**, V **-99%** tấn công/phòng thủ/tốc độ. Đánh trúng +1 tầng (tối đa V, refresh 5h; đòn bị khiên hấp thụ vẫn tính trúng, né/mù/miễn nhiễm không tính); thanh tẩy -1 tầng | 5 giờ (refresh mỗi hit; spec gốc 50h đang tạm giảm cân bằng) |
 
 > Gu `FIVE_ELEMENTS_DIVINE_BARRIER_ARRAY` (Ngũ Hành Thiên Chướng Trận, rank 9) có 2 effect khi bắt đầu trận: **gỡ `regional_wall_suppression` khỏi bản thân** (người mang), và **phản chiếu Áp Chế Giới Vực lên địch PvP** (giảm 1 nửa debuff công/thủ/tốc so với Giới Vực Bích gốc, gắn status 15-55 phút theo rank địch) — chỉ PvP thực.
@@ -108,7 +108,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - **Cách nhận điểm Chân Ý:**
   - **Sử dụng Cổ tiêu hao/Cổ trong chiến đấu:** (Bao gồm cả đánh tay và đánh tự động/Simulator như khai thác mỏ, tàn tích). Mỗi lần thi triển thành công nhận Chân Ý cơ bản theo rank: **R1=1, R2=2, R3=5, R4=10, R5=20, R6=50, R7=100, R8=200, R9=300**. Lượng thực nhận còn phụ thuộc hiệu suất cảnh giới và giới hạn của rank Cổ. (Lưu ý: Đấu Trường Ảo không cộng điểm).
   - **Giới hạn mỗi trận:** điểm Chân Ý nhận từ chiến đấu đối với Cổ phàm và Sát chiêu phàm bị chặn ở **Rank × 10 điểm/trận** (đánh tay, đánh tự động và sát chiêu phàm đều tính chung). Riêng **Tiên Cổ và Sát chiêu Tiên đạo (Rank ≥ 6)** không bị giới hạn tối đa trong trận chiến, thỏa sức ngộ đạo không có trần giới hạn. Thưởng phó bản và luyện Cổ không tính vào giới hạn này.
-  - *(Tương lai)* Sẽ có thêm cơ chế Dung luyện Cổ, Khám phá tàn tích đặc thù hoặc đọc truyền thừa.
+  - Các nguồn điểm khác đã có trong game gồm phần thưởng Phó bản (như Mộng Cảnh) và Luyện Cổ; điểm thực nhận tuân theo công thức của từng hoạt động.
 - **Các mốc cảnh giới:** Phàm Thai (< 10.000) -> Đại Sư (10.000) -> Tông Sư (100.000) -> Đại Tông Sư (1.000.000) -> Vô Thượng Đại Tông Sư (10.000.000).
 - **Tác dụng:**
   - Là **điều kiện bắt buộc để đột phá tu vi Cổ Tiên** (VD: Đột phá Thất Chuyển cần ít nhất 1 lưu phái đạt Tông Sư; Bát Chuyển cần Đại Tông Sư).
@@ -423,9 +423,9 @@ Cổ sư có thể:
 - Tàn phương (recipe chưa 100%) phải dùng `/api/refine/deduce` để suy diễn lên 100% mới được luyện (không còn Ép Luyện). Tiêu hao 15 Niệm Lực và Nguyên Thạch mỗi lần.
   - **Độ khó suy diễn:** Tiến độ (Improvement %) mỗi lần bấm sẽ bị chia cho hệ số Rank của Cổ (Rank 5 chia 100, Rank 6 chia 1.000, Rank 9 chia 10.000.000). Phàm nhân gần như không thể cày chay Tiên Cổ Phương.
   - **Chìa khóa (Cảnh Giới & Đạo Ngân):** Bù đắp độ khó khổng lồ này bằng Cảnh Giới Trí Đạo (x3), Luyện Đạo (x2), Hệ đích (x1) và Đạo Ngân Trí Đạo (Tăng tiến độ theo hàm Căn bậc hai). Trí Đạo Vô Thượng Đại Tông Sư có thể suy tính nhanh gấp hàng vạn lần kẻ phàm. Mức Cảnh Giới Trí Đạo cũng gia tăng tỷ lệ Linh quang chớp lóe (Inspiration Flash - Lập tức hoàn thiện 100%).
-### Tỉ lệ Luyện Cổ và Hệ quả (MỚI)
+### Tỉ lệ Luyện Cổ và Hệ quả
 
-Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên 10 yếu tố:
+Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên các yếu tố sau:
 1. **Tỷ lệ gốc:** Từ bí phương.
 2. **Độ hoàn thiện:** Bí phương phải thôi diễn lên 100% mới được luyện (không còn Ép Luyện).
 3. **Độ chính xác tổ hợp:** Lắp sai Cổ nguyên liệu lập tức tỷ lệ về 0%.
@@ -437,8 +437,8 @@ Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên
 8. **Khí vận:** Dựa trên Đạo Ngân Vận Đạo và hiệu ứng Phúc Trạch (tối đa +10%).
 9. **Hỗ trợ:** Chủng tộc/thể chất dương (vd Người Lông +10%). Bonus Cổ phụ trợ (`success_rate_bonus`) đã bị loại bỏ, Cổ trang bị không còn cộng tỉ lệ luyện.
 10. **Môi trường:** Luyện Cổ tại Đại Vực có thuộc tính phù hợp (+5%).
-11. **Tiên Cổ Giảm Trừ (Immortal Penalty):** Khi luyện Tiên Cổ (Rank 6 - 9), toàn bộ các gia thành cộng thẳng ở trên (Mục 4, 6, 7, 8, 9, 10) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100. Việc này khiến ngoại vật trở nên yếu ớt ở cấp độ Tiên Cổ, buộc Cổ Tiên phải dựa hoàn toàn vào Đạo Ngân Luyện Đạo (Mục 5) khổng lồ để chống lại độ khó kinh khủng này.
-12. **Tiêu hao Năng Lượng:** Luyện Cổ tiêu tốn sinh lực khiếu. Tiêu hao 20 Chân Nguyên đối với đồng cấp Phàm và 10 Tiên Nguyên đối với đồng cấp Tiên. Số lượng này nhân lên hoặc giảm đi (x10 lần với Phàm, x100 lần với Tiên) cho mỗi bậc chênh lệch. Phàm nhân không thể luyện Tiên Cổ do lập tức cạn kiệt Chân Nguyên.
+11. **Tiên Cổ Giảm Trừ (Immortal Penalty):** Khi luyện Tiên Cổ (Rank 6 - 9), các bonus dương được chỉ định trong công thức sẽ bị chia theo độ khó của rank Tiên Cổ.
+12. **Tiêu hao Năng Lượng:** Luyện Cổ tiêu tốn sinh lực khiếu; mức tiêu hao phụ thuộc rank Cổ mục tiêu và chênh lệch cảnh giới.
 
 Hệ quả của quá trình luyện phân thành 4 bậc:
 - **Thành Công:** Nhận Cổ trùng mục tiêu và tăng điểm **Chân Ý lưu phái Luyện Đạo** (Luyện Cổ không tăng Chân Ý lưu phái khác; Chân Ý các hệ khác tích lũy qua sát chiêu, chiến đấu, phó bản):
@@ -455,7 +455,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 Để mô phỏng tiêu hao Thần Hồn và hạn chế việc spam Luyện Cổ liên tục:
 - **Điều kiện kích hoạt:** Chỉ bị ảnh hưởng khi **Luyện Tiên Cổ (Rank 6 trở lên)** hoặc **Luyện Cổ có Rank $\ge$ Rank Cảnh Giới của bản thân**. Luyện Cổ bậc thấp hơn bản thân ("cổ cùi") không làm tổn hao tâm thần và không làm dính mệt mỏi.
 - **[Tâm Thần Mệt Mỏi] (`refine_fatigue`):** Nhận được sau khi Luyện Cổ thỏa điều kiện trên. Giảm **50%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **10 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực).
-- **[Luyện Cổ Phản Phệ] (`refine_backfire`):** Xuất hiện khi người chơi **vẫn cố gắng Luyện Cổ** trong lúc đang bị `refine_fatigue` (tự động leo thang) hoặc khi Luyện Cổ bị **Cháy Nổ (Backfire)**. Giảm **95%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **20 phút** (áp dụng trực tiếp sau khi chặn trần 100% các điểm thưởng tích cực). Tiếp tục luyện khi đang bị Phản Phệ sẽ gia hạn thêm 20 phút.
+- **[Luyện Cổ Phản Phệ] (`refine_backfire`):** Xuất hiện nếu đang có `refine_fatigue` và tiếp tục một lần luyện gây mệt mỏi (Tiên Cổ hoặc Cổ có rank bằng/cao hơn rank người chơi), hoặc khi Luyện Cổ bị **Cháy Nổ (Backfire)**. Một lần luyện cấp thấp hơn không tự leo thang trạng thái. Giảm **95%** tỉ lệ thành công Luyện Cổ trong **20 phút**. Luyện tiếp trong lúc Phản Phệ sẽ gia hạn thêm 20 phút.
 - **[Tâm Đắc Luyện Cổ] (`refine_insight_1..9`):** Pity theo từng rank. Chỉ lần hợp luyện có nguyên liệu khớp công thức và Cổ mục tiêu chưa tồn tại mới đủ điều kiện tăng pity khi thất bại (`+1%/tầng`, không giới hạn, vĩnh viễn). Sai nguyên liệu hoặc Tiên Cổ mục tiêu đã tồn tại thì không tăng tầng, và tầng pity không được cộng vào tỉ lệ của lần thử đó. Luyện thành công hợp lệ rank R thì reset tầng rank đó về 0; bonus chỉ áp dụng cho đúng rank (chịu Immortal Penalty như các bonus dương khác).
 
 ## 7. Sát chiêu
@@ -487,7 +487,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - **Một bản đồ thế giới liên tục** 30.000 × 20.000 ô, chia làm **6 Đại Vực (Lục Đại Vực)** theo lưới 3×2, mỗi Đại Vực 10.000 × 10.000. Trung tâm là **Trấn Thanh Bản / Thương Gia Thành** (vùng an toàn, nơi Cổ Sư hồi phục). Mỗi Đại Vực có **HUB riêng** (trấn an toàn khởi đầu): Thương Gia Thành (Nam Cương), Trung Châu Thành, Bắc Nguyên Trấn, Tây Mạc Trấn, Đông Hải Cảng. Khi hoàn tất thiết lập ban đầu, Cổ Sư được đưa vào HUB của Đại Vực đã chọn theo vị trí đăng ký.
 - Mỗi Đại Vực chia thành **tiểu vực** 1.000 × 1.000. Trong Đại Vực có các **địa danh có tên** (Thanh Mao Sơn, Tam Vương Truyền Thừa, Sa Mạc Thanh Quỷ...) với độ khó cố định theo vùng.
 - Cổ sư xem lưới địa đồ xung quanh, di chuyển theo Thân pháp, chạm trán quái, thu thập tài nguyên/Cổ hoang dã; du hành giữa các Đại Vực qua màn hình bản đồ thế giới.
-- **Bản đồ lớn "Ngũ Vực"** hiển thị toàn bộ Lục Đại Vực trên một canvas phóng to/thu nhỏ được: vẽ ranh giới các vùng, các điểm dùng chung (Trạm Nghỉ 🏯, Boss ⚔️, Linh Tài 💎) từ `map_cells`, **các chấm quái vật/tài nguyên xung quanh đạo hữu** (resolve theo đúng nội dung từng ô khi di chuyển), và sương mù tối vùng tiểu vực chưa ghé thăm (dựa trên `visited_subzones`). Các ô đã tải được **cache theo chunk 64×64, tách theo khu vực và prefetch dải phía trước hướng đi**; thay đổi ô realtime được apply trực tiếp thay vì tải lại toàn vùng, nên marker hiện dần (không nhấp nháy) và xuất hiện sớm ở khu vực sắp đến. Di chuyển bằng cách **giữ WASD/phím mũi tên trên máy tính hoặc kéo joystick trên thiết bị cảm ứng**; thả phím/joystick để dừng và đổi hướng bất kỳ lúc nào. Nhân vật nội suy liên tục giữa các ô với tốc độ dựa trên chỉ số **MOVEMENT**, trong khi server vẫn xác nhận từng ô và dừng lại nếu phát sinh chiến đấu hoặc sự kiện. Click/tap bản đồ chỉ dùng để chọn mục tiêu hoặc tương tác, không còn ra lệnh di chuyển. Mỗi ô đi qua đều kích hoạt nội dung; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss** (bước vào ô trống thì đi bình thường, không có phục kích ngẫu nhiên). Vị trí camera + độ zoom của bản đồ được **giữ nguyên sau khi chiến đấu**.
+- **Bản đồ lớn "Ngũ Vực"** hiển thị toàn bộ Lục Đại Vực trên một canvas phóng to/thu nhỏ được: vẽ ranh giới các vùng, các điểm dùng chung (Trạm Nghỉ 🏯, Boss ⚔️, Linh Tài 💎) từ `map_cells`, **các chấm quái vật/tài nguyên xung quanh đạo hữu** (resolve theo đúng nội dung từng ô khi di chuyển), và sương mù tối vùng tiểu vực chưa ghé thăm (dựa trên `visited_subzones`). Các ô đã tải được **cache theo chunk 64×64, tách theo khu vực và prefetch dải phía trước hướng đi**; thay đổi ô realtime được apply trực tiếp thay vì tải lại toàn vùng, nên marker hiện dần (không nhấp nháy) và xuất hiện sớm ở khu vực sắp đến. Di chuyển bằng cách **giữ WASD/phím mũi tên trên máy tính hoặc kéo joystick trên thiết bị cảm ứng**; thả phím/joystick để dừng và đổi hướng bất kỳ lúc nào. Nhân vật nội suy liên tục giữa các ô với tốc độ dựa trên chỉ số **MOVEMENT**, trong khi server vẫn xác nhận từng ô và dừng lại nếu phát sinh chiến đấu hoặc sự kiện. Click/tap bản đồ chỉ dùng để chọn mục tiêu hoặc tương tác, không còn ra lệnh di chuyển. Ô trống không tự tạo phục kích procedural, nhưng quái runtime có thể phát hiện, đuổi theo và mở combat khi đạo hữu đến đủ gần mà không cần bước vào ô sinh quái. Vị trí camera + độ zoom của bản đồ được **giữ nguyên sau khi chiến đấu**.
 - Trong **Cài Đặt Chung → Hiển thị trên bản đồ**, đạo hữu có thể chọn **Đầy đủ**, **Giảm nhẹ**, **Giảm nhiều** hoặc **Tắt bản đồ**. Các mức giảm bớt nhịp cập nhật dữ liệu nền; Tắt bản đồ tháo giao diện Pixi và ngừng các yêu cầu API nền của bản đồ. Lựa chọn được lưu trên trình duyệt hiện tại.
 - **Quái nhỏ, tài nguyên thấp, Cổ cấp thấp** được sinh procedural theo vùng (không lưu DB), **nội dung ổn định theo ô** — quái không tự đổi chỗ/re-randomize theo thời gian; sau khi đạo hữu dọn dẹp một ô, ô đó trống trong 15 phút rồi nội dung cũ quay lại (cooldown `cleared_cells`). **Boss và tài nguyên cấp cao** là điểm dùng chung toàn thế giới trong `map_cells`, có thời gian hồi sinh sau khi bị đánh bại/hái. Boss trở thành actor dùng chung, phát hiện và đuổi người chơi trong toàn bộ ranh giới `Region` của nó, tự mở combat khi áp sát; khi mất mục tiêu boss quay về ô sinh. Boss không vào `HUB`/`SAFE_ZONE`.
 - Khi trạng thái quái thời gian thực đã tải xong, bản đồ hiển thị đúng cá thể đang tồn tại thay cho dấu quái tĩnh: quái di chuyển rất chậm (0,25 ô/giây) và chỉ chủ động đuổi đánh khi đạo hữu đến rất gần. Phạm vi phát hiện tăng nhẹ theo Rank quái (2 ô ở Rank 1 đến 6 ô ở Rank 9), phạm vi truy đuổi cũng bị giới hạn nên phần lớn quái xung quanh vẫn đứng yên. Quái ra đòn hoặc quay về có hình thái riêng, nhưng không thể sinh ra, chọn mục tiêu hay đi xuyên vào `HUB`/`SAFE_ZONE`. Đạo hữu còn sống sẽ tự động phản công bằng đòn đánh cơ bản sau mỗi lần bị quái đánh trúng. Bản đồ nội suy mượt giữa các vị trí server xác nhận, hiện thanh máu khi bị thương/được chọn và hiệu ứng khi ra đòn hoặc nhận sát thương.
@@ -560,9 +560,8 @@ Quá trình khắc họa trận pháp phụ thuộc mật thiết vào cảnh gi
 - Combat PvE khởi tạo từ thám hiểm, mỏ hoặc các hệ thống gọi combat.
 - Cổ sư dùng Cổ trang bị, có thể charge và chọn mục tiêu.
 - Chỉ định mục tiêu hỗ trợ vị trí/hàng/cột/toàn bộ tùy `target_type` của Cổ.
-- **Giao trân "đánh trả từng phát":** các Cổ trong lượt tấn công được kích hoạt **lần lượt từng chiêu**, không còn xả trọn bộ trong một nhịp. Sau mỗi đòn đánh ra, mục tiêu chủ (đối thủ chính) sẽ **đáp trả ngay một đòn** vào đạo hữu. Tốc độ quyết định **ai giao trân trước** (tính cả hiệu ứng Chậm) — bên nhanh hơn mở màn chuỗi đánh–đáp, sau đó hai bên luân phiên từng phát. Dùng vật phẩm/hút Nguyên Thạch/tụ lực không bị đáp trả; Bộc Phá Sát Chiêu và đánh thường vẫn bị đáp trả bình thường. Đối thủ ngoài đáp trả vẫn giữ đúng một hành động AI mỗi lượt như cũ.
+- **Lượt chiến đấu:** hành động được xử lý theo thứ tự lượt và tốc độ. Trong auto-combat, các hiệu ứng hỗ trợ được resolve trước; mỗi nhân vật dùng hành động gây sát thương đầu tiên trong lượt, hoặc đánh thường nếu không có hành động phù hợp. Đòn đánh không tự kích hoạt một đòn phản công tức thời từ mục tiêu.
 - **Thỉnh Đạo Hữu Tiên Hành Cổ (tiên thủ lượt 1):** trước khi trận bắt đầu, nếu thọ nguyên đối thủ chính không hơn gấp 3 lần thọ nguyên của đạo hữu, đạo hữu được **ra tay đầu tiên** ở lượt 1 (địch vẫn hành động ngay sau, theo tốc độ thường — không bị bỏ lượt). Quái vật dùng tuổi thọ quy đổi theo Chuyển; Cổ sư đối địch (PvP) dùng thọ nguyên thật.
-- **Auto battle (tự chiến/luyện chiến) cùng cơ chế:** mỗi đòn Cổ gây sát thương đều bị nạn nhân **đáp trả ngay bằng viên Cổ kế tiếp** trong bộ của họ (trừ mana, chịu khống chế như thường); cast hỗ trợ/hồi/khiên không bị đáp trả; đòn đáp trả không bị đáp trả ngược (không dây chuyền); AoE chỉ được đáp trả 1 lần bởi mục tiêu trúng đòn chính. Hành động đã dùng để đáp trả sẽ không còn khi tới lượt speed của nhân vật đó.
 - Combat state hỗ trợ đội hình địch/ta, status effects, cooldown, Chân Nguyên/Sinh lực, chiến lợi phẩm.
 - Thắng trận áp dụng chiến lợi phẩm vào thẳng túi đồ thật; thua trận cập nhật trạng thái theo handler combat.
 - **Túi đồ khi khám phá là túi thật:** nguyên liệu/Cổ/tiền nhặt được trong chuyến đi vào thẳng túi đồ (không còn "túi tạm"). Khi về trấn an toàn không có bước "thu hoạch" — đồ đã nằm sẵn trong túi.
@@ -612,22 +611,21 @@ Trong chiến đấu, đạo hữu có thể bắt quái vật làm sủng vật
 
 - **Điều kiện:** Quái vật phải có cờ `is_capturable` trong dictionary quái vật (hiện tại: Dế Mèn, Ong Vàng, Rắn Hổ, Bọ Cạp, Nhện Độc).
 - **Yêu cầu Chuyển:** Cổ trùng bắt buộc phải **Chuyển ≥ Chuyển quái** mới có thể bắt.
-- **Công thức bắt:**
+- **Tỉ lệ bắt:** `clamp(template.capture_chance × hpFactor × typeFactor + captureBonus, 1%, 100%)`.
   ```
-  baseChance × typeFactor × hpFactor × (1 + captureBonus) × luckMultiplier
+  hpFactor = sqrt(clamp(1 - HP hiện tại / HP tối đa, 0.1, 1))
   ```
-  - `baseChance`: 0.25 (Nhất Chuyển) → 0.10 (Ngũ Chuyển) — giảm dần theo Chuyển
-  - `typeFactor`: 1.0 (insect) / 0.8 (reptile) / 0.6 (beast) / 0.4 (spirit) / 0.2 (divine)
-  - `hpFactor`: `(1 - enemy.hp%)^0.5` — quái càng yếu càng dễ bắt (full HP ≈ 0%)
-  - `captureBonus`: tổng từ thuộc tính `capture_bonus` của các Cổ đang trang bị
-  - `luckMultiplier`: random 0.9-1.1
-- **Kết quả:** Nếu roll < baseChance → bắt thành công, quái trở thành Actor sủng vật persistent và bị xóa khỏi combat. Nếu roll ≥ baseChance → bỏ lỡ, tiếp tục chiến đấu.
+  - `template.capture_chance`: xác suất gốc trong dữ liệu quái.
+  - `typeFactor`: quái thường `1.0`, `ELITE` `0.6`, Boss và quái tai kiếp `0`.
+  - `captureBonus`: cộng tổng bonus từ Cổ đang trang bị và ACTIVE.
+  - HP đầy vẫn có hệ số sàn `sqrt(0.1)`; quái yếu dễ bắt hơn.
+- **Kết quả:** Roll ngẫu nhiên dưới tỉ lệ bắt đã tính thì thành công; quái trở thành Actor sủng vật persistent và bị xóa khỏi combat. Ngược lại, tiếp tục chiến đấu.
 
 ### Sủng vật (Pets)
 
 Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 
-- **Đội hình:** Tối đa 4 sủng vật trong đội hình (tăng theo Chuyển, Nhất Chuyển = 2 slot, Ngũ Chuyển = 4 slot).
+- **Đội hình:** Số slot tối đa là `min(1 + rank người chơi, 8)`; Nhất Chuyển có 2 slot, Ngũ Chuyển có 6, Thất Chuyển trở lên có 8. Pet và NPC dị nhân dùng chung slot đội hình.
 - **Chiến đấu:** Sủng vật tự động tấn công quái địch mỗi lượt bằng BASIC_ATTACK (ATK × 1.0).
 - **Phí Hồn Phách:** mỗi lần ra trận thật, một bầy sủng vật tiêu tốn `soul_hp` = số cá thể trong bầy; nếu Hồn Phách không đủ thì sủng vật đó bị bỏ qua, không xuất trận. Võ Đài (ảo) không tốn Hồn Phách.
 - **Độ no:** Giảm theo `pet_hunger_per_hour` (mặc định 2/giờ). Sủng vật đang ngủ giảm 50%. Khi về 0 → **chết vĩnh viễn** (xóa khỏi DB).
@@ -1000,16 +998,16 @@ Cổ Nguyệt Phương Nguyên, một đại ma đầu bị ép đến đường
 
 ### Tu hành lưu phái & Cảnh giới
 - **Lưu phái:** Nhân đạo (Nhân Tổ); Khí đạo, Nô đạo (Nguyên Thủy Tiên Tôn); Trí đạo, Tinh đạo (Tinh Túc Tiên Tôn); Lực đạo, Biến hóa đạo (Cuồng Man Ma Tôn); Luật đạo (Vô Cực Ma Tôn); Hồn đạo (U Hồn Ma Tôn); Thâu đạo (Đạo Thiên Ma Tôn),...
-- **Cảnh giới lưu phái:** Phổ thông ➔ Chuẩn đại sư ➔ Đại sư ➔ Tông sư ➔ Đại tông sư ➔ Vô thượng đại tông sư ➔ Đạo chủ. (Đạo chủ là cảnh giới chỉ có Tôn Giả mới đạt tới, có thể thao túng đạo ngân trong thiên nhiên).
+- **Cảnh giới lưu phái trong game:** Phàm Thai ➔ Đại Sư (10.000 Chân Ý) ➔ Tông Sư (100.000) ➔ Đại Tông Sư (1.000.000) ➔ Vô Thượng Đại Tông Sư (10.000.000). Đây là năm bậc được triển khai trong hệ thống hiện tại.
 
 ## 19. Hướng Dẫn Tân Thủ (Wiki Guide)
 
-Hệ thống cung cấp wiki trong game tại `/wiki`; phần dưới là lộ trình tân thủ ngắn gọn:
+Trang `/wiki` là nơi tra cứu hướng dẫn và bách khoa trong game; nội dung hướng dẫn dùng các tệp trong `frontend/src/lib/wiki/`, còn danh mục Cổ, vật phẩm, quái và khu vực lấy từ dictionary backend. Phần dưới là lộ trình tân thủ ngắn gọn:
 
 ### Thuật ngữ cốt lõi:
 - **Không Khiếu & Tiên Khiếu:** Phàm nhân sử dụng Không Khiếu tích lũy Chân Nguyên chiến đấu. Cổ Tiên (Lục Chuyển trở lên) sở hữu **Tiên Khiếu** (thế giới nhỏ độc lập bên trong cơ thể) tự sản sinh Tiên Nguyên với 4 phẩm cấp: Thấp, Trung, Cao, Cực Hạn dựa trên Nhân Khí lúc Thăng Tiên.
-- **Đạo Ngân (Dao Marks):** Vết khắc của quy luật tự nhiên, chia thành 49 lưu phái (Lực đạo, Hỏa đạo...). Mỗi điểm Đạo Ngân tăng **+1%** sát thương/phòng ngự cho các kỹ năng/Cổ trùng thuộc lưu phái đó.
-- **Cảnh Giới Lưu Phái (Attainment):** Độ ngộ Chân Ý gồm 5 bậc: Phàm Thai ➔ Đại Sư ➔ Tông Sư ➔ Đại Tông Sư ➔ Vô Thượng Đại Tông Sư. Điểm tích lũy theo từng lưu phái (thi triển sát chiêu thành công, luyện Cổ thành công, vượt ải phó bản). Cảnh giới suy ra từ mốc điểm: Đại Sư=100, Tông Sư=1.000, Đại Tông Sư=10.000, Vô Thượng=100.000. **Để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, cần ít nhất 1 lưu phái đạt Tông Sư/Đại Tông Sư/Vô Thượng tương ứng.** Cảnh giới càng cao càng tăng tỉ lệ thành công của sát chiêu và luyện Cổ.
+- **Đạo Ngân (Dao Marks):** Vết khắc của quy luật tự nhiên, chia thành 49 lưu phái. Đạo Ngân cùng phái khuếch đại hành động dùng lưu phái đó; Đạo Ngân ngoại phái có thể tạo xung đột. Hiệu quả được tính theo từng hành động và có thể chịu điều hòa từ Chân Ý hoặc effect miễn/giảm xung đột, không phải mỗi điểm luôn cộng thẳng 1% sát thương và phòng ngự.
+- **Cảnh Giới Lưu Phái (Attainment):** Độ ngộ Chân Ý gồm 5 bậc: Phàm Thai ➔ Đại Sư ➔ Tông Sư ➔ Đại Tông Sư ➔ Vô Thượng Đại Tông Sư. Điểm tích lũy riêng theo từng lưu phái; các nguồn gồm sử dụng Cổ, chiến đấu, sát chiêu, Luyện Cổ và phần thưởng một số Phó bản. Mốc hiện tại: Đại Sư=10.000, Tông Sư=100.000, Đại Tông Sư=1.000.000, Vô Thượng=10.000.000. **Để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, cần ít nhất 1 lưu phái đạt Tông Sư/Đại Tông Sư/Vô Thượng tương ứng.** Cảnh giới còn điều hòa Xung Đột Đạo Ngân và tăng hiệu quả theo cơ chế của từng hệ thống.
 - **Bản Mệnh Cổ (Vital Gu):** Cổ trùng gắn liền sinh mệnh, không bao giờ mất khi thất bại dã ngoại.
 - **Độ No (Hunger):** Cổ trùng giảm Độ No mỗi 3 giờ. Cần cho ăn đúng loại thức ăn (thịt thú, khoáng thạch...), nếu về 0 Độ No Cổ sẽ **chết vĩnh viễn**. Quy luật này áp dụng cả với Cổ đang nằm trong **Bảo khố Tông Môn**: Cổ trong kho vẫn hao Độ No mỗi 3 giờ (ngang mức hoạt động), về 0 sẽ chết và bị xóa khỏi kho; khi đổi ra, Cổ nhận đúng Độ No hiện tại chứ không được reset đầy.
 - **Sát Chiêu (Killer Moves):** Kỹ năng ghép từ 1 Cổ Hạch Tâm (Core Gu) và 0-8 Cổ Phụ Trợ (Support Gu) tăng sát thương, giảm hao Chân Nguyên, thêm khống chế (choáng, đóng băng, câm lặng) hoặc thời gian tụ lực.

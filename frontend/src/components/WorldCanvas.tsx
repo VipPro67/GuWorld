@@ -143,11 +143,11 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
   const renderObjectIdsRef = useRef<WeakMap<object, number>>(new WeakMap());
   const nextRenderObjectIdRef = useRef(1);
   const scheduleMonsterChunkSyncRef = useRef<() => void>(() => {});
+  const scheduleGroundDropSyncRef = useRef<() => void>(() => {});
+  const groundDropSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedTilesRef = useRef<Set<string>>(new Set());
 
   const regions = useGameStore((s) => s.regions);
-  const regionsLoaded = useGameStore((s) => s.regionsLoaded);
-  const fetchRegions = useGameStore((s) => s.fetchRegions);
   const gamePlayer = useGameStore((s) => s.player);
   const playerAvatarUrl = gamePlayer?.avatar_url;
   const setPlayerFromServer = useGameStore((s) => s.setPlayerFromServer);
@@ -184,9 +184,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
   const itemDictionary = useGameStore((s) => s.itemDictionary);
   const groundDrops = useGameStore((s) => s.groundDrops);
   const sectMap = useGameStore((s) => s.sectMap);
-  const fetchSectsMap = useGameStore((s) => s.fetchSectsMap);
   const myTeleportArrays = useGameStore((s) => s.myTeleportArrays);
-  const fetchMyTeleportArrays = useGameStore((s) => s.fetchMyTeleportArrays);
   const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
   const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
   const selectedTarget = useWorldStore((s) => s.selectedTarget);
@@ -471,12 +469,11 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     return Array.from(byKey.values());
   }, [objects, nearbyCells, myTeleportArrays, gamePlayer]);
 
-  // Ensure regions loaded so we can draw them
+  // WorldPage owns the shared regions and teleport-array requests. The canvas
+  // only loads its persistent world objects here.
   useEffect(() => {
-    if (!regionsLoaded) fetchRegions();
     fetchObjects();
-    fetchMyTeleportArrays();
-  }, [regionsLoaded, fetchRegions, fetchObjects, fetchMyTeleportArrays]);
+  }, [fetchObjects]);
 
   // Sync explored sub-zones from the game player
   useEffect(() => {
@@ -516,6 +513,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     if (forceSync || now - lastCameraSyncRef.current >= LIVE_POSITION_SYNC_MS) {
       lastCameraSyncRef.current = now;
       setCamera(scale, stageRef.current.position.x, stageRef.current.position.y);
+      scheduleGroundDropSyncRef.current();
     }
     fogDirtyRef.current = true;
   }, [setCamera]);
@@ -1776,6 +1774,30 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     };
   }, [syncMonsterChunks]);
 
+  useEffect(() => {
+    scheduleGroundDropSyncRef.current = () => {
+      if (groundDropSyncTimerRef.current) clearTimeout(groundDropSyncTimerRef.current);
+      groundDropSyncTimerRef.current = setTimeout(() => {
+        const app = appRef.current;
+        if (!app || !useGameStore.getState().player) return;
+        const scale = Math.max(scaleRef.current, 0.001);
+        const position = stageRef.current.position;
+        const centerX = (app.screen.width / 2 - position.x) / scale;
+        const centerY = (app.screen.height / 2 - position.y) / scale;
+        const radius = Math.ceil(Math.max(app.screen.width, app.screen.height) / (2 * scale));
+        void useGameStore.getState().fetchGroundDrops({
+          x: Math.floor(centerX),
+          y: Math.floor(centerY),
+          radius,
+        });
+      }, 300);
+    };
+    return () => {
+      scheduleGroundDropSyncRef.current = () => {};
+      if (groundDropSyncTimerRef.current) clearTimeout(groundDropSyncTimerRef.current);
+    };
+  }, []);
+
   const drawFog = useCallback(() => {
     const app = appRef.current;
     const g = fogRef.current;
@@ -1888,6 +1910,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         stageRef.current.position.set(mouseX - worldX * newScale, mouseY - worldY * newScale);
         scheduleMonsterChunkSyncRef.current();
         setCamera(newScale, stageRef.current.position.x, stageRef.current.position.y);
+        scheduleGroundDropSyncRef.current();
         fogDirtyRef.current = true;
       }
     };
@@ -1941,6 +1964,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           stageRef.current.position.set(centerX - worldX * newScale, centerY - worldY * newScale);
           scheduleMonsterChunkSyncRef.current();
           setCamera(newScale, stageRef.current.position.x, stageRef.current.position.y);
+          scheduleGroundDropSyncRef.current();
           fogDirtyRef.current = true;
         }
       }
@@ -1950,7 +1974,10 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       initialTouchDistance = 0;
     };
 
-    const handleResize = () => scheduleMonsterChunkSyncRef.current();
+    const handleResize = () => {
+      scheduleMonsterChunkSyncRef.current();
+      scheduleGroundDropSyncRef.current();
+    };
 
     canvasElement.addEventListener("wheel", handleWheel, { passive: false });
     canvasElement.addEventListener("touchstart", handleTouchStart, { passive: false });
@@ -2252,6 +2279,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           centerOnPlayer(app, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
         }
       }
+      scheduleGroundDropSyncRef.current();
       scheduleMonsterChunkSyncRef.current();
 
       let isDragging = false;
@@ -2275,6 +2303,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         stageRef.current.position.set(stageStart.x + dx, stageStart.y + dy);
         scheduleMonsterChunkSyncRef.current();
         setCamera(scaleRef.current, stageRef.current.position.x, stageRef.current.position.y);
+        scheduleGroundDropSyncRef.current();
         fogDirtyRef.current = true;
       };
 
@@ -2362,10 +2391,6 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
   }, [appReady, nearbyPlayers, drawPlayers]);
 
   useEffect(() => {
-    fetchSectsMap();
-  }, [fetchSectsMap]);
-
-  useEffect(() => {
     if (!appReady || !appRef.current) return;
     drawSects(sectMap);
   }, [appReady, sectMap, drawSects]);
@@ -2374,6 +2399,10 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
     if (!appReady || !appRef.current) return;
     drawGroundDrops(groundDrops);
   }, [appReady, groundDrops, drawGroundDrops]);
+
+  useEffect(() => {
+    if (appReady) scheduleGroundDropSyncRef.current();
+  }, [appReady, gamePlayer?.current_region]);
 
   // Poll nearby cells (monsters / resources) around the player while the map
   // is open so markers stay fresh as the player moves. A separate, faster poll

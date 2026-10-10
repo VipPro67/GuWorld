@@ -311,8 +311,7 @@ func GetCurrentPlayer(c *gin.Context) {
 
 	// player.MaterialsInventory is already populated by loadRow() inside ProjectAndPersistBestEffort.
 	// No need to call loadMaterialsInventory() again here.
-	player.CompletedQuests = loadCompletedQuests(playerID.String())
-	player.UnlockedRecipes = loadUnlockedRecipes(playerID.String())
+	player.CompletedQuests, player.UnlockedRecipes = loadSessionProgress(c.Request.Context(), playerID.String())
 	if player.IsAdmin {
 		if canAdmin, errAdmin := cachedPlayerHasAdminAccess(c.Request.Context(), playerID); errAdmin == nil {
 			player.CanAccessAdmin = canAdmin

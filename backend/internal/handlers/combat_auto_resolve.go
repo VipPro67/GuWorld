@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -21,9 +20,12 @@ import (
 
 // AutoResolveCombat runs a combat simulation using the player's saved combat settings
 // and applies the results to the database. Used for "skip battle" feature.
-// Returns: winner ("Phe Ta" or "Phe Địch"), logs, summary info map, error.
-func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.CombatLog, map[string]interface{}, []notify.Notification, error) {
+// The caller must run afterCommit only after committing tx successfully.
+// Returns: winner ("Phe Ta" or "Phe Địch"), logs, summary, notifications, error.
+func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (string, []simulator.CombatLog, map[string]interface{}, []notify.Notification, error) {
+	*afterCommit = nil
 	var pendingNotifications []notify.Notification
+	var publishClearedCell bool
 	if player.ActiveCombat == nil {
 		return "", nil, nil, nil, fmt.Errorf("no active combat")
 	}
@@ -271,13 +273,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				}
 				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
-					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
-				}
-				if player.ActiveCombat != nil {
-					_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
-				}
-				_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
+				publishClearedCell = true
 			}
 			clearedCellsJSON, _ := json.Marshal(player.ClearedCells)
 
@@ -335,24 +331,35 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		winner = "Phe Ta"
 	}
 
-	// Save combat history in background
+	// Queue external effects for the caller to run only after its transaction commits.
 	targetPlayerID := ""
+	clearedRegion, clearedX, clearedY := player.CurrentRegion, player.X, player.Y
+	clearedPlayerID := player.ID.String()
+	clearedEnemyName, clearedEnemyTemplateID := "", ""
 	if player.ActiveCombat != nil {
 		targetPlayerID = player.ActiveCombat.TargetPlayerID
+		clearedEnemyName = player.ActiveCombat.EnemyName
+		clearedEnemyTemplateID = player.ActiveCombat.EnemyTemplateID
 	}
-	go func() {
-		summaryStr := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
+	historyPlayerID, historyUsername, historyRegion := player.ID, player.Username, player.CurrentRegion
+	*afterCommit = func() {
+		if publishClearedCell {
+			publishCombatClearedCell(clearedRegion, clearedX, clearedY, clearedPlayerID, clearedEnemyName, clearedEnemyTemplateID)
+		}
 		if !shouldRecordCombatHistory(enemyType, winner) {
 			return
 		}
-		if enemyType == "PVP" {
-			attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
-			savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, enemyName, player.Username, player.CurrentRegion)
-		} else {
-			// PVE defeats only: the replay the player wants to review afterwards.
-			SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summaryStr, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, player.CurrentRegion)
-		}
-	}()
+		go func() {
+			summaryStr := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
+			if enemyType == "PVP" {
+				attackerIDs, defenderIDs := pvpHistoryPlayerIDs(historyPlayerID, simState.Allies, targetPlayerID)
+				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, enemyName, historyUsername, historyRegion)
+			} else {
+				// PVE defeats only: the replay the player wants to review afterwards.
+				SaveCombatHistory(historyPlayerID, winner, toInterfaceSlice(logs), summaryStr, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, historyRegion)
+			}
+		}()
+	}
 
 	summary["winner"] = winner
 	summary["enemy_name"] = enemyName

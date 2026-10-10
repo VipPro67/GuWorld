@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useWorldStore } from "@/store/useWorldStore";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
@@ -65,6 +67,7 @@ const MAP_PERFORMANCE_OPTIONS: { id: MapPerformanceMode; label: string; descript
 ];
 
 export function WorldPage() {
+  const router = useRouter();
   const currentView = useUIStore((s) => s.currentView);
   const regions = useGameStore((s) => s.regions);
   const regionsLoaded = useGameStore((s) => s.regionsLoaded);
@@ -128,7 +131,6 @@ export function WorldPage() {
 
   // Ground Drops
   const groundDrops = useGameStore((s) => s.groundDrops);
-  const fetchGroundDrops = useGameStore((s) => s.fetchGroundDrops);
   const lootGroundDrop = useGameStore((s) => s.lootGroundDrop);
 
   // Teleportation Arrays
@@ -223,7 +225,7 @@ export function WorldPage() {
     { id: "audit-logs", label: "Ký Sự Tu Hành", icon: ScrollText, color: "text-blue-300" },
     { id: "general-settings", label: "Cài Đặt Chung", icon: Settings, color: "text-zinc-300" },
     { id: "utilities", label: "Tiện Ích", icon: Settings, color: "text-zinc-300" },
-    { id: "wiki", label: "Bách Khoa", icon: HelpCircle, color: "text-teal-400" },
+    { id: "wiki", label: "Wiki", icon: HelpCircle, color: "text-teal-400" },
     { id: "teleport", label: "Dịch Chuyển", icon: Compass, color: "text-cyan-400" },
     { id: "world-atlas", label: "Bản Đồ Thế Giới", icon: Map, color: "text-emerald-400" },
     { id: "teleport-directory", label: "Danh Bạ Truyền Tống Trận", icon: Compass, color: "text-cyan-300" },
@@ -246,6 +248,10 @@ export function WorldPage() {
   }));
 
   const openHotbarAction = (actionId: string) => {
+    if (actionId === "wiki") {
+      router.push("/wiki");
+      return;
+    }
     dispatchHotbarAction(actionId, {
       setView,
       openGeneralSettings: () => setShowGeneralSettings(true),
@@ -260,22 +266,24 @@ export function WorldPage() {
 
   useEffect(() => {
     if (mapPerformanceMode !== "off" && !regionsLoaded) fetchRegions();
+  }, [mapPerformanceMode, regionsLoaded, fetchRegions]);
+
+  useEffect(() => {
     fetchPartyStatus();
     fetchPartyInvitations();
     fetchMySectStatus();
     if (mapPerformanceMode !== "off") {
-      fetchGroundDrops();
       fetchSectsMap();
       fetchMyTeleportArrays();
     }
-  }, [mapPerformanceMode, regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations, fetchGroundDrops, fetchSectsMap, fetchMyTeleportArrays, fetchMySectStatus]);
+  }, [mapPerformanceMode, fetchPartyStatus, fetchPartyInvitations, fetchSectsMap, fetchMyTeleportArrays, fetchMySectStatus]);
 
   const setInvestigationRange = useWorldStore((s) => s.setInvestigationRange);
 
   // Movement and Investigation ranges come from the same stats as the grid viewport.
   useEffect(() => {
     if (mapPerformanceMode === "off") return;
-    fetchGrid().then((data) => {
+    fetchGrid(true).then((data) => {
       if (data?.stats) {
         if (data.stats.movement) setMovementRange(data.stats.movement);
         if (data.stats.investigation) setInvestigationRange(data.stats.investigation);
@@ -421,7 +429,7 @@ export function WorldPage() {
                   onSuccess={() => {
                     setActiveModal(null);
                     fetchMyTeleportArrays();
-                    if (mapPerformanceMode !== "off") fetchGrid();
+                    if (mapPerformanceMode !== "off") fetchGrid(true);
                   }}
                 />
               )}
@@ -443,7 +451,7 @@ export function WorldPage() {
           onClose={() => setManagingTeleportArray(null)}
           onUpdated={() => {
             fetchMyTeleportArrays();
-            if (mapPerformanceMode !== "off") fetchGrid();
+            if (mapPerformanceMode !== "off") fetchGrid(true);
           }}
         />
       )}
@@ -591,9 +599,9 @@ export function WorldPage() {
               <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                 <h3 className="mb-2 text-xs font-semibold text-zinc-200">Tài khoản & hỗ trợ</h3>
                 <div className="flex flex-wrap gap-2">
-                  <a href="/wiki" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-white/10 px-3 py-2 text-xs text-emerald-300 hover:bg-white/[0.06]">
+                  <Link href="/wiki" className="rounded-lg border border-white/10 px-3 py-2 text-xs text-emerald-300 hover:bg-white/[0.06]">
                     Wiki Game
-                  </a>
+                  </Link>
                   <ClearCacheButton showLabel />
                   <button
                     onClick={() => logout()}

@@ -15,6 +15,10 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 	return GetPassiveStats(player).Stats
 }
 
+func calculatePlayerStatsWithTerritory(player *models.Player, territory SectTerritoryInfo) map[string]float64 {
+	return getPassiveStats(player, &territory).Stats
+}
+
 // PlayerDisguiseLevel is the total concealment score of a player: rank plus
 // DISGUISE stats from equipped active Gu plus wisdom/dark path mastery bonus.
 // Used both by scouting/profile and by world-map monster ambush rolls.
@@ -71,6 +75,10 @@ type PassiveStatsResult struct {
 // GetPassiveStats computes a detailed breakdown of all passive stats, attributing
 // each contribution to its source (base cultivation, growth boosts, equipped Gu).
 func GetPassiveStats(player *models.Player) PassiveStatsResult {
+	return getPassiveStats(player, nil)
+}
+
+func getPassiveStats(player *models.Player, territoryOverride *SectTerritoryInfo) PassiveStatsResult {
 	strengthMarks := int64(0)
 	if player.DaoMarks != nil {
 		strengthMarks = player.DaoMarks["strength"]
@@ -171,15 +179,18 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	}
 
 	// Sect Territory AoE Buff
-	if db.DB != nil && player.ID.String() != "" {
-		territory := CheckPlayerSectTerritory(db.DB, player.ID, player.CurrentRegion, player.X, player.Y)
-		if territory.InTerritory {
-			// Player is inside their sect's territory!
-			// Give +10% base attack/defense buff, plus 2% per main hall level
-			buffMult := 0.10 + float64(territory.MainHallLvl)*0.02
-			addSrc("attack", "sect_territory", "Hộ Sơn", baseAttack*buffMult, 1, 1)
-			addSrc("defense", "sect_territory", "Hộ Sơn", baseDefense*buffMult, 1, 1)
-		}
+	territory := SectTerritoryInfo{}
+	if territoryOverride != nil {
+		territory = *territoryOverride
+	} else if db.DB != nil && player.ID.String() != "" {
+		territory = CheckPlayerSectTerritory(db.DB, player.ID, player.CurrentRegion, player.X, player.Y)
+	}
+	if territory.InTerritory {
+		// Player is inside their sect's territory!
+		// Give +10% base attack/defense buff, plus 2% per main hall level.
+		buffMult := 0.10 + float64(territory.MainHallLvl)*0.02
+		addSrc("attack", "sect_territory", "Hộ Sơn", baseAttack*buffMult, 1, 1)
+		addSrc("defense", "sect_territory", "Hộ Sơn", baseDefense*buffMult, 1, 1)
 	}
 
 	// Build totals and details

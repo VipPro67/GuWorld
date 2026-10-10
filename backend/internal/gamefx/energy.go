@@ -42,6 +42,8 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 		cost /= math.Pow(10, float64(player.Rank-guSpec.Rank))
 	} else if player.Rank < guSpec.Rank {
 		cost *= HigherRankManaMultiplier(guSpec.Rank, player.Rank)
+	} else {
+		cost *= SubRankManaFactor(player.SubRank)
 	}
 
 	refineTier := RefineManaTier(player.Rank, player.GuInventory)
@@ -88,6 +90,8 @@ func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionary
 		cost /= math.Pow(10, float64(actor.Rank-guSpec.Rank))
 	} else if actor.Rank < guSpec.Rank {
 		cost *= HigherRankManaMultiplier(guSpec.Rank, actor.Rank)
+	} else {
+		cost *= SubRankManaFactor(actor.SubRank)
 	}
 
 	refineTier := RefineManaTier(actor.Rank, actor.GuInventory)
@@ -138,6 +142,18 @@ func HigherRankManaMultiplier(guRank, userRank int) float64 {
 		gIdx = len(values) - 1
 	}
 	return values[gIdx] / values[uIdx]
+}
+
+// SubRankManaFactor halves mortal Gu mana cost for every sub-rank the user sits
+// above sub 1 (Gu dictionary has no sub-rank of its own, so it counts as sub 1).
+// Only applied when user and Gu share the same rank — once ranks differ, the
+// rank ladder alone decides the cost.
+func SubRankManaFactor(userSubRank int) float64 {
+	gap := userSubRank - 1
+	if gap <= 0 {
+		return 1.0
+	}
+	return 1.0 / math.Pow(2.0, float64(gap))
 }
 
 // CanUseGuWithMana reports whether a user of the given rank may spend mana to

@@ -132,10 +132,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const loadGrid = async () => {
     if (!isExploringActiveRegion) return;
     const data = await fetchGrid();
-    if (data) {
-      setGridData(data);
+    if (data && Array.isArray(data.cells)) {
+      setGridData({ ...data, cells: data.cells });
     }
-    fetchGroundDrops();
+    fetchGroundDrops({
+      x: data?.x ?? player.x,
+      y: data?.y ?? player.y,
+      radius: data?.vision_radius ?? 25,
+    });
     fetchSectsMap();
   };
 

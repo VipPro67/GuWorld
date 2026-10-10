@@ -58,10 +58,10 @@ export const roadmapPages: WikiPage[] = [
             </div>
 
             <div className="relative">
-              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-indigo-500 border-2 border-zinc-950" />
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
                 <span>Phase 6 (Cơ Chế Sát Chiêu & Xung Đột Đạo Ngân)</span>
-                <span className="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 font-mono text-[9px]">Đang phát triển</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Đã triển khai</span>
               </h4>
               <p className="text-[var(--text-secondary)] mt-1 leading-relaxed">
                 Hoàn thiện cơ chế <strong>Sát Chiêu</strong> và hệ thống <strong>Xung Đột Đạo Ngân (Dao Mark Conflict)</strong> cùng 10 nhóm Đạo Ngân, cơ chế điều hòa theo cảnh giới lưu phái.
@@ -69,28 +69,21 @@ export const roadmapPages: WikiPage[] = [
             </div>
 
             <div className="relative">
-              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-indigo-500 border-2 border-zinc-950" />
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
                 <span>Phase 7 (Thăng Tiên & Độ Kiếp)</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Đã triển khai</span>
               </h4>
               <p className="text-[var(--text-secondary)] mt-1 leading-relaxed">
-                Hoàn thiện cơ chế <strong>Thăng Tiên (Ngũ Chuyển Đỉnh Phong thăng lên Lục Chuyển)</strong> và <strong>Độ Kiếp (Cổ Tiên vượt Địa Tai, Thiên Kiếp)</strong>. Xây dựng sinh thái Tiên Khiếu độc lập, chăn nuôi, trồng trọt và khai thác dị nhân.
+                Đã có cơ chế <strong>Thăng Tiên (Ngũ Chuyển Đỉnh Phong thăng lên Lục Chuyển)</strong>, <strong>Độ Kiếp</strong> và sinh thái Tiên Khiếu với tài nguyên, dân cư dị nhân và công trình.
               </p>
             </div>
 
             <div className="relative">
-              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-secondary)]">Phase 8 & 9 (Mộng Cảnh & Hồn Phách)</h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Bổ sung phó bản <strong>Mộng Cảnh</strong> đầy đủ, nâng cấp hệ thống <strong>Hồn Phách</strong> (Tráng Hồn ở núi Đãng Hồn, Luyện Hồn ở cốc Lạc Phách). Mở rộng PvP đấu trường liên lục địa.
-              </p>
-            </div>
-
-            <div className="relative">
-              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
-              <h4 className="font-serif font-bold text-[var(--text-secondary)]">Phase 10 (Tiên cổ phòng)</h4>
-              <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Hoàn thiện cơ chế <strong>Tiên Cổ Phòng</strong>
+                Đã có phó bản <strong>Mộng Cảnh</strong>, hệ thống Hồn Phách, cùng các chế độ chiến đấu và đấu trường. Nội dung và hoạt động trong các hệ thống này tiếp tục được mở rộng.
               </p>
             </div>
           </div>

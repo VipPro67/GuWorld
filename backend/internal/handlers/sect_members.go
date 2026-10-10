@@ -9,9 +9,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type CreateSectRequest struct {
@@ -187,8 +190,15 @@ func GetSectMembers(c *gin.Context) {
 		return
 	}
 
-	var sectID string
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID)
+	var sectID, sectRegion string
+	var sectX, sectY, mainHallLevel int
+	err := db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT sm.sect_id, s.region, s.map_x, s.map_y,
+		       COALESCE((s.buildings->>'main_hall')::int, 1)
+		FROM sect_members sm
+		JOIN sects s ON s.id = sm.sect_id
+		WHERE sm.player_id = $1
+	`, playerID).Scan(&sectID, &sectRegion, &sectX, &sectY, &mainHallLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -215,8 +225,6 @@ func GetSectMembers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect members: " + err.Error()})
 		return
 	}
-	defer rows.Close()
-
 	type MemberInfo struct {
 		PlayerID     uuid.UUID  `json:"player_id"`
 		Username     string     `json:"username"`
@@ -232,6 +240,7 @@ func GetSectMembers(c *gin.Context) {
 
 	var members []MemberInfo
 	now := time.Now()
+	memberIDs := make([]string, 0)
 	for rows.Next() {
 		var mi MemberInfo
 		var la, lmu *time.Time
@@ -242,10 +251,110 @@ func GetSectMembers(c *gin.Context) {
 			} else if lmu != nil && now.Sub(*lmu) <= 5*time.Minute {
 				mi.IsOnline = true
 			}
-			if p, err := PlayerSvc.LoadEquipped(db.DB, mi.PlayerID); err == nil {
-				mi.Power = computeMemberPower(&p)
-			}
+			memberIDs = append(memberIDs, mi.PlayerID.String())
 			members = append(members, mi)
+		}
+	}
+	_ = rows.Close()
+	if len(memberIDs) == 0 {
+		c.JSON(http.StatusOK, members)
+		return
+	}
+
+	// Load only the inputs needed by CalculatePlayerStats in one batch. The
+	// generic PlayerSvc.LoadEquipped path also reads materials and combat state,
+	// neither of which contributes to sect member power.
+	type memberPowerInput struct {
+		player    models.Player
+		territory SectTerritoryInfo
+	}
+	powerInputs := make(map[uuid.UUID]memberPowerInput, len(memberIDs))
+	statRows, statErr := db.DB.QueryContext(c.Request.Context(), `
+		SELECT p.id, p.rank, p.sub_rank, p.base_hp, p.hp, p.growth_data,
+		       COALESCE(p.path_masteries, '{}'::jsonb), COALESCE(p.statuses, '[]'::jsonb),
+		       COALESCE(p.race, ''), COALESCE(p.constitution, ''), COALESCE(p.body_mods, '[]'::jsonb),
+		       COALESCE(p.current_region, ''), p.x, p.y,
+		       CASE WHEN p.rank >= 6 THEN ia.dao_marks::text ELSE '{"strength":0}' END,
+		       EXISTS (SELECT 1 FROM sect_members sm WHERE sm.sect_id = $2 AND sm.player_id = p.id)
+		FROM players p
+		LEFT JOIN immortal_apertures ia ON ia.player_id = p.id
+		WHERE p.id = ANY($1::uuid[])
+	`, pq.Array(memberIDs), sectID)
+	if statErr != nil {
+		logger.S.Warnf("sect members: batch load power inputs failed: %v", statErr)
+	} else {
+		for statRows.Next() {
+			var player models.Player
+			var daoMarksJSON sql.NullString
+			var stillMember bool
+			if err := statRows.Scan(
+				&player.ID, &player.Rank, &player.SubRank, &player.BaseHP, &player.HP,
+				&player.GrowthData, &player.PathMasteries, &player.Statuses,
+				&player.Race, &player.Constitution, &player.BodyMods,
+				&player.CurrentRegion, &player.X, &player.Y, &daoMarksJSON, &stillMember,
+			); err != nil {
+				continue
+			}
+			player.DaoMarks = models.DaoMarksMap{"strength": 0}
+			if player.Rank >= 6 && daoMarksJSON.Valid {
+				var marks models.DaoMarksMap
+				if err := marks.Scan(daoMarksJSON.String); err == nil {
+					player.DaoMarks = marks
+				}
+			}
+			territory := SectTerritoryInfo{MainHallLvl: mainHallLevel}
+			if stillMember && player.CurrentRegion == sectRegion {
+				territory.InTerritory = IsInsideSquareTerritory(player.X, player.Y, sectX, sectY, 5+mainHallLevel)
+			}
+			powerInputs[player.ID] = memberPowerInput{player: player, territory: territory}
+		}
+		if err := statRows.Err(); err != nil {
+			logger.S.Warnf("sect members: batch load power inputs incomplete: %v", err)
+		}
+		_ = statRows.Close()
+	}
+
+	// Power only uses equipped ACTIVE Gus. Loading these together avoids a
+	// per-player inventory query; a failed Gu query mirrors LoadEquipped's
+	// existing behavior of returning power from the remaining player stats.
+	guRows, guErr := db.DB.QueryContext(c.Request.Context(), `
+		SELECT player_id::text, gu_id, gu_rank
+		FROM player_gu
+		WHERE player_id = ANY($1::uuid[])
+		  AND location <> 'ACTOR' AND equipped = TRUE AND state = 'ACTIVE'
+		ORDER BY player_id, created_at, id
+	`, pq.Array(memberIDs))
+	if guErr != nil {
+		logger.S.Warnf("sect members: batch load equipped Gus failed: %v", guErr)
+	} else {
+		for guRows.Next() {
+			var playerID string
+			var gu models.GuInstance
+			if err := guRows.Scan(&playerID, &gu.GuID, &gu.Rank); err != nil {
+				continue
+			}
+			gu.Status = "ACTIVE"
+			gu.Equipped = true
+			id, err := uuid.Parse(playerID)
+			if err != nil {
+				continue
+			}
+			input, ok := powerInputs[id]
+			if !ok {
+				continue
+			}
+			input.player.GuInventory = append(input.player.GuInventory, gu)
+			powerInputs[id] = input
+		}
+		if err := guRows.Err(); err != nil {
+			logger.S.Warnf("sect members: batch load equipped Gus incomplete: %v", err)
+		}
+		_ = guRows.Close()
+	}
+
+	for i := range members {
+		if input, ok := powerInputs[members[i].PlayerID]; ok {
+			members[i].Power = computeMemberPowerWithTerritory(&input.player, input.territory)
 		}
 	}
 
@@ -619,8 +728,7 @@ func ClaimSectLeadership(c *gin.Context) {
 	_ = SendSystemMessage("sect", sql.NullString{String: callerSectID, Valid: true}, chatMsg)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Đạo hữu đã tiếp quản chức vụ Chưởng Môn thành công!",
+		"message":  "Đạo hữu đã tiếp quản chức vụ Chưởng Môn thành công!",
 		"new_rank": "CHUONG_MON",
 	})
 }
-
