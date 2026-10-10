@@ -17,11 +17,12 @@ import (
 )
 
 const (
-	maxTraces         = 500
-	maxLatencySamples = 2000
-	maxEndpoints      = 300
-	rpsWindowSeconds  = 60
-	maxRequestBody    = 8 * 1024
+	maxTraces            = 500
+	maxTraceResponseBody = 8 * 1024
+	maxLatencySamples    = 2000
+	maxEndpoints         = 300
+	rpsWindowSeconds     = 60
+	maxRequestBody       = 8 * 1024
 )
 
 var traceSeq uint64
@@ -35,7 +36,8 @@ func generateTraceID() string {
 // loggingResponseWriter wraps gin.ResponseWriter to capture the response body.
 type loggingResponseWriter struct {
 	gin.ResponseWriter
-	body *bytes.Buffer
+	body          *bytes.Buffer
+	bodyTruncated bool
 }
 
 func newLoggingResponseWriter(w gin.ResponseWriter) *loggingResponseWriter {
@@ -43,13 +45,35 @@ func newLoggingResponseWriter(w gin.ResponseWriter) *loggingResponseWriter {
 }
 
 func (w *loggingResponseWriter) Write(p []byte) (int, error) {
-	w.body.Write(p)
+	w.capture(p)
 	return w.ResponseWriter.Write(p)
 }
 
 func (w *loggingResponseWriter) WriteString(s string) (int, error) {
-	w.body.WriteString(s)
+	remaining := maxTraceResponseBody - w.body.Len()
+	if remaining <= 0 {
+		w.bodyTruncated = true
+	} else if len(s) > remaining {
+		_, _ = w.body.WriteString(s[:remaining])
+		w.bodyTruncated = true
+	} else {
+		_, _ = w.body.WriteString(s)
+	}
 	return w.ResponseWriter.WriteString(s)
+}
+
+func (w *loggingResponseWriter) capture(p []byte) {
+	remaining := maxTraceResponseBody - w.body.Len()
+	if remaining <= 0 {
+		w.bodyTruncated = true
+		return
+	}
+	if len(p) > remaining {
+		_, _ = w.body.Write(p[:remaining])
+		w.bodyTruncated = true
+		return
+	}
+	_, _ = w.body.Write(p)
 }
 
 func (w *loggingResponseWriter) WriteHeader(code int) {
@@ -60,6 +84,10 @@ func (w *loggingResponseWriter) Body() string {
 	return w.body.String()
 }
 
+func (w *loggingResponseWriter) BodyTruncated() bool {
+	return w.bodyTruncated
+}
+
 func (w *loggingResponseWriter) ErrorMessage() string {
 	body := w.body.String()
 	if body == "" {
@@ -67,6 +95,9 @@ func (w *loggingResponseWriter) ErrorMessage() string {
 	}
 	var generic map[string]any
 	if err := json.Unmarshal([]byte(body), &generic); err != nil {
+		if w.bodyTruncated {
+			return "[RESPONSE BODY TRUNCATED]"
+		}
 		return body
 	}
 	if msg, ok := generic["error"].(string); ok {
@@ -82,24 +113,26 @@ func (w *loggingResponseWriter) ErrorMessage() string {
 
 // RequestTrace stores individual request execution details for diagnosis.
 type RequestTrace struct {
-	ID            string      `json:"id"`
-	Timestamp     time.Time   `json:"timestamp"`
-	Method        string      `json:"method"`
-	Path          string      `json:"path"`
-	Route         string      `json:"route,omitempty"`
-	Query         string      `json:"query,omitempty"`
-	RequestBody   interface{} `json:"request_body,omitempty"`
-	BodyTruncated bool        `json:"body_truncated,omitempty"`
-	ContentLength int64       `json:"content_length,omitempty"`
-	Status        int         `json:"status"`
-	DurationMs    float64     `json:"duration_ms"`
-	ClientIP      string      `json:"client_ip"`
-	PlayerID      string      `json:"player_id,omitempty"`
-	Username      string      `json:"username,omitempty"`
-	UserAgent     string      `json:"user_agent,omitempty"`
-	Error         string      `json:"error,omitempty"`
-	ResponseBody  string      `json:"response_body,omitempty"`
-	ErrorMessage  string      `json:"error_message,omitempty"`
+	ID                    string      `json:"id"`
+	Timestamp             time.Time   `json:"timestamp"`
+	Method                string      `json:"method"`
+	Path                  string      `json:"path"`
+	Route                 string      `json:"route,omitempty"`
+	Query                 string      `json:"query,omitempty"`
+	RequestBody           interface{} `json:"request_body,omitempty"`
+	BodyTruncated         bool        `json:"body_truncated,omitempty"`
+	ContentLength         int64       `json:"content_length,omitempty"`
+	ResponseBytes         int         `json:"response_bytes"`
+	Status                int         `json:"status"`
+	DurationMs            float64     `json:"duration_ms"`
+	ClientIP              string      `json:"client_ip"`
+	PlayerID              string      `json:"player_id,omitempty"`
+	Username              string      `json:"username,omitempty"`
+	UserAgent             string      `json:"user_agent,omitempty"`
+	Error                 string      `json:"error,omitempty"`
+	ResponseBody          string      `json:"response_body,omitempty"`
+	ResponseBodyTruncated bool        `json:"response_body_truncated,omitempty"`
+	ErrorMessage          string      `json:"error_message,omitempty"`
 }
 
 var sensitiveKeys = map[string]struct{}{
@@ -680,34 +713,42 @@ func Middleware() gin.HandlerFunc {
 		}
 
 		responseBody := rw.Body()
+		responseBodyTruncated := rw.BodyTruncated()
+		responseBytes := c.Writer.Size()
+		if responseBytes < 0 {
+			responseBytes = 0
+		}
 		errMsg := rw.ErrorMessage()
 		if errMsg == "" && len(c.Errors) > 0 {
 			errMsg = c.Errors.String()
 		}
 		c.Set("response_body", responseBody)
+		c.Set("response_body_truncated", responseBodyTruncated)
 		c.Set("error_msg", errMsg)
 
 		durMs := float64(duration.Nanoseconds()) / 1e6
 
 		GlobalTracker.RecordCompleted(RequestTrace{
-			ID:            traceID,
-			Timestamp:     start,
-			Method:        method,
-			Path:          path,
-			Route:         route,
-			Query:         query,
-			RequestBody:   requestBody,
-			BodyTruncated: bodyTruncated,
-			ContentLength: c.Request.ContentLength,
-			Status:        status,
-			DurationMs:    round2(durMs),
-			ClientIP:      clientIP,
-			PlayerID:      playerIDStr,
-			Username:      usernameStr,
-			UserAgent:     userAgent,
-			Error:         errMsg,
-			ResponseBody:  responseBody,
-			ErrorMessage:  errMsg,
+			ID:                    traceID,
+			Timestamp:             start,
+			Method:                method,
+			Path:                  path,
+			Route:                 route,
+			Query:                 query,
+			RequestBody:           requestBody,
+			BodyTruncated:         bodyTruncated,
+			ContentLength:         c.Request.ContentLength,
+			ResponseBytes:         responseBytes,
+			Status:                status,
+			DurationMs:            round2(durMs),
+			ClientIP:              clientIP,
+			PlayerID:              playerIDStr,
+			Username:              usernameStr,
+			UserAgent:             userAgent,
+			Error:                 errMsg,
+			ResponseBody:          responseBody,
+			ResponseBodyTruncated: responseBodyTruncated,
+			ErrorMessage:          errMsg,
 		})
 	}
 }

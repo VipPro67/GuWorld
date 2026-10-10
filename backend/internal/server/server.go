@@ -310,8 +310,10 @@ func requestLogging() gin.HandlerFunc {
 		requestBody, _ := c.Get("request_body")
 		bodyTruncated, _ := c.Get("request_body_truncated")
 		responseBodyRaw, _ := c.Get("response_body")
+		responseBodyTruncatedRaw, _ := c.Get("response_body_truncated")
 		errMsgRaw, _ := c.Get("error_msg")
 		var responseBody, errMsg string
+		responseBodyTruncated, _ := responseBodyTruncatedRaw.(bool)
 		if v, ok := responseBodyRaw.(string); ok {
 			responseBody = v
 		}
@@ -340,7 +342,7 @@ func requestLogging() gin.HandlerFunc {
 					zap.String("route", c.FullPath()), zap.Int("status", status), zap.Float64("duration_ms", float64(duration.Microseconds())/1000),
 					zap.String("client_ip", clientIP), zap.Any("player_id", playerID), zap.Any("username", username),
 					zap.Any("request_body", requestBody), zap.Bool("body_truncated", isTruncated),
-					respBodyField, zap.String("error", errMsg),
+					respBodyField, zap.Bool("response_body_truncated", responseBodyTruncated), zap.String("error", errMsg),
 					zap.String("user_agent", c.Request.UserAgent()),
 				)
 			}
@@ -354,7 +356,7 @@ func requestLogging() gin.HandlerFunc {
 				zap.Any("request_body", requestBody), zap.Bool("body_truncated", isTruncated),
 			}
 			if status >= 400 {
-				fields = append(fields, respBodyField, zap.String("error", errMsg))
+				fields = append(fields, respBodyField, zap.Bool("response_body_truncated", responseBodyTruncated), zap.String("error", errMsg))
 			}
 			fields = append(fields, zap.String("user_agent", c.Request.UserAgent()))
 			checked.Write(fields...)

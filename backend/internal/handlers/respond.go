@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -191,4 +193,60 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 		result = append(result, p.QuestID)
 	}
 	return result
+}
+
+// loadSessionProgress combines the two small progress reads returned by
+// /auth/me. It falls back to the existing service readers if either service
+// is unavailable or the combined query fails, preserving their error behavior.
+func loadSessionProgress(ctx context.Context, playerID string) (models.CompletedQuestsList, models.UnlockedRecipesList) {
+	fallback := func() (models.CompletedQuestsList, models.UnlockedRecipesList) {
+		return loadCompletedQuests(playerID), loadUnlockedRecipes(playerID)
+	}
+	if db.DB == nil || QuestSvc == nil || RecipeSvc == nil {
+		return fallback()
+	}
+
+	rows, err := db.DB.QueryContext(ctx, `
+		SELECT progress_kind, progress_id, completion_rate
+		FROM (
+			SELECT 1 AS progress_kind, quest_id AS progress_id, 0::double precision AS completion_rate
+			FROM player_quest_progress
+			WHERE player_id = $1 AND status = 'COMPLETED'
+			UNION ALL
+			SELECT 2 AS progress_kind, recipe_id AS progress_id, completion_rate::double precision
+			FROM player_recipe_progress
+			WHERE player_id = $1
+		) AS session_progress
+		ORDER BY progress_kind, progress_id
+	`, playerID)
+	if err != nil {
+		return fallback()
+	}
+	defer rows.Close()
+
+	quests := make(models.CompletedQuestsList, 0)
+	recipes := make(models.UnlockedRecipesList, 0)
+	for rows.Next() {
+		var kind int
+		var id string
+		var completionRate float64
+		if err := rows.Scan(&kind, &id, &completionRate); err != nil {
+			_ = rows.Close()
+			return fallback()
+		}
+		switch kind {
+		case 1:
+			quests = append(quests, id)
+		case 2:
+			recipes = append(recipes, models.UnlockedRecipe{RecipeID: id, CompletionRate: completionRate})
+		default:
+			_ = rows.Close()
+			return fallback()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fallback()
+	}
+	return quests, recipes
 }

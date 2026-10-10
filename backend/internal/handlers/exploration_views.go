@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -108,12 +109,17 @@ func GetCellsRect(c *gin.Context) {
 		maxY = minY + maxSide - 1
 	}
 
+	instanceRegion := hasScope && entry.InstanceID != ""
+	var zones []models.Region
+	if !instanceRegion {
+		zones = rectZoneCandidates(minX, minY, maxX, maxY, entry.MapID)
+	}
 	candidates := []NearbyCell{}
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
-			regionID := DeriveRegionAtOnMap(x, y, entry.MapID)
-			if hasScope && entry.InstanceID != "" {
-				regionID = entry.Region
+			regionID := entry.Region
+			if !instanceRegion {
+				regionID = regionAtFromRectZones(x, y, zones)
 			}
 			cell := ResolveCellInRegion(regionID, x, y)
 			if cell.Type == "Empty" {

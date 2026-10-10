@@ -598,6 +598,42 @@ func DeriveRegionAtOnMap(x, y int, mapID string) string {
 	return HubRegionID
 }
 
+// rectZoneCandidates snapshots only zones that can affect a rectangular map
+// read. Preserve registry order so equal-priority, equal-area ties resolve the
+// same way as FindZoneAtOnMap.
+func rectZoneCandidates(minX, minY, maxX, maxY int, mapID string) []models.Region {
+	ensureZonesLoaded()
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+	candidates := make([]models.Region, 0)
+	for _, zone := range zoneReg.zones {
+		if strings.EqualFold(zone.ZoneType, ZoneTypeSecret) || (mapID != "" && zone.WorldMapID != mapID) {
+			continue
+		}
+		if zone.MaxX < minX || zone.MinX > maxX || zone.MaxY < minY || zone.MinY > maxY {
+			continue
+		}
+		candidates = append(candidates, zone)
+	}
+	return candidates
+}
+
+func regionAtFromRectZones(x, y int, candidates []models.Region) string {
+	bestID := HubRegionID
+	bestPriority, bestArea := -1, 0
+	for i := range candidates {
+		zone := &candidates[i]
+		if !zoneContains(zone, x, y) {
+			continue
+		}
+		priority, area := zonePriorityOf(zone.ZoneType), zoneArea(zone)
+		if priority > bestPriority || (priority == bestPriority && area < bestArea) {
+			bestID, bestPriority, bestArea = zone.ID, priority, area
+		}
+	}
+	return bestID
+}
+
 // IsSafeZone returns true if the region or coordinates belong to a HUB or SAFE_ZONE.
 func IsSafeZone(regionID string, x, y int) bool {
 	if z := ZoneByID(regionID); z != nil && zoneContains(z, x, y) {

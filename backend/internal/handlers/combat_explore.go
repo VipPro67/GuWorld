@@ -159,7 +159,8 @@ func ExploreNode(c *gin.Context) {
 		// Check if player has skip_battle enabled
 		if player.CombatSettings.SkipBattle {
 			// Auto-resolve combat using saved settings
-			winner, _, skipSummary, pendingNotifications, err := AutoResolveCombat(tx, &player)
+			var afterCombatCommit func()
+			winner, _, skipSummary, pendingNotifications, err := AutoResolveCombat(tx, &player, &afterCombatCommit)
 			if err != nil {
 				logger.S.Errorf("Auto-resolve combat failed: %v", err)
 				_ = tx.Rollback()
@@ -211,6 +212,9 @@ func ExploreNode(c *gin.Context) {
 				if err = tx.Commit(); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 					return
+				}
+				if afterCombatCommit != nil {
+					afterCombatCommit()
 				}
 				for _, notification := range pendingNotifications {
 					notify.Publish(notification)

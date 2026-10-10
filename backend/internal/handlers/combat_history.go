@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
@@ -67,15 +69,53 @@ func SaveCombatHistory(playerID uuid.UUID, winner string, logs []interface{}, su
 func savePVPCombatHistory(attackerIDs, defenderIDs []uuid.UUID, attackerWinner string, logs []interface{}, summary CombatSummary, combatants []CombatantInfo, attackerEnemyName, defenderEnemyName, region string) {
 	attackerCombatants := combatantInfoInterfaces(combatants, false)
 	defenderCombatants := combatantInfoInterfaces(combatants, true)
+	attackers := uniquePlayerIDs(attackerIDs)
+	defenders := uniquePlayerIDs(defenderIDs)
 	defenderWinner := "Phe Ta"
 	if attackerWinner == "Phe Ta" {
 		defenderWinner = "Phe Địch"
 	}
 
-	for _, playerID := range uniquePlayerIDs(attackerIDs) {
+	if db.DB == nil || len(attackers)+len(defenders) == 0 {
+		return
+	}
+	attackerIDStrings := make([]string, len(attackers))
+	for i, playerID := range attackers {
+		attackerIDStrings[i] = playerID.String()
+	}
+	defenderIDStrings := make([]string, len(defenders))
+	for i, playerID := range defenders {
+		defenderIDStrings[i] = playerID.String()
+	}
+	logsJSON, _ := json.Marshal(logs)
+	summaryJSON, _ := json.Marshal(summary)
+	attackerCombatantsJSON, _ := json.Marshal(attackerCombatants)
+	defenderCombatantsJSON, _ := json.Marshal(defenderCombatants)
+	_, err := db.DB.Exec(`
+		INSERT INTO combat_history (player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region)
+		SELECT p.id, $5, $1::jsonb, $2::jsonb, $3::jsonb, $7, 'PVP', $9
+		FROM unnest($10::uuid[]) AS p(id)
+		UNION ALL
+		SELECT p.id, $6, $1::jsonb, $2::jsonb, $4::jsonb, $8, 'PVP', $9
+		FROM unnest($11::uuid[]) AS p(id)
+	`, string(logsJSON), string(summaryJSON), string(attackerCombatantsJSON), string(defenderCombatantsJSON),
+		attackerWinner, defenderWinner, attackerEnemyName, defenderEnemyName, region,
+		pq.Array(attackerIDStrings), pq.Array(defenderIDStrings))
+	if err == nil {
+		return
+	}
+
+	fmt.Println("Error saving PVP combat history batch:", err)
+	var pgErr *pq.Error
+	if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
+		return
+	}
+	// Preserve per-player history when a participant disappeared before the
+	// background write and caused the shared INSERT to fail its foreign key.
+	for _, playerID := range attackers {
 		SaveCombatHistory(playerID, attackerWinner, logs, summary, attackerCombatants, attackerEnemyName, "PVP", region)
 	}
-	for _, playerID := range uniquePlayerIDs(defenderIDs) {
+	for _, playerID := range defenders {
 		SaveCombatHistory(playerID, defenderWinner, logs, summary, defenderCombatants, defenderEnemyName, "PVP", region)
 	}
 }

@@ -372,12 +372,21 @@ func monsterRespawnDelay(respawnSeconds int) time.Duration {
 }
 
 func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time) (WorldMonster, bool, error) {
+	monster, err := worldMonsterCandidateForSpawn(spawn, now)
+	if err != nil {
+		return WorldMonster{}, false, err
+	}
+	bx, by := monsterBucket(spawn.X, spawn.Y)
+	return materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
+}
+
+func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldMonster, error) {
 	if isWorldMonsterSafeZone(spawn.RegionID, spawn.X, spawn.Y) {
-		return WorldMonster{}, false, fmt.Errorf("monster spawn %q is inside a safe zone", spawn.ID)
+		return WorldMonster{}, fmt.Errorf("monster spawn %q is inside a safe zone", spawn.ID)
 	}
 	template, ok := models.MonsterRegistry[spawn.MonsterID]
 	if !ok {
-		return WorldMonster{}, false, fmt.Errorf("unknown monster template %q", spawn.MonsterID)
+		return WorldMonster{}, fmt.Errorf("unknown monster template %q", spawn.MonsterID)
 	}
 	maxHP, attack, defense := models.ScaleMonsterStats(template.MaxHP, template.BaseAttack, template.BaseDefense, spawn.Rank, spawn.SubRank, template.Type)
 	aggroRadius, leashRadius := worldMonsterAggroProfile(spawn.Rank)
@@ -399,8 +408,7 @@ func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time)
 		LeashRadius: leashRadius, Speed: speed, AttackIntervalMS: 2000, BaseAttack: attack, BaseDefense: defense,
 		PatrolMinX: patrolMinX, PatrolMinY: patrolMinY, PatrolMaxX: patrolMaxX, PatrolMaxY: patrolMaxY,
 	}
-	bx, by := monsterBucket(spawn.X, spawn.Y)
-	return materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
+	return monster, nil
 }
 
 // worldMonsterAggroProfile keeps ordinary monsters passive until a player is
@@ -592,6 +600,7 @@ func GetWorldMonsters(c *gin.Context) {
 	if radius > WorldMonsterActivationRadius {
 		radius = WorldMonsterActivationRadius
 	}
+	snapshotStartedAt := time.Now()
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id::text, region_id, monster_id, x, y, respawn_seconds, min_rank
 		FROM monster_spawns WHERE is_active=TRUE AND is_boss_spawn=FALSE AND x IS NOT NULL AND y IS NOT NULL
@@ -634,6 +643,7 @@ func GetWorldMonsters(c *gin.Context) {
 		return
 	}
 	_ = rows.Close()
+	spawnDuration := time.Since(snapshotStartedAt)
 	// Persistent Boss map_cells are the source of truth for shared boss spawns.
 	// They are materialized as normal world actors, so the same AI can chase,
 	// attack, be defeated, and respawn them for every player in that region.
@@ -655,7 +665,11 @@ func GetWorldMonsters(c *gin.Context) {
 	for _, region := range scopeRegions {
 		bossSpawnIDs[region] = make(map[string]struct{})
 	}
+	bossSpawns := make([]monsterSpawnRow, 0)
+	bossRequests := make([]cache.WorldMonsterMaterialization, 0)
+	bossRowCount := 0
 	for bossRows.Next() {
+		bossRowCount++
 		var spawn monsterSpawnRow
 		spawn.IsBoss = true
 		if err := bossRows.Scan(&spawn.RegionID, &spawn.X, &spawn.Y, &spawn.MonsterID, &spawn.Rank, &spawn.SubRank, &spawn.RespawnSeconds); err != nil {
@@ -675,11 +689,32 @@ func GetWorldMonsters(c *gin.Context) {
 		if spawn.SubRank < 1 {
 			spawn.SubRank = 1
 		}
-		monster, created, err := materializeSpawn(c.Request.Context(), spawn, now)
+		candidate, err := worldMonsterCandidateForSpawn(spawn, now)
 		if err != nil {
 			logger.S.Warnf("materialize map-cell boss %s: %v", spawn.ID, err)
 			continue
 		}
+		bx, by := monsterBucket(spawn.X, spawn.Y)
+		bossSpawns = append(bossSpawns, spawn)
+		bossRequests = append(bossRequests, cache.WorldMonsterMaterialization{Monster: candidate, BucketX: bx, BucketY: by, TTL: monsterTTL(spawn.RespawnSeconds)})
+	}
+	if err := bossRows.Err(); err != nil {
+		logger.S.Errorf("read map-cell bosses in region %s: %v", entry.Region, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read map-cell bosses"})
+		return
+	}
+	_ = bossRows.Close()
+	bossLoadDuration := time.Since(snapshotStartedAt) - spawnDuration
+	bossMaterializeStartedAt := time.Now()
+	bossMaterializeErrors := 0
+	for i, result := range cache.MaterializeWorldMonsters(c.Request.Context(), bossRequests) {
+		spawn := bossSpawns[i]
+		if result.Err != nil {
+			bossMaterializeErrors++
+			logger.S.Warnf("materialize map-cell boss %s: %v", spawn.ID, result.Err)
+			continue
+		}
+		monster, created := result.Monster, result.Created
 		if spawnWithinPlayerRadius(spawn, entry, radius) {
 			occupied[[2]int{spawn.X, spawn.Y}] = struct{}{}
 		}
@@ -690,16 +725,14 @@ func GetWorldMonsters(c *gin.Context) {
 			broadcastWorldCombat(monster, "monster_spawned", map[string]any{"boss": true})
 		}
 	}
-	if err := bossRows.Err(); err != nil {
-		logger.S.Errorf("read map-cell bosses in region %s: %v", entry.Region, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read map-cell bosses"})
-		return
-	}
+	bossMaterializeDuration := time.Since(bossMaterializeStartedAt)
+	bossPruneStartedAt := time.Now()
 	for _, region := range scopeRegions {
 		if err := cache.PruneWorldBosses(c.Request.Context(), region, bossSpawnIDs[region]); err != nil {
 			logger.S.Warnf("prune stale map-cell bosses in region %s: %v", region, err)
 		}
 	}
+	bossPruneDuration := time.Since(bossPruneStartedAt)
 	// Actors may have chased far from their persistent spawn coordinate. Read
 	// their current AOI buckets as well, so polling/reconnect still sees them.
 	minBX, minBY := monsterBucket(entry.X-radius, entry.Y-radius)
@@ -708,11 +741,15 @@ func GetWorldMonsters(c *gin.Context) {
 	for _, monster := range monsters {
 		seenActors[monster.InstanceID] = struct{}{}
 	}
+	bucketStartedAt := time.Now()
+	bucketCount, bucketErrors := 0, 0
 	for _, scopeRegion := range regionScopeIDs(entry.Region) {
 		for bx := minBX; bx <= maxBX; bx++ {
 			for by := minBY; by <= maxBY; by++ {
+				bucketCount++
 				actors, bucketErr := worldMonstersInBucket(c.Request.Context(), scopeRegion, bx, by)
 				if bucketErr != nil {
+					bucketErrors++
 					continue
 				}
 				for _, monster := range actors {
@@ -728,6 +765,8 @@ func GetWorldMonsters(c *gin.Context) {
 			}
 		}
 	}
+	bucketDuration := time.Since(bucketStartedAt)
+	proceduralStartedAt := time.Now()
 	for _, spawn := range proceduralMonsterSpawns(entry, radius) {
 		if _, exists := occupied[[2]int{spawn.X, spawn.Y}]; exists {
 			continue
@@ -742,6 +781,11 @@ func GetWorldMonsters(c *gin.Context) {
 		if created {
 			broadcastWorldCombat(monster, "monster_spawned", map[string]any{"procedural": true})
 		}
+	}
+	totalDuration := time.Since(snapshotStartedAt)
+	if totalDuration >= 500*time.Millisecond {
+		logger.S.Warnf("GetWorldMonsters slow snapshot region=%s radius=%d total=%s spawns=%s boss_load=%s boss_materialize=%s boss_prune=%s buckets=%s procedural=%s boss_rows=%d boss_candidates=%d boss_errors=%d bucket_count=%d bucket_errors=%d monsters=%d",
+			entry.Region, radius, totalDuration, spawnDuration, bossLoadDuration, bossMaterializeDuration, bossPruneDuration, bucketDuration, time.Since(proceduralStartedAt), bossRowCount, len(bossRequests), bossMaterializeErrors, bucketCount, bucketErrors, len(monsters))
 	}
 	c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": now})
 }

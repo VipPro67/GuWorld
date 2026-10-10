@@ -63,18 +63,22 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
+	transactionStartedAt := time.Now()
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
 		return
 	}
 	defer tx.Rollback()
+	beginDuration := time.Since(transactionStartedAt)
 
+	playerLoadStartedAt := time.Now()
 	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	playerLoadDuration := time.Since(playerLoadStartedAt)
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if gamefx.IsDeadState(&player) {
@@ -104,6 +108,7 @@ func AutoCombatStart(c *gin.Context) {
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
 	isTribulation := player.ActiveCombat.TribulationEventID != ""
 
+	stateBuildStartedAt := time.Now()
 	simState, err := buildSimCombatState(tx, &player, &req.Loadout, isVirtual)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize initiator stats"})
@@ -164,8 +169,13 @@ func AutoCombatStart(c *gin.Context) {
 
 	// 4. Run Simulator
 	simState.CaptureTurnSnapshots = true
+	stateBuildDuration := time.Since(stateBuildStartedAt)
+	simulationStartedAt := time.Now()
 	logs := simulator.Simulate(simState)
+	simulationDuration := time.Since(simulationStartedAt)
+	outcomeStartedAt := time.Now()
 	var pendingNotifications []notify.Notification
+	var publishClearedCell bool
 
 	// Apply Love Gu (Chaos Gamble) penalties
 	applyLoveGuPenalties(&player, logs)
@@ -277,13 +287,7 @@ func AutoCombatStart(c *gin.Context) {
 			if !isTribulation && player.ActiveCombat.TargetSectID == "" {
 				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
-					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
-				}
-				if player.ActiveCombat != nil {
-					_ = cache.BroadcastMonsterKilled(player.X, player.Y, player.ActiveCombat.EnemyName, player.CurrentRegion)
-				}
-				_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
+				publishClearedCell = true
 			}
 
 			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
@@ -334,9 +338,20 @@ func AutoCombatStart(c *gin.Context) {
 		logs = append(logs, *fakeWallLog)
 	}
 
+	outcomeDuration := time.Since(outcomeStartedAt)
+	commitStartedAt := time.Now()
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat transaction"})
 		return
+	}
+	commitDuration := time.Since(commitStartedAt)
+	transactionDuration := time.Since(transactionStartedAt)
+	if transactionDuration >= time.Second {
+		logger.S.Warnf("AutoCombatStart slow transaction player=%s total=%s begin=%s load=%s state_build=%s simulation=%s outcome=%s commit=%s turns=%d",
+			player.ID, transactionDuration, beginDuration, playerLoadDuration, stateBuildDuration, simulationDuration, outcomeDuration, commitDuration, simState.Turn)
+	}
+	if publishClearedCell {
+		publishCombatClearedCell(player.CurrentRegion, player.X, player.Y, player.ID.String(), player.ActiveCombat.EnemyName, player.ActiveCombat.EnemyTemplateID)
 	}
 	for _, notification := range pendingNotifications {
 		notify.Publish(notification)
@@ -359,19 +374,18 @@ func AutoCombatStart(c *gin.Context) {
 		enemyType = player.ActiveCombat.EnemyType
 		targetPlayerID = player.ActiveCombat.TargetPlayerID
 	}
-	go func() {
-		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
-		if !shouldRecordCombatHistory(enemyType, winner) {
-			return
-		}
-		if enemyType == "PVP" {
-			attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
-			savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summary, combatantInfos, enemyName, player.Username, player.CurrentRegion)
-		} else {
-			// PVE defeats only: the replay the player wants to review afterwards.
-			SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, player.CurrentRegion)
-		}
-	}()
+	if shouldRecordCombatHistory(enemyType, winner) {
+		go func() {
+			summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
+			if enemyType == "PVP" {
+				attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
+				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summary, combatantInfos, enemyName, player.Username, player.CurrentRegion)
+			} else {
+				// PVE defeats only: the replay the player wants to review afterwards.
+				SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, player.CurrentRegion)
+			}
+		}()
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "Chiến đấu hoàn tất. Nhân Khí +3.",
 		"logs":            logs,
@@ -380,6 +394,15 @@ func AutoCombatStart(c *gin.Context) {
 		"aperture_hp":     simState.ApertureHP,
 		"aperture_max_hp": simState.ApertureMaxHP,
 	})
+}
+
+// Publish only after the transaction containing cleared_cells has committed.
+func publishCombatClearedCell(region string, x, y int, playerID, enemyName, enemyTemplateID string) {
+	if err := cache.SetCellCleared(region, x, y, playerID, clearedCellCooldown); err != nil {
+		logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", playerID, x, y, err)
+	}
+	_ = cache.BroadcastMonsterKilled(x, y, enemyName, region)
+	_ = cache.BroadcastCellCleared(region, x, y, "Monster", enemyTemplateID)
 }
 
 // buildSimEnemyCombatant constructs a simulator.CombatantAuto for an enemy/defender in combat.
@@ -673,19 +696,6 @@ func buildStatProvenance(player *models.Player, finalStats map[string]float64, f
 		return nil
 	}
 
-	// Flat buff statuses (buff_atk/def/speed/hp) are kept in the base snapshot
-	// so the base→final delta isolates exactly the percentage stat_mods.
-	basePlayer := *player
-	basePlayer.Statuses = nil
-	for _, st := range player.Statuses {
-		switch st.ID {
-		case "buff_atk", "buff_def", "buff_speed", "buff_hp":
-			basePlayer.Statuses = append(basePlayer.Statuses, st)
-		}
-	}
-	baseStats := CalculatePlayerStats(&basePlayer)
-	baseHealing := gamefx.Get(&basePlayer).HealingReceivedBonus
-
 	modsByStat := map[string][]simulator.StatModSource{}
 	for _, st := range player.Statuses.Active() {
 		for _, def := range gamefx.AllStatuses() {
@@ -706,6 +716,22 @@ func buildStatProvenance(player *models.Player, finalStats map[string]float64, f
 			break
 		}
 	}
+	if len(modsByStat) == 0 {
+		return nil
+	}
+
+	// Flat buff statuses (buff_atk/def/speed/hp) are kept in the base snapshot
+	// so the base→final delta isolates exactly the percentage stat_mods.
+	basePlayer := *player
+	basePlayer.Statuses = nil
+	for _, st := range player.Statuses {
+		switch st.ID {
+		case "buff_atk", "buff_def", "buff_speed", "buff_hp":
+			basePlayer.Statuses = append(basePlayer.Statuses, st)
+		}
+	}
+	baseStats := CalculatePlayerStats(&basePlayer)
+	baseHealing := gamefx.Get(&basePlayer).HealingReceivedBonus
 
 	out := map[string]*simulator.StatProvenance{}
 	for stat, mods := range modsByStat {
@@ -1014,7 +1040,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	// Scan inventory for healing items
 	healPotency := 0.0
 	healCharges := 0
-	if InventorySvc != nil {
+	if autoHealHP && InventorySvc != nil {
 		invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
 		for _, inv := range invItems {
 			if inv.Quantity <= 0 {
@@ -1074,39 +1100,39 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	}
 
 	simCombatant := &simulator.CombatantAuto{
-		ID:                   player.ID.String(),
-		Name:                 player.Username,
-		Kind:                 "Player",
-		Rank:                 player.Rank,
-		SubRank:              player.SubRank,
-		GridX:                2,
-		GridY:                3,
-		MaxHP:                simMaxHP,
-		CustomState:          map[string]int{"sat_khi_level": satKhiLevel},
-		HP:                   simHP,
-		MaxMana:              player.MaxMana,
-		Mana:                 simMana,
-		BaseDmg:              playerStats["attack"],
-		BaseDef:              playerStats["defense"],
-		Speed:                playerStats["speed"],
-		Lifespan:             player.Lifespan,
-		VirtualShield:        float64(virtualShield),
-		DaoMarks:             simulator.DaoMarks(player.DaoMarks),
-		PathMasteries:        player.PathMasteries,
-		PathMasteryGainLimit: gamefx.PathMasteryBattleGainLimit(player.Rank),
-		DaoBonus:             charFX.DaoNganBonus,
-		PathDamageBonus:      charFX.PathDamageBonus,
-		PathResistance:       pathResistance,
-		HealingReceived:      charFX.HealingReceivedBonus,
-		MentalResistance:     charFX.MentalResistanceBonus,
-		Tenacity:             charFX.Tenacity,
-		CCResist:             charFX.CCResist,
-		ImmuneDreamStatus:    immuneDream,
-		SoulDefenseBonus:     charFX.SoulDefenseBonus,
-		LuckBonus:            charFX.LuckBonus,
-		HasNonConflictingDao:     charFX.NonConflictingDaoMarks,
+		ID:                      player.ID.String(),
+		Name:                    player.Username,
+		Kind:                    "Player",
+		Rank:                    player.Rank,
+		SubRank:                 player.SubRank,
+		GridX:                   2,
+		GridY:                   3,
+		MaxHP:                   simMaxHP,
+		CustomState:             map[string]int{"sat_khi_level": satKhiLevel},
+		HP:                      simHP,
+		MaxMana:                 player.MaxMana,
+		Mana:                    simMana,
+		BaseDmg:                 playerStats["attack"],
+		BaseDef:                 playerStats["defense"],
+		Speed:                   playerStats["speed"],
+		Lifespan:                player.Lifespan,
+		VirtualShield:           float64(virtualShield),
+		DaoMarks:                simulator.DaoMarks(player.DaoMarks),
+		PathMasteries:           player.PathMasteries,
+		PathMasteryGainLimit:    gamefx.PathMasteryBattleGainLimit(player.Rank),
+		DaoBonus:                charFX.DaoNganBonus,
+		PathDamageBonus:         charFX.PathDamageBonus,
+		PathResistance:          pathResistance,
+		HealingReceived:         charFX.HealingReceivedBonus,
+		MentalResistance:        charFX.MentalResistanceBonus,
+		Tenacity:                charFX.Tenacity,
+		CCResist:                charFX.CCResist,
+		ImmuneDreamStatus:       immuneDream,
+		SoulDefenseBonus:        charFX.SoulDefenseBonus,
+		LuckBonus:               charFX.LuckBonus,
+		HasNonConflictingDao:    charFX.NonConflictingDaoMarks,
 		DaoConflictReductionPct: charFX.DaoConflictReductionPct,
-		DaoProfile:              gamefx.BuildDaoCombatProfileWithReduction(
+		DaoProfile: gamefx.BuildDaoCombatProfileWithReduction(
 			player.DaoMarks,
 			player.PathMasteries,
 			charFX.NonConflictingDaoMarks,

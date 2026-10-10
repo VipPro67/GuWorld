@@ -740,20 +740,20 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   cultivateNPC: async (npcId) => {
     const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/cultivate`, { method: "POST" });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) { get().addToast(`Tu luyện +${data.gained} tiến độ`, "success"); await Promise.all([get().fetchNPCs(), get().initializeSession()]); return true; }
+    if (response.ok) { get().addToast(`Tu luyện +${data.gained} tiến độ`, "success"); await Promise.all([get().fetchNPCs(), get().refreshPlayerSummary()]); return true; }
     get().addToast(data.error || "Không thể tu luyện", "error"); return false;
   },
 
   equipNPCGu: async (npcId, guInstanceId, slot) => {
     const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/gu/equip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gu_instance_id: guInstanceId, slot }) });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) { get().addToast("Đã giao Cổ cho NPC", "success"); await Promise.all([get().fetchNPCs(), get().initializeSession()]); return true; }
+    if (response.ok) { get().addToast("Đã giao Cổ cho NPC", "success"); await Promise.all([get().fetchNPCs(), get().fetchGuInventory()]); return true; }
     get().addToast(data.error || "Không thể trang bị Cổ", "error"); return false;
   },
 
   unequipNPCGu: async (npcId, guInstanceId) => {
     const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/gu/${guInstanceId}`, { method: "DELETE" });
-    if (response.ok) { get().addToast("Đã thu hồi Cổ", "success"); await Promise.all([get().fetchNPCs(), get().initializeSession()]); return true; }
+    if (response.ok) { get().addToast("Đã thu hồi Cổ", "success"); await Promise.all([get().fetchNPCs(), get().fetchGuInventory()]); return true; }
     return false;
   },
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   Sparkles,
   Compass,
@@ -128,14 +129,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
             Thiên địa ưu ái, tư chất sẽ được bộc lộ ngẫu nhiên
           </p>
           <div className="mt-3">
-            <a
+            <Link
               href="/wiki"
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:underline transition-colors"
             >
-              📖 Xem Hướng Dẫn & Bách Khoa Wiki Mới
-            </a>
+              📖 Xem hướng dẫn trên Wiki
+            </Link>
           </div>
         </div>
 

@@ -90,7 +90,7 @@ export const guidePages: WikiPage[] = [
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
-                Tu vi phàm nhân chia làm 5 Cảnh giới (Nhất Chuyển đến Ngũ Chuyển), mỗi Cảnh giới có 4 cấp bậc nhỏ (Sơ Giai, Trung Giai, Cao Giai, Đỉnh Phong). Mỗi lần trùng kích làm tăng <strong>+5 áp lực vách khiếu</strong> — hãy nhớ theo dõi thanh áp lực.
+                Tu vi phàm nhân chia làm 5 Cảnh giới (Nhất Chuyển đến Ngũ Chuyển), mỗi Cảnh giới có 4 cấp bậc nhỏ (Sơ Giai, Trung Giai, Cao Giai, Đỉnh Phong). Áp lực vách khiếu tăng theo lượng Chân Nguyên tiêu hao: cứ 10 Chân Nguyên tăng 1 điểm áp lực (tối đa 10 điểm mỗi lần trùng kích), trước khi áp dụng hiệu ứng điều chỉnh.
               </p>
               <ul className="list-disc list-inside pl-2 space-y-1">
                 <li><strong>Khai Thác Mỏ (Mining):</strong> Đào khoáng và Nguyên Thạch dã ngoại. Đôi khi bạn sẽ chạm trán <strong>Quái Mỏ</strong> hung hãn bảo vệ quặng, cần tiêu diệt chúng để tiếp tục khai thác. Mỏ được tái lập mỗi ngày lúc 00:00.</li>

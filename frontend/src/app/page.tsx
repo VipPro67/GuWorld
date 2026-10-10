@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 import { useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
@@ -38,7 +40,6 @@ const DungeonView = dynamic(() => import("@/components/DungeonView").then(m => m
 const PetPanel = dynamic(() => import("@/components/PetPanel").then(m => m.PetPanel), { ssr: false });
 const SectView = dynamic(() => import("@/components/SectView").then(m => m.SectView), { ssr: false });
 const PartyView = dynamic(() => import("@/components/PartyView").then(m => m.PartyView), { ssr: false });
-const WikiView = dynamic(() => import("@/components/WikiView").then(m => m.WikiView), { ssr: false });
 const CombatHistoryView = dynamic(() => import("@/components/CombatHistoryView").then(m => m.CombatHistoryView), { ssr: false });
 const FeedbackView = dynamic(() => import("@/components/FeedbackView").then(m => m.FeedbackView), { ssr: false });
 const AuditLogsView = dynamic(() => import("@/components/AuditLogsView").then(m => m.AuditLogsView), { ssr: false });
@@ -47,6 +48,7 @@ const TrainingRoom = dynamic(() => import("@/components/TrainingRoom").then(m =>
 const UtilitiesView = dynamic(() => import("@/components/UtilitiesView").then(m => m.UtilitiesView), { ssr: false });
 
 export default function Home() {
+  const router = useRouter();
   const [
     player,
     isLoading,
@@ -165,6 +167,10 @@ export default function Home() {
   const setView = useUIStore((s) => s.setView);
   const showChangelog = useUIStore((s) => s.showChangelog);
   const setShowChangelog = useUIStore((s) => s.setShowChangelog);
+
+  useEffect(() => {
+    if (currentView === "wiki") router.replace("/wiki");
+  }, [currentView, router]);
 
   const [dontShowToday, setDontShowToday] = useState(false);
 
@@ -291,7 +297,7 @@ export default function Home() {
     "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
     arena: "Đấu trường", "death-arena": "Sinh tử đài", leaderboard: "Bảng xếp hạng",
     gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân", mine: "Khai khoáng",
-    aperture: "Tiên khiếu", dungeon: "Bí cảnh", sect: "Tông môn", wiki: "Bách khoa",
+    aperture: "Tiên khiếu", dungeon: "Bí cảnh", sect: "Tông môn",
     "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
     utilities: "Tiện ích",
   };
@@ -518,10 +524,6 @@ export default function Home() {
           <div className="w-full">
             <PartyView />
           </div>
-        ) : currentView === "wiki" ? (
-          <div className="w-full">
-            <WikiView />
-          </div>
         ) : currentView === "combat-history" ? (
           <div className="w-full">
             <CombatHistoryView />
@@ -735,14 +737,12 @@ export default function Home() {
               Không hiển thị lại hôm nay
             </label>
             <div className="flex gap-2.5 mt-2 shrink-0">
-              <a
+              <Link
                 href="/wiki"
-                target="_blank"
-                rel="noopener noreferrer"
                 className="flex-1 py-2 border border-amber-600/30 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 rounded-xl text-xs font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-1.5"
               >
                 📖 Xem Game Wiki
-              </a>
+              </Link>
               <button onClick={handleCloseChangelog} className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer">
                 Đã hiểu!
               </button>

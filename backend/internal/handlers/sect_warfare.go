@@ -76,6 +76,18 @@ func computeMemberPower(player *models.Player) float64 {
 		return 0
 	}
 	stats := CalculatePlayerStats(player)
+	return memberPowerFromStats(player, stats)
+}
+
+func computeMemberPowerWithTerritory(player *models.Player, territory SectTerritoryInfo) float64 {
+	if player == nil {
+		return 0
+	}
+	stats := calculatePlayerStatsWithTerritory(player, territory)
+	return memberPowerFromStats(player, stats)
+}
+
+func memberPowerFromStats(player *models.Player, stats map[string]float64) float64 {
 	hp := player.BaseHP + stats["hp"]
 	power := stats["attack"] + stats["defense"] + hp/20.0
 	power *= 1.0 + 0.15*float64(player.Rank-1)

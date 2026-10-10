@@ -18,6 +18,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
+const maxGroundDropQueryRadius = 127
+
 type GroundDropResponse struct {
 	ID             string         `json:"id"`
 	RegionID       string         `json:"region_id"`
@@ -34,8 +36,9 @@ type GroundDropResponse struct {
 	CreatedAt      time.Time      `json:"created_at"`
 }
 
-// GetTileGroundDrops returns unexpired ground drops in the player's current region.
-// Optional query params: 'x', 'y', and 'radius'.
+// GetTileGroundDrops returns unexpired ground drops in the current viewport.
+// Optional query params: 'x', 'y', and 'radius'. Without them, it uses the
+// player's position and the standard map vision radius.
 func GetTileGroundDrops(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
@@ -59,39 +62,53 @@ func GetTileGroundDrops(c *gin.Context) {
 	qRadius := c.Query("radius")
 
 	var rows *sql.Rows
-	if qX != "" && qY != "" {
+	if qX != "" || qY != "" || qRadius != "" {
+		if qX == "" || qY == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "x and y must be provided together"})
+			return
+		}
 		targetX, errX := strconv.Atoi(qX)
 		targetY, errY := strconv.Atoi(qY)
-		if errX == nil && errY == nil {
-			radius, _ := strconv.Atoi(qRadius)
-			if radius > 0 {
-				rows, err = db.DB.QueryContext(c.Request.Context(), `
-					SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
-					       loot_data, protected_until, expires_at, created_at
-					FROM map_ground_drops
-					WHERE region_id = $1 AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5 AND expires_at > NOW()
-					ORDER BY created_at DESC
-				`, currentRegion.String, targetX-radius, targetX+radius, targetY-radius, targetY+radius)
-			} else {
-				rows, err = db.DB.QueryContext(c.Request.Context(), `
-					SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
-					       loot_data, protected_until, expires_at, created_at
-					FROM map_ground_drops
-					WHERE region_id = $1 AND x = $2 AND y = $3 AND expires_at > NOW()
-					ORDER BY created_at DESC
-				`, currentRegion.String, targetX, targetY)
-			}
+		radius := 0
+		var errRadius error
+		if qRadius != "" {
+			radius, errRadius = strconv.Atoi(qRadius)
 		}
-	}
-
-	if rows == nil {
+		if errX != nil || errY != nil || errRadius != nil || radius < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid drop viewport"})
+			return
+		}
+		if radius > maxGroundDropQueryRadius {
+			radius = maxGroundDropQueryRadius
+		}
+		if targetX < -maxGroundDropQueryRadius || targetX > WorldWidth-1+maxGroundDropQueryRadius ||
+			targetY < -maxGroundDropQueryRadius || targetY > WorldHeight-1+maxGroundDropQueryRadius ||
+			targetX+radius < 0 || targetX-radius >= WorldWidth ||
+			targetY+radius < 0 || targetY-radius >= WorldHeight {
+			c.JSON(http.StatusOK, gin.H{"drops": []GroundDropResponse{}})
+			return
+		}
 		rows, err = db.DB.QueryContext(c.Request.Context(), `
 			SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
 			       loot_data, protected_until, expires_at, created_at
 			FROM map_ground_drops
-			WHERE region_id = $1 AND expires_at > NOW()
+			WHERE region_id = $1
+			  AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5
+			  AND expires_at > NOW()
 			ORDER BY created_at DESC
-		`, currentRegion.String)
+		`, currentRegion.String, targetX-radius, targetX+radius, targetY-radius, targetY+radius)
+	} else {
+		rows, err = db.DB.QueryContext(c.Request.Context(), `
+			SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
+			       loot_data, protected_until, expires_at, created_at
+			FROM map_ground_drops
+			WHERE region_id = $1
+			  AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5
+			  AND expires_at > NOW()
+			ORDER BY created_at DESC
+		`, currentRegion.String,
+			playerX-MaxMapVisionRadius, playerX+MaxMapVisionRadius,
+			playerY-MaxMapVisionRadius, playerY+MaxMapVisionRadius)
 	}
 
 	if err != nil {

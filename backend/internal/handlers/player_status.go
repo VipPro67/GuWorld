@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,32 +46,37 @@ func GetPlayerStatus(c *gin.Context) {
 	writeTrimmedPlayerStatus(c, player)
 }
 
-// playerStatusTrimmedFields are fields the status client never reads: auth
+type playerStatusPayload models.Player
+
+// playerStatusResponse shadows fields the status client never reads: auth
 // identifiers (referral code comes from /player/referrals), internal tick /
 // damage bookkeeping, and disguise values only meaningful to other viewers.
-var playerStatusTrimmedFields = []string{
-	"email", "google_id", "ref_code",
-	"last_hunger_tick_at", "dao_mark_damage", "aperture_damage", "body_mods",
-	"fake_rank", "fake_sub_rank", "fake_vital_gu",
+// The omitempty fields override their promoted Player fields during encoding,
+// preserving the response shape without a marshal/unmarshal/map/marshal pass.
+type playerStatusResponse struct {
+	playerStatusPayload
+	Email            string     `json:"email,omitempty"`
+	GoogleID         *string    `json:"google_id,omitempty"`
+	RefCode          string     `json:"ref_code,omitempty"`
+	LastHungerTickAt *time.Time `json:"last_hunger_tick_at,omitempty"`
+	DaoMarkDamage    float64    `json:"dao_mark_damage,omitempty"`
+	ApertureDamage   float64    `json:"aperture_damage,omitempty"`
+	BodyMods         []string   `json:"body_mods,omitempty"`
+	FakeRank         int        `json:"fake_rank,omitempty"`
+	FakeSubRank      int        `json:"fake_sub_rank,omitempty"`
+	FakeVitalGu      string     `json:"fake_vital_gu,omitempty"`
 }
 
-// writeTrimmedPlayerStatus serializes the player and strips fields the game
-// client never consumes, instead of shipping the full row (~107 fields).
+// writeTrimmedPlayerStatus omits server-only fields while serializing the
+// projected player once, instead of serializing, decoding to a map, and
+// serializing again.
 func writeTrimmedPlayerStatus(c *gin.Context, player models.Player) {
-	raw, err := json.Marshal(player)
+	payload, err := json.Marshal(playerStatusResponse{playerStatusPayload: playerStatusPayload(player)})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize player status"})
 		return
 	}
-	var out map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &out); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize player status"})
-		return
-	}
-	for _, k := range playerStatusTrimmedFields {
-		delete(out, k)
-	}
-	c.JSON(http.StatusOK, out)
+	c.Data(http.StatusOK, "application/json; charset=utf-8", payload)
 }
 
 // GetPlayerInventoryGus returns the full Gu inventory of the authenticated player.

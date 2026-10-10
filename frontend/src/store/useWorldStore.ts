@@ -407,7 +407,11 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       }
       useGameStore.getState().setPlayerFromServer(data.player);
       if (data.player) {
-        get().fetchNearbyCells(data.player.x, data.player.y, 300);
+        const cellRadius = get().investigationRange;
+        get().fetchNearbyCells(data.player.x, data.player.y, cellRadius);
+        if (data.target_defeated && (Math.abs(tx - data.player.x) > cellRadius || Math.abs(ty - data.player.y) > cellRadius)) {
+          get().fetchCellsRect(tx, ty, tx, ty);
+        }
         get().fetchNearbyPlayers(data.player.x, data.player.y, 300);
 
         if (data.damage_dealt && data.damage_dealt > 0) {
@@ -506,7 +510,8 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       }
       // Refetch nearby cells for new position
       setTimeout(() => {
-        useWorldStore.getState().fetchNearbyCells(data.x, data.y, 300);
+        const world = useWorldStore.getState();
+        world.fetchNearbyCells(data.x, data.y, world.investigationRange);
         useWorldStore.getState().fetchNearbyPlayers(data.x, data.y, 300);
       }, 100);
       return data;

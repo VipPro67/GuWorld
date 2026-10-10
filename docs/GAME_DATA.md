@@ -235,6 +235,7 @@ Ví dụ:
 Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `EnergyCostForCombatant`):
 
 - **Phàm nhân (Rank 1–5):** chi phí = `(BaseManaCost/100) × MaxMana` (mặc định 10% MaxMana). Cổ rank thấp hơn giảm chi phí ÷10/rank; **Cổ rank cao hơn bị nhân hệ số lũy tiến**.
+- **Phàm nhân, cùng rank, chênh sub-rank:** mỗi sub-rank trên 1 giảm ÷2 (Cổ không có sub-rank nên tính là sub 1): sub 2 → ÷2, sub 3 → ÷4, sub 4 → ÷8. Chỉ áp dụng khi user và Cổ **cùng rank**; đã chênh rank thì chỉ theo thang rank, sub-rank không cộng dồn.
 - **Cổ Tiên (Rank ≥ 6):** chi phí = `BaseManaCost` (mặc định 1). Cổ dưới Rank 6 miễn phí; Cổ rank cao hơn nhân hệ số lũy tiến; Cổ rank thấp hơn chia 100^chênh lệch.
 
 **Hệ số rank cao hơn** (`HigherRankManaMultiplier(guRank, userRank)`, theo chênh lệch rank Cổ − rank người dùng):

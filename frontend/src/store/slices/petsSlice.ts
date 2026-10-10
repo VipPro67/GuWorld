@@ -164,8 +164,7 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bắt thất bại");
-      // Re-sync inventory from server
-      await get().initializeSession();
+      get().applyInventoryFromResponse(data);
       if (data.captured) {
         get().addToast(data.message || "Bắt thành công!", "success");
         await get().fetchPlayerPets();

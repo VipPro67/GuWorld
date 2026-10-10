@@ -84,6 +84,12 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 // returns the log message plus whether a fight was started. attackTargetID is
 // only used to explicitly attack another player standing on the destination.
 func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (returnedMessage string, startedCombat bool, returnedErr error) {
+	return resolveCellArrivalWithInstance(tx, player, x, y, attackTargetID, allowAmbush, nil)
+}
+
+// resolveCellArrivalWithInstance lets a multi-cell move reuse the locked
+// player's map-instance value instead of querying the same row on every step.
+func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool, loadedInstanceID *sql.NullString) (returnedMessage string, startedCombat bool, returnedErr error) {
 	regionWarning := ""
 	defer func() {
 		if regionWarning != "" {
@@ -95,7 +101,9 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	oldRegion := player.CurrentRegion
 	mapID := worldMapIDForRegion(player.CurrentRegion)
 	var instanceID sql.NullString
-	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&instanceID); err != nil {
+	if loadedInstanceID != nil {
+		instanceID = *loadedInstanceID
+	} else if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&instanceID); err != nil {
 		return "", false, err
 	}
 	if instanceID.Valid {
@@ -215,7 +223,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				dist := int(math.Max(dx, dy))
 
 				// Range requirement: base 2 tiles + bonus stats (attack_range / combat_range)
-				stats := CalculatePlayerStats(player)
+				stats := calculatePlayerStatsWithTerritory(player, playerTerritory)
 				bonusRange := int(stats["attack_range"]) + int(stats["combat_range"])
 				maxPvPRange := 2 + bonusRange
 
@@ -246,7 +254,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				if dist <= maxPvPRange {
 					combatTriggered = true
 					pvpTriggered = true
-					targetStats := CalculatePlayerStats(&targetPlayer)
+					targetStats := calculatePlayerStatsWithTerritory(&targetPlayer, targetTerritory)
 
 					enemyHP := targetPlayer.HP
 					if enemyHP <= 0 {
@@ -304,12 +312,16 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			if item, ok := models.ItemRegistry[cell.Content]; ok {
 				itemName = item.Name
 			}
-			if HasExplorationInventorySpace(player, 1) {
+			if HasExplorationInventorySpace(player, 1, playerTerritory) {
 				if err := InventorySvc.AddItem(tx, player.ID.String(), cell.Content, "materials", 1); err != nil {
 					logger.S.Errorf("Failed to add resource %s to player %s: %v", cell.Content, player.ID, err)
 					// Propagate: a failed write poisons the tx (25P02 on next statement).
 					return "", false, err
 				}
+				if player.MaterialsInventory == nil {
+					player.MaterialsInventory = make(models.MaterialsInventory)
+				}
+				player.MaterialsInventory[cell.Content]++
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s!", player.X, player.Y, itemName)
 
 				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
@@ -342,7 +354,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			if guSpec.Name != "" {
 				guName = guSpec.Name
 			}
-			if HasExplorationInventorySpace(player, 1) {
+			if HasExplorationInventorySpace(player, 1, playerTerritory) {
 				newGu := models.GuInstance{
 					InstanceID: uuid.New().String(),
 					GuID:       cell.Content,
@@ -695,7 +707,8 @@ func MovePlayer(c *gin.Context) {
 	// Auto-resolve combat if skip_battle is enabled
 	var pendingNotifications []notify.Notification
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
-		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player)
+		var afterCombatCommit func()
+		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player, &afterCombatCommit)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during move: %v", err)
 			_ = tx.Rollback()
@@ -733,6 +746,9 @@ func MovePlayer(c *gin.Context) {
 				logger.S.Errorf("MovePlayer: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
 				return
+			}
+			if afterCombatCommit != nil {
+				afterCombatCommit()
 			}
 			for _, notification := range pendingNotifications {
 				notify.Publish(notification)
@@ -986,12 +1002,17 @@ func MovePlayerPath(c *gin.Context) {
 	if len(path) > maxPathCells {
 		path = path[:maxPathCells]
 	}
+	var mapInstanceID sql.NullString
+	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&mapInstanceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
+		return
+	}
 	reached := false
 	var eventLogs []string
 	combatTriggered := false
 	var lastStepLog string
 	for _, step := range path {
-		stepLog, triggered, errArrival := resolveCellArrival(tx, &player, step[0], step[1], "", true)
+		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(tx, &player, step[0], step[1], "", true, &mapInstanceID)
 		if errArrival != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
 			return
@@ -1015,7 +1036,8 @@ func MovePlayerPath(c *gin.Context) {
 	// Auto-resolve combat if skip_battle is enabled
 	var pendingNotifications []notify.Notification
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
-		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player)
+		var afterCombatCommit func()
+		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player, &afterCombatCommit)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during path move: %v", err)
 			_ = tx.Rollback()
@@ -1047,6 +1069,9 @@ func MovePlayerPath(c *gin.Context) {
 				logger.S.Errorf("MovePlayerPath: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()})
 				return
+			}
+			if afterCombatCommit != nil {
+				afterCombatCommit()
 			}
 			for _, notification := range pendingNotifications {
 				notify.Publish(notification)

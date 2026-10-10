@@ -10,7 +10,7 @@ Các route public `/debug/*` và `/api/debug/monsters` đã bị loại bỏ vì
 thông tin runtime. Thống kê hệ thống/request chỉ còn trong nhóm protected
 `/api/admin/monitor/*` dành cho admin.
 
-> **Log request:** mọi request (trừ OPTIONS) phát event structured `http_request_started` và `http_request_completed`, liên kết bằng `trace_id`. Event hoàn tất có method, route/path, status, duration, IP, player ID/username, user-agent và JSON body đã lọc. Body chỉ được ghi với `Content-Type: application/json`, tối đa 8 KiB; password/token/OTP/secret và các key nhạy cảm được thay bằng `[REDACTED]`, body lỗi/quá dài chỉ lưu marker, còn multipart/binary và các nhóm auth/webhook/top-up/chat không được ghi. Query string cũng được redact. Request ≥ 5 giây được log mức warning.
+> **Log request:** mọi request (trừ OPTIONS) phát event structured `http_request_started` và `http_request_completed`, liên kết bằng `trace_id`. Event hoàn tất có method, route/path, status, duration, IP, player ID/username, user-agent và JSON body đã lọc. Request body chỉ được ghi với `Content-Type: application/json`, tối đa 8 KiB; password/token/OTP/secret và các key nhạy cảm được thay bằng `[REDACTED]`, body lỗi/quá dài chỉ lưu marker, còn multipart/binary và các nhóm auth/webhook/top-up/chat không được ghi. Admin request trace có `response_bytes` (số byte body gửi đi); response body giữ trong trace bị giới hạn 8 KiB và có cờ `response_body_truncated`. Query string được redact. Request ≥ 5 giây được log mức warning.
 
 > **DB hardening:** connection string mặc định kèm `statement_timeout=15000ms`, `lock_timeout=10000ms` (override qua `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`). Query bị lock/treo sẽ tự abort thay vì treo vô hạn. Riêng `InitSchema` lúc boot chạy trên connection riêng với timeout nới lỏng (`DB_MIGRATION_STATEMENT_TIMEOUT_MS`/`DB_MIGRATION_LOCK_TIMEOUT_MS`, mặc định 300000/60000 ms) để backfill/consolidate trên bảng lớn không FATAL.
 
@@ -153,7 +153,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `hub_nam_cuong`). |
 | POST | `/explore/retreat/:id` | |
 | POST | `/explore/flee/:id` | Bỏ chạy khỏi trận đang chiến. **Mỏ & PvP: luôn thành công, không phạt.** Còn lại: 70% thành công (BOSS/Tribulation 40%). Thành công → trừ 20% Max HP nếu là PvE thường (có thể ngất + rơi đồ). Thất bại → địch phản công; trả `flee_success:false` kèm `defeat` / `victory` (địch tự chết → thắng tại chỗ + nhận loot + xoá địch khỏi map) và `logs`. |
-| GET | `/explore/grid` | Viewport 5×5 quanh player; trả `{x, y, vision_radius, cells, stats (chỉ movement + investigation), players_on_map, ground_drops, world_width, world_height}` — đã bỏ `teleport_arrays` (frontend không dùng) và phần stat dư thừa. |
+| GET | `/explore/grid` | Viewport 5×5 quanh player; trả `{x, y, vision_radius, cells, stats (chỉ movement + investigation), players_on_map, ground_drops, world_width, world_height}`. `?stats_only=true` chỉ trả tọa độ, `vision_radius`, movement/investigation và world dimensions; bỏ dựng cell/Redis, players, drops cho màn hình chỉ cần range. |
 | GET | `/explore/regions` | Danh sách zone (id, `world_map_id`, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`, `rules`, `effective_rules`). `rules` là luật khai báo tại khu đó; `effective_rules` là luật sau khi kế thừa theo nhóm từ khu cha. Client dùng luật hiệu lực để hiển thị cấm chế; backend vẫn tự kiểm tra. Xem `docs/GAME_DATA.md` để biết schema. `zone_type`: `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC` — khi chồng lấn, ưu tiên `HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC`. |
 | GET | `/explore/maps` | Danh mục tầng bản đồ (`maps[]`: id, tên, kích thước, rank, rules, trạng thái). `bai_thien` và `hac_thien` hiện được cấu hình nhưng chưa mở cho người chơi cho tới khi luồng tọa độ/hiện diện được scope theo tầng. |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
@@ -164,7 +164,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/explore/teleport` | *(Đã vô hiệu hóa)* Dịch chuyển bằng tiền đã bị hủy bỏ. Trả về `400 Bad Request` yêu cầu sử dụng Cổ trùng dịch chuyển (`POST /explore/use_gu`). |
 | GET | `/explore/players` | Người chơi ở gần để hiển thị/tương tác trên bản đồ. |
 | POST | `/explore/use_gu` | Dùng Cổ bản đồ (ví dụ mở cổng). |
-| GET | `/world/drops` | Danh sách chiến lợi phẩm/hài cốt tại ô hiện tại. |
+| GET | `/world/drops` | Chiến lợi phẩm/hài cốt còn hạn trong viewport; mặc định quanh người chơi (radius 25), hỗ trợ `x`, `y`, `radius` tùy chỉnh (radius tối đa 127). |
 | POST | `/world/drops/:id/loot` | Nhặt một ground drop khi đủ điều kiện khóa sở hữu. |
 
 ## Truyền Tống Trận (Teleportation Arrays)
@@ -480,7 +480,7 @@ Tên method/path chi tiết phải đối chiếu trực tiếp nhóm `admin` tr
 | GET | `/admin/monitor/admin-operations` | Counter trong memory cho vận hành admin: 403 theo permission, mutation lỗi theo action, destructive action, import failure, audit write failure, legacy `is_admin` fallback và permission resolution error. Yêu cầu `monitoring.read`; counter reset khi process restart hoặc gọi endpoint reset. |
 | GET | `/admin/monitor/requests/traces` | Tra cứu server-side các request gần nhất (Ring Buffer 500 requests). Hỗ trợ `page`, `page_size`, allowlisted `sort`, `direction`, `method`, `status` (`200`, `500`, hoặc `errors`), `path`, `min_duration_ms`, `search`; trả `{data,traces,total,page,page_size}` (`traces` là alias tương thích). |
 | GET | `/admin/gu-history` | Lịch sử Cổ trùng server-side: `page`, `page_size`, `search`, `event_type`, allowlisted `sort`, `direction`; trả `logs`, `total`, `page`, `page_size`. |
-| GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một request cụ thể qua `trace_id` (method, path/query đã lọc, status, latency, client IP, player ID/username, user-agent, error, `content_length`, JSON `request_body` đã redact và `body_truncated`). Các trace chỉ lưu trong memory và hiển thị tại tab **Giám sát** của Admin. |
+| GET | `/admin/monitor/requests/traces/:id` | Xem thông tin chi tiết một request cụ thể qua `trace_id` (method, path/query đã lọc, status, latency, `response_bytes`, client IP, player ID/username, user-agent, error, `content_length`, JSON `request_body` đã redact cùng `body_truncated`, và `response_body` tối đa 8 KiB cùng `response_body_truncated`). Các trace chỉ lưu trong memory và hiển thị tại tab **Giám sát** của Admin. |
 | POST | `/admin/monitor/requests/reset` | Đặt lại toàn bộ request/admin-operation metrics và xóa danh sách request trace gần nhất. |
 
 ## Realtime Communication — WebSocket `GET /api/ws` (Auth)
