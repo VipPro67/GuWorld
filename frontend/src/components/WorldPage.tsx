@@ -16,6 +16,7 @@ import { WorldAtlasModal } from "./WorldAtlasModal";
 import { MovementJoystick } from "./MovementJoystick";
 import { LogConsole } from "./LogConsole";
 import { DirectActionHotbar, type HotbarAction } from "./DirectActionHotbar";
+import { NotificationBell } from "./NotificationBell";
 import { dispatchHotbarAction } from "@/lib/action-hotbar";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
@@ -347,13 +348,31 @@ export function WorldPage() {
       {activeModal && (
         <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-2 sm:p-6 backdrop-blur-sm overflow-hidden pointer-events-auto">
           <div className="relative w-full h-full max-w-7xl max-h-[calc(100dvh-2rem)] bg-zinc-950/95 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden">
-            <button
-              onClick={() => setActiveModal(null)}
-              className="absolute top-4 right-6 z-50 p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors border border-zinc-600 cursor-pointer shadow-lg"
-              title="Đóng"
-            >
-              <X className="w-6 h-6" />
-            </button>
+            {activeModal === "inventory" && (
+              <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/20 px-3 sm:px-5">
+                <div className="truncate font-serif text-base font-semibold text-emerald-50">Túi đồ</div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <NotificationBell />
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal(null)}
+                    aria-label="Đóng túi đồ"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+            {activeModal !== "inventory" && (
+              <button
+                onClick={() => setActiveModal(null)}
+                className="absolute top-4 right-6 z-50 p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors border border-zinc-600 cursor-pointer shadow-lg"
+                title="Đóng"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            )}
             <div className="flex-1 min-h-0 w-full p-2 sm:p-4 overflow-y-auto relative custom-scrollbar">
               {activeModal === "character" && <Aperture player={gamePlayer!} guDictionary={guDictionary} />}
               {activeModal === "inventory" && (
