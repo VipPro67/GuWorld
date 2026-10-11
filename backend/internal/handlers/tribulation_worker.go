@@ -8,6 +8,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -166,6 +167,7 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 		AttackRange     int
 		HPBonus         int
 		DamageReduction int
+		Cells           []models.ApertureGridCell
 	}
 	var nodes []TNode
 	for nodeRows.Next() {
@@ -180,6 +182,16 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 		nodes = append(nodes, nd)
 	}
 	nodeRows.Close()
+	cellsByNode, err := loadApertureNodeCells(tx, ev.ApertureID)
+	if err != nil {
+		return fmt.Errorf("failed to load aperture node cells: %w", err)
+	}
+	for i := range nodes {
+		nodes[i].Cells = cellsByNode[nodes[i].ID]
+		if len(nodes[i].Cells) == 0 {
+			nodes[i].Cells = []models.ApertureGridCell{{X: nodes[i].X, Y: nodes[i].Y}}
+		}
+	}
 
 	// Accumulate batch updates for this event
 	var pendingPos []posUpdate
@@ -221,30 +233,109 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 			pendingPos = append(pendingPos, posUpdate{ID: en.ID, X: newX, Y: newY})
 		}
 	} else {
+		applyAreaDamage := func(en TEnemy) bool {
+			hitAny := false
+			var destroyedIDs []string
+			for i := range nodes {
+				target := &nodes[i]
+				if target.HP <= 0 {
+					continue
+				}
+				hitCells := 0
+				for _, cell := range target.Cells {
+					dx, dy := cell.X-en.X, cell.Y-en.Y
+					if dx < 0 {
+						dx = -dx
+					}
+					if dy < 0 {
+						dy = -dy
+					}
+					if dx <= 1 && dy <= 1 {
+						hitCells++
+					}
+				}
+				if hitCells == 0 {
+					continue
+				}
+				hitAny = true
+				damageReduction := 0
+				for j := range nodes {
+					buff := &nodes[j]
+					if buff.ID == target.ID || buff.HP <= 0 || buff.DamageReduction <= 0 {
+						continue
+					}
+					dx, dy := buff.X-target.X, buff.Y-target.Y
+					if dx < 0 {
+						dx = -dx
+					}
+					if dy < 0 {
+						dy = -dy
+					}
+					distance := dx + dy
+					if buff.AttackRange == 0 || distance <= buff.AttackRange {
+						damageReduction += buff.DamageReduction
+					}
+				}
+				if damageReduction > 80 {
+					damageReduction = 80
+				}
+				damage := en.NodeDmg * hitCells * (100 - damageReduction) / 100
+				if damage < 1 {
+					damage = 1
+				}
+				target.HP -= damage
+				isDestroyed := target.HP <= 0
+				if isDestroyed {
+					target.HP = 0
+					destroyedIDs = append(destroyedIDs, target.ID)
+					pendingMsgs = append(pendingMsgs, pendingMsg{ReceiverID: ev.PlayerID, Content: fmt.Sprintf("Tai kiếp đã phá hủy hoàn toàn %s!", target.Name)})
+				}
+				pendingNodeDmg[target.ID] = &nodeDmgAcc{HP: target.HP, IsDestroyed: isDestroyed}
+			}
+			if len(destroyedIDs) > 0 {
+				remaining := nodes[:0]
+				for _, node := range nodes {
+					destroyed := false
+					for _, id := range destroyedIDs {
+						if node.ID == id {
+							destroyed = true
+							break
+						}
+					}
+					if !destroyed {
+						remaining = append(remaining, node)
+					}
+				}
+				nodes = remaining
+			}
+			return hitAny
+		}
+
 		// Process each enemy
 		for _, en := range enemies {
 			// Find nearest non-wall node (prefer defense nodes, then resource)
 			var nearestNode *TNode
+			var nearestCell models.ApertureGridCell
 			minDist := 999999
 			for i := range nodes {
 				nd := &nodes[i]
-				dx := nd.X - en.X
-				if dx < 0 {
-					dx = -dx
-				}
-				dy := nd.Y - en.Y
-				if dy < 0 {
-					dy = -dy
-				}
-				dist := dx + dy
-				if dist < minDist {
-					minDist = dist
-					nearestNode = nd
-				} else if dist == minDist && nearestNode != nil {
-					// Tiebreak: prefer defense nodes over resource nodes
-					if nd.NodeCategory == "DEFENSE" && nearestNode.NodeCategory != "DEFENSE" {
-						nearestNode = nd
+				nodeDist := 999999
+				var nodeCell models.ApertureGridCell
+				for _, cell := range nd.Cells {
+					dx, dy := cell.X-en.X, cell.Y-en.Y
+					if dx < 0 {
+						dx = -dx
 					}
+					if dy < 0 {
+						dy = -dy
+					}
+					dist := dx + dy
+					if dist < nodeDist {
+						nodeDist, nodeCell = dist, cell
+					}
+				}
+				if nodeDist < minDist || (nodeDist == minDist && nearestNode != nil && nd.NodeCategory == "DEFENSE" && nearestNode.NodeCategory != "DEFENSE") {
+					minDist, nearestNode, nearestCell = nodeDist, nd, nodeCell
 				}
 			}
 
@@ -252,170 +343,22 @@ func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
 				continue
 			}
 
-			dx := nearestNode.X - en.X
-			dy := nearestNode.Y - en.Y
-			absDx := dx
-			if absDx < 0 {
-				absDx = -absDx
-			}
-			absDy := dy
-			if absDy < 0 {
-				absDy = -absDy
+			if applyAreaDamage(en) {
+				continue
 			}
 
-			if absDx <= 1 && absDy <= 1 {
-				// Enemy is adjacent or on top of the node, attack!
-				effectiveDmg := en.NodeDmg
-				totalDamageReduction := 0
-				totalHPBonus := 0
-
-				for i := range nodes {
-					buffNode := &nodes[i]
-					if buffNode.ID == nearestNode.ID || buffNode.HP <= 0 {
-						continue
-					}
-					bdx := buffNode.X - nearestNode.X
-					if bdx < 0 {
-						bdx = -bdx
-					}
-					bdy := buffNode.Y - nearestNode.Y
-					if bdy < 0 {
-						bdy = -bdy
-					}
-					bdist := bdx + bdy
-
-					if buffNode.HPBonus > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
-						totalHPBonus += buffNode.HPBonus
-					}
-					if buffNode.DamageReduction > 0 && buffNode.AttackRange == 0 {
-						totalDamageReduction += buffNode.DamageReduction
-					}
-					if buffNode.DamageReduction > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
-						totalDamageReduction += buffNode.DamageReduction
-					}
-				}
-
-				if totalDamageReduction > 80 {
-					totalDamageReduction = 80
-				}
-				effectiveDmg = en.NodeDmg * (100 - totalDamageReduction) / 100
-				if effectiveDmg < 1 {
-					effectiveDmg = 1
-				}
-
-				nearestNode.HP -= effectiveDmg
-				isDestroyed := false
-				if nearestNode.HP <= 0 {
-					nearestNode.HP = 0
-					isDestroyed = true
-				}
-				pendingNodeDmg[nearestNode.ID] = &nodeDmgAcc{HP: nearestNode.HP, IsDestroyed: isDestroyed}
-
-				if isDestroyed {
-					pendingMsgs = append(pendingMsgs, pendingMsg{
-						ReceiverID: ev.PlayerID,
-						Content:    fmt.Sprintf("Tai kiếp đã phá hủy hoàn toàn %s!", nearestNode.Name),
-					})
-					var remainingNodes []TNode
-					for _, nd := range nodes {
-						if nd.ID != nearestNode.ID {
-							remainingNodes = append(remainingNodes, nd)
-						}
-					}
-					nodes = remainingNodes
-				}
-			} else {
-				// Move towards the node (allows diagonal movement)
-				targetX := en.X
-				if dx > 0 {
-					targetX = en.X + 1
-				} else if dx < 0 {
-					targetX = en.X - 1
-				}
-				targetY := en.Y
-				if dy > 0 {
-					targetY = en.Y + 1
-				} else if dy < 0 {
-					targetY = en.Y - 1
-				}
-
-				var wallNode *TNode
-				for i := range nodes {
-					nd := &nodes[i]
-					if nd.BlocksMovement && nd.X == targetX && nd.Y == targetY && nd.HP > 0 {
-						wallNode = nd
-						break
-					}
-				}
-
-				if wallNode != nil {
-					nearestNode = wallNode
-					effectiveDmg := en.NodeDmg
-					totalDamageReduction := 0
-					for i := range nodes {
-						buffNode := &nodes[i]
-						if buffNode.ID == wallNode.ID || buffNode.HP <= 0 {
-							continue
-						}
-						bdx := buffNode.X - wallNode.X
-						if bdx < 0 {
-							bdx = -bdx
-						}
-						bdy := buffNode.Y - wallNode.Y
-						if bdy < 0 {
-							bdy = -bdy
-						}
-						bdist := bdx + bdy
-						if buffNode.DamageReduction > 0 && buffNode.AttackRange == 0 {
-							totalDamageReduction += buffNode.DamageReduction
-						}
-						if buffNode.DamageReduction > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
-							totalDamageReduction += buffNode.DamageReduction
-						}
-					}
-					if totalDamageReduction > 80 {
-						totalDamageReduction = 80
-					}
-					effectiveDmg = en.NodeDmg * (100 - totalDamageReduction) / 100
-					if effectiveDmg < 1 {
-						effectiveDmg = 1
-					}
-
-					nearestNode.HP -= effectiveDmg
-					isDestroyed := false
-					if nearestNode.HP <= 0 {
-						nearestNode.HP = 0
-						isDestroyed = true
-					}
-					pendingNodeDmg[nearestNode.ID] = &nodeDmgAcc{HP: nearestNode.HP, IsDestroyed: isDestroyed}
-
-					if isDestroyed {
-						pendingMsgs = append(pendingMsgs, pendingMsg{
-							ReceiverID: ev.PlayerID,
-							Content:    "Tai kiếp đã phá hủy Tường Thành!",
-						})
-						var remainingNodes []TNode
-						for _, nd := range nodes {
-							if nd.ID != wallNode.ID {
-								remainingNodes = append(remainingNodes, nd)
-							}
-						}
-						nodes = remainingNodes
-					}
-				} else {
-					if dx > 0 {
-						en.X++
-					} else if dx < 0 {
-						en.X--
-					}
-					if dy > 0 {
-						en.Y++
-					} else if dy < 0 {
-						en.Y--
-					}
-					pendingPos = append(pendingPos, posUpdate{ID: en.ID, X: en.X, Y: en.Y})
-				}
+			dx, dy := nearestCell.X-en.X, nearestCell.Y-en.Y
+			if dx > 0 {
+				en.X++
+			} else if dx < 0 {
+				en.X--
 			}
+			if dy > 0 {
+				en.Y++
+			} else if dy < 0 {
+				en.Y--
+			}
+			pendingPos = append(pendingPos, posUpdate{ID: en.ID, X: en.X, Y: en.Y})
 		}
 
 		// Watchtower attacks: towers shoot at enemies in range

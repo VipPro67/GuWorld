@@ -251,6 +251,10 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/tribulations/:eventId/engage` | Xuất trận chống quái tai kiếp — tạo `active_combat` (nhiều địch, `enemy_type` = `TRIBULATION_BOSS`/`TRIBULATION_MONSTER`) rồi đánh qua combat UI thông thường (`/combat/start`). Giáp + máu người chơi tiêu hao trước, sát thương tràn sẽ trừ `immortal_apertures.aperture_hp`. |
 | POST | `/tribulations/:eventId/resolve` |
 
+`POST /immortal-aperture/nodes` accepts `{node_type, x, y, path, prod_key, cells}`. `cells` is a connected array of `{x,y}` cells on the 20×20 grid; omitted `cells` means the single anchor cell. `GET /immortal-aperture/nodes` returns each node's `cells` and its combat-derived `dao_conflict_multiplier` when below 1.
+
+`POST /immortal-aperture/nodes/batch` accepts `{action, node_ids}` for `repair`, `upgrade`, or permanent `delete` of up to 400 selected nodes. Repair and upgrade validate and charge the combined cost in one transaction.
+
 ## Shop, marketplace and P2P trade
 
 | Method | Path |

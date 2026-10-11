@@ -49,35 +49,42 @@ type DaoMark struct {
 }
 
 type ApertureResourceNode struct {
-	ID                      string     `json:"id"`
-	ApertureID              string     `json:"aperture_id"`
-	NodeType                string     `json:"node_type"`
-	Name                    string     `json:"name"`
-	Path                    string     `json:"path"`
-	Level                   int        `json:"level"`
-	HP                      int        `json:"hp"`
-	MaxHP                   int        `json:"max_hp"`
-	X                       int        `json:"x"`
-	Y                       int        `json:"y"`
-	ProductionType          string     `json:"production_type"`
-	ProductionAmount        int64      `json:"production_amount"`
-	ProductionIntervalHours int        `json:"production_interval_hours"`
-	LastCollectedAt         *time.Time `json:"last_collected_at"`
-	IsDestroyed             bool       `json:"is_destroyed"`
-	CreatedAt               time.Time  `json:"created_at"`
-	UpdatedAt               time.Time  `json:"updated_at"`
-	NodeCategory            string     `json:"node_category"`
-	DefensePower            int        `json:"defense_power"`
-	AttackRange             int        `json:"attack_range"`
-	HPBonus                 int        `json:"hp_bonus"`
-	DamageReduction         int        `json:"damage_reduction"`
-	BlocksMovement          bool       `json:"blocks_movement"`
-	RequiredGuID            string     `json:"required_gu_id"`
-	RequiredGuRank          int        `json:"required_gu_rank"`
-	ZoneType                string     `json:"zone_type"`
-	FoodPath                string     `json:"food_path"`
-	ItemTier                string     `json:"item_tier"`
-	ProductionKey           string     `json:"production_key"`
+	ID                      string             `json:"id"`
+	ApertureID              string             `json:"aperture_id"`
+	NodeType                string             `json:"node_type"`
+	Name                    string             `json:"name"`
+	Path                    string             `json:"path"`
+	Level                   int                `json:"level"`
+	HP                      int                `json:"hp"`
+	MaxHP                   int                `json:"max_hp"`
+	X                       int                `json:"x"`
+	Y                       int                `json:"y"`
+	ProductionType          string             `json:"production_type"`
+	ProductionAmount        int64              `json:"production_amount"`
+	ProductionIntervalHours int                `json:"production_interval_hours"`
+	LastCollectedAt         *time.Time         `json:"last_collected_at"`
+	IsDestroyed             bool               `json:"is_destroyed"`
+	CreatedAt               time.Time          `json:"created_at"`
+	UpdatedAt               time.Time          `json:"updated_at"`
+	NodeCategory            string             `json:"node_category"`
+	DefensePower            int                `json:"defense_power"`
+	AttackRange             int                `json:"attack_range"`
+	HPBonus                 int                `json:"hp_bonus"`
+	DamageReduction         int                `json:"damage_reduction"`
+	BlocksMovement          bool               `json:"blocks_movement"`
+	RequiredGuID            string             `json:"required_gu_id"`
+	RequiredGuRank          int                `json:"required_gu_rank"`
+	ZoneType                string             `json:"zone_type"`
+	FoodPath                string             `json:"food_path"`
+	ItemTier                string             `json:"item_tier"`
+	ProductionKey           string             `json:"production_key"`
+	Cells                   []ApertureGridCell `json:"cells,omitempty"`
+	DaoConflictMultiplier   float64            `json:"dao_conflict_multiplier,omitempty"`
+}
+
+type ApertureGridCell struct {
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
 type TribulationEvent struct {

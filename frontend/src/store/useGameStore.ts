@@ -592,6 +592,8 @@ export interface ApertureResourceNode {
   food_path: string;
   item_tier: string;
   production_key: string;
+  cells?: { x: number; y: number }[];
+  dao_conflict_multiplier?: number;
 }
 
 export interface ApertureVariantHuman {

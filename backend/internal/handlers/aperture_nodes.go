@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -17,11 +20,252 @@ import (
 )
 
 type PlaceNodeRequest struct {
-	NodeType string `json:"node_type" binding:"required"`
-	X        int    `json:"x"`
-	Y        int    `json:"y"`
-	Path     string `json:"path"`
-	ProdKey  string `json:"prod_key"`
+	NodeType string                    `json:"node_type" binding:"required"`
+	X        int                       `json:"x"`
+	Y        int                       `json:"y"`
+	Path     string                    `json:"path"`
+	ProdKey  string                    `json:"prod_key"`
+	Cells    []models.ApertureGridCell `json:"cells"`
+}
+
+type ManageApertureNodesBatchRequest struct {
+	Action  string   `json:"action" binding:"required"`
+	NodeIDs []string `json:"node_ids" binding:"required,min=1,max=400"`
+}
+
+func ManageApertureNodesBatch(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var req ManageApertureNodesBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Danh sách node không hợp lệ"})
+		return
+	}
+	req.Action = strings.ToLower(strings.TrimSpace(req.Action))
+	if req.Action != "repair" && req.Action != "upgrade" && req.Action != "delete" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thao tác không hợp lệ"})
+		return
+	}
+	nodeIDs := make([]uuid.UUID, 0, len(req.NodeIDs))
+	seen := make(map[uuid.UUID]struct{}, len(req.NodeIDs))
+	for _, rawID := range req.NodeIDs {
+		id, err := uuid.Parse(rawID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mã node không hợp lệ"})
+			return
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		nodeIDs = append(nodeIDs, id)
+	}
+	if len(nodeIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chưa chọn node nào"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+	type batchNode struct {
+		ID, ApertureID, Name, Type, Category string
+		Level, HP, MaxHP                     int
+		Destroyed                            bool
+		ProductionAmount                     int64
+		DefensePower, HPBonus                int
+	}
+	rows, err := tx.Query(`
+		SELECT n.id, n.aperture_id, n.name, n.node_type, COALESCE(n.node_category, 'RESOURCE'),
+			n.level, n.hp, n.max_hp, n.is_destroyed, COALESCE(n.production_amount, 0),
+			COALESCE(n.defense_power, 0), COALESCE(n.hp_bonus, 0)
+		FROM aperture_resource_nodes n
+		JOIN immortal_apertures a ON a.id = n.aperture_id
+		WHERE n.id = ANY($1::uuid[]) AND a.player_id = $2
+		ORDER BY n.id FOR UPDATE OF n
+	`, pq.Array(nodeIDs), playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách node"})
+		return
+	}
+	nodes := make([]batchNode, 0, len(nodeIDs))
+	for rows.Next() {
+		var n batchNode
+		if err := rows.Scan(&n.ID, &n.ApertureID, &n.Name, &n.Type, &n.Category, &n.Level, &n.HP, &n.MaxHP, &n.Destroyed, &n.ProductionAmount, &n.DefensePower, &n.HPBonus); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thông tin node"})
+			return
+		}
+		nodes = append(nodes, n)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc danh sách node"})
+		return
+	}
+	rows.Close()
+	if len(nodes) != len(nodeIDs) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Một hoặc nhiều node không tồn tại hoặc không thuộc Tiên Khiếu của đạo hữu"})
+		return
+	}
+
+	totalCost := 0
+	if req.Action != "delete" {
+		for _, n := range nodes {
+			if n.Destroyed {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể sửa hoặc nâng cấp node đã bị phá hủy"})
+				return
+			}
+			if req.Action == "repair" {
+				cost := int(math.Ceil(float64(n.MaxHP-n.HP) / 50.0))
+				if cost <= 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Danh sách không có node nào cần sửa chữa"})
+					return
+				}
+				totalCost += cost
+				continue
+			}
+			if n.Level >= MaxNodeLevel {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s đã đạt cấp tối đa", n.Name)})
+				return
+			}
+			template, ok := GetResourceNodeTemplate(n.Type)
+			if !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Loại node không hợp lệ: " + n.Type})
+				return
+			}
+			cost := int(float64(template.CostStones) * float64(n.Level) * 1.5)
+			if cost < 5 {
+				cost = 5
+			}
+			totalCost += cost
+		}
+		var stones int
+		if err := tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&stones); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư Tiên Nguyên Thạch"})
+			return
+		}
+		if stones < totalCost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần %d Tiên Nguyên Thạch, hiện có %d", totalCost, stones)})
+			return
+		}
+	}
+
+	var newStones float64
+	if totalCost > 0 {
+		if err := tx.QueryRow(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2 RETURNING immortal_stones`, totalCost, playerID).Scan(&newStones); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
+			return
+		}
+	}
+	for _, n := range nodes {
+		switch req.Action {
+		case "repair":
+			if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET hp = max_hp, updated_at = NOW() WHERE id = $1`, n.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi sửa chữa node"})
+				return
+			}
+		case "upgrade":
+			newLevel := n.Level + 1
+			newMaxHP := n.MaxHP + 500
+			newProduction := n.ProductionAmount
+			newDefense, newHPBonus := n.DefensePower, n.HPBonus
+			if n.Category == "RESOURCE" {
+				newProduction = int64(float64(n.ProductionAmount) * 1.5)
+				if newProduction == n.ProductionAmount {
+					newProduction++
+				}
+			} else {
+				if newDefense > 0 {
+					newDefense = int(float64(newDefense) * 1.25)
+					if newDefense == n.DefensePower {
+						newDefense++
+					}
+				}
+				if newHPBonus > 0 {
+					newHPBonus = int(float64(newHPBonus) * 1.25)
+					if newHPBonus == n.HPBonus {
+						newHPBonus++
+					}
+				}
+			}
+			if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET level=$1, max_hp=$2, hp=hp+500, production_amount=$3, defense_power=$4, hp_bonus=$5, updated_at=NOW() WHERE id=$6`, newLevel, newMaxHP, newProduction, newDefense, newHPBonus, n.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi nâng cấp node"})
+				return
+			}
+		case "delete":
+			if err := updateVariantHumanOnNodeChange(tx, n.ApertureID, n.Type, -50); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật dân số dị nhân"})
+				return
+			}
+		}
+	}
+	if req.Action == "delete" {
+		if _, err := tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = ANY($1::uuid[])`, pq.Array(nodeIDs)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi san phẳng node đã chọn"})
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu thao tác hàng loạt"})
+		return
+	}
+	actionLabel := map[string]string{"repair": "Sửa chữa", "upgrade": "Nâng cấp", "delete": "San phẳng"}[req.Action]
+	response := gin.H{"message": fmt.Sprintf("%s %d node thành công.", actionLabel, len(nodes)), "count": len(nodes), "cost": totalCost}
+	if totalCost > 0 {
+		response["immortal_stones"] = newStones
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func loadApertureNodeCells(tx *sql.Tx, apertureID any) (map[string][]models.ApertureGridCell, error) {
+	rows, err := tx.Query(`SELECT node_id, x, y FROM aperture_resource_node_cells WHERE aperture_id = $1 ORDER BY node_id, y, x`, apertureID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	cells := make(map[string][]models.ApertureGridCell)
+	for rows.Next() {
+		var nodeID string
+		var cell models.ApertureGridCell
+		if err := rows.Scan(&nodeID, &cell.X, &cell.Y); err != nil {
+			return nil, err
+		}
+		cells[nodeID] = append(cells[nodeID], cell)
+	}
+	return cells, rows.Err()
+}
+
+func apertureCellsAreConnected(cells []models.ApertureGridCell) bool {
+	if len(cells) == 0 {
+		return false
+	}
+	remaining := make(map[models.ApertureGridCell]bool, len(cells))
+	for _, cell := range cells {
+		if cell.X < 0 || cell.X >= 20 || cell.Y < 0 || cell.Y >= 20 || remaining[cell] {
+			return false
+		}
+		remaining[cell] = true
+	}
+	queue := []models.ApertureGridCell{cells[0]}
+	delete(remaining, cells[0])
+	for len(queue) > 0 {
+		cell := queue[0]
+		queue = queue[1:]
+		for _, next := range []models.ApertureGridCell{{X: cell.X - 1, Y: cell.Y}, {X: cell.X + 1, Y: cell.Y}, {X: cell.X, Y: cell.Y - 1}, {X: cell.X, Y: cell.Y + 1}} {
+			if remaining[next] {
+				delete(remaining, next)
+				queue = append(queue, next)
+			}
+		}
+	}
+	return len(remaining) == 0
 }
 
 func PlaceApertureNode(c *gin.Context) {
@@ -39,15 +283,33 @@ func PlaceApertureNode(c *gin.Context) {
 
 	req.NodeType = strings.TrimSpace(req.NodeType)
 	req.ProdKey = strings.TrimSpace(req.ProdKey)
+	if len(req.Cells) == 0 {
+		req.Cells = []models.ApertureGridCell{{X: req.X, Y: req.Y}}
+	}
 
-	if req.X < 0 || req.X >= 20 || req.Y < 0 || req.Y >= 20 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ nằm ngoài ranh giới Tiên Khiếu (0-19)."})
+	if len(req.Cells) > 400 || !apertureCellsAreConnected(req.Cells) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Khu tài nguyên phải gồm các ô liền nhau trong lưới Tiên Khiếu."})
+		return
+	}
+	anchorFound := false
+	for _, cell := range req.Cells {
+		if cell.X == req.X && cell.Y == req.Y {
+			anchorFound = true
+			break
+		}
+	}
+	if !anchorFound {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ node phải nằm trong khu đã chọn."})
 		return
 	}
 
 	template, valid := GetResourceNodeTemplate(req.NodeType)
 	if !valid {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại tài nguyên xây dựng không tồn tại"})
+		return
+	}
+	if len(req.Cells) > 1 && req.NodeType != "FARMING_ZONE" && req.NodeType != "BREEDING_ZONE" && req.NodeType != "MINING_ZONE" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ khu trồng trọt, chăn nuôi và khai thác mới chiếm nhiều ô."})
 		return
 	}
 
@@ -85,26 +347,6 @@ func PlaceApertureNode(c *gin.Context) {
 		return
 	}
 
-	// Limit maximum resource nodes count based on area_size
-	var currentNodesCount int
-	err = tx.QueryRow(`
-		SELECT COUNT(1) FROM aperture_resource_nodes 
-		WHERE aperture_id = $1 AND is_destroyed = false
-	`, ap.ID).Scan(&currentNodesCount)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra số lượng mỏ hiện tại"})
-		return
-	}
-
-	maxNodes := int(ap.AreaSize / 100000)
-	if maxNodes > 200 {
-		maxNodes = 200
-	}
-	if currentNodesCount >= maxNodes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Quy mô Tiên Khiếu không đủ rộng lớn. Số lượng điểm tài nguyên tối đa là %d mỏ (Hiện tại: %d).", maxNodes, currentNodesCount)})
-		return
-	}
-
 	var immortalStones int64
 	err = tx.QueryRow(`
 		SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1 FOR UPDATE
@@ -114,22 +356,27 @@ func PlaceApertureNode(c *gin.Context) {
 		return
 	}
 
-	// 2. Check collision
-	var collision bool
-	err = tx.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM aperture_resource_nodes 
-			WHERE aperture_id = $1 AND x = $2 AND y = $3 AND is_destroyed = false
-		)
-	`, ap.ID, req.X, req.Y).Scan(&collision)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra trùng tọa độ"})
-		return
-	}
-
-	if collision {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ này đã có điểm tài nguyên khác xây dựng rồi."})
-		return
+	// Every grid cell can belong to only one active node. Legacy nodes without
+	// footprint rows continue to occupy their original anchor cell.
+	for _, cell := range req.Cells {
+		var collision bool
+		err = tx.QueryRow(`
+			SELECT EXISTS (
+				SELECT 1 FROM aperture_resource_node_cells WHERE aperture_id = $1 AND x = $2 AND y = $3
+				UNION ALL
+				SELECT 1 FROM aperture_resource_nodes n
+				WHERE n.aperture_id = $1 AND n.x = $2 AND n.y = $3 AND n.is_destroyed = false
+				  AND NOT EXISTS (SELECT 1 FROM aperture_resource_node_cells c WHERE c.node_id = n.id)
+			)
+		`, ap.ID, cell.X, cell.Y).Scan(&collision)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra ô đất đang sử dụng"})
+			return
+		}
+		if collision {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Ô (%d, %d) đã thuộc về một khu khác.", cell.X, cell.Y)})
+			return
+		}
 	}
 
 	// 2b. Limit unique defense structures (Barracks: max 1)
@@ -275,6 +522,17 @@ func PlaceApertureNode(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu điểm tài nguyên: " + err.Error()})
 		return
+	}
+	for _, cell := range req.Cells {
+		if _, err = tx.Exec(`INSERT INTO aperture_resource_node_cells (node_id, aperture_id, x, y) VALUES ($1, $2, $3, $4)`, node.ID, ap.ID, cell.X, cell.Y); err != nil {
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+				c.JSON(http.StatusConflict, gin.H{"error": "Một ô trong khu vừa được sử dụng. Hãy chọn vùng khác."})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu diện tích khu tài nguyên"})
+			return
+		}
 	}
 
 	err = updateVariantHumanOnNodeChange(tx, ap.ID, template.NodeType, 50)
@@ -496,5 +754,3 @@ func DeleteApertureNode(c *gin.Context) {
 		"node_id": nodeIDStr,
 	})
 }
-
-// ArePathsConflicting returns true if two paths conflict

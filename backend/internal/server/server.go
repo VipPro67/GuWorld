@@ -770,6 +770,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			aperture.GET("", handlers.GetImmortalAperture)
 			aperture.GET("/nodes", handlers.GetApertureNodes)
 			aperture.POST("/nodes", handlers.PlaceApertureNode)
+			aperture.POST("/nodes/batch", handlers.ManageApertureNodesBatch)
 			aperture.POST("/nodes/:id/collect", handlers.CollectApertureResource)
 			aperture.POST("/nodes/collect-all", handlers.CollectAllApertureResources)
 			aperture.POST("/nodes/repair-all", handlers.RepairAllApertureNodes)

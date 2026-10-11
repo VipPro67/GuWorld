@@ -136,7 +136,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - Tai kiếp có worker kiểm tra tự động mỗi 60 giây. Khi năm nội bộ đạt mốc tiếp theo, worker sinh kiếp và resolve.
 - **Lưu phái tai kiếp ưu tiên lưu phái của Cổ bản mệnh** nếu đó không phải Thiên Đạo. Tỉ lệ ưu tiên bắt đầu từ 80% và tăng theo cấp tai kiếp: Địa Tai **80%**, Thiên Kiếp **85%**, Hạo Kiếp **90%**, Vạn Kiếp **95%**, Hỗn Độn Đại Nạn **100%**; lượt không kích hoạt ưu tiên sẽ chọn ngẫu nhiên trong các lưu phái thường còn lại. Thiên Đạo không xuất hiện trong lưu phái chính hoặc phần Đạo Ngân phụ của phần thưởng tai kiếp.
 - **Bảo hộ khi vắng mặt:** nếu đến mốc tai kiếp mà đạo hữu **đang offline**, tai kiếp sẽ không sinh quái và không phá hoại — Tiên Khiếu chuyển trạng thái **"Kiếp Lực Tích Lũy"** (`TRIBULATION_PENDING`). Khi đạo hữu online trở lại, tai kiếp mới giáng xuống (trong vòng 60 giây) và có **5 phút chuẩn bị** trước khi quái bắt đầu di chuyển/phá mỏ. Thời gian nội bộ vẫn trôi bình thường nên không thể trốn kiếp vô hạn; nếu giữ kiếp offline quá **24 giờ**, phần thưởng Đạo Ngân sẽ bị **giảm còn một nửa**. Bộ đếm 6 giờ tự kết toán chỉ tính thời gian online.
-- **Quái tai kiếp không phá hủy trực tiếp mỏ tài nguyên.** Khi tiếp cận linh mạch tài nguyên, mỗi yêu tướng mỗi nhát làm giảm `hp` mỏ theo loại kiếp: Địa Tai -1, Thiên Kiếp -2, Hạo Kiếp -4, Vạn Kiếp -8, Hỗn Độn Đại Nạn -16. Đại Yêu di chuyển quanh quẩn và đánh mỏ với sát thương gấp đôi yêu tướng.
+- Khi đến gần node/vùng, quái đánh vùng 3×3 quanh vị trí của nó. Mỗi ô thuộc node bị trúng cộng sát thương vào HP chung của node; sát thương mỗi ô theo loại kiếp: Địa Tai 1, Thiên Kiếp 2, Hạo Kiếp 4, Vạn Kiếp 8, Hỗn Độn Đại Nạn 16. Đại Yêu gây gấp đôi sát thương yêu tướng.
 - **Combat tai kiếp dùng giao diện chiến đấu thông thường:** nhấn **"Xuất Trận Chiến Đấu"** trong bảng điều khiển tai kiếp sẽ mở màn chiến đấu (auto-combat) chống toàn bộ quái tai kiếp còn sống, mang theo đội hình Cổ như đánh mỏ/PvP/PvE. Giáp ảo (`shield_flat` từ Cổ) và **máu của đạo hữu tiêu hao trước**; sát thương tràn qua (vượt quá giáp + máu) mới trừ trực tiếp vào **Sinh lực Tiên Khiếu** (`immortal_apertures.aperture_hp`). Thanh **Máu Tiên Khiếu** hiển thị ngay trong màn chiến đấu và cập nhật theo từng lượt.
 - **Cổ sư chỉ được xuất trận khi Sinh lực Tiên Khiếu > 5% Sinh lực tối đa.** Nếu Tiên Khiếu nguy cấp (≤ 5%), đạo hữu không thể ra tay — quái sẽ tiếp tục càn quét mỏ trong sự bất lực; hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp.
 - **Kết toán tai kiếp:** Nếu kết toán khi còn quái trên bản đồ lưới (chấp nhận rủi ro hoặc hết hạn 6 giờ thực tế tự động kết toán), đạo hữu có nguy cơ thất bại. Khi vượt kiếp thất bại, bộ đếm số lượng tai kiếp (tổng số tai kiếp và số lượng theo từng loại) sẽ không tăng (chỉ tích lũy khi thành công), nhưng thời gian/mốc năm của tai kiếp kế tiếp (`next_tribulation_year`) vẫn sẽ được đẩy lên mốc tiếp theo để người chơi có thời gian hồi phục và không bị dồn dập tai kiếp ngay lập tức.
@@ -205,17 +205,21 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   | 100.000 | 47.6% | 28.6% | 23.8% | 0% |
 
 - **Thuộc tính theo phẩm cấp:**
-  - LOW: time rate 10-15x, Sinh lực 10.000, 30 node, 10 tiên nguyên/năm.
-  - MID: time rate 20-28x, Sinh lực 20.000, 60 node, 20 tiên nguyên/năm.
-  - HIGH: time rate 30-40x, Sinh lực 30.000, 90 node, 30 tiên nguyên/năm.
-  - EXTREME: time rate 40-55x, Sinh lực 50.000, 100 node, 50 tiên nguyên/năm.
+  - LOW: time rate 10-15x, Sinh lực 10.000, 10 tiên nguyên/năm.
+  - MID: time rate 20-28x, Sinh lực 20.000, 20 tiên nguyên/năm.
+  - HIGH: time rate 30-40x, Sinh lực 30.000, 30 tiên nguyên/năm.
+  - EXTREME: time rate 40-55x, Sinh lực 50.000, 50 tiên nguyên/năm.
 - **Khi mới khai mở**, Tiên Khiếu được tạo sẵn 2-4 mỏ tài nguyên ngẫu nhiên (tuỳ phẩm cấp):
   - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
-- Cổ sư đặt thêm node tài nguyên theo toạ độ, thu hoạch, gỡ/xóa, sửa chữa node.
+- Bản đồ Tiên Khiếu là lưới 20×20. Mỗi node trồng trọt, chăn nuôi hoặc khai thác có thể chiếm một vùng ô liền nhau; nhiều node cùng loại được phép đặt, nhưng mỗi ô chỉ thuộc một node.
+- Sản lượng node tỉ lệ với số ô được giao. Khi lấp kín 400 ô, tổng sản lượng được hiệu chỉnh còn 25% mức tối đa của giới hạn node cũ; các hệ số path, Đạo Ngân, sinh thái, lao động và phẩm vật vẫn áp dụng.
+- Xung đột Đạo của sản lượng dùng chung hồ sơ combat theo path, Đạo Ngân, path mastery và hiệu ứng giảm xung đột; vị trí node không tạo luật tương khắc riêng.
+- Cổ sư có thể thu hoạch, gỡ/xóa và sửa chữa từng node/vùng.
+- Chế độ **Chọn nhiều node** trên bản đồ cho phép sửa chữa, nâng cấp hoặc san phẳng nhiều node cùng lúc; tổng phí sửa/nâng cấp được kiểm tra trước khi áp dụng.
 - **Thu hoạch tất cả** các mỏ đã đủ thời gian tích tụ cùng lúc; sản lượng giảm **20%** và Nhân Khí nhận được giảm còn **+1/mỏ** (so với thu hoạch từng mỏ).
 - **Sửa chữa tất cả** các công trình còn tồn tại nhưng bị hư tổn cùng lúc; phí sửa mỗi công trình tăng **30%**. Công trình bị phá hủy hoàn toàn sẽ mất vĩnh viễn và phải xây lại.
-- Hệ sinh thái node có kiểm tra xung đột đường tu/path và cân bằng plant/herbivore/carnivore.
+- Hệ sinh thái vẫn kiểm tra cân bằng trồng trọt, chăn nuôi và thú ăn thịt.
 - Dị nhân trong tiên khiếu có population, happiness, oppression, rebellion rate và labor intensity.
 
 ### Công Trình Phòng Thủ

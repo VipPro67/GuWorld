@@ -4,7 +4,7 @@ import "testing"
 
 func TestApplyBulkReward(t *testing.T) {
 	cases := []struct {
-		base     int64
+		base     float64
 		combined float64
 		bulk     float64
 		want     int64
@@ -19,7 +19,7 @@ func TestApplyBulkReward(t *testing.T) {
 	for _, c := range cases {
 		got := applyBulkReward(c.base, c.combined, c.bulk)
 		if got != c.want {
-			t.Fatalf("applyBulkReward(%d, %v, %v) = %d, want %d", c.base, c.combined, c.bulk, got, c.want)
+			t.Fatalf("applyBulkReward(%v, %v, %v) = %d, want %d", c.base, c.combined, c.bulk, got, c.want)
 		}
 	}
 }

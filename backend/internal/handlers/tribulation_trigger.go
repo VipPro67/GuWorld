@@ -205,6 +205,31 @@ func CheckAndTriggerTribulations() error {
 					}
 				}
 			}
+			if cRows, qErr := db.DB.Query(`
+				SELECT aperture_id, node_id, x, y FROM aperture_resource_node_cells
+				WHERE aperture_id = ANY($1::uuid[]) ORDER BY aperture_id, node_id, y, x
+			`, pq.Array(aids)); qErr != nil {
+				logger.S.Errorf("CheckAndTriggerTribulations: batch-read node areas error: %v", qErr)
+			} else {
+				cellsByNode := make(map[string][]models.ApertureGridCell)
+				for cRows.Next() {
+					var aid, nodeID string
+					var cell models.ApertureGridCell
+					if err := cRows.Scan(&aid, &nodeID, &cell.X, &cell.Y); err == nil {
+						cellsByNode[nodeID] = append(cellsByNode[nodeID], cell)
+					}
+				}
+				cRows.Close()
+				for aid := range nodesByAperture {
+					for i := range nodesByAperture[aid] {
+						node := &nodesByAperture[aid][i]
+						node.Cells = cellsByNode[node.ID]
+						if len(node.Cells) == 0 {
+							node.Cells = []models.ApertureGridCell{{X: node.X, Y: node.Y}}
+						}
+					}
+				}
+			}
 		}
 
 		// ── Batch-read: all variant humans (1 query) ──────────────────────────
@@ -395,13 +420,13 @@ func CheckAndTriggerTribulations() error {
 				// Ecosystem & Conflicts Tick — read from pre-loaded nodes
 				nodes := nodesByAperture[ap.ID]
 				if len(nodes) > 0 {
+					daoProfile, _ := loadApertureDaoCombatProfile(db.DB, ap.PlayerID, ap.DaoMarks)
 					_, _, _, overgrazing, _, _ := EvaluateEcosystem(nodes)
 
 					for _, nd := range nodes {
 						decayDamage := 0
-						if CheckNodeConflict(nd, nodes) {
-							decayDamage += int(float64(nd.MaxHP) * 0.10 * float64(yearsDiff))
-						}
+						conflictMultiplier := apertureDaoConflictMultiplierForProfile(daoProfile, nd.Path)
+						decayDamage += int(float64(nd.MaxHP) * 0.10 * float64(yearsDiff) * (1.0 - conflictMultiplier))
 						if overgrazing && (nd.NodeType == "FARMING_ZONE" || nd.ZoneType == "khu_trong" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS") {
 							decayDamage += int(float64(nd.MaxHP) * 0.05 * float64(yearsDiff))
 						}

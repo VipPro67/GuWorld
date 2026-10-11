@@ -55,7 +55,7 @@ export interface ApertureSlice {
   cleanseDaoMarks: (path: string, marks: number) => Promise<boolean>;
   fetchApertureNodes: (forceRefresh?: boolean) => Promise<void>;
   fetchVariantHumans: () => Promise<void>;
-  placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => Promise<boolean>;
+  placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string, cells?: { x: number; y: number }[]) => Promise<boolean>;
   collectResourceNode: (nodeId: string) => Promise<boolean>;
   collectAllResourceNodes: () => Promise<boolean>;
   uninstallApertureNode: (nodeId: string) => Promise<boolean>;
@@ -65,6 +65,7 @@ export interface ApertureSlice {
   repairApertureNode: (nodeId: string) => Promise<boolean>;
   repairAllApertureNodes: () => Promise<boolean>;
   upgradeApertureNode: (nodeId: string) => Promise<boolean>;
+  manageApertureNodesBatch: (action: "repair" | "upgrade" | "delete", nodeIds: string[]) => Promise<boolean>;
   fetchActiveTribulation: (forceRefresh?: boolean) => Promise<void>;
   engageTribulationCombat: (eventId: string) => Promise<boolean>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
@@ -300,7 +301,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     return fetchApertureNodesPromise;
   },
 
-  placeApertureNode: async (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => {
+  placeApertureNode: async (nodeType: string, x: number, y: number, path?: string, prodKey?: string, cells?: { x: number; y: number }[]) => {
     const { token, logout } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
@@ -308,7 +309,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ node_type: nodeType, x, y, path, prod_key: prodKey }),
+        body: JSON.stringify({ node_type: nodeType, x, y, path, prod_key: prodKey, cells }),
       });
       if (response.status === 401) {
         logout();
@@ -928,6 +929,38 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
       get().addLog(data.message || "Đã nâng cấp công trình.");
       get().applyInventoryFromResponse(data);
       await get().fetchApertureNodes(true);
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  manageApertureNodesBatch: async (action: "repair" | "upgrade" | "delete", nodeIds: string[]) => {
+    const { token, logout } = get();
+    if (!token || !nodeIds.length || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, node_ids: nodeIds }),
+      });
+      if (response.status === 401) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể thao tác các node đã chọn");
+      get().addToast(data.message || "Đã thao tác các node đã chọn.", "success");
+      get().addLog(data.message || "Đã thao tác hàng loạt node Tiên Khiếu.");
+      get().applyInventoryFromResponse(data);
+      await get().fetchApertureNodes(true);
+      await get().fetchVariantHumans();
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

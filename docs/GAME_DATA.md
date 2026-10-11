@@ -490,6 +490,12 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `x`, `y` — toạ độ grid (0-19)
 - `production_type`, `production_amount`, `production_interval_hours` — sản lượng
 - `is_destroyed` — cờ tương thích dữ liệu cũ; công trình bị phá hủy hoàn toàn được xóa khỏi bảng và không thể sửa chữa
+- Node vùng trả sản lượng theo số ô được giao; lưới 20×20 được lưu trong `aperture_resource_node_cells`.
+- Xung đột Đạo khi tính sản lượng dùng chung `gamefx.DaoCombatProfile` với combat, không dựa trên khoảng cách giữa các node.
+
+### Bảng `aperture_resource_node_cells`
+
+Mỗi hàng là một ô thuộc vùng của node; `UNIQUE (aperture_id, x, y)` ngăn các node chiếm cùng ô. Xóa node sẽ xóa các ô vùng theo khóa ngoại. `production_remainder` lưu phần sản lượng lẻ tại ô neo để các khu nhỏ vẫn cộng dồn đúng theo diện tích. Node cũ được cấp một ô neo khi bảng mới được khởi tạo.
 
 ### Kinh tế và xã hội Dị Nhân trong Tiên Khiếu
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { operationsBy } from "@/lib/effect-blocks";
 import { useGameStore, ApertureResourceNode, TribulationEnemy } from "@/store/useGameStore";
 import {
@@ -276,6 +277,7 @@ export const ImmortalApertureView: React.FC = () => {
     repairApertureNode,
     repairAllApertureNodes,
     upgradeApertureNode,
+    manageApertureNodesBatch,
     fetchActiveTribulation,
     engageTribulationCombat,
     resolveTribulation,
@@ -290,6 +292,9 @@ export const ImmortalApertureView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "variant_humans">("overview");
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [buildCells, setBuildCells] = useState<{ x: number; y: number }[]>([]);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [showHealMenu, setShowHealMenu] = useState(false);
 
@@ -470,8 +475,38 @@ export const ImmortalApertureView: React.FC = () => {
   // Define nodes dict for checking cell contents
   const nodeMap = new Map<string, ApertureResourceNode>();
   apertureNodes.forEach((node) => {
-    nodeMap.set(`${node.x},${node.y}`, node);
+    const cells = node.cells?.length ? node.cells : [{ x: node.x, y: node.y }];
+    cells.forEach(cell => nodeMap.set(`${cell.x},${cell.y}`, node));
   });
+  const occupiedCells = nodeMap.size;
+  const selectedNodes = apertureNodes.filter(node => selectedNodeIds.includes(node.id));
+  const repairableSelectedNodes = selectedNodes.filter(node => !node.is_destroyed && node.hp < node.max_hp);
+  const upgradeableSelectedNodes = selectedNodes.filter(node => !node.is_destroyed && node.level < 5);
+  const selectedRepairCost = repairableSelectedNodes.reduce((sum, node) => sum + Math.ceil((node.max_hp - node.hp) / 50), 0);
+  const upgradeBaseCosts: Record<string, number> = {
+    FARMING_ZONE: 10, BREEDING_ZONE: 24, MINING_ZONE: 20, WALL: 16,
+    WATCHTOWER: 24, GUARDIAN_STATUE: 30, BARRACKS: 40, FORCE_FIELD: 50,
+  };
+  const selectedUpgradeCost = upgradeableSelectedNodes.reduce((sum, node) =>
+    sum + Math.max(5, Math.floor((upgradeBaseCosts[node.node_type] || 10) * node.level * 1.5)), 0);
+
+  const handleBatchNodeAction = async (action: "repair" | "upgrade" | "delete") => {
+    const nodes = action === "repair" ? repairableSelectedNodes
+      : action === "upgrade" ? upgradeableSelectedNodes : selectedNodes;
+    if (!nodes.length) return;
+    const nodeNames = nodes.slice(0, 4).map(node => node.name).join(", ");
+    const moreCount = nodes.length > 4 ? ` và ${nodes.length - 4} node khác` : "";
+    const actionText = action === "repair" ? `Sửa ${nodes.length} node, hết ${selectedRepairCost} Tiên Nguyên Thạch?`
+      : action === "upgrade" ? `Nâng cấp ${nodes.length} node, hết ${selectedUpgradeCost} Tiên Nguyên Thạch?`
+        : `San phẳng vĩnh viễn ${nodes.length} node (${nodeNames}${moreCount})? Không hoàn trả vật phẩm.`;
+    if (!(await showConfirm(actionText))) return;
+    const success = await manageApertureNodesBatch(action, nodes.map(node => node.id));
+    if (success) {
+      setSelectedNodeIds([]);
+      setSelectedNode(null);
+      setSelectedCell(null);
+    }
+  };
 
   // Define enemies dict for grid overlay
   const enemyMap = new Map<string, TribulationEnemy>();
@@ -485,17 +520,45 @@ export const ImmortalApertureView: React.FC = () => {
     const coordKey = `${x},${y}`;
     const node = nodeMap.get(coordKey);
 
+    if (multiSelectMode) {
+      if (!node) return;
+      setSelectedNodeIds(current => current.includes(node.id)
+        ? current.filter(id => id !== node.id)
+        : [...current, node.id]);
+      setSelectedNode(null);
+      setSelectedCell(null);
+      return;
+    }
+
+    if (pendingBuildZone) {
+      if (node) {
+        addToast("Ô này đã thuộc về một khu khác.", "error");
+        return;
+      }
+      if (buildCells.some(cell => cell.x === x && cell.y === y)) return;
+      const connected = buildCells.length === 0 || buildCells.some(cell => Math.abs(cell.x - x) + Math.abs(cell.y - y) === 1);
+      if (!connected) {
+        addToast("Hãy chọn ô liền cạnh với khu đang khoanh.", "error");
+        return;
+      }
+      setBuildCells(current => [...current, { x, y }]);
+      if (!selectedCell) setSelectedCell({ x, y });
+      return;
+    }
+
     setSelectedCell({ x, y });
     setSelectedNode(node || null);
   };
 
   const handleBuildNode = async (nodeType: string, customPath?: string, customProdKey?: string) => {
     if (!selectedCell) return;
-    const success = await placeApertureNode(nodeType, selectedCell.x, selectedCell.y, customPath, customProdKey);
+    const cells = pendingBuildZone ? buildCells : [selectedCell];
+    const success = await placeApertureNode(nodeType, selectedCell.x, selectedCell.y, customPath, customProdKey, cells);
     if (success) {
       setSelectedCell(null);
       setSelectedNode(null);
       setPendingBuildZone(null);
+      setBuildCells([]);
     }
   };
 
@@ -593,39 +656,23 @@ export const ImmortalApertureView: React.FC = () => {
 
   const getApertureState = getStateName(aperture?.state);
 
-  // Helper to check for path conflict with other nodes
-  const checkConflict = (nd: ApertureResourceNode, all: ApertureResourceNode[]) => {
-    for (const other of all) {
-      if (other.id === nd.id || other.is_destroyed) continue;
-      const dx = Math.abs(nd.x - other.x);
-      const dy = Math.abs(nd.y - other.y);
-      if (dx <= 2 && dy <= 2) {
-        const p1 = nd.path.toLowerCase().trim();
-        const p2 = other.path.toLowerCase().trim();
-        if (p1 !== p2) {
-          const key1 = p1 < p2 ? `${p1}:${p2}` : `${p2}:${p1}`;
-          const conflicts: Record<string, boolean> = {
-            "fire path:water path": true,
-            "metal path:wood path": true,
-            "earth path:wood path": true,
-            "fire path:ice path": true,
-          };
-          if (conflicts[key1]) return other;
-        }
-      }
-    }
-    return null;
+  const getDaoConflictMultiplier = (node: ApertureResourceNode) => {
+    if (typeof node.dao_conflict_multiplier === "number") return node.dao_conflict_multiplier;
+    const path = node.path.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
+    const detail = daoNgan?.paths?.find(p => p.path.toLowerCase() === path);
+    return detail ? 1 - detail.internal_conflict_penalty_pct / 100 : 1;
   };
 
-  const plantCount = apertureNodes.filter(n => !n.is_destroyed &&
+  const plantCount = apertureNodes.reduce((count, n) => count + (!n.is_destroyed &&
     ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS",
      "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
      "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
      "KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
      "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
-     "NO_FARM", "NO_FARM_ADV"].includes(n.node_type)
-  ).length;
-  const herbCount = apertureNodes.filter(n => !n.is_destroyed && n.node_type === "SPIRIT_DEER_PASTURE").length;
+     "NO_FARM", "NO_FARM_ADV"].includes(n.node_type) ? 1 :
+    !n.is_destroyed && n.node_type === "FARMING_ZONE" ? (n.cells?.length || 1) : 0), 0);
+  const herbCount = apertureNodes.reduce((count, n) => count + (!n.is_destroyed && n.node_type === "SPIRIT_DEER_PASTURE" ? 1 :
+    !n.is_destroyed && n.node_type === "BREEDING_ZONE" ? (n.cells?.length || 1) : 0), 0);
   const carnCount = apertureNodes.filter(n => !n.is_destroyed &&
     ["SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
   ).length;
@@ -655,7 +702,9 @@ export const ImmortalApertureView: React.FC = () => {
          "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
          "NO_FARM", "NO_FARM_ADV", "SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
     ) {
-      return sum + n.production_amount;
+      const maxOldNodes = Math.min(200, Math.floor((aperture?.area_size || 0) / 100000));
+      const perCellScale = maxOldNodes * 0.25 / 400;
+      return sum + n.production_amount * (n.cells?.length || 1) * perCellScale * getDaoConflictMultiplier(n);
     }
     return sum;
   }, 0);
@@ -1060,9 +1109,9 @@ return (
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="flex flex-col gap-6">
             {/* Lưới Grid Bản Đồ */}
-            <div className="lg:col-span-2 bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col items-center">
+            <div className="w-full bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col items-center">
               <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 w-full mb-4 flex items-center gap-2">
                 <MapIcon className="w-5 h-5 text-amber-400" />
                 Lưới Địa Hình Tiên Khiếu
@@ -1088,6 +1137,45 @@ return (
                 </button>
               </div>
 
+              <div className="w-full mb-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMultiSelectMode(current => !current);
+                    setSelectedNodeIds([]);
+                    setSelectedNode(null);
+                    setSelectedCell(null);
+                    setPendingBuildZone(null);
+                    setBuildCells([]);
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${multiSelectMode ? "border-violet-400/60 bg-violet-500/15 text-violet-200" : "border-slate-700 bg-slate-950/50 text-slate-300 hover:bg-slate-800"}`}
+                >
+                  {multiSelectMode ? "✓ Đang chọn nhiều node" : "☑ Chọn nhiều node"}
+                </button>
+                {multiSelectMode && (
+                  <div className="mt-2 rounded-xl border border-violet-500/30 bg-violet-950/20 p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-violet-100">Đã chọn {selectedNodes.length} node · {selectedNodes.reduce((sum, node) => sum + (node.cells?.length || 1), 0)} ô</span>
+                      <span className="text-slate-400">Bấm node trên bản đồ để thêm hoặc bỏ chọn</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => handleBatchNodeAction("repair")} disabled={actionLoading || repairableSelectedNodes.length === 0 || player.immortal_stones < selectedRepairCost} className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-800 disabled:text-slate-500">
+                        Sửa ({repairableSelectedNodes.length}) · {selectedRepairCost} đá
+                      </button>
+                      <button type="button" onClick={() => handleBatchNodeAction("upgrade")} disabled={actionLoading || upgradeableSelectedNodes.length === 0 || player.immortal_stones < selectedUpgradeCost} className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-800 disabled:text-slate-500">
+                        Nâng cấp ({upgradeableSelectedNodes.length}) · {selectedUpgradeCost} đá
+                      </button>
+                      <button type="button" onClick={() => handleBatchNodeAction("delete")} disabled={actionLoading || selectedNodes.length === 0} className="rounded-lg border border-rose-700 bg-rose-950/60 px-3 py-2 text-xs font-bold text-rose-200 disabled:opacity-40">
+                        San phẳng ({selectedNodes.length})
+                      </button>
+                      <button type="button" onClick={() => setSelectedNodeIds([])} disabled={selectedNodeIds.length === 0} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40">
+                        Bỏ chọn
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Grid 20x20 container */}
               <div
                 className="bg-slate-950/90 p-3 rounded-2xl border border-slate-800/60 overflow-auto max-w-full shadow-[inset_0_4px_20px_rgba(0,0,0,0.6)] relative"
@@ -1108,35 +1196,14 @@ return (
                       const node = nodeMap.get(coordKey);
                       const enemy = enemyMap.get(coordKey);
                       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
+                      const isBuildSelected = buildCells.some(cell => cell.x === x && cell.y === y);
+                      const isMultiSelected = !!node && selectedNodeIds.includes(node.id);
 
                       // Determine cell contents / look
                       let cellIcon = null;
                       let cellColor = "bg-slate-900/60 hover:bg-slate-800 border-slate-800/80";
 
-                      const checkConflictInJS = (nd: ApertureResourceNode) => {
-                        for (const other of apertureNodes) {
-                          if (other.id === nd.id || other.is_destroyed) continue;
-                          const dx = Math.abs(nd.x - other.x);
-                          const dy = Math.abs(nd.y - other.y);
-                          if (dx <= 2 && dy <= 2) {
-                            const p1 = nd.path.toLowerCase().trim();
-                            const p2 = other.path.toLowerCase().trim();
-                            if (p1 !== p2) {
-                              const key1 = p1 < p2 ? `${p1}:${p2}` : `${p2}:${p1}`;
-                              const conflicts: Record<string, boolean> = {
-                                "fire path:water path": true,
-                                "metal path:wood path": true,
-                                "earth path:wood path": true,
-                                "fire path:ice path": true,
-                              };
-                              if (conflicts[key1]) return true;
-                            }
-                          }
-                        }
-                        return false;
-                      };
-
-                      const hasConflict = node ? checkConflictInJS(node) : false;
+                      const hasConflict = node ? getDaoConflictMultiplier(node) < 0.999 : false;
                       const isPlant = node ? ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS"].includes(node.node_type) : false;
                       const isHerb = node ? node.node_type === "SPIRIT_DEER_PASTURE" : false;
                       const isCarn = node ? node.node_type === "SILVER_WOLF_DEN" : false;
@@ -1173,13 +1240,30 @@ return (
                       if (isSelected) {
                         cellColor += " ring-2 ring-amber-500 border-transparent scale-110 z-10";
                       }
+                      if (isBuildSelected) {
+                        cellColor += " ring-2 ring-cyan-400 border-cyan-300 bg-cyan-500/30 scale-105 z-10";
+                      }
+                      if (isMultiSelected) {
+                        cellColor += " ring-2 ring-violet-400 border-violet-300 brightness-125 z-10";
+                      }
 
                       return (
                         <div
                           key={coordKey}
-                          onClick={() => handleCellClick(x, y)}
+                          onPointerDown={(event) => {
+                            if (pendingBuildZone && event.button === 0) {
+                              event.preventDefault();
+                              handleCellClick(x, y);
+                            }
+                          }}
+                          onPointerEnter={(event) => {
+                            if (pendingBuildZone && event.buttons === 1) handleCellClick(x, y);
+                          }}
+                          onClick={() => {
+                            if (!pendingBuildZone) handleCellClick(x, y);
+                          }}
                           className={`w-full aspect-square flex items-center justify-center text-sm font-bold rounded cursor-pointer border transition-all ${cellColor}`}
-                          title={`Tọa độ: (${x}, ${y})`}
+                          title={node ? `${node.name} · ${node.cells?.length || 1} ô · (${x}, ${y})` : `Tọa độ: (${x}, ${y})`}
                           style={{ minWidth: "28px" }}
                         >
                           {cellIcon}
@@ -1368,36 +1452,20 @@ return (
                           </div>
 
                           <div className="flex justify-between text-xs text-slate-400">
-                            <span>Độ bền: {selectedNode.hp}/{selectedNode.max_hp}</span>
+                            <span>{selectedNode.cells?.length || 1} ô · Độ bền: {selectedNode.hp}/{selectedNode.max_hp}</span>
                             {selectedNode.is_destroyed && <span className="text-rose-500 font-bold">Bị phá hủy</span>}
                           </div>
 
-                          {/* Ecosystem details - only for resource nodes */}
-                          {!selectedNode.is_destroyed && selectedNode.node_category !== "DEFENSE" && (() => {
-                            const checkConflict = (nd: ApertureResourceNode) => {
-                              for (const other of apertureNodes) {
-                                if (other.id === nd.id || other.is_destroyed) continue;
-                                const dx = Math.abs(nd.x - other.x);
-                                const dy = Math.abs(nd.y - other.y);
-                                if (dx <= 2 && dy <= 2) {
-                                  const p1 = nd.path.toLowerCase().trim();
-                                  const p2 = other.path.toLowerCase().trim();
-                                  if (p1 !== p2) {
-                                    const key1 = p1 < p2 ? `${p1}:${p2}` : `${p2}:${p1}`;
-                                    const conflicts: Record<string, boolean> = {
-                                      "fire path:water path": true,
-                                      "metal path:wood path": true,
-                                      "earth path:wood path": true,
-                                      "fire path:ice path": true,
-                                    };
-                                    if (conflicts[key1]) return true;
-                                  }
-                                }
-                              }
-                              return false;
-                            };
-
-                            const isConflicting = checkConflict(selectedNode);
+                          {/* Keep detailed yield math collapsed so core land actions stay visible. */}
+                          {selectedNode.node_category !== "DEFENSE" && (
+                            <details className="rounded-xl border border-slate-800 bg-slate-950/30">
+                              <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-semibold text-emerald-300 flex items-center justify-between">
+                                <span>📊 Chi tiết sản lượng và sinh thái</span>
+                                <span className="text-slate-500 transition-transform group-open:rotate-180">⌄</span>
+                              </summary>
+                              {!selectedNode.is_destroyed && (() => {
+                            const conflictMult = getDaoConflictMultiplier(selectedNode);
+                            const isConflicting = conflictMult < 0.999;
                             const isPlant = selectedNode.node_type === "FARMING_ZONE" || selectedNode.zone_type === "khu_trong";
                             const isHerb = selectedNode.node_type === "BREEDING_ZONE" || selectedNode.zone_type === "khu_nuoi";
                             const isCarn = false;
@@ -1477,14 +1545,9 @@ return (
                               return maxMarks;
                             };
 
-                            const hasSovereignFetus = (player?.gu_inventory || []).some(
-                              (g: ApiResponseData) => (g.gu_id || g.id) === "GU_SOVEREIGN_FETUS" && g.equipped
-                            );
-
                             const levelMultiplier = 1.0 + (Math.max(1, selectedNode.level) - 1) * 0.20;
                             const nodePathMarks = getDaoMarkAmount(selectedNode.path);
                             const daoMultiplier = 1.0 + nodePathMarks * 0.0001;
-                            const conflictMult = (isConflicting && !hasSovereignFetus) ? 0.5 : 1.0;
                             let ecoMult = 1.0;
                             if (overgrazed) ecoMult = 0.5;
                             else if (starvingHerb || starvingCarn) ecoMult = 0.2;
@@ -1550,7 +1613,11 @@ return (
 
                             const combinedMultiplier = (areaMultiplier * daoMultiplier * conflictMult * ecoMult * vhLaborMult * vhPopBonus * itemFoodPathMultiplier * levelMultiplier) / itemRankDivisor;
                             const baseProd = selectedNode.production_amount || 0;
-                            let rawExpected = baseProd > 0 ? Math.max(1, Math.floor(baseProd * combinedMultiplier)) : 0;
+                            const nodeCells = selectedNode.cells?.length || 1;
+                            const legacyNodeCap = Math.min(200, Math.floor((aperture?.area_size || 0) / 100000));
+                            const cellYieldMultiplier = legacyNodeCap * 0.25 / 400;
+                            const projectedProduction = baseProd * nodeCells * cellYieldMultiplier * combinedMultiplier;
+                            let rawExpected = projectedProduction > 0 ? Math.max(1, Math.floor(projectedProduction)) : 0;
                             if (selectedNode.production_type === "Material" && rawExpected > 10000000) {
                               rawExpected = 10000000;
                             }
@@ -1652,10 +1719,8 @@ return (
                                     <span className="text-slate-300 flex items-center gap-1.5">
                                       <span>⚔️</span> Xung đột Đạo ngân:
                                     </span>
-                                    {hasSovereignFetus ? (
-                                      <span className="text-purple-400 font-bold">Thân thể Chí Tôn (Miễn xung đột)</span>
-                                    ) : isConflicting ? (
-                                      <span className="text-rose-400 font-bold">-50% sản lượng (-10% HP/năm)</span>
+                                    {isConflicting ? (
+                                      <span className="text-rose-400 font-bold">-{((1 - conflictMult) * 100).toFixed(1)}% sản lượng</span>
                                     ) : (
                                       <span className="text-emerald-400 font-semibold">Hài hòa (100%)</span>
                                     )}
@@ -1693,12 +1758,15 @@ return (
                               </div>
                             );
                           })()}
+                            </details>
+                          )}
 
                           {/* Defense Structure Details */}
                           {!selectedNode.is_destroyed && selectedNode.node_category === "DEFENSE" && (() => {
                             return (
-                              <div className="p-3 bg-slate-900/40 rounded-lg border border-slate-805 text-[10px] space-y-1 text-slate-400">
-                                <div className="font-bold text-slate-300">Thông Tin Công Trình Phòng Thủ:</div>
+                              <details className="rounded-lg border border-slate-800 bg-slate-900/40">
+                                <summary className="cursor-pointer list-none px-3 py-2 text-[10px] font-bold text-slate-300">Thông tin công trình phòng thủ</summary>
+                                <div className="px-3 pb-3 text-[10px] space-y-1 text-slate-400">
                                 {selectedNode.blocks_movement && (
                                   <div>• <span className="text-amber-400 font-medium">Tường Thành</span>: Chặn kẻ thù di chuyển qua ô này</div>
                                 )}
@@ -1717,7 +1785,8 @@ return (
                                 {selectedNode.required_gu_id && (
                                   <div>• Cổ trùng đã hy sinh: <span className="text-rose-400 font-medium">{selectedNode.required_gu_id}</span> (rank {selectedNode.required_gu_rank}+)</div>
                                 )}
-                              </div>
+                                </div>
+                              </details>
                             );
                           })()}
 
@@ -1838,9 +1907,7 @@ return (
                       </div>
                     ) : (() => {
                       // Build Node menu
-                      const maxNodes = Math.min(200, Math.floor((aperture?.area_size || 0) / 100000));
-                      const currentNodesCount = apertureNodes.length;
-                      const isAtLimit = currentNodesCount >= maxNodes;
+                      const isAtLimit = occupiedCells >= 400;
 
                       const qtyWall = player.materials_inventory?.["node_wall"] || 0;
                       const qtyWatchtower = player.materials_inventory?.["node_watchtower"] || 0;
@@ -1879,15 +1946,15 @@ return (
                       return (
                         <div className="space-y-2.5">
                           <div className="bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-850 flex justify-between items-center text-xs">
-                            <span className="text-slate-400 font-medium">Số lượng mỏ tài nguyên:</span>
+                            <span className="text-slate-400 font-medium">Diện tích đã sử dụng:</span>
                             <span className={`${isAtLimit ? 'text-rose-400' : 'text-amber-400'} font-bold`}>
-                              {currentNodesCount} / {maxNodes} mỏ
+                              {occupiedCells} / 400 ô
                             </span>
                           </div>
 
                           {isAtLimit && (
                             <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-center text-xs text-rose-300">
-                              Quy mô Tiên Khiếu đạt giới hạn mỏ. Hãy tháo dỡ hoặc mở rộng thêm đất đai.
+                              Toàn bộ diện tích Tiên Khiếu đã được sử dụng.
                             </div>
                           )}
 
@@ -1899,6 +1966,7 @@ return (
                                 onClick={() => {
                                   setBuildCategory(cat as ApiResponseData);
                                   setPendingBuildZone(null); // Tắt bảng chọn tùy chỉnh khi chuyển tab!
+                                  setBuildCells([]);
                                 }}
                                 className={`flex-1 py-1 font-bold rounded capitalize transition-all ${
                                   buildCategory === cat ? "bg-slate-800 text-amber-400" : "text-slate-400"
@@ -1917,6 +1985,17 @@ return (
                                     {pendingBuildZone === "FARMING_ZONE" ? "🌱 Tùy chỉnh Khu Trồng Trọt" : pendingBuildZone === "BREEDING_ZONE" ? "🐄 Tùy chỉnh Khu Chăn Nuôi" : pendingBuildZone === "MINING_ZONE" ? "⛏️ Tùy chỉnh Khu Khai Thác" : "⚙️ Tùy chỉnh Mỏ Tài Nguyên"}
                                   </div>
                                   <span className="text-[10px] text-slate-400 font-medium">Chi phí: 10 Tiên Nguyên Thạch</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-cyan-200">
+                                  <span>Vùng đã chọn: <strong>{buildCells.length} ô</strong>. Bấm hoặc kéo qua các ô trống liền cạnh để tô vùng.</span>
+                                  <div className="flex shrink-0 gap-2">
+                                    <button type="button" disabled={buildCells.length === 0} onClick={() => {
+                                      const remaining = buildCells.slice(0, -1);
+                                      setBuildCells(remaining);
+                                      setSelectedCell(remaining[0] || null);
+                                    }} className="text-cyan-300 underline disabled:text-slate-600">Hoàn tác</button>
+                                    <button type="button" onClick={() => { setBuildCells([]); setSelectedCell(null); }} className="text-cyan-300 underline">Xóa vùng</button>
+                                  </div>
                                 </div>
 
                                 {(() => {
@@ -2134,14 +2213,14 @@ return (
                                 })()}
                                 <div className="flex gap-2 pt-2">
                                   <button
-                                    onClick={() => setPendingBuildZone(null)}
+                                    onClick={() => { setPendingBuildZone(null); setBuildCells([]); }}
                                     className="flex-1 py-1.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded hover:bg-slate-700 transition"
                                   >
                                     Hủy
                                   </button>
                                   <button
                                     onClick={() => handleBuildNode(pendingBuildZone, buildPath, buildProdKey)}
-                                    disabled={actionLoading || !buildProdKey}
+                                    disabled={actionLoading || !buildProdKey || buildCells.length === 0}
                                     className="flex-1 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 disabled:from-slate-800 disabled:text-slate-500 text-slate-950 text-[10px] font-bold rounded transition"
                                   >
                                     {actionLoading ? "Đang xây..." : "Xác nhận Xây"}
@@ -2167,6 +2246,11 @@ return (
                                       onClick={() => {
                                         if (["FARMING_ZONE", "BREEDING_ZONE", "MINING_ZONE"].includes(option.id)) {
                                           setPendingBuildZone(option.id);
+                                          const selectedKey = selectedCell ? `${selectedCell.x},${selectedCell.y}` : "";
+                                          const startCell = selectedCell && !nodeMap.has(selectedKey) ? selectedCell : null;
+                                          setBuildCells(startCell ? [startCell] : []);
+                                          setSelectedNode(null);
+                                          if (!startCell) setSelectedCell(null);
                                         } else {
                                           handleBuildNode(option.id);
                                         }
@@ -2366,8 +2450,8 @@ return (
                 </div>
 
                 {/* Thanh Đạo Tẩy Thể Modal */}
-                {showCleanseModal && (
-                  <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                {showCleanseModal && typeof document !== "undefined" && createPortal(
+                  <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-900 border border-purple-700/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
                       <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                         <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -2456,7 +2540,8 @@ return (
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
 
                 {/* Dao Body & Grace Threshold */}
@@ -3501,23 +3586,14 @@ return (
                   <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 space-y-2">
                     <h3 className="text-xs font-bold text-slate-200 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Xung Đột Đạo Ngân</h3>
                     {(() => {
-                      const conflictsList: { n1: ApertureResourceNode; n2: ApertureResourceNode }[] = [];
-                      const checkedPairs = new Set<string>();
-                      apertureNodes.forEach((n1) => {
-                        if (n1.is_destroyed) return;
-                        const conflictingOther = checkConflict(n1, apertureNodes);
-                        if (conflictingOther) {
-                          const pairKey = n1.id < conflictingOther.id ? `${n1.id}:${conflictingOther.id}` : `${conflictingOther.id}:${n1.id}`;
-                          if (!checkedPairs.has(pairKey)) { checkedPairs.add(pairKey); conflictsList.push({ n1, n2: conflictingOther }); }
-                        }
-                      });
-                      if (conflictsList.length === 0) return <div className="text-[10px] text-emerald-400 text-center py-2">Không có xung đột</div>;
+                      const affectedNodes = apertureNodes.filter(n => !n.is_destroyed && getDaoConflictMultiplier(n) < 0.999);
+                      if (affectedNodes.length === 0) return <div className="text-[10px] text-emerald-400 text-center py-2">Không có suy giảm xung đột</div>;
                       return (
                         <div className="space-y-1 max-h-24 overflow-y-auto">
-                          {conflictsList.map(({ n1, n2 }, idx) => (
-                            <div key={idx} className="text-[9px] text-rose-300 flex justify-between">
-                              <span>{n1.name} ❌ {n2.name}</span>
-                              <span className="text-rose-500">Xung Đột</span>
+                          {affectedNodes.map(node => (
+                            <div key={node.id} className="text-[9px] text-rose-300 flex justify-between gap-2">
+                              <span className="truncate">{node.name} · {translatePath(node.path)}</span>
+                              <span className="shrink-0 text-rose-500">-{((1 - getDaoConflictMultiplier(node)) * 100).toFixed(1)}%</span>
                             </div>
                           ))}
                         </div>

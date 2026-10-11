@@ -141,6 +141,28 @@ func schemaAperture() error {
 	CREATE INDEX IF NOT EXISTS idx_aperture_nodes_category ON aperture_resource_nodes (aperture_id, node_category);`); err != nil {
 		return err
 	}
+	if err := execSchema("aperture_resource_node_cells", `
+	CREATE TABLE IF NOT EXISTS aperture_resource_node_cells (
+		node_id UUID NOT NULL REFERENCES aperture_resource_nodes(id) ON DELETE CASCADE,
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		x SMALLINT NOT NULL CHECK (x >= 0 AND x < 20),
+		y SMALLINT NOT NULL CHECK (y >= 0 AND y < 20),
+		production_remainder DOUBLE PRECISION NOT NULL DEFAULT 0,
+		PRIMARY KEY (node_id, x, y),
+		UNIQUE (aperture_id, x, y)
+	);
+	CREATE INDEX IF NOT EXISTS idx_aperture_node_cells_aperture ON aperture_resource_node_cells (aperture_id, node_id);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_resource_node_cells_backfill", `
+		INSERT INTO aperture_resource_node_cells (node_id, aperture_id, x, y)
+		SELECT n.id, n.aperture_id, n.x, n.y
+		FROM aperture_resource_nodes n
+		WHERE NOT EXISTS (SELECT 1 FROM aperture_resource_node_cells c WHERE c.node_id = n.id)
+		ON CONFLICT DO NOTHING
+	`); err != nil {
+		return err
+	}
 
 	if err := execSchema("aperture_variant_humans", `
 	CREATE TABLE IF NOT EXISTS aperture_variant_humans (

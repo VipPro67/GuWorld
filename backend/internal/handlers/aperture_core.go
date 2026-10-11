@@ -375,6 +375,9 @@ func GetApertureNodes(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	var daoMarks models.DaoMarksMap
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoMarks)
+	daoProfile, _ := loadApertureDaoCombatProfile(db.DB, playerID.String(), daoMarks)
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT n.id, n.aperture_id, n.node_type, n.name, n.path, n.level, n.hp, n.max_hp, n.x, n.y,
@@ -383,7 +386,10 @@ func GetApertureNodes(c *gin.Context) {
 			COALESCE(n.node_category, 'RESOURCE'), COALESCE(n.defense_power, 0), COALESCE(n.attack_range, 0),
 			COALESCE(n.hp_bonus, 0), COALESCE(n.damage_reduction, 0), COALESCE(n.blocks_movement, false),
 			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0),
-			COALESCE(n.zone_type, ''), COALESCE(n.food_path, ''), COALESCE(n.item_tier, '')
+			COALESCE(n.zone_type, ''), COALESCE(n.food_path, ''), COALESCE(n.item_tier, ''),
+			COALESCE((SELECT json_agg(json_build_object('x', c.x, 'y', c.y) ORDER BY c.y, c.x)
+				FROM aperture_resource_node_cells c WHERE c.node_id = n.id),
+				json_build_array(json_build_object('x', n.x, 'y', n.y)))
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE a.player_id = $1 AND n.is_destroyed = false
@@ -398,14 +404,17 @@ func GetApertureNodes(c *gin.Context) {
 	for rows.Next() {
 		var n models.ApertureResourceNode
 		var lastCol sql.NullTime
+		var cellsJSON []byte
 		err = rows.Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.Path, &n.Level, &n.HP, &n.MaxHP, &n.X, &n.Y,
 			&n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol,
 			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
 			&n.NodeCategory, &n.DefensePower, &n.AttackRange,
 			&n.HPBonus, &n.DamageReduction, &n.BlocksMovement,
 			&n.RequiredGuID, &n.RequiredGuRank,
-			&n.ZoneType, &n.FoodPath, &n.ItemTier)
+			&n.ZoneType, &n.FoodPath, &n.ItemTier, &cellsJSON)
 		if err == nil {
+			_ = json.Unmarshal(cellsJSON, &n.Cells)
+			n.DaoConflictMultiplier = apertureDaoConflictMultiplierForProfile(daoProfile, n.Path)
 			if lastCol.Valid {
 				n.LastCollectedAt = &lastCol.Time
 			}
