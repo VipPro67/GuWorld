@@ -6,6 +6,7 @@ import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, g
 import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 import { GamePanel, GameButton, GameTabs, GameCard, GameInput, GameSelect } from "@/components/ui";
+import { EffectEnvelopeView } from "@/components/EffectBlockView";
 // UI migrated to shared components
 
 interface ShopItem {
@@ -737,6 +738,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredBuyItems.map((item) => {
+              const guSpec = item.type === "Gu" ? guSpecFor(item.id, item.rank) : undefined;
               const itemTier: StoneTier = item.currency === "immortal" ? "immortal" : "primeval";
               const canAfford = itemTier === "immortal"
                 ? (player.immortal_stones || 0) >= item.price
@@ -778,6 +780,16 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                       <p className="text-xs text-zinc-405 leading-normal mt-2 border-l-2 border-zinc-800 pl-2">
                         {item.description}
                       </p>
+                      {item.type === "Gu" && (
+                        <div className="mt-3">
+                          <h5 className="mb-1 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-500">Tác dụng</h5>
+                          {guSpec?.effects?.blocks?.length ? (
+                            <EffectEnvelopeView effects={guSpec.effects} />
+                          ) : (
+                            <p className="text-[10px] text-zinc-500">Cổ trùng này không có hiệu ứng được ghi nhận.</p>
+                          )}
+                        </div>
+                      )}
                     </details>
                   </div>
                   <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
