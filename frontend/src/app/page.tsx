@@ -138,6 +138,7 @@ export default function Home() {
       state.useItems,
       state.setVitalGu,
       state.useGu,
+      state.useSupportGu,
       state.useGus,
       state.dropGu,
       state.dropGus,
