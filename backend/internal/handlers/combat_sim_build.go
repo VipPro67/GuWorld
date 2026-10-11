@@ -36,6 +36,7 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
 	}
+	applyPveTitleDamage(simPlayer, player.ActiveCombat)
 	simState.Allies = append(simState.Allies, simPlayer)
 
 	// Load other party members as simulated allies
@@ -243,6 +244,23 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 	}
 
 	return simState, nil
+}
+
+func applyPveTitleDamage(combatant *simulator.CombatantAuto, activeCombat *models.CombatState) {
+	if combatant == nil || activeCombat == nil || activeCombat.TitleEffectSnapshot == nil ||
+		!isPveMonsterType(activeCombat.EnemyType) ||
+		!strings.EqualFold(activeCombat.TitleEffectSnapshot.MonsterType, activeCombat.EnemyType) ||
+		activeCombat.TitleEffectSnapshot.DamagePct <= 0 {
+		return
+	}
+	factor := 1 + activeCombat.TitleEffectSnapshot.DamagePct/100
+	combatant.BaseDmg *= factor
+	for i := range combatant.Actions {
+		combatant.Actions[i].Damage *= factor
+		combatant.Actions[i].BleedPerTurn *= factor
+		combatant.Actions[i].PoisonPerTurn *= factor
+		combatant.Actions[i].PhantomDmg *= factor
+	}
 }
 
 func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {

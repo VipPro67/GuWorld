@@ -386,6 +386,15 @@ func schemaPlayerExtras() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("backfill_player_achievements", `
+	INSERT INTO player_achievements(player_id, achievement_id)
+	SELECT p.id, achievement->>'achievement_id'
+	FROM players p
+	CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.earned_achievements)='array' THEN p.earned_achievements ELSE '[]'::jsonb END) AS achievement
+	WHERE COALESCE(achievement->>'achievement_id','') <> ''
+	ON CONFLICT(player_id, achievement_id) DO NOTHING;`); err != nil {
+		return err
+	}
 
 	return nil
 }

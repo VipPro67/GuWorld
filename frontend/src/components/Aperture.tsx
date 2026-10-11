@@ -205,10 +205,16 @@ export const Aperture: React.FC<ApertureProps> = ({
   const constitutionDictionary = store.constitutionDictionary;
   const raceDictionary = store.raceDictionary;
   const statusDictionary = store.statusDictionary;
+  const selectedTitleAchievement = store.achievements?.find((achievement: ApiResponseData) => achievement.id === store.selectedTitle);
+  const selectedTitleEffect = selectedTitleAchievement?.title_effect as ApiResponseData | undefined;
   const manaSnapshot = store.manaSnapshot;
   const passiveStats = store.passiveStats;
   const fetchPassiveStats = store.fetchPassiveStats;
   const [manaNow, setManaNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    void store.fetchAchievements();
+  }, [store.fetchAchievements]);
 
   useEffect(() => {
     if (!player || !manaSnapshot) return;
@@ -742,6 +748,22 @@ export const Aperture: React.FC<ApertureProps> = ({
 
         {activeTab === "growth" && (
           <div className="w-full z-10 space-y-5">
+            <div className="bg-amber-950/15 border border-amber-500/20 rounded-2xl p-3 sm:p-4">
+              <div className="flex items-center gap-2 text-amber-300 text-sm font-bold">
+                <Award className="w-4 h-4" />
+                <span>Hiệu Ứng Danh Hiệu Đang Trang Bị</span>
+              </div>
+              {selectedTitleAchievement && selectedTitleEffect ? (
+                <div className="mt-2 text-xs text-zinc-300 space-y-1">
+                  <div className="font-semibold text-zinc-100">{selectedTitleAchievement.name}</div>
+                  <div>Tăng {selectedTitleEffect.pve_damage_pct}% sát thương lên quái loại {selectedTitleEffect.pve_monster_type}.</div>
+                  {selectedTitleEffect.utility_pct > 0 && <div>Tăng {selectedTitleEffect.utility_pct}% sản lượng khi thu hoạch Tiên Khiếu.</div>}
+                  <div className="text-[10px] text-zinc-500">Chỉ áp dụng PvE với đúng loại quái; trận đang chạy giữ snapshot khi bắt đầu.</div>
+                </div>
+              ) : (
+                <div className="mt-2 text-xs text-zinc-500">Chưa trang bị danh hiệu có hiệu ứng.</div>
+              )}
+            </div>
             {/* Character Identity */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">

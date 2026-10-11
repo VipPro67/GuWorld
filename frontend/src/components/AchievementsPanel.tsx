@@ -23,6 +23,7 @@ interface AchievementItem {
   reward_type?: string;
   reward_val?: number;
   reward_label?: string;
+  title_effect?: { pve_monster_type: string; pve_damage_pct: number; utility_type?: string; utility_pct?: number };
 }
 
 interface QuestItem {
@@ -33,6 +34,19 @@ interface QuestItem {
   rewards: Array<{ type: string; id?: string; amount: number; label: string }>;
 }
 
+interface DailyMissionItem {
+  id: string;
+  title: string;
+  description: string;
+  target: number;
+  progress: number;
+  reward_type: string;
+  reward: number;
+  completed: boolean;
+  claimable: boolean;
+  claimed: boolean;
+}
+
 export default function AchievementsPanel() {
   const store = useGameStore();
   const { achievements, earnedAchievements, selectedTitle, selectedFrame } = store;
@@ -41,6 +55,8 @@ export default function AchievementsPanel() {
   useEffect(() => {
     store.fetchAchievements();
     store.fetchQuests();
+    store.fetchDailyMissions();
+    store.fetchAperture();
     // eslint-disable-next-deps
   }, []);
 
@@ -82,7 +98,17 @@ export default function AchievementsPanel() {
       </div>
 
       {subTab === "quests" && (
-        <MainQuestsPanel />
+        <>
+          <DailyMissionsPanel
+            missions={store.dailyMissions as DailyMissionItem[]}
+            resetAt={store.dailyMissionsResetAt}
+            onClaim={async (id) => {
+              const result = await store.claimDailyMission(id);
+              if (result?.success) store.addToast(result.message, "success");
+            }}
+          />
+          <MainQuestsPanel />
+        </>
       )}
 
       {subTab === "achievements" && (
@@ -129,7 +155,7 @@ export default function AchievementsPanel() {
               <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-y-auto pr-1">
                 {achievements.map((ach: AchievementItem) => {
                   const earned = isEarned(ach.id);
-                  const canClaim = !earned && isClaimableAchievement(ach.id, store.player);
+                  const canClaim = !earned && isClaimableAchievement(ach.id, store.player, store.aperture);
                   const isSelectedTitle = selectedTitle === ach.id;
                   const isSelectedFrame = selectedFrame === ach.id;
                   return (
@@ -152,6 +178,12 @@ export default function AchievementsPanel() {
                           <div className="text-[10px] text-zinc-400 font-serif leading-tight">
                             {ach.description}
                           </div>
+                          {ach.title_effect && (
+                            <div className="text-[10px] text-cyan-300 mt-0.5">
+                              +{ach.title_effect.pve_damage_pct}% sát thương PvE vs {ach.title_effect.pve_monster_type}
+                              {ach.title_effect.utility_pct ? ` · +${ach.title_effect.utility_pct}% sản lượng Tiên Khiếu` : ''}
+                            </div>
+                          )}
                           <div className="text-[10px] text-amber-300 font-mono mt-0.5">
                             {ach.reward_label}
                           </div>
@@ -221,6 +253,66 @@ export default function AchievementsPanel() {
         </>
       )}
     </div>
+  );
+}
+
+function DailyMissionsPanel({ missions, resetAt, onClaim }: {
+  missions: DailyMissionItem[];
+  resetAt: string;
+  onClaim: (id: string) => Promise<void>;
+}) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const secondsLeft = Math.max(0, Math.floor((Date.parse(resetAt) - now) / 1000));
+  const countdown = `${Math.floor(secondsLeft / 3600).toString().padStart(2, "0")}:${Math.floor((secondsLeft % 3600) / 60).toString().padStart(2, "0")}:${(secondsLeft % 60).toString().padStart(2, "0")}`;
+
+  return (
+    <section className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4 sm:p-5 shadow-inner space-y-3">
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-900 pb-2.5">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-amber-400" />
+          <h3 className="font-serif font-bold text-zinc-100 text-sm">Nhiệm Vụ Hằng Ngày</h3>
+        </div>
+        <span className="text-[10px] font-mono text-zinc-400">Làm mới sau {countdown}</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {missions.map((mission) => {
+          const pct = Math.min(100, Math.floor((mission.progress / Math.max(1, mission.target)) * 100));
+          const rewardLabel = mission.reward_type === "immortal_stones" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
+          return (
+            <div key={mission.id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-xs font-bold text-zinc-100">{mission.title}</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5">{mission.description}</div>
+                </div>
+                <span className="text-[10px] text-amber-300 whitespace-nowrap">+{mission.reward} {rewardLabel}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                <div className="h-full bg-amber-400 transition-all" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-zinc-500">{Math.min(mission.progress, mission.target)} / {mission.target}</span>
+                {mission.claimed ? (
+                  <span className="text-emerald-400">Đã nhận</span>
+                ) : mission.claimable ? (
+                  <button onClick={() => void onClaim(mission.id)} className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25">Nhận</button>
+                ) : mission.completed ? (
+                  <span className="text-emerald-400">Hoàn thành</span>
+                ) : (
+                  <span className="text-zinc-500">Đang thực hiện</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {missions.length === 0 && <p className="text-xs text-zinc-500">Đang tải nhiệm vụ…</p>}
+    </section>
   );
 }
 

@@ -622,6 +622,12 @@ func RefineGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return
 	}
+	if outcome == OutcomeSuccess {
+		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "refine:"+newGuInstance.InstanceID, "refine", "", 1); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật nhiệm vụ hằng ngày"})
+			return
+		}
+	}
 
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit refining transaction"})

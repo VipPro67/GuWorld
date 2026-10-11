@@ -124,7 +124,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 ### Thăng Tiên và Độ Kiếp
 
 - Ngũ Chuyển Đỉnh phong (Chuyển 5, SubRank 4) có thể thăng tiên khi Nhân Khí đạt từ 100.000 trở lên.
-- Nhân Thú Táng Sinh Cổ (`MAN_BEAST_BURIAL`) cho phép người chơi Rank 1–4 ở Đỉnh Phong cưỡng ép lên Rank kế tiếp Sơ Giai; rank Cổ phải bằng rank người dùng.
+- Nhân Thú Táng Sinh Cổ (`MAN_BEAST_BURIAL`) cho phép người chơi Rank 1–4 ở Đỉnh Phong cưỡng ép lên Rank kế tiếp Sơ Giai; rank Cổ phải bằng rank người dùng. Cổ trùng làm giảm 10 Chân Nguyên tối đa (tối thiểu 20), Chân Nguyên hiện tại cũng bị kẹp theo giới hạn mới.
 - **Tỉ lệ thành công phụ thuộc vào Tư chất và Nhân Khí:**
   - **Tỉ lệ gốc (`baseChance`):** Giáp: `20%`, Ất/Bính/Đinh: `5%` (tính từ `GetBreakthroughChance(6, Aptitude)` với phạt Rank 6 là 80%).
   - **Bonus Nhân Khí:** Mỗi 100.000 Nhân Khí cộng thêm `+20%` tỉ lệ (`qiBonus = (NhânKhí / 100.000) * 20%`).
@@ -1056,7 +1056,8 @@ Mô phỏng xã hội cập nhật nền sau mỗi vài phút, vì vậy số li
 ## 22. Nhiệm vụ, thành tựu và phần thưởng tài khoản
 
 - **Nhiệm vụ:** xem yêu cầu/tiến độ/phần thưởng rồi hoàn thành khi đủ điều kiện. Một số tiến độ được ghi tự động từ hoạt động gameplay.
-- **Thành tựu:** nhận thưởng cho thành tựu đã mở khóa. Danh hiệu/khung đã mở có thể được chọn để hiển thị trên hồ sơ.
+- **Thành tựu:** nhận thưởng khi đạt điều kiện; danh hiệu và khung chỉ chọn được sau khi đã nhận thành tựu tương ứng. Danh hiệu đang trang bị tăng 2% sát thương PvE trước một loại quái cố định và tăng 5% sản lượng Tiên Khiếu. Hiệu ứng được chụp khi bắt đầu trận, áp dụng mọi PvE phù hợp và không áp dụng PvP. Admin gỡ thành tựu sẽ tháo danh hiệu/hiệu ứng, không thu hồi thưởng đã nhận.
+- **Nhiệm vụ hằng ngày:** server tạo 5 nhiệm vụ theo Rank lúc 00:00 giờ Việt Nam, chọn từ hoạt động khám phá, PvE, tu luyện, luyện Cổ và thu hoạch. Tiến độ chỉ ghi từ hành động được server xác nhận; nhiệm vụ, tiến độ và thưởng chưa nhận hết hạn khi sang ngày mới. Bấm **Nhận** để nhận thưởng.
 - **Referral:** xem mã và thống kê, liên kết mã giới thiệu hợp lệ, sau đó nhận thưởng khi đạt điều kiện.
 - **Gift code:** nhập trong giao diện tài khoản/tiện ích; mỗi code tuân theo thời hạn, giới hạn và phần thưởng do Admin cấu hình.
 - **Thông báo:** chuông hiển thị số chưa đọc, mở chi tiết từng mục, đánh dấu một nhóm hoặc tất cả là đã đọc.

@@ -250,39 +250,48 @@ func DefaultAutoCombatConfig() AutoCombatConfig {
 	}
 }
 
+// TitleEffectSnapshot freezes the selected title's PvE bonus at combat start.
+type TitleEffectSnapshot struct {
+	AchievementID string  `json:"achievement_id"`
+	MonsterType   string  `json:"monster_type"`
+	DamagePct     float64 `json:"damage_pct"`
+}
+
 // CombatState represents the PVE combat status with a wild beast.
 type CombatState struct {
-	EnemyTemplateID         string         `json:"enemy_template_id,omitempty"`
-	WorldMonsterRegionID    string         `json:"world_monster_region_id,omitempty"`
-	WorldMonsterID          string         `json:"world_monster_id,omitempty"`
-	WorldMonsterEncounterID string         `json:"world_monster_encounter_id,omitempty"`
-	WorldBossCellRegionID   string         `json:"world_boss_cell_region_id,omitempty"`
-	WorldBossCellX          int            `json:"world_boss_cell_x,omitempty"`
-	WorldBossCellY          int            `json:"world_boss_cell_y,omitempty"`
-	EnemyName               string         `json:"enemy_name"`
-	EnemyAvatarURL          string         `json:"enemy_avatar_url,omitempty"`
-	EnemyType               string         `json:"enemy_type,omitempty"`
-	CombatMode              string         `json:"combat_mode,omitempty"` // "virtual" = illusion (no real cost), "real" = actual resource consumption, "" = legacy default
-	EnemyHP                 float64        `json:"enemy_hp"`
-	EnemyMaxHP              float64        `json:"enemy_max_hp"`
-	EnemyMana               float64        `json:"enemy_mana,omitempty"`
-	EnemyMaxMana            float64        `json:"enemy_max_mana,omitempty"`
-	EnemyDamage             float64        `json:"enemy_damage"`
-	EnemyDefense            float64        `json:"enemy_defense"`
-	EnemySpeed              float64        `json:"enemy_speed,omitempty"`
-	EnemyRank               int            `json:"enemy_rank,omitempty"`
-	EnemySubRank            int            `json:"enemy_sub_rank,omitempty"`
-	EnemyGuInventory        GuInventory    `json:"enemy_gu_inventory,omitempty"`
-	EnemyDaoMarks           DaoMarksMap    `json:"enemy_dao_marks,omitempty"`
-	EnemyPathMasteries      map[string]int `json:"enemy_path_masteries,omitempty"`
-	AIProfile               string         `json:"ai_profile,omitempty"`
-	LootTableID             string         `json:"loot_table_id,omitempty"`
-	ChargePoints            int            `json:"charge_points"`
-	TargetPlayerID          string         `json:"target_player_id,omitempty"`
-	TargetSectID            string         `json:"target_sect_id,omitempty"`
-	MineSlotID              int            `json:"mine_slot_id,omitempty"`
-	EnemyStatusEffects      []StatusEffect `json:"enemy_status_effects,omitempty"`
-	PlayerStatusEffects     []StatusEffect `json:"player_status_effects,omitempty"`
+	CombatID                string               `json:"combat_id,omitempty"`
+	TitleEffectSnapshot     *TitleEffectSnapshot `json:"title_effect_snapshot,omitempty"`
+	EnemyTemplateID         string               `json:"enemy_template_id,omitempty"`
+	WorldMonsterRegionID    string               `json:"world_monster_region_id,omitempty"`
+	WorldMonsterID          string               `json:"world_monster_id,omitempty"`
+	WorldMonsterEncounterID string               `json:"world_monster_encounter_id,omitempty"`
+	WorldBossCellRegionID   string               `json:"world_boss_cell_region_id,omitempty"`
+	WorldBossCellX          int                  `json:"world_boss_cell_x,omitempty"`
+	WorldBossCellY          int                  `json:"world_boss_cell_y,omitempty"`
+	EnemyName               string               `json:"enemy_name"`
+	EnemyAvatarURL          string               `json:"enemy_avatar_url,omitempty"`
+	EnemyType               string               `json:"enemy_type,omitempty"`
+	CombatMode              string               `json:"combat_mode,omitempty"` // "virtual" = illusion (no real cost), "real" = actual resource consumption, "" = legacy default
+	EnemyHP                 float64              `json:"enemy_hp"`
+	EnemyMaxHP              float64              `json:"enemy_max_hp"`
+	EnemyMana               float64              `json:"enemy_mana,omitempty"`
+	EnemyMaxMana            float64              `json:"enemy_max_mana,omitempty"`
+	EnemyDamage             float64              `json:"enemy_damage"`
+	EnemyDefense            float64              `json:"enemy_defense"`
+	EnemySpeed              float64              `json:"enemy_speed,omitempty"`
+	EnemyRank               int                  `json:"enemy_rank,omitempty"`
+	EnemySubRank            int                  `json:"enemy_sub_rank,omitempty"`
+	EnemyGuInventory        GuInventory          `json:"enemy_gu_inventory,omitempty"`
+	EnemyDaoMarks           DaoMarksMap          `json:"enemy_dao_marks,omitempty"`
+	EnemyPathMasteries      map[string]int       `json:"enemy_path_masteries,omitempty"`
+	AIProfile               string               `json:"ai_profile,omitempty"`
+	LootTableID             string               `json:"loot_table_id,omitempty"`
+	ChargePoints            int                  `json:"charge_points"`
+	TargetPlayerID          string               `json:"target_player_id,omitempty"`
+	TargetSectID            string               `json:"target_sect_id,omitempty"`
+	MineSlotID              int                  `json:"mine_slot_id,omitempty"`
+	EnemyStatusEffects      []StatusEffect       `json:"enemy_status_effects,omitempty"`
+	PlayerStatusEffects     []StatusEffect       `json:"player_status_effects,omitempty"`
 	// Defender-side character effects for PVP enemies (race/constitution/status).
 	EnemyPathResistance   map[string]float64 `json:"enemy_path_resistance,omitempty"`
 	EnemyMentalResistance float64            `json:"enemy_mental_resistance,omitempty"`

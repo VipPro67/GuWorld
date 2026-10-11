@@ -86,7 +86,7 @@ export function checkQuest(
 }
 
 
-export function isClaimableAchievement(achId: string, player: ApiResponseData): boolean {
+export function isClaimableAchievement(achId: string, player: ApiResponseData, aperture?: ApiResponseData | null): boolean {
   if (!player) return false;
   const rank = (player.rank as number) || 0;
   const guInventory = (player.gu_inventory as Array<{ gu_id?: string }>) || [];
@@ -113,11 +113,11 @@ export function isClaimableAchievement(achId: string, player: ApiResponseData): 
     case "rank_9":
       return rank >= 9;
     case "tribulation_1":
-      return rank >= 6;
+      return rank >= 6 && tribulationCount(aperture) >= 1;
     case "tribulation_5":
-      return rank >= 6;
+      return rank >= 6 && tribulationCount(aperture) >= 5;
     case "tribulation_10":
-      return rank >= 6;
+      return rank >= 6 && tribulationCount(aperture) >= 10;
     case "gu_10":
       return new Set(guInventory.map((g) => g.gu_id)).size >= 10;
     case "gu_25":
@@ -147,4 +147,15 @@ export function isClaimableAchievement(achId: string, player: ApiResponseData): 
     default:
       return false;
   }
+}
+
+function tribulationCount(aperture?: ApiResponseData | null): number {
+  if (!aperture) return 0;
+  return ([
+    "earth_calamity_count",
+    "heavenly_tribulation_count",
+    "grand_tribulation_count",
+    "myriad_tribulation_count",
+    "chaos_calamity_count",
+  ] as const).reduce((total, key) => total + (Number(aperture[key]) || 0), 0);
 }

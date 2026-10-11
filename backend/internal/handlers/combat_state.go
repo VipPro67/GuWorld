@@ -15,6 +15,10 @@ import (
 )
 
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
+	if base.CombatID == "" {
+		base.CombatID = uuid.NewString()
+		base.TitleEffectSnapshot = snapshotEquippedTitleEffect(tx, player.ID.String(), base.EnemyType)
+	}
 	if base.EnemyType == "PVP" && base.EnemyGuInventory != nil {
 		var filteredGu []models.GuInstance
 		for _, g := range base.EnemyGuInventory {

@@ -351,7 +351,10 @@ func TestSoulRegenTickAndMigrateAliases(t *testing.T) {
 
 func TestManBeastBurialBreakthrough(t *testing.T) {
 	makePlayer := func(rank, subRank int) *models.Player {
-		return &models.Player{CultivationState: models.CultivationState{Rank: rank, SubRank: subRank, WallProgress: 1}}
+		return &models.Player{
+			CultivationState: models.CultivationState{Rank: rank, SubRank: subRank, WallProgress: 1},
+			ResourceState:    models.ResourceState{MaxMana: 100, CurrentMana: 95},
+		}
 	}
 	apply := func(p *models.Player, specRank, instanceRank int) error {
 		spec := models.GuDictionaryItem{ID: "GU_MAN_BEAST_LIFE_BURIAL", Name: "Nhân Thú Táng Sinh Cổ", Rank: specRank}
@@ -365,8 +368,8 @@ func TestManBeastBurialBreakthrough(t *testing.T) {
 		if err := apply(p, rank, rank); err != nil {
 			t.Fatalf("rank %d: unexpected error: %v", rank, err)
 		}
-		if p.Rank != rank+1 || p.SubRank != 1 || p.WallProgress != 0 {
-			t.Errorf("rank %d breakthrough = rank %d sub %d wall %.1f, want rank %d sub 1 wall 0", rank, p.Rank, p.SubRank, p.WallProgress, rank+1)
+		if p.Rank != rank+1 || p.SubRank != 1 || p.WallProgress != 0 || p.MaxMana != 90 || p.CurrentMana != 90 {
+			t.Errorf("rank %d breakthrough = rank %d sub %d wall %.1f max/current mana %.1f/%.1f, want rank %d sub 1 wall 0 max/current mana 90/90", rank, p.Rank, p.SubRank, p.WallProgress, p.MaxMana, p.CurrentMana, rank+1)
 		}
 	}
 

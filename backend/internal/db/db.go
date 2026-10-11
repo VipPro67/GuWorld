@@ -258,6 +258,7 @@ func InitSchema() error {
 		{"world", schemaWorld},
 		{"parties", schemaParties},
 		{"players", schemaPlayers},
+		{"daily_missions", schemaDailyMissions},
 		{"world_drops", schemaMapGroundDrops},
 		{"admin_roles", schemaAdminRoles},
 		{"authorization", schemaAuthorization},

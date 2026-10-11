@@ -478,7 +478,14 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		player.Rank++
 		player.SubRank = 1
 		player.WallProgress = 0
-		return fmt.Sprintf("%s cưỡng ép đột phá! Tu vi nâng lên %s Sơ Giai.", spec.Name, models.GetRankName(player.Rank)), nil
+		player.MaxMana -= 10
+		if player.MaxMana < 20 {
+			player.MaxMana = 20
+		}
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
+		return fmt.Sprintf("%s cưỡng ép đột phá! Tu vi nâng lên %s Sơ Giai, Chân Nguyên tối đa giảm 10.", spec.Name, models.GetRankName(player.Rank)), nil
 	case "APERTURE_PETRIFICATION", "STONE_APERTURE":
 		player.SubRank = 4
 		player.MaxMana -= 15

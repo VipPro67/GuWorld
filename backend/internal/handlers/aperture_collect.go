@@ -133,6 +133,9 @@ func CollectApertureResource(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tính sản lượng mỏ"})
 		return
 	}
+	if bonus := equippedTitleUtilityBonus(tx, playerID.String()); bonus > 0 {
+		totalReward = int64(math.Floor(float64(totalReward) * (1 + bonus/100)))
+	}
 
 	// 3. Grant rewards
 	var rewardMsg string
@@ -182,6 +185,15 @@ func CollectApertureResource(c *gin.Context) {
 	`, nodeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật thời gian mỏ"})
+		return
+	}
+	var rank int
+	if err := tx.QueryRow(`SELECT rank FROM players WHERE id=$1`, playerID).Scan(&rank); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tải được cảnh giới"})
+		return
+	}
+	if err := TrackDailyMissionProgress(tx, playerID, rank, "aperture-collect:"+nodeID.String()+":"+lastTime.UTC().Format(time.RFC3339Nano), "aperture_collect", "", 1); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật nhiệm vụ hằng ngày"})
 		return
 	}
 
@@ -340,13 +352,13 @@ func nodeDaoPurity(nodeDaoMap map[string]int) float64 {
 }
 
 type apertureRewardContext struct {
-	nodeDaoMap          map[string]int
+	nodeDaoMap              map[string]int
 	daoConflictReductionPct float64
-	overgrazing         bool
-	herbivores          int
-	starvationHerb      bool
-	starvationCarn      bool
-	variantHumans       map[string]struct {
+	overgrazing             bool
+	herbivores              int
+	starvationHerb          bool
+	starvationCarn          bool
+	variantHumans           map[string]struct {
 		population     int
 		laborIntensity string
 	}
@@ -376,7 +388,7 @@ func loadApertureRewardContext(tx *sql.Tx, playerID uuid.UUID, apertureID any, a
 		player := &models.Player{
 			CharacterState: models.CharacterState{Race: race, Constitution: constitution},
 			BodyState:      models.BodyState{BodyMods: bodyMods},
-			GuInventory:   guInventory,
+			GuInventory:    guInventory,
 		}
 		ctx.daoConflictReductionPct = gamefx.Get(player).DaoConflictReductionPct
 	}

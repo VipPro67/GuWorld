@@ -20,6 +20,16 @@ import (
 // Shared by AutoCombatStart and AutoResolveCombat so post-combat state is
 // identical on both paths.
 func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation, alliesAlive bool, updateQuery string, args []interface{}, finalPlayerHP, finalMana float64, before models.GuInventory, logs []simulator.CombatLog) ([]simulator.CombatLog, error) {
+	if alliesAlive && !isVirtual && player.ActiveCombat != nil && player.ActiveCombat.MineSlotID == 0 &&
+		player.ActiveCombat.TargetSectID == "" && isPveMonsterType(player.ActiveCombat.EnemyType) {
+		eventID := player.ActiveCombat.CombatID
+		if eventID == "" {
+			eventID = uuid.NewString()
+		}
+		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "combat:"+eventID, "pve_victory", player.ActiveCombat.EnemyType, 1); err != nil {
+			return logs, fmt.Errorf("daily mission PvE progress: %w", err)
+		}
+	}
 	// Fire ON_COMBAT_END on equipped ACTIVE Gus
 	var combatEndMsg string
 	for _, gu := range player.GuInventory {

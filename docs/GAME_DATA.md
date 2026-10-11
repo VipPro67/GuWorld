@@ -1,5 +1,18 @@
 # Game Data
 
+## Daily missions
+
+Daily mission progress is stored in `player_daily_missions`; `player_daily_mission_events`
+deduplicates server-confirmed activities, and `player_daily_mission_rank_snapshots`
+locks each player's rank at the 00:00 `Asia/Ho_Chi_Minh` rollover. The rollover
+worker expires prior-day rows and snapshots current ranks. Mission definitions
+and rank-eligible pools currently live in `handlers/daily_missions.go`.
+
+`player_achievements` is the authoritative ownership table. Schema initialization
+backfills legacy `players.earned_achievements`; handlers continue dual-writing the
+JSONB field during the compatibility period. Admin revocation clears both records
+and any matching equipped title/frame, while leaving previously claimed rewards.
+
 ## Effect block migration audit
 
 Legacy effects are converted by format, not through a shared best-effort
@@ -545,7 +558,7 @@ Các trường quan trọng trong dictionary:
     - `SEIZE_INITIATIVE` (`event_trigger: ON_BATTLE_START`, Thỉnh Đạo Hữu Tiên Hành Cổ): trên lượt 1, nếu thọ nguyên đối thủ chính (`Enemies[0]`; quái dùng bảng quy đổi theo rank, Cổ sư dùng `players.lifespan`) không hơn `lifespan_ratio` (default 3) lần thọ nguyên chủ Cổ thì chủ Cổ nhảy lên đầu thứ tự hành động, địch vẫn đánh sau theo tốc độ thường (không bỏ lượt).
     - `REBORN` thống nhất (`mode: rewind` reset cả trận / `in_place` đứng dậy tại chỗ): `chance` (0..1, required), `mode`, `max_uses` (0–10, default 1; 0 = hồi sinh vô hạn), `turn1_guaranteed`, `revive_hp_percent` (default 0.5), `clear_debuffs` (default true), `empower_attack/speed/shield_percent` + `empower_turns` (default 100; stack `ATK_UP`/`HASTE` + khiên mỗi lần sống dậy). Counter `rebornUses` sống qua rewind; `REVIVE_LOCK` chặn cả 2 mode; mode `rewind` ưu tiên khi cùng lượt có cả 2. **Phe địch chỉ hồi sinh `in_place`** (không rewind); mode bỏ trống ở phe ta = `rewind` như cũ.
     - `BYPASS_SHIELD` (`ON_HIT`) chỉ xuyên Khiên Ảo — không trừ thủ (muốn trừ thủ dùng `ignore_defense*`). `FIRST_TURN_EVADE` chỉ né đòn đánh đầu tiên Lượt 1 (multi-hit/AoE sau đó vẫn trúng, rider `damage_hp_percent`/strip của đòn bị né cũng bị bỏ). Đòn đánh thường fallback chạy qua `runOne` nên chịu `FORGET_INTENT/WILL`, backlash, mana, hunger và ngộ đạo như đòn thường.
-    - Alias consume đã chạy (không còn 400): `STONE_APERTURE`→`APERTURE_PETRIFICATION`, `POISON_VOW`→`CONTRACT_OATH`, `THIRD_WATCH`→`TIME_ACCELERATION`, `RECORD_MESSAGE`→`RECORD` (dùng qua endpoint Support, trigger `ON_USE`). `MAN_BEAST_BURIAL` cho phép Cổ Sư Rank 1–4 ở Đỉnh Phong đột phá lên Rank kế tiếp Sơ Giai khi rank Cổ trùng bằng rank người dùng; `SPRING_EGG_HATCH` vẫn chưa hỗ trợ. Endpoint Support persist đủ cột như Consumable.
+    - Alias consume đã chạy (không còn 400): `STONE_APERTURE`→`APERTURE_PETRIFICATION`, `POISON_VOW`→`CONTRACT_OATH`, `THIRD_WATCH`→`TIME_ACCELERATION`, `RECORD_MESSAGE`→`RECORD` (dùng qua endpoint Support, trigger `ON_USE`). `MAN_BEAST_BURIAL` cho phép Cổ Sư Rank 1–4 ở Đỉnh Phong đột phá lên Rank kế tiếp Sơ Giai khi rank Cổ trùng với rank người dùng; giảm 10 Chân Nguyên tối đa (tối thiểu 20) và kẹp Chân Nguyên hiện tại theo giới hạn mới. `SPRING_EGG_HATCH` vẫn chưa hỗ trợ. Endpoint Support persist đủ cột như Consumable.
     - Build phe địch chỉ nhận Cổ **đã trang bị + ACTIVE** (khớp phe ta; hunger vẫn miễn cho quái vì quái đánh ở Hunger 0 theo thiết kế, hunger-gate của engine chỉ áp dụng Kind Player).
     - `GU_SEAL` (`disable_gu_next_turn`, `FORGET_EGO`, `FORGET_INTENT_INTERRUPT`, backfire): engine enforce trong `runOne` — combatant `HasGuSeal` không thể dùng `GU_SKILL` (đánh thường vẫn được, như `SILENCE`); seal N lượt = `Duration N+1` vì duration tick đầu lượt; Tenacity có thể tự giải.
     - `BEFORE_ENEMY_ATTACK` chạy trong `runOne` trước khi đòn đánh resolve: `FORGET_INTENT_INTERRUPT` (`chance`, `disable_target_gu_turns`, `max_successful_activations`, `backfire_after_max`) seal đòn hiện tại vẫn trúng, lượt sau bị cấm; `FORGET_WILL_CONFUSE` (`activation_chance`, `hit_user/self/miss_chance`, `backfire_chance`, `backfire_disable_turns`) override target đã resolve (đánh chủ Cổ / tự đánh mình / hụt hẳn).
@@ -648,7 +661,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | Trigger | Action code | Target / unit & scaling | Executor; persistence owner | Test |
 |---|---|---|---|---|
 | `ON_CONSUME` | `SACRIFICE_APTITUDE`, `RANK_PROGRESS`, `ADD_SOUL_MAX`, `ADD_LIFESPAN_YEARS`, `RESTORE_SOUL_HP`, `RESTORE_MENTAL`, `INCREASE_TIME_SPEED`, `REDUCE_STRESS`, `ADD_THOUGHT_MAX`, `DECREASE_TIME_SPEED` | self; typed flat/rank/year/multiplier theo params | `gu-consume`; `players`/aperture | `handlers/gu_effects_test.go` + catalog |
-| `ON_CONSUME` | `MAN_BEAST_BURIAL` | self; yêu cầu người dùng Rank 1–4, Đỉnh Phong và rank Cổ trùng bằng rank người dùng; tăng 1 rank, về Sơ Giai, reset wall progress | `gu-consume`; `players` | `TestManBeastBurialBreakthrough` + catalog |
+| `ON_CONSUME` | `MAN_BEAST_BURIAL` | self; yêu cầu người dùng Rank 1–4, Đỉnh Phong và rank Cổ trùng với rank người dùng; tăng 1 rank, về Sơ Giai, reset wall progress, giảm 10 Chân Nguyên tối đa (tối thiểu 20) | `gu-consume`; `players` | `TestManBeastBurialBreakthrough` + catalog |
 | `ALWAYS_ON` | `DEDUCTION_INSTANT_FINISH` | self; `base_chance + (guRank - targetRank) * per_rank_step`, clamp `[min_chance, max_chance]`; 1 roll/lần thôi diễn, Cổ rank cao nhất thắng, cost vẫn trừ | `DeduceRecipe`; `player_recipe_progress` | `gamefx/balance_test.go` + catalog |
 | `COMBAT_PASSIVE` | `REVERSE_CALAMITY` | self; đảo nghịch mọi trạng thái bất lợi nguồn địch về hư vô (mất lượt, cướp Cổ, phong ấn, debuff); chỉ sát thương xuyên qua | simulator (`status_apply`, interrupt/seal gates) + `handlePreCombatSteal`; combat state | simulator + catalog |
 | `ON_BATTLE_START` | `SUPPRESS_PRIORITY` | self/side; vô hiệu `SEIZE_INITIATIVE` + `FIRST_TURN_EVADE` của địch; trấn áp thành công (ưu tiên địch đủ điều kiện kích hoạt) thì người mang đi trước Lượt 1; song Cấm thì suppressor nhanh hơn đi trước | simulator (`seizeInitiative`, suppress-first, evade gate); combat state | simulator + catalog |

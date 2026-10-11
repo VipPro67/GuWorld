@@ -7,7 +7,11 @@ export interface AchievementsSlice {
   earnedAchievements: ApiResponseData[];
   selectedTitle: string;
   selectedFrame: string;
+  dailyMissions: ApiResponseData[];
+  dailyMissionsResetAt: string;
   fetchAchievements: () => Promise<void>;
+  fetchDailyMissions: () => Promise<void>;
+  claimDailyMission: (missionId: string) => Promise<{ success: boolean; message: string } | null>;
   claimAchievement: (achievementId: string) => Promise<{ success: boolean; message: string } | null>;
   selectTitleFrame: (title: string, frame: string) => Promise<{ success: boolean; message: string } | null>;
 }
@@ -17,6 +21,46 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
   earnedAchievements: [],
   selectedTitle: '',
   selectedFrame: '',
+  dailyMissions: [],
+  dailyMissionsResetAt: '',
+
+  fetchDailyMissions: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/daily-missions`);
+      if (response.status === 401) return;
+      if (response.ok) {
+        const data = await response.json();
+        set({ dailyMissions: data.missions || [], dailyMissionsResetAt: data.reset_at || '' });
+      }
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      console.error("Daily mission fetch error:", err.message);
+      get().addToast("Lỗi tải nhiệm vụ hằng ngày.", "error");
+    }
+  },
+
+  claimDailyMission: async (missionId) => {
+    const { token, logout } = get();
+    if (!token) return null;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/daily-missions/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mission_id: missionId }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nhận thưởng nhiệm vụ thất bại.");
+      await Promise.all([get().fetchDailyMissions(), get().refreshPlayerSummary()]);
+      return { success: true, message: data.message || "Đã nhận thưởng nhiệm vụ." };
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      get().addToast(err.message, "error");
+      return { success: false, message: err.message };
+    }
+  },
 
   fetchAchievements: async () => {
     const { token } = get();

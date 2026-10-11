@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -14,15 +16,23 @@ import (
 )
 
 type AchievementDef struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Icon        string  `json:"icon"`
-	HasFrame    bool    `json:"has_frame"`
-	RewardType  string  `json:"reward_type"`
-	RewardID    string  `json:"reward_id,omitempty"`
-	RewardVal   float64 `json:"reward_val"`
-	RewardLabel string  `json:"reward_label"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Icon        string          `json:"icon"`
+	HasFrame    bool            `json:"has_frame"`
+	RewardType  string          `json:"reward_type"`
+	RewardID    string          `json:"reward_id,omitempty"`
+	RewardVal   float64         `json:"reward_val"`
+	RewardLabel string          `json:"reward_label"`
+	TitleEffect *TitleEffectDef `json:"title_effect,omitempty"`
+}
+
+type TitleEffectDef struct {
+	PveMonsterType string  `json:"pve_monster_type"`
+	PveDamagePct   float64 `json:"pve_damage_pct"`
+	UtilityType    string  `json:"utility_type"`
+	UtilityPct     float64 `json:"utility_pct"`
 }
 
 var achievementRegistry = []AchievementDef{
@@ -59,6 +69,31 @@ var achievementRegistry = []AchievementDef{
 
 	{ID: "wall_crack_50", Name: "Bích Liệt Tiên Phong", Description: "Xung kích bích chướng Không Khiếu đạt 50%", Icon: "⚡", RewardType: "primeval_stones", RewardVal: 500, RewardLabel: "500 Nguyên Thạch"},
 	{ID: "wall_crack_100", Name: "Phá Bích Đột Phá", Description: "Xung kích bích chướng Không Khiếu đạt 100%", Icon: "💥", HasFrame: true, RewardType: "primeval_stones", RewardVal: 1000, RewardLabel: "1.000 Nguyên Thạch"},
+}
+
+func init() {
+	for i := range achievementRegistry {
+		achievementRegistry[i].TitleEffect = titleEffectForAchievement(achievementRegistry[i].ID)
+	}
+}
+
+func titleEffectForAchievement(id string) *TitleEffectDef {
+	monsterType := "Normal"
+	switch id {
+	case "rank_2", "explorer_100", "explorer_500", "explorer_1000", "wall_crack_50", "wall_crack_100":
+		monsterType = "Normal"
+	case "rank_3", "rank_4", "gu_10", "gu_25", "gu_50", "human_qi_1000", "human_qi_10000", "human_qi_100000":
+		monsterType = "Elite"
+	case "rank_5", "rank_6", "rank_8", "rank_9", "millionaire":
+		monsterType = "Boss"
+	case "rank_7", "tribulation_1", "tribulation_5", "tribulation_10":
+		monsterType = "Tribulation_Boss"
+	case "soul_awaken":
+		monsterType = "Tribulation_Monster"
+	case "first_combat":
+		monsterType = "Normal"
+	}
+	return &TitleEffectDef{PveMonsterType: monsterType, PveDamagePct: 2, UtilityType: "aperture_yield", UtilityPct: 5}
 }
 
 type PlayerAchievementData struct {
@@ -99,6 +134,37 @@ func GetAchievements(c *gin.Context) {
 	if earned == nil {
 		earned = []PlayerAchievementData{}
 	}
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT achievement_id, unlocked_at FROM player_achievements WHERE player_id = $1`, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách thành tựu"})
+		return
+	}
+	for rows.Next() {
+		var entry PlayerAchievementData
+		var unlockedAt time.Time
+		if err := rows.Scan(&entry.AchievementID, &unlockedAt); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+			return
+		}
+		entry.ClaimedAt = unlockedAt.Format(time.RFC3339)
+		found := false
+		for _, existing := range earned {
+			if existing.AchievementID == entry.AchievementID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			earned = append(earned, entry)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		return
+	}
+	rows.Close()
 
 	c.JSON(http.StatusOK, AchievementsResponse{
 		Achievements:  achievementRegistry,
@@ -147,10 +213,16 @@ func ClaimAchievement(c *gin.Context) {
 	}
 
 	var earnedJSON []byte
-	tx.QueryRow(`SELECT COALESCE(earned_achievements, '[]'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&earnedJSON)
+	if err := tx.QueryRow(`SELECT COALESCE(earned_achievements, '[]'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&earnedJSON); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		return
+	}
 	var earned []PlayerAchievementData
 	if len(earnedJSON) > 0 {
-		json.Unmarshal(earnedJSON, &earned)
+		if err := json.Unmarshal(earnedJSON, &earned); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu thành tựu không hợp lệ"})
+			return
+		}
 	}
 
 	for _, e := range earned {
@@ -159,8 +231,22 @@ func ClaimAchievement(c *gin.Context) {
 			return
 		}
 	}
+	var adminGranted bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM player_achievements WHERE player_id = $1 AND achievement_id = $2)`, playerID, req.AchievementID).Scan(&adminGranted); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		return
+	}
+	if adminGranted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thành tựu này đã được nhận"})
+		return
+	}
 
-	if !checkAchievementCondition(ach, &player) {
+	conditionMet, conditionErr := checkAchievementCondition(tx, ach, &player)
+	if conditionErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra điều kiện thành tựu"})
+		return
+	}
+	if !conditionMet {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chưa đạt điều kiện thành tựu này"})
 		return
 	}
@@ -183,6 +269,10 @@ func ClaimAchievement(c *gin.Context) {
 			return
 		}
 	}
+	if _, err := tx.Exec(`INSERT INTO player_achievements (player_id, achievement_id) VALUES ($1, $2) ON CONFLICT (player_id, achievement_id) DO NOTHING`, playerID, req.AchievementID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu thành tựu"})
+		return
+	}
 
 	qiGained := 0.0
 
@@ -203,66 +293,72 @@ func ClaimAchievement(c *gin.Context) {
 	})
 }
 
-func checkAchievementCondition(ach *AchievementDef, player *models.Player) bool {
+func checkAchievementCondition(tx *sql.Tx, ach *AchievementDef, player *models.Player) (bool, error) {
 	switch ach.ID {
 	case "first_combat":
-		return len(player.ClearedCells) > 0 || player.ExploreCount > 0
+		return len(player.ClearedCells) > 0, nil
 	case "rank_2":
-		return player.Rank >= 2
+		return player.Rank >= 2, nil
 	case "rank_3":
-		return player.Rank >= 3
+		return player.Rank >= 3, nil
 	case "rank_4":
-		return player.Rank >= 4
+		return player.Rank >= 4, nil
 	case "rank_5":
-		return player.Rank >= 5
+		return player.Rank >= 5, nil
 	case "rank_6":
-		return player.Rank >= 6
+		return player.Rank >= 6, nil
 	case "rank_7":
-		return player.Rank >= 7
+		return player.Rank >= 7, nil
 	case "rank_8":
-		return player.Rank >= 8
+		return player.Rank >= 8, nil
 	case "rank_9":
-		return player.Rank >= 9
+		return player.Rank >= 9, nil
 	case "tribulation_1":
-		var tribCount int
-		_ = db.DB.QueryRow(`SELECT earth_calamity_count + heavenly_tribulation_count + grand_tribulation_count + myriad_tribulation_count + chaos_calamity_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
-		return tribCount >= 1
+		return achievementTribulationCount(tx, player.ID, 1)
 	case "tribulation_5":
-		var tribCount int
-		_ = db.DB.QueryRow(`SELECT earth_calamity_count + heavenly_tribulation_count + grand_tribulation_count + myriad_tribulation_count + chaos_calamity_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
-		return tribCount >= 5
+		return achievementTribulationCount(tx, player.ID, 5)
 	case "tribulation_10":
-		var tribCount int
-		_ = db.DB.QueryRow(`SELECT earth_calamity_count + heavenly_tribulation_count + grand_tribulation_count + myriad_tribulation_count + chaos_calamity_count FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&tribCount)
-		return tribCount >= 10
+		return achievementTribulationCount(tx, player.ID, 10)
 	case "gu_10":
-		return countDistinctGu(player) >= 10
+		return countDistinctGu(player) >= 10, nil
 	case "gu_25":
-		return countDistinctGu(player) >= 25
+		return countDistinctGu(player) >= 25, nil
 	case "gu_50":
-		return countDistinctGu(player) >= 50
+		return countDistinctGu(player) >= 50, nil
 	case "explorer_100":
-		return len(player.VisitedSubZones) >= 100
+		return len(player.VisitedSubZones) >= 100, nil
 	case "explorer_500":
-		return len(player.VisitedSubZones) >= 500
+		return len(player.VisitedSubZones) >= 500, nil
 	case "explorer_1000":
-		return len(player.VisitedSubZones) >= 600
+		return len(player.VisitedSubZones) >= 600, nil
 	case "millionaire":
-		return player.PrimevalStones >= 1000000
+		return player.PrimevalStones >= 1000000, nil
 	case "human_qi_1000":
-		return player.HumanQi >= 1000
+		return player.HumanQi >= 1000, nil
 	case "human_qi_10000":
-		return player.HumanQi >= 10000
+		return player.HumanQi >= 10000, nil
 	case "human_qi_100000":
-		return player.HumanQi >= 100000
+		return player.HumanQi >= 100000, nil
 	case "soul_awaken":
-		return player.SoulHP >= 100
+		return player.SoulHP >= 100, nil
 	case "wall_crack_50":
-		return player.WallProgress >= 0.5
+		return player.WallProgress >= 0.5, nil
 	case "wall_crack_100":
-		return player.WallProgress >= 1.0
+		return player.WallProgress >= 1.0, nil
 	}
-	return false
+	return false, nil
+}
+
+func achievementTribulationCount(tx *sql.Tx, playerID uuid.UUID, target int) (bool, error) {
+	var count int
+	err := tx.QueryRow(`SELECT COALESCE(earth_calamity_count,0)+COALESCE(heavenly_tribulation_count,0)+COALESCE(grand_tribulation_count,0)+COALESCE(myriad_tribulation_count,0)+COALESCE(chaos_calamity_count,0) FROM immortal_apertures WHERE player_id=$1`, playerID).Scan(&count)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return count >= target, nil
 }
 
 func countDistinctGu(player *models.Player) int {
@@ -301,6 +397,9 @@ func SelectTitleFrame(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Danh hiệu không tồn tại"})
 			return
 		}
+		if !playerOwnsAchievement(c, playerID.String(), req.Title) {
+			return
+		}
 	}
 
 	if req.Frame != "" {
@@ -315,6 +414,9 @@ func SelectTitleFrame(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Frame không tồn tại hoặc không phải frame"})
 			return
 		}
+		if !playerOwnsAchievement(c, playerID.String(), req.Frame) {
+			return
+		}
 	}
 
 	_, err := db.DB.Exec(`UPDATE players SET selected_title = $1, selected_frame = $2 WHERE id = $3`, req.Title, req.Frame, playerID)
@@ -324,4 +426,32 @@ func SelectTitleFrame(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật danh hiệu và frame"})
+}
+
+func playerOwnsAchievement(c *gin.Context, playerID, achievementID string) bool {
+	var exists bool
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM player_achievements WHERE player_id = $1 AND achievement_id = $2)`, playerID, achievementID).Scan(&exists); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		return false
+	}
+	if exists {
+		return true
+	}
+	var earnedJSON []byte
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(earned_achievements, '[]'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&earnedJSON); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc thành tựu"})
+		return false
+	}
+	var earned []PlayerAchievementData
+	if err := json.Unmarshal(earnedJSON, &earned); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Dữ liệu thành tựu không hợp lệ"})
+		return false
+	}
+	for _, entry := range earned {
+		if entry.AchievementID == achievementID {
+			return true
+		}
+	}
+	c.JSON(http.StatusForbidden, gin.H{"error": "Bạn chưa mở khóa danh hiệu hoặc frame này"})
+	return false
 }

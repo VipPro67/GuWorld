@@ -125,7 +125,11 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 	player.X = x
 	player.Y = y
 	player.CurrentRegion = destinationRegion
-	recordVisitedSubZone(player, SubZoneKey(player.X, player.Y))
+	visitedSubZone := SubZoneKey(player.X, player.Y)
+	recordVisitedSubZone(player, visitedSubZone)
+	if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "explore:"+player.CurrentRegion+":"+visitedSubZone, "explore", "", 1); err != nil {
+		return "", false, err
+	}
 
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 	isCleared := isCellClearedRecently(player.CurrentRegion, player.X, player.Y, clearedCellCooldown)
@@ -316,6 +320,9 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				if err := InventorySvc.AddItem(tx, player.ID.String(), cell.Content, "materials", 1); err != nil {
 					logger.S.Errorf("Failed to add resource %s to player %s: %v", cell.Content, player.ID, err)
 					// Propagate: a failed write poisons the tx (25P02 on next statement).
+					return "", false, err
+				}
+				if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, fmt.Sprintf("gather:%s:%d:%d", player.CurrentRegion, player.X, player.Y), "collect", "", 1); err != nil {
 					return "", false, err
 				}
 				if player.MaterialsInventory == nil {

@@ -175,6 +175,7 @@ func main() {
 	worker.StartSectTerritoryWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartSectMaintenanceWorker(ctx, db.DB, 24*time.Hour)
 	worker.StartCombatHistoryCleanup(ctx, db.DB, 24*time.Hour)
+	worker.StartDailyMissionRolloverWorker(ctx, db.DB, 5*time.Minute)
 	handlers.StartLastActivityFlusher(ctx)
 	worker.StartBatchPersister(ctx, 5*time.Second)
 	worker.StartVariantProductionWorker(ctx, db.DB, 10*time.Minute) // Phase 1: auto-production tick

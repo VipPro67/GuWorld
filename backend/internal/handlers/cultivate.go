@@ -165,6 +165,10 @@ func BreakWall(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 				return
 			}
+			if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, fmt.Sprintf("cultivate:%s:%d", player.ID, time.Now().UnixNano()), "cultivate", "", 1); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật nhiệm vụ hằng ngày"})
+				return
+			}
 
 			tx.Commit()
 
@@ -208,6 +212,10 @@ func BreakWall(c *gin.Context) {
 	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.WallProgress, player.MaxMana, player.SubRank, player.Rank, player.LastManaUpdate, player.HumanQi, player.ApertureStress, player.LastCultivateTime, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save cultivation progress"})
+		return
+	}
+	if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, fmt.Sprintf("cultivate:%s:%d", player.ID, time.Now().UnixNano()), "cultivate", "", 1); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật nhiệm vụ hằng ngày"})
 		return
 	}
 

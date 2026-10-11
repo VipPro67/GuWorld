@@ -115,6 +115,8 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | GET | `/achievements` |
 | POST | `/achievements/claim` |
 | POST | `/achievements/select` |
+| GET | `/daily-missions` | Lấy 5 nhiệm vụ cá nhân theo Rank đã khóa trong ngày Việt Nam; lần đầu truy cập cũng khởi tạo bộ nhiệm vụ nếu cần. |
+| POST | `/daily-missions/claim` | Nhận thưởng nhiệm vụ đã hoàn thành; body `{ "mission_id": "..." }`; mỗi nhiệm vụ nhận một lần. |
 
 ## Inventory and refining
 

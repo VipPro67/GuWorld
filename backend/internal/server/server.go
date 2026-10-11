@@ -639,6 +639,15 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			achievement.POST("/select", handlers.SelectTitleFrame)
 		}
 
+		dailyMissions := api.Group("/daily-missions")
+		dailyMissions.Use(middleware.AuthRequired())
+		dailyMissions.Use(middleware.RequireOnboarded())
+		dailyMissions.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		{
+			dailyMissions.GET("", handlers.GetDailyMissions)
+			dailyMissions.POST("/claim", handlers.ClaimDailyMission)
+		}
+
 		// Party — group: 30/min, per player: 20/min
 		party := api.Group("/party")
 		party.Use(middleware.AuthRequired())
