@@ -6,6 +6,7 @@ import { CELL_CHUNK_SIZE, useWorldStore, type CellChunk, type NearbyCell, type N
 import { legacyMonsterHasRuntimeReplacement, runtimeMonsterReplacementKey } from "@/store/worldMonsterReducer";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { useUIStore } from "@/store/useUIStore";
+import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
 import { MONSTER_ATLAS_MANIFEST } from "./monsterAtlasManifest";
 
 const BG_COLOR = 0x1d1e2c;
@@ -111,7 +112,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
   const monsterIconTextureRef = useRef<Texture | null>(null);
   const monsterTexturesByIdRef = useRef<Record<string, Texture>>({});
   const regionBackgroundTexturesRef = useRef<Record<string, Texture>>({});
-  const resourceIconTextureRef = useRef<Texture | null>(null);
+  const resourceIconTexturesRef = useRef<Record<string, Texture>>({});
   const fogDirtyRef = useRef(true);
   const scaleRef = useRef<number>(0.05);
   const modeRef = useRef(mode);
@@ -1542,8 +1543,11 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         monsterCount++;
       } else if (c.cell_type === "Resource") {
         if (Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py) > visionRadius) continue;
-        if (resourceIconTextureRef.current) {
-          const sprite = new Sprite(resourceIconTextureRef.current);
+        const item = useGameStore.getState().itemDictionary[c.content];
+        const resourceGroup = getWorldResourceGroup(c.content, item?.item_type || item?.type);
+        const texture = resourceIconTexturesRef.current[resourceGroup] || resourceIconTexturesRef.current.herb;
+        if (texture) {
+          const sprite = new Sprite(texture);
           sprite.anchor.set(0.5, 0.72);
           sprite.position.set(c.x + 0.5, c.y + 0.5);
           sprite.width = 1.25;
@@ -2101,12 +2105,14 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           syncRuntimeMonsters(useWorldStore.getState().monsters);
         }).catch((error) => console.warn(`Monster sprite atlas could not be loaded (${src}); using fallback.`, error));
       }
-      void Assets.load<Texture>("/assets/world/spirit-herb.webp").then((texture) => {
-        if (destroyed) return;
-        resourceIconTextureRef.current = texture;
-        for (const rendered of monsterChunksRef.current.values()) rendered.px = Number.NaN;
-        scheduleMonsterChunkSyncRef.current();
-      }).catch((error) => console.warn("Resource sprite could not be loaded; using fallback.", error));
+      for (const [group, src] of Object.entries(WORLD_RESOURCE_ASSETS)) {
+        void Assets.load<Texture>(src).then((texture) => {
+          if (destroyed) return;
+          resourceIconTexturesRef.current[group] = texture;
+          for (const rendered of monsterChunksRef.current.values()) rendered.px = Number.NaN;
+          scheduleMonsterChunkSyncRef.current();
+        }).catch((error) => console.warn(`Resource sprite could not be loaded (${src}); using fallback.`, error));
+      }
 
       regionsContainerRef.current.eventMode = "none";
       fogRef.current.eventMode = "none";

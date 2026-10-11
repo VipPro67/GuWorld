@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="jade" x1="25" y1="28" x2="99" y2="105" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d8fff1"/><stop offset=".4" stop-color="#55ddc2"/><stop offset="1" stop-color="#126b72"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="28" y1="35" x2="92" y2="90" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff2ac"/><stop offset="1" stop-color="#b87525"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="64" cy="108" rx="39" ry="9" fill="#071b25" fill-opacity=".5"/>
+  <path d="m25 85 13-39 22-25 28 11 16 34-17 34-37 5-25-20Z" fill="url(#jade)" stroke="#c2fff0" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m60 21 1 84M38 46l23 14 27-28M25 85l36-25 39 6M50 105l11-45" stroke="#e5fff7" stroke-opacity=".75" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m75 50 7-21 10 18-8 21-9-18Z" fill="url(#gold)" stroke="#fff0b5" stroke-width="2"/>
+  <path d="m31 42 7-6m53 57 8-4" stroke="#fff" stroke-linecap="round" stroke-width="4"/>
+</svg>

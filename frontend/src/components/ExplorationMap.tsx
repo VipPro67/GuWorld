@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { guSpecFor, useGameStore, Player, Region } from "@/store/useGameStore";
-import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home, Gift, Skull, Package, Shield, X, DoorOpen } from "lucide-react";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, HelpCircle, Crown, Home, Gift, Skull, Package, Shield, X, DoorOpen } from "lucide-react";
 
 import { LogConsole } from "./LogConsole";
 import { SharedSpatialRealmControls } from "./SharedSpatialRealmControls";
 import { GamePanel, GameButton } from "@/components/ui";
 import { usePolling } from "@/lib/usePolling";
+import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
 // UI migrated to shared components
 
 interface ExplorationMapProps {
@@ -248,10 +249,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   // Helper to format map cell content icon
   const getCellIcon = (type: string, content: string) => {
     switch (type) {
-      case "Resource":
-        if (content === "moon_orchid_petal") return <Flower2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />;
-        if (content === "green_bamboo_wine" || content.includes("wine")) return <Wine className="w-5 h-5 text-amber-500" />;
-        return <Gem className="w-5 h-5 text-cyan-400" />;
+      case "Resource": {
+        const item = itemDictionary[content];
+        const group = getWorldResourceGroup(content, item?.item_type || item?.type);
+        return <img src={WORLD_RESOURCE_ASSETS[group]} alt="" className="h-6 w-6 object-contain" />;
+      }
       case "Monster":
         return <Flame className="w-5 h-5 text-rose-500 animate-pulse" />;
       case "WildGu":
