@@ -980,6 +980,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 
 - Tổ đội: tạo tổ đội, xem trạng thái, mời Cổ sư, rời tổ đội.
 - **Chiến đấu tổ đội:** Các thành viên trong tổ đội ở cùng Đại Vực sẽ cùng tham gia vào trận chiến khi Trưởng nhóm khởi xướng (cả Turn-based lẫn Auto Combat/Simulation). Đồng đội sẽ tự động chiến đấu bằng các Cổ trùng đang trang bị, Sát chiêu và Thiết lập tự động của chính họ. Phần thưởng chiến thắng (Nguyên thạch, Nguyên liệu, Cổ trùng) sẽ được chia đều cho tất cả thành viên tham chiến, và tiêu hao (Sinh lực, Chân Nguyên, Dược phẩm) cũng được cập nhật tương ứng. Đồng đội không nhận điểm Chân Ý từ trận chiến — chỉ người chơi chính (Trưởng nhóm) được ngộ đạo.
+  - **Ngoại lệ — đấu cá nhân:** Khi **đánh mỏ** (cả PvE yêu quái lẫn PvP tranh mỏ) hoặc **khiêu chiến Võ Đài**, không phe nào kéo thành viên tổ đội vào trận; chỉ người chơi chính ra tay (sủng vật và NPC biến thể vẫn tham chiến bình thường). Các loại chiến đấu khác (open-world PvP, dã ngoại, tông môn chiến, tai kiếp) vẫn áp dụng tổ đội như trên.
 - **Võ Đài:** tối đa 10 lượt khiêu chiến/ngày; thắng người xếp cao hơn thì đổi vị trí. Thắng nhận 50, thua nhận 10 Đồng Võ Đài; hệ thống chốt thưởng ngày lúc 22:30. Đồng dùng tại tab Bảo Các của Võ Đài.
 
 ## 16. Chat, mail và feedback

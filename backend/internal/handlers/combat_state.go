@@ -14,7 +14,15 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
+// partyJoinsCombat reports whether the initiating player's party members join
+// the battle. Mine (PVE/PVP) and Võ Đài (virtual) are individual duels: party
+// members stay out, while pets and variant NPCs still take part.
+func partyJoinsCombat(base *models.CombatState) bool {
+	return base != nil && base.MineSlotID == 0 && base.CombatMode != "virtual"
+}
+
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
+	soloBattle := !partyJoinsCombat(base)
 	if base.CombatID == "" {
 		base.CombatID = uuid.NewString()
 		base.TitleEffectSnapshot = snapshotEquippedTitleEffect(tx, player.ID.String(), base.EnemyType)
@@ -98,9 +106,11 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		for _, e := range formation {
 			switch e.Kind {
 			case "player":
-				if ally, ok := loadPartyMemberCombatant(tx, e.ID, player, base.CombatMode == "virtual"); ok {
-					base.Allies = append(base.Allies, *ally)
-					lineupGrids = append(lineupGrids, allySlots[takeLineupPos(&usedPos, e.Pos)])
+				if !soloBattle {
+					if ally, ok := loadPartyMemberCombatant(tx, e.ID, player, base.CombatMode == "virtual"); ok {
+						base.Allies = append(base.Allies, *ally)
+						lineupGrids = append(lineupGrids, allySlots[takeLineupPos(&usedPos, e.Pos)])
+					}
 				}
 			case "pet":
 				if pet, ok := loadSingleFormationPet(tx, e.ID, player.ID.String(), base.CombatMode == "virtual", chargeAttacker, &attackerSoul); ok {
@@ -122,7 +132,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 			base.PetSoulCharged = true
 		}
 	} else {
-		if player.PartyID != nil {
+		if player.PartyID != nil && !soloBattle {
 			var membersRaw []byte
 			errPart := tx.QueryRow("SELECT members FROM parties WHERE id = $1", player.PartyID).Scan(&membersRaw)
 			if errPart == nil {

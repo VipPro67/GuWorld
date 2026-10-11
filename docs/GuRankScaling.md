@@ -66,6 +66,6 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 
 ## 5. Kiểm chứng
 
-- Sau khi sửa CSV: chạy audit script so mỗi rank (min/max dmg, shield, heal, passive) với bảng chuẩn; sai lệch > ±35% cần soi lại.
+- Sau khi sửa CSV: chạy `python3 scripts/balance_gu_effects.py` để so mỗi `(key, rank)` với chuẩn. Mặc định chỉ audit, bắt lệch > `--factor` (mặc định 10×); `--band 0.35` dùng dung sai ±35% theo tài liệu này. `--hard` bật bảng ref cứng cho key thưa (sparse), `--apply` ghi CSV giữ nguyên format.
 - Áp dụng không cần restart server: Admin → tab "Dữ liệu" → Import (`admin_data.go: AdminImportData` → `SeedFromCSV` + `LoadGuRegistry`).
 - Với seed mới từ đầu: `db.go: seedGusFromCSV` upsert `INSERT ... ON CONFLICT (id, rank) DO UPDATE`.
