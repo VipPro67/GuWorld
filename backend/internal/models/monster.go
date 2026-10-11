@@ -138,9 +138,9 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 	case "NORMAL", "MONSTER":
 		typeMultiplier = 1.0
 	case "ELITE":
-		typeMultiplier = 2.0
+		typeMultiplier = 1.5
 	case "BOSS":
-		typeMultiplier = 5.0
+		typeMultiplier = 3.0
 	case "WORLDBOSS", "WORLD BOSS":
 		typeMultiplier = 25.0
 	case "TRIBULATION_MONSTER":

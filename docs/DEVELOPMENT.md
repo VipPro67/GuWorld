@@ -19,6 +19,7 @@ distinct `-output` path (never overwrites source). Reports are JSON on stdout.
 | --- | --- |
 | `check-effects` | Validate `Gu.csv` (full catalog + Block-v2 + unclassified-key) and `Item.csv` (Block-v2). Exits non-zero on errors. |
 | `balance` | Score each Gu's flat combat power vs its rank peers (median band ± `tol`) and flag outliers. `-write` scales the flagged Gu's `DAMAGE`/`SHIELD`/`HEAL`/`DIRECT_HP` FLAT values toward the band edge. Tune via `-config` (`balance.tol`, `min_score_frac`, `weights`). |
+| `rebalance` | Clamp supported combat, DoT, and base-stat values to documented rank anchors (±35% by default). Other numeric effects use their same-rank median when at least 5 distinct Gu definitions share the effect; otherwise they are listed in `unanchored_effects` and left unchanged. Dry-run reports JSON; `-write -output` writes a separate candidate CSV; explicit `-in-place` replaces `Gu.csv` after creating `Gu.csv.bak` (refuses to overwrite an existing backup). |
 | `match-food` | Flag `food_types` entries that reference missing items/Gu, and count low-nutrition food. `-write` remaps dangling references to a path/rank-matched Food. |
 | `gen-recipe` | Generate missing refinement recipe rows (unit = `(id, rank)`). Success rate, costs, material quantity (`material_qty`, `material_qty_scale`) and required-Gu quantity (`required_gu_qty`, `required_gu_rank_delta`, `required_gu` map) are config-driven via `-config`. |
 
@@ -35,6 +36,9 @@ Example config (optional, `{}` falls back to defaults):
 go run ./cmd/gudata check-effects -data data
 go run ./cmd/gudata balance -data data
 go run ./cmd/gudata balance -data data -config data/gudata.json -write -output /tmp/Gu.bal.csv
+go run ./cmd/gudata rebalance -data data
+go run ./cmd/gudata rebalance -data data -tolerance 0.35 -write -output /tmp/Gu.rebalanced.csv
+go run ./cmd/gudata rebalance -data data -in-place
 go run ./cmd/gudata match-food -data data
 go run ./cmd/gudata gen-recipe -data data -write -output /tmp/Recipe.gen.csv
 ```
