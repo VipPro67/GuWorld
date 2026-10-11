@@ -29,9 +29,9 @@ export const ClearCacheModal: React.FC<ClearCacheModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] h-[100dvh] flex items-center justify-center px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl text-zinc-100 flex flex-col gap-4 overflow-hidden"
+        className="relative w-full max-w-md max-h-full overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl text-zinc-100 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient Top Glow */}

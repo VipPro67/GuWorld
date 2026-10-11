@@ -64,7 +64,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-[95] h-[100dvh] flex items-center justify-center bg-black/75 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-sm sm:px-6 sm:py-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -73,7 +73,7 @@ export function WorldAtlasModal({ regions, currentRegionId, x, y, onClose }: Wor
         role="dialog"
         aria-modal="true"
         aria-labelledby="world-atlas-title"
-        className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-cyan-900/60 bg-[#07121a] text-zinc-100 shadow-2xl"
+        className="flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-cyan-900/60 bg-[#07121a] text-zinc-100 shadow-2xl"
       >
         <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3">

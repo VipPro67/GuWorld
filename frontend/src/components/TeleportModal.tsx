@@ -113,8 +113,8 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   const currentRegionId = player?.current_region ?? "";
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-[9999] p-2 sm:p-4">
-      <div className="bg-zinc-950 border border-purple-500/40 rounded-3xl w-full max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-left">
+    <div className="fixed inset-0 z-[9999] h-[100dvh] bg-black/75 backdrop-blur-md flex items-center justify-center px-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:px-4">
+      <div className="bg-zinc-950 border border-purple-500/40 rounded-3xl w-full max-w-lg max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-left">
         <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-gradient-to-r from-purple-950/30 via-zinc-900/40 to-transparent">
           <div>
             <h2 className="text-base font-bold text-purple-300 font-serif">Dịch Chuyển Cổ Trùng</h2>

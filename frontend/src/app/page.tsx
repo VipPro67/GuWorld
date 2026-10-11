@@ -304,7 +304,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`min-h-screen ${isWorldMapView ? "h-screen h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0" : "flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8"} relative`}>
+    <div className={`${isWorldMapView ? "h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0" : "min-h-screen flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8"} relative`}>
       {/* Top Header Navigation */}
       {!isWorldMapView && <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto pb-4 border-b border-[var(--border-default)] mb-4 flex justify-between items-center">
         <div className="flex items-center gap-4">

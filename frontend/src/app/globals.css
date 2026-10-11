@@ -132,7 +132,15 @@ body {
   color: var(--text-primary);
   font-family: var(--font-geist-sans), 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Full-screen overlays follow the visible mobile viewport when browser bars move. */
+.fixed.inset-0 {
+  bottom: auto;
+  height: 100vh;
+  height: 100dvh;
 }
 
 /* Wavy liquid animation */

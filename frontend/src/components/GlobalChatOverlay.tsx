@@ -198,7 +198,7 @@ export const GlobalChatOverlay: React.FC = () => {
     lg: "h-[560px] sm:h-[680px] md:h-[760px] lg:h-[860px]",
   }[chatHeight];
 
-  const chatPosition = "bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] right-3 sm:bottom-6 sm:right-6";
+  const chatPosition = "bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] right-[calc(env(safe-area-inset-right)+0.75rem)] sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:right-[calc(env(safe-area-inset-right)+1.5rem)]";
 
   return (
     <>
@@ -228,7 +228,7 @@ export const GlobalChatOverlay: React.FC = () => {
 
       {/* Chat Overlay Panel */}
       {chatOpen && (
-        <div className={`fixed ${chatPosition} ${widthClasses} ${heightClasses} z-[70] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-6rem)] sm:max-h-[calc(100vh-6rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
+        <div className={`fixed ${chatPosition} ${widthClasses} ${heightClasses} z-[70] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-3rem)] overflow-hidden flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
           {/* Channel Tabs */}
           <div className="flex items-center justify-between">
             <div className="flex gap-1.5 border-b border-[var(--border-default)] pb-2">

@@ -98,7 +98,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
 
     const modalContent = (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 z-50 h-[100dvh] flex items-center justify-center px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? "modal-title" : undefined}
@@ -116,7 +116,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
             "bg-surface",
             "rounded-3xl",
             "shadow-2xl",
-            "max-h-[90vh] flex flex-col overflow-hidden",
+            "max-h-[90dvh] flex flex-col overflow-hidden",
             sizeClasses[size],
             variantClasses[variant],
             className,

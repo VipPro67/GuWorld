@@ -9,7 +9,7 @@ export const ConfirmDialog: React.FC = () => {
   if (!confirmDialog.open) return null;
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[10000] h-[100dvh] flex items-center justify-center p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)]">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => closeConfirm(false)} />
       <div
         className="relative bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200"

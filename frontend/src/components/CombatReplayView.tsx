@@ -906,11 +906,11 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 h-[100dvh] flex items-center justify-center bg-black/60 px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm"
         onClick={() => setDetailCombatant(null)}
       >
         <div
-          className={`bg-zinc-900 border ${isAlly ? 'border-emerald-800/50' : 'border-rose-800/50'} rounded-2xl p-5 shadow-2xl max-w-sm w-full mx-4`}
+          className={`bg-zinc-900 border ${isAlly ? 'border-emerald-800/50' : 'border-rose-800/50'} rounded-2xl p-5 shadow-2xl max-h-full max-w-sm w-full mx-4 overflow-y-auto`}
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-3">

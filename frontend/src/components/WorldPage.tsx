@@ -330,13 +330,13 @@ export function WorldPage() {
       {mapPerformanceMode !== "off" && <TargetHud />}
 
       {showWorldActions && (
-        <div className="absolute right-2 top-1/2 z-[60] -translate-y-1/2 pointer-events-auto sm:bottom-24 sm:left-1/2 sm:right-auto sm:top-auto sm:-translate-x-1/2 sm:translate-y-0">
+        <div className="absolute right-2 top-1/2 z-[60] -translate-y-1/2 pointer-events-auto sm:bottom-[calc(env(safe-area-inset-bottom)+6rem)] sm:left-1/2 sm:right-auto sm:top-auto sm:-translate-x-1/2 sm:translate-y-0">
           <DirectActionHotbar actions={hotbarActions} onAction={openHotbarAction} />
         </div>
       )}
 
       {showActivityLog && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm" onClick={() => setShowActivityLog(false)}>
+        <div className="fixed inset-0 z-[80] h-[100dvh] flex items-center justify-center bg-black/70 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-sm" onClick={() => setShowActivityLog(false)}>
           <div className="relative w-full max-w-xl" onClick={(event) => event.stopPropagation()}>
             <button onClick={() => setShowActivityLog(false)} aria-label="Đóng nhật ký" className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-zinc-950 text-zinc-400 hover:text-white">
               <X className="h-4 w-4" />
@@ -347,8 +347,8 @@ export function WorldPage() {
       )}
 
       {activeModal && (
-        <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-2 sm:p-6 backdrop-blur-sm overflow-hidden pointer-events-auto">
-          <div className="relative w-full h-full max-w-7xl max-h-[calc(100dvh-2rem)] bg-zinc-950/95 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-40 h-[100dvh] bg-black/70 flex items-center justify-center px-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:px-6 sm:py-6 backdrop-blur-sm overflow-hidden pointer-events-auto">
+          <div className="relative w-full h-full max-w-7xl max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] bg-zinc-950/95 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden">
             {activeModal === "inventory" && (
               <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/20 px-3 sm:px-5">
                 <div className="truncate font-serif text-base font-semibold text-emerald-50">Túi đồ</div>
@@ -547,7 +547,7 @@ export function WorldPage() {
 
       {showGeneralSettings && (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] h-[100dvh] flex items-center justify-center bg-black/70 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setShowGeneralSettings(false);
           }}
@@ -986,7 +986,7 @@ onClick={() => {
 
       {/* Challenge Sect Modal */}
       {attackTargetSect && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm pointer-events-auto">
+        <div className="fixed inset-0 z-50 h-[100dvh] bg-black/80 flex items-center justify-center p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm pointer-events-auto">
           <div className="w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4 text-left shadow-2xl">
             <div className="shrink-0 flex items-center justify-between border-b border-zinc-900 pb-3">
               <div>

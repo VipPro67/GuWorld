@@ -28,7 +28,7 @@ export const TrackingRadarDrawer: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-96 overflow-hidden rounded-xl border border-cyan-500/30 bg-neutral-950/95 shadow-2xl backdrop-blur-md">
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-40 flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-cyan-500/30 bg-neutral-950/95 shadow-2xl backdrop-blur-md">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-cyan-500/20 bg-neutral-900 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -53,7 +53,7 @@ export const TrackingRadarDrawer: React.FC = () => {
       </div>
 
       {/* Target List */}
-      <div className="max-h-72 space-y-2 overflow-y-auto p-4 text-xs">
+      <div className="flex-1 min-h-0 space-y-2 overflow-y-auto p-4 text-xs">
         <div className="flex items-center justify-between text-neutral-400">
           <span>Mục tiêu đang bị gắn ấn ký ({trackedTargets.length})</span>
           <button

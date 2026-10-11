@@ -716,11 +716,11 @@ export const SectView: React.FC = () => {
           return (
             <div
               onClick={() => setSelectedSectId(null)}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm transition-opacity animate-fade-in cursor-pointer"
+              className="fixed inset-0 z-50 h-[100dvh] flex items-center justify-center p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-zinc-950/80 backdrop-blur-sm transition-opacity animate-fade-in cursor-pointer"
             >
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-[0_0_30px_rgba(59,130,246,0.2)] flex flex-col gap-6 animate-scale-up cursor-default relative overflow-hidden max-h-[90vh] overflow-y-auto"
+                className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-[0_0_30px_rgba(59,130,246,0.2)] flex flex-col gap-6 animate-scale-up cursor-default relative max-h-[90dvh] overflow-y-auto"
               >
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10" />
 
@@ -1471,8 +1471,8 @@ export const SectView: React.FC = () => {
 
           {/* Defend Modal */}
           {showDefendModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
-              <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+            <div className="fixed inset-0 z-50 h-[100dvh] flex items-center justify-center p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-zinc-950/80 backdrop-blur-sm">
+              <div className="w-full max-w-md max-h-full overflow-y-auto bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-zinc-100 font-serif">Bố Trí Phòng Thủ Tông Môn</h3>
                   <button onClick={() => setShowDefendModal(false)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>

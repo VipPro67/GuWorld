@@ -9,7 +9,7 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-[9999] flex flex-col gap-2 sm:gap-3 max-w-[280px] sm:max-w-sm w-full pointer-events-none">
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-[calc(env(safe-area-inset-left)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:left-[calc(env(safe-area-inset-left)+1.5rem)] z-[9999] flex flex-col gap-2 sm:gap-3 max-w-[280px] sm:max-w-sm w-full pointer-events-none">
       {toasts.map((toast) => {
         return (
           <ToastItem
