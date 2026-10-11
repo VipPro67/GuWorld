@@ -380,15 +380,15 @@ func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time)
 		return WorldMonster{}, false, err
 	}
 	bx, by := monsterBucket(spawn.X, spawn.Y)
-	_, created, err := materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
+	runtime, created, err := materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
 	if err != nil {
 		return WorldMonster{}, false, err
 	}
 	// Elite/Boss spawn guards around them
-	if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
-		spawnGuards(ctx, monster, now)
+	if runtime.IsBoss || worldMonsterTemplateIsElite(runtime.MonsterTemplateID) {
+		spawnGuards(ctx, runtime, now)
 	}
-	return monster, created, nil
+	return runtime, created, nil
 }
 
 func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) {
