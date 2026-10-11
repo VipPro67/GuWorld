@@ -165,6 +165,16 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 				logger.S.Errorf("finalize ally update failed for ally %s (%s): %v", simAlly.Name, simAlly.ID, errUpd)
 				return logs, fmt.Errorf("ally %s update: %w", simAlly.ID, errUpd)
 			}
+
+			// Sync ally Gu hunger for instances used in this battle
+			for guKey := range simAlly.GuUsedCounts {
+				if guKey == "" {
+					continue
+				}
+				if hunger, ok := simAlly.GuHunger[guKey]; ok {
+					_, _ = tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`, hunger, guKey, simAlly.ID)
+				}
+			}
 		}
 	} else {
 		for _, simAlly := range simState.Allies {

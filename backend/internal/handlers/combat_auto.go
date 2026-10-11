@@ -244,7 +244,7 @@ func AutoCombatStart(c *gin.Context) {
 		} else {
 			var partyMembers []uuid.UUID
 			for _, ally := range player.ActiveCombat.Allies {
-				if ally.Kind == "Pet" {
+				if ally.Kind == "Pet" || ally.Kind == "VariantNPC" {
 					continue
 				}
 				allyUUID, errParse := uuid.Parse(ally.ID)

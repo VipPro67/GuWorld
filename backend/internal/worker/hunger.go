@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -14,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -66,147 +66,99 @@ func processScheduledTicks(ctx context.Context, db *sql.DB) {
 
 // ── ON_TICK batch ──────────────────────────────────────────────────────────
 
-// findOnTickPlayers returns the player ids that own at least one equipped
-// ACTIVE Gu whose compiled definition contains an ON_TICK trigger.
-func findOnTickPlayers(db *sql.DB) ([]string, error) {
+// batchApplyOnTickEffects reads every equipped ACTIVE Gu's compiled Block-v2
+// definition and sums ON_TICK stone generation per player, then batch-writes
+// in 1 UPDATE. Block v2 is the only runtime source for these mechanics; the
+// legacy effects->'other' flat list never carried them.
+func batchApplyOnTickEffects(db *sql.DB) {
 	rows, err := db.Query(`
-		SELECT DISTINCT pg.player_id::text
+		SELECT pg.player_id::text, pg.gu_id, pg.gu_rank
 		FROM player_gu pg
-		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-		WHERE pg.equipped AND pg.state = 'ACTIVE'
-		  AND EXISTS (
-			SELECT 1 FROM jsonb_array_elements(COALESCE(gd.effects->'other', '[]'::jsonb)) m
-			WHERE m->>'event_trigger' = 'ON_TICK'
-		  )`)
+		WHERE pg.equipped AND pg.state = 'ACTIVE'`)
 	if err != nil {
-		return nil, err
+		logger.S.Errorf("Hunger Worker Error reading equipped Gus: %v", err)
+		return
 	}
 	defer rows.Close()
-	var playerIDs []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			playerIDs = append(playerIDs, id)
-		}
-	}
-	return playerIDs, rows.Err()
-}
 
-// batchApplyOnTickEffects replaces the old per-player applyOnTickEffects loop.
-// It batch-reads all ON_TICK players' stones and equipped Gu effects in 2
-// queries, computes stone generation in Go, then batch-writes in 1 UPDATE.
-func batchApplyOnTickEffects(db *sql.DB) {
-	playerIDs, err := findOnTickPlayers(db)
-	if err != nil {
-		logger.S.Errorf("Hunger Worker Error: failed to query ON_TICK players: %v", err)
-		return
-	}
-	if len(playerIDs) == 0 {
-		return
-	}
-
-	pqIDs := pq.Array(playerIDs)
-
-	// 1. Batch-read stones
-	type stones struct {
-		primeval float64
-		immortal float64
-	}
-	stoneMap := make(map[string]*stones, len(playerIDs))
-	sRows, err := db.Query(`SELECT id, primeval_stones, immortal_stones FROM players WHERE id = ANY($1::uuid[])`, pqIDs)
-	if err != nil {
-		logger.S.Errorf("Hunger Worker Error reading stones: %v", err)
-		return
-	}
-	for sRows.Next() {
-		var pid string
-		var s stones
-		if sRows.Scan(&pid, &s.primeval, &s.immortal) == nil {
-			stoneMap[pid] = &s
-		}
-	}
-	sRows.Close()
-
-	// 2. Batch-read ON_TICK effects for all equipped ACTIVE Gus
-	type effectRow struct {
+	type guRow struct {
 		playerID string
-		otherRaw []byte
+		guID     string
+		rank     int
 	}
-	var effectRows []effectRow
-	eRows, err := db.Query(`
-		SELECT pg.player_id::text, gd.effects->'other'
-		FROM player_gu pg
-		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-		WHERE pg.player_id = ANY($1::uuid[]) AND pg.equipped AND pg.state = 'ACTIVE'`, pqIDs)
-	if err != nil {
-		logger.S.Errorf("Hunger Worker Error reading ON_TICK effects: %v", err)
-		return
-	}
-	for eRows.Next() {
-		var er effectRow
-		if eRows.Scan(&er.playerID, &er.otherRaw) == nil {
-			effectRows = append(effectRows, er)
+	var guRows []guRow
+	for rows.Next() {
+		var r guRow
+		if rows.Scan(&r.playerID, &r.guID, &r.rank) == nil {
+			guRows = append(guRows, r)
 		}
 	}
-	eRows.Close()
+	if err := rows.Err(); err != nil {
+		logger.S.Errorf("Hunger Worker Error scanning equipped Gus: %v", err)
+		return
+	}
+	if len(guRows) == 0 {
+		return
+	}
 
-	// 3. Compute per-player stone generation
+	// Compute per-player stone generation from compiled Block-v2 mechanics.
 	tickStones := make(map[string]float64)
 	tickImmortal := make(map[string]float64)
-
-	for _, er := range effectRows {
-		var other []models.SpecialMechanic
-		if len(er.otherRaw) > 0 {
-			if err := json.Unmarshal(er.otherRaw, &other); err != nil {
-				continue
-			}
+	for _, r := range guRows {
+		spec, ok := models.GetGu(r.guID, r.rank)
+		if !ok {
+			continue
 		}
-		for _, mech := range other {
-			if mech.EventTrigger != "ON_TICK" {
+		compiled := models.CompiledGuEffects(spec)
+		if compiled == nil {
+			continue
+		}
+		for _, mech := range compiled.NativeMechanics() {
+			if mech.Trigger != gameplayeffects.TriggerOnTick {
 				continue
 			}
-			var params map[string]interface{}
-			if len(mech.Params) > 0 {
-				json.Unmarshal(mech.Params, &params)
+			var val float64
+			if mech.Values != nil {
+				val, _ = mech.Values["value"].(float64)
 			}
-			switch mech.ActionCode {
+			if val <= 0 {
+				val = 1.0
+			}
+			switch mech.Code {
 			case "GENERATE_STONES_TICK":
-				val, _ := params["value"].(float64)
-				if val <= 0 {
-					val = 1.0
-				}
-				tickStones[er.playerID] += val
+				tickStones[r.playerID] += val
 			case "GENERATE_IMMORTAL_STONES_TICK":
-				val, _ := params["value"].(float64)
-				if val <= 0 {
-					val = 1.0
-				}
-				tickImmortal[er.playerID] += val
+				tickImmortal[r.playerID] += val
 			}
 		}
 	}
 
-	// 4. Collect players that actually need an update
+	// Collect players that actually need an update.
+	type delta struct{ primeval, immortal float64 }
+	deltas := make(map[string]delta, len(tickStones)+len(tickImmortal))
+	for pid, v := range tickStones {
+		d := deltas[pid]
+		d.primeval = v
+		deltas[pid] = d
+	}
+	for pid, v := range tickImmortal {
+		d := deltas[pid]
+		d.immortal = v
+		deltas[pid] = d
+	}
 	var updateIDs []string
 	var updatePrimeval []float64
 	var updateImmortal []float64
-
-	for pid := range stoneMap {
-		ps := tickStones[pid]
-		is := tickImmortal[pid]
-		if ps == 0 && is == 0 {
-			continue
-		}
+	for pid, d := range deltas {
 		updateIDs = append(updateIDs, pid)
-		updatePrimeval = append(updatePrimeval, ps)
-		updateImmortal = append(updateImmortal, is)
+		updatePrimeval = append(updatePrimeval, d.primeval)
+		updateImmortal = append(updateImmortal, d.immortal)
 	}
-
 	if len(updateIDs) == 0 {
 		return
 	}
 
-	// 5. Batch UPDATE
+	// Batch UPDATE.
 	_, err = db.Exec(`
 		UPDATE players AS p SET
 			primeval_stones = p.primeval_stones + v.ps,

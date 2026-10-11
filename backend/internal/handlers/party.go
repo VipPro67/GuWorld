@@ -70,6 +70,8 @@ func CreateParty(c *gin.Context) {
 		return
 	}
 
+	AddHumanQi(&player, 2.0)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Tạo tổ đội thành công! Nhân Khí +2.",
 		"party": gin.H{
@@ -488,6 +490,8 @@ func RespondToInvitation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit error"})
 		return
 	}
+
+	AddHumanQi(&player, 2.0)
 
 	message := "Đã chấp nhận lời mời tham gia tổ đội! Nhân Khí +2."
 	if regionalWarning != "" {

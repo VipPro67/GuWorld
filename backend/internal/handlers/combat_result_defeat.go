@@ -115,7 +115,19 @@ func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulato
 				})
 				_, _ = tx.Exec("UPDATE players SET hp = 1.0, current_region = $1, x = $2, y = $3, active_combat = NULL WHERE id = $4", aReg, aX, aY, allyUUID)
 			} else {
-				_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+				// Persist ally HP/mana from sim (mirror victory path)
+				var allyHP, allyMana float64
+				for _, sa := range simState.Allies {
+					if sa.ID == ally.ID {
+						allyHP = sa.HP
+						allyMana = sa.Mana
+						break
+					}
+				}
+				if allyHP <= 0 {
+					allyHP = 1
+				}
+				_, _ = tx.Exec("UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL WHERE id = $3", allyHP, allyMana, allyUUID)
 			}
 		}
 	}

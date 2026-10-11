@@ -91,6 +91,7 @@ func schemaPlayers() error {
 		version INT NOT NULL DEFAULT 0,
 		state_revision BIGINT NOT NULL DEFAULT 0,
 		death_arena_title VARCHAR(100) DEFAULT '',
+		martial_title VARCHAR(100) DEFAULT '',
 		active_concealment JSONB NOT NULL DEFAULT '{}'::jsonb,
 		last_sever_clues_at TIMESTAMPTZ DEFAULT NULL,
 		last_resonance_scan_at TIMESTAMPTZ DEFAULT NULL,

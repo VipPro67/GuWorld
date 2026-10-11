@@ -554,6 +554,20 @@ Diễn ra vào **17:00 (5h chiều) Thứ 7 hàng tuần** (Mở đăng ký: 16:
 | POST | `/death-arena/claim-reward` | Nhận phần thưởng giải đấu. |
 | GET | `/death-arena/history` | Lịch sử các mùa giải Đấu Trường Sinh Tử trước. |
 
+## Đại Hội Võ Thuật (Martial Arena) — Auth
+
+| Method | Endpoint | Mô tả |
+| --- | --- | --- |
+| GET | `/martial-arena/current` | Danh sách bảng đấu theo cảnh giới của kỳ đang diễn ra + tham gia của bản thân. |
+| GET | `/martial-arena/bracket` | Bảng đấu (nhiều bracket, mỗi rank 1 cái) kèm các trận 1v1. |
+| GET | `/martial-arena/matches` | Danh sách trận của người chơi. |
+| GET | `/martial-arena/matches/:id/log` | Chiến báo (Combat Log Replay) của một trận 1v1. |
+| GET | `/martial-arena/history` | Lịch sử các kỳ đại hội đã kết thúc. |
+| GET | `/martial-arena/rewards` | Danh sách phần thưởng của bản thân. |
+| POST | `/martial-arena/claim-reward` | Nhận phần thưởng (nguyên thạch, tiên nguyên thạch, item, danh hiệu). |
+
+> Đại Hội Võ Thuật tự gom người online theo cảnh giới (`players.rank`) mỗi **Thứ 3 12:00 VN**: mỗi rank có ≥ 8 người online thì mở 1 bảng đấu 1v1 loại trực tiếp (tối đa 128 người), seed theo `sub_rank`. Không có giai đoạn đăng ký.
+
 ## Trinh Sát & Suy Diễn Thiên Cơ (Scouting & Divination) — Auth
 
 | Method | Endpoint | Mô tả |

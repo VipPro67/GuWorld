@@ -414,6 +414,44 @@ Cổ sư có thể:
 - **Tiến độ vĩnh viễn:** tiến độ tích lũy được lưu theo từng instance; gỡ Cổ ra khỏi Không Khiếu vẫn giữ nguyên tiến độ và hiển thị lại ở tab **Trưởng thành** (Không Khiếu). Khi đạt mức tối đa, loại Cổ đó được ghi nhận vĩnh viễn trong danh sách trưởng thành.
 - Trang bị lại tiếp tục từ tiến độ đã tích lũy, kể cả khi đổi sang bản khác cùng loại.
 
+## 4.1. Cân bằng: Quái vs Cổ trùng cùng Rank
+
+> **Không có Cổ trùng → người chơi tự động thua quái ở mọi rank.**
+
+Quái và Cổ trùng **cùng rank là cân bằng** (mất ~3–5 hit để hạ nhau). Không có Cổ, người chơi yếu hơn rất nhiều so với quái cùng rank.
+
+### Quái base 100 HP / 10 ATK / 5 DEF (sau ScaleMonsterStats)
+
+| Rank | MaxHP | ATK | DEF |
+|------|-------|-----|-----|
+| 1 | 100 | 10 | 5 |
+| 2 | 200 | 20 | 10 |
+| 3 | 500 | 50 | 25 |
+| 4 | 2,000 | 200 | 100 |
+| 5 | 10,000 | 1,000 | 500 |
+
+### Cổ trùng damage/shield (từ Gu.csv)
+
+| Rank | Damage | Shield |
+|------|--------|--------|
+| 1 | 20 | 30 |
+| 2 | 40 | 60 |
+| 3 | 100 | 150 |
+| 4 | 400 | 600 |
+| 5 | 2,000 | 3,000 |
+
+### Combat cùng rank (người chơi + Cổ vs quái)
+
+| Rank | Cổ DMG + Player ATK | Quái HP | Hit giết | Cổ Shield + Player DEF | Quái ATK | Hit chịu |
+|------|---------------------|---------|----------|------------------------|----------|----------|
+| 1 | 30 | 100 | 3–4 | 35 | 10 | 3 |
+| 2 | 60 | 200 | 3–4 | 70 | 20 | 3 |
+| 3 | 130 | 500 | 4 | 165 | 50 | 3 |
+| 4 | 440 | 2,000 | 5 | 620 | 200 | 3 |
+| 5 | 2,050 | 10,000 | 5 | 3,025 | 1,000 | 3 |
+
+> **Boss (×5 type multiplier):** người chơi cần Cổ rank cao hơn 1 bậc để cân bằng.
+
 ## 5. Vật phẩm và nguyên liệu
 
 - Dictionary vật phẩm được Admin import từ `backend/data/Item.csv`.
@@ -662,6 +700,20 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
 - **Phần thưởng:**
   - Thưởng chiến thắng theo vòng: tăng lũy tiến từ 50 đến 400 Nguyên Thạch/người.
   - Quán Quân, Á Quân & Top 3: Nhận thêm Tiên Nguyên Thạch, danh hiệu độc quyền và phần thưởng vật phẩm quý hiếm.
+
+### Đại Hội Võ Thuật (Martial Arena)
+
+Đại hội 1v1 loại trực tiếp, tự động gom người online theo cảnh giới:
+
+- **Lịch trình:** Khai mạc **12:00 trưa Thứ 3 hàng tuần**.
+- **Cách tham gia:** Không cần đăng ký. Tại thời điểm khai mạc, hệ thống tự gom các đạo hữu **đang online** theo **cảnh giới tu vi** (`players.rank`).
+- **Quy mô:**
+  - Mỗi cảnh giới có **≥ 8 người online** thì mở 1 bảng đấu riêng (tối đa **128 người**/cảnh giới).
+  - Cảnh giới nào dưới 8 người online sẽ **không tổ chức** kỳ đó (không gộp cảnh giới).
+- **Thể thức:**
+  - **1v1 loại trực tiếp (Single Elimination):** seed theo `sub_rank` — người gần cảnh giới nhất gặp nhau từ vòng đầu.
+  - Trận đấu diễn ra **tự động** (mô phỏng chiến đấu), không tiêu hao tài nguyên, không cần online lúc thi đấu.
+- **Phần thưởng (Top 3):** Nguyên Thạch, Tiên Nguyên Thạch, Cổ Trùng, vật phẩm và danh hiệu độc quyền (nhận qua mục Phần Thưởng).
 
 ## 10. Phó bản
 

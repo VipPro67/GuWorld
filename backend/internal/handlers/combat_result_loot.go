@@ -93,18 +93,27 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 				stoneQty := loot.Items["primeval_stone"]
 				if stoneQty > 0 {
 					splitStones := stoneQty / len(partyMembers)
-					if splitStones < 1 {
-						splitStones = 1
-					}
+					remaining := stoneQty
 					for _, memberID := range partyMembers {
+						if remaining <= 0 {
+							break
+						}
+						give := splitStones
+						if give < 1 {
+							give = 1
+						}
+						if give > remaining {
+							give = remaining
+						}
+						remaining -= give
 						if memberID == player.ID {
-							player.PrimevalStones += float64(splitStones)
-							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
+							player.PrimevalStones += float64(give)
+							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", give))
 						} else {
-							_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
+							_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", give, memberID)
 							var uname string
 							_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
-							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, splitStones))
+							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, give))
 						}
 					}
 				}
@@ -146,7 +155,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 						InstanceID: uuid.New().String(),
 						GuID:       gID,
 						Rank:       guSpec.Rank,
-						Hunger:     100,
+						Hunger:     0,
 						Status:     "ACTIVE",
 						Equipped:   false,
 					}

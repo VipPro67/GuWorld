@@ -859,6 +859,20 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			deathArena.POST("/claim-reward", handlers.ClaimReward)
 		}
 
+		martialArena := api.Group("/martial-arena")
+		martialArena.Use(middleware.AuthRequired())
+		martialArena.Use(middleware.RequireOnboarded())
+		martialArena.Use(middleware.RateLimitByPlayer(25, time.Minute))
+		{
+			martialArena.GET("/current", handlers.GetCurrentMartialTournament)
+			martialArena.GET("/bracket", handlers.GetMartialBracket)
+			martialArena.GET("/matches", handlers.GetMyMartialMatches)
+			martialArena.GET("/matches/:id/log", handlers.GetMartialMatchCombatLog)
+			martialArena.GET("/history", handlers.GetMartialHistory)
+			martialArena.GET("/rewards", handlers.GetMyMartialRewards)
+			martialArena.POST("/claim-reward", handlers.ClaimMartialReward)
+		}
+
 		// Leaderboard — group: 30/min, per player: 20/min
 		leaderboard := api.Group("/leaderboard")
 		leaderboard.Use(middleware.AuthRequired())

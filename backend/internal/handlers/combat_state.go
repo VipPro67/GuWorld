@@ -285,6 +285,10 @@ func loadPartyMemberCombatant(tx *sql.Tx, memberID string, player *models.Player
 	if errMember != nil || mPlayer.CurrentRegion != player.CurrentRegion || (mPlayer.HP <= 0 && !virtual) {
 		return nil, false
 	}
+	// Don't pull members already in their own combat into a party battle
+	if !virtual && mPlayer.ActiveCombat != nil {
+		return nil, false
+	}
 	mStats := CalculatePlayerStats(&mPlayer)
 	mCombatant := models.CombatantFromPlayer(&mPlayer, mStats)
 	if mCombatant.HP > mCombatant.MaxHP {

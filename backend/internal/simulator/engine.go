@@ -1086,7 +1086,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			if a.ActionType == "GU_SKILL" && (actor.Kind == "Player" || actor.Kind == "VariantNPC") {
+			if a.ActionType == "GU_SKILL" && (actor.Kind == "Player" || actor.Kind == "Ally" || actor.Kind == "VariantNPC") {
 				guKey := a.InstanceID
 				if guKey == "" {
 					guKey = a.SourceID
@@ -1274,7 +1274,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK" || a.ActionType == "KILLER_MOVE") && actor.Kind == "Player" && !state.VirtualMode {
+			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK" || a.ActionType == "KILLER_MOVE") && (actor.Kind == "Player" || actor.Kind == "Ally") && !state.VirtualMode {
 				cleanPath := "strength"
 				guRank := 1
 				baseGain := 1

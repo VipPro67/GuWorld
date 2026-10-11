@@ -165,15 +165,15 @@ func GetGuDropChancePercent(rank int, isBoss bool) float64 {
 	if isBoss {
 		switch rank {
 		case 1:
-			return 35.0 // 35% (Boss - Cổ Nhất Chuyển)
+			return 50.0 // 50% (Boss - Cổ Nhất Chuyển)
 		case 2:
-			return 25.0 // 25% (Boss - Cổ Nhị Chuyển)
+			return 40.0 // 40% (Boss - Cổ Nhị Chuyển)
 		case 3:
-			return 18.0 // 18% (Boss - Cổ Tam Chuyển)
+			return 30.0 // 30% (Boss - Cổ Tam Chuyển)
 		case 4:
-			return 12.0 // 12% (Boss - Cổ Tứ Chuyển)
+			return 20.0 // 20% (Boss - Cổ Tứ Chuyển)
 		case 5:
-			return 8.0 // 8%  (Boss - Cổ Ngũ Chuyển)
+			return 15.0 // 15% (Boss - Cổ Ngũ Chuyển)
 		case 6:
 			return 1.0 // 1.0% (Boss - Tiên Cổ Lục Chuyển)
 		case 7:
@@ -190,18 +190,18 @@ func GetGuDropChancePercent(rank int, isBoss bool) float64 {
 		}
 	}
 
-	// Elite / Normal Enemy
+	// Elite Enemy
 	switch rank {
 	case 1:
-		return 20.0 // 20%
+		return 40.0 // 40%
 	case 2:
-		return 15.0 // 15%
+		return 30.0 // 30%
 	case 3:
-		return 10.0 // 10%
+		return 20.0 // 20%
 	case 4:
-		return 6.0 // 6%
+		return 12.0 // 12%
 	case 5:
-		return 4.0 // 4%
+		return 8.0 // 8%
 	case 6:
 		return 0.3 // 0.3% (Tiên Cổ Lục Chuyển)
 	case 7:

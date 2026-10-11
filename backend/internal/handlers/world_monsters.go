@@ -380,7 +380,60 @@ func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time)
 		return WorldMonster{}, false, err
 	}
 	bx, by := monsterBucket(spawn.X, spawn.Y)
-	return materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
+	_, created, err := materializeWorldMonster(ctx, monster, bx, by, monsterTTL(spawn.RespawnSeconds))
+	if err != nil {
+		return WorldMonster{}, false, err
+	}
+	// Elite/Boss spawn guards around them
+	if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
+		spawnGuards(ctx, monster, now)
+	}
+	return monster, created, nil
+}
+
+func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) {
+	guardCount := 2 + leader.Rank/2 // R1=2, R3=3, R5=4
+	for i := 0; i < guardCount; i++ {
+		angle := float64(i) * 2 * math.Pi / float64(guardCount)
+		gx := int(math.Round(leader.SpawnX + math.Cos(angle)*2))
+		gy := int(math.Round(leader.SpawnY + math.Sin(angle)*2))
+		if isWorldMonsterSafeZone(leader.RegionID, gx, gy) {
+			continue
+		}
+		guardSpawn := monsterSpawnRow{
+			ID:              fmt.Sprintf("guard:%s:%d", leader.InstanceID, i),
+			RegionID:        leader.RegionID,
+			MonsterID:      pickGuardTemplate(leader.RegionID),
+			X:               gx,
+			Y:               gy,
+			RespawnSeconds:  leader.RespawnSeconds,
+			Rank:            leader.Rank,
+			SubRank:         1,
+			IsBoss:          false,
+		}
+		if guardSpawn.MonsterID == "" {
+			continue
+		}
+		guard, err := worldMonsterCandidateForSpawn(guardSpawn, now)
+		if err != nil {
+			continue
+		}
+		bx, by := monsterBucket(gx, gy)
+		materializeWorldMonster(ctx, guard, bx, by, monsterTTL(guardSpawn.RespawnSeconds))
+	}
+}
+
+func pickGuardTemplate(regionID string) string {
+	// Pick a random normal monster from the same region
+	var monsterID string
+	err := db.DB.QueryRowContext(context.Background(), `
+		SELECT monster_id FROM monster_spawns
+		WHERE region_id=$1 AND is_active=TRUE AND is_boss_spawn=FALSE
+		ORDER BY RANDOM() LIMIT 1`, regionID).Scan(&monsterID)
+	if err != nil {
+		return ""
+	}
+	return monsterID
 }
 
 func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldMonster, error) {
@@ -409,7 +462,7 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 		aggroRadius, leashRadius, speed = worldMonsterEliteAggro, worldMonsterEliteLeash, worldMonsterEliteSpeed
 	}
 	monster := WorldMonster{
-		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, IsBoss: spawn.IsBoss, Rank: spawn.Rank, SubRank: spawn.SubRank, RegionID: spawn.RegionID,
+		InstanceID: uuid.NewString(), SpawnID: spawn.ID, MonsterTemplateID: spawn.MonsterID, IsBoss: spawn.IsBoss, IsElite: strings.EqualFold(template.Type, "Elite"), Rank: spawn.Rank, SubRank: spawn.SubRank, RegionID: spawn.RegionID,
 		X: float64(spawn.X), Y: float64(spawn.Y), SpawnX: float64(spawn.X), SpawnY: float64(spawn.Y),
 		HP: maxHP, MaxHP: maxHP, State: MonsterStateIdle, Revision: 1, LastUpdateAt: now,
 		Statuses: []StatusEffect{}, RespawnSeconds: spawn.RespawnSeconds, AggroRadius: aggroRadius, AttackRange: attackRange,
@@ -430,7 +483,10 @@ func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
 		rank = 9
 	}
 	aggroRadius = 2 + float64(rank-1)*0.5
-	leashRadius = aggroRadius + 3
+	leashRadius = float64(rank) / 2.0
+	if aggroRadius > leashRadius {
+		aggroRadius = leashRadius
+	}
 	return aggroRadius, leashRadius
 }
 

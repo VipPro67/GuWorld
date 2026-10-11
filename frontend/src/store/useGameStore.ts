@@ -14,6 +14,7 @@ import { createMineSlice, type MineSlice } from "@/store/slices/mineSlice";
 import { createPartySlice, type PartySlice } from "@/store/slices/partySlice";
 import { createChatSlice, type ChatSlice } from "@/store/slices/chatSlice";
 import { createArenaSlice, type ArenaSlice } from "@/store/slices/arenaSlice";
+import { createMartialArenaSlice, type MartialArenaSlice } from "@/store/slices/martialArenaSlice";
 import { createFeedbackSlice, type FeedbackSlice } from "@/store/slices/feedbackSlice";
 import { createBettingSlice, type BettingSlice } from "@/store/slices/bettingSlice";
 import { createGachaSlice, type GachaSlice } from "@/store/slices/gachaSlice";
@@ -1149,7 +1150,7 @@ export interface WorldConfig {
   hub_y: number;
 }
 
-interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice {
+interface GameState extends NotificationsSlice, MineSlice, PartySlice, ChatSlice, ArenaSlice, MartialArenaSlice, FeedbackSlice, BettingSlice, GachaSlice, AchievementsSlice, PetsSlice, InstanceSlice, MarketplaceSlice, SectSlice, ApertureSlice, TradeSlice, InventorySlice, CombatSlice, CultivationSlice, ProfileSlice, AuthSlice, ReferralsSlice, MiscSlice, TeleportSlice, ScoutingSlice, KillerMovesSlice {
   player: Player | null;
   playerStateRevision: number | null;
   manaSnapshot: ManaSnapshot | null;
@@ -1691,6 +1692,7 @@ export const useGameStore = create<GameState>((set, get) => {
   ...createPartySlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createChatSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createArenaSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
+  ...createMartialArenaSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createFeedbackSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createBettingSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
   ...createGachaSlice(set as ApiResponseData, get as ApiResponseData, {} as ApiResponseData),
@@ -2246,6 +2248,36 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
+      // Listen for martial_arena events
+      const unsubscribeMartialArena = wsManager.subscribe("martial_arena", (payload: ApiResponseData) => {
+        try {
+          const eventType = payload?.type;
+          const eventData = payload?.data;
+          if (eventType === "match_updated" && eventData?.match_id) {
+            set((state) => {
+              const tournaments = state.martialBracket || [];
+              const updated = tournaments.map((entry) => ({
+                ...entry,
+                matches: (entry.matches || []).map((m) =>
+                  m.id === eventData.match_id
+                    ? { ...m, winner_combatant_id: eventData.winner_combatant_id, status: eventData.status }
+                    : m
+                ),
+              }));
+              return { martialBracket: updated };
+            });
+          } else if (eventType === "round_advanced" || eventType === "tournament_started") {
+            get().fetchMartialBracket();
+            get().fetchMartialCurrent();
+          } else if (eventType === "tournament_finished") {
+            get().fetchMartialBracket();
+            get().fetchMartialCurrent();
+          }
+        } catch (err) {
+          console.error("Failed to process martial arena event", err);
+        }
+      });
+
       const unsubscribeCatalog = wsManager.subscribe("catalog", (payload: ApiResponseData) => {
         const event = payload?.data || payload;
         if (event?.type === "catalog.updated" && event?.catalog === "recipes") {
@@ -2262,6 +2294,7 @@ export const useGameStore = create<GameState>((set, get) => {
         unsubscribeGeneralChat();
         unsubscribeSectChat();
         unsubscribeDeathArena();
+        unsubscribeMartialArena();
         unsubscribeCatalog();
         releaseConnection();
       };

@@ -210,13 +210,13 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       DEFEATED: { color: 0x71717a, shape: "triangle" },
     } as const;
     const style = styles[monster.state];
-    const scale = monster.is_boss ? 1.45 : 1;
+    const scale = monster.is_boss ? 1.45 : monster.is_elite ? 1.25 : 1;
     body.scale.set(scale);
-    const color = monster.is_boss ? 0xa855f7 : style.color;
+    const color = monster.is_boss ? 0xa855f7 : monster.is_elite ? 0xfbbf24 : style.color;
     if (sprite) {
       sprite.alpha = monster.state === "RETURN" ? 0.58 : 1;
-      sprite.tint = monster.is_boss ? 0xe9d5ff : 0xffffff;
-      body.circle(0, 0, monster.is_boss ? 0.67 : 0.52).stroke({ color, width: monster.is_boss ? 0.1 : 0.07, alpha: 0.85 });
+      sprite.tint = monster.is_boss ? 0xe9d5ff : monster.is_elite ? 0xfef3c7 : 0xffffff;
+      body.circle(0, 0, monster.is_boss ? 0.67 : monster.is_elite ? 0.6 : 0.52).stroke({ color, width: monster.is_boss ? 0.1 : monster.is_elite ? 0.09 : 0.07, alpha: 0.85 });
     } else if (style.shape === "ring") body.circle(0, 0, 0.46).stroke({ color, width: 0.14 });
     else if (style.shape === "diamond") body.poly([0, -0.58, 0.58, 0, 0, 0.58, -0.58, 0]).fill(color).stroke({ color: 0x581c87, width: 0.08 });
     else if (style.shape === "arrow") body.poly([-0.48, -0.42, 0.58, 0, -0.48, 0.42, -0.18, 0]).fill(color).stroke({ color: 0x581c87, width: 0.07 });

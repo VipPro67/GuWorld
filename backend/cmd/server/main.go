@@ -170,6 +170,7 @@ func main() {
 	handlers.StartAuctionSettlementWorker(ctx)
 	go handlers.StartBeastBettingWorker(ctx)
 	go handlers.StartDeathArenaWorker(ctx)
+	go handlers.StartMartialArenaWorker(ctx)
 	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
 	worker.StartSectMissionWorker(ctx, db.DB, 60*time.Second)
 	worker.StartSectTerritoryWorker(ctx, db.DB, 1*time.Hour)

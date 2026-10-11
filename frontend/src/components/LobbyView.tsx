@@ -248,6 +248,15 @@ export const LobbyView: React.FC = () => {
       iconColor: "text-red-600",
     },
     {
+      id: "martial-arena",
+      label: "Đại Hội Võ Thuật",
+      icon: Trophy,
+      gradient: "from-orange-500 to-amber-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
+      borderColor: "border-orange-400/30",
+      iconColor: "text-orange-500",
+    },
+    {
       id: "achievements",
       label: "Nhiệm Vụ & Thành Tựu",
       icon: Award,

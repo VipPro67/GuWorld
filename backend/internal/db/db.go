@@ -274,6 +274,7 @@ func InitSchema() error {
 		{"payment", schemaPayment},
 		{"beast_betting", schemaBeastBetting},
 		{"death_arena", schemaDeathArena},
+		{"martial_arena", schemaMartialArena},
 		{"gu_history", schemaGuHistory},
 		{"teleport", schemaTeleport},
 		{"scouting", schemaScouting},

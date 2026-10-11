@@ -22,6 +22,7 @@ func StartRedisSubscribers(shub *ShardedHub) {
 	go subscribePattern(shub, "combat:*")
 	go subscribePattern(shub, "notif:*")
 	go subscribePattern(shub, "death_arena:*")
+	go subscribePattern(shub, "martial_arena:*")
 	go subscribePattern(shub, "catalog:*")
 }
 
@@ -109,6 +110,8 @@ func formatClientEvent(redisChannel string, rawPayload []byte) (string, []byte) 
 		clientChannel = "combat"
 	case len(redisChannel) >= 12 && redisChannel[:12] == "death_arena:":
 		clientChannel = "death_arena"
+	case len(redisChannel) >= 14 && redisChannel[:14] == "martial_arena:":
+		clientChannel = "martial_arena"
 	case len(redisChannel) >= 11 && redisChannel[:11] == "world:cells:":
 		clientChannel = "world:cells"
 	case len(redisChannel) >= 8 && redisChannel[:8] == "catalog:":

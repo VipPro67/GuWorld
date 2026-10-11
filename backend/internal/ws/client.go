@@ -126,6 +126,7 @@ func ServeWs(shub *ShardedHub, w http.ResponseWriter, r *http.Request, playerID 
 	shub.Subscribe(client, ChannelName("chat:world"))
 	shub.Subscribe(client, ChannelName("chat:private:"+playerID.String()))
 	shub.Subscribe(client, ChannelName("death_arena"))
+	shub.Subscribe(client, ChannelName("martial_arena"))
 	shub.Subscribe(client, ChannelName("catalog"))
 
 	// Check Sect membership

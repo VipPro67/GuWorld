@@ -32,6 +32,7 @@ const PremiumStoreView = dynamic(() => import("@/components/PremiumStoreView").t
 const BaoHoangMarket = dynamic(() => import("@/components/BaoHoangMarket").then(m => m.BaoHoangMarket), { ssr: false });
 const ArenaView = dynamic(() => import("@/components/ArenaView").then(m => m.ArenaView), { ssr: false });
 const DeathArenaView = dynamic(() => import("@/components/DeathArena/DeathArenaView"), { ssr: false });
+const MartialArenaView = dynamic(() => import("@/components/MartialArena/MartialArenaView"), { ssr: false });
 const MineView = dynamic(() => import("@/components/MineView").then(m => m.MineView), { ssr: false });
 const EntertainmentPanel = dynamic(() => import("@/components/EntertainmentPanel").then(m => m.EntertainmentPanel), { ssr: false });
 const AchievementsPanel = dynamic(() => import("@/components/AchievementsPanel"), { ssr: false });
@@ -297,7 +298,7 @@ export default function Home() {
     "practice-room": "Phòng tập", cultivation: "Tu luyện", character: "Nhân vật", inventory: "Túi đồ", "inventory-gu": "Cổ trùng", party: "Tổ đội",
     refine: "Luyện Cổ", topup: "Nạp", "premium-shop": "Cửa hàng tiên ngọc",
     "premium-store": "Cửa hàng", shop: "Thương hội", auction: "Chợ Tiên",
-    arena: "Đấu trường", "death-arena": "Sinh tử đài", leaderboard: "Bảng xếp hạng",
+    arena: "Đấu trường", "death-arena": "Sinh tử đài", "martial-arena": "Đại Hội Võ Thuật", leaderboard: "Bảng xếp hạng",
     gacha: "Tiên duyên", achievements: "Thành tựu", pets: "Dị nhân", mine: "Khai khoáng",
     aperture: "Tiên khiếu", dungeon: "Bí cảnh", sect: "Tông môn",
     "combat-history": "Lịch sử chiến đấu", feedback: "Góp ý", "audit-logs": "Nhật ký hệ thống",
@@ -486,6 +487,10 @@ export default function Home() {
         ) : currentView === "death-arena" ? (
           <div className="w-full">
             <DeathArenaView />
+          </div>
+        ) : currentView === "martial-arena" ? (
+          <div className="w-full">
+            <MartialArenaView />
           </div>
         ) : currentView === "leaderboard" ? (
           <div className="w-full">

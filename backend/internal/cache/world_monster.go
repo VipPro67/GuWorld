@@ -19,6 +19,7 @@ type WorldMonster struct {
 	SpawnID           string              `json:"spawn_id"`
 	MonsterTemplateID string              `json:"monster_template_id"`
 	IsBoss            bool                `json:"is_boss,omitempty"`
+	IsElite           bool                `json:"is_elite,omitempty"`
 	Rank              int                 `json:"rank"`
 	SubRank           int                 `json:"sub_rank"`
 	RegionID          string              `json:"region_id"`
