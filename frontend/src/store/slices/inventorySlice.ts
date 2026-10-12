@@ -39,11 +39,63 @@ export interface InventorySlice {
   groundDrops: GroundDrop[];
   fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
+  merchants: MerchantView[];
+  fetchMerchants: () => Promise<void>;
+  quoteMerchant: (merchantId: string, items: MerchantSellLine[]) => Promise<MerchantQuoteItem[]>;
+  sellToMerchant: (merchantId: string, items: MerchantSellLine[]) => Promise<boolean>;
+  buyFromMerchant: (merchantId: string, items: { item_id: string; rank?: number; quantity: number }[]) => Promise<boolean>;
+}
+
+export interface MerchantBuyTags {
+  types?: string[];
+  min_rank?: number;
+  max_rank?: number;
+  item_ids?: string[];
+}
+
+export interface MerchantStockItem {
+  item_id: string;
+  name: string;
+  type: string;
+  rank: number;
+  price: number;
+  stock: number;
+}
+
+export interface MerchantView {
+  id: string;
+  region_id: string;
+  profile_id: string;
+  name: string;
+  description: string;
+  kind: string;
+  buy_ratio: number;
+  buy_floor_ratio: number;
+  buy_tags: MerchantBuyTags;
+  quota_per_item: number;
+  quota_period: string;
+  stock: MerchantStockItem[];
+}
+
+export interface MerchantSellLine {
+  item_id: string;
+  item_type: string;
+  quantity: number;
+  rank?: number;
+}
+
+export interface MerchantQuoteItem {
+  item_id: string;
+  rank: number;
+  accepted: boolean;
+  unit_price: number;
+  quota_left: number;
 }
 
 export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, InventorySlice> = (set, get) => ({
   guInventoryLoaded: false,
   groundDrops: [],
+  merchants: [],
 
   fetchGuInventory: async (forceRefresh = false, requestRevision) => {
     if (fetchGuInventoryPromise && !forceRefresh) return fetchGuInventoryPromise;
@@ -287,6 +339,90 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bán hàng thất bại: ${err.message}`);
+      return false;
+    } finally { get().endAction("player:inventory"); }
+  },
+
+  fetchMerchants: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/merchant`);
+      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
+      const data = await response.json();
+      set({ merchants: (data.merchants || []) as MerchantView[] });
+    } catch (caught: unknown) {
+      console.error("fetchMerchants failed", caught);
+    }
+  },
+
+  quoteMerchant: async (merchantId, items) => {
+    const { token, logout } = get();
+    if (!token) return [];
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/merchant/quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchant_id: merchantId, items }),
+      });
+      if (response.status === 401) { logout(); return []; }
+      if (!response.ok) return [];
+      const data = await response.json();
+      return (data.items || []) as MerchantQuoteItem[];
+    } catch {
+      return [];
+    }
+  },
+
+  sellToMerchant: async (merchantId, items) => {
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/merchant/sell`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchant_id: merchantId, items }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Bán hàng thành công!");
+      get().addToast(data.message || "Bán hàng thành công!", "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Bán cho thương nhân thất bại: ${err.message}`);
+      return false;
+    } finally { get().endAction("player:inventory"); }
+  },
+
+  buyFromMerchant: async (merchantId, items) => {
+    const { player, token, logout } = get();
+    if (!player || !token || !get().beginAction("player:inventory")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/merchant/buy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchant_id: merchantId, items }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Mua hàng thất bại.");
+      get().applyInventoryFromResponse(data);
+      get().addLog(data.message || "Mua hàng thành công!");
+      get().addToast(data.message || "Mua hàng thành công!", "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Mua từ thương nhân thất bại: ${err.message}`);
       return false;
     } finally { get().endAction("player:inventory"); }
   },

@@ -968,6 +968,18 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			shop.POST("/bao-hoang/trade-offers/cancel", handlers.CancelTradeOffer)
 		}
 
+		// Merchants — dynamic supply/demand buy + fixed stock sell
+		api.GET("/merchant", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetMerchants)
+		merchant := api.Group("/merchant")
+		merchant.Use(middleware.AuthRequired())
+		merchant.Use(middleware.RequireOnboarded())
+		merchant.Use(middleware.RateLimitByPlayer(30, time.Minute))
+		{
+			merchant.POST("/quote", handlers.QuoteMerchant)
+			merchant.POST("/sell", handlers.SellToMerchant)
+			merchant.POST("/buy", handlers.BuyFromMerchant)
+		}
+
 		// Trade — group: 25/min, per player: 8/min
 		trade := api.Group("/trade")
 		trade.Use(middleware.AuthRequired())

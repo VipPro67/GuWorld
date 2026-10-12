@@ -168,9 +168,9 @@ func UseConsumableGu(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15, path_masteries = $16, time_speed_multiplier = $17, aptitude_type = $18, soul_hp = $19, max_thought = $20, body_mods = $21
-		WHERE id = $22`,
-		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.PathMasteries, player.TimeSpeedMultiplier, player.AptitudeType, player.SoulHP, player.MaxThought, player.BodyMods, player.ID,
+		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15, path_masteries = $16, time_speed_multiplier = $17, aptitude_type = $18, soul_hp = $19, max_thought = $20, body_mods = $21, statuses = $22
+		WHERE id = $23`,
+		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.PathMasteries, player.TimeSpeedMultiplier, player.AptitudeType, player.SoulHP, player.MaxThought, player.BodyMods, player.Statuses, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})

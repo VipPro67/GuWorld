@@ -65,6 +65,11 @@ func BreakWall(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionCultivate)})
 		return
 	}
+	// Không Khiếu hóa đá: không thể trùng kích để lên rank.
+	if gamefx.HasBlockedAction(&player, gamefx.ActionBreakthrough) {
+		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionBreakthrough)})
+		return
+	}
 
 	// Only mortals (rank 1-5) can use wall breaking
 	if player.Rank >= 6 {
@@ -321,6 +326,11 @@ func UseRelicGu(c *gin.Context) {
 		return
 	}
 
+	if gamefx.HasBlockedAction(&player, gamefx.ActionBreakthrough) {
+		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionBreakthrough)})
+		return
+	}
+
 	// Check ownership of relic in materials inventory
 	qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.RelicKey)
 	if err != nil || qty <= 0 {
@@ -412,6 +422,10 @@ func Ascension(c *gin.Context) {
 	// Statuses that block cultivation (e.g. Kiệt Sức).
 	if gamefx.HasBlockedAction(&player, gamefx.ActionCultivate) {
 		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionCultivate)})
+		return
+	}
+	if gamefx.HasBlockedAction(&player, gamefx.ActionBreakthrough) {
+		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionBreakthrough)})
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -429,5 +430,37 @@ func TestValidateGuUsablePortalAndIgnoreRange(t *testing.T) {
 	}
 	if err := ValidateGuUsable(playerRank9, guInst, &spec, true); err == nil {
 		t.Fatal("expected lower rank Gu to fail portal validation for higher rank player")
+	}
+}
+
+// TestStoneAperturePetrifiesWithoutManaLoss locks the reworked STONE_APERTURE
+// effect: it raises SubRank to 4 WITHOUT cutting max mana and instead applies
+// the permanent aperture_petrified status.
+func TestStoneAperturePetrifiesWithoutManaLoss(t *testing.T) {
+	p := &models.Player{
+		CultivationState: models.CultivationState{Rank: 3, SubRank: 1},
+		ResourceState:    models.ResourceState{MaxMana: 80, CurrentMana: 50},
+	}
+	spec := models.GuDictionaryItem{ID: "GU_STONE_APERTURE", Name: "Thạch Khiếu Cổ", Rank: 3}
+	gu := models.GuInstance{GuID: spec.ID, Rank: 3}
+
+	if _, err := handleActionCode(p, spec, gu, models.SpecialMechanic{ActionCode: "STONE_APERTURE"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.SubRank != 4 {
+		t.Errorf("SubRank = %d, want 4", p.SubRank)
+	}
+	if p.MaxMana != 80 {
+		t.Errorf("MaxMana = %v, want unchanged 80", p.MaxMana)
+	}
+	if !p.Statuses.Has("aperture_petrified") {
+		t.Fatal("expected aperture_petrified status to be applied")
+	}
+	fx := gamefx.Get(p)
+	if !fx.DisableManaRegen {
+		t.Error("aperture_petrified should disable automatic mana regen")
+	}
+	if !fx.BlockedActions[gamefx.ActionBreakthrough] {
+		t.Error("aperture_petrified should block breakthrough")
 	}
 }

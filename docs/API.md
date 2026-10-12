@@ -281,6 +281,12 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/trade/lock/:id` |
 | POST | `/trade/unlock/:id` | Mở khóa ưu đãi để chỉnh sửa lại vật phẩm/đá, tự động hủy xác nhận của cả hai bên để đảm bảo an toàn. |
 | POST | `/trade/confirm/:id` |
+| GET | `/merchant` | Thương nhân ở khu vực hiện tại: profile, `buy_tags`, stock đang bán. |
+| POST | `/merchant/quote` | Body `{merchant_id, items:[{item_id,item_type,rank,quantity}]}` → `{items:[{item_id,rank,accepted,unit_price,quota_left}]}`. |
+| POST | `/merchant/sell` | Bán cho thương nhân: giá động theo nhu cầu + quota toàn server. Body như quote. |
+| POST | `/merchant/buy` | Mua từ `merchant_stock`. Body `{merchant_id, items:[{item_id,rank,quantity}]}`. |
+
+**Thương nhân địa phương (cung–cầu):** thay mức thu mua cố định 1/10. Mỗi thương nhân có `buy_ratio` → `buy_floor_ratio` (giá tụt dần về sàn khi `bought/quota` tăng), `buy_tags` giới hạn loại/rank, và `quota_per_item` theo kỳ (HOUR/DAY) **dùng chung toàn server**. Đặt tại region `zone_type IN ('HUB','SAFE_ZONE')`. `/shop/sell` + `/sell-bulk` delegate sang thương nhân `village_general` của khu vực. Chi tiết: `docs/GAME_DATA.md` §"Thương nhân địa phương".
 
 **Quy định phí & thời gian Bảo Hoàng Thiên:**
 - **Cửa hàng (`MARKET`):** Phí Upfront thu ngay lập tức khi đăng lên kệ = **4% giá trị niêm yết** (`price * quantity`), khấu trừ theo loại tiền tệ của đơn hàng (Nguyên Thạch / Tiên Nguyên Thạch). Phí hoa hồng khi bán thành công = **6%** doanh thu.

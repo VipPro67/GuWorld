@@ -21,6 +21,9 @@ const (
 	ActionCombat    = "combat"
 	ActionRefine    = "refine"
 	ActionTrade     = "trade"
+	// ActionBreakthrough gates every rank-up path (BreakWall / Ascension /
+	// UseRelicGu and RANK_PROGRESS / MAN_BEAST_BURIAL / FORCE_RANK_UP).
+	ActionBreakthrough = "breakthrough"
 )
 
 // StatusDef describes a single persistent player status (trạng thái). The
@@ -128,6 +131,19 @@ func defaultStatuses() []StatusDef {
 			Description:            "Chịu áp chế khi xuyên qua Giới Vực Bích giữa các Đại Vực. Công thủ tốc đều suy giảm (tu vi rank càng cao bị áp chế càng nặng).",
 		},
 		{
+			// Không Khiếu Hóa Đá: Thạch Khiếu Cổ đẩy tu vi lên Đỉnh Phong nhưng
+			// vĩnh viễn hóa đá Không Khiếu — không tự hồi Chân Nguyên, không thể
+			// đột phá lên cảnh giới cao hơn.
+			Key:  StatusAperturePetrified,
+			Name: "Không Khiếu Hóa Đá",
+			Effects: Effects{
+				DisableManaRegen: true,
+			},
+			DefaultDurationMinutes: 0,
+			BlockedActions:         []string{ActionBreakthrough},
+			Description:            "Không Khiếu hóa đá: không thể tự hồi Chân Nguyên và không thể đột phá lên tu vi cao hơn.",
+		},
+		{
 			// Sinh Khí Tàn: persistent PvP debuff do Sát Sinh Khí Cổ (GU_KILL_ENERGY) gây ra.
 			// Cường độ nằm ở StatusInstance.Value (âm) và được EffectsForValue dùng để
 			// ghi đè toàn bộ stat_mods — cùng cơ chế với Áp Chế Giới Vực.
@@ -161,6 +177,11 @@ func defaultStatuses() []StatusDef {
 
 // SinhKhiTan là key persistent của trạng thái Sinh Khí Tàn (Sát Sinh Khí Cổ).
 const StatusSinhKhiTan = "sinh_khi_tan"
+
+// StatusAperturePetrified là key persistent của trạng thái Không Khiếu Hóa Đá
+// (Thạch Khiếu Cổ và họ Cổ Thổ đạo cùng cơ chế): không tự hồi Chân Nguyên và
+// không thể đột phá lên tu vi cao hơn.
+const StatusAperturePetrified = "aperture_petrified"
 
 // SinhKhiTanDuration là thời hạn mỗi lần đánh trúng refresh (tạm 5h, spec gốc 50h).
 const SinhKhiTanDurationMinutes = 300

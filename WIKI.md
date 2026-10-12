@@ -734,6 +734,15 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
 
 - Danh sách cửa hàng public; mua/bán cần đăng nhập.
 - Dữ liệu cửa hàng được import từ `backend/data/ShopItem.csv`. Có lọc theo loại/rank/lưu phái, mua và bán Cổ–nguyên liệu–Bí phương, kể cả bán hàng loạt.
+- Hàng xoay theo **khung giờ** (mặc định 1h); giao diện hiện đếm ngược "Thay hàng sau mm:ss" và tự nạp lại khi sang khung mới.
+
+### Thương nhân địa phương (cung–cầu)
+
+- Tại các **thành trấn/thôn làng** (vùng HUB / SAFE_ZONE) có NPC thương nhân cố định; mở tab **Thương Hội** để giao dịch khi đang ở đúng khu vực.
+- Mỗi thương nhân **chỉ thu mua một số loại** nhất định (theo loại/rank) và trả **giá cao** hơn mức 1/10, nhưng **càng bán nhiều một loại, giá càng tụt** về mức sàn.
+- Mỗi loại có **hạn mức (quota) dùng chung toàn server** theo kỳ (giờ/ngày): ai bán trước được trước; hết quota phải chờ kỳ sau.
+- Một số thương nhân còn **bán ra** hàng có sẵn (kho giới hạn) bên cạnh việc thu mua.
+- Bán cho thương nhân làng (giá thấp, mua rộng) vẫn là lựa chọn mặc định khi bán nhanh trong cửa hàng.
 
 ### Bảo Hoàng Thiên chợ trời
 

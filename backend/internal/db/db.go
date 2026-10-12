@@ -256,6 +256,7 @@ func InitSchema() error {
 	}{
 		{"dictionaries", schemaDictionaries},
 		{"world", schemaWorld},
+		{"merchants", schemaMerchants},
 		{"parties", schemaParties},
 		{"players", schemaPlayers},
 		{"daily_missions", schemaDailyMissions},
@@ -300,6 +301,9 @@ func InitSchema() error {
 	}
 	if err := seedHubRegion(); err != nil {
 		return fmt.Errorf("seed hub region: %w", err)
+	}
+	if err := SeedMerchantDefaults(); err != nil {
+		return fmt.Errorf("seed merchant defaults: %w", err)
 	}
 	if err := seedStarterSpatialRealm(); err != nil {
 		return fmt.Errorf("seed starter spatial realm: %w", err)

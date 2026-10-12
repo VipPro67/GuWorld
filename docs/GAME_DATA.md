@@ -340,10 +340,10 @@ Bảng `status_dictionary`:
 | `name` | VARCHAR(200) | Tên tiếng Việt hiển thị |
 | `effects` | JSONB | Cùng format `effects` như thể chất (stat_mods, luck, ...) |
 | `default_duration_minutes` | INTEGER | 0 = vĩnh viễn; > 0 = thời hạn mặc định khi được cấp không kèm duration |
-| `blocked_actions` | JSONB (`[]string`) | Chặn hành động: `explore`, `cultivate`, `combat`, `refine`, `trade` |
+| `blocked_actions` | JSONB (`[]string`) | Chặn hành động: `explore`, `cultivate`, `combat`, `refine`, `trade`, `breakthrough` (mọi đường lên rank: trùng kích, Thăng Tiên, Relic Cổ, và các Cổ tăng rank) |
 | `description` | TEXT | Mô tả |
 
-Danh sách hiện tại (7 trạng thái):
+Danh sách hiện tại (10 trạng thái):
 
 | Key | Tên Việt | Effect | Thời hạn | Chặn |
 | --- | --- | --- | --- | --- |
@@ -356,6 +356,7 @@ Danh sách hiện tại (7 trạng thái):
 | `refine_backfire` | Luyện Cổ Phản Phệ | -95% tỉ lệ Luyện Cổ | 20 phút | — |
 | `refine_insight_1..9` | Luyện Cổ Tâm Đắc R1..R9 | +1%/tầng cho đúng rank đó, không cap (Value = số tầng); chỉ hợp luyện đúng nguyên liệu khi Cổ mục tiêu chưa tồn tại mới được cộng/dùng pity | Vĩnh viễn (reset về 0 khi hợp luyện hợp lệ thành công rank đó) | — |
 | `sinh_khi_tan` | Sinh Khí Tàn | Tầng I -10%, II -25%, III -35%, IV -50%, V -99% attack/defense/speed (Value âm ghi đè stat_mods) | 300 phút, refresh mỗi hit | — |
+| `aperture_petrified` | Không Khiếu Hóa Đá | Không tự hồi Chân Nguyên (block `DISABLE_MANA_REGEN`) | Vĩnh viễn | `breakthrough` |
 
 Sinh Khí Tàn do **Sát Sinh Khí Cổ** (`GU_KILL_ENERGY`, rank 9 Sát Đạo) gây ra: đánh trúng ở PvP thật thì defender persistent +1 tầng (tối đa V, tầng V vẫn ăn hit refresh, không miễn nhiễm). Công thức luyện: `GU_KILL_HEAVEN_DAO` rank 8 + `heaven_qi_rank8/9`, `kill_path_material`, `primordial_kill_origin_stone` (vật liệu Hỗn Độn trong spec gốc chưa tồn tại dưới dạng item nên tạm thay bằng tiên tài Sát Đạo hiện có). Cơ chế **data-driven trên Cổ**: `Gu.csv` block `ON_HIT` + `UNIQUE PERSIST_STATUS_ON_HIT` (`params.status_key=sinh_khi_tan, pvp_only=true`); engine gắn `CombatLog.SourceGuID/HitLanded` (khiên hấp thụ hết vẫn tính hit, né/mù/miễn nhiễm không tính); hook post-combat `handlers.maybeGrantPersistentHitStatuses` (dùng chung `AutoCombatStart` + `AutoResolveCombat`) grant theo spec, Cổ mới chỉ cần thêm block tương tự. Helper: `gamefx.SinhKhiTanTierFromValue/ValueForTier/TierName`, `handlers.GrantSinhKhiTanHit`, `models.GuPersistentHitStatus`, `handlers.CleanseSinhKhiTanOneTier` (thanh tẩy tụt 1 tầng, hết tầng I thì xóa).
 
@@ -1212,6 +1213,23 @@ Loại tiền được suy ra từ **rank hiệu dụng** qua `pkg/pricing.Stone
 **Pool ngẫu nhiên tự sinh (virtual):** ngoài các món `is_default = false` trong `caravan_shop_items`, `autoShopPool()` (`handlers/shop_catalog.go`) tự bổ sung vào pool ngẫu nhiên mọi **Cổ trùng rank < 6 và rarity < 6** (mỗi variant pinned đúng rank) cùng **thức ăn của chúng** (chỉ các id khớp dòng thật trong `item_dictionary`; các pseudo-food tài nguyên không phải item nên tự bị loại), trừ các id đã có trong `caravan_shop_items`. Các món này **không được persist** vào bảng shop nên không làm bẩn danh sách admin hay CSV export.
 
 **Giá + số lượng (stock) món random:** giá mua = `base_price × 1.5` (`randomPoolMarkup`, làm tròn đến `0.001`, tối thiểu `0.001`). Mỗi món có stock hằng ngày theo rank qua `randomPoolStock(rank)`: **R1 = 100, R2 = 50, R3 = 20, R4 = 5, R5 = 2, R6+ = 0**. Số còn lại trong ngày lưu ở bảng `caravan_shop_daily_stock(day, id, rank, remaining)` — key theo ngày nên tự reset mỗi ngày (stock không reset theo giờ). `/api/shop/buy` trừ stock nguyên tử (`UPDATE ... WHERE remaining >= qty`), hết thì trả lỗi "Hàng này hôm nay đã hết". Món default/admin trong `caravan_shop_items` **không** áp dụng cơ chế này (stock CSV của chúng vẫn chỉ hiển thị). Frontend `CaravanShop` hiển thị đếm ngược tới khung xoay kế tiếp và tự nạp lại khi sang khung mới.
+
+### Thương nhân địa phương (cung–cầu)
+
+Hệ thống thu mua thay cho mức cố định 1/10: merchant có **profile data-driven** + **quota toàn server** + **giá động**.
+
+| Bảng | Vai trò |
+| --- | --- |
+| `merchant_profiles` | `buy_ratio`, `buy_floor_ratio`, `buy_tags` (JSONB: `types`/`min_rank`/`max_rank`/`item_ids`), `quota_per_item`, `quota_period` (HOUR/DAY), `sell_markup`, `kind` (FIXED/ROAMING) |
+| `merchants` | Instance cố định, id tất định `village_<region>` / `fence_<region>`, FK `region_id` |
+| `merchant_stock` | Hàng merchant bán ra (rỗng = chỉ thu mua) |
+| `merchant_demand` | `(merchant_id,item_id,period_start) → bought` — PK theo kỳ nên quota tự reset |
+
+- **Vị trí:** mọi region `zone_type IN ('HUB','SAFE_ZONE')` có `village_general` (mua gần hết, giá thấp 10% phẳng, quota 300/ngày); region `HUB` thêm `hub_fence` (mua Material/Consumable rank 1–5, giá 45%→15%, quota 15/giờ). Region import sau được tạo merchant **lazy** khi người chơi vào (`ensureRegionMerchants`).
+- **Giá động:** `ratio(bought) = buy_ratio − (buy_ratio − buy_floor_ratio) × min(bought/quota, 1)`; giá đơn vị = `base_price × ratio`, làm tròn `0.001`. Càng bán nhiều 1 loại, giá càng tụt về sàn.
+- **Quota toàn server:** ai bán trước được trước; hết quota loại đó tới kỳ sau.
+- **`/api/shop/sell` + `/sell-bulk`** giờ **delegate** sang `village_general` của region (giữ nguyên shape response); endpoint riêng cho merchant: `GET /api/merchant`, `POST /api/merchant/{quote,sell,buy}`.
+- Seed trong `SeedMerchantDefaults` (code). Upgrade path: CSV + Admin dataset khi cần tinh chỉnh runtime.
 
 **`base_price` rank ≥ 6 là Tiên Nguyên Thạch** — bảng giá mặc định (fallback trong `pkg/pricing/pricing.go`, dùng khi CSV không ghi `base_price`):
 

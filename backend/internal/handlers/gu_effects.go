@@ -379,6 +379,13 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		_ = json.Unmarshal(mechanic.Params, &params)
 	}
 	actionCode := mechanic.ActionCode
+	// Không Khiếu hóa đá (aperture_petrified) chặn mọi cơ chế lên rank.
+	switch actionCode {
+	case "RANK_PROGRESS", "MAN_BEAST_BURIAL", "FORCE_RANK_UP":
+		if gamefx.Get(player).BlockedActions[gamefx.ActionBreakthrough] {
+			return "", fmt.Errorf("Không Khiếu đã hóa đá, không thể đột phá tu vi!")
+		}
+	}
 	switch actionCode {
 	case "SOVEREIGN_BODY_TRANSFORM":
 		if player.BodyMods.Has(models.BodyModSovereignImmortal) {
@@ -488,14 +495,8 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		return fmt.Sprintf("%s cưỡng ép đột phá! Tu vi nâng lên %s Sơ Giai, Chân Nguyên tối đa giảm 10.", spec.Name, models.GetRankName(player.Rank)), nil
 	case "APERTURE_PETRIFICATION", "STONE_APERTURE":
 		player.SubRank = 4
-		player.MaxMana -= 15
-		if player.MaxMana < 20 {
-			player.MaxMana = 20
-		}
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
-		}
-		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá.", spec.Name), nil
+		player.Statuses.Add(gamefx.StatusAperturePetrified, spec.Name, 0, 0)
+		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá (không tự hồi Chân Nguyên, không thể đột phá lên cảnh giới cao hơn).", spec.Name), nil
 	case "GIVE_STONES":
 		val, _ := params["value"].(float64)
 		amount := val

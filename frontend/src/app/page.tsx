@@ -28,6 +28,7 @@ const RefiningFurnace = dynamic(() => import("@/components/RefiningFurnace").the
 const WorldPage = dynamic(() => import("@/components/WorldPage").then(m => m.WorldPage), { ssr: false });
 const CombatScreen = dynamic(() => import("@/components/CombatScreen").then(m => m.CombatScreen), { ssr: false });
 const CaravanShop = dynamic(() => import("@/components/CaravanShop").then(m => m.CaravanShop), { ssr: false });
+const MerchantTradeView = dynamic(() => import("@/components/MerchantTradeView").then(m => m.MerchantTradeView), { ssr: false });
 const PremiumStoreView = dynamic(() => import("@/components/PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
 const BaoHoangMarket = dynamic(() => import("@/components/BaoHoangMarket").then(m => m.BaoHoangMarket), { ssr: false });
 const ArenaView = dynamic(() => import("@/components/ArenaView").then(m => m.ArenaView), { ssr: false });
@@ -458,7 +459,7 @@ export default function Home() {
             <PremiumStoreView defaultTab="packages" />
           </div>
         ) : currentView === "shop" ? (
-          <div className="w-full">
+          <div className="w-full space-y-6">
             <CaravanShop
               player={player}
               actionLoading={actionLoading}
@@ -466,6 +467,7 @@ export default function Home() {
               onSell={sellShopItem}
               onSellBulk={sellShopItemsBulk}
             />
+            <MerchantTradeView player={player} actionLoading={actionLoading} />
           </div>
         ) : currentView === "auction" ? (
           <BaoHoangMarket
