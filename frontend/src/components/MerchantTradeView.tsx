@@ -41,6 +41,8 @@ export const MerchantTradeView: React.FC<MerchantTradeViewProps> = ({ player, ac
 
   useEffect(() => {
     void fetchMerchants();
+    const id = setInterval(() => { void fetchMerchants(); }, 60000);
+    return () => clearInterval(id);
   }, [fetchMerchants, region]);
 
   const selected: MerchantView | undefined = useMemo(
@@ -114,14 +116,14 @@ export const MerchantTradeView: React.FC<MerchantTradeViewProps> = ({ player, ac
     <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 w-full mx-auto space-y-5 animate-fade-in">
       <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
         <Store className="w-5 h-5 text-amber-500" />
-        <h3 className="text-lg font-bold text-zinc-100 font-serif">Thương Nhân Địa Phương</h3>
+        <h3 className="text-lg font-bold text-zinc-100 font-serif">Thương Nhân Lang Thang</h3>
         <span className="ml-auto text-[10px] font-mono text-zinc-500">{region}</span>
       </div>
 
       {merchants.length === 0 ? (
         <div className="py-10 flex flex-col items-center gap-2 text-zinc-600">
           <Store className="w-8 h-8 text-zinc-700" />
-          <span className="text-xs font-mono">Khu vực này không có thương nhân. Hãy tới thành trấn/thôn làng.</span>
+          <span className="text-xs font-mono text-center">Không có thương nhân lang thang gần đây.<br />Họ xuất hiện ngẫu nhiên ngoài hoang dã — hãy đi tuần để tìm.</span>
         </div>
       ) : (
         <>
@@ -135,7 +137,7 @@ export const MerchantTradeView: React.FC<MerchantTradeViewProps> = ({ player, ac
                     selected?.id === m.id ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "text-zinc-400 border-zinc-800 hover:text-zinc-200"
                   }`}
                 >
-                  {m.name}
+                  {m.name} · {m.distance} ô
                 </button>
               ))}
             </div>
@@ -146,8 +148,20 @@ export const MerchantTradeView: React.FC<MerchantTradeViewProps> = ({ player, ac
               <div className="text-[11px] text-zinc-400 leading-relaxed">
                 {selected.description}
                 <div className="mt-1 text-[10px] font-mono text-zinc-500">
-                  Mua vào {Math.round(selected.buy_ratio * 100)}% → sàn {Math.round(selected.buy_floor_ratio * 100)}% · quota {selected.quota_per_item}/{selected.quota_period === "HOUR" ? "giờ" : "ngày"} (toàn server)
+                  Cách {selected.distance} ô · mua vào {Math.round(selected.buy_ratio * 100)}% → sàn {Math.round(selected.buy_floor_ratio * 100)}% · quota {selected.quota_per_item}/{selected.quota_period === "HOUR" ? "giờ" : "ngày"} (toàn server)
                 </div>
+                {selected.buy_tags?.item_ids?.length ? (
+                  <div className="mt-1 text-[10px] font-mono text-zinc-500">
+                    Thu mua:{" "}
+                    <span className="text-zinc-300">
+                      {selected.buy_tags.item_ids
+                        .slice(0, 12)
+                        .map((id) => itemDictionary[id]?.name || guDictionary[id]?.name || id)
+                        .join(", ")}
+                      {selected.buy_tags.item_ids.length > 12 ? ` +${selected.buy_tags.item_ids.length - 12}` : ""}
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
               <GameTabs

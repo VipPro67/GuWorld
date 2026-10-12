@@ -736,13 +736,14 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
 - Dữ liệu cửa hàng được import từ `backend/data/ShopItem.csv`. Có lọc theo loại/rank/lưu phái, mua và bán Cổ–nguyên liệu–Bí phương, kể cả bán hàng loạt.
 - Hàng xoay theo **khung giờ** (mặc định 1h); giao diện hiện đếm ngược "Thay hàng sau mm:ss" và tự nạp lại khi sang khung mới.
 
-### Thương nhân địa phương (cung–cầu)
+### Thương nhân lang thang
 
-- Tại các **thành trấn/thôn làng** (vùng HUB / SAFE_ZONE) có NPC thương nhân cố định; mở tab **Thương Hội** để giao dịch khi đang ở đúng khu vực.
-- Mỗi thương nhân **chỉ thu mua một số loại** nhất định (theo loại/rank) và trả **giá cao** hơn mức 1/10, nhưng **càng bán nhiều một loại, giá càng tụt** về mức sàn.
-- Mỗi loại có **hạn mức (quota) dùng chung toàn server** theo kỳ (giờ/ngày): ai bán trước được trước; hết quota phải chờ kỳ sau.
-- Một số thương nhân còn **bán ra** hàng có sẵn (kho giới hạn) bên cạnh việc thu mua.
-- Bán cho thương nhân làng (giá thấp, mua rộng) vẫn là lựa chọn mặc định khi bán nhanh trong cửa hàng.
+- **Loại 1 — cố định tại thành trấn/thôn làng (HUB/SAFE_ZONE):** chính là **Thương Hội/Caravan** quen thuộc — bán hàng random theo khung giờ, **mua tất cả giá 1/10**.
+- **Loại 2 — lang thang ngoài hoang dã:** xuất hiện **ngẫu nhiên** ở vùng hoang (không phải HUB/SAFE_ZONE), tồn tại một thời gian rồi dời đi. **Khi xuất hiện sẽ có thông báo ở kênh thế giới kèm tên vùng và toạ độ (x, y)** để đạo hữu nhanh chân tìm tới. Mở tab **Thương Hội** — mục "Thương Nhân Lang Thang" chỉ hiện khi bạn **ở gần** (≤ 12 ô).
+  - **Mỗi con một bể riêng**: thu mua một danh sách loại riêng (không mua hết), giá/quota riêng; bán ra một kho hàng random riêng.
+  - **Mua hàng giá cao**: khởi điểm 70–100% giá gốc, nhưng **càng bán nhiều một loại giá càng tụt** về 10–30%.
+  - **Giới hạn số lượng (quota) dùng chung toàn server** theo giờ: ai nhanh chân bán trước; hết quota phải chờ kỳ sau hoặc tìm con khác.
+  - **Bán ra hàng random** (Cổ/nguyên liệu) với giá có markup.
 
 ### Bảo Hoàng Thiên chợ trời
 

@@ -1214,21 +1214,28 @@ Loại tiền được suy ra từ **rank hiệu dụng** qua `pkg/pricing.Stone
 
 **Giá + số lượng (stock) món random:** giá mua = `base_price × 1.5` (`randomPoolMarkup`, làm tròn đến `0.001`, tối thiểu `0.001`). Mỗi món có stock hằng ngày theo rank qua `randomPoolStock(rank)`: **R1 = 100, R2 = 50, R3 = 20, R4 = 5, R5 = 2, R6+ = 0**. Số còn lại trong ngày lưu ở bảng `caravan_shop_daily_stock(day, id, rank, remaining)` — key theo ngày nên tự reset mỗi ngày (stock không reset theo giờ). `/api/shop/buy` trừ stock nguyên tử (`UPDATE ... WHERE remaining >= qty`), hết thì trả lỗi "Hàng này hôm nay đã hết". Món default/admin trong `caravan_shop_items` **không** áp dụng cơ chế này (stock CSV của chúng vẫn chỉ hiển thị). Frontend `CaravanShop` hiển thị đếm ngược tới khung xoay kế tiếp và tự nạp lại khi sang khung mới.
 
-### Thương nhân địa phương (cung–cầu)
+### Thương nhân (2 loại)
 
-Hệ thống thu mua thay cho mức cố định 1/10: merchant có **profile data-driven** + **quota toàn server** + **giá động**.
+Có **2 loại** thương nhân; cả hai dùng profile data-driven + quota toàn server.
+
+**Loại 1 — cố định tại HUB/SAFE_ZONE (cơ chế cũ).** Chính là Caravan/Thương Hội: bán random theo khung giờ, mua tất cả giá 10% phẳng. Profile `village_general` (`buy_ratio = buy_floor_ratio = 0.10`, `quota_per_item = 0` = vô hạn). `/api/shop/sell` + `/sell-bulk` **delegate** sang profile này theo region (giữ nguyên shape response); instance `village_<region>` tạo lazy (`ensureRegionMerchants`).
+
+**Loại 2 — lang thang ngoài map.** Profile `roaming_trader` (`kind = ROAMING`) làm giá trị nền; **mỗi instance override riêng** (`merchants.buy_tags` / `buy_ratio` / `buy_floor_ratio` / `quota_per_item`) nên **mỗi con có bể mua và bể bán riêng**:
+- Bể mua: allow-list ngẫu nhiên ~8–15 item id (`buy_tags.item_ids`), giá riêng (`buy_ratio` random 0.70–1.00 → `buy_floor_ratio` 0.10–0.30), quota riêng 5–20/giờ (toàn server).
+- Bể bán: `merchant_stock` random sinh lúc spawn (Cổ rank<6 & rarity<6 + thức ăn, giá `base × 1.4`).
+
+Worker `StartRoamingMerchantWorker` (2', package `handlers`) duy trì ~4 con ở region `zone_type NOT IN ('HUB','SAFE_ZONE','SECRET_REALM')`: tọa độ random, vòng đời 30–60', hết hạn thì xóa (cascade stock/demand) và spawn con mới. Mỗi spawn **thông báo world chat kèm tên vùng + toạ độ**. `GET /api/merchant` chỉ trả roaming **trong bán kính ≤ 12 ô** cùng region.
 
 | Bảng | Vai trò |
 | --- | --- |
 | `merchant_profiles` | `buy_ratio`, `buy_floor_ratio`, `buy_tags` (JSONB: `types`/`min_rank`/`max_rank`/`item_ids`), `quota_per_item`, `quota_period` (HOUR/DAY), `sell_markup`, `kind` (FIXED/ROAMING) |
-| `merchants` | Instance cố định, id tất định `village_<region>` / `fence_<region>`, FK `region_id` |
-| `merchant_stock` | Hàng merchant bán ra (rỗng = chỉ thu mua) |
+| `merchants` | Instance; cố định id `village_<region>`, roaming id `roam_<uuid>` + `expires_at`; override `buy_tags`/`buy_ratio`/`buy_floor_ratio`/`quota_per_item` (NULL = dùng profile); FK `region_id` |
+| `merchant_stock` | Hàng merchant bán ra (roaming sinh random lúc spawn) |
 | `merchant_demand` | `(merchant_id,item_id,period_start) → bought` — PK theo kỳ nên quota tự reset |
 
-- **Vị trí:** mọi region `zone_type IN ('HUB','SAFE_ZONE')` có `village_general` (mua gần hết, giá thấp 10% phẳng, quota 300/ngày); region `HUB` thêm `hub_fence` (mua Material/Consumable rank 1–5, giá 45%→15%, quota 15/giờ). Region import sau được tạo merchant **lazy** khi người chơi vào (`ensureRegionMerchants`).
-- **Giá động:** `ratio(bought) = buy_ratio − (buy_ratio − buy_floor_ratio) × min(bought/quota, 1)`; giá đơn vị = `base_price × ratio`, làm tròn `0.001`. Càng bán nhiều 1 loại, giá càng tụt về sàn.
+- **Giá động:** `ratio(bought) = buy_ratio − (buy_ratio − buy_floor_ratio) × min(bought/quota, 1)`; giá đơn vị = `base_price × ratio`, làm tròn `0.001`.
 - **Quota toàn server:** ai bán trước được trước; hết quota loại đó tới kỳ sau.
-- **`/api/shop/sell` + `/sell-bulk`** giờ **delegate** sang `village_general` của region (giữ nguyên shape response); endpoint riêng cho merchant: `GET /api/merchant`, `POST /api/merchant/{quote,sell,buy}`.
+- Endpoint: `GET /api/merchant`, `POST /api/merchant/{quote,sell,buy}`.
 - Seed trong `SeedMerchantDefaults` (code). Upgrade path: CSV + Admin dataset khi cần tinh chỉnh runtime.
 
 **`base_price` rank ≥ 6 là Tiên Nguyên Thạch** — bảng giá mặc định (fallback trong `pkg/pricing/pricing.go`, dùng khi CSV không ghi `base_price`):

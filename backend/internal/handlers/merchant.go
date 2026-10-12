@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -120,6 +121,48 @@ func loadMerchantProfile(q queryer, id string) (merchantProfile, error) {
 	return p, nil
 }
 
+// loadMerchantEffective loads a merchant's profile then overlays any per-instance
+// overrides (buy_tags / buy_ratio / buy_floor_ratio / quota_per_item) so each
+// roaming trader can own its own buy pool.
+func loadMerchantEffective(q queryer, merchantID string) (merchantProfile, string, error) {
+	var p merchantProfile
+	var regionID string
+	var tagsRaw, oTagsRaw []byte
+	var oRatio, oFloor sql.NullFloat64
+	var oQuota sql.NullInt64
+	err := q.QueryRow(`
+		SELECT p.id, p.name, p.description, p.kind, p.buy_ratio, p.buy_floor_ratio, p.buy_tags,
+		       p.quota_per_item, p.quota_period, p.sell_markup,
+		       m.region_id, m.buy_tags, m.buy_ratio, m.buy_floor_ratio, m.quota_per_item
+		FROM merchants m
+		JOIN merchant_profiles p ON p.id = m.profile_id
+		WHERE m.id = $1 AND m.is_active AND p.enabled
+		  AND (m.expires_at IS NULL OR m.expires_at > NOW())`, merchantID).
+		Scan(&p.ID, &p.Name, &p.Description, &p.Kind, &p.BuyRatio, &p.BuyFloorRatio, &tagsRaw,
+			&p.QuotaPerItem, &p.QuotaPeriod, &p.SellMarkup,
+			&regionID, &oTagsRaw, &oRatio, &oFloor, &oQuota)
+	if err != nil {
+		return p, "", err
+	}
+	_ = json.Unmarshal(tagsRaw, &p.BuyTags)
+	if len(oTagsRaw) > 0 {
+		var t merchantBuyTags
+		if json.Unmarshal(oTagsRaw, &t) == nil {
+			p.BuyTags = t
+		}
+	}
+	if oRatio.Valid {
+		p.BuyRatio = oRatio.Float64
+	}
+	if oFloor.Valid {
+		p.BuyFloorRatio = oFloor.Float64
+	}
+	if oQuota.Valid {
+		p.QuotaPerItem = int(oQuota.Int64)
+	}
+	return p, regionID, nil
+}
+
 // merchantResolveBase resolves the dictionary base price and the effective rank
 // for a polymorphic entity (Gu / Recipe / item).
 func merchantResolveBase(q queryer, itemID, itemType string, rank int) (float64, int, error) {
@@ -159,8 +202,8 @@ func merchantResolveBase(q queryer, itemID, itemType string, rank int) (float64,
 // Placement
 // ---------------------------------------------------------------------------
 
-// ensureRegionMerchants lazily creates the fixed merchants for a region that
-// qualifies (HUB / SAFE_ZONE). Idempotent via deterministic ids.
+// ensureRegionMerchants lazily creates the fixed village merchant for a region
+// that qualifies (HUB / SAFE_ZONE). Idempotent via deterministic ids.
 func ensureRegionMerchants(regionID string) error {
 	if regionID == "" {
 		return nil
@@ -175,12 +218,6 @@ func ensureRegionMerchants(regionID string) error {
 	if _, err := db.DB.Exec(`INSERT INTO merchants (id, profile_id, region_id, is_active)
 		VALUES ('village_'||$1, 'village_general', $1, TRUE) ON CONFLICT (id) DO NOTHING`, regionID); err != nil {
 		return err
-	}
-	if zoneType == "HUB" {
-		if _, err := db.DB.Exec(`INSERT INTO merchants (id, profile_id, region_id, is_active)
-			VALUES ('fence_'||$1, 'hub_fence', $1, TRUE) ON CONFLICT (id) DO NOTHING`, regionID); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -201,6 +238,9 @@ type merchantStockItem struct {
 type merchantDTO struct {
 	ID           string              `json:"id"`
 	RegionID     string              `json:"region_id"`
+	X            int                 `json:"x"`
+	Y            int                 `json:"y"`
+	Distance     int                 `json:"distance"`
 	ProfileID    string              `json:"profile_id"`
 	Name         string              `json:"name"`
 	Description  string              `json:"description"`
@@ -212,6 +252,10 @@ type merchantDTO struct {
 	QuotaPeriod  string              `json:"quota_period"`
 	Stock        []merchantStockItem `json:"stock"`
 }
+
+// roamingMerchantRadius is how close a player must be to a roaming merchant to
+// see and trade with it.
+const roamingMerchantRadius = 12
 
 func loadMerchantStock(merchantID string) []merchantStockItem {
 	rows, err := db.DB.Query(`
@@ -241,7 +285,9 @@ func loadMerchantStock(merchantID string) []merchantStockItem {
 	return out
 }
 
-// GetMerchants returns the active merchants in the player's current region.
+// GetMerchants returns the roaming merchants the player is currently standing
+// near (within roamingMerchantRadius in the same region). The fixed village shop
+// is the Caravan / Thương Hội UI and is not returned here.
 func GetMerchants(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -249,21 +295,19 @@ func GetMerchants(c *gin.Context) {
 		return
 	}
 	var region string
-	_ = db.DB.QueryRow(`SELECT current_region FROM players WHERE id=$1`, playerID).Scan(&region)
-	if region == "" {
-		c.JSON(http.StatusOK, gin.H{"region": "", "merchants": []merchantDTO{}})
-		return
-	}
-	if err := ensureRegionMerchants(region); err != nil {
+	var px, py int
+	if err := db.DB.QueryRow(`SELECT current_region, x, y FROM players WHERE id=$1`, playerID).Scan(&region, &px, &py); err != nil || region == "" {
 		c.JSON(http.StatusOK, gin.H{"region": region, "merchants": []merchantDTO{}})
 		return
 	}
 	rows, err := db.DB.Query(`
-		SELECT m.id, m.region_id, p.id, p.name, p.description, p.kind,
-		       p.buy_ratio, p.buy_floor_ratio, p.buy_tags, p.quota_per_item, p.quota_period
+		SELECT m.id, m.region_id, m.x, m.y, p.id, p.name, p.description, p.kind,
+		       p.buy_ratio, p.buy_floor_ratio, p.buy_tags, p.quota_per_item, p.quota_period,
+		       m.buy_tags, m.buy_ratio, m.buy_floor_ratio, m.quota_per_item
 		FROM merchants m
 		JOIN merchant_profiles p ON p.id = m.profile_id
-		WHERE m.region_id = $1 AND m.is_active AND p.enabled
+		WHERE m.region_id = $1 AND m.is_active AND p.enabled AND p.kind = 'ROAMING'
+		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
 		ORDER BY m.id`, region)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thương nhân"})
@@ -273,12 +317,36 @@ func GetMerchants(c *gin.Context) {
 	out := []merchantDTO{}
 	for rows.Next() {
 		var m merchantDTO
-		var tagsRaw []byte
-		if err := rows.Scan(&m.ID, &m.RegionID, &m.ProfileID, &m.Name, &m.Description, &m.Kind,
-			&m.BuyRatio, &m.BuyFloor, &tagsRaw, &m.QuotaPerItem, &m.QuotaPeriod); err != nil {
+		var tagsRaw, oTagsRaw []byte
+		var oRatio, oFloor sql.NullFloat64
+		var oQuota sql.NullInt64
+		if err := rows.Scan(&m.ID, &m.RegionID, &m.X, &m.Y, &m.ProfileID, &m.Name, &m.Description, &m.Kind,
+			&m.BuyRatio, &m.BuyFloor, &tagsRaw, &m.QuotaPerItem, &m.QuotaPeriod,
+			&oTagsRaw, &oRatio, &oFloor, &oQuota); err != nil {
 			continue
 		}
+		dx, dy := m.X-px, m.Y-py
+		sq := dx*dx + dy*dy
+		if sq > roamingMerchantRadius*roamingMerchantRadius {
+			continue
+		}
+		m.Distance = int(math.Sqrt(float64(sq)))
 		_ = json.Unmarshal(tagsRaw, &m.BuyTags)
+		if len(oTagsRaw) > 0 {
+			var t merchantBuyTags
+			if json.Unmarshal(oTagsRaw, &t) == nil {
+				m.BuyTags = t
+			}
+		}
+		if oRatio.Valid {
+			m.BuyRatio = oRatio.Float64
+		}
+		if oFloor.Valid {
+			m.BuyFloor = oFloor.Float64
+		}
+		if oQuota.Valid {
+			m.QuotaPerItem = int(oQuota.Int64)
+		}
 		m.Stock = loadMerchantStock(m.ID)
 		out = append(out, m)
 	}
@@ -317,14 +385,9 @@ func QuoteMerchant(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	var profileID string
-	if err := db.DB.QueryRow(`SELECT profile_id FROM merchants WHERE id=$1 AND is_active`, req.MerchantID).Scan(&profileID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Thương nhân không tồn tại"})
-		return
-	}
-	profile, err := loadMerchantProfile(db.DB, profileID)
+	profile, _, err := loadMerchantEffective(db.DB, req.MerchantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tải được thương nhân"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Thương nhân không tồn tại"})
 		return
 	}
 	periodStart := merchantPeriodStart(profile.QuotaPeriod, time.Now())
@@ -549,18 +612,13 @@ func SellToMerchant(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết, không thể giao dịch!"})
 		return
 	}
-	var profileID, regionID string
-	if err := tx.QueryRow(`SELECT profile_id, region_id FROM merchants WHERE id=$1 AND is_active`, req.MerchantID).Scan(&profileID, &regionID); err != nil {
+	profile, regionID, err := loadMerchantEffective(tx, req.MerchantID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Thương nhân không tồn tại"})
 		return
 	}
 	if regionID != player.CurrentRegion {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không ở cùng khu vực với thương nhân này"})
-		return
-	}
-	profile, err := loadMerchantProfile(tx, profileID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tải được thương nhân"})
 		return
 	}
 	primeval, immortal, summaries, removedGuIDs, guSold, err := executeMerchantSale(tx, &player, req.MerchantID, &profile, req.Items)

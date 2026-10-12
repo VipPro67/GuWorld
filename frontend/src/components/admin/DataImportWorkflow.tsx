@@ -27,6 +27,34 @@ type RowDiff = { kind: string; before?: Record<string, unknown>; after?: Record<
 type DatasetResult = { key: string; filename: string; rows: number; inserts: number; updates: number; unchanged: number; diffs: RowDiff[]; validation_errors: Issue[]; reload_required: boolean; restart_required: boolean };
 type Preflight = { preflight_id: string; expires_at: string; plan: { can_commit: boolean; totals: { rows: number; inserts: number; updates: number; unchanged: number }; datasets: DatasetResult[]; validation_errors: Issue[] } };
 
+const sameValue = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const changedFields = (before: Record<string, unknown> = {}, after: Record<string, unknown> = {}) =>
+  Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
+    .filter(key => !sameValue(before[key], after[key]))
+    .map(key => ({ key, before: before[key], after: after[key] }));
+const fmt = (value: unknown) => value === undefined || value === null ? "—" : typeof value === "string" ? value : JSON.stringify(value);
+
+// Chỉ render phần thay đổi: update = bảng field cũ→mới, insert = thu gọn.
+function RowDiffView({ diffs }: { diffs: RowDiff[] }) {
+  return <div className="mt-2 space-y-2">
+    {diffs.map((diff, index) => {
+      const identity = fmt(diff.after?.id ?? diff.before?.id ?? "") || "…";
+      if (diff.kind === "insert") {
+        const fields = Object.entries(diff.after ?? {}).filter(([, value]) => value !== null && value !== "");
+        return <details key={index} className="rounded border border-emerald-900/50 bg-emerald-950/10 p-2">
+          <summary className="cursor-pointer text-emerald-400">+ thêm mới {identity}</summary>
+          <div className="mt-1 space-y-0.5">{fields.map(([key, value]) => <div key={key} className="flex gap-2"><span className="w-40 shrink-0 text-zinc-500">{key}</span><span className="break-all text-zinc-300">{fmt(value)}</span></div>)}</div>
+        </details>;
+      }
+      const changes = changedFields(diff.before, diff.after);
+      return <div key={index} className="rounded border border-amber-900/50 bg-amber-950/10 p-2">
+        <div className="text-amber-400">~ sửa {identity} · {changes.length} field</div>
+        <table className="mt-1 w-full border-collapse"><tbody>{changes.map(change => <tr key={change.key} className="align-top"><td className="w-32 py-0.5 pr-2 text-zinc-500">{change.key}</td><td className="break-all py-0.5 pr-2 text-red-400">{fmt(change.before)}</td><td className="break-all py-0.5 text-emerald-400">{fmt(change.after)}</td></tr>)}</tbody></table>
+      </div>;
+    })}
+  </div>;
+}
+
 export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }: { canImportDataset: boolean; canImportAll: boolean; addToast: (message: string, type: "success" | "error" | "info") => void }) {
   const [scope, setScope] = useState<"dataset" | "all">("dataset");
   const [dataset, setDataset] = useState<string>(IMPORT_DATASETS[0][0]);
@@ -92,7 +120,7 @@ export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }:
       <div className="mb-4 flex items-center justify-between"><h4 className="text-sm font-bold text-zinc-100">Kết quả preflight</h4><span className="text-[10px] text-zinc-500">Hết hạn: {new Date(preview.expires_at).toLocaleString()}</span></div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">{([['Rows', preview.plan.totals.rows], ['Inserts', preview.plan.totals.inserts], ['Updates', preview.plan.totals.updates], ['Unchanged', preview.plan.totals.unchanged]] as const).map(([label, value]) => <div key={label} className="rounded-lg bg-zinc-950 p-3"><div className="text-[10px] uppercase text-zinc-500">{label}</div><div className="text-xl font-bold text-zinc-100">{value}</div></div>)}</div>
       {(preview.plan.validation_errors ?? []).length > 0 && <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/30 p-3 text-xs text-red-300"><div className="mb-2 font-bold">Validation errors — không ghi database</div>{(preview.plan.validation_errors ?? []).map((issue, index) => <div key={index}>{issue.dataset}{issue.row ? ` dòng ${issue.row}` : ""}{issue.field ? ` [${issue.field}]` : ""}: {issue.message}</div>)}</div>}
-      <div className="mt-4 max-h-80 space-y-3 overflow-auto">{(preview.plan.datasets ?? []).map(item => { const diffs = item.diffs ?? []; return <div key={item.key} className="rounded-lg border border-zinc-800 p-3 text-xs"><div className="flex flex-wrap gap-3 font-semibold text-zinc-200"><span>{item.filename}</span><span className="text-emerald-400">+{item.inserts}</span><span className="text-amber-400">~{item.updates}</span><span className="text-zinc-500">={item.unchanged}</span>{item.reload_required && <span className="text-sky-400">reload registry/cache</span>}{item.restart_required && <span className="text-red-400">cần restart</span>}</div>{diffs.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-zinc-400">Xem diff ({diffs.length}{diffs.length === 200 ? "+" : ""})</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap rounded bg-black/40 p-2 text-[10px] text-zinc-400">{JSON.stringify(diffs, null, 2)}</pre></details>}</div>; })}</div>
+      <div className="mt-4 max-h-80 space-y-3 overflow-auto">{(preview.plan.datasets ?? []).map(item => { const diffs = item.diffs ?? []; return <div key={item.key} className="rounded-lg border border-zinc-800 p-3 text-xs"><div className="flex flex-wrap gap-3 font-semibold text-zinc-200"><span>{item.filename}</span><span className="text-emerald-400">+{item.inserts}</span><span className="text-amber-400">~{item.updates}</span><span className="text-zinc-500">={item.unchanged}</span>{item.reload_required && <span className="text-sky-400">reload registry/cache</span>}{item.restart_required && <span className="text-red-400">cần restart</span>}</div>{diffs.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-zinc-400">Xem diff ({diffs.length}{diffs.length === 200 ? "+" : ""})</summary><RowDiffView diffs={diffs} /></details>}</div>; })}</div>
       <div className="mt-4 rounded-lg border border-amber-800/50 bg-amber-950/20 p-3 text-xs text-amber-300"><AlertTriangle className="mr-2 inline h-4 w-4" />Sau commit, server sẽ reload registry và invalidate cache. Dataset đánh dấu “cần restart” hoặc reload lỗi phải được restart trước khi dữ liệu có hiệu lực đầy đủ.</div>
       <button disabled={!preview.plan.can_commit} onClick={() => setConfirming(true)} className="mt-4 flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"><CheckCircle2 className="h-4 w-4" />Xác nhận commit transaction</button>
     </div>}

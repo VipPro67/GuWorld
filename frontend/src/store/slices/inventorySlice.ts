@@ -65,6 +65,9 @@ export interface MerchantStockItem {
 export interface MerchantView {
   id: string;
   region_id: string;
+  x: number;
+  y: number;
+  distance: number;
   profile_id: string;
   name: string;
   description: string;

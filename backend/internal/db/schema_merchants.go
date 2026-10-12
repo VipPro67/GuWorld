@@ -33,10 +33,27 @@ func schemaMerchants() error {
 		x INTEGER NOT NULL DEFAULT 0,
 		y INTEGER NOT NULL DEFAULT 0,
 		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		expires_at TIMESTAMPTZ,
+		buy_tags JSONB,
+		buy_ratio NUMERIC(10,4),
+		buy_floor_ratio NUMERIC(10,4),
+		quota_per_item INTEGER,
 		updated_at TIMESTAMP DEFAULT NOW()
 	);
 	CREATE INDEX IF NOT EXISTS idx_merchants_region ON merchants (region_id);`); err != nil {
 		return err
+	}
+	// Guards for databases that created `merchants` before these columns existed.
+	for _, stmt := range []struct{ name, sql string }{
+		{"merchants_expires_at", `ALTER TABLE merchants ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`},
+		{"merchants_buy_tags", `ALTER TABLE merchants ADD COLUMN IF NOT EXISTS buy_tags JSONB;`},
+		{"merchants_buy_ratio", `ALTER TABLE merchants ADD COLUMN IF NOT EXISTS buy_ratio NUMERIC(10,4);`},
+		{"merchants_buy_floor_ratio", `ALTER TABLE merchants ADD COLUMN IF NOT EXISTS buy_floor_ratio NUMERIC(10,4);`},
+		{"merchants_quota_per_item", `ALTER TABLE merchants ADD COLUMN IF NOT EXISTS quota_per_item INTEGER;`},
+	} {
+		if err := execSchema(stmt.name, stmt.sql); err != nil {
+			return err
+		}
 	}
 	// Hàng merchant bán ra. Rỗng = merchant chỉ thu mua.
 	if err := execSchema("merchant_stock", `
@@ -76,53 +93,45 @@ func SeedMerchantDefaults() error {
 		quota                              int
 	}{
 		{
+			// Type 1 — fixed village NPC: buys everything at a flat 1/10.
 			id: "village_general", name: "Thương Nhân Thôn Làng", kind: "FIXED",
 			desc:     "Thu mua hầu hết hàng hoá với giá thấp, số lượng lớn.",
 			tags:     `{"types":["Gu","Material","Consumable","Recipe"]}`,
 			period:   "DAY",
-			buyRatio: 0.10, floor: 0.10, markup: 1.50, quota: 300,
+			buyRatio: 0.10, floor: 0.10, markup: 1.50, quota: 0,
 		},
 		{
-			id: "hub_fence", name: "Tiêu Thương Thành Trấn", kind: "FIXED",
-			desc:     "Chỉ thu mua nguyên liệu phẩm chất thấp nhưng trả giá cao; mua nhiều thì giá tụt.",
-			tags:     `{"types":["Material","Consumable"],"min_rank":1,"max_rank":5}`,
+			// Type 2 — roaming trader: high dynamic buy price (1.0 → 0.1), small quota.
+			id: "roaming_trader", name: "Thương Nhân Lang Thang", kind: "ROAMING",
+			desc:     "Kẻ buôn lang bạt ngoài hoang dã: mua giá cao nhưng số lượng có hạn.",
+			tags:     `{"types":["Gu","Material","Consumable","Recipe"]}`,
 			period:   "HOUR",
-			buyRatio: 0.45, floor: 0.15, markup: 1.40, quota: 15,
+			buyRatio: 1.00, floor: 0.10, markup: 1, quota: 100,
 		},
 	}
 	for _, p := range profiles {
 		if _, err := schemaDB().Exec(`
 			INSERT INTO merchant_profiles (id,name,description,kind,buy_ratio,buy_floor_ratio,buy_tags,quota_per_item,quota_period,sell_markup,updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,NOW())
-			ON CONFLICT (id) DO NOTHING`,
+			ON CONFLICT (id) DO UPDATE SET
+				name=EXCLUDED.name, description=EXCLUDED.description, kind=EXCLUDED.kind,
+				buy_ratio=EXCLUDED.buy_ratio, buy_floor_ratio=EXCLUDED.buy_floor_ratio,
+				buy_tags=EXCLUDED.buy_tags, quota_per_item=EXCLUDED.quota_per_item,
+				quota_period=EXCLUDED.quota_period, sell_markup=EXCLUDED.sell_markup, updated_at=NOW()`,
 			p.id, p.name, p.desc, p.kind, p.buyRatio, p.floor, p.tags, p.quota, p.period, p.markup); err != nil {
 			return err
 		}
 	}
-	// Đặt merchant cố định: village ở HUB + SAFE_ZONE, fence chỉ ở HUB.
+	// Drop the retired fixed dynamic profile (cascades to its merchants/stock).
+	if _, err := schemaDB().Exec(`DELETE FROM merchant_profiles WHERE id = 'hub_fence'`); err != nil {
+		return err
+	}
+	// Fixed village merchant in every existing HUB/SAFE_ZONE region.
 	if _, err := schemaDB().Exec(`
 		INSERT INTO merchants (id, profile_id, region_id, is_active)
 		SELECT 'village_'||r.id, 'village_general', r.id, TRUE
 		FROM regions r WHERE r.zone_type IN ('HUB','SAFE_ZONE')
 		ON CONFLICT (id) DO NOTHING`); err != nil {
-		return err
-	}
-	if _, err := schemaDB().Exec(`
-		INSERT INTO merchants (id, profile_id, region_id, is_active)
-		SELECT 'fence_'||r.id, 'hub_fence', r.id, TRUE
-		FROM regions r WHERE r.zone_type = 'HUB'
-		ON CONFLICT (id) DO NOTHING`); err != nil {
-		return err
-	}
-	// Demo stock cho fence để tab "mua" có dữ liệu ngay.
-	if _, err := schemaDB().Exec(`
-		INSERT INTO merchant_stock (merchant_id, item_id, rank, price, stock, sort_order)
-		SELECT m.id, i.id, COALESCE(i.rank,1),
-		       GREATEST(0.001, COALESCE(NULLIF(i.base_price,0),1) * 1.5), 20, 0
-		FROM merchants m
-		JOIN item_dictionary i ON i.id IN ('ITEM_HEALING_PELLET_SMALL','bitter_water','ginseng','boar_meat')
-		WHERE m.profile_id = 'hub_fence'
-		ON CONFLICT (merchant_id, item_id, rank) DO NOTHING`); err != nil {
 		return err
 	}
 	return nil
