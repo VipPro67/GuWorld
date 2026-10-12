@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
@@ -163,6 +164,13 @@ func loadMerchantEffective(q queryer, merchantID string) (merchantProfile, strin
 	return p, regionID, nil
 }
 
+// isRecipeItem reports whether itemID is a refining recipe key.
+func isRecipeItem(q queryer, itemID string) bool {
+	var exists bool
+	_ = q.QueryRow(`SELECT EXISTS(SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, itemID).Scan(&exists)
+	return exists
+}
+
 // merchantResolveBase resolves the dictionary base price and the effective rank
 // for a polymorphic entity (Gu / Recipe / item).
 func merchantResolveBase(q queryer, itemID, itemType string, rank int) (float64, int, error) {
@@ -253,9 +261,9 @@ type merchantDTO struct {
 	Stock        []merchantStockItem `json:"stock"`
 }
 
-// roamingMerchantRadius is how close a player must be to a roaming merchant to
-// see and trade with it.
-const roamingMerchantRadius = 12
+// roamingTradeRadius is how close a player must be to a roaming merchant to
+// trade with it (adjacent, not just "in view").
+const roamingTradeRadius = 2
 
 func loadMerchantStock(merchantID string) []merchantStockItem {
 	rows, err := db.DB.Query(`
@@ -286,8 +294,8 @@ func loadMerchantStock(merchantID string) []merchantStockItem {
 }
 
 // GetMerchants returns the roaming merchants the player is currently standing
-// near (within roamingMerchantRadius in the same region). The fixed village shop
-// is the Caravan / Thương Hội UI and is not returned here.
+// next to (within roamingTradeRadius) plus region/at_village flags so the UI can
+// gate itself. The fixed village shop is the Caravan / Thương Hội UI.
 func GetMerchants(c *gin.Context) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -297,9 +305,12 @@ func GetMerchants(c *gin.Context) {
 	var region string
 	var px, py int
 	if err := db.DB.QueryRow(`SELECT current_region, x, y FROM players WHERE id=$1`, playerID).Scan(&region, &px, &py); err != nil || region == "" {
-		c.JSON(http.StatusOK, gin.H{"region": region, "merchants": []merchantDTO{}})
+		c.JSON(http.StatusOK, gin.H{"region": region, "zone_type": "", "at_village": false, "merchants": []merchantDTO{}})
 		return
 	}
+	var zoneType string
+	_ = db.DB.QueryRow(`SELECT zone_type FROM regions WHERE id=$1`, region).Scan(&zoneType)
+	atVillage := zoneType == "HUB" || zoneType == "SAFE_ZONE"
 	rows, err := db.DB.Query(`
 		SELECT m.id, m.region_id, m.x, m.y, p.id, p.name, p.description, p.kind,
 		       p.buy_ratio, p.buy_floor_ratio, p.buy_tags, p.quota_per_item, p.quota_period,
@@ -316,39 +327,101 @@ func GetMerchants(c *gin.Context) {
 	defer rows.Close()
 	out := []merchantDTO{}
 	for rows.Next() {
-		var m merchantDTO
-		var tagsRaw, oTagsRaw []byte
-		var oRatio, oFloor sql.NullFloat64
-		var oQuota sql.NullInt64
-		if err := rows.Scan(&m.ID, &m.RegionID, &m.X, &m.Y, &m.ProfileID, &m.Name, &m.Description, &m.Kind,
-			&m.BuyRatio, &m.BuyFloor, &tagsRaw, &m.QuotaPerItem, &m.QuotaPeriod,
-			&oTagsRaw, &oRatio, &oFloor, &oQuota); err != nil {
+		m, ok := scanMerchantRow(rows, px, py)
+		if !ok {
 			continue
 		}
-		dx, dy := m.X-px, m.Y-py
-		sq := dx*dx + dy*dy
-		if sq > roamingMerchantRadius*roamingMerchantRadius {
-			continue
-		}
-		m.Distance = int(math.Sqrt(float64(sq)))
-		_ = json.Unmarshal(tagsRaw, &m.BuyTags)
-		if len(oTagsRaw) > 0 {
-			var t merchantBuyTags
-			if json.Unmarshal(oTagsRaw, &t) == nil {
-				m.BuyTags = t
-			}
-		}
-		if oRatio.Valid {
-			m.BuyRatio = oRatio.Float64
-		}
-		if oFloor.Valid {
-			m.BuyFloor = oFloor.Float64
-		}
-		if oQuota.Valid {
-			m.QuotaPerItem = int(oQuota.Int64)
-		}
-		m.Stock = loadMerchantStock(m.ID)
 		out = append(out, m)
+	}
+	c.JSON(http.StatusOK, gin.H{"region": region, "zone_type": zoneType, "at_village": atVillage, "merchants": out})
+}
+
+// merchantRow is the shared column set for merchant list/map queries.
+const merchantRowColumns = `
+	m.id, m.region_id, m.x, m.y, p.id, p.name, p.description, p.kind,
+	p.buy_ratio, p.buy_floor_ratio, p.buy_tags, p.quota_per_item, p.quota_period,
+	m.buy_tags, m.buy_ratio, m.buy_floor_ratio, m.quota_per_item`
+
+type merchantScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+// scanMerchantRow reads one merchant row and applies per-instance overrides.
+// Returns ok=false when the row is beyond the trade radius.
+func scanMerchantRow(row merchantScanner, px, py int) (merchantDTO, bool) {
+	var m merchantDTO
+	var tagsRaw, oTagsRaw []byte
+	var oRatio, oFloor sql.NullFloat64
+	var oQuota sql.NullInt64
+	if err := row.Scan(&m.ID, &m.RegionID, &m.X, &m.Y, &m.ProfileID, &m.Name, &m.Description, &m.Kind,
+		&m.BuyRatio, &m.BuyFloor, &tagsRaw, &m.QuotaPerItem, &m.QuotaPeriod,
+		&oTagsRaw, &oRatio, &oFloor, &oQuota); err != nil {
+		return m, false
+	}
+	dx, dy := m.X-px, m.Y-py
+	sq := dx*dx + dy*dy
+	if sq > roamingTradeRadius*roamingTradeRadius {
+		return m, false
+	}
+	m.Distance = int(math.Sqrt(float64(sq)))
+	_ = json.Unmarshal(tagsRaw, &m.BuyTags)
+	if len(oTagsRaw) > 0 {
+		var t merchantBuyTags
+		if json.Unmarshal(oTagsRaw, &t) == nil {
+			m.BuyTags = t
+		}
+	}
+	if oRatio.Valid {
+		m.BuyRatio = oRatio.Float64
+	}
+	if oFloor.Valid {
+		m.BuyFloor = oFloor.Float64
+	}
+	if oQuota.Valid {
+		m.QuotaPerItem = int(oQuota.Int64)
+	}
+	m.Stock = loadMerchantStock(m.ID)
+	return m, true
+}
+
+type merchantMarker struct {
+	ID   string `json:"id"`
+	X    int    `json:"x"`
+	Y    int    `json:"y"`
+	Name string `json:"name"`
+}
+
+// GetMerchantMap returns every active roaming merchant in the player's region so
+// the world map can render markers (not just the ones within trade range).
+func GetMerchantMap(c *gin.Context) {
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var region string
+	if err := db.DB.QueryRow(`SELECT current_region FROM players WHERE id=$1`, playerID).Scan(&region); err != nil || region == "" {
+		c.JSON(http.StatusOK, gin.H{"region": "", "merchants": []merchantMarker{}})
+		return
+	}
+	rows, err := db.DB.Query(`
+		SELECT m.id, m.x, m.y, p.name
+		FROM merchants m
+		JOIN merchant_profiles p ON p.id = m.profile_id
+		WHERE m.region_id = $1 AND m.is_active AND p.enabled AND p.kind = 'ROAMING'
+		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
+		ORDER BY m.id`, region)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bản đồ thương nhân"})
+		return
+	}
+	defer rows.Close()
+	out := []merchantMarker{}
+	for rows.Next() {
+		var mk merchantMarker
+		if err := rows.Scan(&mk.ID, &mk.X, &mk.Y, &mk.Name); err == nil {
+			out = append(out, mk)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"region": region, "merchants": out})
 }
@@ -763,6 +836,20 @@ func BuyFromMerchant(c *gin.Context) {
 				})
 			}
 			guBought = true
+		} else if isRecipeItem(tx, line.ItemID) {
+			if RecipeSvc == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể mở khóa bí phương"})
+				return
+			}
+			if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
+				PlayerID:       player.ID.String(),
+				RecipeID:       line.ItemID,
+				CompletionRate: 0,
+				IsUnlocked:     true,
+			}); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mở khóa bí phương"})
+				return
+			}
 		} else {
 			var itemType string
 			_ = tx.QueryRow(`SELECT COALESCE(item_type,'Material') FROM item_dictionary WHERE id=$1`, line.ItemID).Scan(&itemType)

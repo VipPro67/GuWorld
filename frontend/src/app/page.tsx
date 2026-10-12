@@ -10,7 +10,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { LevelZeroView } from "@/components/LevelZeroView";
-import { Sparkles, X, Handshake } from "@/lib/icons";
+import { Sparkles, X, Handshake, Store } from "@/lib/icons";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { NotificationBell } from "@/components/NotificationBell";
 import { MaintenanceView } from "@/components/MaintenanceView";
@@ -166,6 +166,10 @@ export default function Home() {
   );
 
   const unequipAllGu = useGameStore((s) => s.unequipAllGu);
+  const merchantAtVillage = useGameStore((s) => s.merchantAtVillage);
+  const nearbyMerchants = useGameStore((s) => s.merchants);
+  const fetchMerchants = useGameStore((s) => s.fetchMerchants);
+  const fetchMerchantMarkers = useGameStore((s) => s.fetchMerchantMarkers);
 
   const currentView = useUIStore((s) => s.currentView);
   const setView = useUIStore((s) => s.setView);
@@ -229,6 +233,21 @@ export default function Home() {
     // Only subscribe once when player becomes available, not on every player state change
 
   }, [isPlayerReady]);
+
+  // Merchant + marker polling: the trade panel is only mounted when adjacent, so
+  // fetch here to gate the UI and feed the map markers.
+  useEffect(() => {
+    if (!playerId) return;
+    void fetchMerchants();
+    void fetchMerchantMarkers();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchMerchants();
+        void fetchMerchantMarkers();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [playerId, player?.current_region, fetchMerchants, fetchMerchantMarkers]);
 
   const isPartyMemberNotLeader = Boolean(player?.party_id) && party !== null && party.leader_id !== player?.id;
   // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay with logs
@@ -460,14 +479,26 @@ export default function Home() {
           </div>
         ) : currentView === "shop" ? (
           <div className="w-full space-y-6">
-            <CaravanShop
-              player={player}
-              actionLoading={actionLoading}
-              onBuy={buyShopItem}
-              onSell={sellShopItem}
-              onSellBulk={sellShopItemsBulk}
-            />
-            <MerchantTradeView player={player} actionLoading={actionLoading} />
+            {merchantAtVillage && (
+              <CaravanShop
+                player={player}
+                actionLoading={actionLoading}
+                onBuy={buyShopItem}
+                onSell={sellShopItem}
+                onSellBulk={sellShopItemsBulk}
+              />
+            )}
+            {nearbyMerchants.length > 0 && <MerchantTradeView player={player} actionLoading={actionLoading} />}
+            {!merchantAtVillage && nearbyMerchants.length === 0 && (
+              <div className="py-16 flex flex-col items-center justify-center gap-3 text-zinc-500">
+                <Store className="w-10 h-10 text-zinc-700" />
+                <span className="text-sm font-mono text-center">
+                  Bạn không ở gần thương nhân nào.
+                  <br />
+                  Hãy tới <span className="text-amber-400">thành trấn / thôn làng</span> để mua bán, hoặc tìm <span className="text-amber-400">Thương Nhân Lang Thang</span> ngoài hoang dã.
+                </span>
+              </div>
+            )}
           </div>
         ) : currentView === "auction" ? (
           <BaoHoangMarket

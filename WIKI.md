@@ -738,12 +738,14 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
 
 ### Thương nhân lang thang
 
-- **Loại 1 — cố định tại thành trấn/thôn làng (HUB/SAFE_ZONE):** chính là **Thương Hội/Caravan** quen thuộc — bán hàng random theo khung giờ, **mua tất cả giá 1/10**.
-- **Loại 2 — lang thang ngoài hoang dã:** xuất hiện **ngẫu nhiên** ở vùng hoang (không phải HUB/SAFE_ZONE), tồn tại một thời gian rồi dời đi. **Khi xuất hiện sẽ có thông báo ở kênh thế giới kèm tên vùng và toạ độ (x, y)** để đạo hữu nhanh chân tìm tới. Mở tab **Thương Hội** — mục "Thương Nhân Lang Thang" chỉ hiện khi bạn **ở gần** (≤ 12 ô).
+- **Loại 1 — cố định tại thành trấn/thôn làng (HUB/SAFE_ZONE):** chính là **Thương Hội/Caravan** quen thuộc — bán hàng random theo khung giờ, **mua tất cả giá 1/10**. UI Thương Hội **chỉ mở khi bạn đang ở thành trấn/thôn làng**.
+- **Loại 2 — lang thang ngoài hoang dã:** xuất hiện **ngẫu nhiên** ở vùng hoang (không phải HUB/SAFE_ZONE), tồn tại một thời gian rồi dời đi.
+  - **Hiện vị trí trên bản đồ** bằng icon 🪙 (và thông báo kênh thế giới kèm tên vùng + toạ độ khi xuất hiện).
+  - **UI giao dịch chỉ mở khi bạn đứng cạnh** (≤ 2 ô) — lại gần mới bán/mua được.
   - **Mỗi con một bể riêng**: thu mua một danh sách loại riêng (không mua hết), giá/quota riêng; bán ra một kho hàng random riêng.
   - **Mua hàng giá cao**: khởi điểm 70–100% giá gốc, nhưng **càng bán nhiều một loại giá càng tụt** về 10–30%.
   - **Giới hạn số lượng (quota) dùng chung toàn server** theo giờ: ai nhanh chân bán trước; hết quota phải chờ kỳ sau hoặc tìm con khác.
-  - **Bán ra hàng random** (Cổ/nguyên liệu) với giá có markup.
+  - **Mua bán cả Cổ, nguyên liệu và cổ phương (bí phương)**; mua cổ phương sẽ mở khóa công thức.
 
 ### Bảo Hoàng Thiên chợ trời
 

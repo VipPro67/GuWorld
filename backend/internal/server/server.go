@@ -975,6 +975,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 		merchant.Use(middleware.RequireOnboarded())
 		merchant.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
+			merchant.GET("/map", handlers.GetMerchantMap)
 			merchant.POST("/quote", handlers.QuoteMerchant)
 			merchant.POST("/sell", handlers.SellToMerchant)
 			merchant.POST("/buy", handlers.BuyFromMerchant)

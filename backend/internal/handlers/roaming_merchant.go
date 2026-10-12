@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 // Roaming merchant tuning.
@@ -152,7 +153,55 @@ func spawnRoamingMerchant(ctx context.Context, tx *sql.Tx) (roamingSpawnNotice, 
 	if err != nil {
 		return roamingSpawnNotice{}, err
 	}
+	if err := insertRandomRecipeStock(ctx, tx, merchantID); err != nil {
+		return roamingSpawnNotice{}, err
+	}
 	return roamingSpawnNotice{regionName: regionName, x: x, y: y}, nil
+}
+
+// insertRandomRecipeStock adds a few random refining recipes to a roaming
+// merchant's sell stock, priced from the target Gu rank.
+func insertRandomRecipeStock(ctx context.Context, tx *sql.Tx, merchantID string) error {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS rid, target_rank
+		FROM refining_recipes
+		ORDER BY random()
+		LIMIT 3`)
+	if err != nil {
+		return err
+	}
+	type recipe struct {
+		id   string
+		rank int
+	}
+	var picked []recipe
+	for rows.Next() {
+		var r recipe
+		if err := rows.Scan(&r.id, &r.rank); err == nil {
+			picked = append(picked, r)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, r := range picked {
+		if r.rank <= 0 {
+			r.rank = 1
+		}
+		price := pricing.Quantize(pricing.GuBasePriceByRank(r.rank) * roamingMerchantSellMarkup)
+		if price < 0.001 {
+			price = 0.001
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO merchant_stock (merchant_id, item_id, rank, price, stock, sort_order)
+			VALUES ($1, $2, $3, $4, (1 + floor(random()*3))::int, 0)
+			ON CONFLICT (merchant_id, item_id, rank) DO NOTHING`,
+			merchantID, r.id, r.rank, price); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // randomBuyPool picks a random subset of entity ids (Gu rank<6 / rarity<6 +
@@ -168,6 +217,9 @@ func randomBuyPool(ctx context.Context, tx *sql.Tx) ([]string, error) {
 			JOIN LATERAL jsonb_array_elements_text(g.food_types) f(fid) ON TRUE
 			JOIN item_dictionary i ON i.id = f.fid
 			WHERE g.rank < 6 AND COALESCE(g.rarity,0) < 6
+			UNION
+			SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text)
+			FROM refining_recipes
 		) p
 		ORDER BY random()
 		LIMIT $1`, count)

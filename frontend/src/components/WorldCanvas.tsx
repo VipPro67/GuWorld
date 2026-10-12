@@ -151,6 +151,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
   const movementRange = useWorldStore((s) => s.movementRange);
   const investigationRange = useWorldStore((s) => s.investigationRange);
   const objects = useWorldStore((s) => s.objects);
+  const merchantMarkers = useGameStore((s) => s.merchantMarkers);
   const nearbyCells = useWorldStore((s) => s.nearbyCells);
   const cellChunks = useWorldStore((s) => s.cellChunks);
   const cellRegion = useWorldStore((s) => s.cellRegion);
@@ -462,8 +463,18 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         });
       }
     }
+    for (const mk of merchantMarkers) {
+      byKey.set(`${mk.x},${mk.y}`, {
+        id: mk.id,
+        region_id: gamePlayer?.current_region || "",
+        x: mk.x,
+        y: mk.y,
+        cell_type: "Merchant",
+        content_id: mk.name,
+      });
+    }
     return Array.from(byKey.values());
-  }, [objects, nearbyCells, myTeleportArrays, gamePlayer]);
+  }, [objects, nearbyCells, myTeleportArrays, merchantMarkers, gamePlayer]);
 
   // WorldPage owns the shared regions and teleport-array requests. The canvas
   // only loads its persistent world objects here.
@@ -1136,6 +1147,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         const isResource = o.cell_type === "Resource";
         const isTeleport = o.cell_type === "TeleportArray";
         const isEntryPortal = o.cell_type === "ENTRY_PORTAL";
+        const isMerchant = o.cell_type === "Merchant";
         if (isBoss && legacyMonsterHasRuntimeReplacement(o, useWorldStore.getState().monsters)) continue;
         if (isResource && player && Math.hypot(o.x + 0.5 - px, o.y + 0.5 - py) > invR) continue;
 
@@ -1186,6 +1198,16 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           g.fill({ color: 0xa5f3fc });
           g.circle(0, 0, size * 0.2);
           g.fill({ color: 0xffffff });
+        } else if (isMerchant) {
+          // Roaming merchant: golden coin / purse marker with an aura.
+          g.circle(0, 0, size + 0.25);
+          g.fill({ color: 0xf59e0b, alpha: 0.25 });
+          g.circle(0, 0, size);
+          g.fill({ color: 0x78350f });
+          g.stroke({ color: 0xfbbf24, width: 0.1 });
+          g.circle(0, 0, size * 0.45);
+          g.fill({ color: 0xfcd34d });
+          g.stroke({ color: 0xb45309, width: 0.06 });
         } else {
           // Empty / Location: Small shrine or stone marker
           g.rect(-size / 1.5, -size / 2, size * 1.33, size);
@@ -1202,7 +1224,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         });
         container.addChild(g);
 
-        const labelColor = isBoss ? 0xfecaca : isEntryPortal ? 0xfcd34d : isTeleport ? 0x67e8f9 : 0xffffff;
+        const labelColor = isBoss ? 0xfecaca : isEntryPortal ? 0xfcd34d : isTeleport ? 0x67e8f9 : isMerchant ? 0xfde68a : 0xffffff;
         let text = o.content_id;
         if (isBoss || o.cell_type === "Monster") {
           text = monsterDictionary[o.content_id]?.name || text;
@@ -1214,6 +1236,8 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
           text = `🌀 ${o.content_id || "Trận Pháp"}`;
         } else if (isEntryPortal) {
           text = `🚪 ${o.content_id.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`;
+        } else if (isMerchant) {
+          text = `🪙 ${o.content_id || "Thương Nhân"}`;
         }
 
         const showBossLabel = isBoss && !!labelSettingsRef.current.bossNearby && !!player && Math.hypot(o.x - px, o.y - py) <= invR;

@@ -40,7 +40,10 @@ export interface InventorySlice {
   fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
   merchants: MerchantView[];
+  merchantMarkers: MerchantMarker[];
+  merchantAtVillage: boolean;
   fetchMerchants: () => Promise<void>;
+  fetchMerchantMarkers: () => Promise<void>;
   quoteMerchant: (merchantId: string, items: MerchantSellLine[]) => Promise<MerchantQuoteItem[]>;
   sellToMerchant: (merchantId: string, items: MerchantSellLine[]) => Promise<boolean>;
   buyFromMerchant: (merchantId: string, items: { item_id: string; rank?: number; quantity: number }[]) => Promise<boolean>;
@@ -87,6 +90,13 @@ export interface MerchantSellLine {
   rank?: number;
 }
 
+export interface MerchantMarker {
+  id: string;
+  x: number;
+  y: number;
+  name: string;
+}
+
 export interface MerchantQuoteItem {
   item_id: string;
   rank: number;
@@ -99,6 +109,8 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   guInventoryLoaded: false,
   groundDrops: [],
   merchants: [],
+  merchantMarkers: [],
+  merchantAtVillage: false,
 
   fetchGuInventory: async (forceRefresh = false, requestRevision) => {
     if (fetchGuInventoryPromise && !forceRefresh) return fetchGuInventoryPromise;
@@ -354,9 +366,26 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
       if (response.status === 401) { logout(); return; }
       if (!response.ok) return;
       const data = await response.json();
-      set({ merchants: (data.merchants || []) as MerchantView[] });
+      set({
+        merchants: (data.merchants || []) as MerchantView[],
+        merchantAtVillage: !!data.at_village,
+      });
     } catch (caught: unknown) {
       console.error("fetchMerchants failed", caught);
+    }
+  },
+
+  fetchMerchantMarkers: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/merchant/map`);
+      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
+      const data = await response.json();
+      set({ merchantMarkers: (data.merchants || []) as MerchantMarker[] });
+    } catch (caught: unknown) {
+      console.error("fetchMerchantMarkers failed", caught);
     }
   },
 

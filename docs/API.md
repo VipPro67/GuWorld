@@ -281,12 +281,13 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 | POST | `/trade/lock/:id` |
 | POST | `/trade/unlock/:id` | Mở khóa ưu đãi để chỉnh sửa lại vật phẩm/đá, tự động hủy xác nhận của cả hai bên để đảm bảo an toàn. |
 | POST | `/trade/confirm/:id` |
-| GET | `/merchant` | Thương nhân ở khu vực hiện tại: profile, `buy_tags`, stock đang bán. |
+| GET | `/merchant` | Thương nhân đứng cạnh (roaming, ≤ 2 ô) + cờ `at_village` (region HUB/SAFE_ZONE) để UI tự bật/tắt. Trả `{region, zone_type, at_village, merchants}`. |
+| GET | `/merchant/map` | Toàn bộ roaming trong region (không lọc khoảng cách) để vẽ marker trên bản đồ. |
 | POST | `/merchant/quote` | Body `{merchant_id, items:[{item_id,item_type,rank,quantity}]}` → `{items:[{item_id,rank,accepted,unit_price,quota_left}]}`. |
-| POST | `/merchant/sell` | Bán cho thương nhân: giá động theo nhu cầu + quota toàn server. Body như quote. |
-| POST | `/merchant/buy` | Mua từ `merchant_stock`. Body `{merchant_id, items:[{item_id,rank,quantity}]}`. |
+| POST | `/merchant/sell` | Bán cho thương nhân: giá động theo nhu cầu + quota toàn server. Body như quote. Hỗ trợ Cổ/Item/cổ phương. |
+| POST | `/merchant/buy` | Mua từ `merchant_stock`. Body `{merchant_id, items:[{item_id,rank,quantity}]}`. Hỗ trợ Cổ/Item/cổ phương (mua cổ phương = mở khóa). |
 
-**Thương nhân (2 loại):** (1) **Cố định** tại HUB/SAFE_ZONE = Caravan/Thương Hội: bán random theo giờ, mua tất cả 1/10 (`village_general`, quota vô hạn). (2) **Lang thang** ngoài hoang dã: xuất hiện ngẫu nhiên, mỗi con có `buy_ratio 1.0 → buy_floor_ratio 0.1` (giá tụt khi `bought/quota` tăng), `quota_per_item` theo giờ **dùng chung toàn server**, và stock bán ra random. `GET /api/merchant` chỉ trả roaming trong bán kính ≤ 12 ô. `/shop/sell` + `/sell-bulk` delegate sang `village_general`. Chi tiết: `docs/GAME_DATA.md` §"Thương nhân".
+**Thương nhân (2 loại + gating):** (1) **Cố định** tại HUB/SAFE_ZONE = Caravan/Thương Hội: bán random theo giờ, mua tất cả 1/10 (`village_general`, quota vô hạn) — **UI chỉ mở khi `at_village`**. (2) **Lang thang**: mỗi con có bể mua/bể bán riêng (allow-list + giá + quota riêng), mua/bán cả Cổ/Item/cổ phương, **UI chỉ mở khi đứng cạnh (≤ 2 ô)**, marker 🪙 hiện trên bản đồ qua `/merchant/map`. `/shop/sell` + `/sell-bulk` delegate sang `village_general`. Chi tiết: `docs/GAME_DATA.md` §"Thương nhân".
 
 **Quy định phí & thời gian Bảo Hoàng Thiên:**
 - **Cửa hàng (`MARKET`):** Phí Upfront thu ngay lập tức khi đăng lên kệ = **4% giá trị niêm yết** (`price * quantity`), khấu trừ theo loại tiền tệ của đơn hàng (Nguyên Thạch / Tiên Nguyên Thạch). Phí hoa hồng khi bán thành công = **6%** doanh thu.

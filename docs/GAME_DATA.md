@@ -1221,10 +1221,12 @@ Có **2 loại** thương nhân; cả hai dùng profile data-driven + quota toà
 **Loại 1 — cố định tại HUB/SAFE_ZONE (cơ chế cũ).** Chính là Caravan/Thương Hội: bán random theo khung giờ, mua tất cả giá 10% phẳng. Profile `village_general` (`buy_ratio = buy_floor_ratio = 0.10`, `quota_per_item = 0` = vô hạn). `/api/shop/sell` + `/sell-bulk` **delegate** sang profile này theo region (giữ nguyên shape response); instance `village_<region>` tạo lazy (`ensureRegionMerchants`).
 
 **Loại 2 — lang thang ngoài map.** Profile `roaming_trader` (`kind = ROAMING`) làm giá trị nền; **mỗi instance override riêng** (`merchants.buy_tags` / `buy_ratio` / `buy_floor_ratio` / `quota_per_item`) nên **mỗi con có bể mua và bể bán riêng**:
-- Bể mua: allow-list ngẫu nhiên ~8–15 item id (`buy_tags.item_ids`), giá riêng (`buy_ratio` random 0.70–1.00 → `buy_floor_ratio` 0.10–0.30), quota riêng 5–20/giờ (toàn server).
-- Bể bán: `merchant_stock` random sinh lúc spawn (Cổ rank<6 & rarity<6 + thức ăn, giá `base × 1.4`).
+- Bể mua: allow-list ngẫu nhiên ~8–15 id (`buy_tags.item_ids`, gồm Cổ/Item/cổ phương), giá riêng (`buy_ratio` random 0.70–1.00 → `buy_floor_ratio` 0.10–0.30), quota riêng 5–20/giờ (toàn server).
+- Bể bán: `merchant_stock` random sinh lúc spawn (Cổ rank<6 & rarity<6 + thức ăn + ~3 cổ phương, giá `base × 1.4`).
 
-Worker `StartRoamingMerchantWorker` (2', package `handlers`) duy trì ~4 con ở region `zone_type NOT IN ('HUB','SAFE_ZONE','SECRET_REALM')`: tọa độ random, vòng đời 30–60', hết hạn thì xóa (cascade stock/demand) và spawn con mới. Mỗi spawn **thông báo world chat kèm tên vùng + toạ độ**. `GET /api/merchant` chỉ trả roaming **trong bán kính ≤ 12 ô** cùng region.
+Worker `StartRoamingMerchantWorker` (2', package `handlers`) duy trì ~4 con ở region `zone_type NOT IN ('HUB','SAFE_ZONE','SECRET_REALM')`: tọa độ random, vòng đời 30–60', hết hạn thì xóa (cascade stock/demand) và spawn con mới. Mỗi spawn **thông báo world chat kèm tên vùng + toạ độ**.
+
+**Giao dịch & hiển thị:** merchant mua/bán được cả **Cổ, Item, cổ phương** (bán cổ phương = `RecipeSvc.Delete`, mua = `RecipeSvc.Upsert` unlocked). `GET /api/merchant` chỉ trả roaming **trong bán kính ≤ 2 ô** (đứng cạnh) + cờ `at_village` (region HUB/SAFE_ZONE) để UI tự bật/tắt: **Caravan/Thương Đội chỉ mở tại làng**. `GET /api/merchant/map` trả toàn bộ roaming trong region (không lọc khoảng cách) để WorldCanvas vẽ marker 🪙.
 
 | Bảng | Vai trò |
 | --- | --- |
