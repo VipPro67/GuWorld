@@ -3,11 +3,68 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type recordingCSVImportExecutor struct {
+	queries []string
+	argLens []int
+}
+
+func (r *recordingCSVImportExecutor) Exec(q string, args ...interface{}) (sql.Result, error) {
+	r.queries = append(r.queries, q)
+	r.argLens = append(r.argLens, len(args))
+	return nil, nil
+}
+
+func (r *recordingCSVImportExecutor) Query(string, ...interface{}) (*sql.Rows, error) {
+	return nil, errors.New("unexpected query")
+}
+
+func (r *recordingCSVImportExecutor) QueryRow(string, ...interface{}) *sql.Row { return nil }
+
+func TestSeedGusFromCSVBatchesInserts(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "Gu.csv")
+	var content strings.Builder
+	content.WriteString("id,name,rank,effects\n")
+	for i := 0; i < 501; i++ {
+		fmt.Fprintf(&content, "gu_%d,Gu %d,1,[]\n", i, i)
+	}
+	if err := os.WriteFile(filename, []byte(content.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := &recordingCSVImportExecutor{}
+	csvImportState.Lock()
+	defer csvImportState.Unlock()
+	prevExecutor, prevOverride := csvImportState.executor, csvImportState.override
+	csvImportState.executor = rec
+	csvImportState.override = nil
+	defer func() { csvImportState.executor = prevExecutor; csvImportState.override = prevOverride }()
+
+	if err := seedGusFromCSV(filename); err != nil {
+		t.Fatalf("seedGusFromCSV() error = %v", err)
+	}
+	if len(rec.queries) != 2 {
+		t.Fatalf("exec count = %d, want 2 batched inserts", len(rec.queries))
+	}
+	if rec.argLens[0] != 500*19 || rec.argLens[1] != 19 {
+		t.Fatalf("arg counts = %v, want [%d %d]", rec.argLens, 500*19, 19)
+	}
+	if !strings.Contains(rec.queries[0], "($1,") || !strings.Contains(rec.queries[0], "$9500") {
+		t.Fatalf("first batch placeholders malformed: %q", rec.queries[0][:80])
+	}
+	if strings.Contains(rec.queries[0], "$9501") {
+		t.Fatalf("first batch has placeholder beyond its 9500 params")
+	}
+	if !strings.Contains(rec.queries[1], "($1,") {
+		t.Fatalf("second batch placeholders must restart at $1")
+	}
+}
 
 type failingCSVImportExecutor struct{ err error }
 

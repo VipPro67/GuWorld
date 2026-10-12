@@ -1147,6 +1147,34 @@ func seedGusFromCSV(filename string) error {
 		logger.S.Warnf("Gu effect catalog contains %d legacy/unwired fields; values were preserved", warningCount)
 	}
 
+	// Gu.csv has ~4400 rows; issuing one INSERT round-trip per row makes the
+	// synchronous admin preflight/commit easily exceed the client timeout.
+	// Multi-row VALUES keeps the upsert semantics while cutting round-trips.
+	const guImportBatchSize = 500
+	batchValues := make([]string, 0, guImportBatchSize)
+	batchArgs := make([]interface{}, 0, guImportBatchSize*19)
+	flushGuBatch := func() error {
+		if len(batchValues) == 0 {
+			return nil
+		}
+		query := "INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url) VALUES " +
+			strings.Join(batchValues, ",") +
+			` ON CONFLICT (id, rank) DO UPDATE
+			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
+			    base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
+			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
+			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, primary_role=EXCLUDED.primary_role,
+			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
+			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END,
+			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END`
+		if _, err := activeCSVImportDB().Exec(query, batchArgs...); err != nil {
+			return err
+		}
+		batchValues = batchValues[:0]
+		batchArgs = batchArgs[:0]
+		return nil
+	}
+
 	for _, key := range order {
 		row := seen[key].fields
 		id := key.id
@@ -1229,21 +1257,19 @@ func seedGusFromCSV(filename string) error {
 			targetType = "SINGLE"
 		}
 
-		_, err := activeCSVImportDB().Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url)
-			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18, $19)
-			ON CONFLICT (id, rank) DO UPDATE
-			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
-			    base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
-			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
-			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, primary_role=EXCLUDED.primary_role,
-			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
-			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END,
-			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END
-		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
-		if err != nil {
-			return fmt.Errorf("upsert gu %s rank %s: %w", id, rankStr, err)
+		n := len(batchArgs)
+		batchValues = append(batchValues, fmt.Sprintf(
+			"($%d,$%d,$%d,$%d::jsonb,$%d,$%d,$%d::jsonb,$%d,$%d::jsonb,$%d,$%d,$%d,$%d,$%d,$%d::jsonb,$%d::jsonb,$%d::jsonb,$%d,$%d)",
+			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13, n+14, n+15, n+16, n+17, n+18, n+19))
+		batchArgs = append(batchArgs, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
+		if len(batchValues) >= guImportBatchSize {
+			if err := flushGuBatch(); err != nil {
+				return fmt.Errorf("upsert gu %s rank %s: %w", id, rankStr, err)
+			}
 		}
+	}
+	if err := flushGuBatch(); err != nil {
+		return fmt.Errorf("upsert gu dictionary: %w", err)
 	}
 	logger.S.Infof("Gu dictionary seeded from %s (%d unique entries)", filename, len(order))
 	return nil

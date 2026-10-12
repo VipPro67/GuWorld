@@ -188,7 +188,16 @@ func commitImport(c *gin.Context, table string) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể commit transaction: " + err.Error()})
 		return
 	}
-	warnings := reloadImportedData()
+	var warnings []string
+	if table == "" {
+		warnings = reloadImportedData()
+	} else if dataset, ok := db.DatasetByKey(table); ok {
+		// Single-dataset commits only touch the declaring registries/caches;
+		// reloading every registry (monster/quest/zone/instance/…) is wasteful.
+		warnings = applyDatasetRuntimeBehavior([]db.Dataset{dataset})
+	} else {
+		warnings = []string{}
+	}
 	if len(warnings) > 0 {
 		monitor.GlobalAdminOperations.RecordImportFailure(action)
 		logger.L.Error("admin_import_failed", zap.String("action", action), zap.String("stage", "runtime_reload"), zap.String("table", entityID), zap.Strings("warnings", warnings), zap.String("player_id", adminID.String()))
@@ -206,7 +215,7 @@ var dictionaryCacheKeys = []string{
 	"game_dictionary_monster_spawns",
 }
 
-func applyDatasetRuntimeBehavior(datasets []db.Dataset) {
+func applyDatasetRuntimeBehavior(datasets []db.Dataset) []string {
 	caches, reloads := map[string]bool{}, map[string]bool{}
 	for _, dataset := range datasets {
 		for _, behavior := range dataset.CacheInvalidation {
@@ -216,10 +225,12 @@ func applyDatasetRuntimeBehavior(datasets []db.Dataset) {
 			reloads[registry] = true
 		}
 	}
+	warnings := []string{}
 	reload := func(name string, fn func() error) {
 		if reloads[name] {
 			if err := fn(); err != nil {
 				logger.S.Warnf("failed to reload %s after import: %v", name, err)
+				warnings = append(warnings, name+": "+err.Error())
 			}
 		}
 	}
@@ -258,6 +269,11 @@ func applyDatasetRuntimeBehavior(datasets []db.Dataset) {
 			logger.S.Warnf("failed to purge world-monster cache after region import: %v", err)
 		}
 	}
+	// The old full reload invalidated these on every commit; region/explore
+	// caches are cheap to rebuild, so keep that guarantee when narrowing scope.
+	invalidateCachedDictionaryPart("explore_regions_v2")
+	cache.Delete("explore_regions")
+	return warnings
 }
 
 // AdminImportData seeds all dictionary tables from CSV files.

@@ -7,6 +7,10 @@ import { AdminConfirmDialog } from "./AdminConfirmDialog";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
+// Preflight/commit chạy toàn bộ import đồng bộ trong một request; dataset lớn
+// (Gu.csv ~4400 dòng) vượt xa timeout mặc định 30s của authFetch.
+const IMPORT_TIMEOUT_MS = 300000;
+
 export const IMPORT_DATASETS = [
   ["item", "Vật phẩm", "Item.csv"], ["gu", "Cổ trùng", "Gu.csv"],
   ["constitution", "Thể chất", "Constitution.csv"], ["race", "Chủng tộc", "Race.csv"],
@@ -39,7 +43,7 @@ export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }:
       const body = new FormData();
       if (scope === "dataset" && file) body.append("file", file);
       const path = scope === "all" ? "/api/admin/data/import" : `/api/admin/data/import/${dataset}`;
-      const response = await authFetch(`${BACKEND_URL}${path}`, { method: "POST", body });
+      const response = await authFetch(`${BACKEND_URL}${path}`, { method: "POST", body, timeoutMs: IMPORT_TIMEOUT_MS });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Preflight thất bại");
       setPreview(data);
@@ -53,7 +57,7 @@ export function DataImportWorkflow({ canImportDataset, canImportAll, addToast }:
     try {
       const path = scope === "all" ? "/api/admin/data/import/commit" : `/api/admin/data/import/${dataset}/commit`;
 	  const target = scope === "all" ? "all" : dataset;
-	  const response = await authFetch(`${BACKEND_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": preview.preflight_id }, body: JSON.stringify({ preflight_id: preview.preflight_id, reason: reason.trim(), confirmation_target: target }) });
+	  const response = await authFetch(`${BACKEND_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": preview.preflight_id }, body: JSON.stringify({ preflight_id: preview.preflight_id, reason: reason.trim(), confirmation_target: target }), timeoutMs: IMPORT_TIMEOUT_MS });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Commit import thất bại");
       addToast(data.reload_ok ? "Import đã commit và registry/cache đã tải lại." : "Import đã commit; cần restart do reload chưa hoàn tất.", data.reload_ok ? "success" : "info");
