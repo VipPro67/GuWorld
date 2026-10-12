@@ -162,7 +162,10 @@ func validateImportCSV(dataset importDataset, content []byte) (int, []ImportVali
 	}
 	seen := map[string]int{}
 	issues := []ImportValidationIssue{}
-	jsonFields := map[string]bool{"effects": true, "food_types": true, "path": true, "required_gus": true, "required_materials": true, "pool_weights": true, "rules": true, "entries": true, "gu_inventory": true, "item_inventory": true, "dao_marks": true, "path_masteries": true, "metadata": true, "rewards": true, "map_data": true, "blocked_actions": true}
+	jsonFields := map[string]bool{"effects": true, "food_types": true, "required_gus": true, "required_materials": true, "pool_weights": true, "rules": true, "entries": true, "gu_inventory": true, "item_inventory": true, "dao_marks": true, "path_masteries": true, "metadata": true, "rewards": true, "map_data": true, "blocked_actions": true}
+	if dataset.key != "dream_realm" {
+		jsonFields["path"] = true
+	}
 	rows := 0
 	for line := 2; ; line++ {
 		row, readErr := r.Read()

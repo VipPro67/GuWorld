@@ -952,6 +952,15 @@ Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy
 
 Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.
 
+#### Loot table (bảng rơi đồ)
+
+- Mỗi monster template trỏ tới một bảng override (`Monster.loot_table_id`) — nơi chứa đồ **đặc thù loài** và bonus riêng. Ngoài ra, mọi trận PvE với quái đều roll thêm **bể chung theo bậc** `loot_monster_common` (2 entry/bậc 1–9: `beast_meat_rankN` 60%, `heaven_qi_rankN` 50%, qty 1–2 × hệ số rank). `RollMonsterLoot` (`handlers/combat_loot.go`) = bể chung + override; entry `gu_id` vẫn roll như cũ.
+- Mỗi `LootEntry` có thêm 2 field JSON (Admin sửa được, xem modal "Bảng Loot"):
+  - `rank` (0–9): **0 = phổ quát/đặc thù loài** (luôn roll, không phụ thuộc rank quái); **N = chỉ rơi khi `EnemyRank == N`** → đảm bảo quái thưởng tài nguyên đúng bậc. `RollLoot` lọc theo `lootEntryEligible`.
+  - `jackpot` (bool): **luôn roll dù lệch rank** với `chance` riêng — dùng cho hiếm phẩm bonus vượt bậc (mặc định `false`; chọn thủ công trong Admin).
+- Quy ước dữ liệu `LootTable.csv`: item `*_rankN` (thịt yêu thú, thiên khí, thiếc, nước, thạch âm, bùn đất, hắc du, kiếm thảo… 9 bậc) mang `rank = N`; item đặc thù (tơ nhện, lông thú, kén…) và tiền tệ đặc biệt (`primeval_stone`, `immortal_stone`, `white_light_essence`) mang `rank = 0`. Hiện 672/956 entry là universal (theme), phần còn lại gắn bậc.
+- **Spawn quái:** toàn bộ 209 monster trừ 6 con sinh bởi hệ kiếp (`monster_tribulation_beast`, 5 `*_calamity_boss`/`*_tribulation_boss`) đều có dòng `MonsterSpawn` — 50 con trước đây thiếu đã được bổ sung vào `MonsterSpawn.csv` (boss → `Fixed` có tọa độ, Elite → `Patrol`, Normal → `Roaming`). Rank spawn của chúng lấy theo bậc vật phẩm trong bảng loot (max `_rankN`/item rank, fallback theo vùng).
+
 ### Canonical non-player actors
 
 `non_player_actors` là bảng canonical cho **Actor Instance** persistent. Nó tham chiếu template qua cặp đa hình `template_source/template_id` thay vì sao chép toàn bộ `monster_templates`; các nguồn hiện có gồm `MONSTER_TEMPLATE`, `VARIANT_RACE`, `NPC_TEMPLATE`, `CUSTOM`. `actor_kind` (`MONSTER`, `COMPANION_BEAST`, `VARIANT_NPC`, `WORLD_NPC`, `SECT_NPC`, `CONSTRUCT`, `BOSS`) chỉ biểu diễn identity/lore và default policy, không phải quyền thực thi hành vi.

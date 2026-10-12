@@ -67,166 +67,166 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 			}
 		}
 	} else if activeCombat != nil && activeCombat.LootTableID != "" {
-		lt, err := db.LoadLootTable(tx, activeCombat.LootTableID)
-		if err == nil {
-			loot := RollLoot(lt, activeCombat.EnemyRank)
+		loot, rollErr := RollMonsterLoot(tx, activeCombat.LootTableID, activeCombat.EnemyRank)
+		if rollErr != nil {
+			lootDetailLogs = append(lootDetailLogs, "Không thể roll chiến lợi phẩm.")
+		}
 
-			if len(activeCombat.EnemyGuInventory) > 0 {
-				for _, eg := range activeCombat.EnemyGuInventory {
-					guSpec, _ := models.GetGuAny(eg.GuID)
-					dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(activeCombat))
-					if rand.Float64()*100.0 < dropChance {
-						isImmortal := guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
-						if isImmortal {
-							exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
-							if err == nil && exists {
-								continue
-							}
+		if len(activeCombat.EnemyGuInventory) > 0 {
+			for _, eg := range activeCombat.EnemyGuInventory {
+				guSpec, _ := models.GetGuAny(eg.GuID)
+				dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(activeCombat))
+				if rand.Float64()*100.0 < dropChance {
+					isImmortal := guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
+					if isImmortal {
+						exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
+						if err == nil && exists {
+							continue
 						}
-						loot.Gus = append(loot.Gus, eg.GuID)
+					}
+					loot.Gus = append(loot.Gus, eg.GuID)
+				}
+			}
+		}
+
+		if len(partyMembers) > 1 {
+			lootDetailLogs = append(lootDetailLogs, "=== PHÂN CHIA CHIẾN LỢI PHẨM TỔ ĐỘI ===")
+			stoneQty := loot.Items["primeval_stone"]
+			if stoneQty > 0 {
+				splitStones := stoneQty / len(partyMembers)
+				remaining := stoneQty
+				for _, memberID := range partyMembers {
+					if remaining <= 0 {
+						break
+					}
+					give := splitStones
+					if give < 1 {
+						give = 1
+					}
+					if give > remaining {
+						give = remaining
+					}
+					remaining -= give
+					if memberID == player.ID {
+						player.PrimevalStones += float64(give)
+						lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", give))
+					} else {
+						_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", give, memberID)
+						var uname string
+						_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
+						lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, give))
 					}
 				}
 			}
 
-			if len(partyMembers) > 1 {
-				lootDetailLogs = append(lootDetailLogs, "=== PHÂN CHIA CHIẾN LỢI PHẨM TỔ ĐỘI ===")
-				stoneQty := loot.Items["primeval_stone"]
-				if stoneQty > 0 {
-					splitStones := stoneQty / len(partyMembers)
-					remaining := stoneQty
-					for _, memberID := range partyMembers {
-						if remaining <= 0 {
-							break
-						}
-						give := splitStones
-						if give < 1 {
-							give = 1
-						}
-						if give > remaining {
-							give = remaining
-						}
-						remaining -= give
-						if memberID == player.ID {
-							player.PrimevalStones += float64(give)
-							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", give))
-						} else {
-							_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", give, memberID)
-							var uname string
-							_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
-							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, give))
-						}
-					}
+			for matID, qty := range loot.Items {
+				if matID == "primeval_stone" {
+					continue
 				}
-
-				for matID, qty := range loot.Items {
-					if matID == "primeval_stone" {
-						continue
-					}
-					itemName := matID
-					if item, ok := models.ItemRegistry[matID]; ok {
-						itemName = item.Name
-					}
-					for q := 0; q < qty; q++ {
-						winnerID := partyMembers[rand.Intn(len(partyMembers))]
-						if winnerID == player.ID {
-							if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
-								logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
-							}
-							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s.", itemName))
-						} else {
-							var uname string
-							_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
-							if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
-								logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
-							}
-							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, itemName))
-						}
-					}
+				itemName := matID
+				if item, ok := models.ItemRegistry[matID]; ok {
+					itemName = item.Name
 				}
-
-				for _, gID := range loot.Gus {
+				for q := 0; q < qty; q++ {
 					winnerID := partyMembers[rand.Intn(len(partyMembers))]
-					guSpec, _ := models.GetGuAny(gID)
-					guName := gID
-					if guSpec.Name != "" {
-						guName = guSpec.Name
-					}
-					newGu := models.GuInstance{
-						InstanceID: uuid.New().String(),
-						GuID:       gID,
-						Rank:       guSpec.Rank,
-						Hunger:     0,
-						Status:     "ACTIVE",
-						Equipped:   false,
-					}
 					if winnerID == player.ID {
-						player.GuInventory = append(player.GuInventory, newGu)
-						lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", guName))
+						if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
+							logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
+						}
+						lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s.", itemName))
 					} else {
 						var uname string
 						_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
-						if err := db.AddPlayerGu(tx, winnerID.String(), newGu); err != nil {
-							if db.IsImmortalConflict(err) {
-								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Tiên Cổ %s đã tồn tại trong thiên hạ, không thể thu phục.", guName))
-								continue
-							}
-							logger.S.Errorf("Failed to distribute loot Gu %s to %s: %v", gID, winnerID, err)
+						if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
+							logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
+						}
+						lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, itemName))
+					}
+				}
+			}
+
+			for _, gID := range loot.Gus {
+				winnerID := partyMembers[rand.Intn(len(partyMembers))]
+				guSpec, _ := models.GetGuAny(gID)
+				guName := gID
+				if guSpec.Name != "" {
+					guName = guSpec.Name
+				}
+				newGu := models.GuInstance{
+					InstanceID: uuid.New().String(),
+					GuID:       gID,
+					Rank:       guSpec.Rank,
+					Hunger:     0,
+					Status:     "ACTIVE",
+					Equipped:   false,
+				}
+				if winnerID == player.ID {
+					player.GuInventory = append(player.GuInventory, newGu)
+					lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", guName))
+				} else {
+					var uname string
+					_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+					if err := db.AddPlayerGu(tx, winnerID.String(), newGu); err != nil {
+						if db.IsImmortalConflict(err) {
+							lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Tiên Cổ %s đã tồn tại trong thiên hạ, không thể thu phục.", guName))
 							continue
 						}
-						lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, guName))
-					}
-					_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &winnerID, nil,
-						fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guName, newGu.Rank),
-						map[string]interface{}{"gu_name": guName})
-				}
-			} else {
-				stoneQty := loot.Items["primeval_stone"]
-				player.PrimevalStones += float64(stoneQty)
-				for matID, qty := range loot.Items {
-					if matID == "primeval_stone" {
+						logger.S.Errorf("Failed to distribute loot Gu %s to %s: %v", gID, winnerID, err)
 						continue
 					}
-					InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", int64(qty))
+					lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, guName))
 				}
-				for _, guID := range loot.Gus {
-					guSpec, _ := models.GetGuAny(guID)
-					newGu := models.GuInstance{
-						InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
-					}
-					player.GuInventory = append(player.GuInventory, newGu)
-					_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &player.ID, nil,
-						fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guSpec.Name, newGu.Rank),
-						map[string]interface{}{"gu_name": guSpec.Name})
+				_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &winnerID, nil,
+					fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guName, newGu.Rank),
+					map[string]interface{}{"gu_name": guName})
+			}
+		} else {
+			stoneQty := loot.Items["primeval_stone"]
+			player.PrimevalStones += float64(stoneQty)
+			for matID, qty := range loot.Items {
+				if matID == "primeval_stone" {
+					continue
 				}
+				InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", int64(qty))
+			}
+			for _, guID := range loot.Gus {
+				guSpec, _ := models.GetGuAny(guID)
+				newGu := models.GuInstance{
+					InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+				}
+				player.GuInventory = append(player.GuInventory, newGu)
+				_ = db.LogGuHistory(tx, newGu.InstanceID, newGu.GuID, newGu.Rank, "CREATED_LOOT", &player.ID, nil,
+					fmt.Sprintf("Thu phục Cổ trùng [%s] R%d sau chiến thắng.", guSpec.Name, newGu.Rank),
+					map[string]interface{}{"gu_name": guSpec.Name})
+			}
 
-				var lootParts []string
-				if stoneQty > 0 {
-					lootParts = append(lootParts, fmt.Sprintf("%d Nguyên Thạch", stoneQty))
+			var lootParts []string
+			if stoneQty > 0 {
+				lootParts = append(lootParts, fmt.Sprintf("%d Nguyên Thạch", stoneQty))
+			}
+			for matID, qty := range loot.Items {
+				if matID == "primeval_stone" || qty <= 0 {
+					continue
 				}
-				for matID, qty := range loot.Items {
-					if matID == "primeval_stone" || qty <= 0 {
-						continue
-					}
-					itemName := matID
-					if item, ok := models.ItemRegistry[matID]; ok {
-						itemName = item.Name
-					}
-					lootParts = append(lootParts, fmt.Sprintf("%dx %s", qty, itemName))
+				itemName := matID
+				if item, ok := models.ItemRegistry[matID]; ok {
+					itemName = item.Name
 				}
-				for _, guID := range loot.Gus {
-					guName := guID
-					if guSpec, ok := models.GetGuAny(guID); ok {
-						guName = guSpec.Name
-					}
-					lootParts = append(lootParts, fmt.Sprintf("1x %s (Cổ trùng)", guName))
+				lootParts = append(lootParts, fmt.Sprintf("%dx %s", qty, itemName))
+			}
+			for _, guID := range loot.Gus {
+				guName := guID
+				if guSpec, ok := models.GetGuAny(guID); ok {
+					guName = guSpec.Name
 				}
+				lootParts = append(lootParts, fmt.Sprintf("1x %s (Cổ trùng)", guName))
+			}
 
-				if len(lootParts) > 0 {
-					lootMsg := "Nhặt được: " + strings.Join(lootParts, ", ") + "."
-					lootDetailLogs = append(lootDetailLogs, lootMsg)
-					if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg); err == nil {
-						pendingNotifications = append(pendingNotifications, n)
-					}
+			if len(lootParts) > 0 {
+				lootMsg := "Nhặt được: " + strings.Join(lootParts, ", ") + "."
+				lootDetailLogs = append(lootDetailLogs, lootMsg)
+				if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg); err == nil {
+					pendingNotifications = append(pendingNotifications, n)
 				}
 			}
 		}

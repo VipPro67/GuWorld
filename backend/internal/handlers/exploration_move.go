@@ -423,29 +423,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 
 			hasHeavenSecret := models.InventoryHasGuCapability(player.GuInventory, "LOOT_PREVIEW", true)
 			if hasHeavenSecret && mon.LootTableID != "" {
-				lt, errLt := db.LoadLootTable(tx, mon.LootTableID)
-				if errLt == nil {
-					chanceMul := lootChanceMultiplier(rank)
-					qtyMul := lootQuantityMultiplier(rank)
-					extraLootMsg := fmt.Sprintf(" [Thiên Cơ hiển lộ (Rank %d x%.1f) - Tỉ lệ rơi đồ: ", rank, qtyMul)
-					first := true
-					for _, entry := range lt.Entries {
-						if !first {
-							extraLootMsg += ", "
-						}
-						scaledChance := math.Min(entry.Chance*chanceMul, 1.0)
-						scaledMin := int(math.Round(float64(entry.MinQty) * qtyMul))
-						scaledMax := int(math.Round(float64(entry.MaxQty) * qtyMul))
-						if itemID := entry.ItemID; itemID != "" {
-							extraLootMsg += fmt.Sprintf("%s x%d-%d (%.1f%%)", itemID, scaledMin, scaledMax, scaledChance*100)
-						} else if entry.GuID != "" {
-							extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.GuID, scaledChance*100)
-						}
-						first = false
-					}
-					extraLootMsg += "]"
-					logMsg += extraLootMsg
-				}
+				logMsg += heavenSecretLootPreview(tx, mon.LootTableID, rank)
 			}
 		case "PVP":
 			if IsSafeZone(player.CurrentRegion, player.X, player.Y) || playerTerritory.InTerritory {

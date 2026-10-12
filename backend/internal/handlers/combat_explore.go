@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -241,29 +240,7 @@ func ExploreNode(c *gin.Context) {
 			}
 		}
 		if hasHeavenSecret && monTemplate.LootTableID != "" {
-			lt, errLt := db.LoadLootTable(tx, monTemplate.LootTableID)
-			if errLt == nil {
-				chanceMul := lootChanceMultiplier(rank)
-				qtyMul := lootQuantityMultiplier(rank)
-				extraLootMsg := fmt.Sprintf(" [Thiên Cơ hiển lộ (Rank %d x%.1f) - Tỉ lệ rơi đồ: ", rank, qtyMul)
-				first := true
-				for _, entry := range lt.Entries {
-					if !first {
-						extraLootMsg += ", "
-					}
-					scaledChance := math.Min(entry.Chance*chanceMul, 1.0)
-					scaledMin := int(math.Round(float64(entry.MinQty) * qtyMul))
-					scaledMax := int(math.Round(float64(entry.MaxQty) * qtyMul))
-					if itemID := entry.ItemID; itemID != "" {
-						extraLootMsg += fmt.Sprintf("%s x%d-%d (%.1f%%)", itemID, scaledMin, scaledMax, scaledChance*100)
-					} else if entry.GuID != "" {
-						extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.GuID, scaledChance*100)
-					}
-					first = false
-				}
-				extraLootMsg += "]"
-				logMsg += extraLootMsg
-			}
+			logMsg += heavenSecretLootPreview(tx, monTemplate.LootTableID, rank)
 		}
 	} else if roll < 90 {
 		foods := []string{"moon_orchid_petal", "green_bamboo_wine", "jade_stone", "boar_meat"}

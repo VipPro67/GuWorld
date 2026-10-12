@@ -127,6 +127,36 @@ func TestValidateImportCSVRejectsMissingRequiredHeader(t *testing.T) {
 	}
 }
 
+func TestValidateImportCSVDreamRealmPathIsNotJSON(t *testing.T) {
+	dataset, ok := findImportDataset("dream_realm")
+	if !ok {
+		t.Fatal("dream_realm dataset is not registered")
+	}
+	content, err := os.ReadFile(filepath.Join("..", "..", "data", dataset.filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, issues := validateImportCSV(dataset, content)
+	for _, issue := range issues {
+		if issue.Code == "invalid_json" && issue.Field == "path" {
+			t.Fatalf("DreamRealm path is a scalar, but validation rejected row %d: %#v", issue.Row, issue)
+		}
+	}
+}
+
+func TestValidateImportCSVStillRequiresGuPathJSON(t *testing.T) {
+	dataset, ok := findImportDataset("gu")
+	if !ok {
+		t.Fatal("gu dataset is not registered")
+	}
+
+	_, issues := validateImportCSV(dataset, []byte("id,rank,path\ngu_test,1,not-json\n"))
+	if len(issues) != 1 || issues[0].Code != "invalid_json" || issues[0].Field != "path" {
+		t.Fatalf("unexpected issues: %#v", issues)
+	}
+}
+
 func TestImportDatasetCatalogMatchesAvailableTables(t *testing.T) {
 	want := strings.Join(ImportDatasetKeys(), ",")
 	got := strings.Join(AvailableTables(), ",")

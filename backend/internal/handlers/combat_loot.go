@@ -27,6 +27,17 @@ func lootQuantityMultiplier(rank int) float64 {
 	return gamefx.LootQuantityMultiplier(rank)
 }
 
+// lootMonsterCommonPoolID is the shared per-rank baseline loot table every
+// monster PvE kill also rolls (entry.Rank gates which tier applies).
+const lootMonsterCommonPoolID = "loot_monster_common"
+
+// lootEntryEligible reports whether an entry may roll for a kill at the given
+// enemy rank: jackpot entries always roll (rare bonus), rank 0 entries are
+// universal/theme-bound, rank N entries only roll when the enemy rank is N.
+func lootEntryEligible(e models.LootEntry, rank int) bool {
+	return e.Jackpot || e.Rank == 0 || e.Rank == rank
+}
+
 func RollLoot(lt models.LootTable, rank int) RolledLoot {
 	rolled := RolledLoot{
 		Items: make(map[string]int),
@@ -36,6 +47,9 @@ func RollLoot(lt models.LootTable, rank int) RolledLoot {
 	qtyMul := lootQuantityMultiplier(rank)
 
 	for _, entry := range lt.Entries {
+		if !lootEntryEligible(entry, rank) {
+			continue
+		}
 		effectiveChance := math.Min(entry.Chance*chanceMul, 1.0)
 		if rand.Float64() <= effectiveChance {
 			qty := 1
@@ -60,6 +74,77 @@ func RollLoot(lt models.LootTable, rank int) RolledLoot {
 		}
 	}
 	return rolled
+}
+
+// RollMonsterLoot rolls a monster PvE kill's full loot: the shared per-rank
+// baseline pool (loot_monster_common, gated by entry.Rank) plus the monster's
+// own override table (rank-filtered the same way).
+func RollMonsterLoot(tx *sql.Tx, overrideID string, rank int) (RolledLoot, error) {
+	loot := RolledLoot{
+		Items: make(map[string]int),
+		Gus:   []string{},
+	}
+	if pool, err := db.LoadLootTable(tx, lootMonsterCommonPoolID); err == nil {
+		loot = RollLoot(pool, rank)
+	} else {
+		logger.S.Warnf("RollMonsterLoot: khong load duoc bể loot chung %s: %v", lootMonsterCommonPoolID, err)
+	}
+	if overrideID != "" {
+		if lt, err := db.LoadLootTable(tx, overrideID); err == nil {
+			override := RollLoot(lt, rank)
+			for k, v := range override.Items {
+				loot.Items[k] += v
+			}
+			loot.Gus = append(loot.Gus, override.Gus...)
+		} else {
+			logger.S.Warnf("RollMonsterLoot: khong load duoc loot table %s: %v", overrideID, err)
+		}
+	}
+	return loot, nil
+}
+
+// heavenSecretLootPreview builds the "[Thiên Cơ hiển lộ ...]" drop preview for
+// the LOOT_PREVIEW Gu capability, matching exactly what RollMonsterLoot rolls
+// (same pool + override, same rank filter). Returns "" when there is nothing
+// to preview.
+func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int) string {
+	chanceMul := lootChanceMultiplier(rank)
+	qtyMul := lootQuantityMultiplier(rank)
+	msg := fmt.Sprintf(" [Thiên Cơ hiển lộ (Rank %d x%.1f) - Tỉ lệ rơi đồ: ", rank, qtyMul)
+	first := true
+	appendPreview := func(entry models.LootEntry) {
+		if !lootEntryEligible(entry, rank) {
+			return
+		}
+		if !first {
+			msg += ", "
+		}
+		scaledChance := math.Min(entry.Chance*chanceMul, 1.0)
+		scaledMin := int(math.Round(float64(entry.MinQty) * qtyMul))
+		scaledMax := int(math.Round(float64(entry.MaxQty) * qtyMul))
+		if itemID := entry.ItemID; itemID != "" {
+			msg += fmt.Sprintf("%s x%d-%d (%.1f%%)", itemID, scaledMin, scaledMax, scaledChance*100)
+		} else if entry.GuID != "" {
+			msg += fmt.Sprintf("%s (%.1f%%)", entry.GuID, scaledChance*100)
+		}
+		first = false
+	}
+	if pool, err := db.LoadLootTable(tx, lootMonsterCommonPoolID); err == nil {
+		for _, e := range pool.Entries {
+			appendPreview(e)
+		}
+	}
+	if overrideID != "" {
+		if lt, err := db.LoadLootTable(tx, overrideID); err == nil {
+			for _, e := range lt.Entries {
+				appendPreview(e)
+			}
+		}
+	}
+	if first {
+		return ""
+	}
+	return msg + "]"
 }
 
 func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {

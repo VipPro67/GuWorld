@@ -41,11 +41,13 @@ type GuPoolEntry struct {
 }
 
 type LootEntry struct {
-	ItemID string  `json:"item_id,omitempty"`
-	GuID   string  `json:"gu_id,omitempty"`
-	MinQty int     `json:"min_qty,omitempty"`
-	MaxQty int     `json:"max_qty,omitempty"`
-	Chance float64 `json:"chance"`
+	ItemID  string  `json:"item_id,omitempty"`
+	GuID    string  `json:"gu_id,omitempty"`
+	MinQty  int     `json:"min_qty,omitempty"`
+	MaxQty  int     `json:"max_qty,omitempty"`
+	Chance  float64 `json:"chance"`
+	Rank    int     `json:"rank,omitempty"`    // 0 = universal/theme (always rolls), N = only drops at enemy rank N
+	Jackpot bool    `json:"jackpot,omitempty"` // always rolls regardless of rank (rare bonus)
 }
 
 type LootTable struct {
@@ -102,7 +104,7 @@ type Combatant struct {
 	// HasNonConflictingDao mirrors a permanent non-conflicting body trait.
 	// When true, offensive conflict penalty is removed and natural defensive
 	// resistance is zeroed out in DaoCombatProfile.
-	HasNonConflictingDao     bool    `json:"has_non_conflicting_dao,omitempty"`
+	HasNonConflictingDao    bool    `json:"has_non_conflicting_dao,omitempty"`
 	DaoConflictReductionPct float64 `json:"dao_conflict_reduction_pct,omitempty"`
 }
 
@@ -551,31 +553,31 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 	hpBonus := stats["hp"]
 	effectiveBaseHP := player.BaseHP + hpBonus
 	return Combatant{
-		ID:             player.ID.String(),
-		Name:           player.Username,
-		Kind:           "Player",
-		Rank:           player.Rank,
-		SubRank:        player.SubRank,
-		HP:             player.HP,
-		MaxHP:          effectiveBaseHP,
-		CurrentMana:    player.CurrentMana,
-		MaxMana:        player.MaxMana,
-		BaseAttack:     stats["attack"],
-		BaseDefense:    stats["defense"],
-		Speed:          stats["speed"],
-		GuInventory:    player.GuInventory,
-		DaoMarks:       player.DaoMarks,
-		PathMasteries:  player.PathMasteries,
-		BodyMods:       player.BodyMods,
+		ID:                   player.ID.String(),
+		Name:                 player.Username,
+		Kind:                 "Player",
+		Rank:                 player.Rank,
+		SubRank:              player.SubRank,
+		HP:                   player.HP,
+		MaxHP:                effectiveBaseHP,
+		CurrentMana:          player.CurrentMana,
+		MaxMana:              player.MaxMana,
+		BaseAttack:           stats["attack"],
+		BaseDefense:          stats["defense"],
+		Speed:                stats["speed"],
+		GuInventory:          player.GuInventory,
+		DaoMarks:             player.DaoMarks,
+		PathMasteries:        player.PathMasteries,
+		BodyMods:             player.BodyMods,
 		HasNonConflictingDao: player.BodyMods.Has(BodyModSovereignImmortal),
-		StatusEffects:  []StatusEffect{}, // Will be populated in combat loop
-		SoulHP:         float64(player.SoulHP),
-		MaxSoulHP:      float64(player.MaxSoul),
-		DaoMarkDamage:  player.DaoMarkDamage,
-		ApertureDmg:    player.ApertureDamage,
-		AvatarURL:      player.AvatarURL,
-		FullyGrown:     player.GrowthData.FullyGrown,
-		CombatSettings: &player.CombatSettings,
+		StatusEffects:        []StatusEffect{}, // Will be populated in combat loop
+		SoulHP:               float64(player.SoulHP),
+		MaxSoulHP:            float64(player.MaxSoul),
+		DaoMarkDamage:        player.DaoMarkDamage,
+		ApertureDmg:          player.ApertureDamage,
+		AvatarURL:            player.AvatarURL,
+		FullyGrown:           player.GrowthData.FullyGrown,
+		CombatSettings:       &player.CombatSettings,
 	}
 }
 
