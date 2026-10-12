@@ -21,7 +21,7 @@ FIELDS = {
     },
 }
 ITEM_PRICE_BY_RANK = (0, 1, 3, 6, 13, 25, 10, 25, 60, 150)
-GU_PRICE_BY_RANK = (0, 200, 500, 1200, 2500, 5000, 200, 5000, 120000, 250000)
+GU_PRICE_BY_RANK = (0, 200, 500, 1200, 25000, 50000, 200, 5000, 120000, 250000)
 
 
 def csv_field_spans(text):
@@ -105,6 +105,7 @@ def main():
                 raise ValueError(f"{filename} thiếu cột {column}")
             index = headers.index(column)
             rank_index = headers.index("rank") if filename != "Recipe.csv" else headers.index("target_rank")
+            rarity_index = headers.index("rarity") if factor_name in ("item_prices", "gu_prices") else None
             for line, row in enumerate(rows[1:], start=2):
                 if index >= len(row) or rank_index >= len(row):
                     continue
@@ -114,13 +115,23 @@ def main():
                 except ValueError as exc:
                     raise ValueError(f"{filename}:{line} rank không hợp lệ") from exc
                 rank = rank if 1 <= rank <= 9 else 1
+                price_rank = rank
                 if factor_name in ("item_prices", "gu_prices"):
-                    rank_counts.setdefault(rank, [0, 0])
-                    rank_counts[rank][0] += 1
+                    if rarity_index is None or rarity_index >= len(row):
+                        raise ValueError(f"{filename}:{line} thiếu cột rarity")
+                    try:
+                        rarity = int(row[rarity_index][0] or "0")
+                    except ValueError as exc:
+                        raise ValueError(f"{filename}:{line} rarity không hợp lệ") from exc
+                    if not 0 <= rarity <= 9:
+                        raise ValueError(f"{filename}:{line} rarity phải từ 0 đến 9")
+                    price_rank = max(rank, rarity)
+                    rank_counts.setdefault(price_rank, [0, 0])
+                    rank_counts[price_rank][0] += 1
                 if factor_name == "item_prices":
-                    new = Decimal(ITEM_PRICE_BY_RANK[rank])
+                    new = Decimal(ITEM_PRICE_BY_RANK[price_rank])
                 elif factor_name == "gu_prices":
-                    new = Decimal(GU_PRICE_BY_RANK[rank])
+                    new = Decimal(GU_PRICE_BY_RANK[price_rank])
                 else:
                     if not old.strip():
                         continue
@@ -135,7 +146,7 @@ def main():
                     changes.append((start, end, f"{new:.3f}"))
                     column_counts[column] = column_counts.get(column, 0) + 1
                     if factor_name in ("item_prices", "gu_prices"):
-                        rank_counts[rank][1] += 1
+                        rank_counts[price_rank][1] += 1
         if changes:
             edits[path] = (bom, text, changes)
             if rank_counts:
@@ -143,7 +154,7 @@ def main():
                     f"R{rank}: {changed}/{total} → {ITEM_PRICE_BY_RANK[rank] if filename == 'Item.csv' else GU_PRICE_BY_RANK[rank]}"
                     for rank, (total, changed) in sorted(rank_counts.items())
                 )
-                summaries.append(f"{filename}: {len(changes)} giá sẽ được đồng bộ theo rank ({detail})")
+                summaries.append(f"{filename}: {len(changes)} giá sẽ được đồng bộ theo max(rank, rarity) ({detail})")
             else:
                 detail = ", ".join(f"{column}: {count}" for column, count in column_counts.items())
                 summaries.append(f"{filename}: {len(changes)} phí sẽ đổi ({detail})")

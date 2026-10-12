@@ -89,10 +89,21 @@ func markedUpPrice(basePrice float64) float64 {
 	return p
 }
 
-// shopCatalogCacheKey scopes the Redis catalog cache to the current day so the
-// daily random rotation refreshes automatically after midnight.
+// shopRotationPeriod is how often the random rotation changes. Each period the
+// seed and the Redis cache key advance to a new bucket, so the showcased subset
+// refreshes automatically without a background job.
+const shopRotationPeriod = time.Hour
+
+// shopRotationBucket returns the start of the current rotation window in UTC.
+// All rotation state (seed + cache key) is derived from it.
+func shopRotationBucket() time.Time {
+	return time.Now().UTC().Truncate(shopRotationPeriod)
+}
+
+// shopCatalogCacheKey scopes the Redis catalog cache to the current rotation
+// window so the rotation refreshes automatically when the bucket changes.
 func shopCatalogCacheKey() string {
-	return "caravan_shop_catalog:" + time.Now().Format("2006-01-02")
+	return "caravan_shop_catalog:" + shopRotationBucket().Format("200601021504")
 }
 
 // invalidateShopCatalogCache drops the Redis catalog cache and the in-memory
@@ -106,16 +117,15 @@ func invalidateShopCatalogCache() {
 	autoPoolCacheMu.Unlock()
 }
 
-// dailyShopSeed derives a stable integer seed from the current UTC date so the
-// random subset is identical for every request on the same day.
+// dailyShopSeed derives a stable integer seed from the current rotation bucket
+// so the random subset is identical for every request inside the same window.
 func dailyShopSeed() int64 {
-	now := time.Now().UTC()
-	return int64(now.Year()*10000 + int(now.Month())*100 + now.Day())
+	return shopRotationBucket().Unix()
 }
 
-// dailyShopRandomSubset deterministically shuffles a pool using the date as a
-// seed and returns at most limit entries. The result is stable within a day and
-// rotates daily.
+// dailyShopRandomSubset deterministically shuffles a pool using the rotation
+// bucket as a seed and returns at most limit entries. The result is stable
+// within a rotation window and rotates when the window changes.
 func dailyShopRandomSubset(pool []ShopItem, limit int) []ShopItem {
 	if len(pool) == 0 {
 		return pool
@@ -130,23 +140,22 @@ func dailyShopRandomSubset(pool []ShopItem, limit int) []ShopItem {
 	return shuffled
 }
 
-// autoShopPool builds the virtual random pool sourced from the dictionaries:
-// every rank < 5 Gu variant (pinned to its specific rank) plus the food items
-// those Gus eat. Ids already listed in caravan_shop_items are excluded so
-// manually managed entries (including defaults) take precedence. These entries
-// live outside caravan_shop_items, so they never pollute the admin list or CSV
-// export.
+// autoShopPool builds the virtual random pool sourced from gu_dictionary: every
+// Gu with rank < 6 and rarity < 6 (mortal tier), each pinned to its specific
+// rank, plus the food items those Gu eat. Ids already listed in
+// caravan_shop_items are excluded so manually managed entries take precedence.
+// These entries live outside caravan_shop_items, so they never pollute the admin
+// list or CSV export.
 func autoShopPool() ([]ShopItem, error) {
 	items := []ShopItem{}
 
-	// Rank < 5 Gus not already listed in the shop, with today's remaining stock
-	// (falls back to the per-rank daily limit when no row exists yet).
 	guRows, err := db.DB.Query(`
 		SELECT g.id, g.rank, COALESCE(g.name, g.id), COALESCE(g.description, ''), COALESCE(g.base_price, 0), ds.remaining
 		FROM gu_dictionary g
 		LEFT JOIN caravan_shop_daily_stock ds
 		       ON ds.day = CURRENT_DATE AND ds.id = g.id AND ds.rank = g.rank
-		WHERE g.rank < 5
+		WHERE g.rank < 6
+		  AND COALESCE(g.rarity, 0) < 6
 		  AND NOT EXISTS (SELECT 1 FROM caravan_shop_items c WHERE c.id = g.id)
 		ORDER BY g.id, g.rank
 	`)
@@ -178,9 +187,9 @@ func autoShopPool() ([]ShopItem, error) {
 	}
 	guRows.Close()
 
-	// Food items referenced by any rank < 5 Gu. The special stone markers
-	// ("primeval_stone", "immortal_stone") are not item_dictionary rows so the
-	// join naturally drops them. Deduplicated via DISTINCT.
+	// Food items eaten by the same Gu set (rank < 6, rarity < 6). The special
+	// stone markers ("primeval_stone", "immortal_stone") are not item_dictionary
+	// rows so the join naturally drops them. Deduplicated via DISTINCT.
 	foodRows, err := db.DB.Query(`
 		SELECT DISTINCT i.id, COALESCE(i.name, i.id), COALESCE(i.description, ''), COALESCE(i.item_type, 'Food'), COALESCE(i.rank, 1), COALESCE(i.base_price, 0), ds.remaining
 		FROM gu_dictionary g
@@ -188,7 +197,8 @@ func autoShopPool() ([]ShopItem, error) {
 		JOIN item_dictionary i ON i.id = f.fid
 		LEFT JOIN caravan_shop_daily_stock ds
 		       ON ds.day = CURRENT_DATE AND ds.id = i.id AND ds.rank = COALESCE(i.rank, 1)
-		WHERE g.rank < 5
+		WHERE g.rank < 6
+		  AND COALESCE(g.rarity, 0) < 6
 		  AND NOT EXISTS (SELECT 1 FROM caravan_shop_items c WHERE c.id = i.id)
 		ORDER BY i.id
 	`)
@@ -285,23 +295,18 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// Append the auto-generated random pool (rank<5 Gus + their food) that is
-	// derived from the dictionaries and never persisted to caravan_shop_items.
+	// Append the auto-generated random pool (rank<6, rarity<6 Gus + their food)
+	// that is derived from the dictionaries and never persisted to
+	// caravan_shop_items.
 	auto, err := cachedAutoShopPool()
 	if err != nil {
 		return nil, err
 	}
 	randomPool = append(randomPool, auto...)
-	// Drop sold-out auto items (remaining == 0) so they don't take a daily slot.
-	available := randomPool[:0]
-	for _, it := range randomPool {
-		if it.IsAuto && it.Stock <= 0 {
-			continue
-		}
-		available = append(available, it)
-	}
-	randomPool = available
-	// Balance the daily rotation: pick a fixed number of Gus and items.
+	// Pick the rotation subset from the FULL pool first so the showcased set is
+	// stable for the whole rotation window. Sold-out items are dropped only
+	// afterwards; filtering beforehand would shrink the shuffle input and leak
+	// new items mid-window every time something sells out.
 	var guPool, itemPool []ShopItem
 	for _, it := range randomPool {
 		if it.Type == "Gu" {
@@ -310,8 +315,16 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 			itemPool = append(itemPool, it)
 		}
 	}
-	items := append(defaults, dailyShopRandomSubset(guPool, maxDailyRandomGus)...)
-	items = append(items, dailyShopRandomSubset(itemPool, maxDailyRandomItems)...)
+	selected := dailyShopRandomSubset(guPool, maxDailyRandomGus)
+	selected = append(selected, dailyShopRandomSubset(itemPool, maxDailyRandomItems)...)
+	items := make([]ShopItem, 0, len(defaults)+len(selected))
+	items = append(items, defaults...)
+	for _, it := range selected {
+		if it.IsAuto && it.Stock <= 0 {
+			continue // sold out for the day
+		}
+		items = append(items, it)
+	}
 	return items, nil
 }
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, guSpecFor } from "@/store/useGameStore";
-import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
+import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check, RefreshCw } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 import { GamePanel, GameButton, GameTabs, GameCard, GameInput, GameSelect } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
@@ -27,6 +27,14 @@ const stoneTier = (rank: number): StoneTier => (rank >= 6 ? "immortal" : "primev
 const currencyLabel = (tier: StoneTier): string =>
   tier === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
 
+// Thương đội reshuffles every hour on the UTC hour boundary. Next boundary is
+// the next multiple of an hour, so the countdown is clock-skew tolerant.
+const ROTATION_PERIOD_MS = 60 * 60 * 1000;
+const rotationSecsLeftNow = (): number =>
+  Math.max(0, Math.floor((Math.ceil(Date.now() / ROTATION_PERIOD_MS) * ROTATION_PERIOD_MS - Date.now()) / 1000));
+const formatRotationSecs = (s: number): string =>
+  `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
 interface CaravanShopProps {
   player: Player;
   actionLoading: boolean;
@@ -44,6 +52,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const { guDictionary, itemDictionary, addToast } = useGameStore();
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [fetchingList, setFetchingList] = useState(false);
+  const [rotationSecsLeft, setRotationSecsLeft] = useState(rotationSecsLeftNow);
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [shopTab, setShopTab] = useState<"Gu" | "Material" | "Consumable">("Gu");
   const [sellTab, setSellTab] = useState<"All" | "Gu" | "Material" | "Recipe">("All");
@@ -88,6 +97,16 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   useEffect(() => {
     void loadShopItems();
+  }, [loadShopItems]);
+
+  // Tick the rotation countdown; reload the shop when the window rolls over.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const left = rotationSecsLeftNow();
+      setRotationSecsLeft(left);
+      if (left <= 0) void loadShopItems();
+    }, 1000);
+    return () => clearInterval(id);
   }, [loadShopItems]);
 
   // Reset filters when changing tab or mode
@@ -450,7 +469,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             Giả Gia Thương Đội
           </h3>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold bg-zinc-950/40 border border-amber-500/20 px-3 py-1.5 rounded-xl">
             <Coins className="w-4 h-4 text-amber-500" />
             <span>{player.primeval_stones} Nguyên Thạch</span>
@@ -458,6 +477,13 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           <div className="flex items-center gap-1.5 text-xs text-cyan-300 font-mono font-bold bg-zinc-950/40 border border-cyan-500/20 px-3 py-1.5 rounded-xl">
             <Sparkles className="w-4 h-4 text-violet-400" />
             <span>{(player.immortal_stones || 0).toLocaleString()} Tiên Nguyên Thạch</span>
+          </div>
+          <div
+            className="flex items-center gap-1.5 text-xs text-emerald-300 font-mono font-bold bg-zinc-950/40 border border-emerald-500/20 px-3 py-1.5 rounded-xl"
+            title="Thương đội thay hàng mỗi giờ"
+          >
+            <RefreshCw className="w-4 h-4 text-emerald-400" />
+            <span>Thay hàng sau {formatRotationSecs(rotationSecsLeft)}</span>
           </div>
         </div>
       </div>

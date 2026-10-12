@@ -290,7 +290,7 @@ Các command dưới `/immortal-aperture/npcs/:npc_id` chỉ chấp nhận NPC t
 
 **Rank cho Cổ đa rank:** `/shop/buy` nhận thêm `rank` (body, mặc định 0 = tự suy variant rank thấp nhất); `rank > 0` mua đúng variant đó. `/shop/sell` và `/shop/sell-bulk` cũng nhận thêm `rank` cho từng món. `caravan_shop_items` có khóa `(id, rank)`, `rank = 0` = auto.
 
-**Xoay vòng hàng theo ngày:** `is_default = true` luôn hiển thị; món `is_default = false` được shuffle deterministic theo ngày (seed `YYYYMMDD` UTC) theo tỷ lệ **~40 Cổ / ~60 item**. Ngoài ra mọi **Cổ trùng rank < 5** và **thức ăn của chúng** được tự thêm vào pool ngẫu nhiên (không persist, không có trong danh sách admin/export). Giá món random = `base_price × 1.5`; mỗi món có **stock hằng ngày theo rank** (R1=100, R2=50, R3=20, R4=5, R5=2, R6+=1), lưu trong `caravan_shop_daily_stock`, `/shop/buy` trừ stock và từ chối khi hết.
+**Xoay vòng hàng theo giờ:** `is_default = true` luôn hiển thị; món `is_default = false` được shuffle deterministic theo khung giờ 1h (seed = Unix giây bucket UTC) theo tỷ lệ **~40 Cổ / ~60 item**. Ngoài ra mọi **Cổ trùng rank < 6 và rarity < 6** cùng **thức ăn của chúng** được tự thêm vào pool ngẫu nhiên (không persist, không có trong danh sách admin/export). Giá món random = `base_price × 1.5`; mỗi món có **stock hằng ngày theo rank** (R1=100, R2=50, R3=20, R4=5, R5=2, R6+=0), lưu trong `caravan_shop_daily_stock`, `/shop/buy` trừ stock và từ chối khi hết. Frontend hiển thị đếm ngược tới khung kế tiếp.
 
 **Admin shop** (thêm/sửa/xóa theo rank): `PUT /admin/shop/:id/:rank`, `DELETE /admin/shop/:id/:rank`; body POST/PUT chứa `rank` (0 = auto).
 
