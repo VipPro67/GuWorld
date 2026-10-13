@@ -174,14 +174,6 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 
 	sectFundCreditIDs := []string{}
 	sectFundCredits := []float64{}
-	sectMatCredits := map[string]int{}
-
-	maxSectLevel := 1
-	for _, sr := range activeSects {
-		if sr.level > maxSectLevel {
-			maxSectLevel = sr.level
-		}
-	}
 
 	for _, sr := range activeSects {
 		elapsedMin := now.Sub(sr.lastTick).Minutes()
@@ -191,18 +183,11 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		spiritVeinLvl := getBuildingLevel(sr.buildings, "spirit_vein")
 
 		fundsRate := sectBaseRate(spiritVeinLvl) * defMult
-		matRate := sectBaseRate(spiritVeinLvl) * 0.2 * defMult
-
 		fundsCredit := fundsRate * elapsedMin
-		matCreditAmt := matRate * elapsedMin
 
 		if fundsCredit > 0 {
 			sectFundCreditIDs = append(sectFundCreditIDs, sr.id)
 			sectFundCredits = append(sectFundCredits, fundsCredit)
-		}
-
-		if matCreditAmt > 1.0 { // only credit if >= 1.0 to avoid fractional spam (though we can floor it)
-			sectMatCredits[sr.id] = int(math.Floor(matCreditAmt))
 		}
 	}
 
@@ -226,102 +211,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		}
 	}
 
-	// 3b. Material handling
-	if len(sectMatCredits) > 0 {
-		matByRank := map[int]string{}
-		if matRows, err := tx.Query(`
-			SELECT DISTINCT ON (rank) rank, id FROM item_dictionary
-			WHERE item_type = 'Material' AND rank >= 1 AND rank <= $1
-			ORDER BY rank, RANDOM()
-		`, maxSectLevel); err != nil {
-			logger.S.Errorf("Sect Territory Worker: material dictionary query failed: %v", err)
-			return
-		} else {
-			for matRows.Next() {
-				var rank int
-				var id string
-				if matRows.Scan(&rank, &id) == nil {
-					matByRank[rank] = id
-				}
-			}
-			matRows.Close()
-		}
-
-		vaultIDs := make([]string, 0, len(sectMatCredits))
-		for sid := range sectMatCredits {
-			vaultIDs = append(vaultIDs, sid)
-		}
-
-		vaultMap := map[string]map[string]int{}
-		vRows, err := tx.Query(`SELECT sect_id, item_id, quantity FROM sect_vault_materials WHERE sect_id = ANY($1::text[])`, pq.Array(vaultIDs))
-		if err != nil {
-			logger.S.Errorf("Sect Territory Worker: vault materials query failed: %v", err)
-			return
-		}
-		for vRows.Next() {
-			var sid string
-			var itemID string
-			var qty int
-			if vRows.Scan(&sid, &itemID, &qty) == nil {
-				if vaultMap[sid] == nil {
-					vaultMap[sid] = map[string]int{}
-				}
-				vaultMap[sid][itemID] += qty
-			}
-		}
-		vRows.Close()
-
-		for _, sr := range activeSects {
-			qty := sectMatCredits[sr.id]
-			if qty > 0 {
-				matID := matByRank[sr.level]
-				if matID == "" {
-					matID = matByRank[1]
-				}
-				if matID != "" {
-					vault := vaultMap[sr.id]
-					if vault == nil {
-						vault = map[string]int{}
-						vaultMap[sr.id] = vault
-					}
-					vault[matID] += qty
-				}
-			}
-		}
-
-		// Update sect_vault_materials using deterministic upsert order
-		sortedVaultSectIDs := make([]string, 0, len(vaultMap))
-		for sid := range vaultMap {
-			sortedVaultSectIDs = append(sortedVaultSectIDs, sid)
-		}
-		sort.Strings(sortedVaultSectIDs)
-
-		for _, sid := range sortedVaultSectIDs {
-			vault := vaultMap[sid]
-			sortedMatIDs := make([]string, 0, len(vault))
-			for matID := range vault {
-				sortedMatIDs = append(sortedMatIDs, matID)
-			}
-			sort.Strings(sortedMatIDs)
-
-			for _, matID := range sortedMatIDs {
-				qty := vault[matID]
-				_, err := tx.ExecContext(ctx, `
-					INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
-					VALUES ($1, $2, $3)
-					ON CONFLICT (sect_id, item_id) DO UPDATE SET
-						quantity = sect_vault_materials.quantity + EXCLUDED.quantity,
-						updated_at = NOW()
-				`, sid, matID, qty)
-				if err != nil {
-					logger.S.Errorf("Sect Territory Worker: failed to update vault material %s for sect %s: %v", matID, sid, err)
-					return
-				}
-			}
-		}
-	}
-
-	// 3c. Batch contribution credit
+	// 3b. Batch contribution credit
 	if len(allMemberIDs) > 0 {
 		type memberState struct {
 			territoryPending    float64

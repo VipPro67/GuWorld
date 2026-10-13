@@ -314,7 +314,7 @@ export const gameplayPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Lãnh địa mỏ Tông môn & Quỹ</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Môn phái có thể chiếm Lãnh địa để tự sinh <strong>Quỹ tông môn</strong> và <strong>Linh tài</strong> theo giờ. Lãnh đạo (Trưởng Lão, Hộ Pháp, Chưởng Môn) được quyền bố trí đệ tử hoặc thuê thần thú canh giữ, đồng thời phát động tấn công mỏ của tông môn khác. Đệ tử phòng thủ nhận +20 cống hiến/giờ, các thành viên khác +2 cống hiến/giờ (tối đa 200/ngày).
+            Môn phái có thể chiếm Lãnh địa để tự sinh <strong>Quỹ tông môn</strong> theo giờ. Lãnh đạo (Trưởng Lão, Hộ Pháp, Chưởng Môn) được quyền bố trí đệ tử hoặc thuê thần thú canh giữ, đồng thời phát động tấn công mỏ của tông môn khác. Đệ tử phòng thủ nhận +20 cống hiến/giờ, các thành viên khác +2 cống hiến/giờ (tối đa 200/ngày).
           </p>
         </div>
 

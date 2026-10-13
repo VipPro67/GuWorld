@@ -1147,7 +1147,7 @@ export const SectView: React.FC = () => {
                     <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.member_fee.toLocaleString()} Quỹ</span>
                   </div>
                   <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
-                    <span className="text-[10px] text-zinc-500">Linh tài ({mySectStatus.maintenance_breakdown.materials_count} món):</span>
+                    <span className="text-[10px] text-zinc-500">Linh tài ({mySectStatus.maintenance_breakdown.materials_count} món, 200 = 1 Quỹ):</span>
                     <span className="text-zinc-200 font-bold">{mySectStatus.maintenance_breakdown.materials_fee.toLocaleString()} Quỹ</span>
                   </div>
                   <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
@@ -1386,7 +1386,7 @@ export const SectView: React.FC = () => {
                   {
                     key: "spirit_vein",
                     name: "Linh Mạch",
-                    desc: "Tự động sản sinh Quỹ tông môn và Linh tài mỗi phút cho Tông môn.",
+                    desc: "Tự động sản sinh Quỹ tông môn mỗi phút cho Tông môn.",
                     baseFunds: 3000,
                     icon: "💎",
                   },

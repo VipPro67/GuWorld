@@ -865,8 +865,15 @@ Hệ thống môn phái chia thành 7 cấp bậc rõ rệt:
 - **Phí Duy Trì Tông Môn Hàng Ngày (`SectMaintenanceWorker`)**:
   - Hệ thống chạy ngầm tự động mỗi 24 giờ.
   - Chi phí bảo trì:
-    $$\text{Phí Duy Trì} = \text{Cấp Tông Môn} \times 5.000 \text{ Quỹ}$$
-  - **Hệ quả thiếu quỹ**: Nếu Quỹ tông môn không đủ thanh toán phí bảo trì, tông môn **bị giáng 1 cấp** (`Level - 1`, tối thiểu Cấp 1) và Thiên Đạo lập tức gửi thư thông báo cảnh báo đến Chưởng Môn.
+    $$\text{Phí Duy Trì} = (\text{Cấp Tông Môn} \times 2.000) + (\text{Số Thành Viên} \times 200) + \text{Phí Kho Tàng}$$
+  - **Phí Kho Tàng** (chỉ tính tài sản đang nằm trong Bảo khố):
+    - **Linh tài**: $\lfloor \text{Tổng số lượng} / 200 \rfloor$ Quỹ — **đồng hạng mọi rank** (200 item = 1 Quỹ) và **không** chịu chiết khấu Bảo Khố.
+    - **Cổ phàm (Rank 1-5)**: $\sum \text{Rank} \times 10 \times \text{Số lượng}$
+    - **Tiên Cổ (Rank 6-9)**: $\sum \text{Rank} \times 200 \times \text{Số lượng}$
+    - **Bí phương**: $\sum \text{Rank Cổ Mục Tiêu} \times 50$
+    - Ba mục cuối được giảm **50% → 90%** theo cấp Bảo Khố (cấp 1: 50%, mỗi cấp thêm 5%, tối đa 90% ở cấp 9). Số Quỹ đã tiết kiệm hiển thị ngay trong bảng Phí Duy Trì.
+  - **Hệ quả thiếu quỹ**: Nếu Quỹ tông môn không đủ thanh toán phí bảo trì, tông môn **bị giáng 1 cấp** — đồng thời trên cả `sects.level` lẫn `buildings.main_hall`, và mọi kiến trúc đang cao hơn bị kẹp về cấp mới nên **bán kính lãnh địa và buff Hộ Sơn thực sự thu nhỏ theo** (tối thiểu Cấp 1). Thiên Đạo lập tức gửi thư thông báo cảnh báo đến Chưởng Môn.
+    - Nếu đã ở **Cấp 1** mà vẫn thiếu quỹ thì không còn gì để giáng: phí chưa được thu, tông giữ nguyên Cấp 1 và chỉ nhận một tin nhắn trong kênh tông môn (không có thư "giáng từ Cấp 1 xuống Cấp 1").
 
 ---
 
@@ -924,8 +931,8 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 | :--- | :--- | :--- | :--- |
 | **Chính Điện** | `main_hall` | $5.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Định đoạt **Cấp bậc Tông Môn** (`sects.level`). Là trần giới hạn: cấp của 4 kiến trúc còn lại không được vượt quá Chính Điện. Mở rộng bán kính lãnh địa ($\text{Radius} = 5 + \text{Cấp}$). |
 | **Hộ Sơn Trận Pháp** | `defensive_array` | $2.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng cường toàn diện chỉ số HP, Công, Thủ, Mana của **Hộ Sơn Thần Thú**. Khi kỹ năng sẵn sàng, chặn lần công kích đầu và mở 10 phút tập hợp; kỹ năng hồi cố định 12 giờ. |
-| **Linh Mạch** | `spirit_vein` | $3.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng sản lượng tự sinh Quỹ tông môn: $(10 + \text{Cấp} \times 10)$ Quỹ/phút. Tự động thu thập và bổ sung Linh tài phàm phẩm vào kho mỗi phút. |
-| **Tàng Bảo Các** | `treasury` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Giảm tỉ lệ từng tài nguyên/Cổ/Bí phương rơi khi thất thủ: từ 20% xuống tối thiểu 5%. Đồng thời giảm 50% phí kho trong duy trì/di dời ở cấp 1, tăng dần đến tối đa 90%. |
+| **Linh Mạch** | `spirit_vein` | $3.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng sản lượng tự sinh Quỹ tông môn: $(10 + \text{Cấp} \times 10)$ Quỹ/phút. |
+| **Tàng Bảo Các** | `treasury` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Giảm tỉ lệ từng tài nguyên/Cổ/Bí phương rơi khi thất thủ: từ 20% xuống tối thiểu 5%. Đồng thời giảm 50% phí kho (Cổ & Bí phương) trong duy trì/di dời ở cấp 1, tăng dần đến tối đa 90%. Ngoại lệ: **Linh tài trong phí duy trì** tính cố định $200 \text{ item} = 1 \text{ Quỹ}$ nên không chịu chiết khấu này. |
 | **Diễn Võ Trường** | `training_ground` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng hiệu suất thu hoạch Điểm cống hiến thụ động theo giờ của toàn bộ môn nhân ($+10\%$ mỗi cấp kiến trúc). |
 
 ---
@@ -945,7 +952,6 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 - **Thu Hoạch Thụ Động Theo Phút (`SectTerritoryWorker`)**:
   - Hệ thống tự động vận hành định kỳ mỗi phút:
     - **Quỹ tông môn**: Tự động tích lũy vào ngân quỹ dựa theo cấp Linh Mạch và nhân thêm hệ số thủ hộ ($+10\%$ mỗi thủ hộ).
-    - **Linh tài**: Tự sinh các loại Linh tài có phẩm cấp phù hợp với cấp tông môn vào kho nguyên liệu.
     - **Điểm cống hiến thụ động cho thành viên**:
       - Đệ tử bình thường: $+2$ điểm/giờ ($2.0 / 60$ mỗi phút).
       - Đệ tử Trấn Thủ: $+20$ điểm/giờ ($20.0 / 60$ mỗi phút).
@@ -959,7 +965,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 - **Bố Trí Thủ Hộ Tông Môn (`DefendSect`)**:
   - Trưởng Lão, Hộ Pháp, Chưởng Môn có thể phân công đệ tử làm Thủ hộ hoặc thuê Thần Thú canh giữ (chi phí thuê: $\text{Rank} \times 500$ Quỹ).
   - Số lượng thủ hộ tối đa $= \text{Cấp Tông Môn} + 1$.
-  - Mỗi thủ hộ đang canh giữ tăng thêm $+10\%$ tổng sản lượng thu hoạch Quỹ và Linh tài của tông môn.
+  - Mỗi thủ hộ đang canh giữ tăng thêm $+10\%$ sản lượng Quỹ tông môn tự sinh của tông môn.
 - **Trấn Thủ Sơn Môn Cá Nhân (`ToggleDefendSect`)**:
   - Đệ tử đứng trực tiếp tại tọa độ căn cứ tông môn có thể bật/tắt trạng thái **Trấn Thủ** (`is_defending`).
   - Đệ tử trấn thủ nhận tốc độ tích lũy Điểm cống hiến thụ động gấp 10 lần bình thường (20 điểm/giờ).

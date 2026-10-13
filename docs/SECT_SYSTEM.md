@@ -369,11 +369,17 @@ Workflow:
 1. Duyệt toàn bộ `sects`.
 2. Nếu quá 24h kể từ `last_maintenance_at`, xét phí duy trì.
 3. Nếu quỹ đủ -> trừ phí, cập nhật `last_maintenance_at`.
-4. Nếu quỹ thiếu -> giảm cấp tông môn (`level = max(level-1, maxSectLevel)`).
+4. Nếu quỹ thiếu -> giảm cấp tông môn xuống `max(level-1, 1)`, **đồng thời kẹp `buildings`**: `main_hall` và mọi kiến trúc đang cao hơn đều bị đưa về cấp mới (hàm `clampBuildings`), cập nhật `last_maintenance_at`.
 5. Gửi tin nhắn cảnh báo cho leader.
 
+Công thức phí (`computeVaultFees`):
+- `Phí = Cấp × 2.000 + Số thành viên × 200 + Phí Kho Tàng`.
+- Linh tài: `floor(tổng số lượng / 200)` Quỹ — đồng hạng mọi rank, **không** chiết khấu Bảo Khố.
+- Cổ phàm `Σ(Rank × 10 × SL)`, Tiên Cổ `Σ(Rank × 200 × SL)`, Bí phương `Σ(Rank × 50)` — ba mục này được `DiscountVaultFee` giảm 50%-90% theo cấp Bảo Khố.
+
 Điểm cần lưu ý:
-- `maxSectLevel` hiện đang là 1, nên không giảm dưới 1.
+- Tối thiểu là Cấp 1. Nếu đã ở Cấp 1 mà vẫn thiếu quỹ thì **không giáng nữa**: chỉ chốt `last_maintenance_at` và gửi tin kênh tông môn (không gửi thư "giáng cấp").
+- Nếu UPDATE trừ phí thất bại, worker đọc lại `funds` + `last_maintenance_at` để phân biệt "đã trừ rồi" với "thiếu quỹ", tránh giáng cấp oan.
 - Nếu cần thay đổi logic cấp tối thiểu, cập nhật ở worker + doc.
 
 ### 4.9 Lãnh thổ / mỏ khoáng
@@ -512,8 +518,8 @@ Base route: `/api/admin/sects`
 ### 7.3 `StartSectTerritoryWorker`
 
 - Duyệt `sect_mines` đã có `occupier_sect_id`.
-- Tính `elapsedMin`, cộng quỹ + nguyên liệu + points cống hiến cho thành viên.
-- Tập trung theo level + số lượng defender + rarity.
+- Tính `elapsedMin`, cộng quỹ + điểm cống hiến cho thành viên.
+- Tích lũy theo level Linh Mạch + số lượng defender.
 
 ---
 
