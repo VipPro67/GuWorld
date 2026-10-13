@@ -542,6 +542,28 @@ func GuNativeMechanic(spec GuDictionaryItem, code string) (gameplayeffects.Compi
 	return gameplayeffects.CompiledOperation{}, false
 }
 
+// GuAlwaysOnValue sums the "value" param of ALWAYS_ON UNIQUE operations with
+// the given native code. Used for value-carrying modifiers authored as UNIQUE
+// hooks (e.g. CULTIVATION_EFFICIENCY) instead of STAT_MOD projections, which
+// GuStatValue does not read.
+func GuAlwaysOnValue(spec GuDictionaryItem, code string) float64 {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return 0
+	}
+	code = strings.ToUpper(strings.TrimSpace(code))
+	var total float64
+	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
+		if op.Type != gameplayeffects.OpUnique || op.Code != code {
+			continue
+		}
+		if v, ok := op.Values["value"].(float64); ok {
+			total += v
+		}
+	}
+	return total
+}
+
 func GuSpecCapability(spec GuDictionaryItem, code string) (gameplayeffects.Capability, bool) {
 	compiled := CompiledGuEffects(spec)
 	if compiled == nil {

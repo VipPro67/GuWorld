@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { BookOpenCheck, Check, GripVertical, Plus, Save, ShieldAlert, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import { BookOpenCheck, Check, GripVertical, Plus, Save, Search, ShieldAlert, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
 import type { KillerMoveDraft, KillerMoveEffectOption, KillerMovePreview } from "@/store/slices/killerMovesSlice";
 
@@ -23,7 +23,9 @@ export function KillerMovesPanel() {
   const useMove = useGameStore((s) => s.useKillerMove);
 
   const [mainId, setMainId] = useState("");
+  const [mainSearch, setMainSearch] = useState("");
   const [components, setComponents] = useState<string[]>([]);
+  const [componentSearch, setComponentSearch] = useState("");
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<KillerMovePreview | null>(null);
@@ -51,6 +53,21 @@ export function KillerMovesPanel() {
     const spec = gu ? guDictionary[gu.gu_id] : undefined;
     return `${spec?.name || gu?.gu_id || "Cổ trùng"} · Rank ${rank}`;
   }, [guDictionary, gus]);
+  const filteredMainGus = useMemo(() => {
+    const query = mainSearch.trim().toLowerCase();
+    return gus.filter((gu) => {
+      const spec = guDictionary[gu.gu_id];
+      return !query || `${spec?.name || ""} ${gu.gu_id}`.toLowerCase().includes(query);
+    });
+  }, [gus, guDictionary, mainSearch]);
+  const filteredComponentGus = useMemo(() => {
+    const query = componentSearch.trim().toLowerCase();
+    return gus.filter((gu) => {
+      if (gu.instance_id === mainId || components.includes(gu.instance_id)) return false;
+      const spec = guDictionary[gu.gu_id];
+      return !query || `${spec?.name || ""} ${gu.gu_id}`.toLowerCase().includes(query);
+    });
+  }, [gus, guDictionary, mainId, components, componentSearch]);
 
   const draft = useMemo<KillerMoveDraft | null>(() => {
     if (!mainId || selectedEffects.length === 0) return null;
@@ -107,9 +124,34 @@ export function KillerMovesPanel() {
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
           <div>
             <label className="mb-1.5 block text-[11px] font-mono uppercase tracking-wider text-zinc-400">Cổ chính</label>
-            <select value={mainId} onChange={(event) => { setMainId(event.target.value); setComponents([]); setSelectedEffects([]); }} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-500">
-              {gus.map((gu) => <option key={gu.instance_id} value={gu.instance_id}>{guName(gu.instance_id, gu.rank)} · No {Math.floor(gu.hunger)}</option>)}
-            </select>
+            <div className="mb-2 rounded-xl border border-amber-900/40 bg-amber-950/15 px-3 py-2 text-sm text-amber-100">
+              {mainId ? `${guName(mainId, selectedMain?.rank || 1)} · No ${Math.floor(selectedMain?.hunger || 0)}` : "Chưa chọn Cổ chính"}
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="search"
+                value={mainSearch}
+                onChange={(event) => setMainSearch(event.target.value)}
+                placeholder="Tìm tên hoặc mã Cổ..."
+                aria-label="Tìm Cổ chính"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 py-2.5 pl-9 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-amber-500"
+              />
+            </div>
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-900/70 p-1">
+              {filteredMainGus.length === 0 ? <p className="px-3 py-2 text-xs text-zinc-500">Không tìm thấy Cổ phù hợp.</p> : filteredMainGus.map((gu) => (
+                <button
+                  key={gu.instance_id}
+                  type="button"
+                  aria-pressed={mainId === gu.instance_id}
+                  onClick={() => { setMainId(gu.instance_id); setComponents([]); setSelectedEffects([]); setComponentSearch(""); }}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${mainId === gu.instance_id ? "bg-amber-950/50 text-amber-200" : "text-zinc-300 hover:bg-zinc-800"}`}
+                >
+                  <span className="truncate">{guName(gu.instance_id, gu.rank)}</span>
+                  <span className="ml-2 shrink-0 text-[10px] text-zinc-500">No {Math.floor(gu.hunger)}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -119,11 +161,32 @@ export function KillerMovesPanel() {
                 const gu = gus.find((entry) => entry.instance_id === id);
                 return <button key={id} onClick={() => { setComponents((current) => current.filter((value) => value !== id)); setSelectedEffects((current) => current.filter((key) => effects.find((effect) => effect.key === key)?.source_instance_id !== id)); }} className="rounded-lg border border-cyan-900/60 bg-cyan-950/30 px-2.5 py-1.5 text-[11px] text-cyan-200 hover:border-red-800">{guName(id, gu?.rank || 1)} ×</button>;
               })}
-              <select value="" onChange={(event) => { const id=event.target.value; if(id && id!==mainId && components.length<5 && !components.includes(id)) setComponents((current)=>[...current,id]); }} className="min-w-48 rounded-lg border border-dashed border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-[11px] text-zinc-300">
-                <option value="">+ Thêm Cổ phụ</option>
-                {gus.filter((gu) => gu.instance_id !== mainId && !components.includes(gu.instance_id)).map((gu) => <option key={gu.instance_id} value={gu.instance_id}>{guName(gu.instance_id, gu.rank)}</option>)}
-              </select>
             </div>
+            {components.length < 5 && <div className="mt-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="search"
+                  value={componentSearch}
+                  onChange={(event) => setComponentSearch(event.target.value)}
+                  placeholder="+ Tìm Cổ phụ theo tên hoặc mã..."
+                  aria-label="Tìm Cổ phụ"
+                  className="w-full rounded-lg border border-dashed border-zinc-700 bg-zinc-900 py-2 pl-8 pr-3 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-amber-500"
+                />
+              </div>
+              <div className="mt-1 max-h-36 space-y-1 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900/70 p-1">
+                {filteredComponentGus.length === 0 ? <p className="px-2.5 py-2 text-[11px] text-zinc-500">Không tìm thấy Cổ phụ phù hợp.</p> : filteredComponentGus.map((gu) => (
+                  <button
+                    key={gu.instance_id}
+                    type="button"
+                    onClick={() => { setComponents((current) => [...current, gu.instance_id]); setComponentSearch(""); }}
+                    className="w-full rounded-md px-2.5 py-1.5 text-left text-[11px] text-zinc-300 hover:bg-zinc-800"
+                  >
+                    {guName(gu.instance_id, gu.rank)}
+                  </button>
+                ))}
+              </div>
+            </div>}
             {selectedMain && <p className="mt-2 text-[10px] text-zinc-600">Cổ thành phần vẫn được dùng trong các sát chiêu khác; nếu bị mất hoặc chết, chiêu này sẽ tạm mất hiệu lực.</p>}
           </div>
 

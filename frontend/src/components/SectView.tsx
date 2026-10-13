@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName, guSpecFor, SectRelocationEstimate } from "@/store/useGameStore";
+import { useGameStore, Sect, SectMission, GuInstance, SectMine, SectVaultGuItem, formatRecipeName, guSpecFor, SectRelocationEstimate } from "@/store/useGameStore";
 import { translatePath, parsePaths } from "@/lib/translate";
 import {
   Shield,
@@ -132,6 +132,8 @@ export const SectView: React.FC = () => {
   const [vaultTab, setVaultTab] = useState<"gu" | "material" | "recipe">("gu");
   const [vaultSearch, setVaultSearch] = useState("");
   const [vaultRankFilter, setVaultRankFilter] = useState<string>("All");
+  const [vaultPage, setVaultPage] = useState(1);
+  const vaultItemsPerPage = 8;
   const [buyQtys, setBuyQtys] = useState<Record<string, number>>({});
 
   const getBuyQty = (key: string): number => buyQtys[key] || 1;
@@ -949,6 +951,66 @@ export const SectView: React.FC = () => {
   const isLeaderOrElder = member?.member_rank === "CHUONG_MON" || member?.member_rank === "TRUONG_LAO" || member?.member_rank === "HO_PHAP";
   // Only Chưởng Môn and Hộ Pháp may destroy vault items.
   const canDestroyVault = member?.member_rank === "CHUONG_MON" || member?.member_rank === "HO_PHAP";
+
+  const normalizedVaultSearch = vaultSearch.trim().toLocaleLowerCase();
+  const filteredVaultGus = useMemo(() => {
+    const merged = new Map<string, SectVaultGuItem>();
+    for (const item of sect?.vault_gu ?? []) {
+      const key = `${item.id}_${item.rank || 0}`;
+      const existing = merged.get(key);
+      if (existing) {
+        existing.quantity = (existing.quantity || 0) + (item.quantity || 0);
+      } else {
+        merged.set(key, { ...item });
+      }
+    }
+
+    return Array.from(merged.values())
+      .filter((item) => {
+        if (item.quantity !== undefined && item.quantity <= 0) return false;
+        const spec = guDictionary[item.id];
+        const rank = item.rank || spec?.rank || 1;
+        if (vaultRankFilter === "6+" ? rank < 6 : vaultRankFilter !== "All" && rank !== Number(vaultRankFilter)) {
+          return false;
+        }
+        return !normalizedVaultSearch || (spec?.name || item.id).toLocaleLowerCase().includes(normalizedVaultSearch);
+      })
+      .sort((a, b) => (a.rank || guDictionary[a.id]?.rank || 1) - (b.rank || guDictionary[b.id]?.rank || 1));
+  }, [sect?.vault_gu, guDictionary, normalizedVaultSearch, vaultRankFilter]);
+
+  const filteredVaultMaterials = useMemo(
+    () =>
+      Object.entries(sect?.vault_materials ?? {}).filter(([id, quantity]) => {
+        if (quantity <= 0) return false;
+        const spec = itemDictionary[id];
+        const rank = spec?.rank || 1;
+        if (vaultRankFilter === "6+" ? rank < 6 : vaultRankFilter !== "All" && rank !== Number(vaultRankFilter)) {
+          return false;
+        }
+        return !normalizedVaultSearch || (spec?.name || id).toLocaleLowerCase().includes(normalizedVaultSearch);
+      }),
+    [sect?.vault_materials, itemDictionary, normalizedVaultSearch, vaultRankFilter],
+  );
+
+  const filteredVaultRecipes = useMemo(
+    () =>
+      (sect?.vault_recipes ?? []).filter((recipe) =>
+        !normalizedVaultSearch || formatRecipeName(recipe.recipe_id).toLocaleLowerCase().includes(normalizedVaultSearch),
+      ),
+    [sect?.vault_recipes, normalizedVaultSearch],
+  );
+
+  const vaultItemCount =
+    vaultTab === "gu" ? filteredVaultGus.length
+      : vaultTab === "material" ? filteredVaultMaterials.length
+        : filteredVaultRecipes.length;
+  const vaultTotalPages = Math.max(1, Math.ceil(vaultItemCount / vaultItemsPerPage));
+  const currentVaultPage = Math.min(vaultPage, vaultTotalPages);
+  const vaultStartIndex = (currentVaultPage - 1) * vaultItemsPerPage;
+
+  useEffect(() => {
+    setVaultPage(1);
+  }, [vaultTab, vaultSearch, vaultRankFilter]);
 
   const renderDestroyButton = (itemType: "gu" | "material" | "recipe", itemId: string, label: string, rank?: number) => {
     if (!canDestroyVault) return null;
@@ -1810,18 +1872,18 @@ export const SectView: React.FC = () => {
       {activeTab === "vault" && (
         <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 backdrop-blur-md flex flex-col gap-6 animate-slide-up">
           {/* Header Vault & Sub-tabs */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-900 pb-4">
-            <div>
-              <h3 className="text-base font-serif font-bold text-zinc-200">
+          <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4 border-b border-zinc-900 pb-4">
+            <div className="min-w-0">
+              <h3 className="text-base font-serif font-bold text-zinc-200 break-words leading-snug">
                 Tàng Kinh Các & Bảo Khố Tông Môn
               </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-2xl">
                 Dùng điểm cống hiến môn phái để đổi lấy thiên tài địa bảo, cổ trùng hay công thức bí truyền.
               </p>
             </div>
 
             {/* Sub Tabs */}
-            <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto">
+            <div className="flex flex-wrap bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start">
               <button
                 onClick={() => setVaultTab("gu")}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${vaultTab === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
@@ -1847,8 +1909,8 @@ export const SectView: React.FC = () => {
           </div>
 
           {/* Vault Top Bar: Contribution Point balance and Filter/Search */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-3.5 mb-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-3.5 mb-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-xs text-zinc-400 font-serif font-bold">Điểm Cống Hiến:</span>
               <span className="text-sm font-mono font-bold text-yellow-400 flex items-center gap-1">
                 <Coins className="w-4 h-4 text-yellow-500" />
@@ -1863,17 +1925,21 @@ export const SectView: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                type="text"
-                value={vaultSearch}
-                onChange={(e) => setVaultSearch(e.target.value)}
-                placeholder="Tìm kiếm vật phẩm..."
-                className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50 min-w-[160px]"
-              />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0 xl:flex-1 xl:justify-end">
+              <label className="relative block w-full sm:flex-1 sm:min-w-[200px] xl:max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <input
+                  type="search"
+                  value={vaultSearch}
+                  onChange={(e) => setVaultSearch(e.target.value)}
+                  placeholder="Tìm kiếm vật phẩm..."
+                  aria-label="Tìm kiếm trong bảo khố"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50"
+                />
+              </label>
 
               {(vaultTab === "gu" || vaultTab === "material") && (
-                <div className="flex items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800 text-[10px] font-mono">
+                <div className="flex flex-wrap items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800 text-[10px] font-mono">
                   {["All", "1", "2", "3", "4", "5", "6+"].map((r) => (
                     <button
                       key={r}
@@ -1896,39 +1962,9 @@ export const SectView: React.FC = () => {
           {/* Vault Inventory Render */}
           <div>
             {vaultTab === "gu" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sect?.vault_gu && (sect.vault_gu as ApiResponseData[]).length > 0 ? (
-                  (() => {
-                    // Deduplicate by id + rank (merge quantities), then sort by rank ascending
-                    const merged: Record<string, ApiResponseData> = {};
-                    for (const vg of sect.vault_gu as ApiResponseData[]) {
-                      const key = `${vg.id}_${vg.rank || 0}`;
-                      if (!merged[key]) {
-                        merged[key] = { ...vg };
-                      } else {
-                        merged[key].quantity = (merged[key].quantity || 0) + (vg.quantity || 0);
-                      }
-                    }
-                    const sorted = Object.values(merged).sort((a: ApiResponseData, b: ApiResponseData) => {
-                      const rankA = a.rank || guDictionary[a.id]?.rank || 1;
-                      const rankB = b.rank || guDictionary[b.id]?.rank || 1;
-                      return rankA - rankB;
-                    }).filter((vg: ApiResponseData) => {
-                      if (vg.quantity !== undefined && vg.quantity <= 0) return false;
-                      const spec = guDictionary[vg.id];
-                      const displayRank = vg.rank || spec?.rank || 1;
-                      if (vaultRankFilter !== "All") {
-                        if (vaultRankFilter === "6+") {
-                          if (displayRank < 6) return false;
-                        } else {
-                          if (displayRank !== parseInt(vaultRankFilter)) return false;
-                        }
-                      }
-                      if (!vaultSearch) return true;
-                      const name = spec?.name || vg.id;
-                      return name.toLowerCase().includes(vaultSearch.toLowerCase());
-                    });
-                    return sorted.map((vg: ApiResponseData) => {
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                {filteredVaultGus.length > 0 ? (
+                  filteredVaultGus.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vg) => {
                       const spec = guDictionary[vg.id];
                       const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
                       const uKey = `${vg.id}_${vg.rank || 0}`;
@@ -1946,10 +1982,10 @@ export const SectView: React.FC = () => {
                       return (
                         <div
                           key={uKey}
-                          className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300"
+                          className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300"
                         >
                           <div className="flex flex-col min-w-0">
-                            <h4 className="text-sm font-serif font-bold text-zinc-100">
+                            <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
                               {spec?.name || vg.id}
                             </h4>
                             <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
@@ -1974,9 +2010,9 @@ export const SectView: React.FC = () => {
                             </p>
                           </div>
 
-                          <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
                             {!outOfStock && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 {renderQtyStepper(qtyKey, maxQty, maxAffordable)}
                                 <div className="text-right">
                                   <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
@@ -2004,34 +2040,17 @@ export const SectView: React.FC = () => {
                           </div>
                         </div>
                       );
-                    });
-                  })()
+                    })
                 ) : (
-                  <div className="col-span-2 text-center py-6 text-zinc-600 text-xs font-mono">Bảo khố hiện tại không còn Cổ trùng nào bán</div>
+                  <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Cổ trùng phù hợp trong bảo khố</div>
                 )}
               </div>
             )}
 
             {vaultTab === "material" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sect?.vault_materials && Object.entries(sect.vault_materials).length > 0 ? (
-                  Object.entries(sect.vault_materials)
-                  .filter(([matId, qty]: ApiResponseData) => {
-                    if (qty <= 0) return false;
-                    const spec = itemDictionary[matId];
-                    const rank = spec?.rank || 1;
-                    if (vaultRankFilter !== "All") {
-                      if (vaultRankFilter === "6+") {
-                        if (rank < 6) return false;
-                      } else {
-                        if (rank !== parseInt(vaultRankFilter)) return false;
-                      }
-                    }
-                    if (!vaultSearch) return true;
-                    const name = spec?.name || matId;
-                    return name.toLowerCase().includes(vaultSearch.toLowerCase());
-                  })
-                  .map(([matId, qty]) => {
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                {filteredVaultMaterials.length > 0 ? (
+                  filteredVaultMaterials.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map(([matId, qty]) => {
                     const spec = itemDictionary[matId];
                     const cost = getVaultCost(getItemBasePrice(matId));
                     const qtyKey = `material-${matId}`;
@@ -2046,10 +2065,10 @@ export const SectView: React.FC = () => {
                     return (
                       <div
                         key={matId}
-                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300"
+                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300"
                       >
                         <div className="flex flex-col min-w-0">
-                          <h4 className="text-sm font-serif font-bold text-zinc-100">
+                          <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
                             {spec?.name || matId}
                           </h4>
                           <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
@@ -2066,9 +2085,9 @@ export const SectView: React.FC = () => {
                           </p>
                         </div>
 
-                        <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
                           {qty > 0 && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               {renderQtyStepper(qtyKey, qty, maxAffordable)}
                               <div className="text-right">
                                 <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
@@ -2098,21 +2117,15 @@ export const SectView: React.FC = () => {
                     );
                   })
                 ) : (
-                  <div className="col-span-2 text-center py-6 text-zinc-600 text-xs font-mono">Linh tài tại bảo khố đã cạn kiệt</div>
+                  <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Linh tài phù hợp trong bảo khố</div>
                 )}
               </div>
             )}
 
             {vaultTab === "recipe" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sect?.vault_recipes && sect.vault_recipes.length > 0 ? (
-                  sect.vault_recipes
-                  .filter((vaultRecipe) => {
-                    if (!vaultSearch) return true;
-                    const name = formatRecipeName(vaultRecipe.recipe_id);
-                    return name.toLowerCase().includes(vaultSearch.toLowerCase());
-                  })
-                  .map((vaultRecipe) => {
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                {filteredVaultRecipes.length > 0 ? (
+                  filteredVaultRecipes.slice(vaultStartIndex, vaultStartIndex + vaultItemsPerPage).map((vaultRecipe) => {
                     const recipeId = vaultRecipe.recipe_id;
                     const recipeInfo = recipes?.find(r => r.id === recipeId);
                     const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
@@ -2125,10 +2138,10 @@ export const SectView: React.FC = () => {
                     return (
                       <div
                         key={recipeId}
-                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300"
+                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300"
                       >
                         <div className="flex flex-col min-w-0">
-                          <h4 className="text-sm font-serif font-bold text-zinc-100">
+                          <h4 className="text-sm font-serif font-bold text-zinc-100 break-words">
                             {formatRecipeName(recipeId)}
                           </h4>
                           <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
@@ -2148,7 +2161,7 @@ export const SectView: React.FC = () => {
                           </p>
                         </div>
 
-                        <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/40 pt-3">
                           <div className="text-right">
                             <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
                             <span className="text-xs font-mono font-bold text-yellow-500">{cost.toLocaleString()} Pts</span>
@@ -2173,11 +2186,40 @@ export const SectView: React.FC = () => {
                     );
                   })
                 ) : (
-                  <div className="col-span-2 text-center py-6 text-zinc-600 text-xs font-mono">Tông môn hiện không có Cổ phương truyền thừa nào bán</div>
+                  <div className="col-span-full text-center py-6 text-zinc-600 text-xs font-mono">Không tìm thấy Cổ phương phù hợp trong bảo khố</div>
                 )}
               </div>
             )}
           </div>
+
+          {vaultItemCount > vaultItemsPerPage && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-zinc-900 pt-4">
+              <span className="text-xs text-zinc-500 font-mono">
+                Hiển thị {vaultStartIndex + 1}–{Math.min(vaultStartIndex + vaultItemsPerPage, vaultItemCount)} / {vaultItemCount} mục
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVaultPage(Math.max(1, currentVaultPage - 1))}
+                  disabled={currentVaultPage === 1}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-800 text-xs font-semibold text-zinc-300 hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Trước
+                </button>
+                <span className="min-w-16 text-center text-xs font-mono text-zinc-400">
+                  Trang {currentVaultPage} / {vaultTotalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setVaultPage(Math.min(vaultTotalPages, currentVaultPage + 1))}
+                  disabled={currentVaultPage === vaultTotalPages}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-800 text-xs font-semibold text-zinc-300 hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

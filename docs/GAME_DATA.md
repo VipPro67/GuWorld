@@ -412,7 +412,7 @@ Format `effects` (JSON object, toàn bộ field đều optional):
 | `path_resistance` | `{"fire": 0.10}` — giảm % sát thương nhận từ hệ đó |
 | `mana_regen` | % hồi Chân Nguyên (mỗi thể chất tự quyết, VD `1` = +100%) |
 | `max_mana` | % Chân Nguyên tối đa |
-| `cultivation_efficiency` | % hiệu quả tu luyện |
+| `cultivation_efficiency` | % hiệu quả tu luyện (trùng kích). Từ cổ trang bị: chỉ tính khi rank cổ trùng rank player, mỗi Gu ID 1 lần |
 | `dao_mark_gain` | % Đạo Ngân nhận được |
 | `luck` | Vận (số phẳng) |
 | `refine` | % tỉ lệ Luyện Cổ thành công |

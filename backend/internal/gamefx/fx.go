@@ -581,6 +581,21 @@ func Get(p *models.Player) Effects {
 		})
 	}
 
+	// CULTIVATION_EFFICIENCY from equipped ACTIVE Gu: one count per Gu ID, only
+	// when the Gu's rank matches the player's rank. Distinct Gu IDs stack.
+	seenCult := map[string]bool{}
+	for _, gu := range p.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" || seenCult[gu.GuID] {
+			continue
+		}
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if !ok || spec.Rank != p.Rank {
+			continue
+		}
+		seenCult[gu.GuID] = true
+		fx.CultivationEfficiencyBonus += models.GuAlwaysOnValue(spec, "CULTIVATION_EFFICIENCY")
+	}
+
 	return fx
 }
 

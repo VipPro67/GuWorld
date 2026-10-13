@@ -371,3 +371,62 @@ func TestDefJSONMarshaling(t *testing.T) {
 		t.Errorf("expected 2 effect blocks, got %d", len(effectsList))
 	}
 }
+
+func TestGuCultivationEfficiencySameRank(t *testing.T) {
+	previous := models.GuRegistry
+	t.Cleanup(func() { models.GuRegistry = previous })
+
+	var guEffects models.GuEffects
+	if err := guEffects.Scan(`[{"id":"CULTIVATION_EFFICIENCY","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"CULTIVATION_EFFICIENCY","params":{"value":0.5}}]}]`); err != nil {
+		t.Fatalf("scan gu effects: %v", err)
+	}
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_FATE_BOND": {
+			3: {ID: "GU_FATE_BOND", Name: "Duyên Kết Cổ", Rank: 3, Effects: guEffects},
+		},
+		"GU_OTHER": {
+			3: {ID: "GU_OTHER", Name: "Khác", Rank: 3, Effects: guEffects},
+		},
+	}
+
+	// Same rank -> counts.
+	p := &models.Player{
+		CultivationState: models.CultivationState{Rank: 3},
+		GuInventory: models.GuInventory{
+			{GuID: "GU_FATE_BOND", Rank: 3, Status: "ACTIVE", Equipped: true},
+		},
+	}
+	if got := Get(p).CultivationEfficiencyBonus; got != 0.5 {
+		t.Errorf("same-rank Gu cultivation efficiency = %v, want 0.5", got)
+	}
+
+	// Different rank -> no effect.
+	p.Rank = 2
+	if got := Get(p).CultivationEfficiencyBonus; got != 0 {
+		t.Errorf("rank-mismatched Gu cultivation efficiency = %v, want 0", got)
+	}
+
+	// Distinct Gu IDs stack.
+	p.Rank = 3
+	p.GuInventory = append(p.GuInventory, models.GuInstance{GuID: "GU_OTHER", Rank: 3, Status: "ACTIVE", Equipped: true})
+	if got := Get(p).CultivationEfficiencyBonus; got != 1.0 {
+		t.Errorf("stacked cultivation efficiency = %v, want 1.0", got)
+	}
+
+	// Same Gu ID counted once.
+	p.GuInventory = append(p.GuInventory, models.GuInstance{GuID: "GU_FATE_BOND", Rank: 3, Status: "ACTIVE", Equipped: true})
+	if got := Get(p).CultivationEfficiencyBonus; got != 1.0 {
+		t.Errorf("duplicate Gu ID cultivation efficiency = %v, want 1.0", got)
+	}
+
+	// Mixed ranks: a matching-rank copy still counts once.
+	models.GuRegistry["GU_FATE_BOND"][2] = models.GuDictionaryItem{ID: "GU_FATE_BOND", Rank: 2, Effects: guEffects}
+	p.Rank = 2
+	p.GuInventory = models.GuInventory{
+		{GuID: "GU_FATE_BOND", Rank: 3, Status: "ACTIVE", Equipped: true},
+		{GuID: "GU_FATE_BOND", Rank: 2, Status: "ACTIVE", Equipped: true},
+	}
+	if got := Get(p).CultivationEfficiencyBonus; got != 0.5 {
+		t.Errorf("mixed-rank Gu cultivation efficiency = %v, want 0.5", got)
+	}
+}
