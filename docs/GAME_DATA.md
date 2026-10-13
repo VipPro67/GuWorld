@@ -1233,7 +1233,7 @@ Có **2 loại** thương nhân; cả hai dùng profile data-driven + quota toà
 - Bể mua: allow-list ngẫu nhiên ~8–15 id (`buy_tags.item_ids`, gồm Cổ/Item/cổ phương), giá riêng (`buy_ratio` random 0.70–1.00 → `buy_floor_ratio` 0.10–0.30), quota riêng 5–20/giờ (toàn server).
 - Bể bán: `merchant_stock` random sinh lúc spawn (Cổ rank<6 & rarity<6 + thức ăn + ~3 cổ phương, giá `base × 1.4`).
 
-Worker `StartRoamingMerchantWorker` (2', package `handlers`) duy trì ~4 con ở region `zone_type NOT IN ('HUB','SAFE_ZONE','SECRET_REALM')`: tọa độ random, vòng đời 30–60', hết hạn thì xóa (cascade stock/demand) và spawn con mới. Mỗi spawn **thông báo world chat kèm tên vùng + toạ độ**.
+Worker `StartRoamingMerchantWorker` (2', package `handlers`) duy trì ~4 con ở region `zone_type NOT IN ('HUB','SAFE_ZONE','SECRET_REALM')`: tọa độ random, vòng đời 30–60', hết hạn thì xóa (cascade stock/demand) và spawn con mới. Mỗi spawn **thông báo ở kênh khu vực (`region`) của vùng spawn** kèm tên vùng + toạ độ (chỉ người trong vùng đó thấy).
 
 **Giao dịch & hiển thị:** merchant mua/bán được cả **Cổ, Item, cổ phương** (bán cổ phương = `RecipeSvc.Delete`, mua = `RecipeSvc.Upsert` unlocked). `GET /api/merchant` chỉ trả roaming **trong bán kính ≤ 2 ô** (đứng cạnh) + cờ `at_village` (region HUB/SAFE_ZONE) để UI tự bật/tắt: **Caravan/Thương Đội chỉ mở tại làng**. `GET /api/merchant/map` trả toàn bộ roaming trong region (không lọc khoảng cách) để WorldCanvas vẽ marker 🪙.
 
@@ -1349,7 +1349,7 @@ Sensitive request fields and multipart bodies are excluded from `change_data`.
 
 ## Ordinary world-monster lifecycle
 
-`monster_templates`, `monster_spawns`, and `map_cells` remain PostgreSQL static data. Ordinary non-boss monster HP, target, state, statuses, position, timestamps, and revision are ephemeral Redis data under `world:monster:*`; they are not written to PostgreSQL per hit or movement. `monster_spawns.id` is the stable spawn identity. Runtime defaults are a 12-cell aggro radius, 1.5-cell attack range, 24-cell leash, speed 1 cell/second, and 2-second attack interval. Monsters cannot spawn in, acquire targets in, attack into, or cross a `HUB`/`SAFE_ZONE`. Runtime TTL is the spawn respawn duration plus a five-minute replay-safety window.
+`monster_templates`, `monster_spawns`, and `map_cells` remain PostgreSQL static data. Ordinary non-boss monster HP, target, state, statuses, position, timestamps, and revision are ephemeral Redis data under `world:monster:*`; they are not written to PostgreSQL per hit or movement. `monster_spawns.id` is the stable spawn identity. Runtime aggro scales from 6 cells at Rank 1 to 14 cells at Rank 9; the leash scales from 10 to 20 cells. Other defaults are a 1.5-cell attack range, speed 0.15 cells/second, and a 2-second attack interval. Monsters cannot spawn in, acquire targets in, attack into, or cross a `HUB`/`SAFE_ZONE`. Runtime TTL is the spawn respawn duration plus a five-minute replay-safety window.
 
 Ordinary world monsters pursue nearby players and continue moving on the map, but do not deal contact damage or trigger automatic counterattacks. Combat damage starts only when the player explicitly enters auto-combat. When a monster defeats a player in auto-combat, its display name is stored in the ground drop's `killer_name`.
 

@@ -168,7 +168,7 @@ func ExploreNode(c *gin.Context) {
 			} else {
 				combatTriggered = false // Combat was auto-resolved, no need for frontend combat screen
 				if winner == "Phe Ta" {
-					logMsg = fmt.Sprintf("Tự động chiến thắng %s tại %s! Nhân Khí +3.", enemy.EnemyName, nodeName)
+					logMsg = fmt.Sprintf("Tự động chiến thắng %s tại %s!", enemy.EnemyName, nodeName)
 				} else {
 					logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại %s thất bại! Đạo hữu bị truyền tống về an toàn.", enemy.EnemyName, nodeName)
 				}
@@ -193,16 +193,19 @@ func ExploreNode(c *gin.Context) {
 				player.Y = zone.EntryY
 				recordVisitedSubZone(&player, SubZoneKey(player.X, player.Y))
 
-				qiGained := AddHumanQi(&player, 3.0)
+				qiGained := 0.0
+				if v, ok := skipSummary["human_qi_gained"].(float64); ok {
+					qiGained = v
+				}
 
 				updateQuery := `
 					UPDATE players
 					SET current_mana = $1, primeval_stones = $2, active_combat = NULL, current_region = $3, x = $4, y = $5,
-					    explore_count = $6, last_explore_reset = $7, human_qi = $8, visited_subzones = $9
-					WHERE id = $10
+					    explore_count = $6, last_explore_reset = $7, visited_subzones = $8
+					WHERE id = $9
 				`
 				_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.CurrentRegion, player.X, player.Y,
-					player.ExploreCount, player.LastExploreReset, player.HumanQi, player.VisitedSubZones, player.ID)
+					player.ExploreCount, player.LastExploreReset, player.VisitedSubZones, player.ID)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exploration progress"})
 					return

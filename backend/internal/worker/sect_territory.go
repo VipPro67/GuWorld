@@ -4,21 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"math"
 	"sort"
 	"time"
 
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
-)
-
-// Territory daily contribution cap per player.
-const territoryDailyCap = 200
-
-// Territory contribution rates per minute.
-const (
-	territoryDefenderRate = 20.0 / 60.0 // defenders
-	territoryMemberRate   = 2.0 / 60.0  // regular members
 )
 
 func StartSectTerritoryWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
@@ -55,10 +45,25 @@ func getBuildingLevel(buildingsJSON []byte, buildingName string) int {
 	return 1 // default level 1
 }
 
-func sectBaseRate(spiritVeinLevel int) float64 {
-	// e.g. Level 1: 50, Level 2: 100, Level 3: 200 funds/hour...
-	// per minute rate
-	return 10.0 + float64(spiritVeinLevel)*10.0
+// sectVeinCoverage is the share of the daily level + member maintenance fee the
+// spirit vein pays out, scaling with its building level: 60% + 5% per level,
+// capped at 105%. The vault fee is never offset — it stays a sink that has to
+// be covered by donations, missions and wars.
+func sectVeinCoverage(spiritVeinLevel int) float64 {
+	coverage := 0.60 + 0.05*float64(spiritVeinLevel)
+	if coverage > 1.05 {
+		coverage = 1.05
+	}
+	return coverage
+}
+
+// sectVeinDailyCredit is the Quỹ the vein credits to a sect over one day: the
+// level + member upkeep scaled by the vein coverage and the +10%/defender guard
+// bonus. At coverage 1.0 (vein level 8) it exactly cancels the level + member
+// fee, which is the intended break-even point.
+func sectVeinDailyCredit(sectLevel, memberCount, spiritVeinLevel, defenderCount int) float64 {
+	upkeep := float64(sectLevel)*dailyLevelFee + float64(memberCount)*dailyMemberFee
+	return upkeep * sectVeinCoverage(spiritVeinLevel) * (1.0 + 0.1*float64(defenderCount))
 }
 
 func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
@@ -111,7 +116,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 	defer tx.Rollback()
 	_, _ = tx.ExecContext(ctx, `SELECT set_config('lock_timeout', '3000', true), set_config('statement_timeout', '10000', true)`)
 
-	// 1a. Defender counts per sect
+	// 1. Defender counts per sect
 	defenderCountMap := map[string]int{}
 	if dRows, err := tx.QueryContext(ctx, `SELECT sect_id, COUNT(*) FROM sect_defenders WHERE sect_id = ANY($1::text[]) GROUP BY sect_id`, pq.Array(sectIDs)); err != nil {
 		logger.S.Errorf("Sect Territory Worker: defender count query failed: %v", err)
@@ -127,50 +132,23 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		dRows.Close()
 	}
 
-	// 1b. Defender player IDs per sect
-	defenderIDsBySect := map[string]map[string]bool{}
-	if dRows, err := tx.QueryContext(ctx, `SELECT sect_id, player_id::text FROM sect_defenders WHERE sect_id = ANY($1::text[]) AND defender_type = 'member'`, pq.Array(sectIDs)); err != nil {
-		logger.S.Errorf("Sect Territory Worker: defender IDs query failed: %v", err)
-		return
-	} else {
-		for dRows.Next() {
-			var sid string
-			var pid string
-			if dRows.Scan(&sid, &pid) == nil {
-				if defenderIDsBySect[sid] == nil {
-					defenderIDsBySect[sid] = map[string]bool{}
-				}
-				defenderIDsBySect[sid][pid] = true
-			}
-		}
-		dRows.Close()
-	}
+	now := time.Now()
 
-	// 1c. Member player IDs per sect
-	memberIDsBySect := map[string][]string{}
-	allMemberIDSet := map[string]bool{}
-	if mRows, err := tx.QueryContext(ctx, `SELECT sect_id, player_id::text FROM sect_members WHERE sect_id = ANY($1::text[])`, pq.Array(sectIDs)); err != nil {
-		logger.S.Errorf("Sect Territory Worker: member IDs query failed: %v", err)
+	// 2. Member counts per sect — the member term of the upkeep the vein offsets.
+	memberCountMap := map[string]int{}
+	if mRows, err := tx.QueryContext(ctx, `SELECT sect_id, COUNT(*) FROM sect_members WHERE sect_id = ANY($1::text[]) GROUP BY sect_id`, pq.Array(sectIDs)); err != nil {
+		logger.S.Errorf("Sect Territory Worker: member count query failed: %v", err)
 		return
 	} else {
 		for mRows.Next() {
-			var sid, pid string
-			if mRows.Scan(&sid, &pid) == nil {
-				memberIDsBySect[sid] = append(memberIDsBySect[sid], pid)
-				allMemberIDSet[pid] = true
+			var sid string
+			var cnt int
+			if mRows.Scan(&sid, &cnt) == nil {
+				memberCountMap[sid] = cnt
 			}
 		}
 		mRows.Close()
 	}
-
-	allMemberIDs := make([]string, 0, len(allMemberIDSet))
-	for pid := range allMemberIDSet {
-		allMemberIDs = append(allMemberIDs, pid)
-	}
-	sort.Strings(allMemberIDs)
-
-	now := time.Now()
-	today := now.Format("2006-01-02")
 
 	sectFundCreditIDs := []string{}
 	sectFundCredits := []float64{}
@@ -178,11 +156,12 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 	for _, sr := range activeSects {
 		elapsedMin := now.Sub(sr.lastTick).Minutes()
 		defCount := defenderCountMap[sr.id]
-		defMult := 1.0 + 0.1*float64(defCount)
 
 		spiritVeinLvl := getBuildingLevel(sr.buildings, "spirit_vein")
 
-		fundsRate := sectBaseRate(spiritVeinLvl) * defMult
+		// The vein offsets the level + member maintenance fee; the vault fee is
+		// left for members to cover by other means so it stays a real sink.
+		fundsRate := sectVeinDailyCredit(sr.level, memberCountMap[sr.id], spiritVeinLvl, defCount) / 1440.0
 		fundsCredit := fundsRate * elapsedMin
 
 		if fundsCredit > 0 {
@@ -191,7 +170,7 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		}
 	}
 
-	// 3a. Batch UPDATE sects funds and last_territory_tick_at
+	// Batch UPDATE sects funds and last_territory_tick_at
 	if len(sectFundCreditIDs) > 0 {
 		if _, err := tx.Exec(`
 			UPDATE sects s SET 
@@ -208,140 +187,6 @@ func processSectTerritoryTick(ctx context.Context, db *sql.DB) {
 		if _, err := tx.Exec(`UPDATE sects SET last_territory_tick_at = now() WHERE id = ANY($1::text[])`, pq.Array(sectIDs)); err != nil {
 			logger.S.Errorf("Sect Territory Worker: batch update tick time failed: %v", err)
 			return
-		}
-	}
-
-	// 3b. Batch contribution credit
-	if len(allMemberIDs) > 0 {
-		type memberState struct {
-			territoryPending    float64
-			creditedToday       int
-			territoryCreditedAt string
-		}
-		memberStates := map[string]memberState{}
-		if cRows, err := tx.Query(`
-			SELECT player_id, territory_pending, territory_credited_today, COALESCE(territory_credited_at::text, '')
-			FROM sect_members WHERE player_id = ANY($1::uuid[])
-		`, pq.Array(allMemberIDs)); err != nil {
-			logger.S.Errorf("Sect Territory Worker: member states query failed: %v", err)
-			return
-		} else {
-			for cRows.Next() {
-				var pid string
-				var ms memberState
-				if cRows.Scan(&pid, &ms.territoryPending, &ms.creditedToday, &ms.territoryCreditedAt) == nil {
-					memberStates[pid] = ms
-				}
-			}
-			cRows.Close()
-		}
-
-		pendingAccum := map[string]float64{}
-		for _, sr := range activeSects {
-			elapsedMin := now.Sub(sr.lastTick).Minutes()
-			if elapsedMin <= 0 {
-				continue
-			}
-
-			trainingLvl := getBuildingLevel(sr.buildings, "training_ground")
-			trainingMult := 1.0 + float64(trainingLvl)*0.1
-
-			defenderIDs := defenderIDsBySect[sr.id]
-			for _, pid := range memberIDsBySect[sr.id] {
-				rate := territoryMemberRate
-				if defenderIDs != nil && defenderIDs[pid] {
-					rate = territoryDefenderRate
-				}
-				pendingAccum[pid] += rate * elapsedMin * trainingMult
-			}
-		}
-
-		type memberCreditResult struct {
-			playerID          string
-			contributionDelta int
-			newPending        float64
-			newCreditedToday  int
-			newCreditedAt     string
-		}
-		var creditResults []memberCreditResult
-
-		for _, pid := range allMemberIDs {
-			ms := memberStates[pid]
-			creditedToday := ms.creditedToday
-			credDate := ms.territoryCreditedAt
-			if credDate == "" || credDate != today {
-				creditedToday = 0
-				credDate = today
-			}
-
-			pending := ms.territoryPending + pendingAccum[pid]
-
-			if creditedToday >= territoryDailyCap {
-				creditResults = append(creditResults, memberCreditResult{
-					playerID:         pid,
-					newPending:       pending,
-					newCreditedToday: creditedToday,
-					newCreditedAt:    credDate,
-				})
-				continue
-			}
-
-			credit := int(math.Floor(pending))
-			remaining := territoryDailyCap - creditedToday
-			if credit > remaining {
-				credit = remaining
-			}
-			newPending := pending
-			newCreditedToday := creditedToday
-			if credit > 0 {
-				newPending = pending - float64(credit)
-				newCreditedToday = creditedToday + credit
-			}
-
-			creditResults = append(creditResults, memberCreditResult{
-				playerID:          pid,
-				contributionDelta: credit,
-				newPending:        newPending,
-				newCreditedToday:  newCreditedToday,
-				newCreditedAt:     credDate,
-			})
-		}
-
-		if len(creditResults) > 0 {
-			sort.Slice(creditResults, func(i, j int) bool {
-				return creditResults[i].playerID < creditResults[j].playerID
-			})
-			crIDs := make([]string, 0, len(creditResults))
-			crDeltas := make([]int, 0, len(creditResults))
-			crPendings := make([]float64, 0, len(creditResults))
-			crCreditedTodays := make([]int, 0, len(creditResults))
-			crCreditedAts := make([]string, 0, len(creditResults))
-
-			for _, cr := range creditResults {
-				crIDs = append(crIDs, cr.playerID)
-				crDeltas = append(crDeltas, cr.contributionDelta)
-				crPendings = append(crPendings, cr.newPending)
-				crCreditedTodays = append(crCreditedTodays, cr.newCreditedToday)
-				crCreditedAts = append(crCreditedAts, cr.newCreditedAt)
-			}
-
-			if _, err := tx.ExecContext(ctx, `
-				UPDATE sect_members AS sm SET
-					contribution_points = sm.contribution_points + v.delta,
-					territory_pending = v.pending,
-					territory_credited_today = v.credited_today,
-					territory_credited_at = v.credited_at::date
-				FROM (SELECT unnest($1::uuid[]) AS player_id,
-				             unnest($2::int[]) AS delta,
-				             unnest($3::float8[]) AS pending,
-				             unnest($4::int[]) AS credited_today,
-				             unnest($5::text[]) AS credited_at) v
-				WHERE sm.player_id = v.player_id
-			`, pq.Array(crIDs), pq.Array(crDeltas), pq.Array(crPendings),
-				pq.Array(crCreditedTodays), pq.Array(crCreditedAts)); err != nil {
-				logger.S.Errorf("Sect Territory Worker: batch update contributions failed: %v", err)
-				return
-			}
 		}
 	}
 

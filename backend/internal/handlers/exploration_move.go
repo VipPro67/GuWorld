@@ -707,7 +707,11 @@ func MovePlayer(c *gin.Context) {
 				enemyName = e
 			}
 			if winner == "Phe Ta" {
-				logMsg = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +3.", enemyName, player.X, player.Y)
+				qiGained := 0.0
+				if v, ok := skipSummary["human_qi_gained"].(float64); ok {
+					qiGained = v
+				}
+				logMsg = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +%.0f.", enemyName, player.X, player.Y, qiGained)
 			} else {
 				logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
 			}
@@ -1039,7 +1043,10 @@ func MovePlayerPath(c *gin.Context) {
 			}
 			var autoLog string
 			if winner == "Phe Ta" {
-				autoLog = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +3.", enemyName, player.X, player.Y)
+				if v, ok := skipSummary["human_qi_gained"].(float64); ok {
+					qiGained = v
+				}
+				autoLog = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)!", enemyName, player.X, player.Y)
 			} else {
 				autoLog = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
 			}

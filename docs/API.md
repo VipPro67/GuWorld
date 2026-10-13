@@ -362,6 +362,7 @@ Bí cảnh bản đồ dùng `instance_templates.type=SPATIAL_REALM`, `spatial_r
 | POST | `/sects/missions/create` | Trưởng Lão/Chưởng Môn phát hành nhiệm vụ. Body: `{"title","description","mission_type","target_id","target_amount","reward_contribution","required_member_rank","duration_hours"}`. `duration_hours`: 0 (hoặc bỏ trống) = mặc định 24h; `-1` = không hết hạn; `>0` = số giờ có hiệu lực. |
 | POST | `/sects/vault/stock` | Nhập kho 1 loại vật phẩm (không cho phép item_type Consumable, Currency). Body: `{"item_type": "material|recipe", "item_id": "...", "quantity": 5}`. |
 | POST | `/sects/vault/stock/bulk` | Nhập kho hàng loạt 1 giao dịch (không cho phép item_type Consumable, Currency). Body: `{"items": [{"item_type": "material|recipe", "item_id": "...", "quantity": 5}]}`. |
+| POST | `/sects/vault/destroy` | **Chưởng Môn / Hộ Pháp** tiêu huỷ vĩnh viễn **cả stack** một vật phẩm trong bảo khố (không hoàn quỹ). Body: `{"item_type": "gu|material|recipe", "item_id": "...", "rank": 1}` (`rank` bắt buộc khi `item_type=gu`). |
 | POST | `/sects/upgrade` |
 | POST | `/sects/toggle-approval` | Bật/tắt duyệt thành viên gia nhập. Body: `{"require_approval": true}`. |
 | POST | `/sects/toggle-promotion-approval` | Bật/tắt duyệt lên cấp (mặc định `false`). Khi `true`, mọi thăng cấp đều tạo yêu cầu chờ Trưởng Lão/Chưởng Môn duyệt. Body: `{"require_promotion_approval": true}`. |

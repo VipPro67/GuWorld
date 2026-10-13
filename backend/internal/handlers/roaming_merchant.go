@@ -77,15 +77,17 @@ func roamingMerchantTick(ctx context.Context, database *sql.DB) {
 		logger.S.Warnf("roaming merchant: commit failed: %v", err)
 		return
 	}
-	// Announce after commit so a rolled-back spawn never leaks coordinates.
+	// Announce in the spawned region's chat channel (not world) after commit so a
+	// rolled-back spawn never leaks coordinates.
 	for _, n := range notices {
-		_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf(
+		_ = SendSystemMessage("region", sql.NullString{String: n.regionID, Valid: true}, fmt.Sprintf(
 			"【Thương Nhân Lang Thang】Một thương nhân bí ẩn vừa xuất hiện tại %s (%d, %d)! Hàng hiếm giá cao, nhanh chân kẻo lỡ.",
 			n.regionName, n.x, n.y))
 	}
 }
 
 type roamingSpawnNotice struct {
+	regionID   string
 	regionName string
 	x, y       int
 }
@@ -156,7 +158,7 @@ func spawnRoamingMerchant(ctx context.Context, tx *sql.Tx) (roamingSpawnNotice, 
 	if err := insertRandomRecipeStock(ctx, tx, merchantID); err != nil {
 		return roamingSpawnNotice{}, err
 	}
-	return roamingSpawnNotice{regionName: regionName, x: x, y: y}, nil
+	return roamingSpawnNotice{regionID: regionID, regionName: regionName, x: x, y: y}, nil
 }
 
 // insertRandomRecipeStock adds a few random refining recipes to a roaming

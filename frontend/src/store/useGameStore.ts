@@ -964,7 +964,6 @@ export interface SectMember {
   player_id: string;
   member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'HO_PHAP' | 'CHUONG_MON';
   contribution_points: number;
-  master_id: string | null;
   joined_at: string;
   is_defending: boolean;
 }
@@ -1004,6 +1003,7 @@ export interface MySectStatus {
   has_pending_promotion?: boolean;
   pending_promotion_target?: string;
   estimated_daily_maintenance?: number;
+  unpaid_maintenance_count?: number;
   maintenance_breakdown?: {
     level_fee: number;
     sect_level: number;

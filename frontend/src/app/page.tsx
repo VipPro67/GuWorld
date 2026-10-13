@@ -630,6 +630,13 @@ export default function Home() {
             <div className="flex-1 overflow-y-auto space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed pr-1 custom-scrollbar">
               <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.4</strong> — Cải Tiến PvP Ngũ Vực & Chống Lợi Dụng Chuyển Đồ:</p>
               <div className="space-y-2">
+                <div className="flex gap-2.5 items-start bg-sky-950/20 border border-sky-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🐾</span>
+                  <div>
+                    <span className="font-bold text-sky-300">Quái Thế Giới Truy Đuổi Từ Xa</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Quái thường phát hiện người chơi trong 6–14 ô theo Rank, đuổi tối đa 10–20 ô quanh điểm sinh và di chuyển chậm 0,15 ô/giây. Elite phát hiện trong 8 ô, đuổi tối đa 18 ô với tốc độ 0,4 ô/giây; boss săn mục tiêu trong toàn vùng. Khi quái áp sát, combat tự mở mà không cần bước vào đúng ô sinh quái.</p>
+                  </div>
+                </div>
                 <div className="flex gap-2.5 items-start bg-red-950/20 border border-red-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">💥</span>
                   <div>

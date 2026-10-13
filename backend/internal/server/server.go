@@ -1053,6 +1053,7 @@ func SetupRouter(shub *ws.ShardedHub) *gin.Engine {
 			sect.POST("/missions/create", handlers.CreateCustomMission)
 			sect.POST("/vault/stock", handlers.StockSectVault)
 			sect.POST("/vault/stock/bulk", handlers.StockSectVaultBulk)
+			sect.POST("/vault/destroy", handlers.DestroySectVaultItem)
 			sect.POST("/upgrade", handlers.UpgradeSect)
 			sect.POST("/toggle-approval", handlers.ToggleSectApproval)
 			sect.POST("/toggle-promotion-approval", handlers.ToggleSectPromotionApproval)

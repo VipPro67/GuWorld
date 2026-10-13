@@ -350,6 +350,102 @@ func StockSectVault(c *gin.Context) {
 	})
 }
 
+type DestroyVaultRequest struct {
+	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
+	ItemID   string `json:"item_id" binding:"required"`
+	Rank     int    `json:"rank"` // required for gu
+}
+
+// DestroySectVaultItem permanently deletes a whole vault stack: a Gu by
+// gu_id+rank, a material item, or a recipe. Restricted to Chưởng Môn / Hộ Pháp.
+// There is no refund of sect funds or contribution points.
+func DestroySectVaultItem(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req DestroyVaultRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	var sectID, callerRank string
+	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+	if !canDestroyVaultItem(callerRank) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ Chưởng Môn hoặc Hộ Pháp mới có quyền tiêu huỷ vật phẩm trong bảo khố!"})
+		return
+	}
+
+	var affected int64
+	switch strings.ToLower(req.ItemType) {
+	case "gu":
+		if req.Rank <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu phẩm cấp Cổ trùng cần tiêu huỷ!"})
+			return
+		}
+		res, err := tx.Exec(`DELETE FROM sect_vault_gu WHERE sect_id = $1 AND gu_id = $2 AND rank = $3`, sectID, req.ItemID, req.Rank)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu huỷ: " + err.Error()})
+			return
+		}
+		affected, _ = res.RowsAffected()
+	case "material":
+		res, err := tx.Exec(`DELETE FROM sect_vault_materials WHERE sect_id = $1 AND item_id = $2`, sectID, req.ItemID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu huỷ: " + err.Error()})
+			return
+		}
+		affected, _ = res.RowsAffected()
+	case "recipe":
+		res, err := tx.Exec(`DELETE FROM sect_vault_recipes WHERE sect_id = $1 AND recipe_id = $2`, sectID, req.ItemID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu huỷ: " + err.Error()})
+			return
+		}
+		affected, _ = res.RowsAffected()
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại vật phẩm không hợp lệ (gu, material, recipe)"})
+		return
+	}
+	if affected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy vật phẩm trong bảo khố!"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		return
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.destroy_vault_item", EntityType: "sect",
+		EntityID:       sectID,
+		RequestSummary: fmt.Sprintf("%s | %s rank=%d", req.ItemType, req.ItemID, req.Rank),
+		Metadata: map[string]interface{}{
+			"item_type": req.ItemType,
+			"item_id":   req.ItemID,
+			"rank":      req.Rank,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã tiêu huỷ vật phẩm khỏi bảo khố tông môn!"})
+}
+
 type StockVaultBulkItem struct {
 	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
 	ItemID   string `json:"item_id" binding:"required"`

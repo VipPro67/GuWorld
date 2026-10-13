@@ -169,7 +169,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 
 - Nhân Khí là tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa **500.000**.
 - Mọi hoạt động lớn đều tích lũy Nhân Khí (tăng theo `human_qi`, lưu trực tiếp vào DB):
-  - Chiến đấu: thắng +20, thua +5; tự động chiến +3; rút lui +2, bỏ chạy +1.
+  - Chiến đấu: thắng `3 × RankScale(rank địch)` (Nhất Chuyển +3, Nhị +6, Tam +15, Tứ +60, Ngũ +300; chặn ở Ngũ Chuyển); thua +2; rút lui +2, bỏ chạy +1.
   - Mua/bán tại cửa hàng +5; đổi vật phẩm đấu trường +5.
   - Chợ: niêm yết +5, đặt giá +3, mua thành công +5 (cả người mua lẫn người bán).
   - Giao dịch trực tiếp: tạo giao dịch +2, cập nhật đề nghị +1, khóa +1, xác nhận +10 mỗi bên.
@@ -534,7 +534,7 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - **Bản đồ lớn "Ngũ Vực"** hiển thị bản đồ thế giới tầng 1 trên một canvas phóng to/thu nhỏ được: vẽ ranh giới các vùng, các điểm dùng chung (Trạm Nghỉ 🏯, Boss ⚔️, Linh Tài 💎) từ `map_cells`, **các chấm quái vật/tài nguyên xung quanh đạo hữu** (resolve theo đúng nội dung từng ô khi di chuyển), và sương mù tối vùng tiểu vực chưa ghé thăm (dựa trên `visited_subzones`). Các ô đã tải được **cache theo chunk 64×64, tách theo khu vực và prefetch dải phía trước hướng đi**; thay đổi ô realtime được apply trực tiếp thay vì tải lại toàn vùng, nên marker hiện dần (không nhấp nháy) và xuất hiện sớm ở khu vực sắp đến. Di chuyển bằng cách **giữ WASD/phím mũi tên trên máy tính hoặc kéo joystick trên thiết bị cảm ứng**; thả phím/joystick để dừng và đổi hướng bất kỳ lúc nào. Nhân vật nội suy liên tục giữa các ô với tốc độ dựa trên chỉ số **MOVEMENT**, trong khi server vẫn xác nhận từng ô và dừng lại nếu phát sinh chiến đấu hoặc sự kiện. Click/tap bản đồ chỉ dùng để chọn mục tiêu hoặc tương tác, không còn ra lệnh di chuyển. Ô trống không tự tạo phục kích procedural, nhưng quái runtime có thể phát hiện, đuổi theo và mở combat khi đạo hữu đến đủ gần mà không cần bước vào ô sinh quái. Vị trí camera + độ zoom của bản đồ được **giữ nguyên sau khi chiến đấu**.
 - Trong **Cài Đặt Chung → Hiển thị trên bản đồ**, đạo hữu có thể chọn **Đầy đủ**, **Giảm nhẹ**, **Giảm nhiều** hoặc **Tắt bản đồ**. Các mức giảm bớt nhịp cập nhật dữ liệu nền; Tắt bản đồ tháo giao diện Pixi và ngừng các yêu cầu API nền của bản đồ. Lựa chọn được lưu trên trình duyệt hiện tại.
 - **Quái nhỏ, tài nguyên thấp, Cổ cấp thấp** được sinh procedural theo vùng (không lưu DB), **nội dung ổn định theo ô** — quái không tự đổi chỗ/re-randomize theo thời gian; sau khi đạo hữu dọn dẹp một ô, ô đó trống trong 15 phút rồi nội dung cũ quay lại (cooldown `cleared_cells`). Các bãi có tâm và loài quái ổn định; mỗi bãi có 10% cơ hội xuất hiện một Elite ở tâm nếu pool của vùng có Elite. **Boss và tài nguyên cấp cao** là điểm dùng chung toàn thế giới trong `map_cells`, có thời gian hồi sinh sau khi bị đánh bại/hái. Boss trở thành actor dùng chung, phát hiện và đuổi người chơi trong toàn bộ ranh giới `Region` của nó, tự mở combat khi áp sát; khi mất mục tiêu boss quay về ô sinh. Boss không vào `HUB`/`SAFE_ZONE`.
-- Khi trạng thái quái thời gian thực đã tải xong, bản đồ hiển thị đúng cá thể đang tồn tại thay cho dấu quái tĩnh: quái thường di chuyển rất chậm (0,25 ô/giây), phát hiện người chơi trong 2–6 ô theo Rank và đuổi trong phạm vi ngắn. Elite ở tâm bãi di chuyển nhanh hơn (0,4 ô/giây), phát hiện trong 8 ô và đuổi tối đa 18 ô quanh bãi; boss săn người chơi trong toàn vùng. Quái không thể sinh ra, chọn mục tiêu hay đi xuyên vào `HUB`/`SAFE_ZONE`; Elite và boss cũng bị giới hạn bởi ranh giới vùng. Đạo hữu còn sống sẽ tự động phản công bằng đòn đánh cơ bản sau mỗi lần bị quái đánh trúng. Bản đồ nội suy mượt giữa các vị trí server xác nhận, hiện thanh máu khi bị thương/được chọn và hiệu ứng khi ra đòn hoặc nhận sát thương.
+- Khi trạng thái quái thời gian thực đã tải xong, bản đồ hiển thị đúng cá thể đang tồn tại thay cho dấu quái tĩnh: quái thường di chuyển chậm (0,15 ô/giây), phát hiện người chơi trong 6–14 ô và đuổi tối đa 10–20 ô quanh điểm sinh theo Rank. Elite ở tâm bãi di chuyển nhanh hơn (0,4 ô/giây), phát hiện trong 8 ô và đuổi tối đa 18 ô quanh bãi; boss săn người chơi trong toàn vùng. Quái không thể sinh ra, chọn mục tiêu hay đi xuyên vào `HUB`/`SAFE_ZONE`; Elite và boss cũng bị giới hạn bởi ranh giới vùng. Đạo hữu còn sống sẽ tự động phản công bằng đòn đánh cơ bản sau mỗi lần bị quái đánh trúng. Bản đồ nội suy mượt giữa các vị trí server xác nhận, hiện thanh máu khi bị thương/được chọn và hiệu ứng khi ra đòn hoặc nhận sát thương.
 - **Tung chiêu ngoài bản đồ:** trang bị một Cổ có hiệu ứng Block v2 `ON_ACTION` (sát thương, hồi phục, tạo khiên hoặc buff công/thủ/tốc) rồi bấm ô kỹ năng (hoặc phím `1`–`5`). Nếu đã chọn quái, chiêu sát thương được tung ngay; nếu chưa chọn, con trỏ chuyển sang chế độ nhắm mục tiêu và cần nhấp trực tiếp vào quái runtime. Mục tiêu và chiêu đang ngắm không bị hủy chỉ vì một snapshot tạm thời chưa chứa con quái đang di chuyển; khi đổi Đại Vực hoặc nhận sự kiện quái bị hạ/hủy thì lựa chọn mới được xóa. Nhấp xuống ô đất không tiêu hao mana. Cổ hồi phục, phòng thủ hoặc buff không thể gây sát thương lên quái chỉ vì một mục tiêu cũ vẫn đang được chọn.
 - Nội dung mỗi vùng phụ thuộc dữ liệu do Admin import từ `backend/data/Region.csv`, `MonsterSpawn.csv` và `MapCell.csv`.
 - Thanh công cụ cho phép chuyển giữa **tương tác/chọn mục tiêu** và **kéo bản đồ**, đưa camera về nhân vật, đồng thời bật/tắt nhãn Quái & Cổ/Boss/HUB/Khu vực/Ngũ Vực. Chọn một người chơi để xem hồ sơ hoặc mời tổ đội; dùng WASD/joystick để tiếp cận và chỉ có thể phát động PvP khi mục tiêu ở trong phạm vi 2 ô.
@@ -741,7 +741,7 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
 
 - **Loại 1 — cố định tại thành trấn/thôn làng (HUB/SAFE_ZONE):** chính là **Thương Hội/Caravan** quen thuộc — bán hàng random theo khung giờ, **mua tất cả giá 1/10**. UI Thương Hội **chỉ mở khi bạn đang ở thành trấn/thôn làng**.
 - **Loại 2 — lang thang ngoài hoang dã:** xuất hiện **ngẫu nhiên** ở vùng hoang (không phải HUB/SAFE_ZONE), tồn tại một thời gian rồi dời đi.
-  - **Hiện vị trí trên bản đồ** bằng icon 🪙 (và thông báo kênh thế giới kèm tên vùng + toạ độ khi xuất hiện).
+  - **Hiện vị trí trên bản đồ** bằng icon 🪙; khi xuất hiện có **thông báo ở kênh khu vực** (chỉ người trong vùng đó thấy) kèm tên vùng + toạ độ.
   - **UI giao dịch chỉ mở khi bạn đứng cạnh** (≤ 2 ô) — lại gần mới bán/mua được.
   - **Mỗi con một bể riêng**: thu mua một danh sách loại riêng (không mua hết), giá/quota riêng; bán ra một kho hàng random riêng.
   - **Mua hàng giá cao**: khởi điểm 70–100% giá gốc, nhưng **càng bán nhiều một loại giá càng tụt** về 10–30%.
@@ -872,8 +872,10 @@ Hệ thống môn phái chia thành 7 cấp bậc rõ rệt:
     - **Tiên Cổ (Rank 6-9)**: $\sum \text{Rank} \times 200 \times \text{Số lượng}$
     - **Bí phương**: $\sum \text{Rank Cổ Mục Tiêu} \times 50$
     - Ba mục cuối được giảm **50% → 90%** theo cấp Bảo Khố (cấp 1: 50%, mỗi cấp thêm 5%, tối đa 90% ở cấp 9). Số Quỹ đã tiết kiệm hiển thị ngay trong bảng Phí Duy Trì.
+  - **Bù trừ bằng Linh Mạch**: hai số hạng **Cấp Tông Môn × 2.000** và **Số Thành Viên × 200** được Quỹ Linh Mạch bù lại theo tỉ lệ $60\% + 5\% \times \text{Cấp Linh Mạch}$ (xem mục kiến trúc). **Phí Kho Tàng không được bù** — phần này buộc phải trang trải bằng quyên góp, nhiệm vụ hoặc chiến tranh.
   - **Hệ quả thiếu quỹ**: Nếu Quỹ tông môn không đủ thanh toán phí bảo trì, tông môn **bị giáng 1 cấp** — đồng thời trên cả `sects.level` lẫn `buildings.main_hall`, và mọi kiến trúc đang cao hơn bị kẹp về cấp mới nên **bán kính lãnh địa và buff Hộ Sơn thực sự thu nhỏ theo** (tối thiểu Cấp 1). Thiên Đạo lập tức gửi thư thông báo cảnh báo đến Chưởng Môn.
     - Nếu đã ở **Cấp 1** mà vẫn thiếu quỹ thì không còn gì để giáng: phí chưa được thu, tông giữ nguyên Cấp 1 và chỉ nhận một tin nhắn trong kênh tông môn (không có thư "giáng từ Cấp 1 xuống Cấp 1").
+  - **Phá sản & Giải Tán**: Mỗi ngày ở Cấp 1 mà vẫn không đủ quỹ, hệ thống ghi nhận thêm **1 ngày nợ**. Trả đủ phí hoặc được giáng cấp sẽ **reset về 0**. Nợ đủ **3 ngày liên tiếp** → tông môn **bị giải tán vĩnh viễn**: toàn bộ thành viên bị trục xuất, **Bảo khố (Cổ / Linh tài / Bí phương) bị xoá sạch**, lãnh địa được giải phóng. Mỗi thành viên nhận thư hệ thống `SECT_DISBANDED`. (Vẫn có thể quyên góp/nhập kho trong thời gian ân hạn để cứu tông.)
 
 ---
 
@@ -907,6 +909,9 @@ Bảo khố tông môn gồm 3 khoang riêng biệt: **Cổ Trùng (`sect_vault_
   - **Cấm nhập Tiên phẩm**: Tuyệt đối không thể dùng quỹ nhập Linh tài hoặc Bí phương Tiên cấp (Rank 6+).
   - **Cổ trùng**: **Không thể nhập bằng quỹ tông môn** (chỉ có thể thu nạp qua sự tự nguyện quyên góp của môn nhân).
 
+#### Tiêu Huỷ Vật Phẩm Trong Kho (Destroy):
+- Chỉ **Chưởng Môn** và **Hộ Pháp** có nút "Tiêu Huỷ" để xoá **vĩnh viễn cả stack** Cổ / Linh tài / Bí phương khỏi bảo khố. **Không hoàn lại** Quỹ tông môn hay Điểm Cống Hiến.
+
 ---
 
 ### 5. Nhiệm Vụ Tông Môn (Sect Missions)
@@ -931,9 +936,9 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
 | :--- | :--- | :--- | :--- |
 | **Chính Điện** | `main_hall` | $5.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Định đoạt **Cấp bậc Tông Môn** (`sects.level`). Là trần giới hạn: cấp của 4 kiến trúc còn lại không được vượt quá Chính Điện. Mở rộng bán kính lãnh địa ($\text{Radius} = 5 + \text{Cấp}$). |
 | **Hộ Sơn Trận Pháp** | `defensive_array` | $2.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng cường toàn diện chỉ số HP, Công, Thủ, Mana của **Hộ Sơn Thần Thú**. Khi kỹ năng sẵn sàng, chặn lần công kích đầu và mở 10 phút tập hợp; kỹ năng hồi cố định 12 giờ. |
-| **Linh Mạch** | `spirit_vein` | $3.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng sản lượng tự sinh Quỹ tông môn: $(10 + \text{Cấp} \times 10)$ Quỹ/phút. |
+| **Linh Mạch** | `spirit_vein` | $3.000 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Bù trừ **phí duy trì phần Cấp Tông Môn + Thành Viên** (không gồm phí kho). Tỉ lệ bù $= 60\% + 5\% \times \text{Cấp Linh Mạch}$ (tối đa $105\%$): cấp 1 bù 65%, đạt hòa vốn ở **cấp 8**, cấp 9+ dư nhẹ. |
 | **Tàng Bảo Các** | `treasury` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Giảm tỉ lệ từng tài nguyên/Cổ/Bí phương rơi khi thất thủ: từ 20% xuống tối thiểu 5%. Đồng thời giảm 50% phí kho (Cổ & Bí phương) trong duy trì/di dời ở cấp 1, tăng dần đến tối đa 90%. Ngoại lệ: **Linh tài trong phí duy trì** tính cố định $200 \text{ item} = 1 \text{ Quỹ}$ nên không chịu chiết khấu này. |
-| **Diễn Võ Trường** | `training_ground` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | Tăng hiệu suất thu hoạch Điểm cống hiến thụ động theo giờ của toàn bộ môn nhân ($+10\%$ mỗi cấp kiến trúc). |
+| **Diễn Võ Trường** | `training_ground` | $1.500 \times \text{Cấp Mục Tiêu}^2$ Quỹ | *(Hiện chưa gắn hiệu ứng — cần thiết kế lại sau khi gỡ điểm cống hiến thụ động.)* |
 
 ---
 
@@ -951,12 +956,7 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
   - Hai Cổ sư cùng thuộc một tông môn không thể tấn công lẫn nhau ngoài dã ngoại ("Đồng môn tương tàn là điều đại kỵ trong Tông Môn!").
 - **Thu Hoạch Thụ Động Theo Phút (`SectTerritoryWorker`)**:
   - Hệ thống tự động vận hành định kỳ mỗi phút:
-    - **Quỹ tông môn**: Tự động tích lũy vào ngân quỹ dựa theo cấp Linh Mạch và nhân thêm hệ số thủ hộ ($+10\%$ mỗi thủ hộ).
-    - **Điểm cống hiến thụ động cho thành viên**:
-      - Đệ tử bình thường: $+2$ điểm/giờ ($2.0 / 60$ mỗi phút).
-      - Đệ tử Trấn Thủ: $+20$ điểm/giờ ($20.0 / 60$ mỗi phút).
-      - Tỷ lệ trên được nhân thêm hệ số từ **Diễn Võ Trường** ($1.0 + \text{Cấp Diễn Võ Trường} \times 0.1$).
-      - **Giới hạn trần ngày**: Mỗi đệ tử tối đa nhận **200 Điểm cống hiến thụ động/ngày** (chống treo máy vô tận), tự động làm mới vào ngày hôm sau.
+    - **Quỹ tông môn**: Quỹ/ngày $= \big(\text{Cấp Tông Môn} \times 2.000 + \text{Số Thành Viên} \times 200\big) \times (60\% + 5\% \times \text{Cấp Linh Mạch}) \times (1 + 0{,}1 \times \text{Số Thủ Hộ})$ (tỉ lệ bù tối đa $105\%$). Linh Mạch cấp 8 bù vừa đủ phần phí cấp + thành viên; phí kho vẫn phải tự trang trải.
 
 ---
 
@@ -968,7 +968,6 @@ Mọi kiến trúc khởi đầu ở cấp 1. Nâng cấp tiêu hao Quỹ tông 
   - Mỗi thủ hộ đang canh giữ tăng thêm $+10\%$ sản lượng Quỹ tông môn tự sinh của tông môn.
 - **Trấn Thủ Sơn Môn Cá Nhân (`ToggleDefendSect`)**:
   - Đệ tử đứng trực tiếp tại tọa độ căn cứ tông môn có thể bật/tắt trạng thái **Trấn Thủ** (`is_defending`).
-  - Đệ tử trấn thủ nhận tốc độ tích lũy Điểm cống hiến thụ động gấp 10 lần bình thường (20 điểm/giờ).
   - Khi sơn môn bị tấn công, tối đa **8 đệ tử Trấn Thủ** đang có mặt tại chỗ sẽ trực tiếp xuất trận cùng Hộ Sơn Thần Thú để nghênh chiến.
 - **Khiêu Chiến & Công Phá Tông Môn (`AttackSect`)**:
   - **Khoảng cách tiếp cận**: Người tấn công phải di chuyển đến vị trí cách căn cứ mục tiêu **trong vòng 2 ô** trên bản đồ thế giới. Không thể tấn công tông môn của chính mình.

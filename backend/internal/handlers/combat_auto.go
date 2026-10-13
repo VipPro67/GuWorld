@@ -306,7 +306,16 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 3, $1) WHERE id = $2", MaxHumanQi, player.ID)
+	qiReward := 2.0
+	if alliesAlive {
+		enemyRank := 1
+		if player.ActiveCombat != nil {
+			enemyRank = player.ActiveCombat.EnemyRank
+		}
+		qiReward = combatHumanQiReward(enemyRank)
+	}
+	qiGained := AddHumanQi(&player, qiReward)
+	_, err = tx.Exec("UPDATE players SET human_qi = $1 WHERE id = $2", player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 		return
@@ -387,7 +396,7 @@ func AutoCombatStart(c *gin.Context) {
 		}()
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "Chiến đấu hoàn tất. Nhân Khí +3.",
+		"message":         fmt.Sprintf("Chiến đấu hoàn tất. Nhân Khí +%.0f.", qiGained),
 		"logs":            logs,
 		"winner":          winner,
 		"combatants":      combatantInfos,

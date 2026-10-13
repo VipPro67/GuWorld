@@ -52,6 +52,7 @@ export interface SectSlice {
   }) => Promise<boolean>;
   stockSectVault: (itemType: 'gu' | 'material' | 'recipe', itemId: string, quantity: number) => Promise<boolean>;
   stockSectVaultBulk: (items: { item_type: 'gu' | 'material' | 'recipe'; item_id: string; quantity: number }[]) => Promise<boolean>;
+  destroySectVaultItem: (itemType: 'gu' | 'material' | 'recipe', itemId: string, rank?: number) => Promise<boolean>;
   
   toggleSectApproval: (requireApproval: boolean) => Promise<boolean>;
   toggleSectPromotionApproval: (requirePromotionApproval: boolean) => Promise<boolean>;
@@ -684,6 +685,31 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
       get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
       get().addLog(`Nhập bảo khố hàng loạt: ${items.length} mặt hàng`);
+      await get().fetchMySectStatus();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { get().endAction("sect"); }
+  },
+
+  destroySectVaultItem: async (itemType, itemId, rank) => {
+    const { token, logout } = get();
+    if (!token || !get().beginAction("sect")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/vault/destroy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_type: itemType, item_id: itemId, rank }),
+      });
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Tiêu huỷ vật phẩm thất bại.");
+      get().addToast(data.message || "Đã tiêu huỷ vật phẩm!", "success");
+      get().addLog(`Tiêu huỷ khỏi bảo khố: ${itemId}${rank ? ` (rank ${rank})` : ""}`);
       await get().fetchMySectStatus();
       return true;
     } catch (caught: unknown) {

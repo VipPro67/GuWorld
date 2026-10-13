@@ -330,3 +330,19 @@ func TestStockVaultRejectsConsumableAndCurrency(t *testing.T) {
 	}
 }
 
+// Only Chưởng Môn and Hộ Pháp may destroy vault items; elders must not.
+func TestCanDestroyVaultItem(t *testing.T) {
+	allowed := []string{"CHUONG_MON", "HO_PHAP"}
+	for _, rank := range allowed {
+		if !canDestroyVaultItem(rank) {
+			t.Fatalf("expected %s to be allowed to destroy vault items", rank)
+		}
+	}
+	denied := []string{"TRUONG_LAO", "CHAN_TRUYEN", "TINH_ANH", "NOI_MON", "NGOAI_MON", ""}
+	for _, rank := range denied {
+		if canDestroyVaultItem(rank) {
+			t.Fatalf("expected %s to be denied from destroying vault items", rank)
+		}
+	}
+}
+

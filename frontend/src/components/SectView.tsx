@@ -74,6 +74,7 @@ export const SectView: React.FC = () => {
     donateSectBulk,
     donateSectRecipe,
     buyFromSectVault,
+    destroySectVaultItem,
     fetchSectMissions,
     acceptSectMission,
     completeSectMission,
@@ -946,6 +947,25 @@ export const SectView: React.FC = () => {
 
   const { member, sect, leaderboard } = mySectStatus;
   const isLeaderOrElder = member?.member_rank === "CHUONG_MON" || member?.member_rank === "TRUONG_LAO" || member?.member_rank === "HO_PHAP";
+  // Only Chưởng Môn and Hộ Pháp may destroy vault items.
+  const canDestroyVault = member?.member_rank === "CHUONG_MON" || member?.member_rank === "HO_PHAP";
+
+  const renderDestroyButton = (itemType: "gu" | "material" | "recipe", itemId: string, label: string, rank?: number) => {
+    if (!canDestroyVault) return null;
+    return (
+      <button
+        type="button"
+        onClick={async () => {
+          if (!(await showConfirm(`Tiêu huỷ vĩnh viễn ${label} khỏi bảo khố tông môn? Hành động này không thể hoàn tác và không hoàn quỹ.`))) return;
+          await destroySectVaultItem(itemType, itemId, rank);
+        }}
+        disabled={actionLoading}
+        className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900/70 border border-red-800/50 disabled:opacity-50 text-red-300 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+      >
+        Tiêu Huỷ
+      </button>
+    );
+  };
 
   // Check if sect leader is missing or inactive for >= 5 days
   const currentLeader = (sectMembers || []).find((m) => m.member_rank === "CHUONG_MON");
@@ -1134,8 +1154,18 @@ export const SectView: React.FC = () => {
                 </div>
 
                 <p className="text-xs text-zinc-400 font-mono leading-relaxed">
-                  Định kỳ mỗi 24 giờ, hệ thống sẽ tự động trích Quỹ Tông Môn để bảo trì sơn môn theo quy mô thực tế. Nếu không đủ quỹ, tông môn sẽ bị giáng 1 cấp.
+                  Định kỳ mỗi 24 giờ, hệ thống sẽ tự động trích Quỹ Tông Môn để bảo trì sơn môn theo quy mô thực tế. Nếu không đủ quỹ, tông môn sẽ bị giáng 1 cấp. Ở <strong className="text-amber-300">Cấp 1</strong>, nợ phí <strong className="text-red-400">3 ngày liên tiếp</strong> sẽ khiến tông môn bị <strong className="text-red-400">giải tán</strong> và toàn bộ Bảo Khố bị xoá.
                 </p>
+
+                {(mySectStatus.unpaid_maintenance_count || 0) > 0 && (
+                  <div className="bg-red-950/30 border border-red-500/40 rounded-xl p-3 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <span className="text-xs text-red-300 leading-relaxed">
+                      Tông môn đang nợ phí duy trì <strong>{mySectStatus.unpaid_maintenance_count}/3</strong> ngày. Quyên góp để bổ sung Quỹ trước khi bị giải tán!
+                      {(sect?.level === 1) && " Đang ở Cấp 1 — đủ 3 ngày nợ là mất tông, xoá sạch Bảo Khố."}
+                    </span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono mt-1">
                   <div className="bg-zinc-900/40 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1">
@@ -1386,7 +1416,7 @@ export const SectView: React.FC = () => {
                   {
                     key: "spirit_vein",
                     name: "Linh Mạch",
-                    desc: "Tự động sản sinh Quỹ tông môn mỗi phút cho Tông môn.",
+                    desc: "Bù phí duy trì phần Cấp Tông môn + Thành viên.",
                     baseFunds: 3000,
                     icon: "💎",
                   },
@@ -1407,7 +1437,7 @@ export const SectView: React.FC = () => {
                   {
                     key: "training_ground",
                     name: "Diễn Võ Trường",
-                    desc: "Tăng tỷ lệ tích lũy Điểm Cống Hiến tự động cho tất cả đệ tử Tông môn.",
+                    desc: "Chưa gắn hiệu ứng (đang chờ thiết kế lại).",
                     baseFunds: 1500,
                     icon: "⚔️",
                   },
@@ -1970,6 +2000,7 @@ export const SectView: React.FC = () => {
                             >
                               {outOfStock ? "Hết Hàng" : qty > 1 ? `Đổi ${qty} Cổ` : "Đổi Cổ"}
                             </button>
+                            {renderDestroyButton("gu", vg.id, spec?.name || vg.id, vg.rank)}
                           </div>
                         </div>
                       );
@@ -2061,6 +2092,7 @@ export const SectView: React.FC = () => {
                           >
                             {qty <= 0 ? "Hết Hàng" : buyQty > 1 ? `Đổi ${buyQty} Linh Tài` : "Đổi Linh Tài"}
                           </button>
+                          {renderDestroyButton("material", matId, spec?.name || matId)}
                         </div>
                       </div>
                     );
@@ -2135,6 +2167,7 @@ export const SectView: React.FC = () => {
                           >
                             {isUnlocked ? "Đã Học" : "Học Công Thức"}
                           </button>
+                          {renderDestroyButton("recipe", recipeId, formatRecipeName(recipeId))}
                         </div>
                       </div>
                     );

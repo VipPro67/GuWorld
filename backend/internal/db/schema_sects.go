@@ -1,8 +1,7 @@
 package db
 
 // Sect schema. sect_missions.target_id is polymorphic (item ids for GATHER,
-// gu ids for DONATE) so it has no FK; sect_members.master_id is a legacy
-// unused column and stays unconstrained.
+// gu ids for DONATE) so it has no FK.
 
 func schemaSects() error {
 	if err := execSchema("sects", `
@@ -24,12 +23,17 @@ func schemaSects() error {
 		last_vault_decay_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		last_territory_tick_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		last_relocated_at TIMESTAMP WITH TIME ZONE,
-		defensive_array_ready_at TIMESTAMP WITH TIME ZONE
+		defensive_array_ready_at TIMESTAMP WITH TIME ZONE,
+		unpaid_maintenance_count INTEGER NOT NULL DEFAULT 0
 	);`); err != nil {
 		return err
 	}
 
-	if err := execSchema("drop_sect_sacrifice_npcs", `DROP TABLE IF EXISTS npcs CASCADE;`); err != nil {
+	// Existing databases need the column added explicitly (fresh installs get it
+	// from the CREATE above). Tracks consecutive failed daily maintenance fees at
+	// level 1; reaching the grace limit disbands the sect.
+	if err := execSchema("sects_add_unpaid_maintenance_count", `
+		ALTER TABLE sects ADD COLUMN IF NOT EXISTS unpaid_maintenance_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
 		return err
 	}
 
@@ -61,17 +65,23 @@ func schemaSects() error {
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
 		member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
 		contribution_points BIGINT NOT NULL DEFAULT 0,
-		master_id VARCHAR(50) DEFAULT NULL,
 		joined_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
-		territory_pending DOUBLE PRECISION NOT NULL DEFAULT 0,
-		territory_credited_at DATE,
-		territory_credited_today INTEGER NOT NULL DEFAULT 0,
 		is_defending BOOLEAN NOT NULL DEFAULT FALSE
 	);`); err != nil {
 		return err
 	}
 	if err := execSchema("sect_members_sect_rank_idx", `
 	CREATE INDEX IF NOT EXISTS idx_sect_members_sect_rank ON sect_members (sect_id, member_rank);`); err != nil {
+		return err
+	}
+	// Legacy columns removed: master_id was never written, the territory_* pair
+	// fed the deleted passive-contribution credit.
+	if err := execSchema("sect_members_drop_legacy", `
+		ALTER TABLE sect_members
+			DROP COLUMN IF EXISTS master_id,
+			DROP COLUMN IF EXISTS territory_pending,
+			DROP COLUMN IF EXISTS territory_credited_at,
+			DROP COLUMN IF EXISTS territory_credited_today;`); err != nil {
 		return err
 	}
 

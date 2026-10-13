@@ -100,7 +100,7 @@ export const gameplayPages: WikiPage[] = [
     content: (
       <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
         <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-sky-300 mb-2">Điều khiển bản đồ</h3><ul className="list-disc list-inside space-y-1"><li>Chuyển giữa click để đi và kéo bản đồ; nút định vị đưa camera về nhân vật.</li><li>Bật/tắt nhãn Quái & Cổ, Boss, HUB, Khu Vực và Ngũ Vực.</li><li>Click đích mới để đổi hướng; click ô đang đứng để dừng.</li><li>Dịch chuyển tức thời sử dụng Cổ trùng có khả năng Dịch Chuyển / Tạo Cổng (như Định Tiên Du, Môn Vực Cổ,...) đang trang bị và ở trạng thái ACTIVE.</li><li>Bố trí và sử dụng <strong>Truyền Tống Trận</strong> để di chuyển nhanh chóng giữa các khu vực hoặc xuyên suốt Ngũ Vực.</li></ul></section>
-        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-rose-300 mb-2">Gặp mục tiêu</h3><p>Chỉ bước đúng ô quái/Boss mới mở chiến đấu. Chọn người chơi để xem hồ sơ, mời tổ đội hoặc tiếp cận. Phạm vi PvP cơ bản là 2 ô và có thể tăng bằng chỉ số tầm đánh/tầm chiến đấu; không thể tấn công trong vùng an toàn.</p></section>
+        <section className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]"><h3 className="font-bold text-rose-300 mb-2">Quái tuần tra & truy đuổi</h3><p className="mb-2">Quái thường phát hiện người chơi trong phạm vi 6–14 ô theo Rank, đuổi tối đa 10–20 ô quanh điểm sinh và di chuyển chậm 0,15 ô/giây. Khi quái áp sát, combat có thể tự mở mà không cần bước vào đúng ô sinh quái. Quái sẽ quay về điểm sinh nếu mất mục tiêu hoặc người chơi chạy vượt khỏi phạm vi truy đuổi.</p><p className="mb-2">Elite phát hiện trong 8 ô, đuổi tối đa 18 ô quanh bãi với tốc độ 0,4 ô/giây; boss có thể truy đuổi trong toàn vùng. Quái không thể đi vào HUB/vùng an toàn. Chọn quái trên bản đồ để tung kỹ năng khi đủ điều kiện.</p><p>Chọn người chơi để xem hồ sơ, mời tổ đội hoặc tiếp cận. Phạm vi PvP cơ bản là 2 ô và có thể tăng bằng chỉ số tầm đánh/tầm chiến đấu; không thể tấn công trong vùng an toàn.</p></section>
         <section className="p-4 rounded-xl bg-rose-950/15 border border-rose-500/20"><h3 className="font-bold text-rose-300 mb-2">Tử vong & hài cốt</h3><p>Thua trận có thể làm rơi thạch, nguyên liệu, Bí phương và Cổ không trang bị/không phải Bản Mệnh. Đồ nằm trên ô bản đồ. Nếu có người hạ gục, thời gian bảo hộ ưu tiên người đó; chiến lợi phẩm PvE không có người hạ gục không được khóa riêng. Luôn xem trạng thái hiển thị trước khi nhặt.</p></section>
       </div>
     ),
@@ -283,7 +283,7 @@ export const gameplayPages: WikiPage[] = [
     id: "gameplay-tongmon",
     title: "Tông Môn Thế Lực",
     category: "gameplay",
-    keywords: ["tông môn", "sect", "gia tộc", "cống hiến", "khảo hạch", "hierarchy", "sư đồ", "master"],
+    keywords: ["tông môn", "sect", "gia tộc", "cống hiến", "khảo hạch", "hierarchy", "sư đồ", "master", "phí duy trì", "bảo trì", "giải tán", "phá sản"],
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -314,7 +314,7 @@ export const gameplayPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Lãnh địa mỏ Tông môn & Quỹ</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Môn phái có thể chiếm Lãnh địa để tự sinh <strong>Quỹ tông môn</strong> theo giờ. Lãnh đạo (Trưởng Lão, Hộ Pháp, Chưởng Môn) được quyền bố trí đệ tử hoặc thuê thần thú canh giữ, đồng thời phát động tấn công mỏ của tông môn khác. Đệ tử phòng thủ nhận +20 cống hiến/giờ, các thành viên khác +2 cống hiến/giờ (tối đa 200/ngày).
+            Môn phái có thể chiếm Lãnh địa để tự sinh <strong>Quỹ tông môn</strong> theo giờ. Lãnh đạo (Trưởng Lão, Hộ Pháp, Chưởng Môn) được quyền bố trí đệ tử hoặc thuê thần thú canh giữ, đồng thời phát động tấn công mỏ của tông môn khác. Mỗi thủ hộ đang canh giữ giúp tăng sản lượng Quỹ tự sinh của tông môn.
           </p>
         </div>
 
@@ -325,6 +325,20 @@ export const gameplayPages: WikiPage[] = [
           </p>
           <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/10 text-xs leading-relaxed text-indigo-300">
             💡 <strong>Sử dụng Điểm cống hiến:</strong> Đổi lấy các công thức, Tiên Cổ từ kho tông môn, sách bí phương hoặc dùng để thăng cấp chức vụ.
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">4. Phí Duy Trì, Quỹ & Giải Tán</h3>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Mỗi <strong>24 giờ</strong> hệ thống tự trích <strong>Quỹ tông môn</strong> để bảo trì sơn môn:
+            <span className="font-mono text-amber-300"> Phí = Cấp × 2.000 + Số thành viên × 200 + Phí Kho Tàng</span>.
+            Phí Kho Tàng tính theo tài sản trong Bảo Khố (Linh tài, Cổ, Bí phương) và được giảm theo cấp Tàng Bảo Các.
+          </p>
+          <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/20 text-xs leading-relaxed text-amber-200 space-y-1.5">
+            <p><strong>Linh Mạch bù phí:</strong> quỹ sinh ra từ Linh Mạch bù lại phần <em>Cấp Tông Môn + Thành Viên</em> theo tỉ lệ <strong>60% + 5%/cấp Linh Mạch</strong> (Linh Mạch cấp 8 bù vừa đủ). <strong>Phí Kho Tàng không được bù</strong> — phải tự lo bằng quyên góp, nhiệm vụ hoặc chiến tranh.</p>
+            <p><strong>Không đủ quỹ:</strong> tông môn bị <strong>giáng 1 cấp</strong> (kèm thu nhỏ lãnh địa và Hộ Sơn).</p>
+            <p><strong className="text-red-300">Phá sản ở Cấp 1:</strong> mỗi ngày vẫn thiếu quỹ ghi thêm 1 ngày nợ; nợ đủ <strong>3 ngày liên tiếp</strong> thì tông môn bị <strong className="text-red-300">giải tán vĩnh viễn</strong> — trục xuất toàn bộ thành viên và <strong>xoá sạch Bảo Khố</strong> (Cổ, Linh tài, Bí phương). Trả đủ phí hoặc được giáng cấp sẽ reset số ngày nợ. Vẫn có thể quyên góp/nhập kho trong thời gian ân hạn để cứu tông.</p>
           </div>
         </div>
       </div>

@@ -27,12 +27,129 @@ type RowDiff = { kind: string; before?: Record<string, unknown>; after?: Record<
 type DatasetResult = { key: string; filename: string; rows: number; inserts: number; updates: number; unchanged: number; diffs: RowDiff[]; validation_errors: Issue[]; reload_required: boolean; restart_required: boolean };
 type Preflight = { preflight_id: string; expires_at: string; plan: { can_commit: boolean; totals: { rows: number; inserts: number; updates: number; unchanged: number }; datasets: DatasetResult[]; validation_errors: Issue[] } };
 
-const sameValue = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const stableStringify = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? String(value);
+};
+const sameValue = (a: unknown, b: unknown) => stableStringify(a) === stableStringify(b);
 const changedFields = (before: Record<string, unknown> = {}, after: Record<string, unknown> = {}) =>
   Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
     .filter(key => !sameValue(before[key], after[key]))
     .map(key => ({ key, before: before[key], after: after[key] }));
 const fmt = (value: unknown) => value === undefined || value === null ? "—" : typeof value === "string" ? value : JSON.stringify(value);
+
+type NestedChange = { path: string; before: unknown; after: unknown };
+
+const parseJson = (value: unknown): unknown => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const OPERATION_IDENTITY_FIELDS = ["op", "code", "status_id", "sub_type", "trigger"] as const;
+
+function arrayItemIdentity(value: unknown): { key: string; label: string } | null {
+  if (!isRecord(value)) return null;
+  if (value.id !== undefined && value.id !== null) {
+    return { key: `id:${stableStringify(value.id)}`, label: `id=${fmt(value.id)}` };
+  }
+  if (typeof value.op === "string") {
+    const identity = Object.fromEntries(
+      OPERATION_IDENTITY_FIELDS.filter(key => value[key] !== undefined).map(key => [key, value[key]]),
+    );
+    const label = Object.entries(identity).map(([key, item]) => `${key}=${fmt(item)}`).join(",");
+    return { key: `operation:${stableStringify(identity)}`, label };
+  }
+  return null;
+}
+
+function matchArrayItems(before: unknown[], after: unknown[]) {
+  const afterUsed = new Set<number>();
+  const pairs = new Map<number, number>();
+  const beforeIdentity = before.map(arrayItemIdentity);
+  const afterIdentity = after.map(arrayItemIdentity);
+  const hasStableIdentity = beforeIdentity.some(Boolean) || afterIdentity.some(Boolean);
+
+  const pair = (beforeIndex: number, afterIndex: number) => {
+    pairs.set(beforeIndex, afterIndex);
+    afterUsed.add(afterIndex);
+  };
+
+  // Match exact items first so duplicate operations remain stable when reordered.
+  before.forEach((item, beforeIndex) => {
+    const afterIndex = after.findIndex((candidate, index) => !afterUsed.has(index) && sameValue(item, candidate));
+    if (afterIndex !== -1) pair(beforeIndex, afterIndex);
+  });
+
+  if (hasStableIdentity) {
+    beforeIdentity.forEach((identity, beforeIndex) => {
+      if (!identity || pairs.has(beforeIndex)) return;
+      const afterIndex = afterIdentity.findIndex((candidate, index) =>
+        !afterUsed.has(index) && candidate?.key === identity.key,
+      );
+      if (afterIndex !== -1) pair(beforeIndex, afterIndex);
+    });
+  } else {
+    before.forEach((_, beforeIndex) => {
+      if (beforeIndex < after.length && !afterUsed.has(beforeIndex)) pair(beforeIndex, beforeIndex);
+    });
+  }
+
+  return { pairs, afterUsed, beforeIdentity, afterIdentity };
+}
+
+function nestedChanges(before: unknown, after: unknown, path: string): NestedChange[] {
+  if (sameValue(before, after)) return [];
+
+  if (Array.isArray(before) && Array.isArray(after)) {
+    const changes: NestedChange[] = [];
+    const { pairs, afterUsed, beforeIdentity, afterIdentity } = matchArrayItems(before, after);
+    for (let beforeIndex = 0; beforeIndex < before.length; beforeIndex++) {
+      const identity = beforeIdentity[beforeIndex];
+      const itemPath = identity ? `${path}[${identity.label}]` : `${path}[${beforeIndex}]`;
+      const afterIndex = pairs.get(beforeIndex);
+      if (afterIndex === undefined) {
+        changes.push({ path: itemPath, before: before[beforeIndex], after: undefined });
+      } else {
+        changes.push(...nestedChanges(before[beforeIndex], after[afterIndex], itemPath));
+      }
+    }
+    for (let afterIndex = 0; afterIndex < after.length; afterIndex++) {
+      if (!afterUsed.has(afterIndex)) {
+        const identity = afterIdentity[afterIndex];
+        const itemPath = identity ? `${path}[${identity.label}]` : `${path}[${afterIndex}]`;
+        changes.push({ path: itemPath, before: undefined, after: after[afterIndex] });
+      }
+    }
+    return changes;
+  }
+
+  if (isRecord(before) && isRecord(after)) {
+    const changes: NestedChange[] = [];
+    for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      const keyPath = /^[A-Za-z_$][\w$]*$/.test(key) ? `${path}.${key}` : `${path}[${JSON.stringify(key)}]`;
+      const hasBefore = Object.prototype.hasOwnProperty.call(before, key);
+      const hasAfter = Object.prototype.hasOwnProperty.call(after, key);
+      if (!hasBefore || !hasAfter) {
+        changes.push({ path: keyPath, before: before[key], after: after[key] });
+      } else {
+        changes.push(...nestedChanges(before[key], after[key], keyPath));
+      }
+    }
+    return changes;
+  }
+
+  return [{ path, before, after }];
+}
 
 // Chỉ render phần thay đổi: update = bảng field cũ→mới, insert = thu gọn.
 function RowDiffView({ diffs }: { diffs: RowDiff[] }) {
@@ -47,9 +164,19 @@ function RowDiffView({ diffs }: { diffs: RowDiff[] }) {
         </details>;
       }
       const changes = changedFields(diff.before, diff.after);
+      const displayChanges = changes.flatMap(change => {
+        if (change.key !== "effects") return [{ ...change, path: change.key }];
+        const before = parseJson(change.before);
+        const after = parseJson(change.after);
+        if (!(Array.isArray(before) || isRecord(before)) || !(Array.isArray(after) || isRecord(after))) {
+          return [{ ...change, path: change.key }];
+        }
+        const nested = nestedChanges(before, after, change.key);
+        return nested.length > 0 ? nested : [{ ...change, path: change.key }];
+      });
       return <div key={index} className="rounded border border-amber-900/50 bg-amber-950/10 p-2">
         <div className="text-amber-400">~ sửa {identity} · {changes.length} field</div>
-        <table className="mt-1 w-full border-collapse"><tbody>{changes.map(change => <tr key={change.key} className="align-top"><td className="w-32 py-0.5 pr-2 text-zinc-500">{change.key}</td><td className="break-all py-0.5 pr-2 text-red-400">{fmt(change.before)}</td><td className="break-all py-0.5 text-emerald-400">{fmt(change.after)}</td></tr>)}</tbody></table>
+        <table className="mt-1 w-full border-collapse"><tbody>{displayChanges.map((change, changeIndex) => <tr key={`${change.path}-${changeIndex}`} className="align-top"><td className="w-40 py-0.5 pr-2 text-zinc-500">{change.path}</td><td className="break-all py-0.5 pr-2 text-red-400">{fmt(change.before)}</td><td className="break-all py-0.5 text-emerald-400">{fmt(change.after)}</td></tr>)}</tbody></table>
       </div>;
     })}
   </div>;

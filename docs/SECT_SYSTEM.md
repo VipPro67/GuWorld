@@ -51,7 +51,7 @@ Cấu trúc chính:
 ### 2.3 Worker / tick jobs
 
 - `backend/internal/worker/sect_maintenance.go`
-  - Phí duy trì tông môn, giảm cấp nếu không đủ quỹ.
+  - Phí duy trì tông môn, giảm cấp nếu không đủ quỹ; giải tán nếu nợ 3 ngày liên tiếp ở Cấp 1.
 - `backend/internal/worker/sect_mission.go`
   - Hết hạn nhiệm vụ tông môn.
 - `backend/internal/worker/sect_territory.go`
@@ -325,12 +325,14 @@ Lưu ý khi sửa:
 - `DonateRecipe`
 - `StockSectVault`
 - `BuyFromSectVault`
+- `DestroySectVaultItem`
 - `DonateBulk`
 
 Cơ chế:
 - `sects.vault_gu`, `vault_materials`, `vault_recipes` là JSONB.
 - Khi đóng góp, cần validate item thật sự thuộc sở hữu người chơi.
 - Khi mua vật phẩm từ kho, phải trừ item trong kho và cộng cho player, đồng thời cập nhật `sect_members.contribution_points` nếu logic quy định.
+- `DestroySectVaultItem`: chỉ `CHUONG_MON` và `HO_PHAP` (helper `canDestroyVaultItem`), xoá cả stack (`gu` theo `gu_id+rank`, `material` theo `item_id`, `recipe` theo `recipe_id`), không hoàn quỹ.
 
 Điểm nguy hiểm:
 - JSONB luồng dữ liệu là map / array, dễ bị type mismatch.
@@ -368,8 +370,8 @@ Worker: `sect_maintenance.go`
 Workflow:
 1. Duyệt toàn bộ `sects`.
 2. Nếu quá 24h kể từ `last_maintenance_at`, xét phí duy trì.
-3. Nếu quỹ đủ -> trừ phí, cập nhật `last_maintenance_at`.
-4. Nếu quỹ thiếu -> giảm cấp tông môn xuống `max(level-1, 1)`, **đồng thời kẹp `buildings`**: `main_hall` và mọi kiến trúc đang cao hơn đều bị đưa về cấp mới (hàm `clampBuildings`), cập nhật `last_maintenance_at`.
+3. Nếu quỹ đủ -> trừ phí, cập nhật `last_maintenance_at`, reset `unpaid_maintenance_count = 0`.
+4. Nếu quỹ thiếu -> giảm cấp tông môn xuống `max(level-1, 1)`, **đồng thời kẹp `buildings`**: `main_hall` và mọi kiến trúc đang cao hơn đều bị đưa về cấp mới (hàm `clampBuildings`), cập nhật `last_maintenance_at`, reset `unpaid_maintenance_count = 0`.
 5. Gửi tin nhắn cảnh báo cho leader.
 
 Công thức phí (`computeVaultFees`):
@@ -378,7 +380,8 @@ Công thức phí (`computeVaultFees`):
 - Cổ phàm `Σ(Rank × 10 × SL)`, Tiên Cổ `Σ(Rank × 200 × SL)`, Bí phương `Σ(Rank × 50)` — ba mục này được `DiscountVaultFee` giảm 50%-90% theo cấp Bảo Khố.
 
 Điểm cần lưu ý:
-- Tối thiểu là Cấp 1. Nếu đã ở Cấp 1 mà vẫn thiếu quỹ thì **không giáng nữa**: chỉ chốt `last_maintenance_at` và gửi tin kênh tông môn (không gửi thư "giáng cấp").
+- Tối thiểu là Cấp 1. Nếu đã ở Cấp 1 mà vẫn thiếu quỹ thì **không giáng nữa**: tăng `sects.unpaid_maintenance_count`, chốt `last_maintenance_at` và gửi tin kênh tông môn (không gửi thư "giáng cấp"). Vẫn cho phép quyên góp/nhập kho trong thời gian ân hạn.
+- **Giải tán khi phá sản**: đủ `sectDisbandGraceDays = 3` ngày liên tiếp không trả được phí ở Cấp 1 (`sectShouldDisband`) → `disbandSect` xoá `sects` (FK CASCADE xoá members/vault/missions/defenders/requests), gửi thư `SECT_DISBANDED` cho từng thành viên. Không dùng kênh `sect` để thông báo vì `messages.sect_id` cascade sẽ xoá tin theo.
 - Nếu UPDATE trừ phí thất bại, worker đọc lại `funds` + `last_maintenance_at` để phân biệt "đã trừ rồi" với "thiếu quỹ", tránh giáng cấp oan.
 - Nếu cần thay đổi logic cấp tối thiểu, cập nhật ở worker + doc.
 
@@ -517,9 +520,11 @@ Base route: `/api/admin/sects`
 
 ### 7.3 `StartSectTerritoryWorker`
 
-- Duyệt `sect_mines` đã có `occupier_sect_id`.
-- Tính `elapsedMin`, cộng quỹ + điểm cống hiến cho thành viên.
-- Tích lũy theo level Linh Mạch + số lượng defender.
+- Duyệt các tông môn có `last_territory_tick_at` cũ hơn 1 phút.
+- Cộng Quỹ = `(Cấp_TM×2000 + Số_TV×200) × coverage(Cấp Linh Mạch)` mỗi ngày, nhân hệ số thủ hộ ($+10\%$ mỗi thủ hộ), rồi cập nhật `last_territory_tick_at`.
+  - `coverage(L) = min(0.60 + 0.05×L, 1.05)`: cấp 1 = 65%, cấp 8 = 100% (hòa vốn với phí cấp + thành viên), cấp 9+ = 105%.
+  - Phí Kho Tàng **không** được bù.
+- Không còn cộng điểm cống hiến thụ động cho thành viên.
 
 ---
 

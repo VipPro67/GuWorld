@@ -40,6 +40,23 @@ type SectMaintenanceBreakdown struct {
 // maintenance, regardless of their rank.
 const materialFeeItemsPerQuy = 200
 
+// Daily maintenance rate for the two upkeep terms the spirit vein is meant to
+// offset. Kept here so the fee calculator and the income worker never drift.
+const (
+	dailyLevelFee  = 2000 // Quỹ per sect level per day
+	dailyMemberFee = 200  // Quỹ per member per day
+)
+
+// sectDisbandGraceDays is how many consecutive daily maintenance failures a
+// level-1 sect may accumulate before it is disbanded.
+const sectDisbandGraceDays = 3
+
+// sectShouldDisband reports whether a level-1 sect has failed to pay the daily
+// maintenance fee for enough consecutive days that it should be dissolved.
+func sectShouldDisband(unpaidDays int) bool {
+	return unpaidDays >= sectDisbandGraceDays
+}
+
 // rankedQty is a single vault row: one rank and the quantity stored at it.
 type rankedQty struct {
 	Rank int
@@ -98,7 +115,7 @@ func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sect
 
 	var breakdown SectMaintenanceBreakdown
 	breakdown.SectLevel = sectLevel
-	breakdown.LevelFee = int64(sectLevel) * 2000
+	breakdown.LevelFee = int64(sectLevel) * dailyLevelFee
 	var treasuryLevel int
 	if err := q.QueryRowContext(ctx, `SELECT COALESCE((buildings->>'treasury')::int, 1) FROM sects WHERE id = $1`, sectID).Scan(&treasuryLevel); err != nil {
 		return 0, breakdown, fmt.Errorf("failed to load treasury level: %w", err)
@@ -110,7 +127,7 @@ func CalculateSectMaintenanceFee(ctx context.Context, q QueryContextRunner, sect
 	if err != nil && err != sql.ErrNoRows {
 		return 0, breakdown, fmt.Errorf("failed to count sect members: %w", err)
 	}
-	breakdown.MemberFee = int64(breakdown.MemberCount) * 200
+	breakdown.MemberFee = int64(breakdown.MemberCount) * dailyMemberFee
 
 	// 2. Materials — counted only; priced flat by computeVaultFees.
 	matRows, err := q.QueryContext(ctx, `SELECT quantity FROM sect_vault_materials WHERE sect_id = $1 AND quantity > 0`, sectID)
@@ -243,7 +260,7 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 		cutoff := now.Add(-24 * time.Hour)
 		var remainingFunds int64
 		errDeduct := db.QueryRowContext(ctx, `
-			UPDATE sects SET funds = funds - $1, last_maintenance_at = $2
+			UPDATE sects SET funds = funds - $1, last_maintenance_at = $2, unpaid_maintenance_count = 0
 			WHERE id = $3 AND funds >= $1 AND (last_maintenance_at IS NULL OR last_maintenance_at <= $4)
 			RETURNING funds
 		`, fee, now, s.id, cutoff).Scan(&remainingFunds)
@@ -282,18 +299,27 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 
 		newLevel := max(s.level-1, 1)
 		if newLevel == s.level {
-			// Already at the lowest level: there is nothing left to demote, just
-			// close the window so the same complaint is not repeated every tick.
-			if _, errStamp := db.ExecContext(ctx, `
-				UPDATE sects SET last_maintenance_at = $1
+			// Lowest level: nothing left to demote. Count the unpaid day; once the
+			// grace window is exhausted the sect is disbanded.
+			var unpaidDays int
+			errStamp := db.QueryRowContext(ctx, `
+				UPDATE sects SET unpaid_maintenance_count = unpaid_maintenance_count + 1, last_maintenance_at = $1
 				WHERE id = $2 AND (last_maintenance_at IS NULL OR last_maintenance_at <= $3)
-			`, now, s.id, cutoff); errStamp != nil {
-				logger.S.Errorf("SectMaintenanceWorker: failed to stamp maintenance for sect %s: %v", s.id, errStamp)
+				RETURNING unpaid_maintenance_count
+			`, now, s.id, cutoff).Scan(&unpaidDays)
+			if errStamp != nil {
+				if errStamp != sql.ErrNoRows {
+					logger.S.Errorf("SectMaintenanceWorker: failed to stamp maintenance for sect %s: %v", s.id, errStamp)
+				}
+				continue
+			}
+			if sectShouldDisband(unpaidDays) {
+				disbandSect(ctx, db, s.id, fee, unpaidDays)
 				continue
 			}
 			sendSectSystemChatMessage(ctx, db, s.id, fmt.Sprintf(
-				"[Bảo Trì] Chưa đủ quỹ đóng phí duy trì (cần %d, hiện %d). Phí chưa được thu, tông giữ nguyên Cấp %d.",
-				fee, curFunds, s.level))
+				"[Bảo Trì] Chưa đủ quỹ đóng phí duy trì (cần %d, hiện %d). Phí chưa được thu, tông giữ nguyên Cấp %d. Còn %d ngày để bổ sung quỹ trước khi bị giải tán!",
+				fee, curFunds, s.level, sectDisbandGraceDays-unpaidDays))
 			continue
 		}
 
@@ -307,7 +333,7 @@ func processSectMaintenanceTick(ctx context.Context, db *sql.DB) {
 		}
 		var appliedLevel int
 		errDown := db.QueryRowContext(ctx, `
-			UPDATE sects SET level = $1, buildings = $2::jsonb, last_maintenance_at = $3
+			UPDATE sects SET level = $1, buildings = $2::jsonb, last_maintenance_at = $3, unpaid_maintenance_count = 0
 			WHERE id = $4 AND (last_maintenance_at IS NULL OR last_maintenance_at <= $5)
 			RETURNING level
 		`, newLevel, string(newBuildings), now, s.id, cutoff).Scan(&appliedLevel)
@@ -386,4 +412,47 @@ func notifySectLeader(ctx context.Context, db *sql.DB, sectID string, oldLevel, 
 	if err != nil {
 		logger.S.Errorf("SectMaintenanceWorker: failed to notify sect leader %s: %v", leaderID.String, err)
 	}
+}
+
+// disbandSect permanently dissolves a sect that exhausted its maintenance grace
+// window at level 1. Every member is notified first, then the sect row is
+// deleted; FK CASCADE removes members, vault, missions, defenders and pending
+// requests. Chat is not used here because messages.sect_id cascades away with
+// the sect.
+func disbandSect(ctx context.Context, db *sql.DB, sectID string, fee int64, unpaidDays int) {
+	var name string
+	if err := db.QueryRowContext(ctx, `SELECT name FROM sects WHERE id = $1`, sectID).Scan(&name); err != nil {
+		if err != sql.ErrNoRows {
+			logger.S.Errorf("SectMaintenanceWorker: cannot load sect %s for disband: %v", sectID, err)
+		}
+		return
+	}
+
+	var memberIDs []string
+	if rows, err := db.QueryContext(ctx, `SELECT player_id FROM sect_members WHERE sect_id = $1`, sectID); err == nil {
+		for rows.Next() {
+			var pid string
+			if rows.Scan(&pid) == nil {
+				memberIDs = append(memberIDs, pid)
+			}
+		}
+		rows.Close()
+	}
+
+	if _, err := db.ExecContext(ctx, `DELETE FROM sects WHERE id = $1`, sectID); err != nil {
+		logger.S.Errorf("SectMaintenanceWorker: failed to disband sect %s: %v", sectID, err)
+		return
+	}
+
+	content := fmt.Sprintf("Tông môn \"%s\" đã bị giải tán sau %d ngày liên tiếp không đủ quỹ duy trì (cần %d Quỹ/ngày). Toàn bộ bảo khố và chức vị đã bị xoá.", name, unpaidDays, fee)
+	for _, pid := range memberIDs {
+		if _, err := db.ExecContext(ctx, `
+			INSERT INTO system_messages (player_id, type, title, content)
+			VALUES ($1, 'SECT_DISBANDED', 'TÔNG MÔN GIẢI TÁN', $2)
+		`, pid, content); err != nil {
+			logger.S.Errorf("SectMaintenanceWorker: failed to notify member %s of disband %s: %v", pid, sectID, err)
+		}
+	}
+
+	logger.S.Infof("SectMaintenanceWorker: disbanded sect %s (%s) after %d unpaid days", name, sectID, unpaidDays)
 }

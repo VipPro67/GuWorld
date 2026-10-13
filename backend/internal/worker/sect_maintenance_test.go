@@ -229,3 +229,22 @@ func TestClampBuildings(t *testing.T) {
 		}
 	})
 }
+
+// A level-1 sect is disbanded exactly when the unpaid-day count reaches the
+// grace window — this is the data-loss boundary, so pin it.
+func TestSectShouldDisband(t *testing.T) {
+	cases := []struct {
+		unpaidDays int
+		want       bool
+	}{
+		{0, false},
+		{sectDisbandGraceDays - 1, false},
+		{sectDisbandGraceDays, true},
+		{sectDisbandGraceDays + 1, true},
+	}
+	for _, tc := range cases {
+		if got := sectShouldDisband(tc.unpaidDays); got != tc.want {
+			t.Fatalf("sectShouldDisband(%d) = %v, want %v", tc.unpaidDays, got, tc.want)
+		}
+	}
+}

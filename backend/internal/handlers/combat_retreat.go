@@ -648,7 +648,7 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 	}
 	_ = cache.BroadcastCellCleared(player.CurrentRegion, player.X, player.Y, "Monster", player.ActiveCombat.EnemyTemplateID)
 
-	qiGained := AddHumanQi(player, 20.0)
+	qiGained := AddHumanQi(player, combatHumanQiReward(cs.EnemyRank))
 	logs = append(logs, fmt.Sprintf("Chiến thắng đem lại sự tin tưởng của bá tánh. Nhân Khí +%.0f.", qiGained))
 
 	player.ActiveCombat = nil

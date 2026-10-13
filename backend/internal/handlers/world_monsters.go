@@ -37,7 +37,7 @@ const (
 	worldMonsterTickInterval = 250 * time.Millisecond
 	worldMonsterSafetyTTL    = 5 * time.Minute
 	worldMonsterMoveEventGap = 400 * time.Millisecond
-	worldMonsterDefaultSpeed = 0.25
+	worldMonsterDefaultSpeed = 0.15
 	worldMonsterEliteSpeed   = 0.4
 	worldMonsterEliteAggro   = 8.0
 	worldMonsterEliteLeash   = 18.0
@@ -472,9 +472,9 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 	return monster, nil
 }
 
-// worldMonsterAggroProfile keeps ordinary monsters passive until a player is
-// very close. Higher-rank monsters notice players slightly farther away, but
-// never regain the old 12-cell aggro / 24-cell chase range.
+// worldMonsterAggroProfile gives ordinary monsters a rank-scaled local aggro
+// radius and a wider leash so they can pursue fleeing players without roaming
+// too far from their spawn.
 func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
 	if rank < 1 {
 		rank = 1
@@ -482,11 +482,8 @@ func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
 	if rank > 9 {
 		rank = 9
 	}
-	aggroRadius = 2 + float64(rank-1)*0.5
-	leashRadius = float64(rank) / 2.0
-	if aggroRadius > leashRadius {
-		aggroRadius = leashRadius
-	}
+	aggroRadius = 6 + float64(rank-1)
+	leashRadius = aggroRadius + 4 + float64(rank-1)*0.25
 	return aggroRadius, leashRadius
 }
 

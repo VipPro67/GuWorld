@@ -67,7 +67,6 @@ type SectMember struct {
 	PlayerID           uuid.UUID `json:"player_id"`
 	MemberRank         string    `json:"member_rank"` // NGOAI_MON, NOI_MON, TINH_ANH, CHAN_TRUYEN, TRUONG_LAO, HO_PHAP, CHUONG_MON
 	ContributionPoints int64     `json:"contribution_points"`
-	MasterID           *string   `json:"master_id"`
 	JoinedAt           time.Time `json:"joined_at"`
 	IsDefending        bool      `json:"is_defending"`
 }
@@ -121,6 +120,12 @@ func sectRankValue(rank string) int {
 // canManageSect reports whether the rank may manage sect operations (missions, vault, settings, kicks).
 func canManageSect(rank string) bool {
 	return rank == "CHUONG_MON" || rank == "TRUONG_LAO" || rank == "HO_PHAP"
+}
+
+// canDestroyVaultItem reports whether the rank may permanently destroy vault
+// items. Deliberately narrower than canManageSect: elders cannot.
+func canDestroyVaultItem(rank string) bool {
+	return rank == "CHUONG_MON" || rank == "HO_PHAP"
 }
 
 type SectVaultGuItem struct {
@@ -511,10 +516,10 @@ func GetMySectStatus(c *gin.Context) {
 
 	var m SectMember
 	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, sect_id, player_id, member_rank, contribution_points, master_id, joined_at, is_defending
+		SELECT id, sect_id, player_id, member_rank, contribution_points, joined_at, is_defending
 		FROM sect_members
 		WHERE player_id = $1
-	`, playerID).Scan(&m.ID, &m.SectID, &m.PlayerID, &m.MemberRank, &m.ContributionPoints, &m.MasterID, &m.JoinedAt, &m.IsDefending)
+	`, playerID).Scan(&m.ID, &m.SectID, &m.PlayerID, &m.MemberRank, &m.ContributionPoints, &m.JoinedAt, &m.IsDefending)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Check if they have a pending join request
@@ -544,11 +549,12 @@ func GetMySectStatus(c *gin.Context) {
 
 	var s Sect
 	var mapX, mapY int
+	var unpaidMaintenanceCount int
 	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings, last_relocated_at
+		SELECT id, name, description, region, funds, level, require_approval, require_promotion_approval, map_x, map_y, shield_until, buildings, last_relocated_at, unpaid_maintenance_count
 		FROM sects
 		WHERE id = $1
-	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &mapX, &mapY, &s.ShieldUntil, &s.Buildings, &s.LastRelocatedAt)
+	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval, &mapX, &mapY, &s.ShieldUntil, &s.Buildings, &s.LastRelocatedAt, &unpaidMaintenanceCount)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return
@@ -627,6 +633,7 @@ func GetMySectStatus(c *gin.Context) {
 		"pending_promotion_target":    pendingPromoTarget,
 		"estimated_daily_maintenance": dailyMaintFee,
 		"maintenance_breakdown":       maintBreakdown,
+		"unpaid_maintenance_count":    unpaidMaintenanceCount,
 	})
 }
 
