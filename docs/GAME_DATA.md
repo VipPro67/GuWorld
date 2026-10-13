@@ -297,7 +297,7 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 - **Cổ phàm (rank 1–5):** theo bảng `{1, 2, 5, 25, 125}` cho gap `{0,1,2,3,4}` — ví dụ rank 1 dùng Cổ rank 5 (gap 4) tốn **125×** Chân Nguyên.
 - **Cổ Tiên (rank ≥ 6):** mỗi bậc chênh lệch nhân ×100 (`100^gap`) — rank 6 dùng Cổ rank 7 tốn ×100, rank 6 dùng rank 8 tốn ×10.000.
 
-- `refine_mana_tier` (passive Cổ cùng rank đang trang bị) giảm 50% chi phí.
+- `refine_mana_tier` (passive Cổ cùng rank đang trang bị, lấy bậc cao nhất) giảm 50% chi phí dùng Cổ và đổi hệ số hồi Chân Nguyên bằng đá trong auto-battle (`0.4 + tier*0.1`, mặc định `1.0`).
 - **Trang bị & Sử dụng Cổ rank cao hơn:** Cho phép **trang bị** và **sử dụng trong chiến đấu** Cổ trùng rank cao hơn trong cùng khoảng cảnh giới (`gamefx.CanEquipGu`):
   - **Khoảng Phàm cổ (Rank < 6):** Phàm Cổ Sư (Rank 1–5) được trang bị và dùng Phàm Cổ rank cao hơn (Rank 1–5). Không thể trang bị/sử dụng Tiên Cổ (Rank ≥ 6).
   - **Khoảng Tiên cổ (Rank ≥ 6):** Cổ Tiên (Rank 6–9) được trang bị và dùng Tiên Cổ rank cao hơn (Rank 6–9) cũng như Phàm Cổ.

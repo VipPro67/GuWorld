@@ -38,7 +38,7 @@ const STAT_NAMES: Record<string, string> = {
   DISGUISE: "Ngụy Trang",
   TIME_SPEED: "Tốc Độ Thời Gian",
   REFINE_SUCCESS: "Tỷ Lệ Luyện Cổ",
-  REFINE_MANA_TIER: "Tiết Kiệm Chân Nguyên Luyện Cổ",
+  REFINE_MANA_TIER: "Tinh Luyện Chân Nguyên",
   STORAGE: "Sức Chứa",
   DAO_MARK: "Đạo Ngân",
   PATH_CONFLICT_REDUCTION: "Giảm Xung Đột Đạo",
