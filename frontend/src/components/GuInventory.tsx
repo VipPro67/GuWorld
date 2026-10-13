@@ -8,6 +8,7 @@ import { translateGuType, translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
 import { GamePanel } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
+import { hasOperation } from "@/lib/effect-blocks";
 import { KillerMovesPanel } from "@/components/KillerMovesPanel";
 
 interface GuInventoryProps {
@@ -53,6 +54,13 @@ const canPayFeedResource = (foodId: string, player: Player, rank: number): boole
   const resource = feedResourceInfo(foodId, player, rank);
   return resource !== null && (resource.preserveOne ? resource.balance > resource.cost : resource.balance >= resource.cost);
 };
+
+// A Gu is usable out of combat when it heals via an ON_ACTION block — this mirrors
+// what the backend reads (UseSupportGu -> CompileCombatAction -> HEAL/FLAT). Gate by
+// effect, not gu_type, so Active/Healing/Support healers all qualify.
+const canUseOutOfCombat = (spec: GuSpec): boolean =>
+  spec.gu_type !== "Consumable" &&
+  hasOperation(spec.effects, { trigger: "ON_ACTION", op: "HEAL", subType: "FLAT" });
 
 const FormatKey = (key: string): string => {
   switch (key) {
@@ -1138,7 +1146,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
                           {/* Group actions */}
                           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end flex-wrap">
-                            {spec.gu_type === "Support" && onUseSupportGu && totalCount > 1 && (
+                            {canUseOutOfCombat(spec) && onUseSupportGu && totalCount > 1 && (
                               <button
                                 type="button"
                                 disabled={actionLoading || !instances.some((gu) => gu.status !== "DEAD" && gu.status !== "SEALED" && gu.hunger > 0)}
@@ -1221,7 +1229,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       {usingGuId === singleGu.instance_id ? "..." : "Sử Dụng"}
                                     </button>
                                   )}
-                                  {spec.gu_type === "Support" && onUseSupportGu && (
+                                  {canUseOutOfCombat(spec) && onUseSupportGu && (
                                     <button
                                       type="button"
                                       disabled={actionLoading || !canAct || usingGuId === singleGu.instance_id}

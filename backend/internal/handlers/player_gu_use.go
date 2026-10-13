@@ -287,8 +287,11 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	if specs.Type != "Support" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không thuộc loại Hỗ Trợ, không thể sử dụng trực tiếp ngoài combat!"})
+	// Out-of-combat use is gated by the effect (ON_ACTION HEAL), not gu_type:
+	// any non-Consumable Gu with an active heal can recover the player. Consumable
+	// Gu have their own use flow and must be consumed there, not healed here.
+	if specs.Type == "Consumable" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng Tiêu Hao phải dùng qua chức năng Sử Dụng!"})
 		return
 	}
 
@@ -335,7 +338,7 @@ func UseSupportGu(c *gin.Context) {
 	}
 
 	if len(logs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng hỗ trợ này không có hiệu ứng ngoài chiến đấu!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không có hiệu ứng hồi phục để dùng ngoài chiến đấu!"})
 		return
 	}
 
