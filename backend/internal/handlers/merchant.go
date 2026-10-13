@@ -171,6 +171,17 @@ func isRecipeItem(q queryer, itemID string) bool {
 	return exists
 }
 
+// recipeCompletionRate reads a player's completion (0-100) for a recipe key.
+// ok=false means the player does not own that recipe (no progress row).
+func recipeCompletionRate(q queryer, playerID, recipeID string) (float64, bool) {
+	var rate float64
+	err := q.QueryRow(`SELECT completion_rate FROM player_recipe_progress WHERE player_id=$1 AND recipe_id=$2`, playerID, recipeID).Scan(&rate)
+	if err != nil {
+		return 0, false
+	}
+	return rate, true
+}
+
 // merchantResolveBase resolves the dictionary base price and the effective rank
 // for a polymorphic entity (Gu / Recipe / item).
 func merchantResolveBase(q queryer, itemID, itemType string, rank int) (float64, int, error) {
@@ -458,6 +469,12 @@ func QuoteMerchant(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	authID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	playerID := authID.String()
 	profile, _, err := loadMerchantEffective(db.DB, req.MerchantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Thương nhân không tồn tại"})
@@ -473,6 +490,15 @@ func QuoteMerchant(c *gin.Context) {
 			qi.Accepted = false
 			out = append(out, qi)
 			continue
+		}
+		if line.ItemType == "Recipe" {
+			rate, owned := recipeCompletionRate(db.DB, playerID, line.ItemID)
+			if !owned {
+				qi.Accepted = false
+				out = append(out, qi)
+				continue
+			}
+			base *= pricing.RecipeCompletionFactor(rate)
 		}
 		var bought int
 		_ = db.DB.QueryRow(`SELECT bought FROM merchant_demand WHERE merchant_id=$1 AND item_id=$2 AND period_start=$3`,
@@ -517,6 +543,13 @@ func executeMerchantSale(tx *sql.Tx, player *models.Player, merchantID string, p
 		}
 		if !profile.BuyTags.accepts(line.ItemType, sellRank, line.ItemID) {
 			return 0, 0, nil, nil, false, fmt.Errorf("Thương nhân không thu mua %s", line.ItemID)
+		}
+		if line.ItemType == "Recipe" {
+			rate, owned := recipeCompletionRate(tx, player.ID.String(), line.ItemID)
+			if !owned {
+				return 0, 0, nil, nil, false, fmt.Errorf("Đạo hữu không sở hữu bí phương %s", line.ItemID)
+			}
+			base *= pricing.RecipeCompletionFactor(rate)
 		}
 		var bought int
 		_ = tx.QueryRow(`SELECT bought FROM merchant_demand WHERE merchant_id=$1 AND item_id=$2 AND period_start=$3`,

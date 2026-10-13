@@ -16,3 +16,26 @@ func TestCurrencyPrecision(t *testing.T) {
 		t.Fatal("0.001 precision validation failed")
 	}
 }
+
+func TestRecipeCompletionFactor(t *testing.T) {
+	cases := []struct {
+		rate float64
+		want float64
+	}{
+		{0, RecipeCompletionFloor},
+		{-5, RecipeCompletionFloor},
+		{5, RecipeCompletionFloor},
+		{50, 0.5},
+		{100, 1.0},
+		{120, 1.0},
+	}
+	for _, tc := range cases {
+		if got := RecipeCompletionFactor(tc.rate); got != tc.want {
+			t.Fatalf("RecipeCompletionFactor(%v) = %v, want %v", tc.rate, got, tc.want)
+		}
+	}
+	// Rank 1 base = 200 → 50% → base 100 → SellPrice 10.
+	if got := RecipeSellPrice(1, 50); got != 10 {
+		t.Fatalf("RecipeSellPrice(1, 50) = %v, want 10", got)
+	}
+}

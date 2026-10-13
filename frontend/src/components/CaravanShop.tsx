@@ -142,6 +142,10 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   // SellPrice = basePrice * 0.10, rounded to the 0.001 currency unit.
   const getSellPrice = (basePrice: number): number => Math.max(0.001, Math.round(basePrice * sellBackRatio * 1000) / 1000);
 
+  // Recipe value scales with completion rate (0-100), floored at 10% — matches pricing.RecipeCompletionFactor.
+  const recipeCompletionFactor = (rate?: number): number =>
+    Math.max(0.1, Math.min(100, rate || 0) / 100);
+
   // Helper to calculate exact sell price matching pricing.go
   const getItemSellPrice = (itemId: string, type: "Gu" | "Material", rank?: number): number => {
     const basePrice = type === "Gu" ? getGuBasePrice(itemId, rank) : getItemBasePrice(itemId);
@@ -211,7 +215,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       description: `Bí phương luyện chế Cổ trùng. Độ hoàn thiện: ${recipe.completion_rate}%`,
       type: "Recipe" as const,
       owned: 1,
-      price: getSellPrice(getGuBasePrice(targetGuID, targetGuRank)),
+      price: getSellPrice(getGuBasePrice(targetGuID, targetGuRank) * recipeCompletionFactor(recipe.completion_rate)),
       rank: targetGuRank,
       currency: stoneTier(targetGuRank),
       paths: [] as string[],

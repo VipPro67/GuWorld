@@ -7,6 +7,8 @@
 Chế độ:
   - Key "dày" (>= --min-samples mẫu ở mọi rank có mặt): ref = median theo rank.
   - Key "thưa": chỉ cân khi có --hard và key nằm trong HARD_REFS (hoặc --hard-file).
+  - DOT (BLEED/POISON/BURN/SLOW_DAMAGE): tổng damage một lần áp dụng tối đa
+    60% damage FLAT chuẩn cùng rank, chia theo số lượt hiệu lực.
   - Ngưỡng lệch: --factor (mặc định 10×, đo theo tỉ lệ) hoặc --band (dung sai ±PCT).
   - Mặc định chỉ audit (in báo cáo); --apply mới ghi CSV.
 
@@ -36,6 +38,10 @@ GU = DATA / "Gu.csv"
 
 # P(rank): bậc quy mô chuẩn dùng bởi docs/GuRankScaling.md và gamefx.RankScale.
 RANK_SCALE = {1: 1, 2: 2, 3: 5, 4: 20, 5: 100, 6: 10**4, 7: 10**6, 8: 10**8, 9: 10**10}
+DOT_STATUS_IDS = {"BLEED", "POISON", "BURN", "SLOW_DAMAGE"}
+DOT_TOTAL_DAMAGE_RATIO = 0.6
+DOT_DEFAULT_TURNS = 3
+FLAT_DAMAGE_PER_RANK_SCALE = 25
 
 # Ngưỡng lệch mạnh: coi là bất thường khi value lệch khỏi ref quá --factor lần,
 # đo theo TỈ LỆ (max(v/ref, ref/v)) vì sức mạnh Cổ scale theo cấp số nhân.
@@ -161,6 +167,13 @@ def in_band(v, ref, factor, band):
     return max(v / ref, ref / v) <= factor
 
 
+def dot_damage_cap(rank, turns):
+    """Giới hạn tổng sát thương DoT ở 60% damage FLAT chuẩn cùng rank."""
+    rank_scale = RANK_SCALE[min(max(rank, 1), 9)]
+    duration = turns if turns > 0 else DOT_DEFAULT_TURNS
+    return FLAT_DAMAGE_PER_RANK_SCALE * rank_scale * DOT_TOTAL_DAMAGE_RATIO / duration
+
+
 def build_parsed(rows, id_idx, rank_idx, eff_idx):
     parsed = {}
     for ri, row in enumerate(rows):
@@ -272,6 +285,22 @@ def main():
     issues, uncovered = [], set()
     for rec in records:
         key, rank, val = rec["key"], rec["rank"], rec["value"]
+        status_id = rec["op"].get("status_id", "")
+        if rec["op"].get("op") == "STATUS" and isinstance(status_id, str) and status_id in DOT_STATUS_IDS:
+            gu_id = parsed[rec["row"]][2]["id"]
+            if gu_id in allow:
+                continue
+            turns = rec["op"].get("turns", DOT_DEFAULT_TURNS)
+            turns = turns if isinstance(turns, int) and not isinstance(turns, bool) else DOT_DEFAULT_TURNS
+            ref = dot_damage_cap(rank, turns)
+            if val <= ref:
+                continue
+            new = num_out(ref)
+            rec["op"]["value"] = new
+            issues.append((gu_id, rank, key, val, new, ref, val / ref - 1, "dot-budget"))
+            state_changes.setdefault(rec["row"], []).append(gu_id)
+            continue
+
         ref, source = ref_for(key, rank)
         if ref is None:
             if key in sparse:
@@ -370,6 +399,9 @@ def self_test():
     assert num_out(2000.0) == 2000
     assert key_str("STAT_MOD", "ATTACK", "ADD_FLAT") == "STAT_MOD|ATTACK|ADD_FLAT"
     assert key_str("STATUS", "BLEED", None) == "STATUS|BLEED|"
+    assert dot_damage_cap(4, 3) == 100
+    assert dot_damage_cap(4, 6) == 50
+    assert dot_damage_cap(99, 3) == 50000000000
     obj = [{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]
     out, _ = dump_style('[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]', obj)
     assert out == '[{"operations": [{"op": "DAMAGE", "value": 20, "sub_type": "FLAT"}]}]'
@@ -400,7 +432,10 @@ def _extract(parsed):
                     key, val, src = key_str(o, op.get("stat"), op.get("sub_type")), op.get("value"), (bi, oi, "value")
                 if not is_number(val):
                     continue
-                records.append({"row": ri, "rank": rank, "key": key, "value": val, "src": src, "obj": obj, "meta": meta})
+                records.append({
+                    "row": ri, "rank": rank, "key": key, "value": val,
+                    "src": src, "obj": obj, "meta": meta, "op": op,
+                })
     return records
 
 

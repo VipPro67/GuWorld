@@ -36,7 +36,7 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 | `passive.stat_base_defense` | `5 × P` | cộng phòng ngự nền |
 | `passive.stat_base_hp` | `10 × P` | cộng máu nền |
 | `passive.stat_base_speed` | `1` | cộng tốc độ nền | ko scale mạnh như các chỉ số khác
-| `active.status_tick_damage` | `10 × P` | sát thương tick theo lượt (BURN/BLEED/PETRIFY...) |
+| DOT (`BLEED`/`POISON`/`BURN`/`SLOW_DAMAGE`) | Tổng damage mỗi lần áp dụng ≤ `60% × damage_flat chuẩn` cùng rank; `value/tick ≤ 0.6 × 25 × P / turns` | Với 3 lượt, mỗi tick bằng tối đa 20% damage FLAT chuẩn. DOT lâu hơn giảm damage/tick tương ứng. |
 
 ## 3. Bảng chuẩn rank 1–9
 
@@ -66,6 +66,6 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 
 ## 5. Kiểm chứng
 
-- Sau khi sửa CSV: chạy `python3 scripts/balance_gu_effects.py` để so mỗi `(key, rank)` với chuẩn. Mặc định chỉ audit, bắt lệch > `--factor` (mặc định 10×); `--band 0.35` dùng dung sai ±35% theo tài liệu này. `--hard` bật bảng ref cứng cho key thưa (sparse), `--apply` ghi CSV giữ nguyên format.
+- Sau khi sửa CSV: chạy `python3 scripts/balance_gu_effects.py` để so mỗi `(key, rank)` với chuẩn. Với DOT, script tự audit giới hạn tổng damage một lần áp dụng ở 60% damage FLAT chuẩn cùng rank, chia theo `turns` (mặc định 3 nếu thiếu); rule này không bị nới bởi `--factor`/`--band`. Mặc định chỉ audit, `--apply` mới ghi CSV giữ nguyên format. Với các key khác, ngưỡng lệch mặc định là `--factor 10`; `--band 0.35` dùng dung sai ±35%, còn `--hard` bật bảng ref cứng cho key thưa (sparse).
 - Áp dụng không cần restart server: Admin → tab "Dữ liệu" → Import (`admin_data.go: AdminImportData` → `SeedFromCSV` + `LoadGuRegistry`).
 - Với seed mới từ đầu: `db.go: seedGusFromCSV` upsert `INSERT ... ON CONFLICT (id, rank) DO UPDATE`.

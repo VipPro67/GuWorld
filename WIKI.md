@@ -747,6 +747,7 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
   - **Mua hàng giá cao**: khởi điểm 70–100% giá gốc, nhưng **càng bán nhiều một loại giá càng tụt** về 10–30%.
   - **Giới hạn số lượng (quota) dùng chung toàn server** theo giờ: ai nhanh chân bán trước; hết quota phải chờ kỳ sau hoặc tìm con khác.
   - **Mua bán cả Cổ, nguyên liệu và cổ phương (bí phương)**; mua cổ phương sẽ mở khóa công thức.
+  - **Giá thu mua bí phương tỉ lệ với độ hoàn thiện**: 100% hoàn thiện ăn giá gốc, thấp hơn thì giảm dần, tối thiểu 10% giá gốc (sàn). Phải sở hữu bí phương mới bán được.
 
 ### Bảo Hoàng Thiên chợ trời
 

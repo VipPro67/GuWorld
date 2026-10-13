@@ -36,6 +36,11 @@ const (
 
 	// RecipeRankDivisor: recipe vault cost = GuBasePrice(targetRank) / RecipeRankDivisor
 	RecipeRankDivisor = 10
+
+	// RecipeCompletionFloor: minimum fraction of base price a recipe keeps when
+	// sold to the system (Caravan / roaming merchant), regardless of completion
+	// rate. A 0%-complete recipe still fetches this much; 100% fetches full.
+	RecipeCompletionFloor = 0.10
 )
 
 // ---- Currency tiers --------------------------------------------------------
@@ -185,7 +190,25 @@ func RecipeBasePrice(targetGuRank int) float64 {
 	return GuBasePriceByRank(targetGuRank)
 }
 
-// RecipeSellPrice returns Primeval Stones refunded when selling a Recipe to the Caravan Shop.
-func RecipeSellPrice(targetGuRank int) float64 {
-	return SellPrice(RecipeBasePrice(targetGuRank))
+// RecipeCompletionFactor maps a recipe completion rate (0-100) to the fraction
+// of its base price it is worth. Linear from RecipeCompletionFloor at 0% up to
+// 1.0 at 100%. Values outside 0-100 are clamped.
+func RecipeCompletionFactor(completionRate float64) float64 {
+	if completionRate < 0 {
+		completionRate = 0
+	}
+	if completionRate > 100 {
+		completionRate = 100
+	}
+	frac := completionRate / 100
+	if frac < RecipeCompletionFloor {
+		return RecipeCompletionFloor
+	}
+	return frac
+}
+
+// RecipeSellPrice returns Primeval Stones refunded when selling a Recipe to the
+// Caravan Shop, scaled by the recipe's completion rate.
+func RecipeSellPrice(targetGuRank int, completionRate float64) float64 {
+	return SellPrice(RecipeBasePrice(targetGuRank) * RecipeCompletionFactor(completionRate))
 }
