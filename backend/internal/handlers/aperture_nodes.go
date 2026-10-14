@@ -502,6 +502,38 @@ func PlaceApertureNode(c *gin.Context) {
 		}
 	}
 
+	// 3c. Gieo giống: khu tài nguyên tiêu hao một lượng chính vật phẩm
+	// định sản xuất (prod_key) làm hạt giống trước khi node hoạt động.
+	seedsConsumed := int64(0)
+	seedName := ""
+	if nodeCategory == "RESOURCE" {
+		if nodeProdKey == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Phải chọn vật phẩm sản xuất cho khu tài nguyên."})
+			return
+		}
+		if template.SeedAmount > 0 {
+			seedQty := int64(template.SeedAmount)
+			seedName = nodeProdKey
+			if itemSpec, exists := models.ItemRegistry[nodeProdKey]; exists {
+				seedName = itemSpec.Name
+			}
+			have, err := InventorySvc.GetQuantity(tx, playerID.String(), nodeProdKey)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn túi đồ giống"})
+				return
+			}
+			if have < seedQty {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Thiếu giống để gieo trồng: cần %d %s (đang có %d).", seedQty, seedName, have)})
+				return
+			}
+			if err := InventorySvc.RemoveItem(tx, playerID.String(), nodeProdKey, "materials", seedQty); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao giống gieo trồng"})
+				return
+			}
+			seedsConsumed = seedQty
+		}
+	}
+
 	// 4. Insert node
 	var node models.ApertureResourceNode
 	var createdAt time.Time
@@ -584,6 +616,9 @@ func PlaceApertureNode(c *gin.Context) {
 	costDesc := strings.Join(costParts, ", ")
 
 	buildMsg := fmt.Sprintf("Xây dựng thành công %s! Tiêu hao: %s.", template.Name, costDesc)
+	if seedsConsumed > 0 {
+		buildMsg += fmt.Sprintf(" Gieo giống: %dx %s.", seedsConsumed, seedName)
+	}
 	notify.Send(db.DB, playerID, "aperture_build", "Xây Dựng Tiên Khiếu", buildMsg)
 
 	auditlog.Log(db.DB, auditlog.Entry{
@@ -609,7 +644,7 @@ func PlaceApertureNode(c *gin.Context) {
 		"message":         buildMsg,
 		"immortal_stones": newStones,
 	}
-	if hasItem {
+	if hasItem || seedsConsumed > 0 {
 		resp["materials_inventory"] = loadMaterialsInventory(playerID.String())
 	}
 	c.JSON(http.StatusOK, resp)

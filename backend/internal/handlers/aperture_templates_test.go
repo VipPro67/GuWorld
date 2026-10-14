@@ -53,4 +53,26 @@ func TestLoadResourceNodeTemplatesFromFile(t *testing.T) {
 	if cat.HPBonus != 500 || cat.AttackRange != 2 || cat.NodeCategory != "DEFENSE" {
 		t.Fatalf("GUARDIAN_STATUE parsed wrong: %+v", cat)
 	}
+
+	// Khu tài nguyên: 1 ô, Tiên Khiếu LOW (area 3M -> cellYield 0.01875, areaMult 1.3),
+	// chia RankScale(3)=5 => prod_amount >= 206 mới thu được >= 1 vật phẩm rank 3.
+	// Interval chuẩn 10h và cần 100 giống để gieo.
+	for _, id := range []string{"FARMING_ZONE", "BREEDING_ZONE", "MINING_ZONE"} {
+		tpl, ok := got[id]
+		if !ok {
+			t.Fatalf("%s missing", id)
+		}
+		if tpl.NodeCategory == "DEFENSE" {
+			t.Fatalf("%s NodeCategory=DEFENSE (phải là khu tài nguyên)", id)
+		}
+		if tpl.ProdAmount < 206 {
+			t.Fatalf("%s ProdAmount=%d < 206 (vật phẩm rank 3 sẽ ra 0)", id, tpl.ProdAmount)
+		}
+		if tpl.ProdIntervalHours != 10 {
+			t.Fatalf("%s ProdIntervalHours=%d != 10", id, tpl.ProdIntervalHours)
+		}
+		if tpl.SeedAmount != 100 {
+			t.Fatalf("%s SeedAmount=%d != 100", id, tpl.SeedAmount)
+		}
+	}
 }

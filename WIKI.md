@@ -213,6 +213,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
 - Bản đồ Tiên Khiếu là lưới 20×20. Mỗi node trồng trọt, chăn nuôi hoặc khai thác có thể chiếm một vùng ô liền nhau; nhiều node cùng loại được phép đặt, nhưng mỗi ô chỉ thuộc một node.
+- **Gieo giống:** đặt một khu trồng trọt/chăn nuôi/khai thác cần tiêu hao **100** chính vật phẩm định sản xuất (`prod_key`) làm hạt giống. Mỏ khởi tạo sẵn thì miễn giống; muốn nhân giống loại mới phải kiếm được loại đó (loot/shop) trước. Giống **không được hoàn** khi tháo dỡ.
 - Sản lượng node tỉ lệ với số ô được giao. Khi lấp kín 400 ô, tổng sản lượng được hiệu chỉnh còn 25% mức tối đa của giới hạn node cũ; các hệ số path, Đạo Ngân, sinh thái, lao động và phẩm vật vẫn áp dụng.
 - Xung đột Đạo của sản lượng dùng chung hồ sơ combat theo path, Đạo Ngân, path mastery và hiệu ứng giảm xung đột; vị trí node không tạo luật tương khắc riêng.
 - Cổ sư có thể thu hoạch, gỡ/xóa và sửa chữa từng node/vùng.

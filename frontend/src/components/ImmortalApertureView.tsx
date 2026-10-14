@@ -41,6 +41,10 @@ import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, 
 import { CountdownTimer } from "./CountdownTimer";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 
+// Số giống (chính vật phẩm sản xuất) cần để gieo một khu tài nguyên. Khớp
+// seed_amount trong backend/data/ApertureNodeTemplate.csv (backend là nguồn chân lý).
+const APERTURE_SEED_AMOUNT = 100;
+
 export interface DaoGroupDef {
   id: string;
   name: string;
@@ -1611,13 +1615,23 @@ return (
                               }
                             }
 
-                            const combinedMultiplier = (areaMultiplier * daoMultiplier * conflictMult * ecoMult * vhLaborMult * vhPopBonus * itemFoodPathMultiplier * levelMultiplier) / itemRankDivisor;
+                            // Độ thuần khiết Tiên Khiếu (spec §5.1) — khớp backend gamefx.EcologyPurityFactor.
+                            const purityFrac = dominantPurity / 100;
+                            let ecologyMultiplier = 1.0;
+                            if (purityFrac > 0) {
+                              const purityFactor = purityFrac >= 0.70 ? 1.0 : Math.max(0.25, 1.0 - (0.70 - purityFrac) * 1.25);
+                              const conflictReduction = daoNgan?.dao_conflict_reduction_pct ?? 0;
+                              ecologyMultiplier = 1.0 - (1.0 - purityFactor) * (1.0 - conflictReduction / 100);
+                            }
+
+                            const combinedMultiplier = (areaMultiplier * daoMultiplier * conflictMult * ecologyMultiplier * ecoMult * vhLaborMult * vhPopBonus * itemFoodPathMultiplier * levelMultiplier) / itemRankDivisor;
                             const baseProd = selectedNode.production_amount || 0;
                             const nodeCells = selectedNode.cells?.length || 1;
                             const legacyNodeCap = Math.min(200, Math.floor((aperture?.area_size || 0) / 100000));
                             const cellYieldMultiplier = legacyNodeCap * 0.25 / 400;
                             const projectedProduction = baseProd * nodeCells * cellYieldMultiplier * combinedMultiplier;
-                            let rawExpected = projectedProduction > 0 ? Math.max(1, Math.floor(projectedProduction)) : 0;
+                            // Khớp backend: floor thật, phần lẻ dồn vào lần thu sau (không làm tròn lên 1).
+                            let rawExpected = projectedProduction > 0 ? Math.floor(projectedProduction) : 0;
                             if (selectedNode.production_type === "Material" && rawExpected > 10000000) {
                               rawExpected = 10000000;
                             }
@@ -2206,6 +2220,16 @@ return (
                                             <span>Đại Đạo: <strong className="text-slate-200">{translatePath(buildPath)}</strong></span>
                                             <span>Chu kỳ thu: <strong className="text-emerald-400">10 tiếng/lần</strong></span>
                                           </div>
+                                          {(() => {
+                                            const seedHave = player.materials_inventory?.[buildProdKey] ?? 0;
+                                            const seedShort = seedHave < APERTURE_SEED_AMOUNT;
+                                            return (
+                                              <div className={`text-[10px] pt-1.5 flex items-center justify-between border-t border-slate-800 font-semibold ${seedShort ? "text-rose-400" : "text-emerald-400"}`}>
+                                                <span>🌱 Giống cần: <strong>{APERTURE_SEED_AMOUNT}× {selectedItemSpec.name}</strong></span>
+                                                <span>Trong túi: {seedHave}</span>
+                                              </div>
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                     </div>
@@ -2220,7 +2244,7 @@ return (
                                   </button>
                                   <button
                                     onClick={() => handleBuildNode(pendingBuildZone, buildPath, buildProdKey)}
-                                    disabled={actionLoading || !buildProdKey || buildCells.length === 0}
+                                    disabled={actionLoading || !buildProdKey || buildCells.length === 0 || (player.materials_inventory?.[buildProdKey] ?? 0) < APERTURE_SEED_AMOUNT}
                                     className="flex-1 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 disabled:from-slate-800 disabled:text-slate-500 text-slate-950 text-[10px] font-bold rounded transition"
                                   >
                                     {actionLoading ? "Đang xây..." : "Xác nhận Xây"}

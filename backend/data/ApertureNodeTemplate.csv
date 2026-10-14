@@ -1,9 +1,9 @@
-node_type,name,path,cost_stones,cost_immortal,prod_type,prod_key,prod_amount,prod_interval_hours,node_category,hp_max,defense_power,attack_range,hp_bonus,damage_reduction,blocks_movement,cost_gu,cost_gu_rank,food_path,item_tier,zone_type
-FARMING_ZONE,Khu Trồng Trọt,Wood Path,10,0,Material,,10,50,,0,0,0,0,0,false,,0,,,khu_trong
-BREEDING_ZONE,Khu Chăn Nuôi,Food Path,24,0,Material,,5,50,,0,0,0,0,0,false,,0,,,khu_nuoi
-MINING_ZONE,Khu Khai Thác,Earth Path,20,0,Material,,3,50,,0,0,0,0,0,false,,0,,,khu_khai_thac
-WALL,Tường Thành Tiên Khiếu,Earth Path,16,0,,,0,0,DEFENSE,3000,0,0,0,0,true,GU_BEAST_SKIN;GU_STONE_SKIN,1,,,khu_phong_thu
-WATCHTOWER,Tháp Canh Tiên Khiếu,Metal Path,24,0,,,0,0,DEFENSE,2000,5,3,0,0,false,GU_IRON_SKIN;GU_HALF_STONE,2,,,khu_phong_thu
-GUARDIAN_STATUE,Tượng Hộ Mệnh Tiên Khiếu,Earth Path,30,0,,,0,0,DEFENSE,2500,0,2,500,0,false,GU_WHITE_JADE;GU_MOON_RAIMENT,2,,,khu_phong_thu
-BARRACKS,Doanh Trại Tiên Khiếu,Human Path,40,0,,,0,0,DEFENSE,4000,0,0,0,15,false,GU_GOLDEN_BELL_SHIELD;GU_IVORY_ARMOR,4,,,khu_phong_thu
-FORCE_FIELD,Trường Lực Tiên Khiếu,Metal Path,50,0,,,0,0,DEFENSE,1500,0,2,0,30,false,GU_SUPREME_SHIELD;GU_GOLDEN_BELL_SHIELD,4,,,khu_phong_thu
+node_type,name,path,cost_stones,cost_immortal,prod_type,prod_key,prod_amount,prod_interval_hours,node_category,hp_max,defense_power,attack_range,hp_bonus,damage_reduction,blocks_movement,cost_gu,cost_gu_rank,food_path,item_tier,zone_type,seed_amount
+FARMING_ZONE,Khu Trồng Trọt,Wood Path,10,0,Material,,300,10,,0,0,0,0,0,false,,0,,,khu_trong,100
+BREEDING_ZONE,Khu Chăn Nuôi,Food Path,24,0,Material,,250,10,,0,0,0,0,0,false,,0,,,khu_nuoi,100
+MINING_ZONE,Khu Khai Thác,Earth Path,20,0,Material,,210,10,,0,0,0,0,0,false,,0,,,khu_khai_thac,100
+WALL,Tường Thành Tiên Khiếu,Earth Path,16,0,,,0,0,DEFENSE,3000,0,0,0,0,true,GU_BEAST_SKIN;GU_STONE_SKIN,1,,,khu_phong_thu,0
+WATCHTOWER,Tháp Canh Tiên Khiếu,Metal Path,24,0,,,0,0,DEFENSE,2000,5,3,0,0,false,GU_IRON_SKIN;GU_HALF_STONE,2,,,khu_phong_thu,0
+GUARDIAN_STATUE,Tượng Hộ Mệnh Tiên Khiếu,Earth Path,30,0,,,0,0,DEFENSE,2500,0,2,500,0,false,GU_WHITE_JADE;GU_MOON_RAIMENT,2,,,khu_phong_thu,0
+BARRACKS,Doanh Trại Tiên Khiếu,Human Path,40,0,,,0,0,DEFENSE,4000,0,0,0,15,false,GU_GOLDEN_BELL_SHIELD;GU_IVORY_ARMOR,4,,,khu_phong_thu,0
+FORCE_FIELD,Trường Lực Tiên Khiếu,Metal Path,50,0,,,0,0,DEFENSE,1500,0,2,0,30,false,GU_SUPREME_SHIELD;GU_GOLDEN_BELL_SHIELD,4,,,khu_phong_thu,0

@@ -33,6 +33,7 @@ type ResourceNodeTemplate struct {
 	FoodPath          string   // path of the food item produced (if any)
 	ItemTier          string   // tier of the item (T1-T9)
 	ZoneType          string   // zone type (khu_trong, khu_nuoi, khu_khai_thac, khu_che_bien, khu_phong_thu, khu_thuc_an)
+	SeedAmount        int      // quantity of the produced item consumed as seed when placing the node (0 = no seed cost)
 }
 
 // ResourceNodeTemplates holds aperture node definitions loaded from
@@ -107,6 +108,7 @@ func parseResourceNodeTemplates(r io.Reader) map[string]ResourceNodeTemplate {
 			FoodPath:          at("food_path"),
 			ItemTier:          at("item_tier"),
 			ZoneType:          at("zone_type"),
+			SeedAmount:        atoi(at("seed_amount")),
 		}
 		if cg := at("cost_gu"); cg != "" {
 			t.CostGu = strings.Split(cg, ";")
