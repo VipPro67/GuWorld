@@ -92,22 +92,19 @@ func GetTileGroundDrops(c *gin.Context) {
 			SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
 			       loot_data, protected_until, expires_at, created_at
 			FROM map_ground_drops
-			WHERE region_id = $1
-			  AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5
+			WHERE x BETWEEN $1 AND $2 AND y BETWEEN $3 AND $4
 			  AND expires_at > NOW()
 			ORDER BY created_at DESC
-		`, currentRegion.String, targetX-radius, targetX+radius, targetY-radius, targetY+radius)
+		`, targetX-radius, targetX+radius, targetY-radius, targetY+radius)
 	} else {
 		rows, err = db.DB.QueryContext(c.Request.Context(), `
 			SELECT id, region_id, x, y, loser_id, loser_name, killer_id, killer_name,
 			       loot_data, protected_until, expires_at, created_at
 			FROM map_ground_drops
-			WHERE region_id = $1
-			  AND x BETWEEN $2 AND $3 AND y BETWEEN $4 AND $5
+			WHERE x BETWEEN $1 AND $2 AND y BETWEEN $3 AND $4
 			  AND expires_at > NOW()
 			ORDER BY created_at DESC
-		`, currentRegion.String,
-			playerX-MaxMapVisionRadius, playerX+MaxMapVisionRadius,
+		`, playerX-MaxMapVisionRadius, playerX+MaxMapVisionRadius,
 			playerY-MaxMapVisionRadius, playerY+MaxMapVisionRadius)
 	}
 

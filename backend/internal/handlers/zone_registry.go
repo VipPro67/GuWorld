@@ -634,17 +634,15 @@ func regionAtFromRectZones(x, y int, candidates []models.Region) string {
 	return bestID
 }
 
-// IsSafeZone returns true if the region or coordinates belong to a HUB or SAFE_ZONE.
+// IsSafeZone returns true if the coordinates belong to a HUB or SAFE_ZONE.
+// A region whose ID maps to a hub/safe zone type only counts when the
+// coordinates are actually inside that zone's rectangle — otherwise players
+// standing in the wilderness between zones would be treated as safe.
 func IsSafeZone(regionID string, x, y int) bool {
 	if z := ZoneByID(regionID); z != nil && zoneContains(z, x, y) {
 		return z.ZoneType == ZoneTypeHub || z.ZoneType == ZoneTypeSafe
 	}
 	if z := FindZoneAtOnMap(x, y, worldMapIDForRegion(regionID)); z != nil {
-		if z.ZoneType == ZoneTypeHub || z.ZoneType == ZoneTypeSafe {
-			return true
-		}
-	}
-	if z := ZoneByID(regionID); z != nil {
 		if z.ZoneType == ZoneTypeHub || z.ZoneType == ZoneTypeSafe {
 			return true
 		}

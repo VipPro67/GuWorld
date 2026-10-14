@@ -767,7 +767,7 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
 - Để ngăn chặn hành vi cố tình chết để tuồn chuyển tài nguyên, đồ đạc:
   - Tỷ lệ hao hụt tài nguyên cơ bản khi tử đạo tăng lên **40%** (Nguyên Thạch, Tiên Nguyên Thạch, Nguyên liệu) và **30%** (Cổ trùng, Bí phương). Khi có Sát Khí, tỷ lệ này nhân thêm hệ số Oán Khí.
   - **Quy tắc Thiên Đạo Tiêu Hủy (Void Destruction):** Trong tổng số tài nguyên hao hụt khi chết, **40% sẽ bị Thiên Đạo chấn nát và tiêu hủy vĩnh viễn khỏi server**, chỉ **60% còn lại** mới rơi ra bãi chiến lợi phẩm tại chỗ (`map_ground_drops`).
-  - Bãi rơi chỉ tồn tại trong vòng **10 phút** (3 phút đầu bảo hộ cho người hạ gục, 7 phút sau cho toàn server).
+  - Bãi rơi chỉ tồn tại trong vòng **30 phút** (3 phút đầu bảo hộ cho người hạ gục, 27 phút sau cho toàn server).
   - Cổ Bản Mệnh (`IsVital`) tuyệt đối không bao giờ bị rơi hay bị tiêu hủy khi chết. Cổ đang trang bị chỉ có nguy cơ rơi/tiêu hủy khi Sát Khí > 5.
 
 ### Giao dịch trực tiếp

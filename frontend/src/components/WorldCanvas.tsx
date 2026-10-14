@@ -255,7 +255,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         group.position.set(toX, toY);
         group.eventMode = "static";
         group.cursor = "pointer";
-        group.hitArea = new Circle(0, 0, 0.8);
+        group.hitArea = new Circle(0, 0, 0.45);
         group.on("pointertap", (event: FederatedPointerEvent) => {
           event.stopPropagation();
           const store = useWorldStore.getState();
@@ -739,9 +739,9 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
                 isMovingRef.current = false;
                 setMoving(false);
                 const currentDrops = useGameStore.getState().groundDrops;
-                const dropAtTarget = currentDrops.find((d) => d.x === requestedX && d.y === requestedY);
-                if (dropAtTarget) {
-                  useGameStore.getState().lootGroundDrop(dropAtTarget.id);
+                const dropsAtTarget = currentDrops.filter((d) => d.x === requestedX && d.y === requestedY);
+                if (dropsAtTarget.length > 0) {
+                  void Promise.all(dropsAtTarget.map((d) => useGameStore.getState().lootGroundDrop(d.id)));
                 } else {
                   selectObject(null);
                 }
@@ -1359,73 +1359,94 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       clearContainer(container);
       labelRenderStateRef.current = "";
 
+      // Group drops by tile so multiple drops on the same tile don't overlap
+      const dropsByTile = new Map<string, typeof groundDrops>();
       for (const drop of drops) {
-        const g = new Graphics();
-        const size = 0.65;
+        const key = `${drop.x},${drop.y}`;
+        const existing = dropsByTile.get(key);
+        if (existing) {
+          existing.push(drop);
+        } else {
+          dropsByTile.set(key, [drop]);
+        }
+      }
 
-        // Outer pulsing glow aura
-        g.circle(0, 0, size + 0.2);
-        g.fill({ color: 0xf59e0b, alpha: 0.35 });
+      for (const [key, tileDrops] of dropsByTile) {
+        const [tileX, tileY] = key.split(",").map(Number);
+        const count = tileDrops.length;
+        const spreadRadius = count > 1 ? 0.22 : 0;
+        tileDrops.forEach((drop, i) => {
+          const angle = count > 1 ? (2 * Math.PI * i) / count - Math.PI / 2 : 0;
+          const ox = spreadRadius * Math.cos(angle);
+          const oy = spreadRadius * Math.sin(angle);
 
-        // Golden pouch / loot chest shape
-        g.roundRect(-size / 2, -size / 2, size, size * 0.8, 0.15);
-        g.fill({ color: 0xd97706 });
-        g.stroke({ color: 0xfef08a, width: 0.08 });
+          const g = new Graphics();
+          const size = 0.65;
 
-        // Shiny gem accent in center
-        g.poly([0, -size / 4, size / 4, 0, 0, size / 4, -size / 4, 0]);
-        g.fill({ color: 0xfde047 });
+          // Outer pulsing glow aura
+          g.circle(0, 0, size + 0.2);
+          g.fill({ color: 0xf59e0b, alpha: 0.35 });
 
-        g.eventMode = "static";
-        g.cursor = "pointer";
-        g.on("pointerdown", (event) => {
-          event.stopPropagation();
-          handleObjectClick({
-            id: drop.id,
-            region_id: "",
-            x: drop.x,
-            y: drop.y,
-            cell_type: "GroundDrop",
-            content_id: drop.id,
-            dropData: drop,
+          // Golden pouch / loot chest shape
+          g.roundRect(-size / 2, -size / 2, size, size * 0.8, 0.15);
+          g.fill({ color: 0xd97706 });
+          g.stroke({ color: 0xfef08a, width: 0.08 });
+
+          // Shiny gem accent in center
+          g.poly([0, -size / 4, size / 4, 0, 0, size / 4, -size / 4, 0]);
+          g.fill({ color: 0xfde047 });
+
+          g.eventMode = "static";
+          g.cursor = "pointer";
+          g.on("pointerdown", (event) => {
+            event.stopPropagation();
+            handleObjectClick({
+              id: drop.id,
+              region_id: "",
+              x: drop.x,
+              y: drop.y,
+              cell_type: "GroundDrop",
+              content_id: drop.id,
+              dropData: drop,
+            });
           });
-        });
 
-        g.position.set(drop.x + 0.5, drop.y + 0.5);
-        container.addChild(g);
+          g.position.set(tileX + 0.5 + ox, tileY + 0.5 + oy);
+          container.addChild(g);
 
-        // Label above loot bag (scaled dynamically with camera targetScale)
-        const label = new Text({
-          text: `🎁 Hài cốt: ${drop.loser_name}`,
-          style: {
-            fontSize: 11,
-            fill: 0xfcd34d,
-            fontFamily: "sans-serif",
-            stroke: { color: 0x000000, width: 2 },
-          },
-        });
-        label.anchor.set(0.5, 1);
-        label.y = -0.6;
-
-        const labelContainer = new Container();
-        labelContainer.name = "drop-label";
-        labelContainer.eventMode = "static";
-        labelContainer.cursor = "pointer";
-        labelContainer.on("pointerdown", (event) => {
-          event.stopPropagation();
-          handleObjectClick({
-            id: drop.id,
-            region_id: "",
-            x: drop.x,
-            y: drop.y,
-            cell_type: "GroundDrop",
-            content_id: drop.id,
-            dropData: drop,
+          // Label above loot bag (scaled dynamically with camera targetScale)
+          const label = new Text({
+            text: `🎁 Hài cốt: ${drop.loser_name}`,
+            style: {
+              fontSize: 11,
+              fill: 0xfcd34d,
+              fontFamily: "sans-serif",
+              stroke: { color: 0x000000, width: 2 },
+            },
           });
+          label.anchor.set(0.5, 1);
+          label.y = -0.6;
+
+          const labelContainer = new Container();
+          labelContainer.name = "drop-label";
+          labelContainer.eventMode = "static";
+          labelContainer.cursor = "pointer";
+          labelContainer.on("pointerdown", (event) => {
+            event.stopPropagation();
+            handleObjectClick({
+              id: drop.id,
+              region_id: "",
+              x: drop.x,
+              y: drop.y,
+              cell_type: "GroundDrop",
+              content_id: drop.id,
+              dropData: drop,
+            });
+          });
+          labelContainer.position.set(tileX + 0.5 + ox, tileY + 0.5 + oy);
+          labelContainer.addChild(label);
+          container.addChild(labelContainer);
         });
-        labelContainer.position.set(drop.x + 0.5, drop.y + 0.5);
-        labelContainer.addChild(label);
-        container.addChild(labelContainer);
       }
     },
     [handleObjectClick, groundDrops],
@@ -1821,7 +1842,7 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
         const position = stageRef.current.position;
         const centerX = (app.screen.width / 2 - position.x) / scale;
         const centerY = (app.screen.height / 2 - position.y) / scale;
-        const radius = Math.ceil(Math.max(app.screen.width, app.screen.height) / (2 * scale));
+        const radius = Math.max(10, Math.ceil(Math.max(app.screen.width, app.screen.height) / (2 * scale)));
         void useGameStore.getState().fetchGroundDrops({
           x: Math.floor(centerX),
           y: Math.floor(centerY),
@@ -2151,9 +2172,9 @@ export default function WorldCanvas({ mode, labelSettings, performanceMode }: Wo
       stageRef.current.addChild(fogRef.current);
       stageRef.current.addChild(objectsContainerRef.current);
       stageRef.current.addChild(sectsContainerRef.current);
-      stageRef.current.addChild(dropsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
       stageRef.current.addChild(runtimeMonstersContainerRef.current);
+      stageRef.current.addChild(dropsContainerRef.current);
       stageRef.current.addChild(monsterLabelsContainerRef.current);
       stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);

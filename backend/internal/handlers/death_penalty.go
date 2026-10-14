@@ -325,6 +325,12 @@ type GroundLootData struct {
 
 // persistDeathDrop writes the computed losses to DB, creates a map_ground_drops record, and builds summary.
 func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggressor bool, primevalLoss, immortalLoss float64, droppedGus models.GuInventory, mult float64, satKhiLevel int, deathPos ...DeathPos) string {
+	// If the ground drop cannot be persisted, roll back every penalty so the
+	// player never loses items without a drop appearing on the map.
+	if _, spErr := tx.Exec("SAVEPOINT sp_death_penalty"); spErr != nil {
+		return ""
+	}
+
 	// Split stones: Void Destruction vs Ground Loot
 	voidPct := deathPenaltyConfig.VoidDestructionPct / 100.0
 
@@ -488,12 +494,14 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 						loot_data, protected_until, expires_at
 					) VALUES (
 						$1, $2, $3, $4, $5, $6, $7,
-						$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '10 minutes'
+						$8, NOW() + INTERVAL '3 minutes', NOW() + INTERVAL '30 minutes'
 					)
 				`, loserRegion.String, loserX, loserY, loserID, loserName, winnerID, killerName, lootBytes)
 				if errDrop != nil {
-					logger.S.Warnf("persistDeathDrop: failed to insert map_ground_drops for loser %s: %v", loserID, errDrop)
-					_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_ground_drop")
+					logger.S.Errorf("persistDeathDrop: failed to insert map_ground_drops for loser %s: %v — rolling back all death penalties", loserID, errDrop)
+					_, _ = tx.Exec("ROLLBACK TO SAVEPOINT sp_death_penalty")
+					_, _ = tx.Exec("RELEASE SAVEPOINT sp_death_penalty")
+					return ""
 				} else {
 					_, _ = tx.Exec("RELEASE SAVEPOINT sp_ground_drop")
 				}
