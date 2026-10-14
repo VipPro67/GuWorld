@@ -483,53 +483,53 @@ export function WorldPage() {
       <div className="absolute top-2 left-2 flex flex-col gap-1.5 pointer-events-none z-10">
         {gamePlayer && (
           <div className="px-0.5 py-0.5 flex flex-col items-start text-xs text-zinc-200 font-serif pointer-events-auto">
-            <div className="w-28 flex flex-col gap-0.5">
-              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Máu: ${Math.round(gamePlayer.hp)}`}>
+            <div className="w-24 sm:w-28 flex flex-col gap-0.5">
+              <div className="relative w-full h-2 sm:h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Máu: ${Math.round(gamePlayer.hp)}`}>
                 <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${Math.min(100, (gamePlayer.hp / (gamePlayer.base_hp || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] sm:text-[9px] font-bold text-white drop-shadow-md">
                   {Math.round(gamePlayer.hp).toLocaleString('vi-VN')}
                 </span>
               </div>
-              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Chân Nguyên: ${Math.floor(gamePlayer.current_mana)}`}>
+              <div className="relative w-full h-2 sm:h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Chân Nguyên: ${Math.floor(gamePlayer.current_mana)}`}>
                 <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.current_mana / (gamePlayer.max_mana || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] sm:text-[9px] font-bold text-white drop-shadow-md">
                   {Math.floor(gamePlayer.current_mana).toLocaleString('vi-VN')}
                 </span>
               </div>
-              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Linh Hồn: ${Math.round(gamePlayer.soul_hp)}`}>
+              <div className="relative w-full h-2 sm:h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Linh Hồn: ${Math.round(gamePlayer.soul_hp)}`}>
                 <div className="h-full bg-purple-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.soul_hp / (gamePlayer.max_soul || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] sm:text-[9px] font-bold text-white drop-shadow-md">
                   {Math.round(gamePlayer.soul_hp).toLocaleString('vi-VN')}
                 </span>
               </div>
-              <div className="relative w-full h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Tinh Thần: ${Math.round(gamePlayer.current_thought)}`}>
+              <div className="relative w-full h-2 sm:h-2.5 bg-zinc-950/70 rounded-sm overflow-hidden shadow-sm" title={`Tinh Thần: ${Math.round(gamePlayer.current_thought)}`}>
                 <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.current_thought / (gamePlayer.max_thought || 1)) * 100)}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md">
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] sm:text-[9px] font-bold text-white drop-shadow-md">
                   {Math.round(gamePlayer.current_thought).toLocaleString('vi-VN')}
                 </span>
               </div>
             </div>
-            <div className="flex flex-col items-start justify-center mt-1">
-              <div className="max-w-40 truncate text-emerald-300 font-bold text-xs drop-shadow-md" title={currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}>
+            <div className="flex flex-col items-start justify-center mt-0.5 sm:mt-1">
+              <div className="max-w-32 sm:max-w-40 truncate text-emerald-300 font-bold text-[11px] sm:text-xs drop-shadow-md" title={currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}>
                 <span>{currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}</span>
               </div>
               <div className="mt-0.5">
                 {currentZone?.zone_type === "HUB" || currentZone?.zone_type === "SAFE_ZONE" ? (
-                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-emerald-950/85 text-emerald-300 shadow-sm" title="Vùng An Toàn: Nghiêm cấm đồ sát / Không thể PvP">
+                  <span className="px-1 sm:px-1.5 py-0.5 text-[8.5px] sm:text-[9px] font-mono font-semibold rounded bg-emerald-950/85 text-emerald-300 shadow-sm" title="Vùng An Toàn: Nghiêm cấm đồ sát / Không thể PvP">
                     🛡️ An toàn
                   </span>
                 ) : currentZone?.zone_type === "PVP_ZONE" ? (
-                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-red-950/85 text-red-300 shadow-sm" title="Vùng PvP Nguy Hiểm: Tự do đồ sát, nguy cơ rơi đồ cao!">
+                  <span className="px-1 sm:px-1.5 py-0.5 text-[8.5px] sm:text-[9px] font-mono font-semibold rounded bg-red-950/85 text-red-300 shadow-sm" title="Vùng PvP Nguy Hiểm: Tự do đồ sát, nguy cơ rơi đồ cao!">
                     ⚔️ PvP nguy hiểm
                   </span>
                 ) : (
-                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-amber-950/85 text-amber-200 shadow-sm" title="Vùng Dã Ngoại: Cho phép giao tranh PvP">
+                  <span className="px-1 sm:px-1.5 py-0.5 text-[8.5px] sm:text-[9px] font-mono font-semibold rounded bg-amber-950/85 text-amber-200 shadow-sm" title="Vùng Dã Ngoại: Cho phép giao tranh PvP">
                     ⚠️ PvP mở
                   </span>
                 )}
               </div>
             </div>
-            <div className="text-[9px] text-zinc-200 font-mono mt-0.5 drop-shadow-md">
+            <div className="text-[8.5px] sm:text-[9px] text-zinc-200 font-mono mt-0.5 drop-shadow-md">
               X:{Math.round(liveX || gamePlayer.x)} Y:{Math.round(liveY || gamePlayer.y)}
             </div>
           </div>

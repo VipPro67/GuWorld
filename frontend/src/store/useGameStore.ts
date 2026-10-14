@@ -1376,7 +1376,8 @@ export const useGameStore = create<GameState>((set, get) => {
 
   const setPlayerFromServer = (player: Player | Partial<Player> | null, extraState: Partial<GameState> = {}, expectedRevision?: number) => {
     if (expectedRevision !== undefined && get().playerRevision !== expectedRevision) return false;
-    if (!player) {
+    if (player === undefined) return false;
+    if (player === null) {
       set((state) => ({ ...extraState, player: null, playerStateRevision: null, manaSnapshot: null, playerRevision: state.playerRevision + 1 }));
       return true;
     }

@@ -72,7 +72,11 @@ func respondActionWithInventory(c *gin.Context, status int, player models.Player
 	}
 	for _, e := range extra {
 		for k, v := range e {
-			resp[k] = v
+			if k == "player" {
+				resp[k] = player
+			} else {
+				resp[k] = v
+			}
 		}
 	}
 	c.JSON(status, resp)

@@ -1106,6 +1106,61 @@ func TestSkillHealBreakdown(t *testing.T) {
 	}
 }
 
+// TestSkillShieldBreakdown verifies a GU_SKILL shield records its formula
+// (base, skill mult, buff mult, dao bonus, final) in the breakdown.
+func TestSkillShieldBreakdown(t *testing.T) {
+	actor := newTestCombatant("ally", "Player", 1000, 0)
+	actor.StatProvenance = map[string]*StatProvenance{
+		"defense": {
+			Stat:       "defense",
+			BaseValue:  100,
+			FinalValue: 120,
+			Mods:       []StatModSource{{Key: "buff_def", Name: "Kim Thân", Pct: 0.2}},
+		},
+	}
+	actor.PendingShieldBuffs = map[string]float64{
+		"buff_gu": 2.0,
+	}
+	actor.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "Kim Quang Thuẫn", Defense: 200, ShieldMult: 1.5},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{actor},
+		Enemies: []*CombatantAuto{newTestCombatant("enemy", "Enemy", 1000, 0)},
+	}
+	logs := Simulate(state)
+
+	var shieldLog *CombatLog
+	for i := range logs {
+		if bd := logs[i].Breakdown; bd != nil && bd.ShieldFinal > 0 {
+			shieldLog = &logs[i]
+			break
+		}
+	}
+	if shieldLog == nil {
+		t.Fatal("expected a shield log with breakdown")
+	}
+	bd := shieldLog.Breakdown
+	if bd.ShieldBase != 200 {
+		t.Fatalf("expected ShieldBase 200, got %v", bd.ShieldBase)
+	}
+	if bd.ShieldSkillMult != 1.5 {
+		t.Fatalf("expected ShieldSkillMult 1.5, got %v", bd.ShieldSkillMult)
+	}
+	if bd.ShieldBuffMult != 2.0 {
+		t.Fatalf("expected ShieldBuffMult 2.0, got %v", bd.ShieldBuffMult)
+	}
+	// 200 * 1.5 * 2.0 = 600
+	if bd.ShieldFinal != 600 {
+		t.Fatalf("expected ShieldFinal 600, got %v", bd.ShieldFinal)
+	}
+	if bd.ShielderDefense == nil {
+		t.Fatal("expected shielder_defense provenance on the breakdown")
+	}
+}
+
 // TestDamageBreakdownCarriesStatProvenance verifies attack/defense status
 // provenance is attached to damage breakdowns from the combatants.
 func TestDamageBreakdownCarriesStatProvenance(t *testing.T) {

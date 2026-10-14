@@ -405,18 +405,23 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         }));
         return null;
       }
-      useGameStore.getState().setPlayerFromServer(data.player);
       if (data.player) {
+        useGameStore.getState().setPlayerFromServer(data.player);
+      } else {
+        useGameStore.getState().applyInventoryFromResponse(data);
+      }
+      const playerObj = data.player || useGameStore.getState().player;
+      if (playerObj) {
         const cellRadius = get().investigationRange;
-        get().fetchNearbyCells(data.player.x, data.player.y, cellRadius);
-        if (data.target_defeated && (Math.abs(tx - data.player.x) > cellRadius || Math.abs(ty - data.player.y) > cellRadius)) {
+        get().fetchNearbyCells(playerObj.x, playerObj.y, cellRadius);
+        if (data.target_defeated && (Math.abs(tx - playerObj.x) > cellRadius || Math.abs(ty - playerObj.y) > cellRadius)) {
           get().fetchCellsRect(tx, ty, tx, ty);
         }
-        get().fetchNearbyPlayers(data.player.x, data.player.y, 300);
+        get().fetchNearbyPlayers(playerObj.x, playerObj.y, 300);
 
         if (data.damage_dealt && data.damage_dealt > 0) {
-          const fxX = data.target_x || tx || data.player.x;
-          const fxY = data.target_y || ty || data.player.y;
+          const fxX = data.target_x || tx || playerObj.x;
+          const fxY = data.target_y || ty || playerObj.y;
           get().triggerSkillFx(
             "damage",
             data.damage_dealt,
@@ -434,8 +439,8 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
             data.effect_type,
             data.effect_value || 0,
             data.message || "Kích hoạt Cổ trùng!",
-            data.player.x,
-            data.player.y
+            playerObj.x,
+            playerObj.y
           );
         }
 

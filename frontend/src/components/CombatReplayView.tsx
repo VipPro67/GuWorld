@@ -46,9 +46,16 @@ export interface DamageBreakdown {
   attacker_attack?: StatProvenance;
   defender_defense?: StatProvenance;
   healer_healing?: StatProvenance;
+  shielder_defense?: StatProvenance;
   healing_base?: number;
   healing_dao_bonus?: number;
   healing_final?: number;
+  shield_base?: number;
+  shield_skill_mult?: number;
+  shield_buff_mult?: number;
+  shield_dao_mult?: number;
+  shield_dao_bonus?: number;
+  shield_final?: number;
 }
 
 export interface CombatLogEntry {

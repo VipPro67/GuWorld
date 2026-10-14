@@ -439,13 +439,31 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
 
               const hasBreakdown = !!entry.breakdown;
               const isExpanded = expandedLogIdx === idx;
+              const bLog = entry.breakdown;
+              const isShieldLog = (bLog?.shield_final ?? 0) > 0 || (bLog?.shield_base ?? 0) > 0;
+              const isHealLog = (bLog?.healing_final ?? 0) > 0 || (bLog?.healing_base ?? 0) > 0;
+              const borderExpandedColor = isShieldLog
+                ? "border-cyan-500/40"
+                : isHealLog
+                ? "border-emerald-500/40"
+                : "border-amber-500/40";
+              const breakdownTitle = isShieldLog
+                ? "Xem chi tiết tính toán khiên ảo"
+                : isHealLog
+                ? "Xem chi tiết tính toán hồi phục"
+                : "Xem chi tiết tính toán sát thương";
+              const chevronColor = isShieldLog
+                ? "text-cyan-400"
+                : isHealLog
+                ? "text-emerald-400"
+                : "text-amber-400";
 
               return (
                 <div
                   key={idx}
                   className={`rounded-lg transition-all border ${
                     isExpanded
-                      ? "bg-zinc-900/80 border-amber-500/40 p-2 my-1"
+                      ? `bg-zinc-900/80 ${borderExpandedColor} p-2 my-1`
                       : "hover:bg-zinc-900/40 border-transparent border-b-zinc-900/60 last:border-b-0 py-1.5 px-2"
                   }`}
                 >
@@ -469,7 +487,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                       <FormattedText
                         text={entry.detail || `${entry.action} lên mục tiêu`}
                       />
-                      {entry.damage && entry.damage > 0 && !entry.detail?.includes("gây ") && !entry.breakdown?.healing_base ? (
+                      {entry.damage && entry.damage > 0 && !entry.detail?.includes("gây ") && !entry.breakdown?.healing_base && !entry.breakdown?.shield_base && entry.action !== "SHIELD_GAIN" ? (
                         <span
                           className={`ml-1.5 font-bold ${
                             entry.is_crit ? "text-amber-400" : "text-rose-400"
@@ -484,10 +502,10 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                       <button
                         type="button"
                         className="text-zinc-500 hover:text-amber-400 shrink-0 p-0.5 rounded transition mt-0.5"
-                        title="Xem chi tiết tính toán sát thương"
+                        title={breakdownTitle}
                       >
                         {isExpanded ? (
-                          <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                          <ChevronUp className={`w-3.5 h-3.5 ${chevronColor}`} />
                         ) : (
                           <ChevronDown className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300" />
                         )}
@@ -528,116 +546,287 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                     const healPct = b.healer_healing?.final_value ?? 0;
                     const isHeal = healFinal > 0 || healBase > 0;
 
-                    if (isHeal) {
-                      return (
-                        <div className="mt-2.5 p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
-                          {/* Header */}
-                          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                            <span className="font-bold text-emerald-400 flex items-center gap-1.5 text-xs">
-                              <Heart className="w-4 h-4 text-emerald-400" />
-                              Chi Tiết Công Thức Hồi Phục
+                    // Shield breakdown variant (skill shields / shield buffs)
+                    const shieldBase = b.shield_base ?? 0;
+                    const shieldSkillMult = b.shield_skill_mult ?? 1;
+                    const shieldBuffMult = b.shield_buff_mult ?? 1;
+                    const shieldDaoMult = b.shield_dao_mult ?? 1;
+                    const shieldDaoBonus = b.shield_dao_bonus ?? 0;
+                    const shieldFinal = b.shield_final ?? (shieldBase * shieldSkillMult * shieldBuffMult + shieldDaoBonus);
+                    const isShield = shieldFinal > 0 || shieldBase > 0;
+                    const baseWithMult = shieldBase * shieldSkillMult * shieldBuffMult;
+
+                    const hasDamage = baseDmg > 0 || (b.final_damage !== undefined && b.final_damage > 0) || (b.hp_damage !== undefined && b.hp_damage > 0);
+
+                    const renderHealCard = () => (
+                      <div className="p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                          <span className="font-bold text-emerald-400 flex items-center gap-1.5 text-xs">
+                            <Heart className="w-4 h-4 text-emerald-400" />
+                            Chi Tiết Công Thức Hồi Phục
+                          </span>
+                          {b.reason && (
+                            <span className="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/50 px-2 py-0.5 rounded-full font-sans">
+                              {b.reason}
                             </span>
-                            {b.reason && (
-                              <span className="text-[10px] text-rose-400 bg-rose-950/50 border border-rose-800/50 px-2 py-0.5 rounded-full font-sans">
-                                {b.reason}
+                          )}
+                        </div>
+
+                        {/* Pipeline Step Summary Bar */}
+                        <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500">Hồi gốc:</span>
+                            <span className="text-emerald-300 font-bold"><Num value={healBase} /></span>
+                          </div>
+                          {healDao > 0 && (
+                            <>
+                              <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+                              <div className="flex items-center gap-1">
+                                <span className="text-zinc-500">Đạo Ngân:</span>
+                                <span className="text-indigo-300 font-bold">+<Num value={healDao} /></span>
+                              </div>
+                            </>
+                          )}
+                          <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500">Hưởng:</span>
+                            <span className={`font-bold ${healPct < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                              {healPct > 0 ? "+" : ""}{(healPct * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded">
+                            <span className="text-emerald-300 font-semibold">Hồi Thực:</span>
+                            <span className="text-emerald-400 font-extrabold text-xs" title={healFinal.toLocaleString()}>
+                              +<Num value={healFinal} /> HP
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Detailed 2-Stage Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-emerald-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-emerald-400" />
+                                1. Hồi Phục Đầu Ra
                               </span>
-                            )}
+                              <span className="text-emerald-300 font-extrabold text-xs">
+                                +<Num value={healBase + healDao} />
+                              </span>
+                            </div>
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>Hồi Phục Gốc:</span>
+                                <span className="text-emerald-300 font-bold"><Num value={healBase} /></span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Đạo Ngân Cộng Thêm:</span>
+                                <span className="text-indigo-300 font-bold">+<Num value={healDao} /></span>
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Pipeline Step Summary Bar */}
-                          <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                            <div className="flex items-center gap-1">
-                              <span className="text-zinc-500">Hồi gốc:</span>
-                              <span className="text-emerald-300 font-bold"><Num value={healBase} /></span>
-                            </div>
-                            {healDao > 0 && (
-                              <>
-                                <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
-                                <div className="flex items-center gap-1">
-                                  <span className="text-zinc-500">Đạo Ngân:</span>
-                                  <span className="text-indigo-300 font-bold">+<Num value={healDao} /></span>
-                                </div>
-                              </>
-                            )}
-                            <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
-                            <div className="flex items-center gap-1">
-                              <span className="text-zinc-500">Hưởng:</span>
-                              <span className={`font-bold ${healPct < 0 ? "text-rose-400" : "text-emerald-400"}`}>
-                                {healPct > 0 ? "+" : ""}{(healPct * 100).toFixed(0)}%
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-emerald-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Heart className="w-3 h-3 text-emerald-400" />
+                                2. Hệ Số Hưởng & Kết Quả
                               </span>
-                            </div>
-                            <div className="flex items-center gap-1 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded">
-                              <span className="text-emerald-300 font-semibold">Hồi Thực:</span>
-                              <span className="text-emerald-400 font-extrabold text-xs" title={healFinal.toLocaleString()}>
+                              <span className="text-emerald-400 font-extrabold text-xs">
                                 +<Num value={healFinal} /> HP
                               </span>
                             </div>
-                          </div>
-
-                          {/* Detailed 2-Stage Cards Grid */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                            <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
-                              <div className="text-[10px] text-emerald-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
-                                <span className="flex items-center gap-1">
-                                  <Sparkles className="w-3 h-3 text-emerald-400" />
-                                  1. Hồi Phục Đầu Ra
-                                </span>
-                                <span className="text-emerald-300 font-extrabold text-xs">
-                                  +<Num value={healBase + healDao} />
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>Hưởng Hồi Phục:</span>
+                                <span className={`font-bold ${healPct < 0 ? "text-rose-400" : "text-emerald-300"}`}>
+                                  {healPct > 0 ? "+" : ""}{(healPct * 100).toFixed(0)}%
                                 </span>
                               </div>
-                              <div className="space-y-1.5 text-zinc-400 text-[11px]">
-                                <div className="flex justify-between items-center">
-                                  <span>Hồi Phục Gốc:</span>
-                                  <span className="text-emerald-300 font-bold"><Num value={healBase} /></span>
+                              {(b.healer_healing?.mods ?? []).map((m) => (
+                                <div key={m.key} className="flex justify-between items-center text-[10px]">
+                                  <span className="text-rose-300/90">{m.name}:</span>
+                                  <span className={`font-bold ${m.pct < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                                    {m.pct > 0 ? "+" : ""}{(m.pct * 100).toFixed(0)}%
+                                  </span>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                  <span>Đạo Ngân Cộng Thêm:</span>
-                                  <span className="text-indigo-300 font-bold">+<Num value={healDao} /></span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
-                              <div className="text-[10px] text-emerald-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
-                                <span className="flex items-center gap-1">
-                                  <Heart className="w-3 h-3 text-emerald-400" />
-                                  2. Hệ Số Hưởng & Kết Quả
-                                </span>
-                                <span className="text-emerald-400 font-extrabold text-xs">
+                              ))}
+                              <div className="flex justify-between items-center pt-1 border-t border-zinc-800/50 text-emerald-300">
+                                <span className="font-semibold">Tổng Hồi Phục:</span>
+                                <span className="text-emerald-400 font-black text-sm">
                                   +<Num value={healFinal} /> HP
                                 </span>
-                              </div>
-                              <div className="space-y-1.5 text-zinc-400 text-[11px]">
-                                <div className="flex justify-between items-center">
-                                  <span>Hưởng Hồi Phục:</span>
-                                  <span className={`font-bold ${healPct < 0 ? "text-rose-400" : "text-emerald-300"}`}>
-                                    {healPct > 0 ? "+" : ""}{(healPct * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                                {(b.healer_healing?.mods ?? []).map((m) => (
-                                  <div key={m.key} className="flex justify-between items-center text-[10px]">
-                                    <span className="text-rose-300/90">{m.name}:</span>
-                                    <span className={`font-bold ${m.pct < 0 ? "text-rose-400" : "text-emerald-400"}`}>
-                                      {m.pct > 0 ? "+" : ""}{(m.pct * 100).toFixed(0)}%
-                                    </span>
-                                  </div>
-                                ))}
-                                <div className="flex justify-between items-center pt-1 border-t border-zinc-800/50 text-emerald-300">
-                                  <span className="font-semibold">Tổng Hồi Phục:</span>
-                                  <span className="text-emerald-400 font-black text-sm">
-                                    +<Num value={healFinal} /> HP
-                                  </span>
-                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      );
-                    }
+                      </div>
+                    );
 
-                    return (
-                      <div className="mt-2.5 p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
+                    const renderShieldCard = () => (
+                      <div className="p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                          <span className="font-bold text-cyan-400 flex items-center gap-1.5 text-xs">
+                            <Shield className="w-4 h-4 text-cyan-400" />
+                            Chi Tiết Công Thức Tạo Khiên Ảo
+                          </span>
+                          {b.reason && (
+                            <span className="text-[10px] text-cyan-400 bg-cyan-950/50 border border-cyan-800/50 px-2 py-0.5 rounded-full font-sans">
+                              {b.reason}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Pipeline Step Summary Bar */}
+                        <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-500">Khiên gốc:</span>
+                            <span className="text-cyan-300 font-bold" title={shieldBase.toLocaleString()}>
+                              <Num value={shieldBase} />
+                            </span>
+                          </div>
+
+                          {(shieldSkillMult !== 1 || shieldBuffMult !== 1) && (
+                            <>
+                              <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+                              <div className="flex items-center gap-1">
+                                <span className="text-zinc-500">Hệ số:</span>
+                                <span className="text-purple-300 font-bold">
+                                  x{(shieldSkillMult * shieldBuffMult).toFixed(2)}
+                                </span>
+                              </div>
+                            </>
+                          )}
+
+                          {shieldDaoBonus > 0 && (
+                            <>
+                              <ArrowRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 hidden sm:inline" />
+                              <div className="flex items-center gap-1">
+                                <span className="text-zinc-500">Đạo Ngân:</span>
+                                <span className="text-indigo-300 font-bold" title={shieldDaoBonus.toLocaleString()}>
+                                  +<Num value={shieldDaoBonus} />
+                                </span>
+                              </div>
+                            </>
+                          )}
+
+                          <div className="flex items-center gap-1 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
+                            <span className="text-cyan-300 font-semibold">Khiên Thực:</span>
+                            <span className="text-cyan-400 font-extrabold text-xs" title={shieldFinal.toLocaleString()}>
+                              +<Num value={shieldFinal} /> Khiên
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Detailed 3-Stage Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
+                          {/* Stage 1: Khiên Đầu Ra */}
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Zap className="w-3 h-3 text-cyan-400" />
+                                1. Khiên Đầu Ra
+                              </span>
+                              <span className="text-cyan-300 font-extrabold text-xs">
+                                <Num value={baseWithMult} />
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>Khiên Gốc:</span>
+                                <span className="text-cyan-300 font-bold"><Num value={shieldBase} /></span>
+                              </div>
+                              <div className="flex justify-between items-start">
+                                <span>Hệ Số Chiêu:</span>
+                                <div className="text-right">
+                                  <span className="text-purple-300 font-bold">
+                                    x{(shieldSkillMult * shieldBuffMult).toFixed(2)}
+                                  </span>
+                                  {shieldBuffMult !== 1 && (
+                                    <div className="text-[10px] text-purple-400/80">
+                                      ({shieldSkillMult.toFixed(2)} chiêu × {shieldBuffMult.toFixed(2)} buff)
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Sau Hệ Số:</span>
+                                <span className="text-cyan-200 font-bold"><Num value={baseWithMult} /></span>
+                              </div>
+                              {b.shielder_defense && (b.shielder_defense.mods?.length ?? 0) > 0 && (
+                                <StatProvenanceRows prov={b.shielder_defense} label="Phòng Ngự" />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Stage 2: Đạo Ngân Bổ Trợ */}
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-indigo-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-indigo-400" />
+                                2. Đạo Ngân Bổ Trợ
+                              </span>
+                              <span className="text-indigo-300 font-extrabold text-xs">
+                                +<Num value={shieldDaoBonus} />
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>Hệ Số Đạo Ngân:</span>
+                                <span className="text-indigo-300 font-bold">x<Num value={shieldDaoMult} /></span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Khiên Đạo Ngân:</span>
+                                <span className="text-indigo-300 font-bold">+<Num value={shieldDaoBonus} /></span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] text-zinc-500 pt-1 border-t border-zinc-800/50">
+                                <span>Khuếch đại lưu phái</span>
+                                <span className="text-indigo-400 font-semibold">
+                                  {shieldDaoMult > 1 ? `+${((shieldDaoMult - 1) * 100).toFixed(0)}%` : "0%"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Stage 3: Kết Quả Khiên Ảo */}
+                          <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 space-y-2">
+                            <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Shield className="w-3 h-3 text-cyan-400" />
+                                3. Kết Quả Khiên Ảo
+                              </span>
+                              <span className="text-cyan-400 font-extrabold text-xs">
+                                +<Num value={shieldFinal} /> Khiên
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5 text-zinc-400 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span>Khiên Đầu Ra:</span>
+                                <span className="text-cyan-300 font-bold"><Num value={baseWithMult} /></span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Đạo Ngân Bổ Sung:</span>
+                                <span className="text-indigo-300 font-bold">+<Num value={shieldDaoBonus} /></span>
+                              </div>
+                              <div className="flex justify-between items-center pt-1 border-t border-zinc-800/50 text-cyan-300">
+                                <span className="font-semibold">Tổng Khiên Nhận:</span>
+                                <span className="text-cyan-400 font-black text-sm">
+                                  +<Num value={shieldFinal} /> Khiên Ảo
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+
+                    const renderDamageCard = () => (
+                      <div className="p-3.5 rounded-xl bg-black/95 border border-zinc-800 text-xs font-mono space-y-3 shadow-2xl animate-in fade-in duration-200">
                         {/* Header */}
                         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                           <span className="font-bold text-amber-400 flex items-center gap-1.5 text-xs">
@@ -835,6 +1024,14 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                             </div>
                           </div>
                         </div>
+                      </div>
+                    );
+
+                    return (
+                      <div className="mt-2.5 space-y-2.5">
+                        {isHeal && renderHealCard()}
+                        {hasDamage && renderDamageCard()}
+                        {isShield && renderShieldCard()}
                       </div>
                     );
                   })()}

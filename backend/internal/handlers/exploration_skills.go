@@ -535,6 +535,7 @@ func UseGuOnMap(c *gin.Context) {
 	syncPlayerFlying(&player)
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
+		"player":           player,
 		"message":          strings.Join(logs, " "),
 		"logs":             logs,
 		"effect_type":      effectType,

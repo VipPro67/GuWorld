@@ -1455,28 +1455,41 @@ func Simulate(state *CombatState) []CombatLog {
 			// Apply shield to self
 			if a.Defense > 0 {
 				baseShield := a.Defense
-				shieldMult := a.ShieldMult
-				if shieldMult <= 0 {
-					shieldMult = 1.0
+				skillMult := a.ShieldMult
+				if skillMult <= 0 {
+					skillMult = 1.0
 				}
 				pendingShield := getPendingShieldMult(actor)
+				combinedMult := skillMult
 				if pendingShield > 1.0 {
-					shieldMult *= pendingShield
+					combinedMult *= pendingShield
 					actor.PendingShieldBuffs = nil // consume all pending shield buffs
+				} else {
+					pendingShield = 1.0
 				}
-				baseShield = a.Defense * shieldMult
+				baseShield = a.Defense * combinedMult
 				daoShield := 0.0
 				if hasDao && daoMult > 1.0 {
 					daoShield = baseShield * (daoMult - 1.0)
 				}
-				actor.VirtualShield += baseShield + daoShield
+				totalShield := baseShield + daoShield
+				actor.VirtualShield += totalShield
 				sl := CombatLog{
 					Turn:      turn,
 					ActorId:   actor.ID,
 					ActorName: actor.Name,
 					Action:    "SHIELD_GAIN",
-					Damage:    baseShield + daoShield,
-					Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, baseShield),
+					Damage:    totalShield,
+					Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, totalShield),
+					Breakdown: &DamageBreakdown{
+						ShieldBase:      a.Defense,
+						ShieldSkillMult: skillMult,
+						ShieldBuffMult:  pendingShield,
+						ShieldDaoMult:   daoMult,
+						ShieldDaoBonus:  daoShield,
+						ShieldFinal:     totalShield,
+						ShielderDefense: actor.StatProvenance["defense"],
+					},
 				}
 				if daoShield > 0 {
 					sl.Detail = fmt.Sprintf("%s nhận %.0f + %.0f Khiên Ảo do Đạo Ngân!", actor.Name, baseShield, daoShield)
@@ -2391,8 +2404,28 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 
 				if useLog != nil {
-					if useLog.Breakdown == nil && extraBreakdown != nil {
+					if useLog.Breakdown == nil {
 						useLog.Breakdown = extraBreakdown
+					} else if extraBreakdown != nil {
+						if extraBreakdown.ShieldFinal > 0 || extraBreakdown.ShieldBase > 0 {
+							useLog.Breakdown.ShieldBase = extraBreakdown.ShieldBase
+							useLog.Breakdown.ShieldSkillMult = extraBreakdown.ShieldSkillMult
+							useLog.Breakdown.ShieldBuffMult = extraBreakdown.ShieldBuffMult
+							useLog.Breakdown.ShieldDaoMult = extraBreakdown.ShieldDaoMult
+							useLog.Breakdown.ShieldDaoBonus = extraBreakdown.ShieldDaoBonus
+							useLog.Breakdown.ShieldFinal = extraBreakdown.ShieldFinal
+							if useLog.Breakdown.ShielderDefense == nil {
+								useLog.Breakdown.ShielderDefense = extraBreakdown.ShielderDefense
+							}
+						}
+						if extraBreakdown.HealingFinal > 0 || extraBreakdown.HealingBase > 0 {
+							useLog.Breakdown.HealingBase = extraBreakdown.HealingBase
+							useLog.Breakdown.HealingDaoBonus = extraBreakdown.HealingDaoBonus
+							useLog.Breakdown.HealingFinal = extraBreakdown.HealingFinal
+							if useLog.Breakdown.HealerHealing == nil {
+								useLog.Breakdown.HealerHealing = extraBreakdown.HealerHealing
+							}
+						}
 					}
 					mergedDetail := useLog.Detail
 

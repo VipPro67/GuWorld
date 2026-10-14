@@ -504,11 +504,20 @@ type DamageBreakdown struct {
 	AttackerAttack  *StatProvenance `json:"attacker_attack,omitempty"`
 	DefenderDefense *StatProvenance `json:"defender_defense,omitempty"`
 	HealerHealing   *StatProvenance `json:"healer_healing,omitempty"`
+	ShielderDefense *StatProvenance `json:"shielder_defense,omitempty"`
 
 	// Healing formula components (skill heals and item heals).
 	HealingBase     float64 `json:"healing_base,omitempty"`
 	HealingDaoBonus float64 `json:"healing_dao_bonus,omitempty"`
 	HealingFinal    float64 `json:"healing_final,omitempty"`
+
+	// Shield formula components (skill shield and shield buffs).
+	ShieldBase      float64 `json:"shield_base,omitempty"`
+	ShieldSkillMult float64 `json:"shield_skill_mult,omitempty"`
+	ShieldBuffMult  float64 `json:"shield_buff_mult,omitempty"`
+	ShieldDaoMult   float64 `json:"shield_dao_mult,omitempty"`
+	ShieldDaoBonus  float64 `json:"shield_dao_bonus,omitempty"`
+	ShieldFinal     float64 `json:"shield_final,omitempty"`
 }
 
 // CombatLog represents a granular event to be stringified as JSON.
