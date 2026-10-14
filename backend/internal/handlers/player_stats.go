@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
@@ -17,6 +19,55 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 
 func calculatePlayerStatsWithTerritory(player *models.Player, territory SectTerritoryInfo) map[string]float64 {
 	return getPassiveStats(player, &territory).Stats
+}
+
+// StatusFlying is the world-map status granted by flying Gu. While active the
+// player ignores ground-monster encounters (grid cells, ambient ambush and
+// world-monster aggro). Grant/refresh it with a positive duration; using the
+// same skill again removes it (early landing).
+const StatusFlying = "phi_hanh"
+
+// CapIgnoreMonsterEncounter is the passive capability with the same effect as
+// StatusFlying, for permanently flying Gu.
+const CapIgnoreMonsterEncounter = "IGNORE_MONSTER_ENCOUNTER"
+
+// PlayerIgnoresMonsters reports whether a player currently bypasses monster
+// encounters while moving: either a passive flying Gu (capability) or the
+// active "phi_hanh" (flying) status.
+func PlayerIgnoresMonsters(player *models.Player) bool {
+	if player == nil {
+		return false
+	}
+	if models.InventoryHasGuCapability(player.GuInventory, CapIgnoreMonsterEncounter, true) {
+		return true
+	}
+	for _, st := range player.Statuses.Active() {
+		if st.ID == StatusFlying {
+			return true
+		}
+	}
+	return false
+}
+
+// toggleFlyingStatus grants or removes the phi_hanh flying status. Duration
+// defaults to the Gu's rank in minutes (rank 1..9), or turns when set in the
+// CSV. Returns the log line and whether the player is now flying.
+func toggleFlyingStatus(player *models.Player, guName string, guRank, turns int) (string, bool) {
+	flyDuration := time.Duration(turns) * time.Minute
+	if turns <= 0 {
+		flyDuration = time.Duration(guRank) * time.Minute
+	}
+	if flyDuration <= 0 {
+		flyDuration = time.Minute
+	}
+	for _, st := range player.Statuses.Active() {
+		if st.ID == StatusFlying {
+			player.Statuses.Remove(StatusFlying)
+			return fmt.Sprintf("%s thu hồi pháp lực, đạo hữu hạ cánh xuống mặt đất.", guName), false
+		}
+	}
+	player.Statuses.Add(StatusFlying, guName, flyDuration, 0)
+	return fmt.Sprintf("%s thôi động, đạo hữu phi thân lên không trung, miễn nhiễm quái thú dưới đất trong %.0f phút.", guName, flyDuration.Minutes()), true
 }
 
 // PlayerDisguiseLevel is the total concealment score of a player: rank plus

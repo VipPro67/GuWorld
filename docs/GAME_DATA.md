@@ -684,7 +684,7 @@ hook. `supported` chỉ mô tả runtime hiện tại, không miễn yêu cầu 
 | `ON_HIT` | `BYPASS_SHIELD`, `GUARANTEED_HIT` | event targets; bool | simulator; hit event (GUARANTEED_HIT bỏ qua Evasion/Blind/First Turn Evade/Forget Will Miss) | engine + catalog |
 | `BEFORE_HIT` | `FIRST_TURN_EVADE` | self; bool/turn gate; Định Tiên Du rank 9 mang (rank 6–8 chỉ `portal_create` + `movement`) | simulator; combat state | engine + catalog |
 | `PASSIVE` | `DOUBLE_DAMAGE_DEALT` | self; multiplier | simulator; combat snapshot (`COMBAT_PASSIVE` là tên v2) | engine + catalog |
-| `CAPABILITY` | `MARKETPLACE_ACCESS`, `REMOTE_TRADE`, `CHAT_CONNECT`, `CHAT_PERCEIVE`, `IGNORE_MOVEMENT_RANGE`, `LOOT_PREVIEW`, `DISGUISE`, `CHANGE_FORM_DISGUISE`, `PERFECT_DISGUISE`, `ARENA_IDENTITY_MASK`, `CONCEAL_GU`, `SEVER_CLUES`, `PORTAL_CREATE`, `RANDOM_PORTAL`, `CAPTURE_BONUS` | self/capability subject; bool/range/level hoặc `value` theo schema hook | marketplace/trade/chat/scouting/world handlers; owner domain tương ứng (`CAPTURE_BONUS` → `handlers/combat_capture.go`) | catalog + handler/scouting characterization |
+| `CAPABILITY` | `MARKETPLACE_ACCESS`, `REMOTE_TRADE`, `CHAT_CONNECT`, `CHAT_PERCEIVE`, `IGNORE_MOVEMENT_RANGE`, `IGNORE_MONSTER_ENCOUNTER`, `LOOT_PREVIEW`, `DISGUISE`, `CHANGE_FORM_DISGUISE`, `PERFECT_DISGUISE`, `ARENA_IDENTITY_MASK`, `CONCEAL_GU`, `SEVER_CLUES`, `PORTAL_CREATE`, `RANDOM_PORTAL`, `CAPTURE_BONUS` | self/capability subject; bool/range/level hoặc `value` theo schema hook | marketplace/trade/chat/scouting/world handlers; owner domain tương ứng (`CAPTURE_BONUS` → `handlers/combat_capture.go`) | catalog + handler/scouting characterization |
 
 **Matrix C — dictionary nhân vật, item và hai surface JSONB còn lại.**
 
@@ -1358,6 +1358,29 @@ Sensitive request fields and multipart bodies are excluded from `change_data`.
 - Cổ mang tag/role trinh sát (INVESTIGATION, MAP_REVEAL, scout...) giờ có `STAT_MOD INVESTIGATION`
   trong `effects`; Cổ che giấu (concealment/stealth...) có `STAT_MOD DISGUISE` + capability
   `DISGUISE` trong `effects`. Giá trị = rank của Cổ.
+
+## Phi hành (flying) — bỏ qua quái khi di chuyển
+
+Người chơi ở trạng thái phi hành sẽ **lướt qua quái thú dưới đất**: không kích combat khi dẫm ô
+`Monster`/`Boss`, không bị phục kích lân cận, không bị quái world (AI sống) nhắm/đuổi theo. PVP
+và du ngoạn (`/explore`) không bị ảnh hưởng. Ô quái không bị xóa — người chơi khác vẫn gặp.
+
+Hai cơ chế, cùng đọc qua `PlayerIgnoresMonsters` (`handlers/player_stats.go`):
+
+- **Chủ động (đa số)** — kỹ năng Active `ON_ACTION` với `STATUS` `status_id` = `FLYING` (hoặc
+  `PHI_HANH`). Kích hoạt → vào trạng thái `phi_hanh` trong N phút; **dùng lại để hạ cánh sớm**.
+  Thời gian mặc định = rank của Cổ (phút), hoặc `turns` nếu đặt trong CSV. Cooldown 2 giây.
+  Ví dụ block:
+  ```json
+  {"trigger":"ON_ACTION","target":{"selector":"SELF"},"operations":[
+    {"op":"STATUS","status_id":"FLYING","turns":0,"value":0,"chance":1}]}
+  ```
+- **Bị động (cực hiếm)** — capability `IGNORE_MONSTER_ENCOUNTER` trên Cổ trang bị: phi hành vĩnh
+  viễn khi đang đeo.
+
+World-monster worker bỏ qua người đang bay qua registry in-memory `flyingPlayers`
+(`handlers/world_index.go`), refresh ở mỗi lần di chuyển và mỗi lần toggle. `startWorldMonsterEncounter`
+vẫn gate lại bằng `PlayerIgnoresMonsters` (trạng thái bền từ DB).
 
 ## Ordinary world-monster lifecycle
 

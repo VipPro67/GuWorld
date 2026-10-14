@@ -387,6 +387,34 @@ func UseGuOnMap(c *gin.Context) {
 		}
 	}
 
+	// Flying (phi hành): toggle a timed status that hides the player from ground
+	// monsters. Runs after the combat-action fallback so a Gu that also buffs or
+	// damages still applies those effects; a pure-utility flying Gu (no damage)
+	// works too.
+	for _, block := range specs.Effects.Blocks {
+		if block.Trigger != gameplayeffects.TriggerOnAction {
+			continue
+		}
+		for _, op := range block.Operations {
+			if op.Op != gameplayeffects.OpStatus {
+				continue
+			}
+			statusID := strings.ToUpper(op.StatusID)
+			if statusID != "FLYING" && statusID != "PHI_HANH" {
+				continue
+			}
+			msg, flyingOn := toggleFlyingStatus(&player, specs.Name, targetGu.Rank, op.Turns)
+			if flyingOn {
+				effectType = "fly_on"
+			} else {
+				effectType = "fly_off"
+			}
+			logs = append(logs, msg)
+			applied = true
+			cdDuration = 2 * time.Second
+		}
+	}
+
 	if !applied {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không có kỹ năng chủ động (Active) để kích hoạt!"})
 		return
@@ -503,6 +531,8 @@ func UseGuOnMap(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+
+	syncPlayerFlying(&player)
 
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{
 		"message":          strings.Join(logs, " "),

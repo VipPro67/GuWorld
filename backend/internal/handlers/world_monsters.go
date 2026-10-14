@@ -1055,6 +1055,10 @@ func startWorldMonsterWorker(ctx context.Context, interval time.Duration) <-chan
 func processWorldMonsterTick(ctx context.Context, now time.Time) {
 	deadline := time.Now().Add(worldMonsterTickBudget)
 	online := worldPosIndex.OnlineEntries(-1, func(entry WorldPosEntry) bool {
+		if flyingPlayers.isFlying(entry.ID, now) {
+			// Flying players are invisible to ground monsters: no aggro, no chase.
+			return false
+		}
 		playerID, err := uuid.Parse(entry.ID)
 		mapID := entry.MapID
 		if mapID == "" {

@@ -54,6 +54,10 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 	if player.ActiveCombat != nil || gamefx.IsDeadState(&player) || player.HP <= 0 {
 		return nil
 	}
+	if PlayerIgnoresMonsters(&player) {
+		// Flying players cannot be dragged into ground-monster combat.
+		return nil
+	}
 	if err := checkPartyLeaderOrSolo(tx, &player); err != nil {
 		return nil
 	}

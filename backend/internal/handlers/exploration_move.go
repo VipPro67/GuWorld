@@ -100,6 +100,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 	oldY := player.Y
 	oldRegion := player.CurrentRegion
 	mapID := worldMapIDForRegion(player.CurrentRegion)
+	ignoreMonsters := PlayerIgnoresMonsters(player)
 	var instanceID sql.NullString
 	if loadedInstanceID != nil {
 		instanceID = *loadedInstanceID
@@ -387,6 +388,10 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				logMsg = fmt.Sprintf("Đạo hữu phát hiện thấy Cổ trùng hoang dã %s, tiếc là Bách Bảo Nang đã đầy nên để nó trốn thoát!", guName)
 			}
 		case "Monster", "Boss":
+			if ignoreMonsters {
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu phi thân trên không, lướt qua quái thú mà không bị chạm trán.", player.X, player.Y)
+				break
+			}
 			if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
 				return err.Error(), false, nil
 			}
@@ -487,7 +492,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 		}
 	}
 
-	if !combatTriggered && allowAmbush && !playerTerritory.InTerritory {
+	if !combatTriggered && allowAmbush && !playerTerritory.InTerritory && !ignoreMonsters {
 		for ax := -1; ax <= 1 && !combatTriggered; ax++ {
 			for ay := -1; ay <= 1 && !combatTriggered; ay++ {
 				if ax == 0 && ay == 0 {
@@ -785,6 +790,8 @@ func MovePlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()})
 		return
 	}
+
+	syncPlayerFlying(&player)
 
 	broadcastWorldPos(WorldPosEvent{
 		ID:        player.ID.String(),
@@ -1115,6 +1122,8 @@ func MovePlayerPath(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure: " + err.Error()})
 		return
 	}
+
+	syncPlayerFlying(&player)
 
 	broadcastWorldPos(WorldPosEvent{
 		ID:        player.ID.String(),

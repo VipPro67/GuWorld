@@ -119,3 +119,28 @@ func TestImmortalManaRegenProducesAnnualApertureEssence(t *testing.T) {
 		t.Fatalf("mana after one internal year = %v, want annual production 20", p.CurrentMana)
 	}
 }
+
+func TestApplyProjectedStatusLifespanImmunityForRank10(t *testing.T) {
+	now := time.Now()
+
+	// Rank 10 Vĩnh Sinh: lifespan must NOT decrease over time
+	p10 := regenTestPlayer()
+	p10.Rank = 10
+	p10.Lifespan = 100
+	p10.LastManaUpdate = now.Add(-36000 * time.Second) // 1 year passed
+	applyProjectedStatus(&p10, 0, 1, now)
+	if p10.Lifespan != 100 {
+		t.Fatalf("rank 10 lifespan changed: got %v, want 100", p10.Lifespan)
+	}
+
+	// Rank 1 mortal: lifespan MUST decrease over time
+	p1 := regenTestPlayer()
+	p1.Rank = 1
+	p1.Lifespan = 100
+	p1.LastManaUpdate = now.Add(-36000 * time.Second) // 1 year passed
+	applyProjectedStatus(&p1, 0, 1, now)
+	if p1.Lifespan >= 100 {
+		t.Fatalf("rank 1 lifespan did not decrease: got %v, want < 100", p1.Lifespan)
+	}
+}
+

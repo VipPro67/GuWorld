@@ -753,6 +753,22 @@ func StatusDisplayName(status string) string {
 	return status
 }
 
+// IsAgingImmune reports whether a player's lifespan is exempt from natural time decay (aging).
+// Rank 10 (Vĩnh Sinh) cultivators and immortal races (Cương Thi) never age.
+// Active lifespan expenditures (Gu feeding, gacha, combat penalties, item usage) still apply normally.
+func IsAgingImmune(p *models.Player) bool {
+	if p == nil {
+		return false
+	}
+	// Vĩnh Sinh (Rank 10) is eternally alive: aging never depletes lifespan.
+	if models.IsVinhSinhRank(p.Rank) {
+		return true
+	}
+	dummyP := models.Player{}
+	dummyP.Race = p.Race
+	return Get(&dummyP).Immortal
+}
+
 // IsDeadState reports whether the player has entered Cõi Chết. Lifespan is the
 // single source of truth — the immortal race never decays lifespan, so a
 // zero-lifespan immortal is not dead.
@@ -760,13 +776,7 @@ func IsDeadState(p *models.Player) bool {
 	if p == nil || p.Lifespan > 0 {
 		return false
 	}
-	// Vĩnh Sinh (Rank 10) is eternally alive: aging never depletes lifespan.
-	if models.IsVinhSinhRank(p.Rank) {
-		return false
-	}
-	dummyP := models.Player{}
-	dummyP.Race = p.Race
-	return !Get(&dummyP).Immortal
+	return !IsAgingImmune(p)
 }
 
 // HasBlockedAction reports whether any of the player's active (non-expired)

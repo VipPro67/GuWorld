@@ -351,3 +351,61 @@ func mapInstanceIDForPlayer(playerID string) string {
 	}
 	return instanceID.String
 }
+
+// flyingPlayerTTL is the horizon used for passive-flying Gu (capability). The
+// entry is refreshed on every move and on skill toggle, so it never needs to
+// survive long; the value only guards against an unbounded-lived map entry.
+const flyingPlayerTTL = 12 * time.Hour
+
+// flyingRegistry tracks players currently flying so the world-monster worker
+// can skip them as targets. Authoritative state lives in players.statuses and
+// the equipped Gu inventory; this is a cheap in-memory overlay refreshed on
+// moves and flying-skill toggles.
+// ponytail: process-local, rebuilt lazily on move/toggle (not on restart).
+// Rebuild from DB in the index sync worker if the post-restart chase window matters.
+var flyingPlayers = &flyingRegistry{until: make(map[string]time.Time)}
+
+type flyingRegistry struct {
+	mu    sync.RWMutex
+	until map[string]time.Time
+}
+
+func (r *flyingRegistry) set(playerID string, until time.Time) {
+	r.mu.Lock()
+	r.until[playerID] = until
+	r.mu.Unlock()
+}
+
+func (r *flyingRegistry) clear(playerID string) {
+	r.mu.Lock()
+	delete(r.until, playerID)
+	r.mu.Unlock()
+}
+
+func (r *flyingRegistry) isFlying(playerID string, now time.Time) bool {
+	r.mu.RLock()
+	until, ok := r.until[playerID]
+	r.mu.RUnlock()
+	return ok && until.After(now)
+}
+
+// syncPlayerFlying refreshes a player's flying entry after a position commit
+// or a flying-skill toggle. Passive flying Gu (capability) use a rolling TTL;
+// the active "phi_hanh" status uses its own expiry.
+func syncPlayerFlying(p *models.Player) {
+	if p == nil {
+		return
+	}
+	id := p.ID.String()
+	if models.InventoryHasGuCapability(p.GuInventory, CapIgnoreMonsterEncounter, true) {
+		flyingPlayers.set(id, time.Now().Add(flyingPlayerTTL))
+		return
+	}
+	for _, st := range p.Statuses.Active() {
+		if st.ID == StatusFlying && st.ExpiresAt != nil {
+			flyingPlayers.set(id, *st.ExpiresAt)
+			return
+		}
+	}
+	flyingPlayers.clear(id)
+}

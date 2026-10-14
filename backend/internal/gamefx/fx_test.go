@@ -269,6 +269,40 @@ func TestIsDeadStateNilPlayer(t *testing.T) {
 	}
 }
 
+func TestIsAgingImmune(t *testing.T) {
+	if IsAgingImmune(nil) {
+		t.Errorf("nil player should not be aging immune")
+	}
+
+	human := &models.Player{}
+	human.Race = "human"
+	human.Rank = 1
+	if IsAgingImmune(human) {
+		t.Errorf("rank 1 mortal should not be aging immune")
+	}
+
+	rank10 := &models.Player{}
+	rank10.Race = "human"
+	rank10.Rank = 10
+	if !IsAgingImmune(rank10) {
+		t.Errorf("rank 10 Vĩnh Sinh player must be aging immune")
+	}
+
+	rank11 := &models.Player{}
+	rank11.Race = "human"
+	rank11.Rank = 11
+	if !IsAgingImmune(rank11) {
+		t.Errorf("rank 11+ player must be aging immune")
+	}
+
+	cuongThi := &models.Player{}
+	cuongThi.Race = "cuong_thi"
+	cuongThi.Rank = 1
+	if !IsAgingImmune(cuongThi) {
+		t.Errorf("cuong_thi race must be aging immune")
+	}
+}
+
 func TestEffectsUnmarshalJSON_Blocks(t *testing.T) {
 	raw := `[
 		{"id":"STAT_MODS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"STAT_MODS","params":{"value":{"attack":0.1,"defense":0.1}}}]},

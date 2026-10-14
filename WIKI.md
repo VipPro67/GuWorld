@@ -1195,6 +1195,10 @@ Không ai được xem trộm hồ sơ từ xa. Muốn biết địch ở đâu,
 - **Ngụy Trang (DISGUISE):** tổng từ rank + Cổ đang trang bị + cảnh giới Trí/Ám.
   Mỗi điểm giảm 1% cơ hội bị quái phục kích lân cận (`50 + rank*2 - disguise`, sàn 5%, trần 95%)
   và thu hẹp cửa sổ gặp quái ngẫu nhiên khi khám phá (`70 - disguise`, sàn 40%).
+- **Phi Hành (FLYING):** một số Cổ phi hành cho đạo hữu **cất cánh** trong vài phút (thời gian
+  mặc định = Chuyển của Cổ, có thể đặt riêng). Khi đang bay, đạo hữu **lướt qua quái thú dưới
+  đất**: không kích combat khi dẫm ô quái, không bị phục kích lân cận, và quái sống **không phát
+  hiện/đuổi theo**. Dùng lại kỹ năng để **hạ cánh sớm**. Không áp dụng cho PvP hay du ngoạn vùng.
 
 ### Ba trụ điểm (áp cho cả hai phe) — cảnh giới là trụ số một
 

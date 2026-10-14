@@ -460,9 +460,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 				poolChanged = true
 			}
 		}
-		dummyP := models.Player{}
-		dummyP.Race = player.Race
-		if !gamefx.Get(&dummyP).Immortal {
+		if !gamefx.IsAgingImmune(player) {
 			yearsPassed := (secondsPassed * effectiveBase) / 36000.0
 			player.Lifespan -= yearsPassed
 			if player.Lifespan <= 0 {

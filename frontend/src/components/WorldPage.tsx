@@ -14,6 +14,7 @@ import { ClearCacheButton } from "./ClearCacheModal";
 import { ThemeToggle } from "./ThemeToggle";
 import { WorldAtlasModal } from "./WorldAtlasModal";
 import { MovementJoystick } from "./MovementJoystick";
+import { GuQuickBar } from "./GuQuickBar";
 import { LogConsole } from "./LogConsole";
 import { DirectActionHotbar, type HotbarAction } from "./DirectActionHotbar";
 import { NotificationBell } from "./NotificationBell";
@@ -1038,6 +1039,7 @@ onClick={() => {
         </div>
       )}
 
+      {mapPerformanceMode !== "off" && <GuQuickBar />}
       {mapPerformanceMode !== "off" && <MovementJoystick />}
     </div>
   );

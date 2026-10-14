@@ -15,6 +15,10 @@ interface GuSkillSlot {
   cost: number;
 }
 
+// Combat-only effects are cast from the combat screen, not the world-map bar.
+// Keep only special utility effects (heal, mana, teleport, flying, ...).
+const COMBAT_EFFECT_TYPES = new Set<GuSkillSlot["effectType"]>(["damage", "shield", "buff_atk", "buff_def", "buff_speed"]);
+
 export function GuQuickBar() {
   const player = useGameStore((s) => s.player);
   const guDictionary = useGameStore((s) => s.guDictionary);
@@ -55,14 +59,15 @@ export function GuQuickBar() {
       } else if (status?.status_id) {
         const id = status.status_id.toUpperCase();
         type = id === "ATK_UP" ? "buff_atk" : id === "DEF_UP" ? "buff_def" : ["HASTE", "SPEED_UP"].includes(id) ? "buff_speed" : id === "REGEN" ? "heal" : "utility";
-        label = `${id} ${status.value || ""}`.trim();
+        label = id === "FLYING" || id === "PHI_HANH" ? "Phi Hành" : `${id} ${status.value || ""}`.trim();
       } else if (first?.op === "SHIELD" || first?.op === "BARRIER") {
         type = "shield"; label = `+${first.value || 0} Khiên`;
       } else if (first) {
         type = "utility"; label = first.op === "DAMAGE" ? `${first.value || 0} Dmg` : "Kích hoạt";
       }
 
-      if (type) {
+      const castable = operationsBy(spec.effects, { trigger: ["ON_ACTION", "ON_USE"] }).length > 0;
+      if (type && !COMBAT_EFFECT_TYPES.has(type) && (castable || type === "teleport")) {
         const cost = spec.base_mana_cost || 10;
         slots.push({
           gu,
