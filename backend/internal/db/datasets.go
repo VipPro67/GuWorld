@@ -112,6 +112,7 @@ func Datasets() []Dataset {
 		dataset("arena_shop_item", "Cửa hàng Đấu trường", "ArenaShopItem.csv", func() error { return seedArenaShopItemsFromCSV("ArenaShopItem.csv") }, individualExportDefs["arena_shop_item"], noDatasetPreflight, []string{"arena_shop"}, none),
 		dataset("region", "Khu vực", "Region.csv", func() error { return seedRegionsFromCSV("Region.csv") }, individualExportDefs["region"], noDatasetPreflight, []string{"dictionary", "world_monsters"}, []string{"zone", "monster"}),
 		dataset("loot_table", "Bảng loot", "LootTable.csv", func() error { return seedLootTablesFromCSV("LootTable.csv") }, individualExportDefs["loot_table"], noDatasetPreflight, dictionary, []string{"monster"}),
+		dataset("region_loot", "Loot theo vùng", "RegionLootTables.csv", func() error { return seedRegionLootTablesFromCSV("RegionLootTables.csv") }, individualExportDefs["region_loot"], noDatasetPreflight, dictionary, []string{"none"}),
 		dataset("monster", "Quái vật", "Monster.csv", func() error { return seedMonsterTemplatesFromCSV("Monster.csv") }, individualExportDefs["monster"], noDatasetPreflight, dictionary, []string{"monster"}),
 		dataset("monster_spawn", "Spawn quái", "MonsterSpawn.csv", func() error { return seedMonsterSpawnsFromCSV("MonsterSpawn.csv") }, individualExportDefs["monster_spawn"], noDatasetPreflight, dictionary, []string{"zone", "monster"}),
 		dataset("map_cell", "Bản đồ", "MapCell.csv", func() error { return seedMapCellsFromCSV("MapCell.csv") }, individualExportDefs["map_cell"], noDatasetPreflight, dictionary, []string{"zone", "monster"}),

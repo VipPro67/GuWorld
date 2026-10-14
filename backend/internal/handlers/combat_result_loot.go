@@ -67,7 +67,7 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 			}
 		}
 	} else if activeCombat != nil && activeCombat.LootTableID != "" {
-		loot, rollErr := RollMonsterLoot(tx, activeCombat.LootTableID, activeCombat.EnemyRank)
+		loot, rollErr := RollMonsterLoot(tx, activeCombat.LootTableID, activeCombat.EnemyRank, activeCombat.WorldMonsterRegionID, activeCombat.EnemyType)
 		if rollErr != nil {
 			lootDetailLogs = append(lootDetailLogs, "Không thể roll chiến lợi phẩm.")
 		}

@@ -17,6 +17,7 @@ export const IMPORT_DATASETS = [
   ["status", "Trạng thái", "Status.csv"], ["recipe", "Cổ phương", "Recipe.csv"],
   ["shop_item", "Cửa hàng", "ShopItem.csv"], ["arena_shop_item", "Cửa hàng Đấu trường", "ArenaShopItem.csv"],
   ["region", "Khu vực", "Region.csv"], ["loot_table", "Bảng loot", "LootTable.csv"],
+  ["region_loot", "Loot theo vùng", "RegionLootTables.csv"],
   ["monster", "Quái vật", "Monster.csv"], ["monster_spawn", "Spawn quái", "MonsterSpawn.csv"],
   ["map_cell", "Ô bản đồ", "MapCell.csv"], ["sect_mission", "Nhiệm vụ tông môn", "SectMission.csv"],
   ["quest", "Nhiệm vụ", "Quest.csv"], ["dream_realm", "Mộng cảnh", "DreamRealm.csv"],

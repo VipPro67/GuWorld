@@ -144,7 +144,7 @@ và session, không chứa role hoặc permission.
 | `backend/data/Gu.csv` | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, targeting, rarity, role/tags. |
 | `backend/data/Item.csv` | Vật phẩm, nguyên liệu, tiền tệ, consumable và effect. |
 | `backend/data/Recipe.csv` | Công thức luyện Cổ, nguyên liệu, tỉ lệ và chi phí. |
-| `backend/data/Monster.csv`, `LootTable.csv`, `MonsterSpawn.csv` | Template quái, bảng loot và quy tắc spawn. |
+| `backend/data/Monster.csv`, `LootTable.csv`, `MonsterSpawn.csv`, `RegionLootTables.csv` | Template quái, bảng loot, quy tắc spawn và loot theo vùng. |
 | `backend/data/Region.csv`, `MapCell.csv` | Vùng/zone và ô persistent của thế giới. |
 | `backend/data/Race.csv`, `Constitution.csv`, `Status.csv` | Chủng tộc, thể chất và trạng thái data-driven. |
 | `backend/data/Quest.csv`, `DreamRealm.csv` | Nhiệm vụ và mộng cảnh/phó bản. |
@@ -960,6 +960,18 @@ Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, pat
   - `jackpot` (bool): **luôn roll dù lệch rank** với `chance` riêng — dùng cho hiếm phẩm bonus vượt bậc (mặc định `false`; chọn thủ công trong Admin).
 - Quy ước dữ liệu `LootTable.csv`: item `*_rankN` (thịt yêu thú, thiên khí, thiếc, nước, thạch âm, bùn đất, hắc du, kiếm thảo… 9 bậc) mang `rank = N`; item đặc thù (tơ nhện, lông thú, kén…) và tiền tệ đặc biệt (`primeval_stone`, `immortal_stone`, `white_light_essence`) mang `rank = 0`. Hiện 672/956 entry là universal (theme), phần còn lại gắn bậc.
 - **Spawn quái:** toàn bộ 209 monster trừ 6 con sinh bởi hệ kiếp (`monster_tribulation_beast`, 5 `*_calamity_boss`/`*_tribulation_boss`) đều có dòng `MonsterSpawn` — 50 con trước đây thiếu đã được bổ sung vào `MonsterSpawn.csv` (boss → `Fixed` có tọa độ, Elite → `Patrol`, Normal → `Roaming`). Rank spawn của chúng lấy theo bậc vật phẩm trong bảng loot (max `_rankN`/item rank, fallback theo vùng).
+
+#### Loot theo vùng (Region loot — lớp thứ 3)
+
+- Loot của một trận PvE gồm **3 lớp độc lập** (cộng dồn, `RollMonsterLoot` trong `handlers/combat_loot.go`):
+  1. **Bể chung theo bậc** `loot_monster_common` (mọi quái).
+  2. **Override đặc thù loài** `Monster.loot_table_id`.
+  3. **Loot theo vùng** — bảng `region_loot_tables`, áp dụng theo `region_id` + `monster_type` (Normal/Elite/Boss…) + dải `min_rank`/`max_rank`.
+- Bảng `region_loot_tables` (CSV `RegionLootTables.csv`, dataset "Loot theo vùng") là mapping `region_id, loot_table_id, monster_type, min_rank, max_rank, chance, is_active`; PK `(region_id, loot_table_id, monster_type)`. Mỗi rule có `chance` kích hoạt riêng (mỗi rule là một lần roll độc lập, không chia sẻ ngân sách xác suất với lớp khác).
+- CSV `RegionLootTables.csv` chỉ chứa mapping; bảng loot đích (`loot_region_*`) khai báo trong `LootTable.csv` như bảng loot bình thường, `entries` tham chiếu `item_id` có thật trong `Item.csv`.
+- **Kế thừa theo phân cấp vùng:** `RollRegionLoot` tra cả `region_id` hiện tại **và tổ tiên** (`parent_id`), nên rule đặt ở `dai_vuc_dong_hai` tự áp dụng cho mọi KHU_VUC con (ví dụ `ngoc_ho_dao`). Nhờ vậy chỉ cần khai báo rule ở cấp đại vực.
+- **Region loot áp dụng cho cả combat ngoài overworld lẫn khám phá:** combat khởi tạo từ `BuildCombatStateFromMonster` được gán `WorldMonsterRegionID = player.CurrentRegion` (exploration) hoặc `current.RegionID` (world monster encounter), nên `EnemyType` + region được truyền đúng vào `RollMonsterLoot`.
+- Ví dụ dữ liệu Đông Hải: `RegionLootTables.csv` map `dai_vuc_dong_hai` → `loot_region_dong_hai_normal` (Normal, rank 1–9, chance 1.0), `_elite` (Elite, rank 2–9, 0.8), `_boss` (Boss, rank 3–9, 1.0). Các bảng loot tương ứng chứa tài nguyên đặc hữu vùng biển (`fish_scales`, `pure_spring_drop`, `water_weed`, `deep_sea_pearl`, `gold_dragonfish_scale`…).
 
 ### Canonical non-player actors
 

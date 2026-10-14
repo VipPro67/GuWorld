@@ -418,12 +418,13 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 			}
 
 			combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
+			combatState.WorldMonsterRegionID = player.CurrentRegion
 			player.ActiveCombat = &combatState
 			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
 
 			hasHeavenSecret := models.InventoryHasGuCapability(player.GuInventory, "LOOT_PREVIEW", true)
 			if hasHeavenSecret && mon.LootTableID != "" {
-				logMsg += heavenSecretLootPreview(tx, mon.LootTableID, rank)
+				logMsg += heavenSecretLootPreview(tx, mon.LootTableID, rank, player.CurrentRegion, mon.Type)
 			}
 		case "PVP":
 			if IsSafeZone(player.CurrentRegion, player.X, player.Y) || playerTerritory.InTerritory {
@@ -535,6 +536,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 							subRank = adj.SubRank
 						}
 						combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
+						combatState.WorldMonsterRegionID = player.CurrentRegion
 						player.ActiveCombat = &combatState
 						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)
 					}

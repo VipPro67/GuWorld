@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -76,10 +77,82 @@ func RollLoot(lt models.LootTable, rank int) RolledLoot {
 	return rolled
 }
 
+// RollRegionLoot rolls region-specific loot based on region + monster type + rank.
+// This is Layer 3 of the 3-layer loot system: region-specific resources.
+// The lookup includes the region's ancestors (e.g. a KHU_VUC inherits its
+// parent NGU_VUC's rules) so broad regional identity applies to subregions.
+func RollRegionLoot(tx *sql.Tx, regionID string, monsterType string, rank int) RolledLoot {
+	rolled := RolledLoot{
+		Items: make(map[string]int),
+		Gus:   []string{},
+	}
+
+	if regionID == "" || monsterType == "" {
+		return rolled
+	}
+
+	scope := regionLootScope(tx, regionID)
+	rows, err := tx.Query(`
+		SELECT loot_table_id, chance FROM region_loot_tables
+		WHERE region_id = ANY($1)
+		  AND monster_type = $2 
+		  AND min_rank <= $3 
+		  AND max_rank >= $3
+		  AND is_active = TRUE
+		  AND chance > 0
+		ORDER BY region_id, monster_type, loot_table_id`, pq.Array(scope), monsterType, rank)
+	if err != nil {
+		logger.S.Warnf("RollRegionLoot: query failed: %v", err)
+		return rolled
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var lootTableID string
+		var chance float64
+		if err := rows.Scan(&lootTableID, &chance); err != nil {
+			continue
+		}
+
+		if rand.Float64() > chance {
+			continue
+		}
+
+		if lt, err := db.LoadLootTable(tx, lootTableID); err == nil {
+			regionLoot := RollLoot(lt, rank)
+			for k, v := range regionLoot.Items {
+				rolled.Items[k] += v
+			}
+			rolled.Gus = append(rolled.Gus, regionLoot.Gus...)
+		}
+	}
+
+	return rolled
+}
+
+// regionLootScope returns the region id plus its ancestor ids so region loot
+// rules defined on a parent NGU_VUC apply to its KHU_VUC children.
+func regionLootScope(tx *sql.Tx, regionID string) []string {
+	scope := []string{regionID}
+	current := regionID
+	for i := 0; i < 8; i++ {
+		var parent sql.NullString
+		if err := tx.QueryRow(`SELECT parent_id FROM regions WHERE id = $1`, current).Scan(&parent); err != nil {
+			break
+		}
+		if !parent.Valid || parent.String == "" {
+			break
+		}
+		scope = append(scope, parent.String)
+		current = parent.String
+	}
+	return scope
+}
+
 // RollMonsterLoot rolls a monster PvE kill's full loot: the shared per-rank
 // baseline pool (loot_monster_common, gated by entry.Rank) plus the monster's
-// own override table (rank-filtered the same way).
-func RollMonsterLoot(tx *sql.Tx, overrideID string, rank int) (RolledLoot, error) {
+// own override table (rank-filtered the same way) plus region-specific loot.
+func RollMonsterLoot(tx *sql.Tx, overrideID string, rank int, regionID string, monsterType string) (RolledLoot, error) {
 	loot := RolledLoot{
 		Items: make(map[string]int),
 		Gus:   []string{},
@@ -100,14 +173,24 @@ func RollMonsterLoot(tx *sql.Tx, overrideID string, rank int) (RolledLoot, error
 			logger.S.Warnf("RollMonsterLoot: khong load duoc loot table %s: %v", overrideID, err)
 		}
 	}
+
+	// Layer 3: Region-specific loot (filter by monster_type)
+	if regionID != "" && monsterType != "" {
+		regionLoot := RollRegionLoot(tx, regionID, monsterType, rank)
+		for k, v := range regionLoot.Items {
+			loot.Items[k] += v
+		}
+		loot.Gus = append(loot.Gus, regionLoot.Gus...)
+	}
+
 	return loot, nil
 }
 
 // heavenSecretLootPreview builds the "[Thiên Cơ hiển lộ ...]" drop preview for
 // the LOOT_PREVIEW Gu capability, matching exactly what RollMonsterLoot rolls
-// (same pool + override, same rank filter). Returns "" when there is nothing
+// (same pool + override + region loot, same rank filter). Returns "" when there is nothing
 // to preview.
-func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int) string {
+func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int, regionID string, monsterType string) string {
 	chanceMul := lootChanceMultiplier(rank)
 	qtyMul := lootQuantityMultiplier(rank)
 	msg := fmt.Sprintf(" [Thiên Cơ hiển lộ (Rank %d x%.1f) - Tỉ lệ rơi đồ: ", rank, qtyMul)
@@ -139,6 +222,29 @@ func heavenSecretLootPreview(tx *sql.Tx, overrideID string, rank int) string {
 			for _, e := range lt.Entries {
 				appendPreview(e)
 			}
+		}
+	}
+	if regionID != "" && monsterType != "" {
+		scope := regionLootScope(tx, regionID)
+		rows, err := tx.Query(`
+			SELECT loot_table_id FROM region_loot_tables
+			WHERE region_id = ANY($1) AND monster_type = $2
+			  AND min_rank <= $3 AND max_rank >= $3
+			  AND is_active = TRUE AND chance > 0
+			ORDER BY region_id, monster_type, loot_table_id`, pq.Array(scope), monsterType, rank)
+		if err == nil {
+			for rows.Next() {
+				var lootTableID string
+				if scanErr := rows.Scan(&lootTableID); scanErr != nil {
+					continue
+				}
+				if lt, loadErr := db.LoadLootTable(tx, lootTableID); loadErr == nil {
+					for _, e := range lt.Entries {
+						appendPreview(e)
+					}
+				}
+			}
+			rows.Close()
 		}
 	}
 	if first {

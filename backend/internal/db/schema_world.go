@@ -231,6 +231,28 @@ func schemaWorld() error {
 		return err
 	}
 
+	if err := execSchema("region_loot_tables", `
+	CREATE TABLE IF NOT EXISTS region_loot_tables (
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		loot_table_id VARCHAR(50) NOT NULL REFERENCES loot_tables(id) ON DELETE CASCADE,
+		monster_type VARCHAR(50) NOT NULL,
+		min_rank INT NOT NULL DEFAULT 1,
+		max_rank INT NOT NULL DEFAULT 9,
+		chance DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (region_id, loot_table_id, monster_type)
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("region_loot_tables_lookup_idx", `
+	CREATE INDEX IF NOT EXISTS idx_region_loot_lookup 
+		ON region_loot_tables(region_id, monster_type, is_active);`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

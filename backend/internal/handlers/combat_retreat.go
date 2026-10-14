@@ -613,7 +613,7 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if isPvE && cs.LootTableID != "" {
-		if loot, err := RollMonsterLoot(tx, cs.LootTableID, cs.EnemyRank); err == nil {
+		if loot, err := RollMonsterLoot(tx, cs.LootTableID, cs.EnemyRank, cs.WorldMonsterRegionID, cs.EnemyType); err == nil {
 			if cs.EnemyGuInventory != nil && len(cs.EnemyGuInventory) > 0 {
 				for _, eg := range cs.EnemyGuInventory {
 					guSpec, _ := models.GetGuAny(eg.GuID)

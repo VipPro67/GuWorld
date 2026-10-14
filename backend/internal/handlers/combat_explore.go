@@ -152,6 +152,7 @@ func ExploreNode(c *gin.Context) {
 		subRank := rand.Intn(5) + 1
 
 		enemy := models.BuildCombatStateFromMonster(monTemplate, rank, subRank)
+		enemy.WorldMonsterRegionID = player.CurrentRegion
 
 		player.ActiveCombat = StartCombat(tx, &enemy, &player)
 
@@ -243,7 +244,7 @@ func ExploreNode(c *gin.Context) {
 			}
 		}
 		if hasHeavenSecret && monTemplate.LootTableID != "" {
-			logMsg += heavenSecretLootPreview(tx, monTemplate.LootTableID, rank)
+			logMsg += heavenSecretLootPreview(tx, monTemplate.LootTableID, rank, player.CurrentRegion, monTemplate.Type)
 		}
 	} else if roll < 90 {
 		foods := []string{"moon_orchid_petal", "green_bamboo_wine", "jade_stone", "boar_meat"}

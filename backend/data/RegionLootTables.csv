@@ -1,0 +1,4 @@
+region_id,loot_table_id,monster_type,min_rank,max_rank,chance,is_active
+dai_vuc_dong_hai,loot_region_dong_hai_normal,Normal,1,9,1.0,true
+dai_vuc_dong_hai,loot_region_dong_hai_elite,Elite,2,9,0.8,true
+dai_vuc_dong_hai,loot_region_dong_hai_boss,Boss,3,9,1.0,true

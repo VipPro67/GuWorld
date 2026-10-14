@@ -1817,6 +1817,9 @@ func SeedMonstersAndSpawns() error {
 	if err := seedMonsterSpawnsFromCSV("MonsterSpawn.csv"); err != nil {
 		return err
 	}
+	if err := seedRegionLootTablesFromCSV("RegionLootTables.csv"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2262,6 +2265,70 @@ func seedLootTablesFromCSV(filename string) error {
 		seeded++
 	}
 	logger.S.Infof("Loot tables seeded from %s (%d seeded)", filename, seeded)
+	return nil
+}
+
+// seedRegionLootTablesFromCSV imports region-specific loot rules: Layer 3 of the
+// 3-layer loot system. Each row maps a (region, monster_type, rank range) to a
+// loot table that additionally rolls on PvE kills in that region.
+func seedRegionLootTablesFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	regionIdx, lootIdx, typeIdx := col("region_id"), col("loot_table_id"), col("monster_type")
+	minRankIdx, maxRankIdx, chanceIdx, activeIdx := col("min_rank"), col("max_rank"), col("chance"), col("is_active")
+	if regionIdx < 0 || lootIdx < 0 || typeIdx < 0 {
+		return fmt.Errorf("RegionLootTables.csv missing required columns (region_id, loot_table_id, monster_type)")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		regionID, lootID, monsterType := get(row, regionIdx), get(row, lootIdx), get(row, typeIdx)
+		if regionID == "" || lootID == "" || monsterType == "" {
+			continue
+		}
+		minRank, maxRank, chance := 1, 9, 1.0
+		if v := get(row, minRankIdx); v != "" {
+			fmt.Sscanf(v, "%d", &minRank)
+		}
+		if v := get(row, maxRankIdx); v != "" {
+			fmt.Sscanf(v, "%d", &maxRank)
+		}
+		if v := get(row, chanceIdx); v != "" {
+			fmt.Sscanf(v, "%f", &chance)
+		}
+		active := true
+		av := strings.ToLower(get(row, activeIdx))
+		if av == "false" || av == "0" || av == "no" {
+			active = false
+		}
+		_, err = activeCSVImportDB().Exec(`
+			INSERT INTO region_loot_tables (region_id, loot_table_id, monster_type, min_rank, max_rank, chance, is_active, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+			ON CONFLICT (region_id, loot_table_id, monster_type)
+			DO UPDATE SET min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank, chance=EXCLUDED.chance, is_active=EXCLUDED.is_active, updated_at=NOW()
+		`, regionID, lootID, monsterType, minRank, maxRank, chance, active)
+		if err != nil {
+			return fmt.Errorf("upsert region loot %s/%s/%s: %w", regionID, lootID, monsterType, err)
+		}
+		seeded++
+	}
+	logger.S.Infof("Region loot tables seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -3496,6 +3563,11 @@ var individualExportDefs = map[string]exportDef{
 		filename: "LootTable.csv",
 		columns:  []string{"id", "name", "entries"},
 		query:    `SELECT id, name, COALESCE(entries::text,'[]') FROM loot_tables ORDER BY id`,
+	},
+	"region_loot": {
+		filename: "RegionLootTables.csv",
+		columns:  []string{"region_id", "loot_table_id", "monster_type", "min_rank", "max_rank", "chance", "is_active"},
+		query:    `SELECT region_id, loot_table_id, monster_type, min_rank, max_rank, chance, is_active FROM region_loot_tables ORDER BY region_id, monster_type, loot_table_id`,
 	},
 	"monster": {
 		filename: "Monster.csv",
