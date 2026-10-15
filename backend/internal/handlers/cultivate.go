@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -466,16 +467,9 @@ func Ascension(c *gin.Context) {
 		if player.DaoMarks == nil {
 			player.DaoMarks = models.DaoMarksMap{}
 		}
-		// Ordinary ascension grants two random paths. Heaven Path is reserved
-		// for its own acquisition mechanic.
-		ascensionPaths := randomOrdinaryDaoMarkPaths(models.AllGuPaths(), 2)
-		if len(ascensionPaths) != 2 {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không đủ lưu phái hợp lệ để ban Đạo Ngân thăng tiên"})
-			return
-		}
-		for _, path := range ascensionPaths {
-			player.DaoMarks[path] = 100
-		}
+		// Ascension grants 200 Dao Marks into the Vital Gu's path (excluding Heaven Path).
+		chosenPath := vitalGuPathForAscension(tx, &player)
+		player.DaoMarks[chosenPath] = 200
 
 		// Set first tribulation to 10 days from now (simulated real-time)
 		nextTrib := time.Now().Add(10 * 24 * time.Hour)
@@ -488,7 +482,7 @@ func Ascension(c *gin.Context) {
 			return
 		}
 
-		msg = "Thăng tiên thành công! Bạn đã khai Tiên Khiếu."
+		msg = fmt.Sprintf("Thăng tiên thành công! Bạn nhận được 200 Đạo Ngân hệ %s và đã khai mở Tiên Khiếu.", strings.ToUpper(chosenPath))
 		SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Đạo hữu %s đã thăng tiên thành công! Người người ngưỡng mộ", player.Account.Username))
 		updateQuery := `
 			UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, next_tribulation_time = $4

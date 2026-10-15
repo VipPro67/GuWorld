@@ -19,6 +19,27 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+type ApertureCheck struct {
+	ID                       string
+	PlayerID                 string
+	TimeRate                 float64
+	AreaSize                 float64
+	ApertureHP               float64
+	MaxApertureHP            float64
+	InternalYearsPassed      float64
+	NextTribulationYear      float64
+	EssenceProductionPerYear int
+	RankStartYear            float64
+	EarthCalamityCount       int
+	HeavenlyTribulationCount int
+	GrandTribulationCount    int
+	MyriadTribulationCount   int
+	ChaosCalamityCount       int
+	TribulationPendingAt     sql.NullTime
+	State                    string
+	DaoMarks                 models.DaoMarksMap
+}
+
 func checkAndTriggerSingleAperture(apertureID string) error {
 	var ap struct {
 		ID                       string
@@ -121,27 +142,6 @@ func CheckAndTriggerTribulations() error {
 	`)
 	if err != nil {
 		return err
-	}
-
-	type ApertureCheck struct {
-		ID                       string
-		PlayerID                 string
-		TimeRate                 float64
-		AreaSize                 float64
-		ApertureHP               float64
-		MaxApertureHP            float64
-		InternalYearsPassed      float64
-		NextTribulationYear      float64
-		EssenceProductionPerYear int
-		RankStartYear            float64
-		EarthCalamityCount       int
-		HeavenlyTribulationCount int
-		GrandTribulationCount    int
-		MyriadTribulationCount   int
-		ChaosCalamityCount       int
-		TribulationPendingAt     sql.NullTime
-		State                    string
-		DaoMarks                 models.DaoMarksMap
 	}
 
 	apertures := []ApertureCheck{}
@@ -599,6 +599,12 @@ func CheckAndTriggerTribulations() error {
 			}
 
 			if newYearsPassed >= triggerYear {
+				// Nếu đã bị quá giờ bảo lưu (> 24 giờ) dù online hay offline => LUÔN BẠI!
+				if ap.TribulationPendingAt.Valid && time.Since(ap.TribulationPendingAt.Time) > tribulationPenaltyAfter {
+					failOverduePendingTribulation(ap, newYearsPassed, calcNextType)
+					continue
+				}
+
 				if !isPlayerOnline(ap.PlayerID) {
 					_, _ = db.DB.Exec(`
 						UPDATE immortal_apertures
@@ -611,10 +617,6 @@ func CheckAndTriggerTribulations() error {
 				}
 
 				rewardMult := 1.0
-				if ap.TribulationPendingAt.Valid && time.Since(ap.TribulationPendingAt.Time) > tribulationPenaltyAfter {
-					rewardMult = 0.5
-				}
-
 				_, _ = db.DB.Exec(`
 					UPDATE immortal_apertures
 					SET internal_years_passed = $1, tribulation_pending_at = NULL, updated_at = NOW()
@@ -1081,6 +1083,72 @@ func chooseTribulationPath(supportedPaths, vitalPaths []string, tribulationType 
 	return eligible[rand.Intn(len(eligible))], true
 }
 
+func failOverduePendingTribulation(ap ApertureCheck, newYearsPassed float64, calcNextType string) {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Rollback()
+
+	var playerRank int
+	_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, ap.PlayerID).Scan(&playerRank)
+
+	nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, newYearsPassed)
+	nextYear = guardNextTribulationYear(nextYear, newYearsPassed)
+
+	newHP := float64(ap.MaxApertureHP) / 10.0
+	if newHP < 100 {
+		newHP = 100
+	}
+
+	var activeNodesCount int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ap.ID).Scan(&activeNodesCount)
+	nodesToDestroy := int(float64(activeNodesCount) * 0.3)
+	if nodesToDestroy < 1 && activeNodesCount > 0 {
+		nodesToDestroy = 1
+	}
+	if nodesToDestroy > 0 {
+		_, _ = tx.Exec(`
+			DELETE FROM aperture_resource_nodes
+			WHERE id IN (
+				SELECT id FROM aperture_resource_nodes 
+				WHERE aperture_id = $1 AND is_destroyed = false 
+				ORDER BY random() 
+				LIMIT $2
+			)
+		`, ap.ID, nodesToDestroy)
+	}
+
+	_, _ = tx.Exec(`
+		UPDATE players 
+		SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
+		WHERE id = $1
+	`, ap.PlayerID)
+
+	_, _ = tx.Exec(`
+		UPDATE immortal_apertures 
+		SET state = 'DAMAGED', next_tribulation_year = $1, aperture_hp = $2,
+			internal_years_passed = $3, tribulation_pending_at = NULL,
+			area_size = GREATEST(0, CAST(area_size AS numeric) * 0.9),
+			time_rate = GREATEST(1.0, time_rate * 0.9),
+			updated_at = NOW()
+		WHERE id = $4
+	`, nextYear, newHP, newYearsPassed, ap.ID)
+
+	eventID := uuid.New()
+	_, _ = tx.Exec(`
+		INSERT INTO tribulation_events (id, aperture_id, player_id, tribulation_type, path, difficulty, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at)
+		VALUES ($1, $2, $3, $4, 'general', 1, 'FAILED', $5, $6, 0, NOW(), NOW())
+	`, eventID, ap.ID, ap.PlayerID, calcNextType, ap.ApertureHP, newHP)
+
+	_, _ = tx.Exec(`
+		INSERT INTO messages (sender_id, receiver_id, content, channel)
+		VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Đạo hữu trốn tránh kiếp nạn quá 24 giờ! Thiên Ý cuồng bạo tàn phá Tiên Khiếu, kiếp nạn bị phán định THẤT BẠI: mất 2,000 Nguyên Thạch, 5 Tiên Nguyên, diện tích và tốc độ thời gian bị giảm 10%, 30% tài nguyên bị san phẳng.', 'private')
+	`, ap.PlayerID)
+
+	_ = tx.Commit()
+}
+
 func autoResolveEvent(eventID string, playerID string) {
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -1135,7 +1203,9 @@ func autoResolveEvent(eventID string, playerID string) {
 		UPDATE immortal_apertures 
 		SET state = 'DAMAGED', next_tribulation_year = $1, aperture_hp = $2,
 			earth_calamity_count = $3, heavenly_tribulation_count = $4, grand_tribulation_count = $5,
-			myriad_tribulation_count = $6, chaos_calamity_count = $7
+			myriad_tribulation_count = $6, chaos_calamity_count = $7,
+			area_size = GREATEST(0, CAST(area_size AS numeric) * 0.9),
+			time_rate = GREATEST(1.0, time_rate * 0.9)
 		WHERE id = $8
 	`, nextYear, newHP,
 		ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
@@ -1147,14 +1217,33 @@ func autoResolveEvent(eventID string, playerID string) {
 		WHERE id = $2
 	`, newHP, ev.ID)
 
+	var activeNodesCount int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ev.ApertureID).Scan(&activeNodesCount)
+	nodesToDestroy := int(float64(activeNodesCount) * 0.3)
+	if nodesToDestroy < 1 && activeNodesCount > 0 {
+		nodesToDestroy = 1
+	}
+	if nodesToDestroy > 0 {
+		_, _ = tx.Exec(`
+			DELETE FROM aperture_resource_nodes
+			WHERE id IN (
+				SELECT id FROM aperture_resource_nodes 
+				WHERE aperture_id = $1 AND is_destroyed = false 
+				ORDER BY random() LIMIT $2
+			)
+		`, ev.ApertureID, nodesToDestroy)
+	}
+
 	_, _ = tx.Exec(`
-		DELETE FROM aperture_resource_nodes
-		WHERE id IN (
-			SELECT id FROM aperture_resource_nodes 
-			WHERE aperture_id = $1 AND is_destroyed = false 
-			ORDER BY random() LIMIT 2
-		)
-	`, ev.ApertureID)
+		UPDATE players 
+		SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
+		WHERE id = $1
+	`, playerID)
+
+	_, _ = tx.Exec(`
+		INSERT INTO messages (sender_id, receiver_id, content, channel)
+		VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Kiếp nạn quá hạn 24 giờ không giải quyết! Thiên Ý cuồng bạo tàn phá Tiên Khiếu, kiếp nạn bị phán định THẤT BẠI: mất 2,000 Nguyên Thạch, 5 Tiên Nguyên, diện tích và tốc độ thời gian bị giảm 10%, 30% tài nguyên bị san phẳng.', 'private')
+	`, playerID)
 
 	_, _ = tx.Exec(`UPDATE tribulation_enemies SET is_dead = true WHERE event_id = $1`, ev.ID)
 

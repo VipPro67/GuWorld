@@ -453,9 +453,6 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 				act.BonusTurns = 2
 			}
 		}
-		if active.ShieldFlat > 0 {
-			act.Defense += active.ShieldFlat
-		}
 		if active.ShieldMult > 0 {
 			act.ShieldMult = active.ShieldMult
 		}

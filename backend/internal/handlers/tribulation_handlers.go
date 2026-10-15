@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -520,125 +519,65 @@ func ResolveTribulation(c *gin.Context) {
 			`, playerID, breakthroughMsg)
 		}
 	} else {
-		// Player resolves manually with remaining enemies (yields high risk of damage)
-		successChance := 0.25
-		if remainingEnemies == 1 {
-			successChance = 0.50
+		// Player resolves manually with remaining enemies (rút lui) => ALWAYS FAIL
+		var playerRank int
+		_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
+
+		// Counts are only incremented on success — a failed tribulation does
+		// not count toward the total / per-type counters, but the next year
+		// is still pushed forward to the next milestone for recovery time.
+		nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.InternalYearsPassed)
+		ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
+
+		ap.State = "DAMAGED"
+		ap.ApertureHP = ap.MaxApertureHP / 10
+
+		// Phá hủy 30% tài nguyên
+		var activeNodesCount int
+		_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ap.ID).Scan(&activeNodesCount)
+		nodesToDestroy := int(float64(activeNodesCount) * 0.3)
+		if nodesToDestroy < 1 && activeNodesCount > 0 {
+			nodesToDestroy = 1
 		}
 
-		win := rand.Float64() < successChance
-		if win {
-			reducedReward := ev.RewardDaoMarks / 2
-			rewards := distributeDaoMarks(ev.Path, reducedReward)
-			daoMap, errDao := addMultipleDaoMarksTx(tx, playerID.String(), rewards)
-			if errDao != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + errDao.Error()})
-				return
-			}
-			updatedDaoMarks = daoMap
-
-			ap.ApertureHP = ap.MaxApertureHP / 2
-			handleSuccess(ev.TribulationType)
-
+		if nodesToDestroy > 0 {
 			_, _ = tx.Exec(`
 				DELETE FROM aperture_resource_nodes
 				WHERE id IN (
 					SELECT id FROM aperture_resource_nodes 
 					WHERE aperture_id = $1 AND is_destroyed = false 
-					ORDER BY random() LIMIT 1
+					ORDER BY random() 
+					LIMIT $2
 				)
-			`, ap.ID)
-
-			_, _ = tx.Exec(`
-				UPDATE immortal_apertures 
-				SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
-					rank_start_year = $4, earth_calamity_count = $5, heavenly_tribulation_count = $6,
-					grand_tribulation_count = $7, myriad_tribulation_count = $8, chaos_calamity_count = $9
-				WHERE id = $10
-			`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
-				ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount,
-				ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
-
-			_, _ = tx.Exec(`
-				UPDATE tribulation_events
-				SET status = 'SUCCESS', aperture_hp_after = $1, ended_at = $2, reward_dao_marks = $3
-				WHERE id = $4
-			`, ap.ApertureHP, now, reducedReward, ev.ID)
-
-			rewardStrings := []string{}
-			for path, amount := range rewards {
-				rewardStrings = append(rewardStrings, fmt.Sprintf("%d Đạo Ngân hệ %s", amount, strings.ToUpper(path)))
-			}
-			rewardText := strings.Join(rewardStrings, ", ")
-			msg = fmt.Sprintf("Đạo hữu vượt kiếp chật vật thành công! Nhận %s, nhưng Tiên Khiếu bị chấn động mạnh (HP giảm còn 50%%), 1 Điểm tài nguyên ngẫu nhiên đã bị phá hủy.%s", rewardText, breakthroughMsg)
-
-			if didBreakthrough {
-				_, _ = tx.Exec(`
-					INSERT INTO messages (sender_id, receiver_id, content, channel)
-					VALUES ('11111111-1111-1111-1111-111111111111', $1, $2, 'private')
-				`, playerID, breakthroughMsg)
-			}
-		} else {
-			// Failed Tribulation
-			var playerRank int
-			_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
-
-			// Counts are only incremented on success — a failed tribulation does
-			// not count toward the total / per-type counters, but the next year
-			// is still pushed forward to the next milestone for recovery time.
-			nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.RankStartYear, ap.InternalYearsPassed)
-			ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
-
-			ap.State = "DAMAGED"
-			ap.ApertureHP = ap.MaxApertureHP / 10
-
-			// Phá hủy 30% tài nguyên
-			var activeNodesCount int
-			_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ap.ID).Scan(&activeNodesCount)
-			nodesToDestroy := int(float64(activeNodesCount) * 0.3)
-			if nodesToDestroy < 1 && activeNodesCount > 0 {
-				nodesToDestroy = 1
-			}
-
-			if nodesToDestroy > 0 {
-				_, _ = tx.Exec(`
-					DELETE FROM aperture_resource_nodes
-					WHERE id IN (
-						SELECT id FROM aperture_resource_nodes 
-						WHERE aperture_id = $1 AND is_destroyed = false 
-						ORDER BY random() 
-						LIMIT $2
-					)
-				`, ap.ID, nodesToDestroy)
-			}
-
-			_, _ = tx.Exec(`
-				UPDATE players 
-				SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
-				WHERE id = $1
-			`, playerID)
-
-			// Giảm diện tích và tốc độ thời gian
-			_, _ = tx.Exec(`
-				UPDATE immortal_apertures 
-				SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
-					earth_calamity_count = $4, heavenly_tribulation_count = $5, grand_tribulation_count = $6,
-					myriad_tribulation_count = $7, chaos_calamity_count = $8,
-					area_size = GREATEST(0, CAST(area_size AS numeric) * 0.9),
-					time_rate = GREATEST(1.0, time_rate * 0.9)
-				WHERE id = $9
-			`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
-				ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
-				ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
-
-			_, _ = tx.Exec(`
-				UPDATE tribulation_events
-				SET status = 'FAILED', aperture_hp_after = $1, ended_at = $2, reward_dao_marks = 0
-				WHERE id = $3
-			`, ap.ApertureHP, now, ev.ID)
-
-			msg = "Kiếp nạn vượt thất bại! Thiên Ý cuồng bạo tàn phá Tiên Khiếu, Nguyên khí hư hao, bạn mất 2,000 Nguyên Thạch, 5 Tiên Nguyên, diện tích Tiên Khiếu và tốc độ thời gian bị giảm, 30% điểm tài nguyên bị san phẳng."
+			`, ap.ID, nodesToDestroy)
 		}
+
+		_, _ = tx.Exec(`
+			UPDATE players 
+			SET primeval_stones = GREATEST(0, primeval_stones - 2000), immortal_stones = GREATEST(0.0, immortal_stones - 5.0)
+			WHERE id = $1
+		`, playerID)
+
+		// Giảm diện tích và tốc độ thời gian
+		_, _ = tx.Exec(`
+			UPDATE immortal_apertures 
+			SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
+				earth_calamity_count = $4, heavenly_tribulation_count = $5, grand_tribulation_count = $6,
+				myriad_tribulation_count = $7, chaos_calamity_count = $8,
+				area_size = GREATEST(0, CAST(area_size AS numeric) * 0.9),
+				time_rate = GREATEST(1.0, time_rate * 0.9)
+			WHERE id = $9
+		`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
+			ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
+			ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
+
+		_, _ = tx.Exec(`
+			UPDATE tribulation_events
+			SET status = 'FAILED', aperture_hp_after = $1, ended_at = $2, reward_dao_marks = 0
+			WHERE id = $3
+		`, ap.ApertureHP, now, ev.ID)
+
+		msg = "Đạo hữu rút lui khi kiếp nạn chưa dứt! Thiên Ý cuồng bạo tàn phá Tiên Khiếu, kiếp nạn bị phán định THẤT BẠI: Nguyên khí hư hao, bạn mất 2,000 Nguyên Thạch, 5 Tiên Nguyên, diện tích Tiên Khiếu và tốc độ thời gian bị giảm 10%, 30% điểm tài nguyên bị san phẳng."
 	}
 
 	// Clean up dead/remaining enemies

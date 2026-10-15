@@ -43,6 +43,47 @@ func randomOrdinaryDaoMarkPaths(paths []string, count int) []string {
 	return eligible[:count]
 }
 
+// vitalGuPathForAscension finds the primary ordinary path of the player's vital Gu.
+// It explicitly excludes Heaven Path ("heaven") and falls back to a random ordinary path.
+func vitalGuPathForAscension(tx *sql.Tx, player *models.Player) string {
+	if player != nil {
+		for _, inst := range player.GuInventory {
+			if inst.IsVital {
+				if spec, found := models.GetGu(inst.GuID, inst.Rank); found {
+					for _, p := range spec.Path {
+						clean := gamefx.CleanPath(p)
+						if clean != "" && clean != heavenDaoPath {
+							return clean
+						}
+					}
+				}
+			}
+		}
+
+		if tx != nil && player.ID.String() != "" {
+			var vitalGuID string
+			var vitalGuRank int
+			err := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE player_id = $1 AND is_vital = true LIMIT 1`, player.ID).Scan(&vitalGuID, &vitalGuRank)
+			if err == nil {
+				if spec, found := models.GetGu(vitalGuID, vitalGuRank); found {
+					for _, p := range spec.Path {
+						clean := gamefx.CleanPath(p)
+						if clean != "" && clean != heavenDaoPath {
+							return clean
+						}
+					}
+				}
+			}
+		}
+	}
+
+	randomPaths := randomOrdinaryDaoMarkPaths(models.AllGuPaths(), 1)
+	if len(randomPaths) > 0 {
+		return randomPaths[0]
+	}
+	return "strength"
+}
+
 func daoMarkGainMultiplierTx(tx *sql.Tx, playerID string) float64 {
 	var constitution string
 	if err := tx.QueryRow(`SELECT COALESCE(constitution, '') FROM players WHERE id = $1`, playerID).Scan(&constitution); err != nil {
@@ -155,43 +196,7 @@ func distributeDaoMarksFromPaths(mainPath string, totalMarks int64, paths []stri
 	if mainPath == heavenDaoPath || mainPath == "" {
 		mainPath = eligiblePaths[rand.Intn(len(eligiblePaths))]
 	}
-	// Main path gets 70%
-	mainAmount := int64(float64(totalMarks) * 0.7)
-	if mainAmount < 1 {
-		mainAmount = totalMarks
-	}
-	rewards[mainPath] = mainAmount
-
-	remaining := totalMarks - mainAmount
-	if remaining > 0 {
-		otherPaths := []string{}
-		for _, p := range eligiblePaths {
-			if p != mainPath {
-				otherPaths = append(otherPaths, p)
-			}
-		}
-		rand.Shuffle(len(otherPaths), func(i, j int) {
-			otherPaths[i], otherPaths[j] = otherPaths[j], otherPaths[i]
-		})
-
-		if len(otherPaths) == 0 {
-			rewards[mainPath] += remaining
-			return rewards
-		}
-		numExtra := rand.Intn(2) + 1 // 1 or 2 extra paths
-		if numExtra > len(otherPaths) {
-			numExtra = len(otherPaths)
-		}
-
-		if numExtra == 1 {
-			rewards[otherPaths[0]] = remaining
-		} else {
-			part1 := remaining / 2
-			part2 := remaining - part1
-			rewards[otherPaths[0]] = part1
-			rewards[otherPaths[1]] = part2
-		}
-	}
+	rewards[mainPath] = totalMarks
 	return rewards
 }
 
@@ -221,5 +226,5 @@ func guardNextTribulationYear(nextYear, currentYears float64) float64 {
 const (
 	tribulationOnlineWindow = 5 * time.Minute // how fresh last_activity must be to count as "online"
 	tribulationGracePeriod  = 5 * time.Minute // enemies idle this long after spawn/return
-	tribulationPenaltyAfter = 24 * time.Hour  // offline hold beyond this halves the Dao Ngân reward
+	tribulationPenaltyAfter = 24 * time.Hour  // offline/pending hold beyond this causes immediate tribulation failure
 )

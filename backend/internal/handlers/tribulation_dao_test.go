@@ -3,6 +3,8 @@ package handlers
 import (
 	"reflect"
 	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 func TestEligibleOrdinaryDaoMarkPathsExcludesHeavenWithoutMutatingInput(t *testing.T) {
@@ -51,8 +53,8 @@ func TestDistributeDaoMarksExcludesHeavenAndPreservesTotal(t *testing.T) {
 			if total != 1000 {
 				t.Fatalf("total = %d, want 1000: %v", total, rewards)
 			}
-			if mainPath == "fire" && rewards["fire"] != 700 {
-				t.Fatalf("main path reward = %d, want 700: %v", rewards["fire"], rewards)
+			if mainPath == "fire" && (rewards["fire"] != 1000 || len(rewards) != 1) {
+				t.Fatalf("main path reward = %d (len %d), want 1000 (len 1): %v", rewards["fire"], len(rewards), rewards)
 			}
 		}
 	}
@@ -121,3 +123,46 @@ func TestChooseTribulationPathIgnoresHeavenVitalPath(t *testing.T) {
 		t.Fatalf("Heaven-only pool chose (%q, %v), want no path", path, ok)
 	}
 }
+
+func TestVitalGuPathForAscension(t *testing.T) {
+	prev := models.GuRegistry
+	t.Cleanup(func() { models.GuRegistry = prev })
+
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"fire_gu": {
+			1: {ID: "fire_gu", Name: "Hỏa Cổ", Path: []string{"Fire Path"}, Rank: 1},
+		},
+		"heaven_gu": {
+			1: {ID: "heaven_gu", Name: "Thiên Đạo Cổ", Path: []string{"Heaven Path"}, Rank: 1},
+		},
+	}
+
+	// 1. Player with vital Fire Gu -> returns "fire"
+	pFire := &models.Player{
+		GuInventory: models.GuInventory{
+			{GuID: "fire_gu", Rank: 1, IsVital: true},
+		},
+	}
+	if got := vitalGuPathForAscension(nil, pFire); got != "fire" {
+		t.Fatalf("vitalGuPathForAscension with fire vital Gu = %q, want fire", got)
+	}
+
+	// 2. Player with vital Heaven Gu -> ignores heaven and returns an ordinary path (never heaven)
+	pHeaven := &models.Player{
+		GuInventory: models.GuInventory{
+			{GuID: "heaven_gu", Rank: 1, IsVital: true},
+		},
+	}
+	if got := vitalGuPathForAscension(nil, pHeaven); got == heavenDaoPath || got == "" {
+		t.Fatalf("vitalGuPathForAscension with heaven vital Gu = %q, should not be heaven or empty", got)
+	}
+
+	// 3. Player with no vital Gu -> returns an ordinary path
+	pNone := &models.Player{
+		GuInventory: models.GuInventory{},
+	}
+	if got := vitalGuPathForAscension(nil, pNone); got == heavenDaoPath || got == "" {
+		t.Fatalf("vitalGuPathForAscension with no vital Gu = %q, should not be heaven or empty", got)
+	}
+}
+

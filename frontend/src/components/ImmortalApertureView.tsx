@@ -1400,8 +1400,8 @@ return (
                     <p className="text-[11px] text-slate-400 leading-relaxed">
                       Để kết thúc tai kiếp hoàn toàn, hãy tiêu diệt toàn bộ kẻ địch trên bản đồ lưới trước khi nhấn kết toán để nhận **Đạo Ngân tối đa**.
                     </p>
-                    <p className="text-[11px] text-amber-500 font-semibold leading-relaxed">
-                      ⚠️ Cảnh báo: Kết toán khi còn quái vật sống chỉ có 25-50% cơ hội thắng lợi chật vật (nhận 1/2 quà), và có nguy cơ cao bị phá hủy 1 mỏ tài nguyên!
+                    <p className="text-[11px] text-rose-500 font-semibold leading-relaxed">
+                      ⚠️ Cảnh báo: Kết toán khi còn quái vật sống (rút lui) sẽ LUÔN THẤT BẠI! Tiên Khiếu sẽ bị tổn hại nặng nề, mất tài nguyên và không nhận được Đạo Ngân!
                     </p>
                     <p className="text-[11px] text-cyan-400 font-semibold leading-relaxed">
                       Lưu ý Đột Phá: Đảm bảo Cảnh Giới Lưu Phái đạt yêu cầu (Thất: Tông Sư, Bát: Đại Tông Sư, Cửu: Vô Thượng Đại Tông Sư ). Nếu thiếu, việc vượt kiếp vẫn thành công nhưng sẽ KHÔNG thể thăng Chuyển tu vi dù đủ số lần tai kiếp.
