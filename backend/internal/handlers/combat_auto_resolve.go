@@ -399,6 +399,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		}, nil
 	}
 
+	scale, reason := GetGuAttainmentScale(actor, spec)
 	act := simulator.SimAction{
 		ActionType: actionType,
 		Name:       spec.Name,
@@ -406,8 +407,10 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		Path:       spec.Path,
 		Rank:       spec.Rank,
 		Damage:     dmg,
-		DamageMult: 1.0,
+		DamageMult: scale,
 		Defense:    def,
+		ShieldMult: scale,
+		Reason:     reason,
 		ManaCost:   cost,
 	}
 	if compiled := spec.Effects.Compiled(); compiled != nil {
@@ -454,7 +457,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			}
 		}
 		if active.ShieldMult > 0 {
-			act.ShieldMult = active.ShieldMult
+			act.ShieldMult *= active.ShieldMult
 		}
 		// Registry-driven statuses (BLEED/POISON/BURN/FEAR/CONFUSE/STEALTH/
 		// SLEEP/BLIND/CHARM/BIND + catalog). Entries with chance opt into the
@@ -488,7 +491,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			act.Defense += 30.0
 		}
 		if active.DamageMult > 0 {
-			act.DamageMult = active.DamageMult
+			act.DamageMult *= active.DamageMult
 		}
 		if active.TargetSelector != "" {
 			act.TargetType = active.TargetSelector
@@ -522,7 +525,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 							act.Path = []string{op.Path}
 						}
 						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
-							act.DamageMult = op.Value
+							act.DamageMult *= op.Value
 						} else if strings.EqualFold(op.SubType, "MAX_HP_PERCENT") && op.Value > 0 {
 							if op.Value <= 1.0 {
 								act.DamageHPPercent = op.Value
@@ -532,7 +535,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 						}
 					case gameplayeffects.OpShield:
 						if strings.EqualFold(op.SubType, "MULTIPLIER") && op.Value > 0 {
-							act.ShieldMult = op.Value
+							act.ShieldMult *= op.Value
 						}
 					case gameplayeffects.OpHeal:
 						if strings.EqualFold(op.SubType, "LIFESTEAL") {

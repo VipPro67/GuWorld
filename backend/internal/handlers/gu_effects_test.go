@@ -463,4 +463,16 @@ func TestStoneAperturePetrifiesWithoutManaLoss(t *testing.T) {
 	if !fx.BlockedActions[gamefx.ActionBreakthrough] {
 		t.Error("aperture_petrified should block breakthrough")
 	}
+
+	// Rank mismatch: Gu rank must equal player rank, otherwise no effect.
+	mismatch := &models.Player{
+		CultivationState: models.CultivationState{Rank: 3, SubRank: 1},
+		ResourceState:    models.ResourceState{MaxMana: 80, CurrentMana: 50},
+	}
+	if _, err := handleActionCode(mismatch, spec, models.GuInstance{GuID: spec.ID, Rank: 4}, models.SpecialMechanic{ActionCode: "STONE_APERTURE"}); err == nil {
+		t.Fatal("expected rank mismatch error")
+	}
+	if mismatch.SubRank != 1 || mismatch.Statuses.Has("aperture_petrified") {
+		t.Error("rank mismatch must not raise SubRank or petrify aperture")
+	}
 }

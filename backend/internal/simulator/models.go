@@ -128,6 +128,7 @@ type SimAction struct {
 	ShieldMult     float64  // shield multiplier (applied on top of Defense)
 	Defense        float64  // shield value granted to self (excludes dao bonus)
 	Healing        float64  // HP restored to self (excludes dao bonus)
+	Reason         string   // explanation for scaling/reduction (e.g. "Lưu phái chưa đạt Sơ Thông (uy lực x0.70)")
 	ManaCost       float64  // mana consumed on use
 	ManaRestore    float64  // mana restored to self
 	CleanseDebuffs bool     // purges debuffs/DoTs from self

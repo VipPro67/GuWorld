@@ -494,6 +494,9 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		}
 		return fmt.Sprintf("%s cưỡng ép đột phá! Tu vi nâng lên %s Sơ Giai, Chân Nguyên tối đa giảm 10.", spec.Name, models.GetRankName(player.Rank)), nil
 	case "APERTURE_PETRIFICATION", "STONE_APERTURE":
+		if gu.Rank != player.Rank {
+			return "", fmt.Errorf("%s chỉ dùng được khi rank Cổ trùng với rank bản thân (%s)", spec.Name, models.GetRankName(player.Rank))
+		}
 		player.SubRank = 4
 		player.Statuses.Add(gamefx.StatusAperturePetrified, spec.Name, 0, 0)
 		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá (không tự hồi Chân Nguyên, không thể đột phá lên cảnh giới cao hơn).", spec.Name), nil

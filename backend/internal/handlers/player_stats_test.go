@@ -468,13 +468,13 @@ func TestBuildSimCombatant_StatusFactorScalesSkillDamage(t *testing.T) {
 		t.Fatalf("expected GU_SKILL damage on both builds, got clean=%v suppressed=%v", cleanSkill, supSkill)
 	}
 
-	// Skill only scales Gu stats: 100 * 0.7 (no mastery) * factor.
-	// Clean: 100 * 0.7 = 70. Suppressed: 100 * 0.7 * 0.5 = 35.
-	if diff := supSkill - 35.0; diff > 1e-6 || diff < -1e-6 {
-		t.Fatalf("suppressed skill damage = %v, want 35.0 (DamageFlat x status factor 0.5)", supSkill)
+	// Skill Damage is pure Gu flat value (100 clean, 50 suppressed by -50% status factor).
+	// Attainment scaling is handled via DamageMult.
+	if diff := supSkill - 50.0; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("suppressed skill damage = %v, want 50.0 (DamageFlat x status factor 0.5)", supSkill)
 	}
-	if diff := cleanSkill - 70.0; diff > 1e-6 || diff < -1e-6 {
-		t.Fatalf("clean skill damage = %v, want 70", cleanSkill)
+	if diff := cleanSkill - 100.0; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("clean skill damage = %v, want 100", cleanSkill)
 	}
 
 	// Basic attack damage IS the suppressed attack stat — no extra factor.

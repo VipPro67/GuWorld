@@ -26,7 +26,7 @@ const STEPS = [
       <>
         <p>
           Giữa thập vạn đại sơn, <strong className="text-amber-300">Cổ giới</strong> là thế giới của các Cổ Sư
-          liệu pháp sinh mệnh. Tư chất Linh Căn của bạn vừa thức tỉnh một trong bốn phẩm cấp:
+          liệu pháp sinh mệnh. Tư chất của bạn vừa thức tỉnh một trong bốn phẩm cấp:
           <strong className="text-amber-300"> Giáp, Ất, Bính, Đinh</strong>. Trước khi mơ về Lục Chuyển
           Tiên Khiếu, ta là <strong className="text-amber-300">Phàm Nhân (rank 0)</strong> — chưa có Cổ
           trùng, chưa chọn được vùng đầu quân.

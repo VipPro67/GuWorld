@@ -67,14 +67,14 @@ export const guidePages: WikiPage[] = [
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
             <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
               <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">1</span>
-              Ngay Lập Tức: Tạo Nhân Vật & Thức Tỉnh Linh Căn
+              Ngay Lập Tức: Tạo Nhân Vật & Thức Tỉnh Không khiếu
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
-                Bước vào Cổ giới, đạo hữu sẽ đặt tên Cổ sư của mình và chọn <strong>Chủng tộc</strong>, <strong>Giới tính</strong>. Hệ thống sẽ tự động thức tỉnh <strong>Linh Căn</strong> ngẫu nhiên với một trong bốn phẩm cấp: <strong>Giáp, Ất, Bính, Đinh</strong>.
+                Bước vào Cổ giới, đạo hữu sẽ đặt tên Cổ sư của mình và chọn <strong>Chủng tộc</strong>, <strong>Giới tính</strong>. Hệ thống sẽ tự động thức tỉnh <strong>Không Khiếu</strong> ngẫu nhiên với một trong bốn phẩm cấp: <strong>Giáp, Ất, Bính, Đinh</strong>.
               </p>
               <p>
-                Linh Căn quyết định hướng phát triển ban đầu của bạn: tư chất Giáp/Ất giúp trùng kích vách khiếu nhanh hơn rõ rệt. Sử dụng các Cổ trùng có cùng hệ thuộc tính với Linh Căn sẽ giúp gia tăng đáng kể hiệu năng chiến đấu.
+                Không Khiếu quyết định hướng phát triển ban đầu của bạn: tư chất Giáp/Ất giúp trùng kích vách khiếu nhanh hơn rõ rệt.
               </p>
               <div className="p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/10 text-indigo-300">
                 ⏱️ <strong>Gợi ý:</strong> Ngay khi tạo xong, hãy hoàn tất luồng onboarding, nhận Cổ trùng ban đầu và bắt đầu trùng kích vách khiếu — Chân Nguyên khởi đầu rất thấp nên mỗi giờ hồi phục đều đáng giá.

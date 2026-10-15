@@ -34,7 +34,7 @@ export const characterPages: WikiPage[] = [
         description: "Chủng tộc, thể chất, trạng thái và Áp lực vách khiếu."
       },
       {
-        title: "Linh Căn (Tư chất)",
+        title: "Không khiếu",
         targetId: "gameplay-character-linhcan",
         description: "Phẩm cấp Giáp/Ất/Bính/Đinh và cách nâng tư chất Không khiếu."
       },
@@ -116,7 +116,7 @@ export const characterPages: WikiPage[] = [
                 </tr>
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Tư chất Không Khiếu</td>
-                  <td className="p-3">Phẩm cấp Linh Căn (Giáp/Ất/Bính/Đinh kèm hệ số phần trăm).</td>
+                  <td className="p-3">Phẩm cấp Không Khiếu (Giáp/Ất/Bính/Đinh kèm hệ số phần trăm).</td>
                   <td className="p-3">Ảnh hưởng trữ lượng Chân Nguyên tối đa, tốc độ hồi phục và hiệu suất phá vách.</td>
                 </tr>
                 <tr>
@@ -337,7 +337,7 @@ export const characterPages: WikiPage[] = [
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Khi đăng ký nhân vật, bạn sẽ được thức tỉnh không khiếu ngẫu nhiên với một trong bốn phẩm cấp tư chất (Linh Căn). Tư chất quyết định lượng chân nguyên lưu trữ tối đa, tốc độ hồi phục và đặc biệt là hiệu suất phá vách khiếu tu luyện.
+          Khi đăng ký nhân vật, bạn sẽ được thức tỉnh không khiếu ngẫu nhiên với một trong bốn phẩm cấp tư chất (Không Khiếu). Tư chất quyết định lượng chân nguyên lưu trữ tối đa, tốc độ hồi phục và đặc biệt là hiệu suất phá vách khiếu tu luyện.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -379,7 +379,7 @@ export const characterPages: WikiPage[] = [
           <ul className="list-disc list-inside text-xs text-[var(--text-secondary)] space-y-2 leading-relaxed">
             <li><strong>Huyết Sọ Cổ</strong> tăng <strong>+5% tư chất</strong> mỗi lần sử dụng (tối đa 99%) và tiêu hao 20 độ no của Cổ.</li>
             <li><strong>Hiệu ứng Cổ:</strong> một số Cổ trùng có hiệu ứng tăng trực tiếp tư chất Không khiếu (tối đa 99%).</li>
-            <li>Khi tư chất thay đổi, phẩm cấp Linh Căn tự động cập nhật theo ngưỡng: &ge;80% = Giáp, &ge;60% = Ất, &ge;40% = Bính, dưới 40% = Đinh.</li>
+            <li>Khi tư chất thay đổi, phẩm cấp Không khiếu tự động cập nhật theo ngưỡng: &ge;80% = Giáp, &ge;60% = Ất, &ge;40% = Bính, dưới 40% = Đinh.</li>
             <li>Gợi ý cho đạo hữu Bính/Đinh: tận dụng <strong>Tửu Trùng</strong> và <strong>Xá Lợi Cổ</strong> để bù lại tốc độ tu luyện chậm chạp.</li>
           </ul>
         </div>

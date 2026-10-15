@@ -155,14 +155,20 @@ func generateCellForZone(x, y int, zone *models.Region) models.Cell {
 	switch pickWeightedType(weights, rng) {
 	case "Monster":
 		monsterID := ""
+		rank := zone.MinRank
 		if spawn, ok := pickMonsterFromPool(zoneID, rng, false); ok {
 			monsterID = spawn.MonsterID
+			// Rank-tagged spawn pools pin the monster to its own rank so the
+			// same monster always fights at the same difficulty. Pools without
+			// a rank tag fall back to the zone band.
+			if spawn.MinRank > 0 {
+				rank = spawn.MinRank
+			}
 		} else {
 			monsterID = randomNormalMonsterID(rng)
-		}
-		rank := zone.MinRank
-		if zone.MaxRank > zone.MinRank {
-			rank += rng.Intn(zone.MaxRank - zone.MinRank + 1)
+			if zone.MaxRank > zone.MinRank {
+				rank += rng.Intn(zone.MaxRank - zone.MinRank + 1)
+			}
 		}
 		if rank < 1 {
 			rank = 1

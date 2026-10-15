@@ -37,15 +37,40 @@ func TestCalculateGuEffectForCombatant_ShieldFlat(t *testing.T) {
 		},
 	}
 
-	_, def, _, err := CalculateGuEffectForCombatant(actor, guBlock, false)
+	// applyDao=false (used by simulator to get raw Gu stats): returns baseDef = 20.0
+	_, defRaw, _, err := CalculateGuEffectForCombatant(actor, guBlock, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if defRaw != 20.0 {
+		t.Fatalf("expected raw def = 20.0, got %.2f", defRaw)
+	}
 
-	// Expected: baseDef (20) * powerScale (0.70) = 14.0
-	expectedDef := 20.0 * 0.70
-	if def < expectedDef-0.001 || def > expectedDef+0.001 {
-		t.Fatalf("expected effectiveDefense ~ %.2f, got %.2f", expectedDef, def)
+	// Attainment scale for level 0 is 1.0 (Ordinary)
+	scale, reason := GetGuAttainmentScale(actor, guBlock)
+	if scale != 1.0 || reason != "" {
+		t.Fatalf("expected scale 1.0 and empty reason for level 0, got scale=%.2f, reason=%q", scale, reason)
+	}
+
+	// applyDao=true with level 0: returns baseDef * 1.0 = 20.0
+	_, defScaled, _, err := CalculateGuEffectForCombatant(actor, guBlock, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if defScaled != 20.0 {
+		t.Fatalf("expected scaled def = 20.0, got %.2f", defScaled)
+	}
+
+	// Attainment scale for level 1 (Master, >= 10,000 points) is 1.10
+	actorMaster := &models.Combatant{
+		Rank: 1,
+		PathMasteries: map[string]int{
+			"blade": 10000,
+		},
+	}
+	scaleMaster, reasonMaster := GetGuAttainmentScale(actorMaster, guBlock)
+	if scaleMaster != 1.10 || reasonMaster == "" {
+		t.Fatalf("expected scale 1.10 for Master, got %.2f, reason=%q", scaleMaster, reasonMaster)
 	}
 
 	// 2. Gu with legacy Active (ShieldFlat = 20)
@@ -60,12 +85,11 @@ func TestCalculateGuEffectForCombatant_ShieldFlat(t *testing.T) {
 		},
 	}
 
-	_, defActive, _, err := CalculateGuEffectForCombatant(actor, guActive, false)
+	_, defActiveRaw, _, err := CalculateGuEffectForCombatant(actor, guActive, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	if defActive < expectedDef-0.001 || defActive > expectedDef+0.001 {
-		t.Fatalf("expected legacy effectiveDefense ~ %.2f, got %.2f", expectedDef, defActive)
+	if defActiveRaw != 20.0 {
+		t.Fatalf("expected legacy raw def = 20.0, got %.2f", defActiveRaw)
 	}
 }

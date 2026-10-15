@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -15,13 +13,42 @@ func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) floa
 	return gamefx.PathMasteryMultiplier(actor.PathMasteries, paths)
 }
 
+// GetGuAttainmentScale calculates the path attainment multiplier and reason for a Gu action.
+// Level 0 = 1.0 (Ordinary / Phổ thông).
+// Level 1-4 scale up progressively (1.1x, 1.25x, 1.4x, 1.5x).
+func GetGuAttainmentScale(actor *models.Combatant, guSpec *models.GuDictionaryItem) (float64, string) {
+	if guSpec == nil || len(guSpec.Path) == 0 {
+		return 1.0, ""
+	}
+	masteryMultiplier := getActorPathMasteryMultiplier(actor, guSpec.Path)
+	if masteryMultiplier <= 0 {
+		masteryMultiplier = 1.0
+	}
+	reason := ""
+	if masteryMultiplier > 1.0 {
+		attainmentLevel := 0
+		if actor.PathMasteries != nil {
+			for _, path := range guSpec.Path {
+				cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+				if points, ok := actor.PathMasteries[cleanPath]; ok {
+					lvl := gamefx.PathMasteryLevel(points)
+					if lvl > attainmentLevel {
+						attainmentLevel = lvl
+					}
+				}
+			}
+		}
+		levelName := gamefx.PathMasteryLevelName(attainmentLevel)
+		reason = fmt.Sprintf("Cảnh giới lưu phái %s (x%.2f)", levelName, masteryMultiplier)
+	}
+	return masteryMultiplier, reason
+}
+
 func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem, applyDao bool, bonuses ...map[string]float64) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
 	// Mortal users cannot use immortal Gu that cost mana.
 	if !gamefx.CanUseGuWithMana(actor.Rank, guSpec) {
 		return 0, 0, 0, fmt.Errorf("Tu vi %s chưa đủ để sử dụng Tiên Cổ %s (Rank %d) có hao phí!", models.GetRankName(actor.Rank), guSpec.Name, guSpec.Rank)
 	}
-
-	powerScale := 1.0
 
 	var baseDmg float64
 	var baseDef float64
@@ -43,59 +70,14 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		}
 	}
 
-	attainmentLevel := 0
-	if actor.PathMasteries != nil {
-		for _, path := range guSpec.Path {
-			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			if points, ok := actor.PathMasteries[cleanPath]; ok {
-				lvl := gamefx.PathMasteryLevel(points)
-				if lvl > attainmentLevel {
-					attainmentLevel = lvl
-				}
-			}
-		}
-	}
-	if attainmentLevel < 2 {
-		powerScale *= 0.70
+	if !applyDao {
+		// Building action for simulator: preserve exact Gu flat values so breakdown
+		// displays the authentic base stats. Scaling and reasons are applied via Action multipliers.
+		cost := gamefx.EnergyCostForCombatant(actor, guSpec)
+		return baseDmg, baseDef, cost, nil
 	}
 
-	if attainmentLevel >= 3 && actor.Kind == "Player" {
-		currentRegion := ""
-		playerUUID, parseErr := uuid.Parse(actor.ID)
-		if parseErr == nil {
-			_ = db.DB.QueryRow(`SELECT current_region FROM players WHERE id = $1`, playerUUID).Scan(&currentRegion)
-		}
-		isResonant := false
-		for _, path := range guSpec.Path {
-			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			switch strings.ToLower(currentRegion) {
-			case "eastern_sea":
-				if cleanPath == "water" {
-					isResonant = true
-				}
-			case "western_desert":
-				if cleanPath == "fire" {
-					isResonant = true
-				}
-			case "northern_plains":
-				if cleanPath == "wind" {
-					isResonant = true
-				}
-			case "southern_border":
-				if cleanPath == "earth" {
-					isResonant = true
-				}
-			case "central_continent":
-				if cleanPath == "qi" {
-					isResonant = true
-				}
-			}
-		}
-		if isResonant {
-			powerScale *= 1.50
-		}
-	}
-
+	powerScale, _ := GetGuAttainmentScale(actor, guSpec)
 	masteryMultiplier := getActorPathMasteryMultiplier(actor, guSpec.Path)
 
 	daoMultiplier := 1.0
@@ -106,20 +88,18 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	if len(bonuses) > 1 {
 		pathDamage = bonuses[1]
 	}
-	if applyDao {
-		pathKey := "strength"
-		if len(guSpec.Path) > 0 {
-			pathKey = guSpec.Path[0]
-		}
-		conflictReductionPct := actor.DaoConflictReductionPct
-		if conflictReductionPct == 0 && !actor.HasNonConflictingDao {
-			conflictReductionPct = combatantDaoConflictReduction(actor.GuInventory)
-		}
-		profile := gamefx.BuildDaoCombatProfileWithReduction(actor.DaoMarks, actor.PathMasteries, actor.HasNonConflictingDao, conflictReductionPct, daoBonus)
-		daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
-		daoMultiplier = (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
-		masteryMultiplier = 1.0 // integrated in DaoCombatProfile
+	pathKey := "strength"
+	if len(guSpec.Path) > 0 {
+		pathKey = guSpec.Path[0]
 	}
+	conflictReductionPct := actor.DaoConflictReductionPct
+	if conflictReductionPct == 0 && !actor.HasNonConflictingDao {
+		conflictReductionPct = combatantDaoConflictReduction(actor.GuInventory)
+	}
+	profile := gamefx.BuildDaoCombatProfileWithReduction(actor.DaoMarks, actor.PathMasteries, actor.HasNonConflictingDao, conflictReductionPct, daoBonus)
+	daoAmp, realmEff, conflictMult := profile.GetOffensiveFactors(pathKey)
+	daoMultiplier = (1.0 + (daoAmp-1.0)*realmEff) * conflictMult
+	masteryMultiplier = 1.0 // integrated in DaoCombatProfile
 
 	if baseDmg > 0 {
 		effectiveDamage = baseDmg * powerScale * masteryMultiplier * daoMultiplier

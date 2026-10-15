@@ -1,158 +1,169 @@
 region_id,x,y,cell_type,content_id,metadata,respawn_seconds,is_active
-qing_mao_mountain,1940,1940,Resource,ginseng,{},600,true
 bach_cot_son,1940,6440,Resource,white_bone_marrow,{},600,true
-blood_lake_purple_sand,1940,11940,Resource,blood_marrow,{},600,true
-am_hon_nhai,1940,16440,Resource,desert_ghost_tear,{},600,true
-qing_mao_mountain,2000,2000,SafePoint,,300,0,true
-qing_mao_mountain,2000,2100,Resource,stone_man_heart,{},600,true
 bach_cot_son,2000,6500,SafePoint,,300,0,true
 bach_cot_son,2000,6600,Resource,yin_bone_ash,{},600,true
-blood_lake_purple_sand,2000,12000,SafePoint,,300,0,true
-blood_lake_purple_sand,2000,12100,Resource,blood_vein_stone,{},600,true
-am_hon_nhai,2000,16500,SafePoint,,300,0,true
-am_hon_nhai,2000,16600,Resource,yin_soul_rock,{},600,true
-qing_mao_mountain,4950,1650,Boss,boss_wolf_king,"{""rank"": 3}",300,true
-bach_cot_son,8300,4950,Boss,monster_bone_general,"{""rank"": 4}",600,true
-qing_mao_mountain,2060,1940,Resource,nine_beast_kings_eyes,{},600,true
 bach_cot_son,2060,6440,Resource,bone_spear_fossil,{},600,true
-blood_lake_purple_sand,2060,11940,Resource,blood_qi_pearl,{},600,true
-am_hon_nhai,2060,16440,Resource,hollow_bone,{},600,true
-qing_mao_mountain,4000,1500,SafePoint,,{},300,true
-wan_xa_goc,4440,4440,Resource,six_headed_snake_blood,{},600,true
-huyet_sa_khau,4440,11940,Resource,blood_marrow_king,{},600,true
-wan_xa_goc,4500,4500,SafePoint,,300,0,true
-wan_xa_goc,4500,4600,Resource,snake_tongue,{},600,true
-huyet_sa_khau,4500,12000,SafePoint,,300,0,true
-huyet_sa_khau,4500,12100,Resource,blood_seal_clay,{},600,true
-wan_xa_goc,4550,4550,Boss,monster_boar_king,"{""rank"": 3}",300,true
-wan_xa_goc,4560,4440,Resource,poison_path_material,{},600,true
-huyet_sa_khau,4560,11940,Resource,vital_energy_blood,{},600,true
 three_kings_mountain,6440,2440,Resource,golden_crow_meteor,{},600,true
 am_luu_cu_hac,6440,6440,Resource,black_python_gall,{},600,true
-van_duc_dong,6440,12440,Resource,blood_bat_egg,{},600,true
-luu_sa_hai,6440,16440,Resource,quicksand_core,{},600,true
 three_kings_mountain,6500,2500,SafePoint,,300,0,true
 three_kings_mountain,6500,2600,Resource,summit_stone,{},600,true
 am_luu_cu_hac,6500,6500,SafePoint,,300,0,true
 am_luu_cu_hac,6500,6600,Resource,underworld_jellyfish,{},600,true
-van_duc_dong,6500,12500,SafePoint,,300,0,true
-van_duc_dong,6500,12600,Resource,blood_silkworm_cocoon,{},600,true
-luu_sa_hai,6500,16500,SafePoint,,300,0,true
-luu_sa_hai,6500,16600,Resource,yellow_gold_sand,{},600,true
-three_kings_mountain,1650,8300,Boss,monster_three_kings_boss,"{""rank"": 5}",600,true
-am_luu_cu_hac,4950,8300,Boss,monster_dark_swamp_python,"{""rank"": 6}",900,true
-van_duc_dong,4950,14950,Boss,monster_vampire_bat_king,"{""rank"": 5}",600,true
 three_kings_mountain,6560,2440,Resource,nine_palace_flower,{},600,true
 am_luu_cu_hac,6560,6440,Resource,dark_water_essence,{},600,true
-van_duc_dong,6560,12440,Resource,sonic_vibration_stone,{},600,true
-luu_sa_hai,6560,16440,Resource,earth_spirit_mud,{},600,true
 lac_thien_coc,11940,1940,Resource,glory_of_the_immemorial_light,{},600,true
 luyen_co_dong,11940,6440,Resource,earth_abyss_stone,{},600,true
-shadow_glimpse_trench,16940,11940,Resource,deep_sea_pearl,{},600,true
-binh_kinh_hai,16940,16440,Resource,mirror_water_crystal,{},600,true
 lac_thien_coc,12000,2000,SafePoint,,300,0,true
 lac_thien_coc,12000,2100,Resource,sword_spirit_grass,{},600,true
 luyen_co_dong,12000,6500,SafePoint,,{},300,true
 luyen_co_dong,12000,6600,Resource,deep_ground_silk,{},600,true
-shadow_glimpse_trench,17000,12000,SafePoint,,300,0,true
-shadow_glimpse_trench,17000,12100,Resource,dark_coral_blood,{},600,true
-binh_kinh_hai,17000,16500,SafePoint,,300,0,true
-binh_kinh_hai,17000,16600,Resource,clear_reflection_glass,{},600,true
-lac_thien_coc,18300,8300,Boss,monster_sword_intent_golem,"{""rank"": 7}",900,true
-luyen_co_dong,12050,6550,Boss,monster_earth_trench_centipede,"{""rank"": 8}",1200,true
-shadow_glimpse_trench,23300,11650,Boss,monster_shadow_glimpse_boss,"{""rank"": 5}",600,true
 lac_thien_coc,12060,1940,Resource,hundred_year_lifespan_gu,{},600,true
 luyen_co_dong,12060,6440,Resource,subterranean_fire_lava,{},600,true
-shadow_glimpse_trench,17060,11940,Resource,abyssal_black_stone,{},600,true
-binh_kinh_hai,17060,16440,Resource,wisdom_pearl,{},600,true
-long_ngu_dao,19440,11940,Resource,gold_dragonfish_scale,{},600,true
-long_ngu_dao,19950,14950,Boss,monster_east_sea_dragonfish,"{""rank"": 5}",300,true
-long_ngu_dao,19500,12010,SafePoint,,300,0,true
-long_ngu_dao,19500,12100,Resource,water_defense_shell,{},600,true
-long_ngu_dao,19560,11940,Resource,dragon_scale_soil,{},600,true
-dai_vuc_trung_chau,15300,5300,Boss,monster_earth_calamity_boss,"{""rank"": 6}",600,true
 thien_de_son,16440,2440,Resource,cloud_ladder_wood,{},600,true
 bat_bai_coc,16440,6440,Resource,golden_crow_meteor,{},600,true
-turbulent_current_sea,21440,12440,Resource,immortal_apertures_shards,{},600,true
-khi_hai_vuc,21440,16440,Resource,primordial_qi_bead,{},600,true
 thien_de_son,16500,2500,SafePoint,,300,0,true
 thien_de_son,16500,2600,Resource,heaven_well_water,{},600,true
 bat_bai_coc,16500,6500,SafePoint,,300,0,true
 bat_bai_coc,16500,6600,Resource,pure_water_drop,{},600,true
-turbulent_current_sea,21500,12500,SafePoint,,300,0,true
-turbulent_current_sea,21500,12600,Resource,snake_tongue,{},600,true
-khi_hai_vuc,21500,16500,SafePoint,,300,0,true
-khi_hai_vuc,21500,16600,Resource,heaven_earth_qi_fruit,{},600,true
-turbulent_current_sea,16650,18300,Boss,monster_tide_dragon,"{""rank"": 8}",1200,true
-khi_hai_vuc,19950,18300,Boss,monster_primordial_qi_dragon,"{""rank"": 8}",1200,true
 thien_de_son,16560,2440,Resource,star_fragment,{},600,true
 bat_bai_coc,16560,6440,Resource,refine_flame_crystal,{},600,true
-turbulent_current_sea,21560,12440,Resource,time_sand,{},600,true
-khi_hai_vuc,21560,16440,Resource,heavenly_crystal,{},600,true
 hu_tien_phuc_dia,18440,4440,Resource,deer_god_fruit,{},600,true
 hu_tien_phuc_dia,18500,4500,SafePoint,,300,0,true
 hu_tien_phuc_dia,18500,4600,Resource,amount_love_flower,{},600,true
 hu_tien_phuc_dia,18560,4440,Resource,book_worm,{},600,true
 gu_luan_slope,21940,1940,Resource,silver_wolf_pelt,{},600,true
 vuong_dinh_phuc_dia,21940,6440,Resource,imperial_gold_leaf,{},600,true
-quang_am_chi_ha,21940,11940,Resource,flowing_light_apple,{},600,true
-nghich_luu_ha,21940,16440,Resource,reverse_flow_water,{},600,true
 gu_luan_slope,22000,2000,SafePoint,,300,0,true
 gu_luan_slope,22000,2100,Resource,green_blade_grass,{},600,true
 vuong_dinh_phuc_dia,22000,6500,SafePoint,,300,0,true
 vuong_dinh_phuc_dia,22000,6600,Resource,sun_radiance_stone,{},600,true
-quang_am_chi_ha,22000,12000,SafePoint,,300,0,true
-quang_am_chi_ha,22000,12100,Resource,historical_dust,{},600,true
-nghich_luu_ha,22000,16500,SafePoint,,300,0,true
-nghich_luu_ha,22000,16600,Resource,unyielding_will_shard,{},600,true
-gu_luan_slope,24950,1650,Boss,monster_boar_king,"{""rank"": 4}",300,true
-quang_am_chi_ha,22500,18300,Boss,monster_year_beast_tiger,"{""rank"": 9}",1800,true
-nghich_luu_ha,27500,14950,Boss,monster_reverse_flow_spirit,"{""rank"": 9}",1800,true
 gu_luan_slope,22060,1940,Resource,lightning_wolf_fang,{},600,true
 vuong_dinh_phuc_dia,22060,6440,Resource,true_yang_amber,{},600,true
-quang_am_chi_ha,22060,11940,Resource,overlord_ba_lan_flower,{},600,true
-nghich_luu_ha,22060,16440,Resource,destiny_crystal,{},600,true
 tuyet_nguyen_nhan_tuyet,24440,2440,Resource,ice_tear,{},600,true
 tuyet_nguyen_nhan_tuyet,24500,2500,SafePoint,,300,0,true
 tuyet_nguyen_nhan_tuyet,24500,2600,Resource,white_lotus_giant_silkworm,{},600,true
 tuyet_nguyen_nhan_tuyet,24560,2440,Resource,snow_lotus_essence,{},600,true
-dai_vuc_hac_thien,25000,15000,Boss,monster_grand_calamity_boss,"{""rank"": 8}",1200,true
-dai_vuc_bac_nguyen,25300,5300,Boss,monster_heaven_tribulation_boss,"{""rank"": 7}",900,true
-dai_vuc_hac_thien,26000,16000,Boss,monster_myriad_tribulation_boss,"{""rank"": 9}",1800,true
 azure_ghost_desert,26440,2440,Resource,ghost_cry_sand,{},600,true
-nguyet_nha_ho,26440,6440,Resource,moon_water_drop,{},600,true
-dang_hon_son,26440,12440,Resource,guts_gu,{},600,true
-sinh_tu_mon,26440,16440,Resource,black_phoenix_heart,{},600,true
 azure_ghost_desert,26500,2500,SafePoint,,300,0,true
 azure_ghost_desert,26500,2600,Resource,dark_wind_essence,{},600,true
-nguyet_nha_ho,26500,6500,SafePoint,,300,0,true
-nguyet_nha_ho,26500,6600,Resource,clear_dew,{},600,true
-dang_hon_son,26500,12500,SafePoint,,300,0,true
-dang_hon_son,26500,12600,Resource,soul_shake_stone,{},600,true
-sinh_tu_mon,27500,18300,Boss,monster_chaos_calamity_boss,"{""rank"": 9}",3600,true
-sinh_tu_mon,26500,16510,SafePoint,,300,0,true
-sinh_tu_mon,26500,16600,Resource,death_domain_essence,{},600,true
-azure_ghost_desert,21650,8300,Boss,monster_desert_ghost_boss,"{""rank"": 6}",900,true
-dang_hon_son,22500,11650,Boss,monster_immemorial_soul_beast,"{""rank"": 9}",1800,true
-sinh_tu_mon,27512,18288,Boss,monster_soul_gate_godfiend,"{""rank"": 9}",2400,true
-qing_mao_mountain,2050,2050,Boss,boss_wolf_king,"{""rank"": 3}",300,false
-bach_cot_son,2050,6550,Boss,monster_bone_general,"{""rank"": 4}",300,false
-three_kings_mountain,6550,2550,Boss,monster_three_kings_boss,"{""rank"": 5}",300,false
-am_luu_cu_hac,6550,6550,Boss,monster_dark_swamp_python,"{""rank"": 6}",300,false
-van_duc_dong,6550,12550,Boss,monster_vampire_bat_king,"{""rank"": 5}",300,false
-lac_thien_coc,12050,2050,Boss,monster_sword_intent_golem,"{""rank"": 7}",300,false
-shadow_glimpse_trench,17050,12050,Boss,monster_shadow_glimpse_boss,"{""rank"": 5}",300,false
-long_ngu_dao,19500,12000,Boss,monster_east_sea_dragonfish,"{""rank"": 5}",300,false
-turbulent_current_sea,21550,12550,Boss,monster_tide_dragon,"{""rank"": 8}",300,false
-khi_hai_vuc,21550,16550,Boss,monster_primordial_qi_dragon,"{""rank"": 8}",300,false
-gu_luan_slope,22050,2050,Boss,monster_boar_king,"{""rank"": 4}",300,false
-quang_am_chi_ha,22050,12050,Boss,monster_year_beast_tiger,"{""rank"": 9}",300,false
-nghich_luu_ha,22050,16550,Boss,monster_reverse_flow_spirit,"{""rank"": 9}",300,false
-sinh_tu_mon,26500,16500,Boss,monster_chaos_calamity_boss,"{""rank"": 9}",300,false
-azure_ghost_desert,26550,2550,Boss,monster_desert_ghost_boss,"{""rank"": 6}",300,false
-dang_hon_son,26550,12550,Boss,monster_immemorial_soul_beast,"{""rank"": 9}",300,false
-sinh_tu_mon,26550,16550,Boss,monster_soul_gate_godfiend,"{""rank"": 9}",300,false
 azure_ghost_desert,26560,2440,Resource,soul_crystal,{},600,true
-nguyet_nha_ho,26560,6440,Resource,crescent_fish_scales,{},600,true
-dang_hon_son,26560,12440,Resource,pure_soul_mud,{},600,true
-sinh_tu_mon,26560,16440,Resource,life_spark_flower,{},600,true
+am_hon_sa_vuc,3000,15000,Boss,boss_dan_qing_scholar,"{""rank"": 3}",600,true
+am_luu_cu_hac,4950,8300,Boss,monster_ancient_nine_nether_ice_dragon,"{""rank"": 5}",600,true
+am_tieu_vuc,13000,17000,Boss,monster_sword_intent_golem,"{""rank"": 4}",600,true
+azure_ghost_desert,21650,8300,Boss,monster_shadow_glimpse_boss,"{""rank"": 4}",600,true
+bac_nguyen_gioi_bich_dong,29000,1000,Boss,monster_immemorial_landscape_phoenix,"{""rank"": 6}",600,true
+bach_cot_son,8300,4950,Boss,monster_ancient_nine_nether_ice_dragon,"{""rank"": 5}",600,true
+bach_kinh_vuc,11000,13000,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
+bach_sa_nguyen,3000,11000,Boss,monster_ancient_mountain_lifting_ape,"{""rank"": 6}",600,true
+bang_phong_hac_uyen,29000,9000,Boss,monster_immemorial_divine_feaster,"{""rank"": 8}",600,true
+bat_bai_coc,17000,1000,Boss,monster_mystic_formation_general,"{""rank"": 4}",600,true
+bat_thap_bat_gac_dai,27000,9000,Boss,monster_immemorial_celestial_star_beast,"{""rank"": 8}",600,true
+bn_diet_than_truong,21000,7000,Boss,monster_immemorial_soul_beast,"{""rank"": 5}",600,true
+bn_gioi_bich_nam,21000,9000,Boss,monster_immemorial_myriad_jun_titan,"{""rank"": 6}",600,true
+bn_gioi_bich_tay,21000,5000,Boss,monster_ancient_myriad_beast_king,"{""rank"": 7}",600,true
+bn_tuyet_quai_coc,27000,1000,Boss,monster_ancient_nine_nether_ice_dragon,"{""rank"": 5}",600,true
+bong_lai_phuc_dia,15000,17000,Boss,monster_vampire_bat_king,"{""rank"": 4}",600,true
+cat_xuyen_thao_nguyen,21000,1000,Boss,boss_dan_qing_scholar,"{""rank"": 3}",600,true
+cu_lang_vuc,19000,15000,Boss,monster_genesis_lotus_will_avatar,"{""rank"": 6}",600,true
+cuu_cung_sa_uyen,1000,17000,Boss,monster_ancient_blade_spirit_asura,"{""rank"": 7}",600,true
+dai_vuc_bac_nguyen,25300,5300,Boss,boss_dan_qing_scholar,"{""rank"": 3}",600,true
+dai_vuc_dong_hai,16500,11500,Boss,monster_soul_gate_godfiend,"{""rank"": 6}",600,true
+dai_vuc_nam_cuong,5080,5082,Boss,monster_immemorial_celestial_star_beast,"{""rank"": 8}",600,true
+dai_vuc_tay_mac,5140,15084,Boss,monster_tide_dragon,"{""rank"": 5}",600,true
+dai_vuc_trung_chau,15300,5300,Boss,monster_soul_gate_godfiend,"{""rank"": 6}",600,true
+dan_qing_hoa_canh,15068,1702,Boss,monster_east_sea_dragonfish,"{""rank"": 4}",600,true
+dao_tac_phuc_dia,3000,19000,Boss,monster_immemorial_celestial_star_beast,"{""rank"": 8}",600,true
+dh_gioi_bich_dong_bac,19000,11000,Boss,monster_ancient_flying_sword_dragon,"{""rank"": 7}",600,true
+dh_gioi_bich_nam,11000,19000,Boss,monster_ancient_desert_ghost_king,"{""rank"": 6}",600,true
+dh_gioi_bich_tay,11000,15000,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
+dh_gioi_bich_tay_bac,11000,11000,Boss,monster_immemorial_myriad_jun_titan,"{""rank"": 6}",600,true
+dong_gia_bao,3000,17000,Boss,monster_bone_general,"{""rank"": 3}",600,true
+dong_hai_cuc_dong,19000,19000,Boss,monster_immemorial_refinement_golem,"{""rank"": 9}",600,true
+dong_hai_hai_nhan,11000,17000,Boss,monster_primordial_qi_dragon,"{""rank"": 6}",600,true
+gu_luan_slope,24950,1650,Boss,monster_bone_general,"{""rank"": 3}",600,true
+hac_gia_trai,29000,5000,Boss,monster_ancient_taotie_devourer,"{""rank"": 6}",600,true
+han_bang_tuyet_vuc,23000,1000,Boss,monster_immemorial_soul_beast,"{""rank"": 5}",600,true
+hoa_co_dinh,23000,9000,Boss,monster_immemorial_heaven_will_avatar,"{""rank"": 7}",600,true
+hoa_hai_dao,15000,11000,Boss,monster_sword_intent_golem,"{""rank"": 4}",600,true
+hu_tien_phuc_dia,18296,5079,Boss,monster_gluttonous_pig_emperor,"{""rank"": 5}",600,true
+hung_lang_nguyen,29000,7000,Boss,monster_gluttonous_pig_emperor,"{""rank"": 5}",600,true
+huyen_canh_sa_hai,9000,15000,Boss,monster_ancient_mountain_lifting_ape,"{""rank"": 6}",600,true
+huyet_hai_co_vuc,8174,8321,Boss,monster_immemorial_chaos_ice_beast,"{""rank"": 6}",600,true
+khi_hai_phuc_dia,15000,19000,Boss,monster_ancient_myriad_beast_king,"{""rank"": 7}",600,true
+kim_phong_khau,1000,13000,Boss,monster_immemorial_chaos_ice_beast,"{""rank"": 6}",600,true
+kim_tinh_hai,19000,17000,Boss,monster_immemorial_chaos_ice_beast,"{""rank"": 6}",600,true
+lac_da_thung_lung,7000,15000,Boss,monster_bone_general,"{""rank"": 3}",600,true
+lac_thien_coc,18300,8300,Boss,monster_ancient_flying_sword_dragon,"{""rank"": 7}",600,true
+lau_lan_co_dia,27000,7000,Boss,monster_sword_intent_golem,"{""rank"": 4}",600,true
+linh_diep_coc,7000,5000,Boss,monster_east_sea_dragonfish,"{""rank"": 4}",600,true
+linh_duyen_trai_canh,11000,3000,Boss,monster_wine_monkey_king,"{""rank"": 3}",600,true
+linh_nhi_ho,13000,5000,Boss,monster_three_kings_boss,"{""rank"": 4}",600,true
+long_cung_di_tich,17000,19000,Boss,monster_immemorial_celestial_star_beast,"{""rank"": 8}",600,true
+luc_bao_oc_dao,5000,11000,Boss,monster_mystic_formation_general,"{""rank"": 4}",600,true
+luu_ly_hai,17000,15000,Boss,monster_sword_intent_golem,"{""rank"": 4}",600,true
+luyen_co_dong,12050,6550,Boss,monster_sword_intent_golem,"{""rank"": 4}",600,true
+ma_to_phuc_dia,23000,7000,Boss,monster_genesis_lotus_will_avatar,"{""rank"": 6}",600,true
+mac_gia_thanh,5000,17000,Boss,boss_dan_qing_scholar,"{""rank"": 3}",600,true
+man_hoang_mieu,25000,9000,Boss,monster_primordial_qi_dragon,"{""rank"": 6}",600,true
+nam_cuong_cuc_nam,9000,9000,Boss,monster_immemorial_dream_phoenix,"{""rank"": 7}",600,true
+nam_cuong_gioi_bich_bac,5000,1000,Boss,monster_immemorial_cloud_phoenix,"{""rank"": 8}",600,true
+nam_cuong_gioi_bich_nam,5000,9000,Boss,monster_immemorial_law_ruler_spirit,"{""rank"": 8}",600,true
+nam_cuong_gioi_bich_tay,1000,5000,Boss,monster_thai_co_tinh_linh,"{""rank"": 8}",600,true
+nc_am_duong_coc,7000,9000,Boss,monster_ancient_star_sea_whale,"{""rank"": 7}",600,true
+nc_am_hon_coc,1000,1000,Boss,monster_immemorial_sword_emperor,"{""rank"": 7}",600,true
+nc_gioi_bich_dong,9000,5000,Boss,monster_soul_gate_godfiend,"{""rank"": 6}",600,true
+nc_hac_am_hap,1000,3000,Boss,monster_ancient_luck_cloud_dragon,"{""rank"": 6}",600,true
+nc_hu_doc_chieu,1000,7000,Boss,monster_year_beast_tiger,"{""rank"": 6}",600,true
+nc_loi_dinh_nhai,9000,7000,Boss,monster_year_beast_tiger,"{""rank"": 6}",600,true
+nc_phong_bao_dinh,9000,1000,Boss,monster_immemorial_heaven_will_avatar,"{""rank"": 7}",600,true
+nc_thap_van_thu_son,7000,1000,Boss,monster_soul_gate_godfiend,"{""rank"": 6}",600,true
+nghe_hoan_trach,3000,7000,Boss,monster_desert_ghost_boss,"{""rank"": 4}",600,true
+nguyet_nhi_ho,27000,5000,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
+nhan_ngu_thanh,13000,15000,Boss,monster_east_sea_dragonfish,"{""rank"": 4}",600,true
+phi_hac_son,11000,1000,Boss,monster_east_sea_dragonfish,"{""rank"": 4}",600,true
+phi_sa_hac,9000,13000,Boss,monster_immemorial_sword_emperor,"{""rank"": 7}",600,true
+phong_hoa_thao_nguyen,25000,7000,Boss,monster_immemorial_soul_beast,"{""rank"": 5}",600,true
+phong_van_hoang_dia,9000,17000,Boss,monster_tide_dragon,"{""rank"": 5}",600,true
+phuc_hi_thao_nguyen,23000,5000,Boss,monster_desert_ghost_boss,"{""rank"": 4}",600,true
+quy_hon_hai_vuc,17000,17000,Boss,monster_immemorial_human_ancestor_will,"{""rank"": 6}",600,true
+song_gia_thuy_vuc,13000,11000,Boss,monster_shadow_glimpse_boss,"{""rank"": 4}",600,true
+tay_mac_cuc_nam,9000,19000,Boss,monster_dream_dao_supreme_avatar,"{""rank"": 9}",600,true
+tc_gioi_bich_bac,19000,1000,Boss,monster_ancient_myriad_beast_king,"{""rank"": 7}",600,true
+tc_gioi_bich_nam,19000,7000,Boss,monster_ancient_luck_cloud_dragon,"{""rank"": 6}",600,true
+tc_kiem_minh_hai,15000,9000,Boss,monster_immemorial_sword_emperor,"{""rank"": 7}",600,true
+tc_ta_ma_quyet,11000,9000,Boss,monster_immemorial_cloud_phoenix,"{""rank"": 8}",600,true
+tc_thai_co_di_tich,13000,9000,Boss,monster_ancient_heaven_stealing_dragon,"{""rank"": 6}",600,true
+tc_than_tieu_phuc_dia,15000,5000,Boss,monster_tide_dragon,"{""rank"": 5}",600,true
+tc_thien_tri_son,17000,7000,Boss,monster_immemorial_heaven_will_avatar,"{""rank"": 7}",600,true
+tc_tien_co_truong,17000,9000,Boss,monster_soul_gate_godfiend,"{""rank"": 6}",600,true
+tc_van_kiem_nhai,11000,7000,Boss,monster_ancient_creation_womb_titan,"{""rank"": 7}",600,true
+thai_gia_cang,17000,13000,Boss,monster_bone_general,"{""rank"": 3}",600,true
+tham_gia_dao,13000,13000,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
+thanh_mao_son,3000,5000,Boss,boss_wolf_king,"{""rank"": 3}",600,true
+thanh_thao_hai,25000,5000,Boss,monster_vampire_bat_king,"{""rank"": 4}",600,true
+thap_am_tieu_dao,17000,11000,Boss,monster_bone_general,"{""rank"": 3}",600,true
+thien_de_son,11621,8206,Boss,monster_immemorial_human_ancestor_will,"{""rank"": 6}",600,true
+thien_dinh_ngoai_vi,19000,9000,Boss,monster_nether_bone_dragon_lord,"{""rank"": 9}",600,true
+thien_khanh_dia_hac,7000,19000,Boss,monster_immemorial_human_ancestor_will,"{""rank"": 6}",600,true
+thien_luu_hai_vuc,19000,13000,Boss,monster_tide_dragon,"{""rank"": 5}",600,true
+thien_xa_quat,7000,11000,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
+thiet_gia_thanh,3000,3000,Boss,monster_sword_intent_golem,"{""rank"": 4}",600,true
+three_kings_mountain,1650,8300,Boss,monster_ancient_heaven_stealing_dragon,"{""rank"": 6}",600,true
+tieu_gia_tran,3000,13000,Boss,monster_three_kings_boss,"{""rank"": 4}",600,true
+tm_gioi_bich_bac,1000,11000,Boss,monster_immemorial_celestial_star_beast,"{""rank"": 8}",600,true
+tm_gioi_bich_dong,9000,11000,Boss,monster_reverse_flow_spirit,"{""rank"": 6}",600,true
+tm_gioi_bich_nam,1000,19000,Boss,monster_ancient_cloud_canvas_dragon,"{""rank"": 6}",600,true
+tm_gioi_bich_tay,1000,15000,Boss,monster_ancient_creation_womb_titan,"{""rank"": 7}",600,true
+trung_chau_dia_cau,15000,7000,Boss,monster_ancient_myriad_beast_king,"{""rank"": 7}",600,true
+trung_chau_gioi_bich_dong,19000,5000,Boss,monster_ancient_mountain_lifting_ape,"{""rank"": 6}",600,true
+trung_chau_gioi_bich_tay,11000,5000,Boss,monster_immemorial_dream_phoenix,"{""rank"": 7}",600,true
+tuyet_nguyen_nhan_tuyet,24998,4954,Boss,monster_gluttonous_pig_emperor,"{""rank"": 5}",600,true
+u_minh_sa_huyet,7000,17000,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
+van_hoa_coc,8284,1599,Boss,monster_vampire_bat_king,"{""rank"": 4}",600,true
+van_truong_hai_cau,13000,19000,Boss,monster_immemorial_heaven_will_avatar,"{""rank"": 7}",600,true
+van_xa_goc,7000,7000,Boss,monster_dark_swamp_python,"{""rank"": 4}",600,true
+vo_bien_thu_lam,15000,1000,Boss,monster_six_headed_serpent,"{""rank"": 4}",600,true
+vo_vong_sa_hai,5000,19000,Boss,monster_immemorial_dream_phoenix,"{""rank"": 7}",600,true
+vu_son_hien_dia,3000,9000,Boss,monster_ancient_cloud_canvas_dragon,"{""rank"": 6}",600,true
+vuong_dinh_phuc_dia,28382,4997,Boss,monster_ancient_cloud_canvas_dragon,"{""rank"": 6}",600,true
+xich_nhiem_sa_hai,7000,13000,Boss,monster_ancient_nine_nether_ice_dragon,"{""rank"": 5}",600,true

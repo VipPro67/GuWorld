@@ -1476,6 +1476,16 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				totalShield := baseShield + daoShield
 				actor.VirtualShield += totalShield
+				shieldReason := a.Reason
+				conflictMult := actionConflictMult(actor, a.Path)
+				if conflictMult < 1.0 {
+					conflictMsg := fmt.Sprintf("Xung đột Đạo Ngân (uy lực x%.2f)", conflictMult)
+					if shieldReason != "" {
+						shieldReason += " | " + conflictMsg
+					} else {
+						shieldReason = conflictMsg
+					}
+				}
 				sl := CombatLog{
 					Turn:      turn,
 					ActorId:   actor.ID,
@@ -1490,6 +1500,7 @@ func Simulate(state *CombatState) []CombatLog {
 						ShieldDaoMult:   daoMult,
 						ShieldDaoBonus:  daoShield,
 						ShieldFinal:     totalShield,
+						Reason:          shieldReason,
 						ShielderDefense: actor.StatProvenance["defense"],
 					},
 				}
@@ -1948,6 +1959,15 @@ func Simulate(state *CombatState) []CombatLog {
 						natResFinal = target.DaoProfile.GetDefensiveResistance(a.Path[0])
 					}
 
+					dmgReason := a.Reason
+					if conflictMult < 1.0 {
+						conflictMsg := fmt.Sprintf("Xung đột Đạo Ngân (uy lực x%.2f)", conflictMult)
+						if dmgReason != "" {
+							dmgReason += " | " + conflictMsg
+						} else {
+							dmgReason = conflictMsg
+						}
+					}
 					breakdown := &DamageBreakdown{
 						BaseDamage:      a.Damage,
 						SkillMult:       skillMult,
@@ -1964,6 +1984,7 @@ func Simulate(state *CombatState) []CombatLog {
 						FinalDamage:     totalHitDmg,
 						RawDamage:       rawDmg,
 						HitCount:        hitCount,
+						Reason:          dmgReason,
 						AttackerAttack:  actor.StatProvenance["attack"],
 						DefenderDefense: target.StatProvenance["defense"],
 					}

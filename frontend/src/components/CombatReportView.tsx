@@ -745,6 +745,11 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                   <span className="text-purple-300 font-bold">
                                     x{(shieldSkillMult * shieldBuffMult).toFixed(2)}
                                   </span>
+                                  {b.reason && (
+                                    <div className="text-[10px] text-amber-400/90 font-sans">
+                                      ({b.reason})
+                                    </div>
+                                  )}
                                   {shieldBuffMult !== 1 && (
                                     <div className="text-[10px] text-purple-400/80">
                                       ({shieldSkillMult.toFixed(2)} chiêu × {shieldBuffMult.toFixed(2)} buff)
@@ -922,6 +927,11 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                   <span className="text-purple-300 font-bold">
                                     x{(skillMult * buffMult).toFixed(2)}
                                   </span>
+                                  {b.reason && (
+                                    <div className="text-[10px] text-amber-400/90 font-sans">
+                                      ({b.reason})
+                                    </div>
+                                  )}
                                   {buffMult !== 1 && (
                                     <div className="text-[10px] text-purple-400/80">
                                       ({skillMult.toFixed(2)} chiêu × {buffMult.toFixed(2)} buff)
