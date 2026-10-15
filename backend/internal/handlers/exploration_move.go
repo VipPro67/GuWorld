@@ -422,7 +422,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 				subRank = cell.SubRank
 			}
 
-			combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
+			combatState := models.BuildCombatStateFromMonsterWithRegion(mon, rank, subRank, regionMonsterGuPool(player.CurrentRegion))
 			combatState.WorldMonsterRegionID = player.CurrentRegion
 			player.ActiveCombat = &combatState
 			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
@@ -540,7 +540,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 						if adj.SubRank > 0 {
 							subRank = adj.SubRank
 						}
-						combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
+						combatState := models.BuildCombatStateFromMonsterWithRegion(mon, rank, subRank, regionMonsterGuPool(player.CurrentRegion))
 						combatState.WorldMonsterRegionID = player.CurrentRegion
 						player.ActiveCombat = &combatState
 						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)

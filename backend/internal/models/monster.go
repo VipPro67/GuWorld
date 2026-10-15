@@ -289,9 +289,18 @@ func ScaleAndRandomizeMonsterDaoMarks(mon MonsterTemplate, rank int, subRank int
 }
 
 func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) CombatState {
+	return BuildCombatStateFromMonsterWithRegion(mon, rank, subRank, nil)
+}
+
+// BuildCombatStateFromMonsterWithRegion builds the enemy combat state and
+// resolves its equipped Gu from, in order of precedence, the monster's own
+// gu_pool, then the region's monster_gus pool, then the registry auto-match.
+// regionGuPool is the already-resolved pool for the region the encounter
+// happens in (see handlers.regionMonsterGuPool); pass nil when none applies.
+func BuildCombatStateFromMonsterWithRegion(mon MonsterTemplate, rank int, subRank int, regionGuPool []GuPoolEntry) CombatState {
 	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, rank, subRank, mon.Type)
 	finalDaoMarks := ScaleAndRandomizeMonsterDaoMarks(mon, rank, subRank)
-	guInventory := buildMonsterGuInventory(mon, rank, finalDaoMarks)
+	guInventory := buildMonsterGuInventory(mon, rank, finalDaoMarks, regionGuPool)
 
 	return CombatState{
 		EnemyTemplateID:    mon.ID,
@@ -317,20 +326,33 @@ func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) Com
 // When set, buildMonsterGuInventory will skip Immortal Gu that are already owned by any player, listed in auction, or stored in sect vaults.
 var ImmortalGuChecker func(guID string, rank int) bool
 
-func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks DaoMarksMap) GuInventory {
-	// Normal monsters have NO Gu
+func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks DaoMarksMap, regionGuPool []GuPoolEntry) GuInventory {
 	monTypeUpper := strings.ToUpper(strings.TrimSpace(mon.Type))
-	if monTypeUpper == "NORMAL" || monTypeUpper == "MONSTER" {
-		return GuInventory{}
-	}
+	isNormal := monTypeUpper == "NORMAL" || monTypeUpper == "MONSTER"
+	isBoss := strings.Contains(monTypeUpper, "BOSS")
 
 	var result GuInventory
 
+	// Explicit template Gu are always carried.
 	if len(mon.GuInventory) > 0 {
 		result = append(result, mon.GuInventory...)
 	}
 
-	isBoss := strings.Contains(monTypeUpper, "BOSS")
+	// Configured pools win over the registry auto-match so a monster or region
+	// can declare exactly which Gu its monsters carry (and therefore drop).
+	// Precedence: per-monster gu_pool, then per-region monster_gus.
+	if pool := eligibleGuPool(mon.GuPool, monsterRank); len(pool) > 0 {
+		return append(result, rollGuPool(mon, pool, isBoss, isNormal)...)
+	}
+	if pool := eligibleGuPool(regionGuPool, monsterRank); len(pool) > 0 {
+		return append(result, rollGuPool(mon, pool, isBoss, isNormal)...)
+	}
+
+	// Normal monsters only carry Gu when a pool is configured above; without a
+	// pool they carry none, so an unconfigured Normal cannot drop Gu.
+	if isNormal {
+		return result
+	}
 
 	// Match Gu from GuRegistry (for Rank 6+ using DaoMarks, or for Rank 1-5 using any valid Gu rank <= monsterRank)
 	if len(GuRegistry) > 0 {
@@ -447,57 +469,122 @@ func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks DaoM
 		}
 	}
 
-	// Fallback/additional Gu from mon.GuPool if configured
-	if len(mon.GuPool) > 0 {
-		pool := make([]GuPoolEntry, 0, len(mon.GuPool))
-		for _, entry := range mon.GuPool {
-			if entry.IsWorldBoss || entry.Rank > monsterRank {
-				continue
-			}
-			pool = append(pool, entry)
-		}
+	return result
+}
 
-		if len(pool) > 0 {
-			totalWeight := 0.0
-			for _, e := range pool {
-				totalWeight += e.Weight
+// guSlotProfile returns how many Gu a monster type equips: active first, then
+// passive. Normal monsters are deliberately light so that giving them Gu does
+// not spike early-game difficulty.
+func guSlotProfile(isBoss, isNormal bool) (numActive, numPassive int) {
+	switch {
+	case isBoss:
+		return 3, 2
+	case isNormal:
+		return 1, 0
+	default:
+		return 2, 1
+	}
+}
+
+// eligibleGuPool filters a configured Gu pool for a kill at monsterRank:
+// world-boss-only entries and entries above the monster's rank are dropped,
+// and Immortal Gu already alive somewhere in the world are skipped.
+func eligibleGuPool(pool []GuPoolEntry, monsterRank int) []GuPoolEntry {
+	if len(pool) == 0 {
+		return nil
+	}
+	out := make([]GuPoolEntry, 0, len(pool))
+	for _, e := range pool {
+		if e.GuID == "" || e.IsWorldBoss {
+			continue
+		}
+		rank := e.Rank
+		if rank <= 0 {
+			if spec, ok := GetGuAny(e.GuID); ok {
+				rank = spec.Rank
 			}
-			if totalWeight > 0 {
-				for _, entry := range pool {
-					count := entry.MinCount
-					if entry.MaxCount > entry.MinCount {
-						count += rand.Intn(entry.MaxCount - entry.MinCount + 1)
-					}
-					for i := 0; i < count; i++ {
-						roll := rand.Float64() * totalWeight
-						acc := 0.0
-						var selected *GuPoolEntry
-						for j := range pool {
-							acc += pool[j].Weight
-							if roll <= acc {
-								selected = &pool[j]
-								break
-							}
-						}
-						if selected == nil {
-							selected = &pool[0]
-						}
-						inst := GuInstance{
-							InstanceID: fmt.Sprintf("%s_gu_%s_%d", mon.ID, selected.GuID, rand.Int63()),
-							GuID:       selected.GuID,
-							Rank:       selected.Rank,
-							Hunger:     0,
-							Status:     "ACTIVE",
-							Equipped:   true,
-							IsVital:    false,
-						}
-						result = append(result, inst)
-					}
+		}
+		if rank <= 0 {
+			rank = 1
+		}
+		if rank > monsterRank {
+			continue
+		}
+		if rank >= 6 && ImmortalGuChecker != nil && ImmortalGuChecker(e.GuID, rank) {
+			continue
+		}
+		e.Rank = rank
+		out = append(out, e)
+	}
+	return out
+}
+
+// rollGuPool equips Gu drawn from a configured weighted pool. Each entry
+// contributes rand(min_count..max_count) copies (default 1) and weight biases
+// which entries fill the type's slot budget. A pool larger than the budget
+// therefore yields a random subset.
+func rollGuPool(mon MonsterTemplate, pool []GuPoolEntry, isBoss, isNormal bool) GuInventory {
+	numActive, numPassive := guSlotProfile(isBoss, isNormal)
+	slots := numActive + numPassive
+	if slots <= 0 || len(pool) == 0 {
+		return nil
+	}
+
+	type candidate struct {
+		entry  GuPoolEntry
+		weight float64
+	}
+	var cands []candidate
+	for _, e := range pool {
+		copies := e.MinCount
+		if e.MaxCount > e.MinCount {
+			copies += rand.Intn(e.MaxCount - e.MinCount + 1)
+		}
+		if copies < 1 {
+			copies = 1
+		}
+		w := e.Weight
+		if w <= 0 {
+			w = 1
+		}
+		for i := 0; i < copies; i++ {
+			cands = append(cands, candidate{entry: e, weight: w})
+		}
+	}
+	if len(cands) == 0 {
+		return nil
+	}
+
+	result := make(GuInventory, 0, slots)
+	for len(result) < slots && len(cands) > 0 {
+		total := 0.0
+		for _, c := range cands {
+			total += c.weight
+		}
+		pick := 0
+		if total > 0 {
+			r := rand.Float64() * total
+			acc := 0.0
+			for i, c := range cands {
+				acc += c.weight
+				if r <= acc {
+					pick = i
+					break
 				}
 			}
 		}
+		chosen := cands[pick]
+		cands = append(cands[:pick], cands[pick+1:]...)
+		result = append(result, GuInstance{
+			InstanceID: fmt.Sprintf("%s_gu_%s_%d", mon.ID, chosen.entry.GuID, rand.Int63()),
+			GuID:       chosen.entry.GuID,
+			Rank:       chosen.entry.Rank,
+			Hunger:     0,
+			Status:     "ACTIVE",
+			Equipped:   true,
+			IsVital:    false,
+		})
 	}
-
 	return result
 }
 

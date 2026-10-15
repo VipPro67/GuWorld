@@ -517,7 +517,7 @@ func AttackMineSlot(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy dữ liệu quái vật canh giữ"})
 			return
 		}
-		pvpCombat = models.BuildCombatStateFromMonster(monsterTemplate, monsterRank, monsterSubRank)
+		pvpCombat = models.BuildCombatStateFromMonsterWithRegion(monsterTemplate, monsterRank, monsterSubRank, regionMonsterGuPool(attacker.CurrentRegion))
 		pvpCombat.EnemyName = "Yêu Quái Canh Mỏ: " + monsterTemplate.Name
 		pvpCombat.MineSlotID = req.SlotID
 	} else {

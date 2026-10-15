@@ -349,11 +349,39 @@ func isBossEnemy(cs *models.CombatState) bool {
 	return false
 }
 
-// GetGuDropChancePercent returns the drop chance percentage (0.0 - 100.0) based on Gu rank and whether enemy is a Boss vs Elite.
-// Defeating a Boss gives a higher drop chance for Gu than Elites/Normal enemies.
-// Immortal Gu (Rank >= 6) have significantly lower drop rates to ensure their rarity and uniqueness.
-func GetGuDropChancePercent(rank int, isBoss bool) float64 {
-	if isBoss {
+// guDropTier classifies an enemy type for Gu-drop purposes. Bosses roll the
+// highest table, Elites the middle, Normal monsters the lowest.
+func guDropTier(enemyType string) string {
+	switch strings.ToUpper(strings.TrimSpace(enemyType)) {
+	case "NORMAL", "MONSTER":
+		return "normal"
+	case "BOSS", "WORLD_BOSS", "WORLDBOSS", "WORLD BOSS", "MINE_PVE", "TRIBULATION_BOSS":
+		return "boss"
+	default:
+		return "elite"
+	}
+}
+
+// guDropTierForCombat resolves the drop tier from a combat state, preserving
+// isBossEnemy's broader boss detection (e.g. a Boss-typed combatant).
+func guDropTierForCombat(cs *models.CombatState) string {
+	if isBossEnemy(cs) {
+		return "boss"
+	}
+	if cs != nil {
+		return guDropTier(cs.EnemyType)
+	}
+	return "elite"
+}
+
+// GetGuDropChancePercent returns the drop chance percentage (0.0 - 100.0) for
+// an equipped Gu of the given rank and enemy tier ("boss", "normal", "elite").
+// Defeating a Boss gives a higher drop chance than an Elite, which in turn is
+// higher than a plain Normal monster. Immortal Gu (Rank >= 6) have
+// significantly lower rates to protect their rarity and uniqueness.
+func GetGuDropChancePercent(rank int, tier string) float64 {
+	switch tier {
+	case "boss":
 		switch rank {
 		case 1:
 			return 50.0 // 50% (Boss - Cổ Nhất Chuyển)
@@ -379,32 +407,85 @@ func GetGuDropChancePercent(rank int, isBoss bool) float64 {
 			}
 			return 15.0
 		}
-	}
-
-	// Elite Enemy
-	switch rank {
-	case 1:
-		return 40.0 // 40%
-	case 2:
-		return 30.0 // 30%
-	case 3:
-		return 20.0 // 20%
-	case 4:
-		return 12.0 // 12%
-	case 5:
-		return 8.0 // 8%
-	case 6:
-		return 0.3 // 0.3% (Tiên Cổ Lục Chuyển)
-	case 7:
-		return 0.1 // 0.1% (Tiên Cổ Thất Chuyển)
-	case 8:
-		return 0.05 // 0.05% (Tiên Cổ Bát Chuyển)
-	case 9:
-		return 0.01 // 0.01% (Tiên Cổ Cửu Chuyển)
-	default:
-		if rank >= 6 {
-			return 0.01
+	case "normal":
+		switch rank {
+		case 1:
+			return 15.0 // 15%
+		case 2:
+			return 10.0 // 10%
+		case 3:
+			return 6.0 // 6%
+		case 4:
+			return 3.0 // 3%
+		case 5:
+			return 1.5 // 1.5%
+		case 6:
+			return 0.05 // 0.05% (Tiên Cổ Lục Chuyển)
+		case 7:
+			return 0.02 // 0.02% (Tiên Cổ Thất Chuyển)
+		case 8:
+			return 0.01 // 0.01% (Tiên Cổ Bát Chuyển)
+		case 9:
+			return 0.005 // 0.005% (Tiên Cổ Cửu Chuyển)
+		default:
+			if rank >= 6 {
+				return 0.005
+			}
+			return 1.5
 		}
-		return 8.0
+	default: // elite
+		switch rank {
+		case 1:
+			return 40.0 // 40%
+		case 2:
+			return 30.0 // 30%
+		case 3:
+			return 20.0 // 20%
+		case 4:
+			return 12.0 // 12%
+		case 5:
+			return 8.0 // 8%
+		case 6:
+			return 0.3 // 0.3% (Tiên Cổ Lục Chuyển)
+		case 7:
+			return 0.1 // 0.1% (Tiên Cổ Thất Chuyển)
+		case 8:
+			return 0.05 // 0.05% (Tiên Cổ Bát Chuyển)
+		case 9:
+			return 0.01 // 0.01% (Tiên Cổ Cửu Chuyển)
+		default:
+			if rank >= 6 {
+				return 0.01
+			}
+			return 8.0
+		}
 	}
+}
+
+// regionMonsterGuPool resolves the configured per-region Gu pool for monster
+// combat, walking the region parent chain so a rule declared on a parent
+// NGU_VUC applies to its KHU_VUC children. Child entries win over parents.
+func regionMonsterGuPool(regionID string) []models.GuPoolEntry {
+	if regionID == "" {
+		return nil
+	}
+	var pool []models.GuPoolEntry
+	seen := make(map[string]struct{})
+	for _, id := range regionScopeIDs(regionID) {
+		zone := ZoneByID(id)
+		if zone == nil {
+			continue
+		}
+		for _, e := range zone.PoolWeights.MonsterGus {
+			if e.GuID == "" {
+				continue
+			}
+			if _, dup := seen[e.GuID]; dup {
+				continue
+			}
+			seen[e.GuID] = struct{}{}
+			pool = append(pool, e)
+		}
+	}
+	return pool
 }

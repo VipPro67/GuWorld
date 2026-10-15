@@ -95,7 +95,7 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 			return err
 		}
 	}
-	combat := models.BuildCombatStateFromMonster(template, current.Rank, current.SubRank)
+	combat := models.BuildCombatStateFromMonsterWithRegion(template, current.Rank, current.SubRank, regionMonsterGuPool(current.RegionID))
 	combat.WorldMonsterRegionID = current.RegionID
 	combat.WorldMonsterID = current.InstanceID
 	combat.WorldMonsterEncounterID = uuid.NewString()

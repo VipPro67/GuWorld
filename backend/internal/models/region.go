@@ -8,9 +8,10 @@ import (
 // ZonePools defines procedural content pools for a zone. All fields are
 // data-driven via the regions.pool_weights JSONB column.
 type ZonePools struct {
-	CellWeights map[string]int `json:"cell_type_weights"` // Monster / Resource / WildGu / Empty
-	Resources   []string       `json:"resources"`         // resource item ids
-	WildGus     []string       `json:"wild_gus"`          // low-tier Gu ids
+	CellWeights map[string]int `json:"cell_type_weights"`     // Monster / Resource / WildGu / Empty
+	Resources   []string       `json:"resources"`             // resource item ids
+	WildGus     []string       `json:"wild_gus"`              // low-tier Gu ids
+	MonsterGus  []GuPoolEntry  `json:"monster_gus,omitempty"` // Gu carried (and droppable) by monsters fought in this region
 }
 
 // Region represents a zone in the shared continuous world map. Regions are

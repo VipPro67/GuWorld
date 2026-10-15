@@ -589,7 +589,7 @@ Các trường quan trọng trong dictionary:
 - **Tính duy nhất của Tiên Cổ (rank ≥ 6):** cổ trùng rank ≥ 6 là **duy nhất toàn server, tính theo `gu_id`** (cùng id khác rank vẫn bị tính trùng). Áp dụng cho instance **đang sống** ở mọi nguồn: `player_gu`, `auction` ACTIVE (`item_type='Gu'`), `sect_vault_gu` (`quantity>0`). Enforce 2 lớp: app-level `db.CheckImmortalGuExists` (+ advisory lock, trả **409** khi trùng: refine/gacha/deposit) và backstop DB `uq_player_gu_immortal` / `uq_sect_vault_gu_immortal` + `chk_sect_vault_gu_immortal_qty` (kho rank≥6 luôn `quantity<=1`). Destroy (đói chết/thả/chết rơi đồ) = end lifecycle `instance_id` đó, `gu_id` được tái sinh với `instance_id` mới. Nguồn kiểm tra: `db.CheckImmortalGuExists` / `db.GetExistingImmortalGuIDs` / `db.IsImmortalConflict`.
 - **`instance_id` bất biến xuyên vòng đời:** trade, đăng bán/đấu giá, ký gửi, nhập/xuất kho tông môn chỉ đổi chủ/vị trí, không đổi `id`. Đăng bán Tiên Cổ mỗi đơn 1 instance; rút kho Tiên Cổ mỗi lần 1 instance, giữ nguyên id. Regen id mới chỉ cho legacy snapshot thiếu id rank < 6.
 - **`gu_history_logs` chỉ log Tiên Cổ (rank ≥ 6):** `LogGuHistory` drop mọi event rank < 6. Event terminal (`STARVED_DEATH`, `DEATH_DESTROYED/DROPPED`, `DROPPED_RELEASED` với `metadata.terminal=true`) đóng timeline của `instance_id`.
-- **Tiên Cổ không xuất hiện từ loot/region:** mọi entry loot table có `gu_id` là cổ rank ≥ 6 bị **lọc bỏ** khi (1) import CSV LootTable, (2) Admin tạo/sửa bảng loot, (3) `RollLoot` roll thực tế. `pool_weights.wild_gus` của Region cũng được lọc Cổ Tiên khi import CSV (xem `filterImmortalWildGus`) và khi sinh ô WildGu (`GenerateCell`), đảm bảo Cổ Tiên chỉ đến từ gacha, luyện cổ và đấu giá.
+- **Tiên Cổ không xuất hiện từ loot/region:** mọi entry loot table có `gu_id` là cổ rank ≥ 6 bị **lọc bỏ** khi (1) import CSV LootTable, (2) Admin tạo/sửa bảng loot, (3) `RollLoot` roll thực tế. `pool_weights.wild_gus` và `pool_weights.monster_gus` của Region cũng được lọc Cổ Tiên khi import CSV (xem `filterImmortalWildGus` / `filterImmortalMonsterGus`) và khi sinh ô WildGu (`GenerateCell`), đảm bảo Cổ Tiên chỉ đến từ gacha, luyện cổ và đấu giá.
 
 ### Hiệu ứng Cổ (effects)
 
@@ -950,7 +950,7 @@ Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy
 
 ### Monster/combat
 
-Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.
+Monster template chứa chỉ số, Gu inventory (`gu_inventory`) và Gu pool (`gu_pool`), item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.
 
 #### Loot table (bảng rơi đồ)
 
@@ -972,6 +972,21 @@ Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, pat
 - **Kế thừa theo phân cấp vùng:** `RollRegionLoot` tra cả `region_id` hiện tại **và tổ tiên** (`parent_id`), nên rule đặt ở `dai_vuc_dong_hai` tự áp dụng cho mọi KHU_VUC con (ví dụ `ngoc_ho_dao`). Nhờ vậy chỉ cần khai báo rule ở cấp đại vực.
 - **Region loot áp dụng cho cả combat ngoài overworld lẫn khám phá:** combat khởi tạo từ `BuildCombatStateFromMonster` được gán `WorldMonsterRegionID = player.CurrentRegion` (exploration) hoặc `current.RegionID` (world monster encounter), nên `EnemyType` + region được truyền đúng vào `RollMonsterLoot`.
 - Ví dụ dữ liệu Đông Hải: `RegionLootTables.csv` map `dai_vuc_dong_hai` → `loot_region_dong_hai_normal` (Normal, rank 1–9, chance 1.0), `_elite` (Elite, rank 2–9, 0.8), `_boss` (Boss, rank 3–9, 1.0). Các bảng loot tương ứng chứa tài nguyên đặc hữu vùng biển (`fish_scales`, `pure_spring_drop`, `water_weed`, `deep_sea_pearl`, `gold_dragonfish_scale`…).
+
+#### Cổ trùng trên quái (monster/region Gu pool)
+
+- **Quái mang cổ và có thể rơi cổ** — kể cả quái **Normal**. Bộ cổ trang bị khi khởi tạo trận (`BuildCombatStateFromMonsterWithRegion` → `buildMonsterGuInventory`) chọn theo thứ tự ưu tiên:
+  1. **Pool riêng loài** `monster_templates.gu_pool` (JSONB, cột `gu_pool` trong `Monster.csv`, Admin sửa được).
+  2. **Pool theo vùng** `regions.pool_weights.monster_gus` (kế thừa `parent_id`, con thắng cha theo `gu_id`; resolve ở `handlers.regionMonsterGuPool`).
+  3. **Registry auto-match** theo rank/dao marks (hành vi cũ, chỉ còn áp dụng cho **Elite/Boss**).
+- Quái **Normal không có pool nào thì không mang cổ** (giữ nguyên cân bằng cũ). Muốn Normal rơi cổ phải khai pool ở `gu_pool` hoặc `monster_gus`.
+- `GuPoolEntry` (dùng chung cho cả 2 pool): `gu_id`, `rank`, `weight`, `min_count`, `max_count`, `is_world_boss`. Entry `rank > EnemyRank` bị lọc; entry `is_world_boss` chỉ dùng cho drop world-boss (không trang bị thường).
+- **Số slot trang bị theo loại:** Normal = 1; Elite = 3 (2 active + 1 passive); Boss = 5 (3 active + 2 passive). Pool nhiều hơn slot → chọn ngẫu nhiên theo `weight`; `min_count`/`max_count` cho phép nhân bản một cổ.
+- **Rơi cổ:** `applyCombatVictoryLoot` duyệt **từng cổ đang trang bị** và roll độc lập qua `GetGuDropChancePercent(rank, tier)` với 3 tier:
+  - `boss` > `elite` > `normal`. Normal thấp hơn Elite, ví dụ R1 15% / R2 10% / R3 6% / R4 3% / R5 1.5%; R6+ ~0.005–0.05%.
+  - Tier suy ra từ `EnemyType` qua `guDropTierForCombat` (Boss/World_Boss/Mine_PVE → boss; Normal/Monster → normal; còn lại → elite).
+- **Tiên Cổ (rank ≥ 6):** luật unique toàn server không đổi. Pool vùng bị lọc rank ≥ 6 khi import (`filterImmortalMonsterGus`); pool loài rank ≥ 6 bị bỏ nếu cổ đã tồn tại (`ImmortalGuChecker`), và `StartCombat` lọc lại lần nữa.
+- CSV: `Monster.csv` cột `gu_pool` (import/export đầy đủ); `Region.csv` cột `pool_weights` chứa `monster_gus`. Admin sửa qua modal quái (`gu_pool` JSON) và modal vùng (`pool_weights` JSON).
 
 ### Canonical non-player actors
 
@@ -1022,10 +1037,13 @@ Các bí cảnh bản đồ dùng chung có `regions.zone_type='SECRET_REALM'` v
 {
   "cell_type_weights": { "Monster": 22, "Resource": 14, "WildGu": 5, "Empty": 59 },
   "resources": ["moon_orchid_petal", "jade_stone"],
-  "wild_gus": ["GU_LITTLE_LIGHT", "GU_JADE_SKIN"]
+  "wild_gus": ["GU_LITTLE_LIGHT", "GU_JADE_SKIN"],
+  "monster_gus": [
+    { "gu_id": "mortal_gu_2", "rank": 2, "weight": 3, "min_count": 1, "max_count": 1 }
+  ]
 }
 ```
-`cell_type_weights` quyết định tỉ lệ các loại ô; `resources` / `wild_gus` là pool tài nguyên và Cổ cấp thấp. Không khai báo → dùng pool mặc định.
+`cell_type_weights` quyết định tỉ lệ các loại ô; `resources` / `wild_gus` là pool tài nguyên và Cổ cấp thấp. `monster_gus` là bộ cổ mà **quái đánh trong vùng mang theo** (và do đó có thể rơi) — xem "Cổ trùng trên quái". Không khai báo → dùng pool mặc định (riêng `monster_gus` rỗng nghĩa là không gán thêm).
 
 **Thứ tự ưu tiên zone_type** — khi một điểm nằm trong nhiều zone chồng lấn, `FindZoneAt` chọn zone có priority cao nhất (bằng → diện tích nhỏ nhất = innermost):
 

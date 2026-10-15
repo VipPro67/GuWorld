@@ -3809,7 +3809,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <Globe className="w-4 h-4 text-amber-400" />Quản Lý Khu Vực
                 </h3>
                 {canAdminAction("updateRegion") && <button
-                  onClick={() => openRegionEditor({ id: "", name: "", description: "", world_map_id: "world_map", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, safe_zone_x: null, safe_zone_y: null, parent_id: "", paths: [], rules: {}, pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })}
+                  onClick={() => openRegionEditor({ id: "", name: "", description: "", world_map_id: "world_map", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, safe_zone_x: null, safe_zone_y: null, parent_id: "", paths: [], rules: {}, pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [], monster_gus: [] }, _isNew: true })}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />Thêm Khu Vực
@@ -5230,7 +5230,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   return;
                 }
                 if (!body.pool_weights) {
-                  body.pool_weights = { cell_type_weights: {}, resources: [], wild_gus: [] };
+                  body.pool_weights = { cell_type_weights: {}, resources: [], wild_gus: [], monster_gus: [] };
                 }
                 if (!Array.isArray(body.paths)) body.paths = [];
                 const url = isNew ? `${BACKEND_URL}/api/admin/regions` : `${BACKEND_URL}/api/admin/regions/${regionEdit.id}`;

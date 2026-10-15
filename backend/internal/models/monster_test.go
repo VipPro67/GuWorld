@@ -50,11 +50,11 @@ func TestBuildCombatStateFromMonster_RankFilteringAndGuAssignment(t *testing.T) 
 		},
 		"fire_gu_passive_2": {
 			6: GuDictionaryItem{
-				ID:         "fire_gu_passive_2",
-				Name:       "Bão Hỏa Cổ",
-				Rank:       6,
-				Path:       []string{"fire"},
-				Type:       "PASSIVE",
+				ID:   "fire_gu_passive_2",
+				Name: "Bão Hỏa Cổ",
+				Rank: 6,
+				Path: []string{"fire"},
+				Type: "PASSIVE",
 				Effects: GuEffects{
 					Passive: &PassiveEffect{
 						StatBaseSpeed: 50,
@@ -258,4 +258,80 @@ func TestScaleAndRandomizeMonsterDaoMarks(t *testing.T) {
 	if len(dmRandom) == 0 {
 		t.Errorf("expected random dao marks to be generated for rank 6 boss, got empty")
 	}
+}
+
+func TestBuildMonsterGuInventoryFromPools(t *testing.T) {
+	prevRegistry := GuRegistry
+	prevChecker := ImmortalGuChecker
+	defer func() {
+		GuRegistry = prevRegistry
+		ImmortalGuChecker = prevChecker
+	}()
+	GuRegistry = map[string]map[int]GuDictionaryItem{}
+	ImmortalGuChecker = nil
+
+	one := func(guID string, rank int) []GuPoolEntry {
+		return []GuPoolEntry{{GuID: guID, Rank: rank, Weight: 1, MinCount: 1, MaxCount: 1}}
+	}
+
+	t.Run("per-monster pool equips configured Gu for a Normal monster", func(t *testing.T) {
+		mon := MonsterTemplate{ID: "mon_pool", Type: "Normal", GuPool: one("gu_monster", 1)}
+		cs := BuildCombatStateFromMonsterWithRegion(mon, 1, 1, nil)
+		if len(cs.EnemyGuInventory) != 1 || cs.EnemyGuInventory[0].GuID != "gu_monster" {
+			t.Fatalf("expected monster gu_pool to equip gu_monster, got %+v", cs.EnemyGuInventory)
+		}
+	})
+
+	t.Run("per-region pool equips configured Gu for a Normal monster", func(t *testing.T) {
+		mon := MonsterTemplate{ID: "mon_region", Type: "Normal"}
+		cs := BuildCombatStateFromMonsterWithRegion(mon, 2, 1, one("gu_region", 2))
+		if len(cs.EnemyGuInventory) != 1 || cs.EnemyGuInventory[0].GuID != "gu_region" {
+			t.Fatalf("expected region pool to equip gu_region, got %+v", cs.EnemyGuInventory)
+		}
+	})
+
+	t.Run("per-monster pool wins over the region pool", func(t *testing.T) {
+		mon := MonsterTemplate{ID: "mon_both", Type: "Normal", GuPool: one("gu_monster", 1)}
+		cs := BuildCombatStateFromMonsterWithRegion(mon, 2, 1, one("gu_region", 2))
+		if len(cs.EnemyGuInventory) != 1 || cs.EnemyGuInventory[0].GuID != "gu_monster" {
+			t.Fatalf("expected monster pool to win, got %+v", cs.EnemyGuInventory)
+		}
+	})
+
+	t.Run("Normal monster without any pool carries no Gu", func(t *testing.T) {
+		mon := MonsterTemplate{ID: "mon_plain", Type: "Normal"}
+		cs := BuildCombatStateFromMonsterWithRegion(mon, 3, 1, nil)
+		if len(cs.EnemyGuInventory) != 0 {
+			t.Fatalf("expected no Gu, got %+v", cs.EnemyGuInventory)
+		}
+	})
+
+	t.Run("pool entries above the monster rank are filtered out", func(t *testing.T) {
+		mon := MonsterTemplate{ID: "mon_lowrank", Type: "Normal", GuPool: one("gu_high", 5)}
+		cs := BuildCombatStateFromMonsterWithRegion(mon, 2, 1, nil)
+		if len(cs.EnemyGuInventory) != 0 {
+			t.Fatalf("expected rank-5 entry to be filtered at rank 2, got %+v", cs.EnemyGuInventory)
+		}
+	})
+
+	t.Run("immortal Gu already alive in the world is skipped", func(t *testing.T) {
+		ImmortalGuChecker = func(guID string, rank int) bool { return guID == "gu_immortal" }
+		defer func() { ImmortalGuChecker = nil }()
+		mon := MonsterTemplate{ID: "mon_immortal", Type: "Boss", GuPool: one("gu_immortal", 6)}
+		cs := BuildCombatStateFromMonsterWithRegion(mon, 6, 1, nil)
+		if len(cs.EnemyGuInventory) != 0 {
+			t.Fatalf("expected existing immortal Gu to be skipped, got %+v", cs.EnemyGuInventory)
+		}
+	})
+
+	t.Run("Boss pool equips up to its slot budget", func(t *testing.T) {
+		mon := MonsterTemplate{ID: "mon_boss_pool", Type: "Boss", GuPool: []GuPoolEntry{
+			{GuID: "gu_1", Rank: 1, Weight: 1, MinCount: 1, MaxCount: 1},
+			{GuID: "gu_2", Rank: 1, Weight: 1, MinCount: 1, MaxCount: 1},
+		}}
+		cs := BuildCombatStateFromMonsterWithRegion(mon, 1, 1, nil)
+		if len(cs.EnemyGuInventory) != 2 {
+			t.Fatalf("expected 2 Gu from the pool, got %d: %+v", len(cs.EnemyGuInventory), cs.EnemyGuInventory)
+		}
+	})
 }

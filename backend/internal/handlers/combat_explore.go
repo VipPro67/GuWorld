@@ -151,7 +151,7 @@ func ExploreNode(c *gin.Context) {
 		}
 		subRank := rand.Intn(5) + 1
 
-		enemy := models.BuildCombatStateFromMonster(monTemplate, rank, subRank)
+		enemy := models.BuildCombatStateFromMonsterWithRegion(monTemplate, rank, subRank, regionMonsterGuPool(req.NodeID))
 		enemy.WorldMonsterRegionID = player.CurrentRegion
 
 		player.ActiveCombat = StartCombat(tx, &enemy, &player)

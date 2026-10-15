@@ -1964,7 +1964,7 @@ func seedRegionsFromCSV(filename string) error {
 		safeY := parseInt(row, safeYIdx, entryY)
 		poolWeights := "{}"
 		if v := get(row, poolIdx); v != "" {
-			poolWeights = filterImmortalWildGus(v)
+			poolWeights = filterImmortalMonsterGus(filterImmortalWildGus(v))
 		}
 		var rulesValue any
 		if rawRules := get(row, rulesIdx); rawRules != "" {
@@ -2396,6 +2396,39 @@ func filterImmortalWildGus(poolWeights string) string {
 	return string(out)
 }
 
+// filterImmortalMonsterGus removes rank >= 6 (Tiên Cổ) gu ids from an imported
+// region pool_weights JSON monster_gus pool, since immortal Gus must only be
+// obtained from gacha/refinement/auction, never from monster drops.
+func filterImmortalMonsterGus(poolWeights string) string {
+	var pools models.ZonePools
+	if err := json.Unmarshal([]byte(poolWeights), &pools); err != nil {
+		return poolWeights
+	}
+	hasImmortal := false
+	for _, e := range pools.MonsterGus {
+		if e.GuID != "" && models.HasImmortalRank(e.GuID) {
+			hasImmortal = true
+			break
+		}
+	}
+	if !hasImmortal {
+		return poolWeights
+	}
+	kept := pools.MonsterGus[:0]
+	for _, e := range pools.MonsterGus {
+		if e.GuID != "" && models.HasImmortalRank(e.GuID) {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	pools.MonsterGus = kept
+	out, err := json.Marshal(pools)
+	if err != nil {
+		return poolWeights
+	}
+	return string(out)
+}
+
 func seedMonsterTemplatesFromCSV(filename string) error {
 	f, r, header, err := openCSV(filename)
 	if err != nil {
@@ -2405,7 +2438,8 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 	col := func(name string) int { return colIndex(header, name) }
 	idIdx, nameIdx, typeIdx := col("id"), col("name"), col("type")
 	hpIdx, attackIdx, defenseIdx := col("max_hp"), col("base_attack"), col("base_defense")
-	guIdx, itemIdx, daoIdx, masteryIdx := col("gu_inventory"), col("item_inventory"), col("dao_marks"), col("path_masteries")
+	guIdx, guPoolIdx, itemIdx := col("gu_inventory"), col("gu_pool"), col("item_inventory")
+	daoIdx, masteryIdx := col("dao_marks"), col("path_masteries")
 	aiIdx, lootIdx, descIdx, activeIdx := col("ai_profile"), col("loot_table_id"), col("description"), col("is_active")
 	capturableIdx, captureChanceIdx, hungerRateIdx := col("is_capturable"), col("capture_chance"), col("pet_hunger_per_hour")
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || hpIdx < 0 || attackIdx < 0 || defenseIdx < 0 {
@@ -2439,6 +2473,7 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 			ai = "beast_basic"
 		}
 		guInv := safeJSONArray(get(row, guIdx), "[]", fmt.Sprintf("monster %s gu_inventory", id))
+		guPool := safeJSONArray(get(row, guPoolIdx), "[]", fmt.Sprintf("monster %s gu_pool", id))
 		itemInv := safeJSONObject(get(row, itemIdx), "{}", fmt.Sprintf("monster %s item_inventory", id))
 		daoMarks := safeJSONObject(get(row, daoIdx), "{}", fmt.Sprintf("monster %s dao_marks", id))
 		masteries := safeJSONObject(get(row, masteryIdx), "{}", fmt.Sprintf("monster %s path_masteries", id))
@@ -2467,14 +2502,14 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 			lootTableID = v
 		}
 		_, err = activeCSVImportDB().Exec(`
-			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, is_capturable, capture_chance, pet_hunger_per_hour, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,NOW())
+			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, gu_pool, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, is_capturable, capture_chance, pet_hunger_per_hour, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, type=EXCLUDED.type,
 			max_hp=EXCLUDED.max_hp, base_attack=EXCLUDED.base_attack, base_defense=EXCLUDED.base_defense,
-			gu_inventory=EXCLUDED.gu_inventory, item_inventory=EXCLUDED.item_inventory, dao_marks=EXCLUDED.dao_marks, path_masteries=EXCLUDED.path_masteries,
+			gu_inventory=EXCLUDED.gu_inventory, gu_pool=EXCLUDED.gu_pool, item_inventory=EXCLUDED.item_inventory, dao_marks=EXCLUDED.dao_marks, path_masteries=EXCLUDED.path_masteries,
 			ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id, description=EXCLUDED.description, is_active=EXCLUDED.is_active,
 			is_capturable=EXCLUDED.is_capturable, capture_chance=EXCLUDED.capture_chance, pet_hunger_per_hour=EXCLUDED.pet_hunger_per_hour, updated_at=NOW()
-		`, id, get(row, nameIdx), get(row, typeIdx), maxHP, attack, defense, guInv, itemInv, daoMarks, masteries, ai, lootTableID, get(row, descIdx), active, capturable, captureChance, petHungerRate)
+		`, id, get(row, nameIdx), get(row, typeIdx), maxHP, attack, defense, guInv, guPool, itemInv, daoMarks, masteries, ai, lootTableID, get(row, descIdx), active, capturable, captureChance, petHungerRate)
 		if err != nil {
 			return fmt.Errorf("upsert monster %s: %w", id, err)
 		}
@@ -3571,8 +3606,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"monster": {
 		filename: "Monster.csv",
-		columns:  []string{"id", "name", "type", "max_hp", "base_attack", "base_defense", "gu_inventory", "item_inventory", "dao_marks", "path_masteries", "ai_profile", "loot_table_id", "description", "is_active"},
-		query:    `SELECT id, name, type, max_hp, base_attack, base_defense, COALESCE(gu_inventory::text,'[]'), COALESCE(item_inventory::text,'{}'), COALESCE(dao_marks::text,'{}'), COALESCE(path_masteries::text,'{}'), COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''), COALESCE(description,''), COALESCE(is_active,true) FROM monster_templates ORDER BY id`,
+		columns:  []string{"id", "name", "type", "max_hp", "base_attack", "base_defense", "gu_inventory", "item_inventory", "dao_marks", "path_masteries", "ai_profile", "loot_table_id", "description", "is_active", "gu_pool"},
+		query:    `SELECT id, name, type, max_hp, base_attack, base_defense, COALESCE(gu_inventory::text,'[]'), COALESCE(item_inventory::text,'{}'), COALESCE(dao_marks::text,'{}'), COALESCE(path_masteries::text,'{}'), COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''), COALESCE(description,''), COALESCE(is_active,true), COALESCE(gu_pool::text,'[]') FROM monster_templates ORDER BY id`,
 	},
 	"monster_spawn": {
 		filename: "MonsterSpawn.csv",

@@ -617,7 +617,7 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 			if cs.EnemyGuInventory != nil && len(cs.EnemyGuInventory) > 0 {
 				for _, eg := range cs.EnemyGuInventory {
 					guSpec, _ := models.GetGuAny(eg.GuID)
-					dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(cs))
+					dropChance := GetGuDropChancePercent(guSpec.Rank, guDropTierForCombat(cs))
 					if rand.Float64()*100.0 < dropChance {
 						isImmortal := guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
 						if isImmortal {
