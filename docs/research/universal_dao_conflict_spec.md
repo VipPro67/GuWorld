@@ -34,6 +34,9 @@ $$\text{Denominator} = \text{Amount}(p) + \max(1\,000, 0.1 \times \text{TotalMar
 - $\text{Amount}(p)$: Số Đạo Ngân của lưu phái thi triển.
 - $\text{TotalMarks}$: Tổng toàn bộ Đạo Ngân trên nhân vật.
 
+### 2.1b. Sàn Miễn Xung Đột Theo Tổng (`DaoConflictTotalFloor`)
+Khi $\text{TotalMarks} \le 10\,000$, tiên khiếu được xem là **miễn toàn bộ xung đột**: `conflictMult = 1.0`, không mana tax, không tán loạn, không phản phệ, `NaturalResistance = 0`, và không kích hoạt Kiếp Nạn Hỗn Loạn. Xung đột chỉ được xét khi $\text{TotalMarks} > 10\,000$. Phần khuếch đại Đạo Ngân (`DaoAmplification`) và hiệu suất cảnh giới vẫn giữ nguyên.
+
 ### 2.2. Hệ Số Phạt Đa Tu Lũy Tiến ($F_{\text{Multi}}$)
 Với $N$ là số lưu phái ngoại lai vượt ngưỡng an toàn ($> 2\%$ tổng Đạo Ngân) và $P = \frac{\text{Amount}(p)}{\text{TotalMarks}}$ là Độ Thuần Khiết:
 $$F_{\text{Multi}} = 1.0 + (N - 1)^{1.3} \times (1.0 - P)^2 \times 4.0$$
@@ -68,7 +71,7 @@ $$\text{EffectiveManaCost} = \text{BaseManaCost} \times \text{ManaTaxMultiplier}
 - **Log:** `[Thôi Động Thất Bại] Đạo ngân dị chủng nhiễu loạn chân nguyên, sát chiêu [%s] tán loạn tiêu biến!`
 
 ### 3.3. Phản Phệ Nội Thương (Internal Backfire)
-- **Điều kiện kích hoạt:** $\text{conflictMult} < 0.60$.
+- **Điều kiện kích hoạt:** $\text{conflictMult} < 0.60$ **và hành động không phải đánh thường**. Đòn đánh thường (`BASIC_ATTACK`, mặc định Strength) được **miễn phản phệ**: không tự mất HP và không bị giảm nửa sát thương do phản phệ, dù `conflictMult` thấp tới đâu. (Hệ số `conflictMult` vẫn nhân vào sát thương như bình thường.)
 - **Công thức xác suất:**
   $$\text{BackfireChance} = \min\left(0.30, \frac{0.60 - \text{conflictMult}}{0.60 - 0.08} \times 0.30\right)$$
 - **Hành vi khi kích hoạt:**
@@ -123,7 +126,7 @@ $$N_{\text{eff}} = 1.0 + \sum_{q \neq p, \, \text{amt}(q) > \text{grace}} 2.0 \t
   2. Sản lượng Tiên Nguyên tự nhiên sinh ra hàng năm (`essence_production_per_year` / `applyApertureProjection`).
 
 ### 5.2. Kích Hoạt Kiếp Nạn Hỗn Loạn (Chaotic / Hybrid Tribulation)
-- **Điều kiện kích hoạt:** $P < 0.60$ VÀ $N_{\text{eff}} \ge 2.5$.
+- **Điều kiện kích hoạt:** $P < 0.60$ VÀ $N_{\text{eff}} \ge 2.5$ VÀ $\text{TotalMarks} > 10\,000$ (tiên khiếu ở hoặc dưới sàn `DaoConflictTotalFloor` không bao giờ bị kiếp nạn hỗn loạn).
 - **Đặc điểm tai kiếp biến dị:**
   1. **Lai tạp đa thuộc tính (Hybrid Elements):** Tai kiếp kết hợp 2-3 lưu phái tương khắc mạnh nhất hiện có trong Tiên Khiếu (ví dụ: *Băng Hỏa Lôi Kiếp*, *Ám Độc Hồn Kiếp*).
   2. **Khuếch đại uy lực Quái Kiếp Nạn (Calamity Monster Power):**
@@ -192,7 +195,7 @@ $$N_{\text{eff}} = 1.0 + \sum_{q \neq p, \, \text{amt}(q) > \text{grace}} 2.0 \t
 ## 8. Trạng Thái Triển Khai (Implementation Status)
 
 - [x] **Phase 1:** `gamefx/dao_combat_profile.go` — mẫu số động, $N_{\text{eff}}$, $F_{\text{Multi}}$, sàn `0.08`, `RealmControlForLevel(4)=1.00`, helper `ManaTaxMultiplier`/`CastFailureChance`/`BackfireChance`/`DaoPurity`/`EcologyPurityFactor`/`EffectivePathCount`/`IsChaoticTribulation`; Boss/Hoang Thú `HasNonConflictingDao=true` (`combat_auto.go`).
-- [x] **Phase 2:** `simulator/engine.go` — Mana Tax, Fizzle (`DAO_CAST_FAILED`), Backfire (`DAO_BACKFIRE`, true damage + giảm 50% uy lực), log tương ứng.
+- [x] **Phase 2:** `simulator/engine.go` — Mana Tax, Fizzle (`DAO_CAST_FAILED`), Backfire (`DAO_BACKFIRE`, true damage + giảm 50% uy lực), log tương ứng. **Cập nhật sau:** đánh thường (`BASIC_ATTACK`) được miễn phản phệ; thêm sàn `DaoConflictTotalFloor = 10.000` (tổng Đạo Ngân ≤ 10k miễn toàn bộ xung đột) áp cả combat, kháng đạo tự nhiên và Kiếp Nạn Hỗn Loạn.
 - [x] **Phase 3:** `aperture_collect.go` + `services/player_service.go` + `tribulation_trigger.go` — `EcologyPurityFactor` áp vào sản lượng node và Tiên Nguyên; kiếp nạn `CHAOTIC_TRIBULATION` (khuếch đại HP/Công quái, path lai tạp, rải đều Đạo Ngân thưởng).
 - [x] **Phase 4:** `handlers/aperture_cleanse.go` + route `POST /api/immortal-aperture/cleanse-dao-marks` + cột `immortal_apertures.last_cleanse_at` + UI Purity Badge & Cleansing Modal (`ImmortalApertureView.tsx`, `apertureSlice.ts`).
 - [ ] **Hoãn:** tuỳ chọn "hoàn thành bế quan ngay" bằng Tiên Nguyên Thạch (chưa cần thiết cho v1).

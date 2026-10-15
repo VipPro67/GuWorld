@@ -320,7 +320,8 @@ Một số cặp có độ tương thích ghi đè:
 Hệ thống tính riêng theo lưu phái của từng hành động:
 
 1. **Chọn lưu phái thi triển**: lấy lưu phái đầu tiên được gắn với kỹ năng/Cổ. Nếu hành động không khai báo lưu phái, mặc định là **Strength (Lực Đạo)**. Vì vậy đánh thường thường tính theo Strength; mang Cổ Thủy không tự biến đòn đánh thường thành đòn Thủy.
-2. **Tính ngưỡng bỏ qua**: cộng toàn bộ Đạo Ngân dương thành Tổng. Ngưỡng bằng max(1.000, 2% × Tổng). Đạo Ngân ngoại hệ chỉ được đưa vào tính xung đột khi **lớn hơn** ngưỡng; bằng ngưỡng vẫn được bỏ qua.
+2. **Sàn miễn xung đột theo tổng**: nếu **Tổng Đạo Ngân ≤ 10.000**, tiên khiếu miễn toàn bộ xung đột (không suy giảm sát thương, mana tax, tán loạn, phản phệ, kháng đạo tự nhiên và Kiếp Nạn Hỗn Loạn). Xung đột chỉ được xét khi **Tổng Đạo Ngân > 10.000**.
+3. **Tính ngưỡng bỏ qua**: cộng toàn bộ Đạo Ngân dương thành Tổng. Ngưỡng bằng max(1.000, 2% × Tổng). Đạo Ngân ngoại hệ chỉ được đưa vào tính xung đột khi **lớn hơn** ngưỡng; bằng ngưỡng vẫn được bỏ qua.
 3. **Tính xung đột thô**: với mỗi phái ngoại hệ đang hoạt động, cộng Đạo Ngân ngoại hệ × (1 − độ tương thích với phái thi triển).
 4. **Tính số phái hiệu dụng**: mỗi phái ngoại hệ đóng góp 2 × (1 − độ tương thích). Khi Chân Ý của phái thi triển đạt Tông Sư trở lên, ma sát của cặp tương thích từ 0,90 trở lên giảm một nửa.
 5. **Phạt đa tu**: nhiều phái ít tương thích làm xung đột tăng theo F_multi = 1 + (N_eff − 1)^1,3 × (1 − P)^2 × 4, trong đó P = Đạo Ngân của phái thi triển / Tổng Đạo Ngân. Đây là độ thuần của **phái đang dùng**, không phải phần trăm Đạo Ngân chủ đạo hiển thị trên hồ sơ.
@@ -346,7 +347,7 @@ Hệ số M nằm trong [0,08; 1,00]. Nó nhân vào hệ số Đạo Ngân củ
 
 - **Tốn mana hơn** nếu hành động có mana cost: ManaCost × [1 + (1 − M) × 1,5]. Ở mức xung đột nặng nhất (M = 0,08), mana tốn tối đa **2,38 lần**.
 - **Kỹ năng tán loạn**: chỉ kỹ năng Cổ (GU_SKILL) và sát chiêu (KILLER_MOVE) bị kiểm tra khi M < 0,70. Xác suất = min(25%, (0,70 − M) / (0,70 − 0,08) × 25%), tối đa **25%** tại M = 0,08. Mana đã trừ trước khi gieo; nếu kỹ năng tán loạn thì lượt đó dừng và không kiểm tra phản phệ.
-- **Phản phệ nội thương**: khi M < 0,60, xác suất = min(30%, (0,60 − M) / (0,60 − 0,08) × 30%), tối đa **30%** tại M = 0,08. Kiểm tra này không giới hạn ở kỹ năng Cổ: đánh thường Strength cũng có thể phản phệ nếu hệ số Strength thấp đủ mức.
+- **Phản phệ nội thương**: khi M < 0,60, xác suất = min(30%, (0,60 − M) / (0,60 − 0,08) × 30%), tối đa **30%** tại M = 0,08. Kiểm tra này chỉ áp dụng cho **kỹ năng Cổ (GU_SKILL) và sát chiêu (KILLER_MOVE)**; **đánh thường được miễn phản phệ** (không tự mất HP, không bị giảm nửa sát thương) dù xung đột Strength nặng tới đâu.
 - **HP mất khi phản phệ**: trừ trực tiếp **8–12% HP tối đa**, không qua phòng thủ hoặc khiên ảo. Đòn đánh phát sinh phản phệ còn bị giảm thêm 50% sát thương.
 - **Bạo thể vong mạng**: không có một lần gieo xác suất chết riêng. Nhân vật chết nếu HP còn 0 sau khi trừ máu phản phệ. Một lần phản phệ thường không giết người đang đầy máu, nhưng có thể kết liễu người đã yếu; nhiều lần phản phệ làm nguy cơ cộng dồn. Bất Hoại chặn được sát thương; Bất Tử giữ tối thiểu 1 HP, trừ khi Sát Khí đủ điều kiện xuyên miễn nhiễm.
 - **Kháng Đạo Ngân tự nhiên khi phòng thủ**: khi nhận đòn từ phái p, hệ thống cộng Đạo Ngân phòng thủ theo `DefConflict = Σ(ĐạoNgân_q × (1 − TươngThích(p,q)))`, rồi tính `Kháng = 0,30 × DefConflict / (DefConflict + 50.000)`. Kháng tăng dần và tiến gần tối đa 30%; Cổ miễn xung đột cũng bỏ qua lớp kháng này. Cơ chế phòng thủ này riêng với phản phệ tự trừ HP của người ra đòn.
@@ -367,7 +368,7 @@ Các ví dụ giả định không có bonus khác, Chân Ý của phái đang d
 $$\text{EcologyPurityFactor} = \max\left(0.25,\ 1.0 - (0.70 - P) \times 1.25\right)$$
 (Chí Tôn Tiên Thai / Đạo Ngân Bất Tương Xung miễn nhiễm suy thoái này.)
 
-**Kiếp Nạn Hỗn Loạn (Chaotic Tribulation)**: kích hoạt khi $P < 0.60$ và $N_{\text{eff}} \ge 2.5$. Tai kiếp lai tạp 2–3 lưu phái, quái được khuếch đại `1.0 + (1.0 − P) × 0.75` HP/Công, phá node mạnh hơn, và thưởng Đạo Ngân rải đều theo các hệ thay vì dồn 70% phái chính — tạo **Vòng Xoáy Tha Hóa** nếu không chủ động thanh tẩy.
+**Kiếp Nạn Hỗn Loạn (Chaotic Tribulation)**: kích hoạt khi $P < 0.60$ và $N_{\text{eff}} \ge 2.5$, **đồng thời Tổng Đạo Ngân phải lớn hơn sàn 10.000** (tiên khiếu ở hoặc dưới sàn 10.000 không bao giờ bị kiếp nạn hỗn loạn). Tai kiếp lai tạp 2–3 lưu phái, quái được khuếch đại `1.0 + (1.0 − P) × 0.75` HP/Công, phá node mạnh hơn, và thưởng Đạo Ngân rải đều theo các hệ thay vì dồn 70% phái chính — tạo **Vòng Xoáy Tha Hóa** nếu không chủ động thanh tẩy.
 
 **Thanh Đạo Tẩy Thể**: dùng Tiên Nguyên Thạch để bóc tách Đạo Ngân ngoại hệ, nâng cao Độ Thuần Khiết:
 - Chi phí: **1 Tiên Nguyên Thạch / 100 Đạo Ngân tạp**.

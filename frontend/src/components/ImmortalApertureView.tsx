@@ -2379,6 +2379,9 @@ return (
                       <p className="text-slate-400 leading-relaxed">
                         Ngưỡng an toàn ngoại hệ là <strong className="text-cyan-400">{daoNgan?.grace_threshold ? daoNgan.grace_threshold.toLocaleString() : "1.000"} Đạo Ngân</strong>. Vượt qua ngưỡng này sẽ gây xung đột nội thể làm suy giảm bội số công kích.
                       </p>
+                      <p className="text-slate-400 leading-relaxed">
+                        Khi <strong className="text-amber-300">tổng Đạo Ngân ≤ {(daoNgan?.conflict_floor ?? 10000).toLocaleString()}</strong>, tiên khiếu được xem là <strong className="text-emerald-400">miễn toàn bộ xung đột</strong> (không suy giảm sát thương, không tán loạn, không phản phệ, không kháng đạo tự nhiên và không kích hoạt Kiếp Nạn Hỗn Loạn).
+                      </p>
                     </div>
 
                     <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg space-y-1">
@@ -2587,8 +2590,10 @@ return (
                   </div>
                   <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
                     <span>Ngưỡng An Toàn Ngoại Hệ:</span>
-                    <span className="font-bold text-cyan-300">
-                      {daoNgan?.grace_threshold ? daoNgan.grace_threshold.toLocaleString() : "1.000"} Đạo
+                    <span className={`font-bold ${daoNgan?.below_conflict_floor ? "text-emerald-400" : "text-cyan-300"}`}>
+                      {daoNgan?.below_conflict_floor
+                        ? `Miễn xung đột (tổng ≤ ${(daoNgan?.conflict_floor ?? 10000).toLocaleString()})`
+                        : `${daoNgan?.grace_threshold ? daoNgan.grace_threshold.toLocaleString() : "1.000"} Đạo`}
                     </span>
                   </div>
                 </div>

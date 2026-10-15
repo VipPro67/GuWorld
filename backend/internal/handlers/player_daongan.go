@@ -60,6 +60,8 @@ type DaoNganResult struct {
 	MaxPath                 string              `json:"max_path"`                // path with highest multiplier
 	DominantPath            string              `json:"dominant_path"`           // path with most dao marks
 	GraceThreshold          int64               `json:"grace_threshold"`         // safe foreign mark threshold
+	ConflictFloor           int64               `json:"conflict_floor"`          // total marks floor below which dao conflict is ignored
+	BelowConflictFloor      bool                `json:"below_conflict_floor"`    // true when total marks <= ConflictFloor (conflict-free)
 	HasNonConflictingDao    bool                `json:"has_non_conflicting_dao"` // non-conflicting dao marks trait
 	DaoConflictReductionPct float64             `json:"dao_conflict_reduction_pct"`
 	Paths                   []DaoNganPathDetail `json:"paths"` // per-path breakdown
@@ -96,6 +98,8 @@ func CalculateDaoNganDetailedWithReduction(
 	profile := gamefx.BuildDaoCombatProfileWithReduction(daoMarks, pathMasteries, hasNonConflicting, conflictReductionPct, daoBonus)
 	result.DominantPath = profile.DominantPath
 	result.GraceThreshold = profile.GraceThreshold
+	result.ConflictFloor = gamefx.DaoConflictTotalFloor
+	result.BelowConflictFloor = profile.BelowConflictFloor
 	result.HasNonConflictingDao = profile.HasNonConflictingDao
 	result.DaoConflictReductionPct = profile.ConflictReductionPct
 

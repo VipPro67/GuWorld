@@ -233,6 +233,12 @@ func DaoAmplification(marks int64) float64 {
 	return 1.0 + float64(marks)/100.0
 }
 
+// DaoConflictTotalFloor is the minimum total Dao Mark count required before any
+// dao conflict is considered. Apertures at or below this floor are treated as
+// conflict-free: no damage penalty, mana tax, cast failure, backfire, natural
+// resistance (đạo kháng tự nhiên), or chaotic tribulation.
+const DaoConflictTotalFloor int64 = 10000
+
 // RealmControlForLevel returns the conflict reduction percentage for an attainment level (0 to 4).
 //
 // Level 0 (Ordinary):            0%
@@ -402,9 +408,11 @@ func EffectivePathCount(marks map[string]int64, levels map[string]int) float64 {
 
 // IsChaoticTribulation reports whether an aperture's Dao Mark composition forces
 // the Chaotic/Hybrid tribulation (spec §5.2): purity P < 0.60 and N_eff >= 2.5.
+// Apertures at or below DaoConflictTotalFloor never trigger the chaotic
+// tribulation, mirroring the combat conflict floor.
 func IsChaoticTribulation(marks map[string]int64, levels map[string]int) bool {
 	_, total, purity := DaoPurity(marks)
-	if total == 0 || purity >= 0.60 {
+	if total == 0 || total <= DaoConflictTotalFloor || purity >= 0.60 {
 		return false
 	}
 	return EffectivePathCount(marks, levels) >= 2.5
@@ -430,6 +438,7 @@ type PathCombatModifiers struct {
 type DaoCombatProfile struct {
 	TotalDaoMarks        int64                          `json:"total_dao_marks"`
 	GraceThreshold       int64                          `json:"grace_threshold"`
+	BelowConflictFloor   bool                           `json:"below_conflict_floor"`
 	HasNonConflictingDao bool                           `json:"has_non_conflicting_dao"`
 	ConflictReductionPct float64                        `json:"conflict_reduction_pct"`
 	DominantPath         string                         `json:"dominant_path"`
@@ -502,6 +511,7 @@ func BuildDaoCombatProfileWithReduction(
 	profile := &DaoCombatProfile{
 		TotalDaoMarks:        totalMarks,
 		GraceThreshold:       graceThreshold,
+		BelowConflictFloor:   totalMarks <= DaoConflictTotalFloor,
 		HasNonConflictingDao: hasNonConflictingDao,
 		ConflictReductionPct: conflictReductionPct,
 		DominantPath:         dominantPath,
@@ -518,6 +528,26 @@ func BuildDaoCombatProfileWithReduction(
 		purity := 0.0
 		if totalMarks > 0 {
 			purity = float64(amt) / float64(totalMarks)
+		}
+
+		// Apertures at or below the total floor are conflict-free: keep the raw
+		// Dao amplification but neutralise every conflict-driven penalty and the
+		// natural defensive resistance derived from mixed marks.
+		if profile.BelowConflictFloor {
+			return PathCombatModifiers{
+				Path:                 p,
+				DaoMarks:             amt,
+				DaoAmplification:     daoAmp,
+				AttainmentLevel:      lvl,
+				AttainmentName:       PathMasteryLevelName(lvl),
+				RealmControl:         realmCtrl,
+				RealmEfficiency:      realmEff,
+				InternalConflictMult: 1.0,
+				NaturalResistance:    0.0,
+				Purity:               purity,
+				EffectivePathCount:   1.0,
+				MultiPathFactor:      1.0,
+			}
 		}
 
 		// Raw offensive conflict against active foreign marks (spec §2.3/§4.2).

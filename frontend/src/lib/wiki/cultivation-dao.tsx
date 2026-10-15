@@ -29,6 +29,9 @@ export const cultivationDaoPages: WikiPage[] = [
             <Zap className="w-4 h-4 text-amber-400" /> Cách hệ thống tính xung đột
           </h3>
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
+            <p className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 text-emerald-200">
+              <strong>Sàn miễn xung đột:</strong> nếu <strong>tổng Đạo Ngân ≤ 10.000</strong>, tiên khiếu được xem là miễn toàn bộ xung đột — không suy giảm sát thương, không tăng phí Chân Nguyên, không tán loạn, không phản phệ, không kháng đạo tự nhiên và không kích hoạt Kiếp Nạn Hỗn Loạn. Xung đột chỉ bắt đầu được xét khi tổng Đạo Ngân <strong>lớn hơn 10.000</strong>.
+            </p>
             <ol className="list-decimal list-inside space-y-2">
               <li><strong>Chọn lưu phái của hành động.</strong> Hệ thống dùng lưu phái được khai báo đầu tiên trên kỹ năng/Cổ; nếu không có thì dùng Strength.</li>
               <li><strong>Tính ngưỡng dung nạp:</strong> ngưỡng = max(1.000, 2% tổng Đạo Ngân dương). Đạo Ngân của phái khác chỉ gây xung đột khi <strong>lớn hơn</strong> ngưỡng; bằng ngưỡng vẫn được bỏ qua.</li>
@@ -82,7 +85,7 @@ export const cultivationDaoPages: WikiPage[] = [
             </div>
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-red-500/20 space-y-2">
               <h4 className="font-bold text-red-300">Phản phệ nội thương</h4>
-              <p>Khi M &lt; 0,60, mỗi hành động có tối đa 30% xác suất phản phệ tại M = 0,08. Đánh thường cũng có thể bị phản phệ nếu hành động được tính theo Strength và xung đột Strength đủ nặng. Khi xảy ra, người ra đòn mất trực tiếp 8–12% HP tối đa; đòn đó gây một nửa sát thương.</p>
+              <p>Khi M &lt; 0,60 và tổng Đạo Ngân đã vượt sàn 10.000, kỹ năng Cổ và sát chiêu có tối đa 30% xác suất phản phệ tại M = 0,08. <strong>Đánh thường được miễn phản phệ</strong>: dù xung đột Strength nặng tới đâu, hành động đánh thường cũng không tự mất HP và không bị giảm nửa sát thương. Khi phản phệ xảy ra với kỹ năng/sát chiêu, người ra đòn mất trực tiếp 8–12% HP tối đa; đòn đó gây một nửa sát thương.</p>
             </div>
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-blue-500/20 space-y-2">
               <h4 className="font-bold text-blue-300 flex items-center gap-2"><Shield className="w-4 h-4" /> Bạo thể vong mạng</h4>
@@ -97,19 +100,19 @@ export const cultivationDaoPages: WikiPage[] = [
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Ví dụ thực tế</h3>
           <div className="space-y-3">
             <article className="p-4 rounded-xl bg-[var(--bg-card)] border border-emerald-500/20">
-              <h4 className="font-bold text-emerald-300">Hỏa 1.000, Thủy 0 — dùng kỹ năng Thủy</h4>
-              <p>Tổng Đạo Ngân = 1.000 nên ngưỡng cũng là 1.000. Hỏa bằng ngưỡng, không lớn hơn ngưỡng, vì vậy không gây xung đột: M = 1, không tăng phí, không tán loạn và không phản phệ. Đòn Thủy cũng không được khuếch đại bởi Đạo Ngân Thủy vì nhân vật có 0 Đạo Ngân Thủy.</p>
+              <h4 className="font-bold text-emerald-300">Hỏa 5.000, Thủy 5.000 (tổng 10.000) — miễn xung đột</h4>
+              <p>Tổng Đạo Ngân bằng đúng sàn 10.000 nên tiên khiếu miễn toàn bộ xung đột: M = 1, không tăng phí, không tán loạn và không phản phệ, dù Hỏa–Thủy tương khắc 0,55. Phần khuếch đại Đạo Ngân của từng phái vẫn được giữ nguyên.</p>
             </article>
             <article className="p-4 rounded-xl bg-[var(--bg-card)] border border-rose-500/20">
-              <h4 className="font-bold text-rose-300">Hỏa 1.001, Thủy 0 — dùng kỹ năng Thủy</h4>
-              <p>Hỏa vượt ngưỡng 1.000 một điểm. Do Hỏa–Thủy tương thích 0,55, M xấp xỉ 0,236 nếu không có Chân Ý/bonus khác. Phí Chân Nguyên khoảng 2,15 lần; kỹ năng có 18,7% nguy cơ tán loạn. Nếu qua bước đó, phản phệ có khoảng 21,0% xác suất và gây mất 8–12% HP tối đa.</p>
+              <h4 className="font-bold text-rose-300">Hỏa 6.000, Thủy 6.000 (tổng 12.000) — dùng kỹ năng Thủy</h4>
+              <p>Tổng Đạo Ngân vượt sàn nên xung đột được xét. Do Hỏa–Thủy tương thích 0,55 và Chân Ý ở Phàm Thai, M xấp xỉ 0,47. Phí Chân Nguyên khoảng 1,80 lần; kỹ năng có khoảng 9% nguy cơ tán loạn. Nếu qua bước đó, phản phệ có khoảng 7% xác suất và gây mất 8–12% HP tối đa.</p>
             </article>
             <article className="p-4 rounded-xl bg-[var(--bg-card)] border border-amber-500/20">
-              <h4 className="font-bold text-amber-300">Hỏa 2.000, Strength 0 — đánh thường</h4>
-              <p>Đánh thường không khai báo lưu phái nên dùng Strength; Cổ Thủy trong túi/trang bị không đổi quy tắc đó. Hỏa–Strength tương thích 0,85 nên xung đột nhẹ hơn Hỏa–Thủy. Với Chân Ý Strength ở Phàm Thai và không có bonus khác, M xấp xỉ 0,532: đánh thường không tán loạn, nhưng có khoảng 4% nguy cơ phản phệ mỗi đòn. Nếu đòn có phí Chân Nguyên, phí khoảng 1,70 lần.</p>
+              <h4 className="font-bold text-amber-300">Hỏa 12.000, Strength 0 — đánh thường</h4>
+              <p>Đánh thường không khai báo lưu phái nên dùng Strength; Cổ Thủy trong túi/trang bị không đổi quy tắc đó. Tổng vượt sàn nên xung đột vẫn được xét và hệ số M nhân vào sát thương đòn (suy giảm công kích), <strong>nhưng đánh thường không bao giờ phản phệ</strong>: không tự mất HP và không bị giảm nửa sát thương do phản phệ.</p>
             </article>
             <article className="p-4 rounded-xl bg-[var(--bg-card)] border border-indigo-500/20">
-              <h4 className="font-bold text-indigo-300">Cùng Hỏa 2.000, nhưng Chân Ý Strength Vô Thượng</h4>
+              <h4 className="font-bold text-indigo-300">Cùng Hỏa 12.000, nhưng Chân Ý Strength Vô Thượng</h4>
               <p>Đòn đánh thường vẫn dùng Strength, và Chân Ý Strength Vô Thượng điều hòa 100% xung đột cho hành động đó nên M = 1. Kỹ năng Thủy vẫn phải xét Chân Ý Thủy riêng.</p>
             </article>
           </div>

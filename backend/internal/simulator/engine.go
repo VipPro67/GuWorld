@@ -1218,7 +1218,9 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 
 			// Backfire: violent dao conflict wounds the caster directly (true damage).
-			if conflictMult < 0.60 {
+			// Basic attacks (đánh thường) are exempt: the fallback path defaults to
+			// Strength, so mixed-dao casters would otherwise self-wound every turn.
+			if conflictMult < 0.60 && a.ActionType != "BASIC_ATTACK" {
 				if chance := gamefx.BackfireChance(conflictMult); chance > 0 && rng.Float64() < chance {
 					satKhi := satKhiPiercesImmunity(actor)
 					if !isImmuneToDamage(actor, satKhi) {

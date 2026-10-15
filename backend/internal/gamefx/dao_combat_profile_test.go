@@ -247,6 +247,50 @@ func TestDaoConflictCastHelpers(t *testing.T) {
 	}
 }
 
+func TestDaoConflictTotalFloor(t *testing.T) {
+	// At or below the total floor, all conflict is neutralised while the raw
+	// Dao amplification is preserved.
+	below := BuildDaoCombatProfile(map[string]int64{"fire": 5000, "water": 5000}, nil, false, nil)
+	if !below.BelowConflictFloor {
+		t.Fatalf("expected BelowConflictFloor for total 10000, got false")
+	}
+	if _, _, c := below.GetOffensiveFactors("fire"); c != 1.0 {
+		t.Errorf("below floor: conflictMult = %v, want 1.0", c)
+	}
+	if r := below.GetDefensiveResistance("water"); r != 0.0 {
+		t.Errorf("below floor: natural resistance = %v, want 0.0", r)
+	}
+	if amp, _, _ := below.GetOffensiveFactors("fire"); amp != 51.0 {
+		t.Errorf("below floor: daoAmp = %v, want 51.0 (amplification must be kept)", amp)
+	}
+
+	// Above the floor the normal conflict math applies again.
+	above := BuildDaoCombatProfile(map[string]int64{"fire": 6000, "water": 6000}, nil, false, nil)
+	if above.BelowConflictFloor {
+		t.Fatalf("expected not BelowConflictFloor for total 12000, got true")
+	}
+	if _, _, c := above.GetOffensiveFactors("fire"); c >= 1.0 {
+		t.Errorf("above floor: conflictMult = %v, want < 1.0", c)
+	}
+	if r := above.GetDefensiveResistance("water"); r <= 0.0 {
+		t.Errorf("above floor: natural resistance = %v, want > 0.0", r)
+	}
+
+	// Chaotic tribulation is gated by the same floor.
+	belowFloorMarks := map[string]int64{
+		"fire": 1600, "water": 1600, "light": 1600, "dark": 1600, "wood": 1600, "poison": 1600,
+	}
+	if IsChaoticTribulation(belowFloorMarks, nil) {
+		t.Error("chaotic tribulation must not trigger at or below the total floor")
+	}
+	aboveFloorMarks := map[string]int64{
+		"fire": 2000, "water": 2000, "light": 2000, "dark": 2000, "wood": 2000, "poison": 2000,
+	}
+	if !IsChaoticTribulation(aboveFloorMarks, nil) {
+		t.Error("chaotic tribulation must still trigger above the total floor")
+	}
+}
+
 func TestEcologyPurityFactor(t *testing.T) {
 	cases := []struct {
 		purity, want float64

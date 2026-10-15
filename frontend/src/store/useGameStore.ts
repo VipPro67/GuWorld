@@ -558,6 +558,8 @@ export interface DaoNganResult {
   max_path: string;
   dominant_path: string;
   grace_threshold: number;
+  conflict_floor: number;
+  below_conflict_floor: boolean;
   has_non_conflicting_dao: boolean;
   dao_conflict_reduction_pct: number;
   paths: DaoNganPathDetail[];
