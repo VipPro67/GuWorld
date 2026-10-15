@@ -121,15 +121,14 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		masteryMultiplier = 1.0 // integrated in DaoCombatProfile
 	}
 
-	// Gu skill damage scales with player's base attack so it stays relevant vs basic attack
 	if baseDmg > 0 {
-		effectiveDamage = (baseDmg + actor.BaseAttack) * powerScale * masteryMultiplier * daoMultiplier
+		effectiveDamage = baseDmg * powerScale * masteryMultiplier * daoMultiplier
 	} else {
 		effectiveDamage = 0
 	}
 	effectiveDamage *= gamefx.PathDamageMultiplierForPaths(guSpec.Path, pathDamage)
 	if baseDef > 0 {
-		effectiveDefense = (baseDef + actor.BaseDefense) * powerScale * masteryMultiplier * daoMultiplier
+		effectiveDefense = baseDef * powerScale * masteryMultiplier * daoMultiplier
 	}
 	cost := gamefx.EnergyCostForCombatant(actor, guSpec)
 

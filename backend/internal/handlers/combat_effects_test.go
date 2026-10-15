@@ -42,8 +42,8 @@ func TestCalculateGuEffectForCombatant_ShieldFlat(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Expected: (baseDef (20) + BaseDefense (10)) * powerScale (0.70) = 21.0
-	expectedDef := (20.0 + 10.0) * 0.70
+	// Expected: baseDef (20) * powerScale (0.70) = 14.0
+	expectedDef := 20.0 * 0.70
 	if def < expectedDef-0.001 || def > expectedDef+0.001 {
 		t.Fatalf("expected effectiveDefense ~ %.2f, got %.2f", expectedDef, def)
 	}
