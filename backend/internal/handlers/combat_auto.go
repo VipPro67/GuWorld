@@ -208,6 +208,11 @@ func AutoCombatStart(c *gin.Context) {
 		Detail: fmt.Sprintf("=== %s ===", enemyTypeName),
 	}}, logs...)
 
+	// Capture the battle region before the outcome branch: a defeat respawns the
+	// player (applyAutoCombatDefeat mutates CurrentRegion), and combat history
+	// must record where the fight happened, not the respawn hub.
+	historyRegion := player.CurrentRegion
+
 	if alliesAlive {
 		if isVirtual {
 			if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 50); err != nil {
@@ -388,10 +393,10 @@ func AutoCombatStart(c *gin.Context) {
 			summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
 			if enemyType == "PVP" {
 				attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
-				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summary, combatantInfos, enemyName, player.Username, player.CurrentRegion)
+				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summary, combatantInfos, enemyName, player.Username, historyRegion)
 			} else {
 				// PVE defeats only: the replay the player wants to review afterwards.
-				SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, player.CurrentRegion)
+				SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, historyRegion)
 			}
 		}()
 	}

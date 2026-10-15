@@ -162,6 +162,11 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 
 	summary := make(map[string]interface{})
 
+	// Capture the battle region before the outcome branch: a defeat respawns the
+	// player (applyAutoCombatDefeat mutates CurrentRegion), and combat history
+	// must record where the fight happened, not the respawn hub.
+	historyRegion := player.CurrentRegion
+
 	if alliesAlive {
 		if isVirtual {
 			if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 50); err != nil {
@@ -351,7 +356,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 		clearedEnemyName = player.ActiveCombat.EnemyName
 		clearedEnemyTemplateID = player.ActiveCombat.EnemyTemplateID
 	}
-	historyPlayerID, historyUsername, historyRegion := player.ID, player.Username, player.CurrentRegion
+	historyPlayerID, historyUsername := player.ID, player.Username
 	*afterCommit = func() {
 		if publishClearedCell {
 			publishCombatClearedCell(clearedRegion, clearedX, clearedY, clearedPlayerID, clearedEnemyName, clearedEnemyTemplateID)
