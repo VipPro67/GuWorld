@@ -1243,58 +1243,6 @@ export interface MineSlot {
 
 export const AUTHENTICATED_SESSION = "cookie-session";
 
-// ── apiFetch: wraps authFetch with automatic error toasts ────────────
-// Usage: const res = await apiFetch(url, opts)
-//   opts.silent = true  → skip auto-toast (handler manages errors itself)
-//   opts.raw     = true → return raw Response without auto error handling
-interface ApiFetchInit extends RequestInit {
-  silent?: boolean;
-  raw?: boolean;
-}
-
-const apiFetch = async (input: RequestInfo | URL, init: ApiFetchInit = {}): Promise<Response> => {
-  const { silent, raw, ...fetchInit } = init;
-  try {
-    const response = await authFetch(input, fetchInit);
-
-    if (raw) return response;
-
-    if (response.status === 401) {
-      if (!silent) {
-        const state = useGameStore.getState();
-        let errorMsg = "Phiên làm việc hết hạn. Vui lòng đăng nhập lại.";
-        try {
-          const errData = await response.clone().json();
-          if (errData.error) {
-            errorMsg = errData.error;
-          }
-        } catch {}
-        state.addToast(errorMsg, "error");
-        state.logout();
-      }
-      return response;
-    }
-
-    if (!response.ok && !silent) {
-      let errorMsg = "Lỗi từ server";
-      try {
-        const errData = await response.clone().json();
-        errorMsg = errData.error || errorMsg;
-      } catch {}
-      useGameStore.getState().addToast(errorMsg, "error");
-    }
-
-    return response;
-  } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-    if (!silent) {
-      const msg = err?.name === "AbortError" ? "Yêu cầu đã hết thời gian" : (err.message || "Lỗi kết nối");
-      useGameStore.getState().addToast(msg, "error");
-    }
-    throw err;
-  }
-};
-
 const PLAYER_EVENT_TYPES = [
   "mana.snapshot",
   "player.updated",
