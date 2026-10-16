@@ -17,7 +17,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -54,15 +53,6 @@ var gachaPools = []GachaPool{
 			{Type: "gu_rank", ID: "3", Min: 1, Max: 1, Weight: 2.0, Label: "Cổ Trùng R3"},
 			{Type: "gu_rank", ID: "4", Min: 1, Max: 1, Weight: 3.0, Label: "Cổ Trùng R4"},
 			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R5"},
-			{Type: "recipe_rank", ID: "1", Min: 1, Max: 1, Weight: 18.0, Label: "Cổ Phương R1"},
-			{Type: "recipe_rank", ID: "2", Min: 1, Max: 1, Weight: 9.0, Label: "Cổ Phương R2"},
-			{Type: "recipe_rank", ID: "3", Min: 1, Max: 1, Weight: 3.0, Label: "Cổ Phương R3"},
-			{Type: "recipe_rank", ID: "4", Min: 1, Max: 1, Weight: 4.5, Label: "Cổ Phương R4"},
-			{Type: "recipe_rank", ID: "5", Min: 1, Max: 1, Weight: 1.5, Label: "Cổ Phương R5"},
-			{Type: "recipe_rank", ID: "6", Min: 1, Max: 1, Weight: 0.5, Label: "Cổ Phương R6"},
-			{Type: "recipe_rank", ID: "7", Min: 1, Max: 1, Weight: 0.2, Label: "Cổ Phương R7"},
-			{Type: "recipe_rank", ID: "8", Min: 1, Max: 1, Weight: 0.1, Label: "Cổ Phương R8"},
-			{Type: "recipe_rank", ID: "9", Min: 1, Max: 1, Weight: 0.05, Label: "Cổ Phương R9"},
 		},
 	},
 	{
@@ -79,12 +69,42 @@ var gachaPools = []GachaPool{
 			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R5"},
 			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.00001, Label: "Cổ Trùng R6"},
 			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.0000001, Label: "Cổ Trùng R7"},
-			{Type: "recipe_rank", ID: "4", Min: 1, Max: 1, Weight: 4.5, Label: "Cổ Phương R4"},
-			{Type: "recipe_rank", ID: "5", Min: 1, Max: 1, Weight: 1.5, Label: "Cổ Phương R5"},
-			{Type: "recipe_rank", ID: "6", Min: 1, Max: 1, Weight: 0.5, Label: "Cổ Phương R6"},
-			{Type: "recipe_rank", ID: "7", Min: 1, Max: 1, Weight: 0.2, Label: "Cổ Phương R7"},
-			{Type: "recipe_rank", ID: "8", Min: 1, Max: 1, Weight: 0.1, Label: "Cổ Phương R8"},
-			{Type: "recipe_rank", ID: "9", Min: 1, Max: 1, Weight: 0.05, Label: "Cổ Phương R9"},
+		},
+	},
+	{
+		ID:          "da_thuong_pham",
+		Name:        "Đá Thượng Phẩm",
+		Description: "Mở Đá Thượng Phẩm, tỉ lệ ra nguyên liệu và Cổ trùng R4-R5 cao hơn hẳn. Không có bí phương, Thọ Nguyên.",
+		CostType:    "primeval_stones",
+		CostAmount:  20000,
+		Rewards: []GachaRewardItem{
+			{Type: "item", Min: 1, Max: 1, Weight: 30.0, Label: "Vật liệu"},
+			{Type: "food", Min: 1, Max: 1, Weight: 25.0, Label: "Cổ lương"},
+			{Type: "primeval_stones", Min: 5000, Max: 20000, Weight: 8.0, Label: "5.000~20.000 Nguyên Thạch"},
+			{Type: "gu_rank", ID: "1", Min: 1, Max: 1, Weight: 8.0, Label: "Cổ Trùng R1"},
+			{Type: "gu_rank", ID: "2", Min: 1, Max: 1, Weight: 7.0, Label: "Cổ Trùng R2"},
+			{Type: "gu_rank", ID: "3", Min: 1, Max: 1, Weight: 5.0, Label: "Cổ Trùng R3"},
+			{Type: "gu_rank", ID: "4", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R4"},
+			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 2.0, Label: "Cổ Trùng R5"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.00005, Label: "Cổ Trùng R6"},
+		},
+	},
+	{
+		ID:          "da_cuc_pham",
+		Name:        "Đá Cực Phẩm",
+		Description: "Mở Đá Cực Phẩm, tỉ lệ ra nguyên liệu dồi dào cùng cơ hội chạm tới Cổ trùng R6-R7. Không có bí phương, Thọ Nguyên.",
+		CostType:    "primeval_stones",
+		CostAmount:  100000,
+		Rewards: []GachaRewardItem{
+			{Type: "item", Min: 1, Max: 1, Weight: 32.0, Label: "Vật liệu"},
+			{Type: "food", Min: 1, Max: 1, Weight: 28.0, Label: "Cổ lương"},
+			{Type: "primeval_stones", Min: 20000, Max: 80000, Weight: 7.0, Label: "20.000~80.000 Nguyên Thạch"},
+			{Type: "gu_rank", ID: "2", Min: 1, Max: 1, Weight: 6.0, Label: "Cổ Trùng R2"},
+			{Type: "gu_rank", ID: "3", Min: 1, Max: 1, Weight: 6.0, Label: "Cổ Trùng R3"},
+			{Type: "gu_rank", ID: "4", Min: 1, Max: 1, Weight: 5.0, Label: "Cổ Trùng R4"},
+			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 3.0, Label: "Cổ Trùng R5"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.0002, Label: "Cổ Trùng R6"},
+			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.000002, Label: "Cổ Trùng R7"},
 		},
 	},
 }
@@ -137,12 +157,12 @@ type weightedRecipeEntry struct {
 }
 
 type precomputedPools struct {
-	guByRank          map[string][]weightedGuEntry // "1,2,3" → pool
-	materials         []weightedMaterialEntry
-	recipesByRank     map[string][]weightedRecipeEntry // "1" → pool
-	totalByRank       map[string]float64
-	totalRecipeByRank map[string]float64
-	totalMat          float64
+	guByRank      map[string][]weightedGuEntry // "1,2,3" → pool
+	materials     []weightedMaterialEntry
+	foods         []weightedMaterialEntry
+	recipesByRank map[string][]weightedRecipeEntry // "all" → pool (mine chest)
+	totalMat      float64
+	totalFood     float64
 }
 
 var globalPrecomputedPools *precomputedPools
@@ -166,21 +186,23 @@ func getPrecomputedPools() *precomputedPools {
 	}
 
 	pc := &precomputedPools{
-		guByRank:          make(map[string][]weightedGuEntry),
-		recipesByRank:     make(map[string][]weightedRecipeEntry),
-		totalByRank:       make(map[string]float64),
-		totalRecipeByRank: make(map[string]float64),
+		guByRank:      make(map[string][]weightedGuEntry),
+		recipesByRank: make(map[string][]weightedRecipeEntry),
 	}
 
-	// Build material pool once
+	// Build material and food pools once
 	for id, spec := range models.ItemRegistry {
-		if spec.Type != "Material" {
+		w := rankDropMultiplier(effectiveDropLevel(spec.Rank, spec.Rarity))
+		if w <= 0 {
 			continue
 		}
-		w := rankDropMultiplier(effectiveDropLevel(spec.Rank, spec.Rarity))
-		if w > 0 {
+		switch spec.Type {
+		case "Material":
 			pc.materials = append(pc.materials, weightedMaterialEntry{id: id, weight: w})
 			pc.totalMat += w
+		case "Food":
+			pc.foods = append(pc.foods, weightedMaterialEntry{id: id, weight: w})
+			pc.totalFood += w
 		}
 	}
 
@@ -188,7 +210,6 @@ func getPrecomputedPools() *precomputedPools {
 	rankFilters := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "1,2,3", "3,4", "4,5", "6,7", "8,9"}
 	for _, rf := range rankFilters {
 		var pool []weightedGuEntry
-		var total float64
 		rankSet := make(map[int]bool)
 		for _, rs := range strings.Split(rf, ",") {
 			r := 0
@@ -201,16 +222,14 @@ func getPrecomputedPools() *precomputedPools {
 					w := guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
 					if w > 0 {
 						pool = append(pool, weightedGuEntry{id: id, weight: w, rank: spec.Rank})
-						total += w
 					}
 				}
 			}
 		}
 		pc.guByRank[rf] = pool
-		pc.totalByRank[rf] = total
 	}
 
-	// Build Recipe pools by rank
+	// Build the recipe pool for open_mine_chest (item effect).
 	rows, err := db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
 	if err == nil {
 		defer rows.Close()
@@ -218,22 +237,14 @@ func getPrecomputedPools() *precomputedPools {
 			var targetGuID string
 			var targetRank, variant int
 			if err := rows.Scan(&targetGuID, &targetRank, &variant); err == nil {
-				rID := fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant)
 				weight := rankDropMultiplier(targetRank)
 				if weight > 0 {
-					rankStr := fmt.Sprintf("%d", targetRank)
-					entry := weightedRecipeEntry{
-						id:         rID,
+					pc.recipesByRank["all"] = append(pc.recipesByRank["all"], weightedRecipeEntry{
+						id:         fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant),
 						targetGuID: targetGuID,
 						targetRank: targetRank,
 						weight:     weight,
-					}
-					pc.recipesByRank[rankStr] = append(pc.recipesByRank[rankStr], entry)
-					pc.totalRecipeByRank[rankStr] += weight
-
-					// Also add to an "all_recipes" bucket for open_mine_chest
-					pc.recipesByRank["all"] = append(pc.recipesByRank["all"], entry)
-					pc.totalRecipeByRank["all"] += weight
+					})
 				}
 			}
 		}
@@ -274,22 +285,6 @@ func (pc *precomputedPools) rollGu(rankKey string, excludedImmortal map[string]b
 	return "", 0
 }
 
-func (pc *precomputedPools) rollRecipe(rankKey string) (string, string, int) {
-	pool := pc.recipesByRank[rankKey]
-	total := pc.totalRecipeByRank[rankKey]
-	if len(pool) == 0 || total <= 0 {
-		return "", "", 0
-	}
-	r := rand.Float64() * total
-	for _, rec := range pool {
-		r -= rec.weight
-		if r <= 0 {
-			return rec.id, rec.targetGuID, rec.targetRank
-		}
-	}
-	return pool[0].id, pool[0].targetGuID, pool[0].targetRank
-}
-
 func (pc *precomputedPools) rollMaterial() string {
 	if len(pc.materials) == 0 || pc.totalMat <= 0 {
 		return ""
@@ -302,6 +297,20 @@ func (pc *precomputedPools) rollMaterial() string {
 		}
 	}
 	return pc.materials[0].id
+}
+
+func (pc *precomputedPools) rollFood() string {
+	if len(pc.foods) == 0 || pc.totalFood <= 0 {
+		return ""
+	}
+	r := rand.Float64() * pc.totalFood
+	for _, f := range pc.foods {
+		r -= f.weight
+		if r <= 0 {
+			return f.id
+		}
+	}
+	return pc.foods[0].id
 }
 
 // ── Immortal Gu cache (5-minute TTL) ────────────────────────────────
@@ -410,47 +419,14 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	// Load player's unlocked recipes
-	recipes, err := RecipeSvc.ListByPlayerContext(c.Request.Context(), tx, player.ID.String())
-	if err != nil {
-		logger.S.Errorf("gacha: load recipes failed for player %s: %v", player.ID, err)
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database đang bận, vui lòng thử lại"})
-		return
-	}
-	unlockedMap := make(map[string]*services.RecipeProgress)
-	for idx := range recipes {
-		unlockedMap[recipes[idx].RecipeID] = &recipes[idx]
-	}
-
 	// Roll all rewards, batch items, apply non-item rewards in-memory
 	rewards := make([]GachaResultItem, quantity)
 	itemQtyMap := make(map[string]int64)
-	touchedRecipes := make(map[string]*services.RecipeProgress)
 	for i := 0; i < quantity; i++ {
 		rewards[i] = rollGachaRewardPrecomputed(pool, pc, excludedImmortal)
 		switch rewards[i].Type {
 		case "item":
 			itemQtyMap[rewards[i].ID] += int64(rewards[i].Amount)
-		case "recipe_rank":
-			recipeID := rewards[i].ID
-			completionRate := rewards[i].Amount
-			existing, exists := unlockedMap[recipeID]
-			if exists {
-				if completionRate > existing.CompletionRate {
-					existing.CompletionRate = completionRate
-					touchedRecipes[recipeID] = existing
-				}
-			} else {
-				newRp := &services.RecipeProgress{
-					PlayerID:       player.ID.String(),
-					RecipeID:       recipeID,
-					CompletionRate: completionRate,
-					IsUnlocked:     true,
-					DeduceCount:    0,
-				}
-				unlockedMap[recipeID] = newRp
-				touchedRecipes[recipeID] = newRp
-			}
 		default:
 			applyGachaRewardInMemory(&player, rewards[i])
 		}
@@ -466,19 +442,6 @@ func runGachaOpen(c *gin.Context, forced int) {
 	if len(itemQtyMap) > 0 {
 		if err := InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", itemQtyMap); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
-			return
-		}
-	}
-
-	// Upsert ONLY recipes that were unlocked or updated
-	if len(touchedRecipes) > 0 {
-		batch := make([]*services.RecipeProgress, 0, len(touchedRecipes))
-		for _, rp := range touchedRecipes {
-			batch = append(batch, rp)
-		}
-		if err := RecipeSvc.UpsertBatch(tx, batch); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật bí phương"})
-			logger.S.Errorf("gacha: update recipes failed for player %s: %v", player.ID, err)
 			return
 		}
 	}
@@ -595,6 +558,17 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc *precomputedPools, excludedI
 		}
 		return GachaResultItem{Type: "item", ID: itemID, Amount: 1, Label: fmt.Sprintf("1x %s", itemName), IsRare: isRare}
 
+	case "food":
+		foodID := pc.rollFood()
+		if foodID == "" {
+			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
+		}
+		foodName := foodID
+		if spec, ok := models.ItemRegistry[foodID]; ok {
+			foodName = spec.Name
+		}
+		return GachaResultItem{Type: "item", ID: foodID, Amount: 1, Label: fmt.Sprintf("1x %s", foodName), IsRare: isRare}
+
 	case "gu":
 		guID, rank := pc.rollGu("1,2,3", excludedImmortal)
 		if guID == "" {
@@ -616,25 +590,6 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc *precomputedPools, excludedI
 			guName = spec.Name
 		}
 		return GachaResultItem{Type: "gu", ID: guID, Rank: rank, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
-
-	case "recipe_rank":
-		recipeID, targetGuID, rank := pc.rollRecipe(chosen.ID)
-		if recipeID == "" {
-			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
-		}
-		targetGuName := targetGuID
-		if spec, ok := models.GetGuAny(targetGuID); ok {
-			targetGuName = spec.Name
-		}
-		completionRate := float64(rand.Intn(81))
-		return GachaResultItem{
-			Type:   "recipe_rank",
-			ID:     recipeID,
-			Rank:   rank,
-			Amount: completionRate,
-			Label:  fmt.Sprintf("Bí phương [%s] (%.0f%%)", targetGuName, completionRate),
-			IsRare: isRare,
-		}
 
 	case "primeval_stones":
 		return GachaResultItem{Type: "primeval_stones", Amount: amount, Label: fmt.Sprintf("%.0f Nguyên Thạch", amount), IsRare: isRare}
@@ -901,16 +856,6 @@ func aggregateGachaRewards(rewards []GachaResultItem) string {
 			if spec, ok := models.GetGuAny(r.ID); ok {
 				name = spec.Name
 			}
-		case "recipe_rank":
-			key = "recipe:" + r.ID
-			parts := strings.Split(r.ID, "_")
-			name = r.ID
-			if len(parts) >= 4 {
-				targetGuID := strings.Join(parts[1:len(parts)-2], "_")
-				if spec, ok := models.GetGuAny(targetGuID); ok {
-					name = spec.Name
-				}
-			}
 		default:
 			key = r.Type + ":" + r.ID
 			name = r.Label
@@ -924,13 +869,7 @@ func aggregateGachaRewards(rewards []GachaResultItem) string {
 				isRare: r.IsRare,
 			}
 		} else {
-			if r.Type == "recipe_rank" {
-				if r.Amount > aggMap[key].amount {
-					aggMap[key].amount = r.Amount
-				}
-			} else {
-				aggMap[key].amount += r.Amount
-			}
+			aggMap[key].amount += r.Amount
 		}
 	}
 
@@ -940,8 +879,6 @@ func aggregateGachaRewards(rewards []GachaResultItem) string {
 		var line string
 		if strings.HasPrefix(key, "item:") || strings.HasPrefix(key, "gu:") {
 			line = fmt.Sprintf("%.0fx %s", val.amount, val.label)
-		} else if strings.HasPrefix(key, "recipe:") {
-			line = fmt.Sprintf("Bí phương: [%s] (Độ hoàn thiện: %.0f%%)", val.label, val.amount)
 		} else if key == "primeval_stones" {
 			line = fmt.Sprintf("%.0f %s", val.amount, val.label)
 		} else if key == "immortal_stones" {

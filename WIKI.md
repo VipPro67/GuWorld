@@ -789,7 +789,7 @@ Sủng vật và NPC dị nhân có tên dùng chung mô hình Actor Instance. M
 ### Khu Giải Trí
 
 Khu vực thư giãn cho các đạo hữu đọ vận may và tranh đoạt Nguyên Thạch. Gồm hai phần:
-- **Cổ Từ Bảo Khố (Đổ Thạch):** Mở đá huyền bí đọ cơ duyên nhận Nguyên Thạch, Cổ trùng hoặc Thọ Nguyên.
+- **Cổ Từ Bảo Khố (Đổ Thạch):** Mở đá huyền bí đọ cơ duyên nhận Nguyên Thạch, nguyên liệu/cổ lương và Cổ trùng. Bốn loại đá: Đá Thường (2.000 Nguyên Thạch), Đá VIP (1.000 Tiên Nguyên Thạch), Đá Thượng Phẩm (20.000 Nguyên Thạch) và Đá Cực Phẩm (100.000 Nguyên Thạch) — đá càng cao cấp càng dồi dào nguyên liệu và dễ chạm Cổ trùng hiếm. Gacha không thưởng bí phương lẫn Thọ Nguyên.
 - **Đấu Thú Đặt Cược:**
   - Hai phe **Tả Thanh Long** (Phe Đỏ) và **Hữu Bạch Hổ** (Phe Xanh) xuất quân với 9 linh thú giống nhau, cắn nhau ngẫu nhiên.
   - Đạo hữu có thể đặt cược Nguyên Thạch vào phe tin rằng sẽ chiến thắng.

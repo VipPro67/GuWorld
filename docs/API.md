@@ -334,6 +334,8 @@ Bí cảnh bản đồ dùng `instance_templates.type=SPATIAL_REALM`, `spatial_r
 | POST | `/gacha/open` | Mở N lần. Body: `{"pool_id": "...", "quantity": 10}` (`quantity` mặc định 1, tối đa 100; ≥ 10 được giảm 10% chi phí). Trúng Tiên Cổ đã tồn tại → **409**. |
 | POST | `/gacha/open10` | Tương đương `/gacha/open` với `quantity: 10` (giữ để tương thích). |
 
+Pool hiện có: `da_thuong` (2.000 Nguyên Thạch), `da_vip` (1.000 Tiên Nguyên Thạch), `da_thuong_pham` (20.000 Nguyên Thạch) và `da_cuc_pham` (100.000 Nguyên Thạch). Gacha **không còn thưởng bí phương**; phần thưởng gồm Nguyên Thạch/Tiên Nguyên Thạch, nguyên liệu (Material/Food) và Cổ trùng. Rate limit: 5 lần/phút/người chơi; frontend tự khoá nút ~12s sau mỗi lần mở và bỏ qua 429 im lặng.
+
 ## Sects
 
 | Method | Path |

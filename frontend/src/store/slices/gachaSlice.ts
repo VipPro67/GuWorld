@@ -5,7 +5,7 @@ import { BACKEND_URL } from "@/lib/config";
 export interface GachaSlice {
   gachaPools: ApiResponseData[];
   fetchGachaPools: () => Promise<void>;
-  openGacha: (poolId: string, quantity?: number) => Promise<{ success: boolean; message: string; reward?: ApiResponseData; rewards?: ApiResponseData[] } | null>;
+  openGacha: (poolId: string, quantity?: number) => Promise<{ success: boolean; message: string; reward?: ApiResponseData; rewards?: ApiResponseData[]; cooldown?: boolean } | null>;
 }
 
 export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, GachaSlice> = (set, get) => ({
@@ -39,6 +39,12 @@ export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         body: JSON.stringify({ pool_id: poolId, quantity }),
       });
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      // Rate limit: treat as a cooldown signal, not an error. Stay quiet so
+      // spam-clicking never floods the log/toast with 429 noise.
+      if (response.status === 429) {
+        set({ error: null });
+        return { success: false, message: "Cơ duyên đang hồi phục, vui lòng đợi.", cooldown: true };
+      }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mở Đá  thất bại."); }
       // Re-sync inventory from response

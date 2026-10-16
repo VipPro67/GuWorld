@@ -15,7 +15,6 @@ func TestRollGuNeverReturnsExcludedGu(t *testing.T) {
 				{id: "eligible", rank: 6, weight: 1},
 			},
 		},
-		totalByRank: map[string]float64{"6": 100},
 	}
 
 	for i := 0; i < 100; i++ {
@@ -178,5 +177,38 @@ func TestBuildGachaRewardLabel(t *testing.T) {
 	labelFallback := buildGachaRewardLabel(rFallback)
 	if labelFallback != "5 lifespan" {
 		t.Errorf("unexpected fallback label: %s", labelFallback)
+	}
+}
+
+// TestGachaPoolsAreValid guards the hard-coded pool tables: no duplicate ids,
+// no invalid costs, and no reward type the roll/apply switch cannot handle
+// (e.g. the removed "recipe_rank").
+func TestGachaPoolsAreValid(t *testing.T) {
+	known := map[string]bool{
+		"item": true, "food": true, "gu": true, "gu_rank": true,
+		"primeval_stones": true, "immortal_stones": true,
+	}
+	seen := map[string]bool{}
+	for _, pool := range gachaPools {
+		if seen[pool.ID] {
+			t.Fatalf("duplicate pool id %q", pool.ID)
+		}
+		seen[pool.ID] = true
+		if pool.CostAmount <= 0 {
+			t.Fatalf("pool %q has invalid cost %v", pool.ID, pool.CostAmount)
+		}
+		var total float64
+		for _, r := range pool.Rewards {
+			if !known[r.Type] {
+				t.Fatalf("pool %q has unhandled reward type %q", pool.ID, r.Type)
+			}
+			if r.Weight <= 0 {
+				t.Fatalf("pool %q reward %q has non-positive weight", pool.ID, r.Type)
+			}
+			total += r.Weight
+		}
+		if total <= 0 {
+			t.Fatalf("pool %q has no rewards", pool.ID)
+		}
 	}
 }

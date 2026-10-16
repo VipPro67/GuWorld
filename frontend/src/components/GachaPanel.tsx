@@ -7,19 +7,26 @@ import { useGameStore } from "@/store/useGameStore";
 const POOL_ICONS: Record<string, React.ReactNode> = {
   da_thuong: <Coins className="w-5 h-5 text-yellow-400" />,
   da_vip: <Crown className="w-5 h-5 text-purple-400" />,
+  da_thuong_pham: <Sparkles className="w-5 h-5 text-emerald-400" />,
+  da_cuc_pham: <Gem className="w-5 h-5 text-rose-400" />,
 };
 
 const POOL_COLORS: Record<string, string> = {
   da_thuong: "from-yellow-600/30 to-amber-900/30 border-yellow-700/40",
   da_vip: "from-purple-600/30 to-violet-900/30 border-purple-700/40",
+  da_thuong_pham: "from-emerald-600/30 to-teal-900/30 border-emerald-700/40",
+  da_cuc_pham: "from-rose-600/30 to-red-900/30 border-rose-700/40",
 };
 
 const POOL_BTN: Record<string, string> = {
   da_thuong: "bg-yellow-600 hover:bg-yellow-500",
   da_vip: "bg-purple-600 hover:bg-purple-500",
+  da_thuong_pham: "bg-emerald-600 hover:bg-emerald-500",
+  da_cuc_pham: "bg-rose-600 hover:bg-rose-500",
 };
 
 const QUICK_QTYS = [1, 10, 50, 100];
+const COOLDOWN_MS = 12000;
 
 interface GachaPoolShape {
   id: string;
@@ -36,10 +43,22 @@ export const GachaPanel: React.FC = () => {
   const [animIndex, setAnimIndex] = useState(0);
   const [animRewards, setAnimRewards] = useState<ApiResponseData[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     fetchGachaPools();
   }, [fetchGachaPools]);
+
+  // Tick the cooldown countdown while it is active.
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(timer);
+  }, [cooldownUntil]);
+
+  const cooldownLeft = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
 
   useEffect(() => {
     if (showAnim && animIndex < animRewards.length) {
@@ -55,8 +74,11 @@ export const GachaPanel: React.FC = () => {
   const clampQty = (n: number): number => Math.max(1, Math.min(100, Math.floor(n) || 1));
 
   const handleOpen = async (poolId: string, count: number) => {
-    if (actionLoading) return;
+    if (actionLoading || Date.now() < cooldownUntil) return;
     const result = await openGacha(poolId, count);
+    // Start the cooldown on any attempt (success or server 429) so the client
+    // stops firing opens while the server rate-limit window is still hot.
+    setCooldownUntil(Date.now() + COOLDOWN_MS);
     if (result?.success) {
       const rewards = "reward" in result && result.reward ? [result.reward] : ("rewards" in result ? (result.rewards || []) : []);
       setAnimRewards(rewards);
@@ -220,12 +242,21 @@ export const GachaPanel: React.FC = () => {
                 </div>
 
                 <button
-                  disabled={actionLoading || !canAfford(pool)}
+                  disabled={actionLoading || cooldownLeft > 0 || !canAfford(pool)}
                   onClick={() => handleOpen(pool.id, quantity)}
                   className={`w-full py-2.5 ${POOL_BTN[pool.id] || "bg-amber-600 hover:bg-amber-500"} disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[11px] font-bold font-mono cursor-pointer transition-all flex items-center justify-center gap-1.5`}
                 >
-                  <Repeat className="w-3 h-3" />
-                  {quantity > 1 ? `Mở ${quantity} lần` : "Mở 1"}
+                  {cooldownLeft > 0 ? (
+                    <>
+                      <Clock className="w-3 h-3" />
+                      Chờ {cooldownLeft}s
+                    </>
+                  ) : (
+                    <>
+                      <Repeat className="w-3 h-3" />
+                      {quantity > 1 ? `Mở ${quantity} lần` : "Mở 1"}
+                    </>
+                  )}
                 </button>
                 {!canAfford(pool) && (
                   <span className="text-[9px] text-red-400/80 font-mono text-center">Không đủ tài nguyên</span>
