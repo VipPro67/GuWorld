@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review — GuWorld</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { curve: "basis" } });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 5 4; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .leak { stroke: #dc2626; stroke-width: 2; }
+      .mermaid { display: flex; justify-content: center; }
+      .mermaid svg { max-height: 330px; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans antialiased">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+      <header class="border-b border-slate-200 pb-6">
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Deepening review</p>
+        <h1 class="font-serif text-4xl mt-1">GuWorld</h1>
+        <p class="text-sm text-slate-600 mt-2">2026-10-16 · hot spots: combat, player state, non-player actors, tribulation, frontend client</p>
+        <div class="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-600">
+          <span class="flex items-center gap-2"><span class="inline-block w-5 h-3 border-2 border-slate-700"></span> module</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-5 border-t-2 border-dashed border-slate-500"></span> seam</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-5 border-t-2 border-red-600"></span> leakage</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-5 h-3 deep"></span> deep module</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-16">
+
+        <!-- ================= C1 ================= -->
+        <article id="c1">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="font-serif text-2xl">1. One combat outcome, two implementations</h2>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-xs text-slate-600 mt-3 leading-relaxed">
+            backend/internal/handlers/combat_auto.go · combat_auto_resolve.go · combat_finalize.go ·
+            combat_result_loot.go · combat_result_defeat.go · combat_retreat.go · combat_ai.go ·
+            combat_targeting.go · combat_damage.go · simulator/engine.go
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6 mt-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before</p>
+              <pre class="mermaid">
+flowchart TB
+  A["AutoCombatStart<br/>358 lines"] --> H[shared helpers]
+  B["AutoResolveCombat<br/>361 lines"] --> H
+  F["Flee<br/>392 lines"] --> L["legacy engine<br/>combat_ai/targeting/damage"]
+  A -->|branch bodies copy-pasted| X["loot · defeat · sect war · arena"]
+  B -->|branch bodies copy-pasted| X
+  B -.->|"winner := match(log string)"| W["Trận chiến kết thúc"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class B,W leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After</p>
+              <pre class="mermaid">
+flowchart TB
+  A["AutoCombatStart"] --> D
+  B["AutoResolveCombat"] --> D
+  F["Flee"] --> D
+  subgraph D["Combat outcome module"]
+    direction TB
+    S["build snapshot"] --> SIM["simulator.Simulate"] --> R["read result → persist"]
+  end
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a;
+  class D deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-5 mt-5 text-sm">
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p>Two full copies of the same resolution flow stay in sync by comment, and the skip-battle copy re-derives the winner by matching a localized log string.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p>Collapse the shared outcome into one module whose interface is "snapshot + mode in, persisted result + logs out"; callers keep only their own preconditions.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Wins</p><ul class="list-disc ml-4 space-y-1">
+              <li>locality: loot/defeat fix once</li>
+              <li>winner stops leaking through log text</li>
+              <li>tests hit one interface</li>
+              <li>retire the legacy engine in Flee</li>
+            </ul></div>
+          </div>
+        </article>
+
+        <!-- ================= C2 ================= -->
+        <article id="c2">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="font-serif text-2xl">2. Finish the Player seam you already built</h2>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-xs text-slate-600 mt-3 leading-relaxed">
+            backend/internal/services/player_service.go · handlers/services.go · scouting.go · profile.go ·
+            player_events.go · player_auth_register.go · player_auth_google.go · admin_player_read.go
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6 mt-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — wide interface, many loaders, 44 paths bypass it</p>
+              <div class="flex items-end gap-3 h-56">
+                <div class="flex flex-col justify-end items-center gap-1">
+                  <div class="w-16 bg-slate-300" style="height:150px"></div>
+                  <span class="text-[10px] text-slate-500">PlayerSvc<br/>11 methods</span>
+                </div>
+                <div class="flex flex-col justify-end items-center gap-1">
+                  <div class="w-16 bg-slate-300" style="height:130px"></div>
+                  <span class="text-[10px] text-slate-500">hand-rolled<br/>SELECT/UPDATE</span>
+                </div>
+                <div class="text-red-600 text-3xl self-center">⇄</div>
+                <div class="flex flex-col justify-end items-center gap-1">
+                  <div class="w-16 bg-slate-700" style="height:170px"></div>
+                  <span class="text-[10px] text-slate-500">60-col<br/>loadRow</span>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one seam every path crosses</p>
+              <div class="flex items-end gap-3 h-56">
+                <div class="flex flex-col justify-end items-center gap-1">
+                  <div class="w-10 bg-slate-700" style="height:36px"></div>
+                  <span class="text-[10px] text-slate-500">interface</span>
+                </div>
+                <div class="flex flex-col justify-end items-center gap-1">
+                  <div class="w-24 deep" style="height:190px"></div>
+                  <span class="text-[10px] text-slate-300">Player module</span>
+                </div>
+                <span class="text-slate-500 text-xs self-center">← scouting, auth, admin, combat all route here</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-5 mt-5 text-sm">
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p>A real Player seam exists and is load-bearing, but it is half-built: the same 27-column read is pasted into scouting and profile, the full column list is inlined into two register INSERTs, and 44 mutation/read paths bypass it.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p>Route every player read/write through the Player module; the row shape and mana projection live behind one interface.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Wins</p><ul class="list-disc ml-4 space-y-1">
+              <li>one column list, one place to change</li>
+              <li>leverage: 44 call sites, one seam</li>
+              <li>aliases loadPlayerForStatus collapse</li>
+              <li>tests replace a real adapter</li>
+            </ul></div>
+          </div>
+          <div class="mt-4 text-xs bg-amber-50 border-l-4 border-amber-400 text-amber-900 px-3 py-2">
+            contradicts AGENTS.md ("No service layer"). The claim is stale — PlayerSvc/InventorySvc are already wired in main.go and used in dozens of handlers.
+          </div>
+        </article>
+
+        <!-- ================= C3 ================= -->
+        <article id="c3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="font-serif text-2xl">3. Delete the response envelope that never got wired</h2>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">deletion</span>
+          </div>
+          <p class="font-mono text-xs text-slate-600 mt-3 leading-relaxed">
+            backend/internal/handlers/utils.go · frontend/src/store/useGameStore.ts (apiFetch)
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6 mt-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — a seam with zero adapters</p>
+              <div class="flex flex-col gap-2 text-xs">
+                <div class="border-l-4 border-slate-400 bg-slate-50 px-3 py-2">APIResponse · RespondError · WithTx <span class="text-slate-400">(0 callers)</span></div>
+                <div class="border-l-4 border-slate-300 bg-slate-50 px-3 py-2">apiFetch <span class="text-slate-400">(0 callers)</span></div>
+                <div class="border-l-4 border-red-500 bg-red-50 px-3 py-2">~3,600 ad-hoc <span class="font-mono">c.JSON(status, gin.H{"error":…})</span></div>
+                <div class="border-l-4 border-red-500 bg-red-50 px-3 py-2">~200 <span class="font-mono">if (!response.ok)</span> checks, 251 duplicated 401s</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — keep the flat shape the client actually reads</p>
+              <div class="flex flex-col gap-2 text-xs">
+                <div class="line-through text-slate-400 border-l-4 border-slate-200 bg-slate-50 px-3 py-2">APIResponse · WithTx · apiFetch</div>
+                <div class="border-l-4 border-emerald-500 bg-emerald-50 px-3 py-2">one <span class="font-mono">fail(c, status, msg)</span> + one authenticated client wrapper</div>
+                <div class="border-l-4 border-slate-300 bg-slate-50 px-3 py-2">unchanged <span class="font-mono">gin.H{"error":…}</span> JSON, just fewer spellings of it</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-5 mt-5 text-sm">
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p>An abandoned response-layer refactor left two abstractions no one calls, while the flat error shape the frontend depends on is re-spelled thousands of times.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p>Deletion test: the envelope hides no complexity and every caller re-implements it, so delete it; keep a single small fail/auth-fetch helper for the shape already in use.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Wins</p><ul class="list-disc ml-4 space-y-1">
+              <li>delete dead scaffolding</li>
+              <li>one error interface, both tiers</li>
+              <li>no breaking JSON change</li>
+            </ul></div>
+          </div>
+        </article>
+
+        <!-- ================= C4 ================= -->
+        <article id="c4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="font-serif text-2xl">4. World monsters reject the Actor Instance seam</h2>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">ports &amp; adapters</span>
+          </div>
+          <p class="font-mono text-xs text-slate-600 mt-3 leading-relaxed">
+            backend/internal/cache/world_monster.go · handlers/world_monsters.go · world_monster_encounter.go ·
+            db/schema_actors.go · handlers/tribulation_trigger.go
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6 mt-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — three parallel non-player actors</p>
+              <pre class="mermaid">
+flowchart LR
+  T["Actor Template<br/>monster_templates"] --> A1["non_player_actors<br/>companion beasts"]
+  T --> A2["cache.WorldMonster<br/>Redis TTL"]
+  T --> A3["tribulation_enemies"]
+  A2 -.->|new UUID on respawn| A2
+  subgraph ID["Actor Instance"]
+    A1
+  end
+  subgraph ORPHAN["canonical table bypassed"]
+    A2
+    A3
+  end
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class A2,A3 leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one Actor Instance, presence split out</p>
+              <pre class="mermaid">
+flowchart LR
+  T["Actor Template"] --> AI["Actor Instance<br/>non_player_actors"]
+  AI --> WP["World Presence<br/>Redis, TTL"]
+  WP --> C["Combat Snapshot"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a;
+  class AI deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-5 mt-5 text-sm">
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p>A world monster's identity and its map presence are merged into one TTL-bound Redis value, and respawn mints a new id — so the canonical Actor Instance table declared for exactly this is never touched.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p>Give the world monster path an Actor Instance row plus a separate World Presence, matching the domain model the schema already encodes.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Wins</p><ul class="list-disc ml-4 space-y-1">
+              <li>identity survives TTL expiry</li>
+              <li>capability data becomes usable</li>
+              <li>one actor model, not three</li>
+            </ul></div>
+          </div>
+          <div class="mt-4 text-xs bg-amber-50 border-l-4 border-amber-400 text-amber-900 px-3 py-2">
+            contradicts ADR-0001 (Canonical non-player actor model) — not reopening the decision, closing the gap between it and the world-monster code.
+          </div>
+        </article>
+
+        <!-- ================= C5 ================= -->
+        <article id="c5">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="font-serif text-2xl">5. Tribulation lifecycle spread across six modules</h2>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-xs text-slate-600 mt-3 leading-relaxed">
+            backend/internal/handlers/tribulation_trigger.go · tribulation_worker.go · tribulation_handlers.go ·
+            tribulation_dao.go · tribulation_suppression.go · tribulation_online.go
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6 mt-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — one Độ Kiếp concept, six files</p>
+              <pre class="mermaid">
+flowchart LR
+  W1["60s ticker"] --> S["schedule<br/>trigger.go:134"]
+  S --> SP["spawn<br/>trigger.go:823"]
+  W2["15s ticker"] --> G["grid AI<br/>worker.go:16"]
+  G --> E["EngageTribulation<br/>handlers.go:107"]
+  E --> R["Resolve<br/>handlers.go:336"]
+  R --> F1["fail penalty<br/>trigger.go:1111"]
+  SP --> F2["fail penalty<br/>trigger.go:1220"]
+  R --> F3["fail penalty<br/>handlers.go:536"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class F1,F2,F3 leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one lifecycle module</p>
+              <pre class="mermaid">
+flowchart LR
+  W1["60s ticker"] --> T
+  W2["15s ticker"] --> T
+  H1["EngageTribulation"] --> T
+  H2["ResolveTribulation"] --> T
+  subgraph T["Tribulation module"]
+    direction LR
+    SC["schedule/spawn"] --> AI["grid"] --> EN["engage"] --> RS["resolve/fail"]
+  end
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a;
+  class T deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-5 mt-5 text-sm">
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p>The failure penalty is written three times, the "next tribulation" triple is repeated five times, and the tribulation-type enum is spelled out in three files with no shared table.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p>One tribulation lifecycle module owning schedule → spawn → grid → resolve → fail, with the type table and penalty behind its interface; tickers and handlers become adapters that call in.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Wins</p><ul class="list-disc ml-4 space-y-1">
+              <li>penalty defined once</li>
+              <li>type table stops drifting</li>
+              <li>lifecycle testable without Postgres</li>
+            </ul></div>
+          </div>
+        </article>
+
+        <!-- ================= C6 ================= -->
+        <article id="c6">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="font-serif text-2xl">6. One worker runner instead of sixteen</h2>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">Speculative</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-xs text-slate-600 mt-3 leading-relaxed">
+            backend/internal/worker/{hunger,pet_hunger,growth,sect_mission,batch_persister,variant_production}.go ·
+            handlers/{tribulation_worker,world_monsters,roaming_merchant}.go
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6 mt-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — the same ticker, hand-copied ~16×</p>
+              <div class="grid grid-cols-4 gap-2">
+                <div class="h-20 border-2 border-slate-300 rounded flex items-center justify-center text-[9px] text-slate-500">ticker</div>
+                <div class="h-20 border-2 border-slate-300 rounded flex items-center justify-center text-[9px] text-slate-500">ticker</div>
+                <div class="h-20 border-2 border-slate-300 rounded flex items-center justify-center text-[9px] text-slate-500">ticker</div>
+                <div class="h-20 border-2 border-slate-300 rounded flex items-center justify-center text-[9px] text-slate-500">ticker</div>
+                <div class="h-20 border-2 border-slate-300 rounded flex items-center justify-center text-[9px] text-slate-500">ticker</div>
+                <div class="h-20 border-2 border-slate-300 rounded flex items-center justify-center text-[9px] text-slate-500">ticker</div>
+                <div class="h-20 border-2 border-red-400 rounded flex items-center justify-center text-[9px] text-red-600">no panic<br/>recovery</div>
+                <div class="h-20 border-2 border-slate-300 rounded flex items-center justify-center text-[9px] text-slate-500">ticker</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one runner, functions passed in</p>
+              <pre class="mermaid">
+flowchart LR
+  H["hunger"] --> R["runEvery(ctx, d, fn)<br/>recover + stop"]
+  G["growth"] --> R
+  T["tribulation"] --> R
+  M["merchant"] --> R
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a;
+  class R deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-5 mt-5 text-sm">
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p>Every worker hand-rolls the same ticker/select/shutdown boilerplate, shutdown is inconsistent, and none recovers from a panic — one bad tick can take the process down.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p>A single runner that takes context, interval, and a function; the workers become the function bodies.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Wins</p><ul class="list-disc ml-4 space-y-1">
+              <li>panic recovery in one place</li>
+              <li>consistent shutdown</li>
+              <li>16 call sites, one seam</li>
+            </ul></div>
+          </div>
+        </article>
+
+        <!-- ================= C7 ================= -->
+        <article id="c7">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="font-serif text-2xl">7. Collapse the frontend fetch/error seam</h2>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">in-process</span>
+          </div>
+          <p class="font-mono text-xs text-slate-600 mt-3 leading-relaxed">
+            frontend/src/lib/auth.ts · lib/fetch.ts · store/useGameStore.ts · store/slices/*.ts
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-6 mt-5">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — transport shared, error+dedup per slice</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant S as sectSlice
+  participant I as inventorySlice
+  participant A as authFetch
+  S->>A: authFetch(...)
+  A-->>S: response
+  Note over S: 35× !response.ok · try/catch toast
+  I->>A: authFetch(...)
+  A-->>I: response
+  Note over I: 26× !response.ok · own dedup map
+  Note over S,I: profileSlice adds its own TTL map too
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one client module</p>
+              <pre class="mermaid">
+sequenceDiagram
+  participant S as sectSlice
+  participant I as inventorySlice
+  participant C as gameClient
+  S->>C: client.post(url)
+  I->>C: client.get(url)
+  C->>C: authFetch + ok-check + toast + dedup
+  C-->>S: parsed data or thrown error
+  C-->>I: parsed data or thrown error
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-5 mt-5 text-sm">
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Problem</p><p>Transport is centralized, but every slice re-implements the same ok-check, error toast, and request dedup; the intended wrapper (apiFetch) is dead code, and the sparse-inventory merge is duplicated between two root helpers.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Solution</p><p>Wire apiFetch (or a small gameClient) as the single interface slices call; its implementation owns ok-check, toast, and dedup.</p></div>
+            <div><p class="text-xs uppercase tracking-wider text-slate-500">Wins</p><ul class="list-disc ml-4 space-y-1">
+              <li>~200 ok-checks collapse</li>
+              <li>dedup stops drifting per slice</li>
+              <li>one place to change error policy</li>
+            </ul></div>
+          </div>
+        </article>
+
+      </section>
+
+      <section id="top-recommendation">
+        <div class="rounded-xl border-2 border-slate-900 bg-white p-8">
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Top recommendation</p>
+          <h2 class="font-serif text-2xl mt-2">
+            <a href="#c1" class="underline decoration-emerald-400 decoration-2 underline-offset-4">One combat outcome, two implementations</a>
+          </h2>
+          <p class="text-sm text-slate-700 mt-3">
+            It is the highest-churn, highest-risk area: two parallel resolution flows kept aligned by comments, a second legacy engine living inside <span class="font-mono text-xs">Flee</span>, a winner decided by matching Vietnamese log text, and the coordination layer that actually breaks has almost no tests.
+            Deepening it concentrates loot, defeat, and persistence behind one interface — and every other candidate gets cheaper once combat stops duplicating itself.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
