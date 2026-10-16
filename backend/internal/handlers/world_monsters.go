@@ -37,10 +37,14 @@ const (
 	worldMonsterTickInterval = 250 * time.Millisecond
 	worldMonsterSafetyTTL    = 5 * time.Minute
 	worldMonsterMoveEventGap = 400 * time.Millisecond
-	worldMonsterDefaultSpeed = 0.15
-	worldMonsterEliteSpeed   = 0.4
-	worldMonsterEliteAggro   = 8.0
-	worldMonsterEliteLeash   = 18.0
+	// Ordinary monsters must be able to close on a player who walks (base
+	// MOVEMENT = 1 cell/s), otherwise a pursuit is invisible: the client only
+	// renders a 25-cell window, and a 0.15 cell/s crawl never covers it.
+	worldMonsterDefaultSpeed = 1.0
+	worldMonsterEliteSpeed   = 1.4
+	worldMonsterBossSpeed    = 1.4
+	worldMonsterEliteAggro   = 18.0
+	worldMonsterEliteLeash   = 30.0
 	// Idle monsters only need their Redis value refreshed occasionally (TTL,
 	// retuned fields). Without a heartbeat every idle actor would issue a CAS +
 	// SET on every 250ms tick.
@@ -454,7 +458,7 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 		patrolMinX, patrolMinY, patrolMaxX, patrolMaxY = monsterPatrolBounds(spawn.RegionID)
 		leashRadius = patrolRadius(spawn.X, spawn.Y, patrolMinX, patrolMinY, patrolMaxX, patrolMaxY)
 		aggroRadius = leashRadius
-		attackRange, speed = 2, 0.4
+		attackRange, speed = 2, worldMonsterBossSpeed
 	} else if strings.EqualFold(template.Type, "Elite") {
 		// Elite camp leaders notice and pursue players around their camp, but
 		// stay inside their owning region instead of using the boss-wide hunt.
@@ -472,9 +476,11 @@ func worldMonsterCandidateForSpawn(spawn monsterSpawnRow, now time.Time) (WorldM
 	return monster, nil
 }
 
-// worldMonsterAggroProfile gives ordinary monsters a rank-scaled local aggro
-// radius and a wider leash so they can pursue fleeing players without roaming
-// too far from their spawn.
+// worldMonsterAggroProfile gives ordinary monsters a rank-scaled detection
+// radius wide enough to cover the client's 25-cell investigation window, plus a
+// wider leash so a pursuit is not dropped the moment the player steps one cell
+// out of detection. Detection is 14-22 cells; the pursuit keeps its target out
+// to 22-34 cells of the spawn point.
 func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
 	if rank < 1 {
 		rank = 1
@@ -482,8 +488,8 @@ func worldMonsterAggroProfile(rank int) (aggroRadius, leashRadius float64) {
 	if rank > 9 {
 		rank = 9
 	}
-	aggroRadius = 6 + float64(rank-1)
-	leashRadius = aggroRadius + 4 + float64(rank-1)*0.25
+	aggroRadius = 14 + float64(rank-1)
+	leashRadius = aggroRadius + 8 + float64(rank-1)*0.5
 	return aggroRadius, leashRadius
 }
 
@@ -503,7 +509,7 @@ func applyWorldMonsterTuning(ctx context.Context, monster *WorldMonster) {
 	if monster.IsBoss {
 		monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY = monsterPatrolBounds(monster.RegionID)
 		monster.LeashRadius = patrolRadius(int(math.Round(monster.SpawnX)), int(math.Round(monster.SpawnY)), monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY)
-		monster.AggroRadius, monster.Speed = monster.LeashRadius, 0.4
+		monster.AggroRadius, monster.Speed = monster.LeashRadius, worldMonsterBossSpeed
 		monster.AttackRange = 2
 	} else if worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
 		monster.PatrolMinX, monster.PatrolMinY, monster.PatrolMaxX, monster.PatrolMaxY = monsterPatrolBounds(monster.RegionID)
@@ -895,10 +901,13 @@ type monsterTickTarget struct {
 	X, Y float64
 }
 
-func selectMonsterTarget(monster WorldMonster, candidates []WorldPosEntry, active func(string) bool) (monsterTickTarget, bool) {
+func selectMonsterTarget(monster WorldMonster, candidates []WorldPosEntry, active func(string) bool, radius float64) (monsterTickTarget, bool) {
 	type ranked struct {
 		monsterTickTarget
 		d float64
+	}
+	if radius <= 0 {
+		radius = monster.AggroRadius
 	}
 	valid := make([]ranked, 0, len(candidates))
 	for _, p := range candidates {
@@ -906,7 +915,7 @@ func selectMonsterTarget(monster WorldMonster, candidates []WorldPosEntry, activ
 			continue
 		}
 		d := math.Hypot(float64(p.X)-monster.X, float64(p.Y)-monster.Y)
-		if d > monster.AggroRadius {
+		if d > radius {
 			continue
 		}
 		valid = append(valid, ranked{monsterTickTarget{p.ID, float64(p.X), float64(p.Y)}, d})
@@ -949,7 +958,13 @@ func tickWorldMonster(monster WorldMonster, candidates []WorldPosEntry, now time
 			}
 		}
 	}
-	target, found := selectMonsterTarget(monster, targetCandidates, active)
+	// Detection uses the aggro radius, but a monster already pursuing keeps its
+	// target out to the leash so it does not give up one cell outside detection.
+	searchRadius := monster.AggroRadius
+	if monster.State == MonsterStateChase || monster.State == MonsterStateAttack {
+		searchRadius = math.Max(monster.AggroRadius, monster.LeashRadius)
+	}
+	target, found := selectMonsterTarget(monster, targetCandidates, active, searchRadius)
 	if monster.State == MonsterStateReturn {
 		moveMonsterToward(&monster, monster.SpawnX, monster.SpawnY, dt)
 		if math.Hypot(monster.X-monster.SpawnX, monster.Y-monster.SpawnY) < 0.1 {
