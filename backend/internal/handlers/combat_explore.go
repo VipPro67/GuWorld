@@ -159,14 +159,16 @@ func ExploreNode(c *gin.Context) {
 		// Check if player has skip_battle enabled
 		if player.CombatSettings.SkipBattle {
 			// Auto-resolve combat using saved settings
-			var afterCombatCommit func()
-			winner, _, skipSummary, pendingNotifications, err := AutoResolveCombat(tx, &player, &afterCombatCommit)
+			res, err := ResolveCombat(tx, &player, nil, nil)
 			if err != nil {
 				logger.S.Errorf("Auto-resolve combat failed: %v", err)
 				_ = tx.Rollback()
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
 				return
 			} else {
+				winner, skipSummary := res.Winner, res.Summary
+				afterCombatCommit := res.AfterCommit
+				pendingNotifications := res.Notifications
 				combatTriggered = false // Combat was auto-resolved, no need for frontend combat screen
 				if winner == "Phe Ta" {
 					logMsg = fmt.Sprintf("Tự động chiến thắng %s tại %s!", enemy.EnemyName, nodeName)

@@ -15,7 +15,7 @@ import (
 
 // applyAutoCombatMineOccupation handles mine PvE victory: robs the previous
 // occupier, rewards the player, and takes the slot. Shared by AutoCombatStart
-// and AutoResolveCombat so mine resolution is identical.
+// and ResolveCombat so mine resolution is identical.
 // Returns the generated logs and whether the slot was successfully occupied.
 func applyAutoCombatMineOccupation(tx *sql.Tx, player *models.Player, activeCombat *models.CombatState, turn int) (mineLogs []simulator.CombatLog, occupied bool) {
 	if activeCombat == nil || activeCombat.MineSlotID <= 0 {

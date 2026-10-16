@@ -158,6 +158,30 @@ npm run lint
 npm run build
 ```
 
+## Background workers
+
+Every recurring background task goes through `backend/internal/worker/runner.go`:
+
+```go
+// Tick loop + panic recovery, spawned as its own goroutine.
+worker.RunEvery(ctx, 3*time.Hour, "Hunger Worker", func(ctx context.Context) {
+	processScheduledTicks(ctx, db)
+})
+
+// Same recovery, for work that runs outside RunEvery (startup pre-runs, or
+// loops that must flush on shutdown).
+worker.SafeRun("Batch Persister", ctx, flushAll)
+```
+
+Rules:
+
+- A panic inside a tick is logged with a stack trace and the loop keeps running. Never
+  hand-roll a `for { select { case <-ctx.Done(): ... case <-ticker.C: ... } }` loop:
+  it has no recovery, and a panic in a worker goroutine takes the whole process down.
+- Always pass `ctx`; `RunEvery` stops on cancellation.
+- Workers that must flush on shutdown (batch persister, last-activity batcher) or that
+  need a `done` channel keep their own loop, but wrap the tick body in `SafeRun`.
+
 ## Quản lý dữ liệu gameplay
 
 Quy trình bootstrap/khôi phục admin, điều tra audit, rollback import và xử lý

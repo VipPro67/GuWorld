@@ -10,12 +10,12 @@
 //	combat_effects.go    - CalculateGuEffect*, getActorPathMasteryMultiplier
 //	combat_state.go      - InitializeCombatState, StartCombat
 //	combat_targeting.go  - ResolveSingleTarget, ResolveTargets, findCombatant
-//	combat_damage.go     - applyDamageWithLogs, calculateLooseGuFailureChance
+//	combat_damage.go     - applyDamageWithLogs
 //	combat_ai.go         - BuildEnemyActions, BuildBasicEnemyAction, SelectActionsByAI
 //	combat_loot.go       - RollLoot, ApplyLoot
 //	combat_integration.go- IntegratePassiveGus
 //	combat_explore.go    - ExploreNode, checkAndIncrementExploreLimit
 //	combat_retreat.go    - Retreat handler
 //	combat_auto.go       - AutoCombatStart handler (manual/replay)
-//	combat_auto_resolve.go - AutoResolveCombat (skip battle, applies results)
+//	combat_auto_resolve.go - ResolveCombat (skip battle + manual replay, applies results)
 package handlers

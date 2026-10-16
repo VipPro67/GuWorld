@@ -15,7 +15,7 @@ import (
 // applyAutoCombatDefeat handles the losing path for auto-combat: virtual arena
 // consolation, mine defender notification, death drop + hub teleport, party
 // cleanup, and the player update query. Shared by AutoCombatStart and
-// AutoResolveCombat so defeat resolution is identical (including virtual mode).
+// ResolveCombat so defeat resolution is identical (including virtual mode).
 func applyAutoCombatDefeat(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation bool, finalMana float64) (updateQuery string, args []interface{}, defLogs []simulator.CombatLog) {
 	if isVirtual {
 		updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`

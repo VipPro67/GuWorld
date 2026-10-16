@@ -115,11 +115,13 @@ func startWorldMonsterEncounter(ctx context.Context, monster WorldMonster, targe
 	var pendingNotifications []notify.Notification
 	var afterCombatCommit func()
 	if player.CombatSettings.SkipBattle {
-		winner, _, _, pendingNotifications, err = AutoResolveCombat(tx, &player, &afterCombatCommit)
+		res, err := ResolveCombat(tx, &player, nil, nil)
 		if err != nil {
 			resetWorldMonsterAfterEncounter(ctx, current)
 			return err
 		}
+		winner, afterCombatCommit = res.Winner, res.AfterCommit
+		pendingNotifications = res.Notifications
 	} else {
 		combatJSON, err := json.Marshal(player.ActiveCombat)
 		if err != nil {

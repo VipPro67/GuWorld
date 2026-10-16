@@ -18,7 +18,7 @@ import (
 // buildSimCombatState constructs the deterministic simulator state for the
 // player's active combat: initiator + pets + party allies + enemies.
 //
-// Shared by AutoCombatStart (manual replay) and AutoResolveCombat (skip battle)
+// Used by AutoCombatStart (manual replay) and the skip-battle paths
 // so both paths use identical combatants, turn order and calculations. The
 // caller supplies the loadout (request loadout vs saved combat settings) and
 // the already-derived isVirtual flag.
@@ -349,7 +349,7 @@ func buildSimPlayerDefender(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 }
 
 // applyLoveGuPenalties scans the combat log for Chaos Gamble (Love Gu) penalties
-// and applies them to the player. Shared by AutoCombatStart and AutoResolveCombat
+// and applies them to the player. Shared by all auto-combat paths
 // so both paths penalize identically.
 func applyLoveGuPenalties(player *models.Player, logs []simulator.CombatLog) {
 	loveAptitudePenalty := 0
@@ -385,7 +385,7 @@ func applyLoveGuPenalties(player *models.Player, logs []simulator.CombatLog) {
 // combatOutcome derives the post-simulation outcome from the sim state.
 // alliesAlive is true only when the initiator is alive AND all enemies are dead.
 // Returns the initiator's final HP too. Shared by AutoCombatStart and
-// AutoResolveCombat so both paths judge victory identically.
+// ResolveCombat so all paths judge victory identically.
 func combatOutcome(simState *simulator.CombatState, playerID string) (enemiesAlive, alliesAlive bool, finalPlayerHP float64) {
 	for _, e := range simState.Enemies {
 		if e.HP > 0 {
@@ -405,7 +405,7 @@ func combatOutcome(simState *simulator.CombatState, playerID string) (enemiesAli
 // applySimConsumption deducts simulator-consumed healing items, primeval stones,
 // immortal stones and equipped-Gu hunger from the player, returning the usage
 // counts plus the corresponding log lines. Shared by AutoCombatStart and
-// AutoResolveCombat so resource consumption is identical on both paths.
+// ResolveCombat so resource consumption is identical on all paths.
 func applySimConsumption(tx *sql.Tx, player *models.Player, simPlayer *simulator.CombatantAuto, isVirtual bool, turn int) (itemsUsed int, stonesSpent, immortalStonesSpent float64, usageLogs []simulator.CombatLog) {
 	itemsUsed = simPlayer.ItemsUsedInBattle
 

@@ -17,7 +17,7 @@ import (
 // sync, NaN guards, the player row persist, simulated allies' status updates,
 // pet death/HP persistence, and the final player Gu sync.
 //
-// Shared by AutoCombatStart and AutoResolveCombat so post-combat state is
+// Shared by all auto-combat paths so post-combat state is
 // identical on both paths.
 func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation, alliesAlive bool, updateQuery string, args []interface{}, finalPlayerHP, finalMana float64, before models.GuInventory, logs []simulator.CombatLog) ([]simulator.CombatLog, error) {
 	if alliesAlive && !isVirtual && player.ActiveCombat != nil && player.ActiveCombat.MineSlotID == 0 &&

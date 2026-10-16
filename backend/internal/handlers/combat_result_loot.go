@@ -17,7 +17,7 @@ import (
 // applyCombatVictoryLoot rolls and distributes loot after a won auto-combat.
 //
 // This is the single implementation shared by AutoCombatStart (manual/replay)
-// and AutoResolveCombat (skip battle), using the AutoCombatStart semantics:
+// and ResolveCombat (skip battle), using the AutoCombatStart semantics:
 // PVP drop record + loot-table roll + Gu-drop chance, with random per-item
 // winners when in a party and direct inventory grants when solo.
 func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *models.CombatState, partyMembers []uuid.UUID, isVirtual bool) (lootDetailLogs []string, pendingNotifications []notify.Notification) {

@@ -699,15 +699,16 @@ func MovePlayer(c *gin.Context) {
 	// Auto-resolve combat if skip_battle is enabled
 	var pendingNotifications []notify.Notification
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
-		var afterCombatCommit func()
-		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player, &afterCombatCommit)
+		res, err := ResolveCombat(tx, &player, nil, nil)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during move: %v", err)
 			_ = tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
 			return
 		} else {
-			pendingNotifications = notifications
+			winner, skipSummary := res.Winner, res.Summary
+			afterCombatCommit := res.AfterCommit
+			pendingNotifications = res.Notifications
 			combatTriggered = false // Combat was auto-resolved
 			enemyName := "kẻ thù"
 			if e, ok := skipSummary["enemy_name"].(string); ok {
@@ -1036,15 +1037,16 @@ func MovePlayerPath(c *gin.Context) {
 	// Auto-resolve combat if skip_battle is enabled
 	var pendingNotifications []notify.Notification
 	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
-		var afterCombatCommit func()
-		winner, _, skipSummary, notifications, err := AutoResolveCombat(tx, &player, &afterCombatCommit)
+		res, err := ResolveCombat(tx, &player, nil, nil)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during path move: %v", err)
 			_ = tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Tự động chiến đấu thất bại: " + err.Error()})
 			return
 		} else {
-			pendingNotifications = notifications
+			winner, skipSummary := res.Winner, res.Summary
+			afterCombatCommit := res.AfterCommit
+			pendingNotifications = res.Notifications
 			combatTriggered = false // Combat was auto-resolved
 			enemyName := "kẻ thù"
 			if e, ok := skipSummary["enemy_name"].(string); ok {

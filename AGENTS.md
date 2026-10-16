@@ -24,7 +24,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 
 ## Backend Conventions (agent would likely miss)
 
-- **No service layer.** Handlers are fat but split per domain in `backend/internal/handlers/` (e.g. `player_auth.go`, `player_inventory.go`, `player_stats.go`, `player_explore.go`, `player_daongan.go`, `player_profile.go`, `combat.go`: 2400+ lines). All gameplay logic lives there.
+- **Handlers are fat, and load-bearing services sit behind them.** Gameplay logic lives in `backend/internal/handlers/`, split per domain (e.g. `player_auth.go`, `player_inventory.go`, `player_stats.go`, `player_explore.go`, `player_daongan.go`, `player_profile.go`, `combat.go`). A small service layer exists for shared persistence/state and **is** wired in: `backend/internal/services/` (`PlayerService`, `InventoryService`, `QuestService`, `RecipeService`, `AchievementService`, `CombatSessionService`) exposed to handlers via the `PlayerSvc` / `InventorySvc` globals in `handlers/services.go`. Reuse those instead of pasting new player-row SQL; a real seam exists, so keep reads/writes routed through it.
 - **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). When adding **new columns**, declare them inline in the `CREATE TABLE` of the matching `schema_*.go` file (fresh init; no ALTER patches). Per-region starting hubs (`hub_*`) come from `Region.csv` (imported via Admin); `CompleteOnboarding` (`player_auth.go`) maps each registration region to its hub and falls back to `Southern_Border`.
 - **DB reset note:** `players.race`, `players.constitution`, `players.current_region` have FKs. `InitSchema` pre-seeds the `''` race/constitution keys and the `Southern_Border` region so registration works before CSV import; race/constitution registry loaders filter out `''` keys.
 - CSV data is managed through the Admin panel.
@@ -34,7 +34,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - **Registries cached in memory** on startup (`models.GuRegistry`, `models.ItemRegistry`, `gamefx.ConstitutionRegistry`, `gamefx.RaceRegistry`). Changing CSV requires app restart.
 - **Thể chất (constitution) là data-driven.** Danh sách seed từ `data/Constitution.csv` → bảng `constitution_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm thể chất mới: sửa CSV + Import bảng "Thể chất" trong Admin. Format effects xem `docs/GAME_DATA.md`.
 - **Chủng tộc (race) là data-driven.** Danh sách seed từ `data/Race.csv` → bảng `race_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm chủng tộc mới: sửa CSV + Import bảng "Chủng tộc" trong Admin. `players.race` luôn là 1 key duy nhất (default `human`).
-- **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters. All workers accept `context.Context` for graceful shutdown.
+- **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters. All workers accept `context.Context` for graceful shutdown, and **all recurring loops go through `internal/worker/runner.go`** (`RunEvery` / `SafeRun`) so a panic in one tick is logged and recovered instead of killing the process. Don't hand-roll a ticker/select loop. See `docs/DEVELOPMENT.md` → Background workers.
 - **Redis is required for full functionality, but startup is resilient.** Connects with bounded retries/backoff (`REDIS_CONNECT_ATTEMPTS`/`REDIS_CONNECT_DELAY_MS`) and, if still unavailable, keeps running with in-memory fallbacks and a nil cache client rather than crash-looping (a restart replays `InitSchema`'s heavy backfills/DDL and can take the database down).
 - **JSONB fields** use `interface{}` with custom `Scan`/`Value`. Watch for type assertion panics. `CombatState.Scan` now returns empty struct (not nil) on null.
 - **Handlers return errors** to Gin; no panic recovery middleware.
@@ -62,7 +62,8 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - `backend/internal/server/server.go` — all `/api/*` routes registered here
 - `backend/internal/db/db.go` — `Connect` + `InitSchema` orchestrator + CSV seed/export logic
 - `backend/internal/db/schema_*.go` — per-domain table DDL (columns, indexes, FK)
-- `backend/internal/handlers/*.go` — all feature logic (no service layer)
+- `backend/internal/handlers/*.go` — all feature logic
+- `backend/internal/services/*.go` — shared player/inventory/quest persistence (see `handlers/services.go`)
 - `backend/internal/simulator/engine.go` — deterministic auto-battle loop, combat log format
 - `frontend/src/store/useGameStore.ts` — Zustand root store composing domain slices in `frontend/src/store/slices/` + shared SSE wiring
 - `frontend/src/app/` — Next.js App Router pages

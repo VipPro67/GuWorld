@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -18,38 +17,63 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
-// AutoResolveCombat runs a combat simulation using the player's saved combat settings
-// and applies the results to the database. Used for "skip battle" feature.
-// The caller must run afterCommit only after committing tx successfully.
-// Returns: winner ("Phe Ta" or "Phe Địch"), logs, summary, notifications, error.
-func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (string, []simulator.CombatLog, map[string]interface{}, []notify.Notification, error) {
-	*afterCommit = nil
+// CombatResolution is everything a caller needs once a combat has been
+// simulated and persisted: what to show the player, plus the work that must run
+// only after the surrounding transaction commits.
+type CombatResolution struct {
+	Winner        string
+	Logs          []simulator.CombatLog
+	Summary       map[string]interface{}
+	Notifications []notify.Notification
+	Combatants    []CombatantInfo
+	ApertureHP    float64
+	ApertureMaxHP float64
+	Turn          int
+	ItemsUsed     int
+	StonesSpent   float64
+	AfterCommit   func()
+}
+
+// ResolveCombat simulates a combat and applies the outcome to the database. It
+// owns everything from building the snapshot through the victory/defeat branch
+// to persisting the result; callers own the transaction and their own
+// preconditions.
+//
+// loadout is the loadout to simulate with; nil means use the player's saved
+// combat settings. loadoutGuIDs is the explicit Gu selection for the player
+// combatant (nil means "whatever the settings/enemy selection implies").
+//
+// winner is always derived from the simulation, never from log text.
+func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string) (*CombatResolution, error) {
 	var pendingNotifications []notify.Notification
 	var publishClearedCell bool
 	if player.ActiveCombat == nil {
-		return "", nil, nil, nil, fmt.Errorf("no active combat")
+		return nil, fmt.Errorf("no active combat")
 	}
 	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
-		return "", nil, nil, nil, err
+		return nil, err
 	}
 	if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
-		return "", nil, nil, nil, err
+		return nil, err
 	}
 
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
 	isTribulation := player.ActiveCombat.TribulationEventID != ""
 
-	// Build loadout from player's saved combat settings
-	loadout := simulator.CombatLoadout{
-		AutoHealHP:      player.CombatSettings.AutoHealHP,
-		HealThreshold:   player.CombatSettings.HealThreshold,
-		AutoRestoreMana: player.CombatSettings.AutoRestoreMana,
-		ManaThreshold:   player.CombatSettings.ManaThreshold,
+	// Build loadout from the player's saved combat settings when the caller did
+	// not supply one.
+	if loadout == nil {
+		loadout = &simulator.CombatLoadout{
+			AutoHealHP:      player.CombatSettings.AutoHealHP,
+			HealThreshold:   player.CombatSettings.HealThreshold,
+			AutoRestoreMana: player.CombatSettings.AutoRestoreMana,
+			ManaThreshold:   player.CombatSettings.ManaThreshold,
+		}
 	}
 
-	simState, err := buildSimCombatState(tx, player, &loadout, isVirtual)
+	simState, err := buildSimCombatState(tx, player, loadout, isVirtual)
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
+		return nil, fmt.Errorf("failed to initialize initiator stats: %w", err)
 	}
 	simPlayer := simState.Allies[0]
 
@@ -76,7 +100,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 			PathMasteries: ally.PathMasteries,
 		}
 		if ally.ID == player.ID.String() {
-			cInst.GuInventory = filterCombatGuInventory(player.GuInventory, nil, player.CombatSettings)
+			cInst.GuInventory = filterCombatGuInventory(player.GuInventory, loadoutGuIDs, player.CombatSettings)
 		}
 		combatantInfos = append(combatantInfos, cInst)
 	}
@@ -127,14 +151,12 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 
 	_, alliesAlive, finalPlayerHP := combatOutcome(simState, player.ID.String())
 
-	// Apply outcome to DB (simplified from AutoCombatStart)
-	before := append(models.GuInventory(nil), player.GuInventory...)
-
 	applyLoveGuPenalties(player, logs)
 
 	itemsUsed, stonesSpent, _, usageLogs := applySimConsumption(tx, player, simPlayer, isVirtual, simState.Turn)
-	// Refresh before snapshot so finalizeAutoCombatOutcome only diffs post-consumption changes (e.g. loot)
-	before = append(models.GuInventory(nil), player.GuInventory...)
+	// Snapshot after consumption so finalizeAutoCombatOutcome only diffs
+	// post-consumption changes (e.g. loot).
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	var finalMana float64
 	for _, a := range simState.Allies {
@@ -150,14 +172,18 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 	var args []interface{}
 
 	enemyName := ""
+	rawEnemyType := ""
 	if player.ActiveCombat != nil {
 		enemyName = player.ActiveCombat.EnemyName
+		rawEnemyType = player.ActiveCombat.EnemyType
 	}
-	enemyType := combatTypeLabel(player.ActiveCombat)
+	// combatTypeLabel is a human-readable label for the log header only; the raw
+	// EnemyType is what combat-history decisions and rows must use (e.g. "PVP").
+	enemyTypeLabel := combatTypeLabel(player.ActiveCombat)
 	logs = append([]simulator.CombatLog{{
 		Turn:   0,
 		Action: "COMBAT_TYPE",
-		Detail: fmt.Sprintf("=== %s ===", enemyType),
+		Detail: fmt.Sprintf("=== %s ===", enemyTypeLabel),
 	}}, logs...)
 
 	summary := make(map[string]interface{})
@@ -177,6 +203,27 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 					Action: "ARENA_REWARD",
 					Detail: "Chiến thắng Võ Đài! Nhận thưởng 50 Xu Đấu Trường.",
 				})
+			}
+			// Beating a higher-ranked opponent swaps arena ranks.
+			if player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
+				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
+				if parseErr == nil {
+					var playerRank, targetRank int
+					errPR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&playerRank)
+					errTR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", targetUUID).Scan(&targetRank)
+					if errPR == nil && errTR == nil && playerRank > targetRank {
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = -1 WHERE player_id = $1", player.ID)
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", targetRank, player.ID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", targetRank, player.ID)
+						logs = append(logs, simulator.CombatLog{
+							Turn:   simState.Turn,
+							Action: "ARENA_RANK_UP",
+							Detail: fmt.Sprintf("Chúc mừng! Đạo hữu đã vượt cấp khiêu chiến thành công, thăng lên Hạng %d Võ Đài!", targetRank),
+						})
+					}
+				}
 			}
 			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
 			args = append(args, player.ID)
@@ -212,67 +259,23 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 				summary["mine_occupied"] = player.ActiveCombat.MineSlotID
 			}
 
-			// Sect War Victory/Defeat
+			// Sect War victory. This branch only runs when alliesAlive (outer
+			// branch), and alliesAlive implies every enemy is down, so the
+			// attacker always won here — no log-text matching needed. The
+			// attacker-defeat case is handled by applyAutoCombatDefeat.
 			if player.ActiveCombat.TargetSectID != "" {
-				// Determine winner: check combat logs for "Trận kết thúc. Phe X thắng!"
-				var winner string
-				for i := len(logs) - 1; i >= 0; i-- {
-					logDetail := logs[i].Detail
-					if strings.Contains(logDetail, "Trận chiến kết thúc") {
-						if strings.Contains(logDetail, "Phe Ta") {
-							winner = "attacker"
-						} else if strings.Contains(logDetail, "Phe Địch") {
-							winner = "defender"
-						}
-						break
-					}
-				}
-
-				if winner == "attacker" {
-					// Attacker won - apply victory: plunder, shield, rewards
-					sectWarLogs := ApplySectWarVictory(tx, player, player.ActiveCombat)
-					for _, swMsg := range sectWarLogs {
-						logs = append(logs, simulator.CombatLog{
-							Turn:   simState.Turn,
-							Action: "SECT_WAR",
-							Detail: swMsg,
-						})
-					}
-					summary["sect_war_won"] = true
-				} else {
-					// Defender won (attacker lost) - apply defeat: contribution points, shield, teleport
-					sectDefeatLogs := ApplySectWarDefeat(tx, player, player.ActiveCombat)
-					for _, sdMsg := range sectDefeatLogs {
-						logs = append(logs, simulator.CombatLog{
-							Turn:   simState.Turn,
-							Action: "SECT_WAR_DEFEAST",
-							Detail: sdMsg,
-						})
-					}
-					// Apply death-like penalty: teleport to hub, death drop
-					player.HP = 1.0
-					deathRegion, deathX, deathY := player.CurrentRegion, player.X, player.Y
-					player.CurrentRegion, player.X, player.Y = ResolveRespawnPosition(tx, player.ID, deathRegion, deathX, deathY)
-
-					// Apply death drop (may drop items)
-					dropSummary := applyDeathDrop(tx, player, nil, false, DeathPos{Region: deathRegion, X: deathX, Y: deathY})
-					playerMsg := "Đại bại trong chiến tranh Tông Môn. " + RespawnLocationMessage(deathRegion, player.CurrentRegion, player.X, player.Y)
-					if dropSummary != "" {
-						playerMsg += fmt.Sprintf(" Rơi rớt mất: %s.", dropSummary)
-					}
+				sectWarLogs := ApplySectWarVictory(tx, player, player.ActiveCombat)
+				for _, swMsg := range sectWarLogs {
 					logs = append(logs, simulator.CombatLog{
 						Turn:   simState.Turn,
-						Action: "BATTLE_END",
-						Detail: playerMsg,
+						Action: "SECT_WAR",
+						Detail: swMsg,
 					})
-
-					// Update player position in DB
-					_, _ = tx.Exec(`UPDATE players SET current_region = $1, x = $2, y = $3 WHERE id = $4`,
-						player.CurrentRegion, player.X, player.Y, player.ID)
 				}
+				summary["sect_war_won"] = true
 			}
 
-			if player.ActiveCombat.TargetSectID == "" {
+			if !isTribulation && player.ActiveCombat.TargetSectID == "" {
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
 				}
@@ -280,11 +283,12 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 				publishClearedCell = true
 			}
-			clearedCellsJSON, _ := json.Marshal(player.ClearedCells)
+			// player.ClearedCells implements driver.Valuer, so it goes straight
+			// into the jsonb column without a manual marshal.
 
 			player.HP = float64(finalPlayerHP)
 			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, path_masteries = $5, aptitude_percent = $6, lifespan = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
-			args = append(args, player.HP, finalMana, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.AptitudePercent, player.Lifespan, clearedCellsJSON, player.ID)
+			args = append(args, player.HP, finalMana, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.AptitudePercent, player.Lifespan, player.ClearedCells, player.ID)
 
 			summary["loot"] = lootDetailLogs
 		}
@@ -297,7 +301,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 
 	logs, err = finalizeAutoCombatOutcome(tx, player, simState, isVirtual, isTribulation, alliesAlive, updateQuery, args, finalPlayerHP, finalMana, before, logs)
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("failed to finalize combat outcome: %w", err)
+		return nil, fmt.Errorf("failed to finalize combat outcome: %w", err)
 	}
 
 	qiReward := 2.0
@@ -311,7 +315,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 	qiGained := AddHumanQi(player, qiReward)
 	_, err = tx.Exec("UPDATE players SET human_qi = $1 WHERE id = $2", player.HumanQi, player.ID)
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("failed to update human_qi: %w", err)
+		return nil, fmt.Errorf("failed to update human_qi: %w", err)
 	}
 	summary["human_qi_gained"] = qiGained
 
@@ -357,32 +361,44 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player, afterCommit *func()) (
 		clearedEnemyTemplateID = player.ActiveCombat.EnemyTemplateID
 	}
 	historyPlayerID, historyUsername := player.ID, player.Username
-	*afterCommit = func() {
+	res := &CombatResolution{
+		Winner:        winner,
+		Logs:          logs,
+		Summary:       summary,
+		Notifications: pendingNotifications,
+		Combatants:    combatantInfos,
+		ApertureHP:    simState.ApertureHP,
+		ApertureMaxHP: simState.ApertureMaxHP,
+		Turn:          simState.Turn,
+		ItemsUsed:     itemsUsed,
+		StonesSpent:   stonesSpent,
+	}
+	res.AfterCommit = func() {
 		if publishClearedCell {
 			publishCombatClearedCell(clearedRegion, clearedX, clearedY, clearedPlayerID, clearedEnemyName, clearedEnemyTemplateID)
 		}
-		if !shouldRecordCombatHistory(enemyType, winner) {
+		if !shouldRecordCombatHistory(rawEnemyType, winner) {
 			return
 		}
 		go func() {
 			summaryStr := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
-			if enemyType == "PVP" {
+			if rawEnemyType == "PVP" {
 				attackerIDs, defenderIDs := pvpHistoryPlayerIDs(historyPlayerID, simState.Allies, targetPlayerID)
 				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summaryStr, combatantInfos, enemyName, historyUsername, historyRegion)
 			} else {
 				// PVE defeats only: the replay the player wants to review afterwards.
-				SaveCombatHistory(historyPlayerID, winner, toInterfaceSlice(logs), summaryStr, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, historyRegion)
+				SaveCombatHistory(historyPlayerID, winner, toInterfaceSlice(logs), summaryStr, combatantInfoInterfaces(combatantInfos, false), enemyName, rawEnemyType, historyRegion)
 			}
 		}()
 	}
 
 	summary["winner"] = winner
 	summary["enemy_name"] = enemyName
-	summary["enemy_type"] = enemyType
+	summary["enemy_type"] = rawEnemyType
 	summary["allies"] = allySummary
 
 	player.ActiveCombat = nil
-	return winner, logs, summary, pendingNotifications, nil
+	return res, nil
 }
 
 // ── helpers ────────────────────────────────────────────────────────────

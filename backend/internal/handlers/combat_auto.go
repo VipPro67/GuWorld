@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -79,7 +78,6 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 	playerLoadDuration := time.Since(playerLoadStartedAt)
-	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if gamefx.IsDeadState(&player) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu đã rơi vào cõi chết. Không thể bắt đầu giao tranh!"})
@@ -105,254 +103,16 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
-	isVirtual := player.ActiveCombat.CombatMode == "virtual"
-	isTribulation := player.ActiveCombat.TribulationEventID != ""
-
-	stateBuildStartedAt := time.Now()
-	simState, err := buildSimCombatState(tx, &player, &req.Loadout, isVirtual)
+	// ── Shared outcome path: build snapshot → simulate → outcome → persist ──
+	resolveStartedAt := time.Now()
+	res, err := ResolveCombat(tx, &player, &req.Loadout, req.Loadout.GuIds)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize initiator stats"})
-		return
-	}
-	simPlayer := simState.Allies[0]
-
-	// ── Build combatant info for frontend replay ──
-	var combatantInfos []CombatantInfo
-	for _, ally := range simState.Allies {
-		cInst := CombatantInfo{
-			ID:            ally.ID,
-			Name:          ally.Name,
-			Kind:          "ally",
-			MaxHP:         ally.MaxHP,
-			HP:            ally.HP,
-			MaxMana:       ally.MaxMana,
-			Mana:          ally.Mana,
-			GridX:         ally.GridX,
-			GridY:         ally.GridY,
-			Shield:        ally.VirtualShield,
-			Damage:        ally.BaseDmg,
-			Defense:       ally.BaseDef,
-			Speed:         ally.Speed,
-			KindDetail:    ally.Kind,
-			Rank:          ally.Rank,
-			SubRank:       ally.SubRank,
-			DaoMarks:      models.DaoMarksMap(ally.DaoMarks),
-			PathMasteries: ally.PathMasteries,
-		}
-		if ally.ID == player.ID.String() {
-			cInst.GuInventory = filterCombatGuInventory(player.GuInventory, req.Loadout.GuIds, player.CombatSettings)
-		}
-		combatantInfos = append(combatantInfos, cInst)
-	}
-	for _, e := range player.ActiveCombat.Enemies {
-		combatantInfos = append(combatantInfos, CombatantInfo{
-			ID:            e.ID,
-			Name:          e.Name,
-			Kind:          "enemy",
-			MaxHP:         e.MaxHP,
-			HP:            e.HP,
-			MaxMana:       e.MaxMana,
-			Mana:          e.CurrentMana,
-			GridX:         e.GridX,
-			GridY:         e.GridY,
-			Damage:        e.BaseAttack,
-			Defense:       e.BaseDefense,
-			Speed:         e.Speed,
-			KindDetail:    e.Kind,
-			Rank:          e.Rank,
-			SubRank:       e.SubRank,
-			DaoMarks:      e.DaoMarks,
-			PathMasteries: e.PathMasteries,
-			GuInventory:   e.GuInventory,
-		})
-	}
-
-	// 4. Run Simulator
-	simState.CaptureTurnSnapshots = true
-	stateBuildDuration := time.Since(stateBuildStartedAt)
-	simulationStartedAt := time.Now()
-	logs := simulator.Simulate(simState)
-	simulationDuration := time.Since(simulationStartedAt)
-	outcomeStartedAt := time.Now()
-	var pendingNotifications []notify.Notification
-	var publishClearedCell bool
-
-	// Apply Love Gu (Chaos Gamble) penalties
-	applyLoveGuPenalties(&player, logs)
-
-	// 5. Apply outcome to DB
-	_, alliesAlive, finalPlayerHP := combatOutcome(simState, player.ID.String())
-
-	itemsUsed, stonesSpent, _, usageLogs := applySimConsumption(tx, &player, simPlayer, isVirtual, simState.Turn)
-	// Refresh before snapshot so finalizeAutoCombatOutcome only diffs post-consumption changes (e.g. loot)
-	before = append(models.GuInventory(nil), player.GuInventory...)
-	logs = append(logs, usageLogs...)
-
-	// ── Grab final mana from sim ──
-	var finalMana float64
-	for _, a := range simState.Allies {
-		if a.ID == player.ID.String() {
-			finalMana = a.Mana
-			break
-		}
-	}
-
-	var updateQuery string
-	var args []interface{}
-
-	// ── Combat type label for logs ──
-	enemyTypeName := combatTypeLabel(player.ActiveCombat)
-	logs = append([]simulator.CombatLog{{
-		Turn:   0,
-		Action: "COMBAT_TYPE",
-		Detail: fmt.Sprintf("=== %s ===", enemyTypeName),
-	}}, logs...)
-
-	// Capture the battle region before the outcome branch: a defeat respawns the
-	// player (applyAutoCombatDefeat mutates CurrentRegion), and combat history
-	// must record where the fight happened, not the respawn hub.
-	historyRegion := player.CurrentRegion
-
-	if alliesAlive {
-		if isVirtual {
-			if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 50); err != nil {
-				logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
-			} else {
-				logs = append(logs, simulator.CombatLog{
-					Turn:   simState.Turn,
-					Action: "ARENA_REWARD",
-					Detail: "Chiến thắng Võ Đài! Nhận thưởng 50 Xu Đấu Trường.",
-				})
-			}
-			if player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
-				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
-				if parseErr == nil {
-					var playerRank, targetRank int
-					errPR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&playerRank)
-					errTR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", targetUUID).Scan(&targetRank)
-					if errPR == nil && errTR == nil && playerRank > targetRank {
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = -1 WHERE player_id = $1", player.ID)
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", playerRank, targetUUID)
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", targetRank, player.ID)
-						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", playerRank, targetUUID)
-						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", targetRank, player.ID)
-						logs = append(logs, simulator.CombatLog{
-							Turn:   simState.Turn,
-							Action: "ARENA_RANK_UP",
-							Detail: fmt.Sprintf("Chúc mừng! Đạo hữu đã vượt cấp khiêu chiến thành công, thăng lên Hạng %d Võ Đài!", targetRank),
-						})
-					}
-				}
-			}
-			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
-			args = append(args, player.ID)
-		} else {
-			var partyMembers []uuid.UUID
-			for _, ally := range player.ActiveCombat.Allies {
-				if ally.Kind == "Pet" || ally.Kind == "VariantNPC" {
-					continue
-				}
-				allyUUID, errParse := uuid.Parse(ally.ID)
-				if errParse == nil {
-					partyMembers = append(partyMembers, allyUUID)
-				}
-			}
-
-			lootDetailLogs, lootNotifications := applyCombatVictoryLoot(tx, &player, player.ActiveCombat, partyMembers, isVirtual)
-			pendingNotifications = append(pendingNotifications, lootNotifications...)
-
-			markBossCleared(tx, &player)
-
-			for _, lMsg := range lootDetailLogs {
-				logs = append(logs, simulator.CombatLog{
-					Turn:   simState.Turn,
-					Action: "LOOT",
-					Detail: lMsg,
-				})
-			}
-
-			mineLogs, _ := applyAutoCombatMineOccupation(tx, &player, player.ActiveCombat, simState.Turn)
-			logs = append(logs, mineLogs...)
-
-			// Sect War Victory
-			if player.ActiveCombat.TargetSectID != "" {
-				sectWarLogs := ApplySectWarVictory(tx, &player, player.ActiveCombat)
-				for _, swMsg := range sectWarLogs {
-					logs = append(logs, simulator.CombatLog{
-						Turn:   simState.Turn,
-						Action: "SECT_WAR",
-						Detail: swMsg,
-					})
-				}
-			}
-
-			if player.ClearedCells == nil {
-				player.ClearedCells = make(models.ClearedCellsMap)
-			}
-			if !isTribulation && player.ActiveCombat.TargetSectID == "" {
-				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-				publishClearedCell = true
-			}
-
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
-			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.ImmortalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
-		}
-	} else {
-		defUpdateQuery, defArgs, defLogs := applyAutoCombatDefeat(tx, &player, simState, isVirtual, isTribulation, finalMana)
-		updateQuery = defUpdateQuery
-		args = append(args, defArgs...)
-		logs = append(logs, defLogs...)
-	}
-
-	logs, err = finalizeAutoCombatOutcome(tx, &player, simState, isVirtual, isTribulation, alliesAlive, updateQuery, args, finalPlayerHP, finalMana, before, logs)
-	if err != nil {
+		logger.S.Errorf("AutoCombatStart: resolve failed for player=%s: %v", player.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
 		return
 	}
+	resolveDuration := time.Since(resolveStartedAt)
 
-	qiReward := 2.0
-	if alliesAlive {
-		enemyRank := 1
-		if player.ActiveCombat != nil {
-			enemyRank = player.ActiveCombat.EnemyRank
-		}
-		qiReward = combatHumanQiReward(enemyRank)
-	}
-	qiGained := AddHumanQi(&player, qiReward)
-	_, err = tx.Exec("UPDATE players SET human_qi = $1 WHERE id = $2", player.HumanQi, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
-		return
-	}
-
-	// Cổ mang PERSIST_STATUS_ON_HIT: đòn đánh trúng ở PvP thật thì defender
-	// nhận persistent status (data-driven, xem handlers/status.go).
-	for _, g := range maybeGrantPersistentHitStatuses(tx, &player, simState, logs) {
-		if strings.EqualFold(g.StatusKey, gamefx.StatusSinhKhiTan) {
-			logs = append(logs, simulator.CombatLog{
-				Turn:   simState.Turn,
-				Action: "SINH_KHI_TAN_APPLIED",
-				Detail: fmt.Sprintf("Sát khí tàn lụi xâm nhập! Kẻ địch nhận [%s] (công/thủ/tốc giảm %.0f%% trong %d giờ).",
-					gamefx.SinhKhiTanTierName(g.Tier),
-					-gamefx.SinhKhiTanValueForTier(g.Tier)*100, gamefx.SinhKhiTanDurationMinutes/60),
-			})
-		} else {
-			logs = append(logs, simulator.CombatLog{
-				Turn:   simState.Turn,
-				Action: "PERSIST_STATUS_APPLIED",
-				Detail: fmt.Sprintf("Kẻ địch trúng dư âm Cổ trùng, nhận [%s].",
-					gamefx.StatusDisplayName(g.StatusKey)),
-			})
-		}
-	}
-
-	if fakeWallLog := maybeGrantFakeRegionalWallStatus(tx, &player); fakeWallLog != nil {
-		fakeWallLog.Turn = simState.Turn
-		logs = append(logs, *fakeWallLog)
-	}
-
-	outcomeDuration := time.Since(outcomeStartedAt)
 	commitStartedAt := time.Now()
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat transaction"})
@@ -361,52 +121,32 @@ func AutoCombatStart(c *gin.Context) {
 	commitDuration := time.Since(commitStartedAt)
 	transactionDuration := time.Since(transactionStartedAt)
 	if transactionDuration >= time.Second {
-		logger.S.Warnf("AutoCombatStart slow transaction player=%s total=%s begin=%s load=%s state_build=%s simulation=%s outcome=%s commit=%s turns=%d",
-			player.ID, transactionDuration, beginDuration, playerLoadDuration, stateBuildDuration, simulationDuration, outcomeDuration, commitDuration, simState.Turn)
+		logger.S.Warnf("AutoCombatStart slow transaction player=%s total=%s begin=%s load=%s resolve=%s commit=%s turns=%d",
+			player.ID, transactionDuration, beginDuration, playerLoadDuration, resolveDuration, commitDuration, res.Turn)
 	}
-	if publishClearedCell {
-		publishCombatClearedCell(player.CurrentRegion, player.X, player.Y, player.ID.String(), player.ActiveCombat.EnemyName, player.ActiveCombat.EnemyTemplateID)
+
+	// Cleared-cell publish and combat history run only after the commit.
+	if res.AfterCommit != nil {
+		res.AfterCommit()
 	}
-	for _, notification := range pendingNotifications {
+	for _, notification := range res.Notifications {
 		notify.Publish(notification)
 	}
 
 	setWorldPosFromPlayer(&player)
+	completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, res.Winner, player.ID.String())
 
-	winner := "Phe Địch"
-	if alliesAlive {
-		winner = "Phe Ta"
-	}
-	completeWorldMonsterCombat(c.Request.Context(), &worldMonsterCombat, winner, player.ID.String())
-
-	// ── Save combat history (non-critical) ──
-	enemyName := ""
-	enemyType := ""
-	var targetPlayerID string
-	if player.ActiveCombat != nil {
-		enemyName = player.ActiveCombat.EnemyName
-		enemyType = player.ActiveCombat.EnemyType
-		targetPlayerID = player.ActiveCombat.TargetPlayerID
-	}
-	if shouldRecordCombatHistory(enemyType, winner) {
-		go func() {
-			summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, int64(stonesSpent))
-			if enemyType == "PVP" {
-				attackerIDs, defenderIDs := pvpHistoryPlayerIDs(player.ID, simState.Allies, targetPlayerID)
-				savePVPCombatHistory(attackerIDs, defenderIDs, winner, toInterfaceSlice(logs), summary, combatantInfos, enemyName, player.Username, historyRegion)
-			} else {
-				// PVE defeats only: the replay the player wants to review afterwards.
-				SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfoInterfaces(combatantInfos, false), enemyName, enemyType, historyRegion)
-			}
-		}()
+	qiGained := 0.0
+	if v, ok := res.Summary["human_qi_gained"].(float64); ok {
+		qiGained = v
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"message":         fmt.Sprintf("Chiến đấu hoàn tất. Nhân Khí +%.0f.", qiGained),
-		"logs":            logs,
-		"winner":          winner,
-		"combatants":      combatantInfos,
-		"aperture_hp":     simState.ApertureHP,
-		"aperture_max_hp": simState.ApertureMaxHP,
+		"logs":            res.Logs,
+		"winner":          res.Winner,
+		"combatants":      res.Combatants,
+		"aperture_hp":     res.ApertureHP,
+		"aperture_max_hp": res.ApertureMaxHP,
 	})
 }
 
@@ -769,7 +509,7 @@ func buildStatProvenance(player *models.Player, finalStats map[string]float64, f
 }
 
 // buildSimCombatant constructs a simulator.CombatantAuto from player + Gu loadout.
-// Shared by AutoCombatStart (combat_auto.go) and AutoResolveCombat (combat_auto_resolve.go).
+// Shared by AutoCombatStart (combat_auto.go) and ResolveCombat (combat_auto_resolve.go).
 func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInitiator bool, reqLoadout *simulator.CombatLoadout) (*simulator.CombatantAuto, error) {
 	// Cổ mang CLEANSE_REGIONAL_WALL: gỡ Áp Chế Giới Vực khỏi bản thân trước
 	// khi tính stat để trận không kế thừa debuff thế giới. player ở đây luôn là
