@@ -432,7 +432,7 @@ func TestSpawnMaterializationUsesAuthoritativePlayerRadius(t *testing.T) {
 
 func TestProceduralMonsterCellBecomesRuntimeSpawn(t *testing.T) {
 	entry := WorldPosEntry{Region: "dang_hon_son", X: 24798, Y: 13261}
-	previousCell, previousRegion, previousCleared := resolveWorldMonsterCell, deriveWorldMonsterRegion, worldMonsterCellCleared
+	previousCell, previousRegion, previousCleared := resolveWorldMonsterCell, deriveWorldMonsterRegion, worldMonsterCellsCleared
 	resolveWorldMonsterCell = func(x, y int) models.Cell {
 		if x == entry.X && y == entry.Y {
 			return models.Cell{X: x, Y: y, Type: "Monster", Content: "monster_soul_devourer", Rank: 5, SubRank: 2}
@@ -440,9 +440,11 @@ func TestProceduralMonsterCellBecomesRuntimeSpawn(t *testing.T) {
 		return models.Cell{X: x, Y: y, Type: "Empty"}
 	}
 	deriveWorldMonsterRegion = func(int, int) string { return entry.Region }
-	worldMonsterCellCleared = func(string, int, int) bool { return false }
+	worldMonsterCellsCleared = func([]cache.CellCoordKey) (map[cache.CellCoordKey]cache.MapCellState, error) {
+		return nil, nil
+	}
 	t.Cleanup(func() {
-		resolveWorldMonsterCell, deriveWorldMonsterRegion, worldMonsterCellCleared = previousCell, previousRegion, previousCleared
+		resolveWorldMonsterCell, deriveWorldMonsterRegion, worldMonsterCellsCleared = previousCell, previousRegion, previousCleared
 	})
 	cell := resolveWorldMonsterCell(entry.X, entry.Y)
 	spawns := proceduralMonsterSpawns(entry, 1)
@@ -455,7 +457,13 @@ func TestProceduralMonsterCellBecomesRuntimeSpawn(t *testing.T) {
 	if !found {
 		t.Fatalf("procedural monster cell was not converted to a stable runtime spawn: %#v", spawns)
 	}
-	worldMonsterCellCleared = func(string, int, int) bool { return true }
+	worldMonsterCellsCleared = func(coords []cache.CellCoordKey) (map[cache.CellCoordKey]cache.MapCellState, error) {
+		out := make(map[cache.CellCoordKey]cache.MapCellState, len(coords))
+		for _, c := range coords {
+			out[c] = cache.MapCellState{}
+		}
+		return out, nil
+	}
 	if cleared := proceduralMonsterSpawns(entry, 1); len(cleared) != 0 {
 		t.Fatalf("cleared procedural cell rematerialized: %#v", cleared)
 	}

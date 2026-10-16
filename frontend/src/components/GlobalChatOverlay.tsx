@@ -139,6 +139,7 @@ export const GlobalChatOverlay: React.FC = () => {
   useEffect(() => {
     let active = true;
     const syncRegion = async () => {
+      if (document.visibilityState !== "visible") return;
       const key = await getCurrentRegionChatChannel();
       if (!active || !key || regionChatSubscription.current?.key === key) return;
       regionChatSubscription.current?.unsubscribe();
@@ -146,10 +147,13 @@ export const GlobalChatOverlay: React.FC = () => {
       if (activeChannel === "region") void fetchBaoHoangMessages("region");
     };
     void syncRegion();
-    const timer = window.setInterval(syncRegion, 15000);
+    const timer = window.setInterval(syncRegion, 60000);
+    const onVisible = () => { if (document.visibilityState === "visible") void syncRegion(); };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
       regionChatSubscription.current?.unsubscribe();
       regionChatSubscription.current = null;
     };

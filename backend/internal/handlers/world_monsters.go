@@ -105,7 +105,12 @@ var (
 	resolveWorldMonsterCell   = ResolveCell
 	deriveWorldMonsterRegion  = DeriveRegionAt
 	isWorldMonsterSafeZone    = IsSafeZone
-	worldMonsterCellCleared   = func(region string, x, y int) bool { return isCellClearedRecently(region, x, y, clearedCellCooldown) }
+	// worldMonsterCellsCleared resolves cleared-state for a whole AOI in one
+	// Redis MGET. The old per-cell check cost one round-trip per cell, which
+	// dominated /api/world/monsters latency (up to (2r+1)^2 calls per request).
+	worldMonsterCellsCleared = func(coords []cache.CellCoordKey) (map[cache.CellCoordKey]cache.MapCellState, error) {
+		return cache.GetClearedCells(coords)
+	}
 	loadWorldMonsterSpawnRank = func(ctx context.Context, spawnID string) (int, error) {
 		var rank int
 		err := db.DB.QueryRowContext(ctx, `SELECT min_rank FROM monster_spawns WHERE id::text=$1`, spawnID).Scan(&rank)
@@ -564,6 +569,14 @@ func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow
 	spawns := make([]monsterSpawnRow, 0, 64)
 	minX, maxX := max(0, player.X-radius), min(WorldWidth-1, player.X+radius)
 	minY, maxY := max(0, player.Y-radius), min(WorldHeight-1, player.Y+radius)
+
+	// Phase 1: resolve procedural cells (pure in-memory, no Redis).
+	type cellCandidate struct {
+		x, y int
+		cell models.Cell
+	}
+	candidates := make([]cellCandidate, 0, 64)
+	coords := make([]cache.CellCoordKey, 0, 64)
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
 			dx, dy := int64(x-player.X), int64(y-player.Y)
@@ -571,14 +584,29 @@ func proceduralMonsterSpawns(player WorldPosEntry, radius int) []monsterSpawnRow
 				continue
 			}
 			cell := resolveWorldMonsterCell(x, y)
-			if cell.Type != "Monster" || cell.Content == "" || deriveWorldMonsterRegion(x, y) != player.Region || worldMonsterCellCleared(player.Region, x, y) {
+			if cell.Type != "Monster" || cell.Content == "" || deriveWorldMonsterRegion(x, y) != player.Region {
 				continue
 			}
-			spawns = append(spawns, monsterSpawnRow{
-				ID: fmt.Sprintf("procedural:%s:%d:%d", player.Region, x, y), RegionID: player.Region,
-				MonsterID: cell.Content, X: x, Y: y, RespawnSeconds: int(clearedCellCooldown.Seconds()), Rank: cell.Rank, SubRank: cell.SubRank,
-			})
+			candidates = append(candidates, cellCandidate{x: x, y: y, cell: cell})
+			coords = append(coords, cache.CellCoordKey{RegionID: player.Region, X: x, Y: y})
 		}
+	}
+
+	// Phase 2: drop cleared cells with a single batched lookup.
+	cleared, err := worldMonsterCellsCleared(coords)
+	if err != nil {
+		logger.S.Warnf("procedural monster cleared-state batch lookup failed: %v", err)
+		cleared = nil // fail open, matching the old per-cell error behaviour
+	}
+
+	for _, c := range candidates {
+		if _, isCleared := cleared[cache.CellCoordKey{RegionID: player.Region, X: c.x, Y: c.y}]; isCleared {
+			continue
+		}
+		spawns = append(spawns, monsterSpawnRow{
+			ID: fmt.Sprintf("procedural:%s:%d:%d", player.Region, c.x, c.y), RegionID: player.Region,
+			MonsterID: c.cell.Content, X: c.x, Y: c.y, RespawnSeconds: int(clearedCellCooldown.Seconds()), Rank: c.cell.Rank, SubRank: c.cell.SubRank,
+		})
 	}
 	return spawns
 }

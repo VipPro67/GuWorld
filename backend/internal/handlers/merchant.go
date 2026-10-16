@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -319,32 +320,19 @@ func GetMerchants(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"region": region, "zone_type": "", "at_village": false, "merchants": []merchantDTO{}})
 		return
 	}
-	var zoneType string
-	_ = db.DB.QueryRow(`SELECT zone_type FROM regions WHERE id=$1`, region).Scan(&zoneType)
-	atVillage := zoneType == "HUB" || zoneType == "SAFE_ZONE"
-	rows, err := db.DB.Query(`
-		SELECT m.id, m.region_id, m.x, m.y, p.id, p.name, p.description, p.kind,
-		       p.buy_ratio, p.buy_floor_ratio, p.buy_tags, p.quota_per_item, p.quota_period,
-		       m.buy_tags, m.buy_ratio, m.buy_floor_ratio, m.quota_per_item
-		FROM merchants m
-		JOIN merchant_profiles p ON p.id = m.profile_id
-		WHERE m.region_id = $1 AND m.is_active AND p.enabled AND p.kind = 'ROAMING'
-		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
-		ORDER BY m.id`, region)
+	entry, err := loadRegionMerchantCache(region)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải thương nhân"})
 		return
 	}
-	defer rows.Close()
+	atVillage := entry.zoneType == "HUB" || entry.zoneType == "SAFE_ZONE"
 	out := []merchantDTO{}
-	for rows.Next() {
-		m, ok := scanMerchantRow(rows, px, py)
-		if !ok {
-			continue
+	for i := range entry.rows {
+		if m, ok := entry.rows[i].toDTO(px, py); ok {
+			out = append(out, m)
 		}
-		out = append(out, m)
 	}
-	c.JSON(http.StatusOK, gin.H{"region": region, "zone_type": zoneType, "at_village": atVillage, "merchants": out})
+	c.JSON(http.StatusOK, gin.H{"region": region, "zone_type": entry.zoneType, "at_village": atVillage, "merchants": out})
 }
 
 // merchantRow is the shared column set for merchant list/map queries.
@@ -353,46 +341,131 @@ const merchantRowColumns = `
 	p.buy_ratio, p.buy_floor_ratio, p.buy_tags, p.quota_per_item, p.quota_period,
 	m.buy_tags, m.buy_ratio, m.buy_floor_ratio, m.quota_per_item`
 
-type merchantScanner interface {
-	Scan(dest ...interface{}) error
+// merchantRowData is one merchant row (profile fields with per-instance
+// overrides already applied) without any player-specific distance or stock.
+type merchantRowData struct {
+	ID           string
+	RegionID     string
+	X            int
+	Y            int
+	ProfileID    string
+	Name         string
+	Description  string
+	Kind         string
+	BuyRatio     float64
+	BuyFloor     float64
+	BuyTags      merchantBuyTags
+	QuotaPerItem int
+	QuotaPeriod  string
 }
 
-// scanMerchantRow reads one merchant row and applies per-instance overrides.
-// Returns ok=false when the row is beyond the trade radius.
-func scanMerchantRow(row merchantScanner, px, py int) (merchantDTO, bool) {
-	var m merchantDTO
-	var tagsRaw, oTagsRaw []byte
-	var oRatio, oFloor sql.NullFloat64
-	var oQuota sql.NullInt64
-	if err := row.Scan(&m.ID, &m.RegionID, &m.X, &m.Y, &m.ProfileID, &m.Name, &m.Description, &m.Kind,
-		&m.BuyRatio, &m.BuyFloor, &tagsRaw, &m.QuotaPerItem, &m.QuotaPeriod,
-		&oTagsRaw, &oRatio, &oFloor, &oQuota); err != nil {
-		return m, false
-	}
-	dx, dy := m.X-px, m.Y-py
+// toDTO builds the per-player view, applying the trade-radius gate and loading
+// stock only for merchants the player can actually trade with. Returns ok=false
+// when the merchant is out of trade range.
+func (r merchantRowData) toDTO(px, py int) (merchantDTO, bool) {
+	dx, dy := r.X-px, r.Y-py
 	sq := dx*dx + dy*dy
 	if sq > roamingTradeRadius*roamingTradeRadius {
-		return m, false
+		return merchantDTO{}, false
 	}
-	m.Distance = int(math.Sqrt(float64(sq)))
-	_ = json.Unmarshal(tagsRaw, &m.BuyTags)
-	if len(oTagsRaw) > 0 {
-		var t merchantBuyTags
-		if json.Unmarshal(oTagsRaw, &t) == nil {
-			m.BuyTags = t
-		}
+	m := merchantDTO{
+		ID: r.ID, RegionID: r.RegionID, X: r.X, Y: r.Y,
+		ProfileID: r.ProfileID, Name: r.Name, Description: r.Description, Kind: r.Kind,
+		BuyRatio: r.BuyRatio, BuyFloor: r.BuyFloor, BuyTags: r.BuyTags,
+		QuotaPerItem: r.QuotaPerItem, QuotaPeriod: r.QuotaPeriod,
+		Distance: int(math.Sqrt(float64(sq))),
+		Stock:    loadMerchantStock(r.ID),
 	}
-	if oRatio.Valid {
-		m.BuyRatio = oRatio.Float64
-	}
-	if oFloor.Valid {
-		m.BuyFloor = oFloor.Float64
-	}
-	if oQuota.Valid {
-		m.QuotaPerItem = int(oQuota.Int64)
-	}
-	m.Stock = loadMerchantStock(m.ID)
 	return m, true
+}
+
+// The merchant set of a region is global (not per-player), so both /merchant and
+// /merchant/map can serve from the same short-TTL cache keyed by region instead
+// of re-running the join on every 15s client poll.
+type merchantRegionCacheEntry struct {
+	rows     []merchantRowData
+	zoneType string
+	cachedAt time.Time
+}
+
+const merchantRegionCacheTTL = 10 * time.Second
+
+var (
+	merchantRegionCacheMu sync.RWMutex
+	merchantRegionCache   = map[string]merchantRegionCacheEntry{}
+)
+
+// invalidateMerchantRegionCache drops a region's cached merchant rows. An empty
+// regionID clears the whole cache (used after roaming spawn/expire batches).
+func invalidateMerchantRegionCache(regionID string) {
+	merchantRegionCacheMu.Lock()
+	if regionID == "" {
+		merchantRegionCache = map[string]merchantRegionCacheEntry{}
+	} else {
+		delete(merchantRegionCache, regionID)
+	}
+	merchantRegionCacheMu.Unlock()
+}
+
+// loadRegionMerchantCache returns a region's active roaming merchants (with
+// overrides applied) and its zone type, cached for merchantRegionCacheTTL.
+func loadRegionMerchantCache(region string) (merchantRegionCacheEntry, error) {
+	merchantRegionCacheMu.RLock()
+	entry, ok := merchantRegionCache[region]
+	merchantRegionCacheMu.RUnlock()
+	if ok && time.Since(entry.cachedAt) < merchantRegionCacheTTL {
+		return entry, nil
+	}
+
+	var zoneType string
+	_ = db.DB.QueryRow(`SELECT zone_type FROM regions WHERE id=$1`, region).Scan(&zoneType)
+
+	rows, err := db.DB.Query(`
+		SELECT `+merchantRowColumns+`
+		FROM merchants m
+		JOIN merchant_profiles p ON p.id = m.profile_id
+		WHERE m.region_id = $1 AND m.is_active AND p.enabled AND p.kind = 'ROAMING'
+		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
+		ORDER BY m.id`, region)
+	if err != nil {
+		return merchantRegionCacheEntry{}, err
+	}
+	defer rows.Close()
+	out := []merchantRowData{}
+	for rows.Next() {
+		var r merchantRowData
+		var tagsRaw, oTagsRaw []byte
+		var oRatio, oFloor sql.NullFloat64
+		var oQuota sql.NullInt64
+		if err := rows.Scan(&r.ID, &r.RegionID, &r.X, &r.Y, &r.ProfileID, &r.Name, &r.Description, &r.Kind,
+			&r.BuyRatio, &r.BuyFloor, &tagsRaw, &r.QuotaPerItem, &r.QuotaPeriod,
+			&oTagsRaw, &oRatio, &oFloor, &oQuota); err != nil {
+			continue
+		}
+		_ = json.Unmarshal(tagsRaw, &r.BuyTags)
+		if len(oTagsRaw) > 0 {
+			var t merchantBuyTags
+			if json.Unmarshal(oTagsRaw, &t) == nil {
+				r.BuyTags = t
+			}
+		}
+		if oRatio.Valid {
+			r.BuyRatio = oRatio.Float64
+		}
+		if oFloor.Valid {
+			r.BuyFloor = oFloor.Float64
+		}
+		if oQuota.Valid {
+			r.QuotaPerItem = int(oQuota.Int64)
+		}
+		out = append(out, r)
+	}
+
+	entry = merchantRegionCacheEntry{rows: out, zoneType: zoneType, cachedAt: time.Now()}
+	merchantRegionCacheMu.Lock()
+	merchantRegionCache[region] = entry
+	merchantRegionCacheMu.Unlock()
+	return entry, nil
 }
 
 type merchantMarker struct {
@@ -415,24 +488,14 @@ func GetMerchantMap(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"region": "", "merchants": []merchantMarker{}})
 		return
 	}
-	rows, err := db.DB.Query(`
-		SELECT m.id, m.x, m.y, p.name
-		FROM merchants m
-		JOIN merchant_profiles p ON p.id = m.profile_id
-		WHERE m.region_id = $1 AND m.is_active AND p.enabled AND p.kind = 'ROAMING'
-		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
-		ORDER BY m.id`, region)
+	entry, err := loadRegionMerchantCache(region)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải bản đồ thương nhân"})
 		return
 	}
-	defer rows.Close()
-	out := []merchantMarker{}
-	for rows.Next() {
-		var mk merchantMarker
-		if err := rows.Scan(&mk.ID, &mk.X, &mk.Y, &mk.Name); err == nil {
-			out = append(out, mk)
-		}
+	out := make([]merchantMarker, 0, len(entry.rows))
+	for _, r := range entry.rows {
+		out = append(out, merchantMarker{ID: r.ID, X: r.X, Y: r.Y, Name: r.Name})
 	}
 	c.JSON(http.StatusOK, gin.H{"region": region, "merchants": out})
 }

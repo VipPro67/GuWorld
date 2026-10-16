@@ -283,8 +283,14 @@ func schemaMapGroundDrops() error {
 	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_active ON map_ground_drops (region_id, expires_at);`); err != nil {
 		return err
 	}
-	if err := execSchema("map_ground_drops_xy_idx", `
-	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_xy ON map_ground_drops (x, y);`); err != nil {
+	if err := execSchema("map_ground_drops_xy_expires_idx", `
+	CREATE INDEX IF NOT EXISTS idx_map_ground_drops_xy_expires ON map_ground_drops (x, y, expires_at);`); err != nil {
+		return err
+	}
+	// Superseded by idx_map_ground_drops_xy_expires (same prefix plus the expiry
+	// filter the viewport query always applies).
+	if err := execSchema("map_ground_drops_xy_idx_drop", `
+	DROP INDEX IF EXISTS idx_map_ground_drops_xy;`); err != nil {
 		return err
 	}
 

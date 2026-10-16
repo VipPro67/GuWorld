@@ -77,6 +77,8 @@ func roamingMerchantTick(ctx context.Context, database *sql.DB) {
 		logger.S.Warnf("roaming merchant: commit failed: %v", err)
 		return
 	}
+	// New/expired traders change every region's /merchant list; drop the cache.
+	invalidateMerchantRegionCache("")
 	// Announce in the spawned region's chat channel (not world) after commit so a
 	// rolled-back spawn never leaks coordinates.
 	for _, n := range notices {
